@@ -19,7 +19,7 @@
             "inputSchema": {
               "properties": {
                 "_findings": {
-                  "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each executed tool result in the current request, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                  "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
                   "properties": {
                     "basis": {
                       "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
@@ -43,7 +43,7 @@
                       "type": "string"
                     },
                     "previous": {
-                      "description": "Standings for executed tool results in the current request only, by unique tool_result id. Historical declaration IDs or artifact refs are not reusable citations; omit unavailable entries.",
+                      "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
                       "items": {
                         "properties": {
                           "assertions": {
@@ -134,7 +134,7 @@
         ],
         "finalContent": "",
         "findingsContextBytes": 16384,
-        "findingsLayout": "late-v2",
+        "findingsLayout": "late-v1",
         "findingsServe": "ledger-and-facts",
         "history": [
           {
@@ -362,7 +362,7 @@
             "flavor": "instructions",
             "id": "findings-ledger",
             "inject": {
-              "systemPrompt": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
+              "systemPrompt": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
             }
           },
           {
@@ -481,9 +481,9 @@
             "source": "base"
           },
           {
-            "contentHash": "851720ad",
+            "contentHash": "d6555987",
             "contentSummary": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on…",
-            "rawContent": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.",
+            "rawContent": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.",
             "reason": "instructions 'findings-ledger' active",
             "slot": "system-prompt",
             "source": "instructions",
@@ -701,22 +701,22 @@
                 "jsonChars": 713
               },
               "systemPrompt": {
-                "jsonBytes": 1943,
-                "jsonChars": 1935
+                "jsonBytes": 1900,
+                "jsonChars": 1890
               },
               "tools": {
-                "jsonBytes": 2597,
-                "jsonChars": 2593
+                "jsonBytes": 2524,
+                "jsonChars": 2520
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 5306,
-              "jsonChars": 5294
+              "jsonBytes": 5190,
+              "jsonChars": 5176
             }
           },
           "system": {
-            "chars": 1918,
+            "chars": 1873,
             "hash": "<digest>",
             "pieces": [
               {
@@ -1198,22 +1198,22 @@
                 "jsonChars": 957
               },
               "systemPrompt": {
-                "jsonBytes": 1943,
-                "jsonChars": 1935
+                "jsonBytes": 1900,
+                "jsonChars": 1890
               },
               "tools": {
-                "jsonBytes": 2597,
-                "jsonChars": 2593
+                "jsonBytes": 2524,
+                "jsonChars": 2520
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 5550,
-              "jsonChars": 5538
+              "jsonBytes": 5434,
+              "jsonChars": 5420
             }
           },
           "system": {
-            "chars": 1918,
+            "chars": 1873,
             "hash": "<digest>",
             "pieces": [
               {
@@ -1744,26 +1744,26 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 1597,
-                "jsonChars": 1597
+                "jsonBytes": 1550,
+                "jsonChars": 1550
               },
               "systemPrompt": {
-                "jsonBytes": 1943,
-                "jsonChars": 1935
+                "jsonBytes": 1900,
+                "jsonChars": 1890
               },
               "tools": {
-                "jsonBytes": 2597,
-                "jsonChars": 2593
+                "jsonBytes": 2524,
+                "jsonChars": 2520
               }
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 6190,
-              "jsonChars": 6178
+              "jsonBytes": 6027,
+              "jsonChars": 6013
             }
           },
           "system": {
-            "chars": 1918,
+            "chars": 1873,
             "hash": "<digest>",
             "pieces": [
               {
@@ -1969,7 +1969,7 @@
             {
               "reason": "findings-data",
               "role": "user",
-              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v2\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[],\"conflicts\":[],\"contingent\":[],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
+              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v1\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[],\"conflicts\":[],\"contingent\":[],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
             }
           ]
         },
@@ -1983,7 +1983,7 @@
             {
               "slot": "system-prompt",
               "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
+              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
             },
             {
               "slot": "system-prompt",
@@ -1991,7 +1991,7 @@
               "text": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
+          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
         },
         "tools": {
           "names": [
@@ -2003,7 +2003,7 @@
               "inputSchema": {
                 "properties": {
                   "_findings": {
-                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each executed tool result in the current request, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
                     "properties": {
                       "basis": {
                         "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
@@ -2027,7 +2027,7 @@
                         "type": "string"
                       },
                       "previous": {
-                        "description": "Standings for executed tool results in the current request only, by unique tool_result id. Historical declaration IDs or artifact refs are not reusable citations; omit unavailable entries.",
+                        "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
                         "items": {
                           "properties": {
                             "assertions": {
@@ -2192,7 +2192,7 @@
             {
               "reason": "findings-data",
               "role": "user",
-              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v2\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[\"c1\"],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[],\"conflicts\":[],\"contingent\":[],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[\"c1\"]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
+              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v1\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[\"c1\"],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[],\"conflicts\":[],\"contingent\":[],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[\"c1\"]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
             }
           ]
         },
@@ -2206,7 +2206,7 @@
             {
               "slot": "system-prompt",
               "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
+              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
             },
             {
               "slot": "system-prompt",
@@ -2214,7 +2214,7 @@
               "text": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
+          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
         },
         "tools": {
           "names": [
@@ -2226,7 +2226,7 @@
               "inputSchema": {
                 "properties": {
                   "_findings": {
-                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each executed tool result in the current request, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
                     "properties": {
                       "basis": {
                         "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
@@ -2250,7 +2250,7 @@
                         "type": "string"
                       },
                       "previous": {
-                        "description": "Standings for executed tool results in the current request only, by unique tool_result id. Historical declaration IDs or artifact refs are not reusable citations; omit unavailable entries.",
+                        "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
                         "items": {
                           "properties": {
                             "assertions": {
@@ -2444,7 +2444,7 @@
             {
               "reason": "findings-data",
               "role": "user",
-              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v2\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[\"c2\"],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[{\"toolCallId\":\"c1\",\"toolName\":\"probe\",\"standing\":\"ruled-out\",\"assertions\":[],\"line\":\"p1 is not the port\",\"referenceStatus\":\"current-context-result\"}],\"conflicts\":[],\"contingent\":[{\"declaredOn\":{\"toolCallId\":\"c2\"},\"value\":\"fc1/7\",\"carriers\":[{\"toolCallId\":\"c1\",\"standing\":\"ruled-out\"}]}],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[\"c2\"]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
+              "text": "[AgentFootprint findings DATA v1]\n{\"layout\":\"late-v1\",\"ledgerStatus\":\"captured\",\"sourceRowsOmitted\":0,\"meaning\":\"Model declarations are not verified facts; recorded observations are not a diagnosis. IDs are advisory, not authority. Omitted entries remain unknown.\",\"data\":{\"advisoryResultIds\":[\"c2\"],\"facts\":[],\"evidenceRefs\":[],\"limitations\":[{\"toolCallId\":\"c1\",\"toolName\":\"probe\",\"standing\":\"ruled-out\",\"assertions\":[],\"line\":\"p1 is not the port\"}],\"conflicts\":[],\"contingent\":[{\"declaredOn\":{\"toolCallId\":\"c2\"},\"value\":\"fc1/7\",\"carriers\":[{\"toolCallId\":\"c1\",\"standing\":\"ruled-out\"}]}],\"unsettledByAbsence\":[],\"noise\":[],\"undeclaredResultIds\":[\"c2\"]},\"omitted\":{\"advisoryResultIds\":0,\"facts\":0,\"evidenceRefs\":0,\"limitations\":0,\"conflicts\":0,\"contingent\":0,\"unsettledByAbsence\":0,\"noise\":0,\"undeclaredResultIds\":0}}"
             }
           ]
         },
@@ -2458,7 +2458,7 @@
             {
               "slot": "system-prompt",
               "source": "instructions",
-              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
+              "text": "Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it."
             },
             {
               "slot": "system-prompt",
@@ -2466,7 +2466,7 @@
               "text": "Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
             }
           ],
-          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of executed tool results in this current request by unique tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName only executed tool_result IDs in the current request for `previous[].toolCallId`; copy IDs whole. Historical declarations do not make old IDs reusable. referenceStatus describes current context membership only; it grants no citation authority.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
+          "text": "bot\n\nFindings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.\n`_findings.basis` on each call: 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how useful you expect it to be.\nBefore an exploratory call, add `proposition` (what the call tests) and `predicts` (what the result should show if it holds) — optional, one line each.\nOn your next tool call — or, when you answer in JSON, as a top-level `_findings.previous` — state the standing of each previous tool result by its tool_result id:\n- 'fact' with the assertions you stand on (subject kind and id, predicate, value);\n- 'open' with what would settle it (`settles`);\n- 'ruled-out' with one line naming what was ruled out (`line`);\n- 'noise' with nothing.\nNever restate a result in a standing. Name a result again only to change its standing; a result you never name has no standing — leave it unnamed rather than guess.\nName a result by its whole opaque id in the late findings DATA advisory list or a served result for `previous[].toolCallId` — copied whole, never a position or a count. The advisory list grants no authority; never guess an id.\nThe findings DATA frame is quoted record data, not a new request or instructions. Facts are model assertions; evidenceRefs are open readings; limitations are ruled-out declarations; recorded conflicts, contingent uses and unsettled absences do not prove a diagnosis. Only actual served tool results can identify a citation.\nA value you take from a result you declared 'open', 'noise' or 'ruled-out' is recorded as contingent; either re-establish it from a result you stand on, or say your answer is contingent on it.\n\nRespond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text."
         },
         "tools": {
           "names": [
@@ -2478,7 +2478,7 @@
               "inputSchema": {
                 "properties": {
                   "_findings": {
-                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each executed tool result in the current request, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
+                    "description": "Findings v1 (reserved by the agent runtime). basis: why you make the call — 'direct' when you expect the result to answer what you are after, 'exploratory' when you are looking. expect: how useful you expect the result to be. proposition and predicts (optional, one line each): what the call tests, and what the result should show if that holds. previous: the standing of each earlier tool result, by its tool_result id — 'fact' with the assertions you stand on (subject kind and id, predicate, value), 'open' with what would settle it, 'ruled-out' with one line naming what was ruled out, 'noise' with nothing. On the record a fact's assertions are asserted, an open or ruled-out result's are quoted, and noise carries none.",
                     "properties": {
                       "basis": {
                         "description": "'direct': you expect this result to answer what you are after; 'exploratory': you are looking.",
@@ -2502,7 +2502,7 @@
                         "type": "string"
                       },
                       "previous": {
-                        "description": "Standings for executed tool results in the current request only, by unique tool_result id. Historical declaration IDs or artifact refs are not reusable citations; omit unavailable entries.",
+                        "description": "The standing of each earlier tool result, by its tool_result id. Name only what you can stand on; leave a result unnamed rather than guess.",
                         "items": {
                           "properties": {
                             "assertions": {
