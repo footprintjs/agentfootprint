@@ -38,7 +38,7 @@ export function viewOf(location: EpochLocation, served: boolean): ServedView {
     recordedBound,
     initialLayoutUnknown,
   );
-  const gaps = gapsOf(location, layoutUnknown, conversation, read, forced);
+  const gaps = gapsOf(location, layoutUnknown, conversation, read, forced, served);
 
   return frozenView({
     epoch: location.epoch,

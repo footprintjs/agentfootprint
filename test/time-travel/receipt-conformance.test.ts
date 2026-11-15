@@ -54,6 +54,7 @@ import { findingsFrame } from '../helpers/findingsData.js';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { conversationRedaction } from '../../src/doors/security.js';
+import { nativeRetainsSafeBase } from '../redaction/nativeFoldBase.js';
 import {
   Agent,
   defineTool,
@@ -202,6 +203,7 @@ const excusedBy = (view: ServedView, field: string): boolean => named(view.gaps,
  * that can answer it.
  */
 const MISSING_ROW_GAPS: readonly ServedGapKind[] = [
+  'privacy-policy',
   'forced-tool-schema',
   'no-fold-base',
   'no-run-log',
@@ -1534,12 +1536,12 @@ describe('what a recording actually contains', () => {
     // footprintjs scrubbed the system prompt's pieces at COMMIT time…
     expect(JSON.stringify(snapshot.commitLog)).not.toContain('sk-abc123');
     expect(JSON.stringify(snapshot)).not.toContain('sk-abc123');
-    // …and the rebuild reads the placeholder as absent — never as the text the
-    // model was sent — under the gap that says a value it could not recover
-    // reads as empty rather than unknown.
+    // The rebuild reads the placeholder as absent, never as the model's text.
+    // Privacy remains a separate caveat when the native engine retains a safe base.
     const view = servedAt(snapshot, 1)!;
     expect(view.system.text).not.toContain('REDACTED');
-    expect(view.gaps.map((g) => g.gap)).toContain('no-fold-base');
+    expect(view.gaps.map((g) => g.gap)).toContain('privacy-policy');
+    expect(view.gaps.some((g) => g.gap === 'no-fold-base')).toBe(!(await nativeRetainsSafeBase()));
     // The receipt is minted live, from the real pieces: hashes only, as always.
     expect(receiptAt(snapshot, 1)!.system.hash).toBe(
       receiptHash(receiptAt(snapshot, 1)!.basis.runId, 'bot with key sk-abc123'),
@@ -1589,8 +1591,7 @@ describe('a recording that travelled without its fold base', () => {
     const r = await run('dynamic', TOOL_THEN_DONE, (a) =>
       a.system('you are a bot').tool(tool('alpha_tool')),
     );
-    // Exactly the shape `getSnapshot({ redact: true })` hands back: the log
-    // travels, the fold base does not.
+    // An intentionally incomplete recording: the log travels, the base does not.
     const baseless = JSON.parse(JSON.stringify(r.snapshot)) as Snapshot & {
       initialState?: unknown;
     };
