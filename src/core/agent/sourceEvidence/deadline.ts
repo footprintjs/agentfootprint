@@ -2,10 +2,10 @@ import type { ToolExecutionContext } from '../../../tools/tools.js';
 import { untilAborted } from '../../../lib/abort.js';
 
 /** A deadline ends waiting; an accepted artifact write may still finish without authority. */
-export async function withSourceEvidenceDeadline<T>(
-  context: ToolExecutionContext,
+export async function withSourceEvidenceDeadline<T, C extends Pick<ToolExecutionContext, 'signal'>>(
+  context: C,
   timeoutMs: number,
-  work: (context: ToolExecutionContext) => Promise<T>,
+  work: (context: C) => Promise<T>,
 ): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort(context.signal?.reason);

@@ -24,7 +24,8 @@ export const meta: ExampleMeta = {
 export async function run(input: string, suppliedProvider?: LLMProvider): Promise<string> {
   let sourceCalls = 0,
     receipt = '',
-    observed: unknown;
+    observed: unknown,
+    prepared: unknown;
   // #region declare-source
   const source = withSourceEvidence(
     defineTool({
@@ -114,7 +115,25 @@ export async function run(input: string, suppliedProvider?: LLMProvider): Promis
         candidate.scope.site === 'local-seed'
           ? candidate
           : undefined,
+      // #region prepare-metadata
+      preparation: {
+        admit: (candidate, ctx) =>
+          ctx.identity?.principal === 'fixture-reader' &&
+          candidate.producer.name === 'read_inventory' &&
+          candidate.scope.site === 'local-seed'
+            ? candidate
+            : undefined,
+      },
     })
+    .aroundTurn({
+      name: 'historical-source-context',
+      async around(turn, proceed) {
+        if (turn.kind === 'run') prepared = await turn.sourceEvidence!.recent({ limit: 5 });
+        // Metadata is historical context only; the reader expires before the run.
+        await proceed();
+      },
+    })
+    // #endregion prepare-metadata
     .build();
   const identity = {
     tenant: 'synthetic',
@@ -135,7 +154,7 @@ export async function run(input: string, suppliedProvider?: LLMProvider): Promis
   // #endregion mount-and-continue
   if (!observed || sourceCalls !== 1)
     throw new Error('The deterministic retained-read proof did not complete.');
-  return JSON.stringify({ sourceCalls, observed }, null, 2);
+  return JSON.stringify({ sourceCalls, observed, prepared }, null, 2);
 }
 
 if (isCliEntry(import.meta.url))

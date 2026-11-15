@@ -8,7 +8,15 @@ export type {
   ArtifactDetailResult,
 } from './artifacts/detailTypes.js';
 export { withSourceEvidence } from './tools/sourceEvidence.js';
-export type { SourceEvidenceOptions, SourceEvidenceDescriptor } from './tools/sourceEvidence.js';
+export type {
+  SourceEvidenceOptions,
+  SourceEvidenceDescriptor,
+  SourceEvidencePreparationContext,
+  SourceEvidenceMetadata,
+  SourceEvidenceRecentArgs,
+  SourceEvidenceRecentResult,
+  SourceEvidencePreparation,
+} from './tools/sourceEvidence.js';
 export type {
   SourceEvidenceSubject,
   SourceEvidenceScalar,

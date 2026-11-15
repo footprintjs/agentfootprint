@@ -4,7 +4,7 @@ title: TurnChanges
 
 # Interface: TurnChanges
 
-Defined in: [src/core/agent/aroundTurn/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L43)
+Defined in: [src/core/agent/aroundTurn/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L46)
 
 The closed set of changes `proceed` accepts, on a `run` turn only.
 
@@ -18,4 +18,4 @@ caller's (`input.time`, else `options.time`).
 
 > `readonly` `optional` **time?**: [`RunTime`](/docs/api/interfaces/RunTime)
 
-Defined in: [src/core/agent/aroundTurn/types.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L44)
+Defined in: [src/core/agent/aroundTurn/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L47)
