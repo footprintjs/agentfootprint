@@ -3,6 +3,41 @@ Walker: `pool.ts` owns lifecycle state and wires its delegates; Lens: `errors.ts
 
 Start at [`mcpClientPool.ts`](mcpClientPool.ts), then [`pool.ts`](pool.ts) for admission, authoritative state and synchronous callback wiring. Follow the relevant owner below instead of reading every lifecycle at once.
 
+The diagram shows existing wiring, not a recorded runtime chart or a fixed sequence every operation follows. Solid arrows are delegation or synchronous host callbacks; the dotted arrow is access to the same canonical owners. Cross-owner calls return through `Pool`, not direct delegate imports. The linked table below provides code and tests; viewers that enable Mermaid interactions can also use the node links.
+
+```mermaid
+flowchart LR
+  C["Entry and caller adapters<br/>mcpClientPool / lease / listTools / boundTool"] --> P["pool.ts<br/>admission, state, host callbacks<br/>lifetime / app leases / waiters"]
+  subgraph Ops["Lifecycle delegates"]
+    L["pool/leases.ts<br/>reserve, wait, recheck, lease"]
+    O["pool/opening.ts<br/>one open per key"]
+    Q["pool/listing.ts<br/>context, definitions, invalidation"]
+    T["pool/transport.ts<br/>guard, send, classify evidence"]
+    E["pool/endingLifecycle.ts<br/>reserve slots, defer, end"]
+    D["pool/drain.ts<br/>terminate, close, await settlement"]
+  end
+  P --> L
+  P --> O
+  P --> Q
+  P --> T
+  P --> E
+  P --> D
+  Ops -->|"synchronous host callbacks"| P
+  P -. actual owner references .-> S["clientSet.ts / pooledClient.ts<br/>work.ts: Work / OperationBudget<br/>definitions.ts"]
+
+  click C "mcpClientPool.ts" "Public entry; caller adapters are linked below"
+  click P "pool.ts" "State and callback wiring"
+  click L "pool/leases.ts" "Reservation and lease lifecycle"
+  click O "pool/opening.ts" "Opening lifecycle"
+  click Q "pool/listing.ts" "Definitions and context checks"
+  click T "pool/transport.ts" "Request guards and evidence"
+  click E "pool/endingLifecycle.ts" "Capacity and endings"
+  click D "pool/drain.ts" "Closing and settlement waits"
+  click S "work.ts" "Settlement accounting; other state owners are linked below"
+```
+
+`listTools` and `boundTool` orchestrate lease and listing calls through the facade; leases do not call listing. Opening requests the guarded transport seam through its host, and transport routes tools-changed invalidation back through the facade. The table links the canonical state owners and the tests for each path. This documentation makes no measured token-saving claim.
+
 | Question                                                   | Code owner                                                                                                                                                                   | Behavior controls                                                                                                                                         |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Is an operation admitted, and when does its charge return? | `pool.ts` admission → [`work.ts`](work.ts)                                                                                                                                   | [`operations`](../../../test/mcp/pool/operations.test.ts), [`sendGate`](../../../test/mcp/pool/sendGate.test.ts)                                          |
