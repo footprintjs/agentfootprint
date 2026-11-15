@@ -74,7 +74,7 @@ import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import type { RunTranslation } from '../hosting/protocolAdapter.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
-import { newScope, type Scope, type OpenText, type OpenCall } from './translationScope.js';
+import { newScope, type Scope, type OpenText, type AgUiOpenCall } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
 import {
   AG_UI_PROTOCOL_VERSION,
@@ -703,10 +703,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
    * where the record still names the call (no redaction policy), the id
    * decides among several.
    */
-  function takeCall(scope: Scope, address: string, servedId: unknown): OpenCall | undefined {
+  function takeCall(scope: Scope, address: string, servedId: unknown): AgUiOpenCall | undefined {
     let at = -1;
     for (let i = scope.calls.length - 1; i >= 0; i--) {
-      const call = scope.calls[i] as OpenCall;
+      const call = scope.calls[i] as AgUiOpenCall;
       if (call.address !== address) continue;
       if (at < 0) at = i;
       if (typeof servedId === 'string' && call.servedId === servedId) {

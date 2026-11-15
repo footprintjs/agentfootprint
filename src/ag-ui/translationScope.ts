@@ -10,7 +10,7 @@ export interface OpenReasoning {
   readonly iteration: unknown;
 }
 
-export interface OpenCall {
+export interface AgUiOpenCall {
   readonly id: string;
   /** Its number in this run — `-1` for a call a paused run opened. */
   readonly n: number;
@@ -43,7 +43,7 @@ export interface Scope {
   /** Open step names, in the order they opened. */
   readonly steps: string[];
   /** Open tool calls, most recent last. */
-  readonly calls: OpenCall[];
+  readonly calls: AgUiOpenCall[];
 }
 
 export const newScope = (
