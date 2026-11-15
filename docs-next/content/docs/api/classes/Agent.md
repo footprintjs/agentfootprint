@@ -882,9 +882,9 @@ one.
 
 **Under `redact` it is the SERVED snapshot** — footprintjs's redacted view
 (`RunnerBase.getLastSnapshot`): the placeholder wherever the policy
-selected a value, and no `initialState`. The agent's own logic never reads
-this getter; `checkpoint()`, `followUp()` and the crash checkpoint read the
-live run, so redaction never changes what the agent continues from.
+selected a value. Older engines omit `initialState`; newer engines retain
+its policy-filtered base. The agent's logic reads the live run for
+`checkpoint()`, `followUp()` and crash recovery, so continuation stays raw.
 
 #### Returns
 
