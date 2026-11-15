@@ -2,6 +2,33 @@
 Walker: actual dispatch capture and bounded find/read flowcharts.
 Lens: freshly admitted historical values and fixed unavailable outcomes.
 
+## Pre-seed metadata preparation
+
+An explicit `preparation.admit` opt-in adds `RunTurn.sourceEvidence.recent`
+inside `aroundTurn`, before `proceed` and synchronous configuration. It returns
+only subject, operation, scope, native status/coverage/period, producer and
+receipt provenance in native newest-first index order. Scalars, dataset
+descriptors and rows are stripped before preparation admission and never returned.
+This is historical metadata, not source execution, skill activation or a current
+tool offer. Multiple subjects from one observation remain separate and may be
+ambiguous; retention time is not source collection time.
+
+The index comes from this native continuation (including the validated crash
+carrier), bounded identically to seed. A fresh catalog reads the provider once
+per preparation at explicit iteration zero, with current caller identity and
+cancellation; executable caches are never inherited. Unique static and skill
+declarations remain resolvable off wire, as in native dispatch. Different current
+provider/declared holders are ambiguous and withheld; a removed provider-only
+producer is unavailable. Current native permissions and separate preparation
+privacy admission still apply. Original argument-based policies are not replayed.
+
+`admission.ts` and `permissionChecks.ts` are shared by both reader lifecycles.
+`preparation.ts` uses the same native fixed-phase flow and bounds as tool reads;
+no ToolExecutionContext is invented. Both native signal positions are linked
+only for this lease. Proceed, wrapper exit and cancellation revoke the capability;
+a caught permission halt still prevents proceeding. No metadata payload cache
+survives the preparation. Unopted agents have no new turn field or catalog work.
+
 # Native retained-source lifecycle
 
 `capture.ts` is called only by the ordinary native delivery owner and the three

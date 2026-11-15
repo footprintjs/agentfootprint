@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-405 exported from `agentfootprint`.
+407 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -329,8 +329,10 @@ title: Interfaces
 - [`SourceEvidenceIndex`](/docs/api/interfaces/SourceEvidenceIndex)
 - [`SourceEvidenceLimits`](/docs/api/interfaces/SourceEvidenceLimits)
 - [`SourceEvidenceOptions`](/docs/api/interfaces/SourceEvidenceOptions)
+- [`SourceEvidencePreparation`](/docs/api/interfaces/SourceEvidencePreparation)
 - [`SourceEvidenceProjection`](/docs/api/interfaces/SourceEvidenceProjection)
 - [`SourceEvidenceReadArgs`](/docs/api/interfaces/SourceEvidenceReadArgs)
+- [`SourceEvidenceRecentArgs`](/docs/api/interfaces/SourceEvidenceRecentArgs)
 - [`SourceEvidenceSource`](/docs/api/interfaces/SourceEvidenceSource)
 - [`SourceEvidenceSubject`](/docs/api/interfaces/SourceEvidenceSubject)
 - [`SqliteArtifacts`](/docs/api/interfaces/SqliteArtifacts)

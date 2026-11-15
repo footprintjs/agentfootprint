@@ -6,6 +6,7 @@ import type { FlowchartCheckpoint } from 'footprintjs';
 import type { RunTime } from '../../../time/clock.js';
 import type { AgentRunOptions } from '../../Agent.js';
 import type { AgentInput } from '../types.js';
+import type { SourceEvidencePreparation } from '../../../tools/sourceEvidence.js';
 
 /**
  * A new turn: what `run`, `runTyped`, `followUp`, `resumeOnError` and a hosted
@@ -16,6 +17,8 @@ export interface RunTurn {
   readonly kind: 'run';
   readonly input: AgentInput | string;
   readonly options: AgentRunOptions | undefined;
+  /** Explicitly admitted native retained metadata, live only before proceed. */
+  readonly sourceEvidence?: SourceEvidencePreparation;
 }
 
 /**

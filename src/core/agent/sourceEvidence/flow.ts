@@ -4,7 +4,7 @@ import { throwIfAborted } from '../../../lib/abort.js';
 
 /** Raw parcels/capabilities stay in this invocation's closures; the chart records fixed outcomes only. */
 export async function runSourceEvidenceFlow(
-  context: ToolExecutionContext,
+  context: Pick<ToolExecutionContext, 'signal' | 'redact'>,
   steps: readonly { readonly id: string; readonly run: () => void | Promise<void> }[],
 ): Promise<void> {
   const first = steps[0];

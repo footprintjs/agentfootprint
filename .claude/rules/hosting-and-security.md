@@ -33,3 +33,20 @@ Loaded only when you work on the paths above — moved verbatim out of the root 
 ## Module contract: ag-ui/
 
 (door `/ag-ui`) the AG-UI protocol adapter, a Lens over ONE run: `serializer.ts` turns the run's SERVED events into AG-UI 1.0 events (never live values — a redaction policy holds at every depth; a nested agent turn is a sub-agent scoped by its subflow path, so parallel branches never cross), `ids.ts` mints every id as `<runId>/<kind>/<n>/<runtimeStageId>` (injective, pinned), `framing.ts` frames through the optional peer `@ag-ui/encoder` (loaded only when a framing is built). What leaves for a browser is a decision, not a pass-through: `CUSTOM` is an allow-list with per-type field projections (`AG_UI_CUSTOM_EVENTS`), reasoning only with `reasoning: true`, `RUN_ERROR` and a failed `TOOL_CALL_RESULT` in fixed words (a failed `RunSettlement` carries no thrown value; `toolErrors: 'served'` opts a tool's own failure text in), the record's process-wide run id never written; pinned by `test/ag-ui/redaction.property.test.ts`. It implements the hosting port `hosting/protocolAdapter.ts`; `hosting/stream.ts · SseFraming` is the framing strategy seam. A paused translation's `suspension()` (ids, step names, every scope's open calls — never a run value) passed as `resume` makes the continuation the same invocation. `agUi()` = three replaceable strategies around one core (unreleased): `reader` (a body → `AgUiTurnRequest`; a gateway's own body), `translation` (default `agUiSerializer`), `framing` (a gateway's envelope; the HOST hands each frame its per-stream `sequence` — `SseFramePosition` — so no framing keeps a counter); `request.ts · readAgUiRequest` copies a CUSTOM reader's output as plain JSON (the default reader's parsed body is read as is) then runs the same checks for every reader; the default wire is pinned byte for byte by test/ag-ui/gateway.test.ts against `fixtures/default-wire.golden.json`. `request.ts` reads a `RunAgentInput` as UNTRUSTED input: only the newest user message is conversation, an answer is matched to the pause the SERVER keeps, frontend tools only by the app's allow-list (`frontendTools.ts` — the app's contract, a pause the page answers), `state`/`context` only through the app's validators; `adapter.ts` · `agUi()` is the `ProtocolAdapter` that `hosting/streamHandler.ts` takes (fresh runner per request, `ThreadBinder` + session store, one turn per thread)
+
+
+## Standing event protocols
+
+`protocolRoute` on the existing `httpHost` enters the same standing handler and
+session lane. Plan after native ownership-checked hydration, and feed served
+events only for the captured invocation. Forward optional `HostReply.event` and
+`custom` ports by presence through wrappers, including ingress accounting.
+Hosted delivery is explicit: candidate text at every depth and nested answer
+results are withheld until authorized `complete`; app custom delivery is not
+claimed to be a served recording observation. Keep standalone record-only
+defaults unchanged. Store protocol suspension in the existing pause envelope
+before announcing it, preserve closed native refusal codes with fixed words,
+and enforce encoded event/aggregate bounds before publishing a terminal.
+`HostedProtocolRequest.turn` is a detached native plan available after planning;
+its input and accepted containers remain claims rather than authorization.
+Pooled mode refuses per-request frontend tools; never mutate a cached registry.
