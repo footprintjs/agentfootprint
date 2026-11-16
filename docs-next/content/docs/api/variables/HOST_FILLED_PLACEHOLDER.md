@@ -6,6 +6,6 @@ title: HOST_FILLED_PLACEHOLDER
 
 > `const` **HOST\_FILLED\_PLACEHOLDER**: `"[host-filled]"` = `'[host-filled]'`
 
-Defined in: [src/tools/hostFilled.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L158)
+Defined in: [src/tools/hostFilled.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L164)
 
 What replaces a credential value in a result or an error.

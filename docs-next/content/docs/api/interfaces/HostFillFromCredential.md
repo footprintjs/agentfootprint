@@ -4,7 +4,7 @@ title: HostFillFromCredential
 
 # Interface: HostFillFromCredential
 
-Defined in: [src/tools/hostFilled.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L52)
+Defined in: [src/tools/hostFilled.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L58)
 
 Fill from the call's resolved credential (`ctx.credential`).
 
@@ -14,7 +14,7 @@ Fill from the call's resolved credential (`ctx.credential`).
 
 > `readonly` **from**: `"credential"`
 
-Defined in: [src/tools/hostFilled.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L53)
+Defined in: [src/tools/hostFilled.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L59)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/tools/hostFilled.ts:53](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **mode?**: `"user"` \| `"machine"`
 
-Defined in: [src/tools/hostFilled.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L58)
+Defined in: [src/tools/hostFilled.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L64)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/tools/hostFilled.ts:58](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **read?**: (`credential`) => `string`
 
-Defined in: [src/tools/hostFilled.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L60)
+Defined in: [src/tools/hostFilled.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L66)
 
 Credential → argument value. Default: a bearer's `token`, an API key's `key`.
 
@@ -50,7 +50,7 @@ Credential → argument value. Default: a bearer's `token`, an API key's `key`.
 
 > `readonly` `optional` **scopes?**: readonly `string`[]
 
-Defined in: [src/tools/hostFilled.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L57)
+Defined in: [src/tools/hostFilled.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L63)
 
 Scopes / mode for the `needs` this fill declares (ignored when the tool has its own).
 
@@ -60,6 +60,6 @@ Scopes / mode for the `needs` this fill declares (ignored when the tool has its 
 
 > `readonly` `optional` **service?**: `string`
 
-Defined in: [src/tools/hostFilled.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L55)
+Defined in: [src/tools/hostFilled.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L61)
 
 The service (`needs.credential`) — required when the tool declares no `needs`.
