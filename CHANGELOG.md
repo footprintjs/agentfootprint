@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.7.0] - 2026-11-16
+
+### Added
+
+- `flowchartAsTool` and `runbookAsTool` accept optional `observability` controls for native retained read/write views, commit values, and write provenance. Runbook verdict projections also distinguish an unavailable served rowset from a known empty result, preserving coverage uncertainty and omitting unknown totals.
+
 ## [14.6.1] - 2026-11-15
 
 ### Fixed
