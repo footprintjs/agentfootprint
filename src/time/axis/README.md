@@ -1,4 +1,4 @@
-# Dataset time-axis helpers
+**Support** — private dataset time-axis helpers for parsing, normalization and wording; callers own the reader-facing result.
 
 This private library supports the public [`axis.ts`](../axis.ts) facade. A
 dataset declaration is judged without reading its rows; the read-side view then
