@@ -767,6 +767,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a regular-expression source of the English time reader — the words it RECOGNISES in a person’s message (`… to now`); matched against text, never sent to a model or shown to anyone',
     },
   ],
+  'src/ag-ui/request/readerAnswer.test.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 2,
+      why: 'two test titles describing then-property detection; read only by the test runner, never delivered to a model or included in conversation history',
+    },
+  ],
   'src/time/resolve/lookback.test.ts': [
     {
       kind: 'not-model-facing',
@@ -1422,12 +1429,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 128,
-        total: 210,
+        files: 129,
+        total: 212,
         registry: 8,
         ephemeral: 27,
         unrepaired: 35,
-        notModelFacing: 140,
+        notModelFacing: 142,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —
