@@ -9,6 +9,7 @@ import {
   type AgentOutput,
   type RunnerPauseOutcome,
   type AwaitingInput,
+  type LLMResponse,
 } from '../../../../src/index.js';
 import { mock } from '../../../../src/providers.js';
 
@@ -65,18 +66,15 @@ function fixture(
     execute: () => askHuman({ question: 'Continue?' }),
   });
   const requested = options.verified ? traced : untraced;
+  let calls: LLMResponse['toolCalls'] = [requested];
+  if (options.toolPause) calls = [traced, { id: 'plain-pause', name: 'ask_plain', args: {} }];
+  else if (options.multiple)
+    calls = [untraced, { ...untraced, id: 'untraced-disks-2', name: 'read_backup_disks' }];
+  else if (options.mixed) calls = [{ id: 'route', name: 'route_work', args: {} }, requested];
   const provider = mock({
     replies: [
       ...(options.previousResult ? [{ toolCalls: [traced] }] : []),
-      {
-        toolCalls: options.toolPause
-          ? [traced, { id: 'plain-pause', name: 'ask_plain', args: {} }]
-          : options.multiple
-            ? [untraced, { ...untraced, id: 'untraced-disks-2', name: 'read_backup_disks' }]
-            : options.mixed
-              ? [{ id: 'route', name: 'route_work', args: {} }, requested]
-              : [requested],
-      },
+      { toolCalls: calls },
       'Finished.',
     ],
   });
