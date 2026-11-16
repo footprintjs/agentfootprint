@@ -189,6 +189,8 @@ export interface ArgumentAskDeps {
   readonly excludedCallIds?: readonly string[];
   readonly admitAnswer?: () => void;
   readonly saveParties?: () => void;
+  /** Immediately before a newly raised input pause, while this batch is wholly undispatched. */
+  readonly beforePause?: () => void;
   readonly pendingAsk?: boolean;
   readonly settledAsk?: () => void;
   readonly refuseMalformedBatch?: () => boolean;
@@ -509,6 +511,7 @@ export function askBeforeDispatch(
     markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
     scope.argumentAsk = next;
     deps.saveParties?.();
+    deps.beforePause?.();
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');
   }

@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   Agent,
+  askHuman,
   defineTool,
   isPaused,
   type AgentfootprintEvent,
@@ -31,22 +32,25 @@ function fixture(
     mixed?: boolean;
     previousResult?: boolean;
     verified?: boolean;
+    multiple?: boolean;
+    toolPause?: boolean;
   } = {},
 ) {
   const events: AgentfootprintEvent[] = [];
   const executed: string[] = [];
-  const disks = defineTool({
-    name: TOOL,
-    description: 'Read synthetic VM disks.',
-    inputSchema: { type: 'object', properties: { vm: { type: 'string' } }, required: ['vm'] },
-    argumentsFrom: ['inventory'],
-    resultColumns: { capacity_gb: 'number' },
-    askOrAssume: { vm: { ask: 'Which VM should I read?' } },
-    execute(args) {
-      executed.push(String(args.vm));
-      return [{ capacity_gb: options.previousResult ? 'wrong-type' : 0 }];
-    },
-  });
+  const diskTool = (name: string) =>
+    defineTool({
+      name,
+      description: 'Read synthetic VM disks.',
+      inputSchema: { type: 'object', properties: { vm: { type: 'string' } }, required: ['vm'] },
+      argumentsFrom: ['inventory'],
+      resultColumns: { capacity_gb: 'number' },
+      askOrAssume: { vm: { ask: 'Which VM should I read?' } },
+      execute(args) {
+        executed.push(String(args.vm));
+        return [{ capacity_gb: options.previousResult ? 'wrong-type' : 0 }];
+      },
+    });
   const work = defineTool({
     name: 'route_work',
     description: 'Synthetic routing work.',
@@ -55,19 +59,28 @@ function fixture(
       return 'ready';
     },
   });
+  const ownPause = defineTool({
+    name: 'ask_plain',
+    description: 'Pause from inside an executed tool.',
+    execute: () => askHuman({ question: 'Continue?' }),
+  });
   const requested = options.verified ? traced : untraced;
   const provider = mock({
     replies: [
       ...(options.previousResult ? [{ toolCalls: [traced] }] : []),
       {
-        toolCalls: options.mixed
-          ? [{ id: 'route', name: 'route_work', args: {} }, requested]
-          : [requested],
+        toolCalls: options.toolPause
+          ? [traced, { id: 'plain-pause', name: 'ask_plain', args: {} }]
+          : options.multiple
+            ? [untraced, { ...untraced, id: 'untraced-disks-2', name: 'read_backup_disks' }]
+            : options.mixed
+              ? [{ id: 'route', name: 'route_work', args: {} }, requested]
+              : [requested],
       },
       'Finished.',
     ],
   });
-  const agent = Agent.create({
+  const builder = Agent.create({
     provider,
     model: 'mock',
     maxIterations: 5,
@@ -75,10 +88,11 @@ function fixture(
     noticeEmptyLookups: options.empty ?? true,
     checkColumnTypes: options.columns ? 'warn' : 'off',
   })
-    .tool(disks)
-    .tool(work)
-    .findings({ argumentSources: true })
-    .build();
+    .tool(diskTool(TOOL))
+    .tool(work);
+  if (options.multiple) builder.tool(diskTool('read_backup_disks'));
+  if (options.toolPause) builder.tool(ownPause);
+  const agent = builder.findings({ argumentSources: true }).build();
   agent.on('*', (event) => events.push(event));
   return { agent, executed, events };
 }
@@ -145,6 +159,57 @@ describe('failure-first: genuine undispatched argument asks reach native dev-pos
 });
 
 describe('completed-result and resume controls', () => {
+  it('a partial reply holds both declared siblings through a genuine reask, then executes each once', async () => {
+    const { agent, executed, events } = fixture({ columns: true, multiple: true });
+    try {
+      const first = paused(await agent.run(question));
+      const input = (first.checkpoint.pauseData as { awaitingInput: AwaitingInput }).awaitingInput;
+      expect(input.fields).toHaveLength(2);
+      for (const check of ['empty-lookup', 'column-type-mismatch', 'missing-column'])
+        expect(rowFor(events, check)).toMatchObject({ checked: 0, findings: 0, notApplicable: 2 });
+      const second = paused(
+        await agent.resume(first.checkpoint, {
+          requestId: input.requestId,
+          values: { [input.fields[0]!.id]: 'fixture-vm-first' },
+        }),
+      );
+      expect(executed).toEqual([]);
+      const next = (second.checkpoint.pauseData as { awaitingInput: AwaitingInput }).awaitingInput;
+      // Partial replies are retained at the native resume door; no ToolCalls
+      // pass is invented merely to file another disposition for that reply.
+      expect(next.supplied).toMatchObject({ [input.fields[0]!.id]: 'fixture-vm-first' });
+      expect(next.missing).toEqual([input.fields[1]!.id]);
+      const beforeDone = events.length;
+      expect(
+        await agent.resume(second.checkpoint, {
+          requestId: next.requestId,
+          values: { [next.missing[0]!]: 'fixture-vm-second' },
+        }),
+      ).toBe('Finished.');
+      expect(executed).toEqual(['fixture-vm-first', 'fixture-vm-second']);
+      for (const check of ['empty-lookup', 'column-type-mismatch', 'missing-column'])
+        expect(rowFor(events.slice(beforeDone), check)).toMatchObject({
+          checked: 2,
+          findings: 0,
+          notApplicable: 1,
+        });
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
+  it('does not relabel already executed writes when a later tool raises its own mid-batch pause', async () => {
+    const { agent, executed, events } = fixture({ columns: true, toolPause: true });
+    try {
+      paused(await agent.run(question));
+      expect(executed).toEqual(['fixture-vm-a']);
+      for (const check of ['empty-lookup', 'column-type-mismatch', 'missing-column'])
+        expect(rowFor(events, check)).toMatchObject({ checked: 1, findings: 0, notApplicable: 0 });
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
   it('preserves a completed result finding and accounts the distinct still-undispatched call', async () => {
     const { agent, executed, events } = fixture({ previousResult: true, columns: true });
     try {
