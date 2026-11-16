@@ -374,6 +374,7 @@
       "BudgetPressureRecord",
       "CallRow",
       "CallWindowRow",
+      "ChartToolObservability",
       "CheckInAssembler",
       "CheckInAssemblerInput",
       "CheckInBuilderOptions",
