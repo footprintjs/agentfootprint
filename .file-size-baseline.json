@@ -98,7 +98,6 @@
     "src/recorders/observability/BoundaryRecorder.ts": 909,
     "src/recorders/observability/FlowchartRecorder.ts": 762,
     "src/recorders/observability/recordingEnvelope.ts": 651,
-    "src/recorders/observability/recordingPack.ts": 678,
     "src/recorders/observability/RunStepRecorder.ts": 789,
     "src/semantics/coverage/period.ts": 858,
     "src/semantics/coverage/README.md": 1042,
