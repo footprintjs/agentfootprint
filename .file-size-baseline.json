@@ -21,7 +21,6 @@
     "src/adapters/observability/audit.ts": 774,
     "src/adapters/observability/githubBugReporter.ts": 682,
     "src/adapters/observability/xray.ts": 660,
-    "src/ag-ui/request.ts": 606,
     "src/ag-ui/serializer.ts": 1056,
     "src/answer-account/account.ts": 737,
     "src/answer-account/facts/understood.ts": 633,
