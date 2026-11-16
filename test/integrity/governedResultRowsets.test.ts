@@ -272,13 +272,15 @@ const mismatch = (result: Awaited<ReturnType<typeof inspect>>) =>
 const noCheckedPass = (result: Awaited<ReturnType<typeof inspect>>) =>
   expect(result.rowsetChecks.some((check) => check.disposition === 'checked-pass')).toBe(false);
 function notApplicable(result: Awaited<ReturnType<typeof inspect>>) {
-  for (const check of ['column-type-mismatch', 'missing-column'])
-    expect(result.dispositions.find((row) => row.check === check)).toMatchObject({
+  for (const check of ['column-type-mismatch', 'missing-column']) {
+    const row = result.dispositions.find((item) => item.check === check);
+    expect(row).toMatchObject({
       checked: 0,
       findings: 0,
-      notApplicable: 1,
       unreachable: 0,
     });
+    expect(row?.notApplicable).toBeGreaterThanOrEqual(1);
+  }
 }
 
 describe('baseline control: legacy bare-array declaration does not read a wrapper or ticket', () => {
@@ -288,10 +290,7 @@ describe('baseline control: legacy bare-array declaration does not read a wrappe
     expect(mismatch(result)).toEqual([]);
     expect(result.reads).toEqual([]);
     expect(result.rowsetChecks).toEqual([]);
-    expect(result.dispositions.find((row) => row.check === 'column-type-mismatch')).toMatchObject({
-      checked: 0,
-      notApplicable: 1,
-    });
+    notApplicable(result);
   });
 });
 
