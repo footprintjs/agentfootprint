@@ -1,6 +1,6 @@
-# Skill-file frontmatter
+# Map — skill-file frontmatter
 
-This sealed folder parses one authored `SKILL.md` into data. Only
+This sealed folder parses one authored `SKILL.md` declaration into data at build time. Only
 `../skillsFromDir.ts` and files in this folder import its implementation.
 It reads no directory, resolves no tool implementation and evaluates no code.
 
