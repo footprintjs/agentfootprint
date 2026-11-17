@@ -21,6 +21,9 @@ const CODE = 'source-declaration-required';
 type Call = LLMResponse['toolCalls'][number];
 type Args = Readonly<Record<string, unknown>>;
 type SeenRequest = Pick<LLMRequest, 'messages' | 'tools' | 'systemPrompt'>;
+// Public provider requests may contain live native views; these synthetic wire
+// projections are JSON. Detach them at this boundary without cloning a Proxy.
+const jsonCopy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const call = (id: string, args: Args): Call => ({ id, name: TOOL, args });
 const claim = (id: string, vm = VM): Call =>
   call(id, {
@@ -46,7 +49,7 @@ function fixture(
   const provider = mock({
     respond(request) {
       requests.push(
-        structuredClone({
+        jsonCopy({
           messages: request.messages,
           tools: request.tools,
           systemPrompt: request.systemPrompt,
@@ -68,7 +71,7 @@ function fixture(
     argumentsFrom: [VM_LIST],
     resultColumns: { capacity_gb: 'number' },
     execute(args) {
-      executions.push({ tool: TOOL, args: structuredClone(args) });
+      executions.push({ tool: TOOL, args: jsonCopy(args) });
       return [{ capacity_gb: options.badFirstResult && executions.length === 1 ? 'bad-type' : 0 }];
     },
   });
@@ -76,7 +79,7 @@ function fixture(
     name: 'write_synthetic_marker',
     description: 'Write a synthetic marker to detect premature sibling side effects.',
     execute(args) {
-      executions.push({ tool: 'write_synthetic_marker', args: structuredClone(args) });
+      executions.push({ tool: 'write_synthetic_marker', args: jsonCopy(args) });
       return 'marker written';
     },
   });
@@ -84,7 +87,7 @@ function fixture(
     name: VM_LIST,
     description: 'List the immutable synthetic VM fixture identities.',
     execute(args) {
-      executions.push({ tool: VM_LIST, args: structuredClone(args) });
+      executions.push({ tool: VM_LIST, args: jsonCopy(args) });
       return [{ vm: VM }];
     },
   });
