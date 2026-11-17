@@ -13,6 +13,8 @@ When the person's message already names a value, a model can propose the right t
 
 The first proposal runs no tool. Every call in that proposed batch is held, including otherwise valid siblings. The native ToolCalls stage returns correlated framework feedback and continues through the existing ReAct loop. The new proposal passes the same source checks as any ordinary call. The parent `_findings` property remains optional.
 
+For the omitted declaration, that feedback includes a closed JSON body naming the public path `['_findings', 'from']`, the missing argument names and the minimal declaration schema with its actual nesting. The schema comes from the same native owner as the offered tool: `basis` plus `from` with findings, `from` alone without it. A root-level `from` is not moved or accepted as metadata. The runnable example also returns the native protocol feedback for inspection; application code needs no parser or retry loop.
+
 ```mermaid
 flowchart TD
   A[Existing inputs: declare, verify, record, resolve] --> B[Existing native ToolCalls barrier]
@@ -24,7 +26,9 @@ flowchart TD
   E -->|Yes| R{Real missing value, time confirmation, other unverified claim or refusal takes priority?}
   R -->|Yes| F[Existing typed human question or refusal]
   R -->|No| G{Only absent source declarations and allowance unused?}
-  G -->|Yes| H[Hold whole batch; one fixed correction; no tool runs]
+  G -->|Yes| T{Names and framed feedback fit native bounds?}
+  T -->|Yes| H[Hold whole batch; one fixed correction; no tool runs]
+  T -->|No| F
   H --> I[Existing ReAct loop; verify the new proposal]
   G -->|No| F
 ```
@@ -40,5 +44,7 @@ Both hosting strategies use this same native state: keep a conversation Agent in
 The trace retains a masked omission observation. A `correction: 'source-declaration-required'` argument row means the batch was actually held for correction; `withheld: 'batch-preempted'` means a native admission refusal took precedence. Neither invents a source or a human question, and neither earns source-check execution credit. An actual human fallback uses the ordinary `asked` row. Previously completed failures remain recorded.
 
 Framework notices contain fixed protocol feedback, never argument values or inferred sources. Their committed native history has zero producer bytes and `toolResultOrigin: 'not-entered'`; these internal fields are removed from provider requests. Notices are excluded from offered results and person/app/result evidence. Existing argument views, quote masking and native redaction still apply.
+
+Feedback has at most 32 missing argument names per call, 8 KiB UTF-8 per framed notice and 64 KiB for the complete batch, including held siblings. Names are never truncated. A representation that would exceed a bound falls back to the ordinary human question before consuming the correction. These bounds do not change tool schemas, request limits or source admission.
 
 The correction consumes an ordinary native iteration. Existing iteration, request, output, cancellation, deadline and liveness bounds remain in force. A source check establishes that bytes trace to the claimed place; it cannot prove the answer used the relevant entity. Applications must still send current selection context clearly and use their normal selection-change tests.

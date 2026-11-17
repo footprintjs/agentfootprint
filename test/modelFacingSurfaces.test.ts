@@ -2216,15 +2216,16 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'inputs layer — one source-declaration correction holds the whole native batch',
-    module: 'src/core/agent/stages/toolCalls/batch/refusal.ts',
+    module: 'src/core/agent/findings/sourceContractFeedback.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'Each fixed role-tool notice is correlated to a withheld proposal and remains in native history; both arms are persistent facts about that past call and batch.',
     drivenBy: [
       'test/core/agent/arguments/source-declaration-correction.test.ts',
       'test/core/agent/arguments/source-correction-privacy.test.ts',
+      'test/core/agent/arguments/source-contract-feedback.test.ts',
     ],
-    reaches: [/_findings\.from/, /another call/],
+    reaches: [/"path":\["_findings","from"\]/, /"declarationSchema"/, /another call/],
     compose: sourceDeclarationFeedback,
   },
   {

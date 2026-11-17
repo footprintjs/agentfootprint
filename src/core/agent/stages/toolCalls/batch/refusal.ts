@@ -43,7 +43,7 @@ export function refuseToolBatch(scope: TypedScope<AgentState>, reason: ToolBatch
 export function refuseSourceDeclarationBatch(
   scope: TypedScope<AgentState>,
   calls: readonly DispatchCall[],
-  omittedCallIds: ReadonlySet<string>,
+  contents: readonly string[],
   shownCalls: readonly DispatchCall[],
 ): void {
   const iteration = scope.iteration as number;
@@ -51,16 +51,10 @@ export function refuseSourceDeclarationBatch(
   const assistant = assistantToolTurn(scope, calls);
   const assistantAt = history.length;
   if (assistant !== undefined) history.push(assistant);
-  for (const call of calls) {
-    const reason = omittedCallIds.has(call.id)
-      ? 'That call lacked actual _findings.from declarations for its present ask-ruled arguments. ' +
-        'Declare the actual source without inventing a claim, or ask the person.'
-      : 'That call was held because another call in that batch lacked an argument-source declaration.';
+  for (const [index, call] of calls.entries()) {
     history.push({
       role: 'tool',
-      content:
-        `${TOOL_BATCH_FRAME_PREFIX} — framework feedback: source-declaration-required. ` +
-        `No calls in that batch ran. ${reason} Submit a new batch.]`,
+      content: contents[index]!,
       toolCallId: call.id,
       toolName: call.name,
       toolChars: 0,

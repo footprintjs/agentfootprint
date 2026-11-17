@@ -2,6 +2,7 @@ import { refuseToolBatch, refuseSourceDeclarationBatch } from './refusal.js';
 import { recordFindings } from '../../../findings/ledger.js';
 import { shownArgsOf } from '../../../../toolShownArgs.js';
 import type { AskedArgument } from '../../../arguments/sourceCorrection.js';
+import { prepareSourceContractFeedback } from '../../../findings/sourceContractFeedback.js';
 import { toolBatchFailure } from '../../toolCallShape.js';
 import { hasUnbindableCallId } from '../../batchParties.js';
 import { restoreServedParties, saveServedParties } from '../../servedParties.js';
@@ -160,6 +161,12 @@ export function buildToolBatchExecution(
                 return false;
               const rows = inputs.pendingOmissions(scope, scope.turnNumber as number, iteration);
               if (!inputs.onlyOmissions(rows, asks)) return false;
+              const feedback = prepareSourceContractFeedback(
+                toolCalls,
+                rows,
+                deps.findings === true,
+              );
+              if (feedback === undefined) return false;
               scope.$getEnv().signal?.throwIfAborted();
               const bound = toolCalls.map((call) => ({
                 call,
@@ -179,12 +186,7 @@ export function buildToolBatchExecution(
                 operations.judgeColumns(scope, at, undefined);
               }
               noteUndispatchedRowsets(toolCalls);
-              refuseSourceDeclarationBatch(
-                scope,
-                toolCalls,
-                new Set(rows.map((row) => row.toolCallId)),
-                shownCalls,
-              );
+              refuseSourceDeclarationBatch(scope, toolCalls, feedback, shownCalls);
               return true;
             },
           }),

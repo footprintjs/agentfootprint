@@ -62,6 +62,9 @@ export async function run(input: string): Promise<unknown> {
       answer,
       executions,
       ledger: agent.findings(),
+      protocolFeedback: (agent.getSnapshot()?.sharedState.history ?? [])
+        .filter((message) => message.role === 'tool' && message.toolResultOrigin === 'not-entered')
+        .map((message) => message.content),
       limitation:
         'A verified source declaration traces bytes; it does not prove relevance or truth.',
     };
