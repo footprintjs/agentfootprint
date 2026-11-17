@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.9.0] - 2026-11-17
+
+### Added
+
+- **Correct an omitted argument-source declaration once before asking the person.** Opt in with `inputsLayer({ argumentSources: true, declarationCorrection: 'once' })`. The native batch barrier holds every proposed tool call, asks the model for an actual source declaration and verifies its new proposal through the existing checks. False or malformed claims and genuinely missing values keep their human-question or refusal path. The allowance survives same-request pause/crash recovery and resets on a new human turn; framework notices never become source evidence.
+
 ## [14.8.0] - 2026-11-17
 
 ### Added
