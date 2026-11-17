@@ -200,6 +200,9 @@ export function buildCatalog(
     environment.seededHonestyLayers = honestyLayersOf({
       inputs: inputsArmed,
       argumentSources,
+      ...(this.configuration.sourceDeclarationCorrection !== undefined && {
+        declarationCorrection: this.configuration.sourceDeclarationCorrection,
+      }),
       results: resultsArmed,
       answer: answerArmed,
     });

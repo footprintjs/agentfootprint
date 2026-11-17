@@ -559,7 +559,7 @@ describe('silent success — stored conversations', () => {
   });
 
   it('STATED: the fingerprint rule is the embedder rule — both sides, or nothing', () => {
-    const src = read('core/runCheckpoint.ts');
+    const src = read('core/runCheckpointTypes.ts');
     expect(src).toContain('BOTH sides named themselves');
     expect(src).toContain("A default id (`'agent'`) is not");
     expect(src).toContain('the embedder fingerprint already uses');

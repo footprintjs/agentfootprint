@@ -267,6 +267,7 @@ export class AgentBuilder {
   /** `.inputsLayer({ argumentSources: true })` (honesty layer 2): declared
    *  sources without the findings ledger. False unless asked for. */
   private inputsLayerSourcesValue = false;
+  private declare inputsLayerCorrectionValue?: 'once';
   /** `.resultsLayer()` (honesty layer 3, step 7b). False for every agent that
    *  did not ask for it; a REGISTERED tool with a `ToolPeriod` arms the layer
    *  on its own, so this is for provider-served tools and for tools that
@@ -1850,54 +1851,51 @@ export class AgentBuilder {
   }
 
   /**
-   * Mount the INPUTS LAYER (honesty layer 2) for ruled tools the build cannot
-   * see — tools a `ToolProvider` serves.
+   * Mount the inputs layer for ruled tools a ToolProvider serves. Registered
+   * `askOrAssume` tools arm it automatically; a provider's tools are known only
+   * per iteration. A ruled tool met without the layer is refused, never run
+   * unruled. Missing declared defaults are filled, recorded as `default`,
+   * described after the result, and read as assumed by the answer's standing.
    *
-   * A tool that declares `askOrAssume` (`defineTool({ …, askOrAssume: { window:
-   * { assume: '2h' } } })`) arms the layer by itself when it is REGISTERED on
-   * the agent (`.tool()`, a skill's tools, an MCP tool registered here): the
-   * library fills a value the call leaves out, files it on the findings ledger
-   * as `default`, tells the model in a note on the result, and the answer's
-   * standing says the value was assumed. A ToolProvider's list is only known
-   * per iteration, so the build cannot see its ruled tools — and a ruled tool
-   * met on an agent without the layer is REFUSED rather than run unruled,
-   * because configured-and-inert looks exactly like configured-and-working.
-   * This one line mounts the layer so those tools' rules apply.
+   * `argumentSources: true` checks the model's `_findings.from`: a person's
+   * quote, a result ID, an earlier answer, app text or an assumed choice. It
+   * serves `from` alone on ruled tools without the findings ledger. Beside
+   * `.findings()`, both use that door's ordinary combined schema. An untraced
+   * ask-ruled value raises the existing typed human question.
    *
-   * `argumentSources: true` arms DECLARED SOURCES without the findings
-   * ledger: each ruled tool's served schema carries the reserved `_findings`
-   * argument with `from` alone — where each argument value came from (the
-   * person's words as a `quote`, a result's `id`, an earlier answer, the app,
-   * or `'assumed'`) — and the layer CHECKS each claim before the batch runs;
-   * under an `ask` rule a value the checks do not trace is asked of the
-   * person. The same checks and rows as `.findings({ argumentSources: true })`,
-   * without the ledger's `_findings` schema on every tool (about 2,500
-   * characters each) — `.findings()` beside it serves both, exactly as that
-   * door does.
+   * `declarationCorrection: 'once'` optionally holds the whole proposed batch
+   * for one missing-declaration correction before that question. It requires
+   * declared sources from either door; it never infers a source, repairs a
+   * false/malformed claim or bypasses a genuinely missing human value. A new
+   * proposal must pass the ordinary checks. The native spent marker survives
+   * same-request pause/crash recovery in pooled or recreated Agents, and resets
+   * on a genuine new human turn. Existing iteration/request bounds still apply.
    *
-   * Off → the chart is byte-identical (nothing mounted, decorated, read or
-   * written).
+   * Off: nothing new is mounted, decorated, read or written.
    *
    * @example
-   *   const agent = Agent.create({ provider, model })
-   *     .toolProvider(fleetTools)   // lists a tool that declares askOrAssume
-   *     .inputsLayer()
-   *     .build();
+   *   Agent.create({ provider, model }).toolProvider(fleetTools).inputsLayer().build();
    *
    * @example
-   *   // The model says where each ruled value came from; the library checks it.
-   *   const agent = Agent.create({ provider, model })
-   *     .tool(searchLogs)           // declares askOrAssume: { window: { ask, choices } }
-   *     .inputsLayer({ argumentSources: true })
-   *     .build();
+   *   Agent.create({ provider, model }).tool(searchLogs)
+   *     .inputsLayer({ argumentSources: true, declarationCorrection: 'once' }).build();
    */
-  inputsLayer(options?: { readonly argumentSources?: boolean }): this {
+  inputsLayer(options?: {
+    readonly argumentSources?: boolean;
+    readonly declarationCorrection?: 'once';
+  }): this {
     return configureInputsLayer(
       livePort<InputsLayerPort>({
         inputsLayerValue: {
           get: () => this.inputsLayerValue,
           set: (value) => {
             this.inputsLayerValue = value;
+          },
+        },
+        inputsLayerCorrectionValue: {
+          get: () => this.inputsLayerCorrectionValue,
+          set: (value) => {
+            this.inputsLayerCorrectionValue = value;
           },
         },
         inputsLayerSourcesValue: {
@@ -3129,6 +3127,7 @@ export class AgentBuilder {
         timeValue: { get: () => this.timeValue },
         opts: { get: () => this.opts },
         inputsLayerSourcesValue: { get: () => this.inputsLayerSourcesValue },
+        inputsLayerCorrectionValue: { get: () => this.inputsLayerCorrectionValue },
         selfExplainConfig: { get: () => this.selfExplainConfig },
         registry: { get: () => this.registry },
         evidenceGate: { get: () => this.evidenceGate },

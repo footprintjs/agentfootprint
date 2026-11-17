@@ -600,6 +600,7 @@
     "asked": "kept",
     "claimed": "kept",
     "coincides": "kept",
+    "correction": "kept",
     "earlier": "kept",
     "failed": "kept",
     "free": "kept",
@@ -614,7 +615,8 @@
     "toolCallId": "kept",
     "toolName": "kept",
     "turn": "kept",
-    "valueChars": "kept"
+    "valueChars": "kept",
+    "withheld": "kept"
   },
   "agentfootprint.findings.contingent": {
     "carriers": "kept",

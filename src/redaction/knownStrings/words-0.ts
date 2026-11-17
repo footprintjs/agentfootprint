@@ -184,6 +184,7 @@ export const words0 = {
   avg: true,
   backtick: true,
   base: true,
+  'batch-preempted': true,
   bears: true,
   'before-tool': true,
   below: true,
@@ -301,5 +302,4 @@ export const words0 = {
   framework: true,
   gate_open: true,
   gated: true,
-  get: true,
 } as const;

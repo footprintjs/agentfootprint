@@ -139,6 +139,7 @@ export const fields0 = {
   contentWithheld: true,
   continuity: true,
   corpusEmpty: true,
+  correction: true,
   correctiveMessageHash: true,
   count: true,
   coverage: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   llm: true,
   local: true,
   localeCompare: true,
-  lookedFor: true,
 } as const;

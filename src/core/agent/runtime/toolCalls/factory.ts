@@ -72,6 +72,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       ...(environment.inputsArmed && { inputsLayer: true as const }),
       // Declared sources: the peel reads `_findings.from` as the layer did.
       ...(environment.argumentSources && { argumentSources: true as const }),
+      ...(environment.configuration.sourceDeclarationCorrection !== undefined && {
+        declarationCorrection: environment.configuration.sourceDeclarationCorrection,
+      }),
       // The results layer (honesty layer 3, step 7b) — read in one place: a
       // period a result declares with NO layer mounted is dev-warned (nobody
       // will file its verdict). And the turn stamp, as under any layer.

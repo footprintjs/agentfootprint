@@ -70,6 +70,7 @@ export interface ToolEvidencePort {
    * `.inputsLayer()`; every other call runs exactly as it always did.
    */
   readonly inputsLayer?: true;
+  readonly declarationCorrection?: 'once';
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
    * true })` or `.inputsLayer({ argumentSources: true })`) — present only

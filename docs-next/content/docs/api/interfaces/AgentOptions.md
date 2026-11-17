@@ -507,7 +507,7 @@ Stable id used for topology + events. Default: 'agent'.
 
 ### inputsLayer?
 
-> `readonly` `optional` **inputsLayer?**: `boolean` \| \{ `argumentSources?`: `boolean`; \}
+> `readonly` `optional` **inputsLayer?**: `boolean` \| `InputsLayerOptions`
 
 Defined in: [src/core/agent/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L171)
 

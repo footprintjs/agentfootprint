@@ -507,7 +507,12 @@ export function wantsRecordedContext(scope: object): boolean {
  * this library, not bound to a runner — is a run whose state is unknown: its
  * payload is the placeholder (fail closed), never the payload as made.
  */
-export function emitServed(scope: EmitScope, type: string, payload: unknown): void {
+export function emitServed(
+  scope: EmitScope,
+  type: string,
+  payload: unknown,
+  servedPayload?: unknown,
+): void {
   const registration = scopeRuns.get(scope as object);
   const computation = registration?.computation;
   // Private reduction precedes native $emit: native's later stale-scope refusal
@@ -519,7 +524,10 @@ export function emitServed(scope: EmitScope, type: string, payload: unknown): vo
     return;
   }
   entry.run.real(type, payload, entry.stageId);
-  scope.$emit(type, entry.run.serving.payload(type, payload));
+  scope.$emit(
+    type,
+    entry.run.serving.payload(type, servedPayload === undefined ? payload : servedPayload),
+  );
 }
 
 /** A scope that can set a value — structurally footprintjs's `TypedScope` `$setValue`. */
