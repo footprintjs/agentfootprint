@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.7.3] - 2026-11-17
+
+### Fixed
+
+- **Native argument questions no longer fail with `checker_dead` before their tools can run.** A batch held for a person's input now records honest no-result encounters for its armed write checks. Completed results and findings, real checker liveness, and successful reply/resume behavior remain intact.
+
 ## [14.7.2] - 2026-11-16
 
 _Internal changes only — nothing a user of the library can see._
