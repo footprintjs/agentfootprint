@@ -85,6 +85,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  findings ledger's own serve stays `findingsOptions`'s: without
    *  `.findings()` the arm plants `_findings.from` on ruled tools only. */
   readonly argumentSourcesArmed?: true;
+  readonly sourceDeclarationCorrection?: 'once';
 
   /** `AgentOptions.argumentAskContext` (honesty layer 2): the host's own
    *  context for the inputs layer's batch ask, handed to the dispatch stage

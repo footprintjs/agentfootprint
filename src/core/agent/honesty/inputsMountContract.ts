@@ -4,6 +4,7 @@ import type { ToolOf } from '../arguments/resolve.js';
 import type { ZoneName } from '../../../time/zone.js';
 /** What an armed agent hands the inputs layer's mount — closures, never scope. */
 export interface InputsMountDeps {
+  readonly declarationCorrection?: 'once';
   /** Filter refused references before input planning can consult host-supplied sources. */
   readonly findings?: true;
   /**

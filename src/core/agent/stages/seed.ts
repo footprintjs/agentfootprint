@@ -22,12 +22,12 @@ import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
+import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import type { MemoryStore } from '../../../memory/store/index.js';
 import { resolveTurnNumber } from '../../../memory/turn/index.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
-import type { EvidenceRecoveryCheckpoint } from '../../runCheckpoint.js';
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from '../../runCheckpoint.js';
 import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
@@ -46,7 +46,7 @@ import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../m
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
 import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
-import { historyForTurn } from '../runtime/conversation/seedHistory.js';
+import { historyForTurn, turnNumberFor } from '../runtime/conversation/seedHistory.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
 export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
@@ -82,6 +82,8 @@ export interface SeedStageDeps {
   readonly consumePendingResumeHistory: () => PendingResumeHistory | undefined;
   /** Same-request recovery only. A new human turn never supplies this state. */
   readonly consumePendingEvidenceRecovery?: () => EvidenceRecoveryCheckpoint | undefined;
+  readonly sourceDeclarationCorrection?: 'once';
+  readonly consumePendingSourceDeclarationCorrection?: () => AgentRunCheckpoint['sourceDeclarationCorrection'];
   /**
    * The agent keeps a tool-call ledger for `answerValidation`
    * (`AgentState.toolCallLedger`). Seed starts it on every run: a `resumeOnError` leg
@@ -335,59 +337,6 @@ export interface SeedStageDeps {
 }
 
 /**
- * How many user turns the conversation already contains, this one included.
- * At least 1 — a run always IS a turn.
- */
-function countUserTurns(history: readonly LLMMessage[]): number {
-  let count = 0;
-  for (const message of history) if (message.role === 'user') count++;
-  return Math.max(1, count);
-}
-
-/** A stamp that counts as a turn: a positive whole number. */
-const isTurn = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
-
-/**
- * WHICH TURN THIS IS, while an honesty layer is armed — the stamp every
- * ledger row of this turn carries (`findings/ledger.ts` · `recordFindings`)
- * and the one the answer's standing reads "this turn" by, so it must never
- * repeat in one conversation. `countUserTurns` cannot promise that on its
- * own: a window strategy or a compaction trims the stored history, and the
- * count of the user messages left repeats and goes backwards — an earlier
- * turn's verdict would then be folded as a later turn's.
- *
- * Two floors raise the count, each a lower bound of the true turn (the rule
- * `memory/turn/resolveTurnNumber.ts` applies to a store: whichever source
- * knows more wins, and none drags the conversation backwards):
- *   - the turn the stored history ENDS on (`AgentRunCheckpoint.turnNumber`):
- *     a continued conversation is the turn after it, a `resumeOnError` retry
- *     the same turn again;
- *   - the latest turn stamped on the restored ledger — for a conversation
- *     stored before the checkpoint carried its turn: a continued
- *     conversation comes after every stamped row, a retry at or after them.
- *
- * With neither — a fresh run, or no layer armed — the count, as always.
- */
-function turnNumberFor(
-  history: readonly LLMMessage[],
-  resume: PendingResumeHistory | undefined,
-  ledger: FindingsLedger | undefined,
-  stamped: boolean,
-): number {
-  const counted = countUserTurns(history);
-  if (!stamped || resume === undefined) return counted;
-  const next = resume.appendsUserTurn ? 1 : 0;
-  let turn = counted;
-  if (isTurn(resume.turn)) turn = Math.max(turn, resume.turn + next);
-  for (const row of ledger ?? []) {
-    const stamp = (row as { readonly turn?: unknown }).turn;
-    if (isTurn(stamp)) turn = Math.max(turn, stamp + next);
-  }
-  return turn;
-}
-
-/**
  * Raise `scope.turnNumber` to what the conversation's own stores know.
  *
  * The turn number is the KEY memory writes stamp on their entries, so two
@@ -570,6 +519,14 @@ function seedFrom(
   // accessor clears the field, so a later run without a continuation starts
   // fresh.
   const resume = mounted ? undefined : deps.consumePendingResumeHistory();
+  const correction = mounted ? undefined : deps.consumePendingSourceDeclarationCorrection?.();
+  if (
+    deps.sourceDeclarationCorrection === 'once' &&
+    resume !== undefined &&
+    !resume.appendsUserTurn &&
+    correction?.spent === true
+  )
+    scope.sourceDeclarationCorrectionSpent = true;
   const history = historyForTurn(resume, message);
   scope.history = history;
   seedSourceEvidence(scope, deps, mounted);

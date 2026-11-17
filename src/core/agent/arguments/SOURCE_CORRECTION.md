@@ -1,0 +1,9 @@
+## One omitted source declaration, corrected natively
+
+`inputsLayer({ argumentSources: true, declarationCorrection: 'once' })` optionally holds the whole current batch for one source-declaration correction per human request. It only recognizes absence through the existing reserved reader; it never infers a claim, repairs a false claim, or bypasses a real missing human value/time confirmation. The ordinary off path stays unchanged.
+
+`sourceCorrection.ts` is the pure eligibility/settlement leaf. Under the new arm, RECORD defers only already masked omission rows as native working data. The existing ToolCalls barrier settles them once through the ledger writer: actual correction, actual human question, or known native preemption. No append-only row is rewritten, and no early `asked`/`source` verdict is fabricated. Framework feedback uses genuine call correlations, zero producer bytes and the existing `not-entered` origin; normal provider request projection removes these internal fields.
+
+The spent marker is separate from evidence and output repair. The native checkpoint/seed owner preserves it for same-request recovery and resets it for a new human turn. Both dynamic charts keep inputs and ToolCalls on their outer native scope, so these working fields require no phantom mapping through the grouped model/context subflow. See `docs-next/content/docs/debug/source-declaration-correction.mdx` and runnable example `examples/features/122-source-declaration-correction.ts`.
+
+Native refusals discovered during current time/origin admission settle only their own pending candidate members before an early return or a human pause. The correction decision reads those same current native entries. Other unasked members stay staged until their actual question; no earlier refusal is silently cleared by a later inputs pass.

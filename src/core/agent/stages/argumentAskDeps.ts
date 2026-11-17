@@ -2,6 +2,8 @@ import type { ToolOf } from '../arguments/resolve.js';
 import type { ZoneName } from '../../../time/zone.js';
 import type { TimeAskMessages } from '../../../time/ask.js';
 import type { TimePolicy } from '../../../time/resolve.js';
+import type { CallAsk } from '../arguments/ask.js';
+import type { AskedArgument } from '../arguments/sourceCorrection.js';
 
 /** What the dispatch stage hands the ask — closures, never scope. */
 export interface ArgumentAskDeps {
@@ -10,7 +12,11 @@ export interface ArgumentAskDeps {
   readonly admitAnswer?: () => void;
   readonly saveParties?: () => void;
   /** Immediately before a newly raised input pause, while this batch is wholly undispatched. */
-  readonly beforePause?: () => void;
+  readonly beforePause?: (asked: readonly AskedArgument[]) => void;
+  /** Only after the native time/protocol owner confirms this batch has no other human obligation. */
+  readonly correctOmissions?: (asks: readonly CallAsk[]) => boolean;
+  /** Current native refusals, before early return or any newly raised human pause. */
+  readonly refusedCalls?: (ids: readonly string[]) => void;
   readonly pendingAsk?: boolean;
   readonly settledAsk?: () => void;
   readonly refuseMalformedBatch?: () => boolean;

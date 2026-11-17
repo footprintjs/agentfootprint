@@ -8,7 +8,7 @@ import type { DispositionLedger } from '../../integrity/disposition/ledger.js';
 import type { RunCheckpointTracker } from '../runCheckpoint.js';
 import type { ClockDraft, ReadRunTime } from '../../time/clock.js';
 import type { AnsweredAsk } from '../../tools/inputRequest.js';
-import type { EvidenceRecoveryCheckpoint } from '../runCheckpoint.js';
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
 import type { FoldedSpan } from './window/types.js';
 import type { buildSeedStage, PendingResumeHistory } from './stages/seed.js';
@@ -47,6 +47,7 @@ export interface AgentRunValues extends RunnerCoreValues {
   pendingResumeHistory?: PendingResumeHistory;
   pendingResumeSourceEvidence?: SourceEvidenceIndex;
   pendingEvidenceRecovery?: EvidenceRecoveryCheckpoint;
+  pendingSourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'];
   pendingResumeFolded?: readonly FoldedSpan[];
   pendingResumeFindingsLedger?: FindingsLedger;
   pendingResumeSkillCursor?: string;

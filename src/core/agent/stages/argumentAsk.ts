@@ -309,6 +309,14 @@ export function askBeforeDispatch(
   const turn = scope.turnNumber as number;
   const calls = batchOf(scope).filter((call) => !deps.excludedCallIds?.includes(call.id));
   const entries = new Map(resolutions);
+  const notifyRefusals = (current: ReadonlyMap<string, ArgumentResolution>) => {
+    if (deps.refusedCalls !== undefined)
+      deps.refusedCalls(
+        [...current.values()]
+          .filter((entry) => entry.refused !== undefined)
+          .map((entry) => entry.toolCallId),
+      );
+  };
   const time = askTimeOf(scope, deps);
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const readings = readingsOf(ledger, turn);
@@ -346,6 +354,7 @@ export function askBeforeDispatch(
       }
     }
   }
+  notifyRefusals(entries);
   const asks: CallAsk[] = [...entries.values()].flatMap((r) =>
     r.refused === undefined && r.ask !== undefined && r.ask.length > 0
       ? [
@@ -362,6 +371,15 @@ export function askBeforeDispatch(
   if (asks.length === 0 && origins.length === 0 && stored === undefined)
     return { resolutions: entries, answered: false };
   if (deps.refuseMalformedBatch?.() === true)
+    return { resolutions: entries, answered: false, refused: true };
+  if (
+    deps.correctOmissions !== undefined &&
+    stored === undefined &&
+    origins.length === 0 &&
+    ![...entries.values()].some((entry) => entry.refused !== undefined) &&
+    !asks.some((ask) => ask.window === true) &&
+    deps.correctOmissions?.(asks) === true
+  )
     return { resolutions: entries, answered: false, refused: true };
   requirePrivateQuestionSupport(
     scope,
@@ -435,6 +453,7 @@ export function askBeforeDispatch(
   let round = nextAskRound(state);
   if (round === undefined && state.partial?.phase === 'complete-arguments') {
     const completed = withSettled(entries, state, calls);
+    notifyRefusals(completed);
     const eligible = origins.filter(
       (origin) => completed.get(origin.call.id)?.refused === undefined,
     );
@@ -474,7 +493,16 @@ export function askBeforeDispatch(
     markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
     scope.argumentAsk = next;
     deps.saveParties?.();
-    deps.beforePause?.();
+    deps.beforePause?.(
+      waiting.fieldIndexes.flatMap((index) =>
+        next.fields[index].members.flatMap((member) =>
+          member.toolCallIds.map((toolCallId) => ({
+            toolCallId,
+            argument: member.argument,
+          })),
+        ),
+      ),
+    );
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
@@ -560,5 +588,6 @@ export function askBeforeDispatch(
       }
     }
   }
+  notifyRefusals(settled);
   return { resolutions: settled, answered };
 }

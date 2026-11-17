@@ -38,7 +38,10 @@ import { requestOf } from '../../../requestOfRun.js';
 import { withoutTime } from '../../run/withoutTime.js';
 import { resumeRedactionOf } from '../../run/resumeRedaction.js';
 import type { AgentContext } from '../contracts.js';
-import { sourceEvidenceOf } from '../conversation/checkpointParts.js';
+import {
+  sourceDeclarationCorrectionOf,
+  sourceEvidenceOf,
+} from '../conversation/checkpointParts.js';
 
 export async function resume(
   this: Pick<AgentContext, 'native' | 'resumeOwned'>,
@@ -98,6 +101,18 @@ export async function resumeLeg(
   // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
   // without reaching it, refused or aborted, used nothing.
   resumeStateOf(checkpoint);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
+    checkpoint.sharedState,
+    'sourceDeclarationCorrectionSpent',
+  );
+  if (
+    sourceDeclarationCorrection !== undefined &&
+    (this.configuration.sourceDeclarationCorrection !== 'once' ||
+      this.configuration.argumentSourcesArmed !== true)
+  )
+    throw new TypeError(
+      'Resume requires the source declaration correction setting used by the paused request.',
+    );
   const sourceEvidence = sourceEvidenceOf(checkpoint.sharedState);
   const sourceEvidenceConfig = this.configuration.sourceEvidenceConfig;
   if (sourceEvidenceConfig === undefined && sourceEvidence !== undefined)

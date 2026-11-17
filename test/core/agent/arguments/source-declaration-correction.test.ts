@@ -121,11 +121,27 @@ function notices(request: SeenRequest | undefined, ids: readonly string[]) {
   );
 }
 
-function expectCorrectionNotice(request: SeenRequest | undefined, ids: readonly string[]) {
+function expectCorrectionNotice(
+  agent: Agent,
+  request: SeenRequest | undefined,
+  ids: readonly string[],
+) {
   const found = notices(request, ids);
   expect(found).toHaveLength(ids.length);
   for (const message of found) {
-    expect(message.toolChars).toBe(0);
+    expect(message).not.toHaveProperty('toolChars');
+    expect(message).not.toHaveProperty('toolResultOrigin');
+    const state = agent.getSnapshot()?.sharedState as {
+      readonly history?: SeenRequest['messages'];
+    };
+    const committed = (state.history ?? []).find(
+      (entry) => entry.role === 'tool' && entry.toolCallId === message.toolCallId,
+    );
+    expect(committed).toMatchObject({
+      toolChars: 0,
+      toolResultOrigin: 'not-entered',
+      content: message.content,
+    });
     expect(String(message.content)).toContain(CODE);
     expect(String(message.content)).not.toContain(VM);
   }
@@ -150,7 +166,7 @@ describe('failure-first: native source declaration correction is an explicit inp
         expect(f.requests).toHaveLength(3);
         expect(f.atRequest).toEqual([0, 0, 1]);
         expect(f.executions).toEqual([{ tool: TOOL, args: { vm: VM } }]);
-        expectCorrectionNotice(f.requests[1], ['omitted-parent']);
+        expectCorrectionNotice(f.agent, f.requests[1], ['omitted-parent']);
         const first = rowsOf(f.agent).find(
           (row) => row.kind === 'argument' && row.toolCallId === 'omitted-parent',
         );
@@ -197,7 +213,7 @@ describe('failure-first: native source declaration correction is an explicit inp
     try {
       expect(await f.agent.run({ message: QUESTION })).toBe('Done.');
       expect(f.atRequest).toEqual([0, 0, 1]);
-      expectCorrectionNotice(f.requests[1], ['missing-entry']);
+      expectCorrectionNotice(f.agent, f.requests[1], ['missing-entry']);
       expect(f.executions).toEqual([
         { tool: TOOL, args: { vm: VM, ...(Object.hasOwn(args, 'limit') && { limit: 7 }) } },
       ]);
@@ -217,7 +233,7 @@ describe('failure-first: native source declaration correction is an explicit inp
       expect(await f.agent.run({ message: QUESTION })).toBe('Done.');
       expect(f.atRequest).toEqual([0, 0, 2]);
       expect(f.executions.map((entry) => entry.tool)).toEqual(['write_synthetic_marker', TOOL]);
-      expectCorrectionNotice(f.requests[1], ['held-sibling', 'held-disks']);
+      expectCorrectionNotice(f.agent, f.requests[1], ['held-sibling', 'held-disks']);
       const disposition = f.events.findLast(
         (event) => event.type === 'agentfootprint.integrity.disposition',
       );
@@ -248,7 +264,7 @@ describe('failure-first: native source declaration correction is an explicit inp
       expect(isPaused(out)).toBe(true);
       expect(f.requests).toHaveLength(2);
       expect(f.executions).toEqual([]);
-      expectCorrectionNotice(f.requests[1], ['omission-one']);
+      expectCorrectionNotice(f.agent, f.requests[1], ['omission-one']);
       expect(rowsOf(f.agent).filter((row) => row.correction === CODE)).toHaveLength(1);
       expect(rowsOf(f.agent)).toContainEqual(
         expect.objectContaining({
@@ -314,7 +330,7 @@ describe('failure-first: native source declaration correction is an explicit inp
       expect(isPaused(out)).toBe(true);
       expect(f.requests).toHaveLength(2);
       expect(f.executions).toEqual([]);
-      expectCorrectionNotice(f.requests[1], ['withheld-result']);
+      expectCorrectionNotice(f.agent, f.requests[1], ['withheld-result']);
       expect(rowsOf(f.agent)).toContainEqual(
         expect.objectContaining({
           kind: 'argument',

@@ -64,6 +64,7 @@ export interface AssemblyPort extends ContractsPort, StepsPort, DeferredPort {
   timeValue?: TimeOptions;
   readonly opts: AgentOptions;
   inputsLayerSourcesValue: boolean;
+  inputsLayerCorrectionValue?: 'once';
   selfExplainConfig?: Parameters<SelfExplainExtension['binding']>[0];
   readonly registry: ToolRegistryEntry[];
   evidenceGate?: ResolvedEvidenceGate;
@@ -132,11 +133,11 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
           // armed by either stay armed, and a malformed option is still refused
           // by the one reader rather than silently replaced by the door's value.
           ...(self.inputsLayerValue && {
-            inputsLayer:
-              self.inputsLayerSourcesValue ||
-              readInputsLayerOption(self.opts.inputsLayer)?.argumentSources === true
-                ? { argumentSources: true }
-                : true,
+            inputsLayer: mergeInputsLayerOption(
+              self.opts.inputsLayer,
+              self.inputsLayerSourcesValue,
+              self.inputsLayerCorrectionValue,
+            ),
           }),
           // The results layer (honesty layer 3), the same door grammar.
           ...(self.resultsLayerValue && { resultsLayer: true }),
@@ -482,4 +483,21 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
     agent.bindSelfExplain(selfExplainBinding);
   }
   return agent;
+}
+
+/** Validate the direct door even when the builder also arms inputs; preserve both options. */
+function mergeInputsLayerOption(
+  value: AgentOptions['inputsLayer'],
+  sources: boolean,
+  correction: 'once' | undefined,
+): NonNullable<AgentOptions['inputsLayer']> {
+  const direct = readInputsLayerOption(value);
+  const argumentSources = sources || direct?.argumentSources === true;
+  const declarationCorrection = correction ?? direct?.declarationCorrection;
+  return argumentSources || declarationCorrection !== undefined
+    ? {
+        ...(argumentSources && { argumentSources: true }),
+        ...(declarationCorrection !== undefined && { declarationCorrection }),
+      }
+    : true;
 }

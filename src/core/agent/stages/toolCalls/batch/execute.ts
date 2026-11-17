@@ -1,4 +1,7 @@
-import { refuseToolBatch } from './refusal.js';
+import { refuseToolBatch, refuseSourceDeclarationBatch } from './refusal.js';
+import { recordFindings } from '../../../findings/ledger.js';
+import { shownArgsOf } from '../../../../toolShownArgs.js';
+import type { AskedArgument } from '../../../arguments/sourceCorrection.js';
 import { toolBatchFailure } from '../../toolCallShape.js';
 import { hasUnbindableCallId } from '../../batchParties.js';
 import { restoreServedParties, saveServedParties } from '../../servedParties.js';
@@ -43,6 +46,7 @@ export function buildToolBatchExecution(
     }
     const { toolCalls, iteration, findingsRefusals } = operations.admitFindingsBatch(scope);
     if (hasUnbindableCallId(toolCalls)) {
+      if (deps.declarationCorrection !== undefined) scope.argumentSourceOmissionRows = [];
       refuseToolBatch(scope, 'invalid-call-id');
       return;
     }
@@ -50,7 +54,50 @@ export function buildToolBatchExecution(
     // `import()` only under the arm, so an unarmed batch awaits nothing new.
     const inputs: InputsDispatch | undefined =
       deps.inputsLayer === true ? await import('../../../arguments/dispatch.js') : undefined;
-    let resolutions = readBatchResolutions(scope, inputs, iteration, toolCalls, findingsRefusals);
+    let resolutions = readBatchResolutions(
+      scope,
+      inputs,
+      iteration,
+      toolCalls,
+      findingsRefusals,
+      deps.declarationCorrection === undefined,
+    );
+    const originalResolutions = resolutions;
+    const settle = (
+      outcome: 'correction' | 'asked' | 'preempted',
+      members?: readonly AskedArgument[],
+    ) => {
+      if (deps.declarationCorrection === undefined || inputs === undefined) return;
+      const turn = scope.turnNumber as number;
+      inputs.settleOmissions(
+        scope,
+        turn,
+        iteration,
+        outcome,
+        (rows) => recordFindings(scope, rows, { turn }),
+        members,
+      );
+    };
+    const settleRefused = (ids: readonly string[]) => {
+      if (deps.declarationCorrection === undefined || inputs === undefined || ids.length === 0)
+        return;
+      const refused = new Set(ids);
+      settle(
+        'preempted',
+        inputs
+          .pendingOmissions(scope, scope.turnNumber as number, iteration)
+          .filter((row) => refused.has(row.toolCallId)),
+      );
+    };
+    if (deps.declarationCorrection !== undefined)
+      settleRefused([
+        ...toolCalls
+          .filter((_, index) => findingsRefusals[index] !== undefined)
+          .map((call) => call.id),
+        ...[...(resolutions?.values() ?? [])]
+          .filter((entry) => entry.refused !== undefined)
+          .map((entry) => entry.toolCallId),
+      ]);
     // ── THE BATCH ASK (honesty layer 2, step 4) — FIRST, before anything
     // is written or dispatched: when the layer named an `ask` argument a
     // call of this batch left out, the person is asked ONCE for everything
@@ -79,9 +126,50 @@ export function buildToolBatchExecution(
         refuseMalformedBatch: () => {
           const malformed = toolBatchFailure(toolCalls);
           if (malformed === undefined) return false;
+          settle('preempted');
           refuseToolBatch(scope, malformed);
           return true;
         },
+        ...(deps.declarationCorrection !== undefined &&
+          inputs !== undefined && {
+            refusedCalls: settleRefused,
+            correctOmissions: (asks: readonly import('../../../arguments/ask.js').CallAsk[]) => {
+              if (
+                deps.servedTools?.argumentAskPending === true ||
+                scope.sourceDeclarationCorrectionSpent === true ||
+                toolCalls.some((call) => call.argumentsFailure !== undefined) ||
+                findingsRefusals.some((refusal) => refusal !== undefined)
+              )
+                return false;
+              const rows = inputs.pendingOmissions(scope, scope.turnNumber as number, iteration);
+              if (!inputs.onlyOmissions(rows, asks)) return false;
+              scope.$getEnv().signal?.throwIfAborted();
+              const bound = toolCalls.map((call) => ({
+                call,
+                tool: operations.resolveTool(call.name).tool,
+                args: operations.peelCall(call).args,
+              }));
+              const shownCalls = bound.map(({ call, tool, args }) => ({
+                ...call,
+                args: shownArgsOf(tool, args),
+              }));
+              scope.$getEnv().signal?.throwIfAborted();
+              scope.sourceDeclarationCorrectionSpent = true;
+              settle('correction');
+              for (const call of toolCalls) {
+                const at = { toolName: call.name, toolCallId: call.id, iteration };
+                operations.noticeEmptyLookup(scope, at, call.args, undefined, [], false);
+                operations.judgeColumns(scope, at, undefined);
+              }
+              refuseSourceDeclarationBatch(
+                scope,
+                toolCalls,
+                new Set(rows.map((row) => row.toolCallId)),
+                shownCalls,
+              );
+              return true;
+            },
+          }),
         excludedCallIds: toolCalls
           .filter((_, index) => findingsRefusals[index] !== undefined)
           .map((call) => call.id),
@@ -95,8 +183,11 @@ export function buildToolBatchExecution(
             partyOf: (name) => operations.resolveTool(name).party,
             argumentAsk: true,
           }),
-        ...((deps.emptyLookupGrounding !== undefined || deps.columnDeclarations !== undefined) && {
-          beforePause: () => {
+        ...((deps.declarationCorrection !== undefined ||
+          deps.emptyLookupGrounding !== undefined ||
+          deps.columnDeclarations !== undefined) && {
+          beforePause: (asked: readonly AskedArgument[]) => {
+            settle('asked', asked);
             // This fresh argument ask holds the WHOLE current batch before
             // dispatch. A promised write has no result yet, so its existing
             // checker meets a not-applicable encounter, never a fabricated
@@ -120,6 +211,13 @@ export function buildToolBatchExecution(
       if (asked.refused === true) return;
       resolutions = asked.resolutions;
       if (asked.answered) askedLayer = inputs;
+    }
+    if (
+      deps.declarationCorrection !== undefined &&
+      inputs !== undefined &&
+      originalResolutions !== undefined
+    ) {
+      inputs.dropUsedKept(scope, originalResolutions, toolCalls);
     }
     const oneQuestionAsked = askedLayer !== undefined;
     const {

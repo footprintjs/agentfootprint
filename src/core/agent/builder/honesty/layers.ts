@@ -1,9 +1,11 @@
+import { readInputsLayerOption, type InputsLayerOptions } from '../../honesty/armed.js';
 import { answerLayerArm } from '../../assessment/answerLayerOptions.js';
 import type { StandingLineWhen } from '../../assessment/compose.js';
 
 export interface InputsLayerPort {
   inputsLayerValue: boolean;
   inputsLayerSourcesValue: boolean;
+  inputsLayerCorrectionValue?: 'once';
 }
 
 export interface ResultsLayerPort {
@@ -16,7 +18,7 @@ export interface AnswerLayerPort {
 
 export function configureInputsLayer<TReceiver extends InputsLayerPort>(
   self: TReceiver,
-  options: { readonly argumentSources?: boolean } | undefined,
+  options: InputsLayerOptions | undefined,
   original: object,
 ): object {
   if (self.inputsLayerValue) {
@@ -37,6 +39,9 @@ export function configureInputsLayer<TReceiver extends InputsLayerPort>(
         `${JSON.stringify(argumentSources)}.`,
     );
   }
+  const read = readInputsLayerOption(options ?? true);
+  if (read?.declarationCorrection !== undefined)
+    self.inputsLayerCorrectionValue = read.declarationCorrection;
   self.inputsLayerValue = true;
   self.inputsLayerSourcesValue = argumentSources === true;
   return original;

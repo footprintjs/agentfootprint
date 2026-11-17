@@ -147,4 +147,6 @@ export interface CallSources {
   readonly toolCallId: string;
   readonly from: readonly DeclaredSource[];
   readonly malformed?: number;
+  /** Full parser fault, irrespective of which native row owns the display count. Correction arm only. */
+  readonly declarationMalformed?: true;
 }

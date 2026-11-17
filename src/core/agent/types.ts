@@ -168,7 +168,7 @@ export interface AgentOptions {
    *
    * Prefer the builder's `.inputsLayer()`. Absent → the chart is byte-identical.
    */
-  readonly inputsLayer?: boolean | { readonly argumentSources?: boolean };
+  readonly inputsLayer?: boolean | import('./honesty/armed.js').InputsLayerOptions;
   /**
    * THE RESULTS LAYER (honesty layer 3) — mount `sf-results` at the loop head
    * even when no REGISTERED tool declares a `ToolPeriod`. A registered tool
