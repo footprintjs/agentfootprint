@@ -11,7 +11,7 @@ When the person's message already names a value, a model can propose the right t
   title="Native source declaration correction, using a free mock"
 />
 
-The first proposal runs no tool. Every call in that proposed batch is held, including otherwise valid siblings. The native ToolCalls stage returns correlated framework feedback and continues through the existing ReAct loop. The new proposal passes the same source checks as any ordinary call. The parent `_findings` property remains optional.
+The first proposal runs no tool. Every call in that proposed batch is held, including otherwise valid siblings. The native ToolCalls stage returns correlated framework feedback and continues through the existing ReAct loop. The new proposal passes the same source checks as any ordinary call. With argument sources enabled, an actual ASK tool requires the library-owned `_findings` envelope and its `from` list, independently of this correction option. An empty list is structurally valid but establishes no source; omitting a genuinely missing business value still raises the ordinary human question. Unruled, assume-only, source-off and author-owned metadata retain their existing schemas.
 
 For the omitted declaration, that feedback includes a closed JSON body naming the public path `['_findings', 'from']`, the missing argument names and the minimal declaration schema with its actual nesting. The schema comes from the same native owner as the offered tool: `basis` plus `from` with findings, `from` alone without it. A root-level `from` is not moved or accepted as metadata. The runnable example also returns the native protocol feedback for inspection; application code needs no parser or retry loop.
 

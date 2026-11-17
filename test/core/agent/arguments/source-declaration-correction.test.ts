@@ -183,7 +183,7 @@ describe('failure-first: native source declaration correction is an explicit inp
         );
         const served = f.requests[0]!.tools!.find((tool) => tool.name === TOOL)!
           .inputSchema as Record<string, unknown>;
-        expect(served.required ?? []).not.toContain('_findings');
+        expect(served.required ?? []).toContain('_findings');
       } finally {
         await f.agent.shutdown();
       }

@@ -2,6 +2,8 @@ import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { toolsWithheld } from '../../core/agent/composeRequest.js';
 import { FORCED_OUTPUT_TOOL_KEY } from '../../core/agent/receipt/receipt.js';
 import type { EpochLocation } from '../epochs.js';
+import { readAtCall as recordedAtCall } from '../epochs.js';
+import { isPlaceholder } from '../../redaction/marker.js';
 import { readAtCall, readRunConstant } from './recordReads.js';
 
 /** A committed tool list, or `undefined` when the key held no array — which is
@@ -19,6 +21,7 @@ export function toolsAt(
   registered: LLMToolSchema[],
   withheld: ReturnType<typeof toolsWithheld>,
   forced: string | undefined,
+  schemasUnknown: boolean,
 ] {
   // ── the tools ──────────────────────────────────────────────────────────
   // `dynamicToolSchemas` is the PRE-assembly list. Two rules run after it and
@@ -39,12 +42,15 @@ export function toolsAt(
     readAtCall(location, 'wrapUpAsked', served),
     readAtCall(location, 'toolsOffAfterRevision', served),
   );
-  const dynamic =
-    toolListOf(readAtCall(location, 'dynamicToolSchemas', served)) ??
-    toolListOf(readAtCall(location, 'toolSchemas', served)) ??
-    [];
-  const registered = withheld !== null ? [] : dynamic;
+  const agentSchemas = toolListOf(readAtCall(location, 'dynamicToolSchemas', served));
+  const schemasUnknown =
+    withheld === null &&
+    served &&
+    (isPlaceholder(recordedAtCall(location, 'dynamicToolSchemas')) ||
+      (agentSchemas === undefined && isPlaceholder(recordedAtCall(location, 'toolSchemas'))));
+  const dynamic = agentSchemas ?? toolListOf(readAtCall(location, 'toolSchemas', served)) ?? [];
+  const registered = withheld !== null || schemasUnknown ? [] : dynamic;
   const forcedRaw = readRunConstant(location, FORCED_OUTPUT_TOOL_KEY, served);
   const forced = typeof forcedRaw === 'string' && forcedRaw.length > 0 ? forcedRaw : undefined;
-  return [registered, withheld, forced];
+  return [registered, withheld, forced, schemasUnknown];
 }

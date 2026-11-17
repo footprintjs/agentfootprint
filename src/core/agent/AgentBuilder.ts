@@ -1859,9 +1859,9 @@ export class AgentBuilder {
    *
    * `argumentSources: true` checks the model's `_findings.from`: a person's
    * quote, a result ID, an earlier answer, app text or an assumed choice. It
-   * serves `from` alone on ruled tools without the findings ledger. Beside
-   * `.findings()`, both use that door's ordinary combined schema. An untraced
-   * ask-ruled value raises the existing typed human question.
+   * serves `from` alone without the ledger; source-armed ASK tools require our
+   * envelope. With `.findings()`, `basis` stays required; other observations stay
+   * optional. An untraced ASK value raises the existing typed human question.
    *
    * `declarationCorrection: 'once'` optionally holds the whole proposed batch
    * for one missing-declaration correction before that question. It requires
@@ -2241,8 +2241,8 @@ export class AgentBuilder {
    *
    * WHY. A long tool-using run serves every result back in full on every
    * call, and what the model already stood on, left open, ruled out or found
-   * to be noise is nowhere but in its head. With this door every served tool
-   * schema carries a reserved optional `_findings` argument: the model
+   * to be noise is nowhere but in its head. `_findings` observations stay
+   * optional; source-armed ASK declarations require our envelope. The model
    * declares a `basis` for each call before the result exists ('direct' when
    * it expects the answer, 'exploratory' when it is looking) and, on its next
    * tool call or as a top-level `_findings.previous` on a JSON answer, the
