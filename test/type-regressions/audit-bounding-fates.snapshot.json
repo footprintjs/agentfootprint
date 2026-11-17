@@ -692,6 +692,7 @@
     "kind": "kept",
     "message": "chars",
     "predicate": "kept",
+    "rowset": "kept",
     "seam": "kept",
     "subjects[].id": "kept",
     "subjects[].kind": "kept",
@@ -1335,6 +1336,16 @@
     "maxChars": "kept",
     "narrowBy[]": "kept",
     "sizeChars": "kept",
+    "toolCallId": "kept",
+    "toolName": "kept"
+  },
+  "agentfootprint.tools.rowset_checked": {
+    "delivery": "kept",
+    "disposition": "kept",
+    "iteration": "kept",
+    "reason": "kept",
+    "rowset": "kept",
+    "source": "kept",
     "toolCallId": "kept",
     "toolName": "kept"
   },

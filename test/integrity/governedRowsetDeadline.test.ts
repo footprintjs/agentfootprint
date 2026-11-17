@@ -74,6 +74,7 @@ function fixture(mode: 'warn' | 'enforce', multi = false) {
     checkColumnTypes: mode,
     integrityPosture: 'dev',
     provider: mock({
+      chunkDelayMs: 0,
       respond(request) {
         const last = request.messages.at(-1);
         if (last?.role === 'tool') {

@@ -51,6 +51,10 @@ const agent = Agent.create({ provider, model, checkColumnTypes: 'warn' }) // ←
 ## Wrapped and published rowsets
 
 Use `resultRowsets` when the final result contains named rows or a dataset reference.
+`ToolResultRowset` is the public type for one named declaration: its key, columns
+and selected source. `ToolResultRowsetSource` selects either an inline path or
+a reference published by this native invocation, with its artifact kind and
+explicit row and byte bounds.
 Choose an explicit inline path, such as `{ kind: 'inline', path: ['result', 'disks'] }`
 for rows inside a `coverage()` result. An empty path selects a direct array. The
 native tool-result envelope's `content` is unwrapped before these paths are read.

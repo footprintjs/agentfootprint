@@ -935,6 +935,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the runtime-capability error thrown when node:sqlite is missing',
     },
   ],
+  'src/mcp/toolExtras.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the static MCP metadata-ingest warning hint goes to console while invalid declarations are dropped, never into a native tool reply',
+    },
+  ],
   'src/memory/asRoleRefusal.ts': [
     {
       kind: 'not-model-facing',
@@ -1003,6 +1010,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 3,
       why: 'the answer account\'s template table — sentences rendered for a PERSON reading "Explain this answer" (the lens pane, the print report); `accountForAnswer` is a read-time fold over a finished recording and no model ever reads its output',
+    },
+  ],
+  'src/tools/resultRowsets.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'invalid rowset metadata is refused to the host at definition/registration or catalog discovery; native dispatch reads the already-held declaration rather than serving this diagnostic as a tool reply',
     },
   ],
   'src/tools/skillScopedTools.ts': [
@@ -1422,12 +1436,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 128,
-        total: 210,
+        files: 130,
+        total: 212,
         registry: 8,
         ephemeral: 27,
         unrepaired: 35,
-        notModelFacing: 140,
+        notModelFacing: 142,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

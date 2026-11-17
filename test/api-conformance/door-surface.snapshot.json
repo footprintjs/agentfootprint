@@ -817,6 +817,8 @@
       "ToolResultEnvelope",
       "ToolResultMiddleware",
       "ToolResultOutcome",
+      "ToolResultRowset",
+      "ToolResultRowsetSource",
       "ToolResultStatus",
       "ToolScript",
       "ToolSearch",
