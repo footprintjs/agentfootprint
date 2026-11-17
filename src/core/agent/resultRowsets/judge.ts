@@ -95,7 +95,7 @@ export async function judgeGovernedRowsets(
           toolName: call.toolName,
           toolCallId: call.toolCallId,
           rowset: declaration.key,
-          columns: declaration.columns,
+          columns: {},
           mode,
           reading: resolved.reading,
         },
