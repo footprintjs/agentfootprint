@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.8.0] - 2026-11-17
+
+### Added
+
+- **Check explicitly declared rowsets in the final governed result.** `Tool.resultRowsets` binds named column contracts to inline paths or bounded datasets published by that same native invocation. The existing column-type dial, findings and dispositions apply across ordinary and resumed execution. Availability has a finite value-free event; warn preserves delivery and enforce refuses unavailable or mistyped results. SourceEvidence shares one sealed publication receipt. Existing direct-array `resultColumns` delivery and the default off path retain their behavior. With an enabled dial and a dynamic provider, responses without a current declaring call file honest not-applicable write accounting.
+
 ## [14.7.3] - 2026-11-17
 
 ### Fixed

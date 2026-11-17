@@ -368,6 +368,9 @@ describe('record-only fields — every serving path goes through the one strip',
     // `afterMoment`) and be driven by this file.
     const PINNED = [
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
+      // Bounded inspection of the final governed/placed/capped surface for
+      // canonical absence only; this reader serves no envelope or record-only lists.
+      'core/agent/resultRowsets/read.ts',
       // Captures only the governed surface, strips record-only lists again;
       // actual retained-read privacy is driven by source-evidence/capture.test.ts.
       'core/agent/sourceEvidence/capture.ts',

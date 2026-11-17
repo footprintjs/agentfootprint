@@ -7,7 +7,6 @@ import {
   type ResolvedSourceEvidenceOptions,
 } from '../../../tools/sourceEvidence.js';
 import type { ToolResultStatus } from '../../../semantics/toolOutcome.js';
-import type { ArtifactMeta } from '../../../artifacts/types.js';
 import { readCoverageResult, strip } from '../../../semantics/coverage/read.js';
 import { readToolResultEnvelope } from '../../../semantics/toolEffects.js';
 import { listsWithoutRecordOnly } from '../../../semantics/coverage/items.js';
@@ -24,7 +23,11 @@ import {
 } from '../../../artifacts/sourceEvidence/datasets.js';
 import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
 import type { AgentState } from '../types.js';
-import { takeSourcePublications, closeSourcePublications } from './publications.js';
+import {
+  finalizeSourcePublications,
+  closeSourcePublications,
+  type SourcePublicationReceipt,
+} from './publications.js';
 import { withSourceEvidenceDeadline } from './deadline.js';
 
 export interface SourceCaptureLanding {
@@ -46,12 +49,13 @@ export function nativeSourceCapture(
   context: ToolExecutionContext,
   options: ResolvedSourceEvidenceOptions | undefined,
   active: () => boolean,
+  sharedPublications?: () => SourcePublicationReceipt | undefined,
 ): NativeSourceCapture | undefined {
   if (!options) return undefined;
   const descriptor = sourceEvidenceDescriptor(tool);
   if (!descriptor || !context.hasArtifacts) return undefined;
   let closed = false;
-  let publications: ReadonlyMap<string, ArtifactMeta> | undefined;
+  let publications: SourcePublicationReceipt | undefined;
   const capture = async (served: unknown, landing: SourceCaptureLanding) => {
     if (closed) return;
     closed = true;
@@ -197,16 +201,19 @@ export function nativeSourceCapture(
     } catch {
       // Source delivery must retain its own truth. Failed retention advertises no new authority.
     } finally {
-      closeSourcePublications(context.artifacts);
+      if (sharedPublications === undefined) closeSourcePublications(context.artifacts);
     }
   };
   return Object.assign(capture, {
     returned() {
-      publications ??= takeSourcePublications(context.artifacts);
+      publications ??=
+        sharedPublications === undefined
+          ? finalizeSourcePublications(context.artifacts)
+          : sharedPublications();
     },
     withheld() {
       closed = true;
-      closeSourcePublications(context.artifacts);
+      if (sharedPublications === undefined) closeSourcePublications(context.artifacts);
     },
   });
 }

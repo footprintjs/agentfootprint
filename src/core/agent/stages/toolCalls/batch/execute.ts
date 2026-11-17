@@ -14,6 +14,9 @@ import { completeToolBatch } from './completion.js';
 import type { ToolCallOperations } from '../compose.js';
 import type { DispatchBatchFrame } from '../contracts/dispatchBatch.js';
 import type { DispatchCallRunner } from '../contracts/dispatchCall.js';
+import { resultRowsetsOf } from '../../../../../tools/resultRowsets.js';
+import { noteUnansweredRowsets } from '../../../resultRowsets/judge.js';
+import type { DispatchCall } from '../contracts/batchCall.js';
 
 /** The existing native batch handler: original waits, one serial call loop, and defined pause propagation. */
 export function buildToolBatchExecution(
@@ -21,6 +24,20 @@ export function buildToolBatchExecution(
   operations: ToolCallOperations,
   dispatchCall: DispatchCallRunner,
 ): PausableHandler<TypedScope<AgentState>>['execute'] {
+  const noteUndispatchedRowsets = (calls: readonly DispatchCall[]): void => {
+    if (deps.columnCheckMode === undefined) return;
+    for (const call of calls) {
+      const resolved = operations.resolveTool(call.name);
+      const tool = resolved.tool;
+      if (tool !== undefined)
+        noteUnansweredRowsets(
+          deps.integrityLedger,
+          deps.resultRowsetsFor === undefined
+            ? resultRowsetsOf(call.name, tool, tool.resultColumns)
+            : deps.resultRowsetsFor(call.name, tool, resolved.party),
+        );
+    }
+  };
   const execute: PausableHandler<TypedScope<AgentState>>['execute'] = async (scope) => {
     if (deps.servedTools?.argumentAskPending === true) deps.resources?.expectAnswer();
     restoreServedParties(scope, deps.servedTools);
@@ -185,7 +202,8 @@ export function buildToolBatchExecution(
           }),
         ...((deps.declarationCorrection !== undefined ||
           deps.emptyLookupGrounding !== undefined ||
-          deps.columnDeclarations !== undefined) && {
+          deps.columnDeclarations !== undefined ||
+          deps.columnCheckMode !== undefined) && {
           beforePause: (asked: readonly AskedArgument[]) => {
             settle('asked', asked);
             // This fresh argument ask holds the WHOLE current batch before
@@ -197,6 +215,7 @@ export function buildToolBatchExecution(
               operations.noticeEmptyLookup(scope, at, call.args, undefined, [], false);
               operations.judgeColumns(scope, at, undefined);
             }
+            noteUndispatchedRowsets(toolCalls);
           },
         }),
         runId: () => operations.runFactsOf(scope)?.runId,
@@ -252,6 +271,9 @@ export function buildToolBatchExecution(
     for (const [callIndex, tc] of toolCalls.entries()) {
       const result = await dispatchCall(scope, tc, callIndex, batch);
       if (result.kind === 'paused') {
+        // Only the siblings AFTER this real pause were never entered. The
+        // paused call's owner and every earlier completed result keep theirs.
+        noteUndispatchedRowsets(toolCalls.slice(callIndex + 1));
         saveServedParties(scope, deps.servedTools, {
           calls: toolCalls,
           iteration,

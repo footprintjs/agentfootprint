@@ -129,6 +129,8 @@ export interface ColumnTypesCall {
   readonly toolCallId: string;
   /** `Tool.resultColumns`, exactly as the author wrote it. */
   readonly columns: ToolResultColumns;
+  /** Present for a named resultRowsets declaration; absent is the legacy direct array. */
+  readonly rowset?: string;
   /** What the library could read of the result — `undefined` = not a rowset. */
   readonly reading: RowsetReading | undefined;
   /** What the boundary will do with a finding — carried so the message can
@@ -205,6 +207,7 @@ export function columnTypesOf(call: ColumnTypesCall, epoch: number): ColumnTypes
         // are two findings, exactly as two arguments of one call are at the
         // choice seam.
         predicate: column.name,
+        ...(call.rowset !== undefined && { rowset: call.rowset }),
         witnesses: [
           {
             subject,
@@ -212,7 +215,10 @@ export function columnTypesOf(call: ColumnTypesCall, epoch: number): ColumnTypes
             value: `declared ${column.type}`,
             epoch,
             stratum: 'asserted',
-            provenance: `Tool.resultColumns on '${call.toolName}', as its author wrote it`,
+            provenance:
+              call.rowset === undefined
+                ? `Tool.resultColumns on '${call.toolName}', as its author wrote it`
+                : `Tool.resultRowsets '${call.rowset}' on '${call.toolName}', as its author wrote it`,
           },
           {
             subject,
@@ -245,6 +251,7 @@ export function columnTypesOf(call: ColumnTypesCall, epoch: number): ColumnTypes
       seam: 'write',
       subjects: [subject],
       predicate: column.name,
+      ...(call.rowset !== undefined && { rowset: call.rowset }),
       witnesses: [
         {
           subject,
@@ -252,7 +259,10 @@ export function columnTypesOf(call: ColumnTypesCall, epoch: number): ColumnTypes
           value: `declared ${column.type}${column.nullable ? ' (nullable)' : ''}`,
           epoch,
           stratum: 'asserted',
-          provenance: `Tool.resultColumns on '${call.toolName}', as its author wrote it`,
+          provenance:
+            call.rowset === undefined
+              ? `Tool.resultColumns on '${call.toolName}', as its author wrote it`
+              : `Tool.resultRowsets '${call.rowset}' on '${call.toolName}', as its author wrote it`,
         },
         {
           subject,

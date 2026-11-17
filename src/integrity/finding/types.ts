@@ -20,6 +20,7 @@
 
 import type { Assertion, SubjectRef } from '../assertion/types.js';
 import type { IntegritySeam } from '../disposition/types.js';
+import { encodeIdentityField } from '../../memory/identity/encode.js';
 
 /**
  * The nine defect classes, by their plain names:
@@ -97,6 +98,8 @@ export interface ContextError {
    * is the whole story there), which keeps their identities byte-identical.
    */
   readonly predicate?: string;
+  /** Named final-result contract; absent keeps the legacy finding identity unchanged. */
+  readonly rowset?: string;
   /** The epoch the conflict was judged at, when the witnesses carry one. */
   readonly epoch?: number;
   /** True when every witness is canary material — never mixed with real. */
@@ -123,6 +126,25 @@ export interface ContextError {
  * exists to prevent.
  */
 export function contextErrorIdentity(e: ContextError): string {
+  if (e.rowset !== undefined) {
+    const subjects = e.subjects
+      .map((subject) => [subject.kind, subject.id].map(encodeIdentityField).join('/'))
+      .sort();
+    // A separate namespace and individually encoded segments keep arbitrary
+    // rowset/column/subject text from donating a tuple boundary.
+    return (
+      'rowset/' +
+      [
+        encodeIdentityField(e.kind),
+        encodeIdentityField(e.seam),
+        String(subjects.length),
+        ...subjects,
+        encodeIdentityField(e.predicate),
+        encodeIdentityField(e.epoch === undefined ? undefined : String(e.epoch)),
+        encodeIdentityField(e.rowset),
+      ].join('/')
+    );
+  }
   const subjects = e.subjects
     .map((s) => `${s.kind} ${s.id}`)
     .sort()
