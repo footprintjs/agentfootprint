@@ -1,3 +1,4 @@
+import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
 import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
@@ -326,23 +327,6 @@ export function buildCallLLMStage(
         });
       }
     }
-    // The join: injections, then the recovery piece, then the ontology piece,
-    // then the findings piece — a FIXED order `servedView.ts · viewOf`
-    // mirrors. Every request-only piece is composed into `systemPieces` ONLY,
-    // never pushed into `systemPromptInjections`: a piece there would be
-    // exempt from the evidence gate (`evidenceIndex.ts · exemptFromRun`
-    // indexes every injection's rawContent), and the ledger quotes the
-    // model's own words.
-    const systemPieces =
-      recoveryPiece === undefined && ontologyPieceRecord === undefined
-        ? systemPromptInjections
-        : [
-            ...systemPromptInjections,
-            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
-            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
-          ];
-    const systemPrompt = joinSystemPrompt(systemPieces);
-
     // Dynamic schemas — registry tools + injection-supplied tools (Skills'
     // `inject.tools` when their Injection is active). Falls back to the static
     // schemas at startup before the tools slot has run. Computed BEFORE the
@@ -378,6 +362,20 @@ export function buildCallLLMStage(
     // WIRE. It is reported in `llm_start` too, and deliberately: that event's
     // whole claim is "what the model actually saw this call", and a tool the
     // model was forced to use is the last thing to leave out of it.
+    // Actual offered contracts specialize only the native findings instruction.
+    // These request-only copies feed cache, receipts and context recording;
+    // servedView applies the same fold without changing committed injections.
+    const systemPieces = projectSourceInstructions(
+      recoveryPiece === undefined && ontologyPieceRecord === undefined
+        ? systemPromptInjections
+        : [
+            ...systemPromptInjections,
+            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
+          ],
+      registeredToolSchemas,
+    );
+    const systemPrompt = joinSystemPrompt(systemPieces);
     const activeToolSchemas = deps.schemaTool
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;

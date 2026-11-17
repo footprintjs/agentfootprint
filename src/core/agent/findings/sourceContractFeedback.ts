@@ -3,33 +3,13 @@ import { TOOL_BATCH_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { utf8Length } from '../../../lib/utf8.js';
 import { MAX_ASK_ARGUMENTS } from '../../../tools/declare.js';
 import { FINDINGS_ARGUMENT_SCHEMA_WITH_FROM, FINDINGS_SOURCES_SCHEMA } from './reserved.js';
-import { RESERVED_ARGUMENT } from './types.js';
+import { SOURCE_DECLARATION_PATH, sourceDeclarationView } from '../sourceContract.js';
 
-type PlainObject = Readonly<Record<string, unknown>>;
+const LEDGER_SOURCE_CONTRACT = sourceDeclarationView(FINDINGS_ARGUMENT_SCHEMA_WITH_FROM);
+const SOURCE_CONTRACT = sourceDeclarationView(FINDINGS_SOURCES_SCHEMA);
 
-/** Project only the canonical required declaration members, with their actual nesting. */
-function requiredDeclarationSchema(planted: PlainObject): PlainObject {
-  const required = planted.required as readonly string[];
-  const properties = planted.properties as PlainObject;
-  return Object.freeze({
-    type: 'object',
-    required: Object.freeze([RESERVED_ARGUMENT]),
-    properties: Object.freeze({
-      [RESERVED_ARGUMENT]: Object.freeze({
-        type: planted.type,
-        required,
-        properties: Object.freeze(
-          Object.fromEntries(required.map((name) => [name, properties[name]])),
-        ),
-      }),
-    }),
-  });
-}
-const LEDGER_SOURCE_CONTRACT = requiredDeclarationSchema(FINDINGS_ARGUMENT_SCHEMA_WITH_FROM);
-const SOURCE_CONTRACT = requiredDeclarationSchema(FINDINGS_SOURCES_SCHEMA);
-
-/** Native error data only; neither the served schema nor its optional parent is changed. */
-export function sourceDeclarationSchema(findings: boolean): PlainObject {
+/** Native error data only; served ASK contracts and optional observations share the same grammar. */
+export function sourceDeclarationSchema(findings: boolean): Readonly<Record<string, unknown>> {
   return findings ? LEDGER_SOURCE_CONTRACT : SOURCE_CONTRACT;
 }
 
@@ -66,7 +46,7 @@ export function prepareSourceContractFeedback(
         : `${TOOL_BATCH_FRAME_PREFIX} — framework feedback: No calls in that batch ran. Submit a new batch.\n${JSON.stringify(
             {
               code: 'source-declaration-required',
-              path: ['_findings', 'from'],
+              path: SOURCE_DECLARATION_PATH,
               missingArguments: [...missing],
               declarationSchema: sourceDeclarationSchema(findings),
             },

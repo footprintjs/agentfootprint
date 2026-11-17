@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Agent, defineTool, isInputPause, type LLMProvider } from '../../../../src/index.js';
-import { FINDINGS_FROM_PROPERTY } from '../../../../src/core/agent/findings/reserved.js';
 import { validateToolArgs } from '../../../../src/tools/toolArgsValidation.js';
 import {
   QUESTION,
@@ -54,7 +53,13 @@ describe('source-declaration feedback is an actual bounded structural protocol',
         const root = contract.declarationSchema as Bag;
         const declaration = (root.properties as Bag)._findings as Bag;
         expect(declaration.required).toEqual(ledger ? ['basis', 'from'] : ['from']);
-        expect((declaration.properties as Bag).from).toEqual(FINDINGS_FROM_PROPERTY);
+        const served = f.requests[1]!.tools!.find((candidate) => candidate.name === TOOL)!;
+        const servedDeclaration = (served.inputSchema.properties as Bag)._findings as Bag;
+        const from = (declaration.properties as Bag).from as Bag;
+        expect(from).toEqual((servedDeclaration.properties as Bag).from);
+        const source = ((from.items as Bag).properties as Bag).source as Bag;
+        expect(source.enum).toEqual(['user', 'result', 'turn', 'app', 'assumed']);
+        expect(source.description).toContain('app-supplied context');
         expect(root.required).toEqual(['_findings']);
         expect(validateToolArgs({}, root).ok).toBe(false);
         expect(validateToolArgs(flatArgs(), root).ok).toBe(false);
@@ -69,7 +74,7 @@ describe('source-declaration feedback is an actual bounded structural protocol',
         const schemas = f.requests.map((request) => JSON.stringify(request.tools));
         expect(new Set(schemas).size).toBe(1);
         const tool = f.requests[1]!.tools!.find((candidate) => candidate.name === TOOL)!;
-        expect(tool.inputSchema.required ?? []).not.toContain('_findings');
+        expect(tool.inputSchema.required ?? []).toContain('_findings');
         const history = f.agent.getSnapshot()?.sharedState.history as {
           role: string;
           toolCallId?: string;

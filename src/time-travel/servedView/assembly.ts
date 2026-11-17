@@ -24,8 +24,14 @@ export function viewOf(location: EpochLocation, served: boolean): ServedView {
     history,
   );
   const ontology = ontologyAt(location, served);
-  const [composedPieces, pieces] = systemPieces(injections, recovery, ontology, findings);
-  const [registered, withheld, forced] = toolsAt(location, served);
+  const [registered, withheld, forced, schemasUnknown] = toolsAt(location, served);
+  const [composedPieces, pieces] = systemPieces(
+    injections,
+    recovery,
+    ontology,
+    findings,
+    schemasUnknown ? undefined : registered,
+  );
   const [requestOnly, layoutUnknown] = requestOnlyAt(
     location,
     served,

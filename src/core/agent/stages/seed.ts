@@ -1,3 +1,4 @@
+import { sourceSchemasOnWire } from '../sourceContract.js';
 import { withoutEarlierScriptText } from '../scripts/rows.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
@@ -33,7 +34,6 @@ import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
-import { carriesRules } from '../../../tools/declare.js';
 import type { HonestyLayers } from '../honesty/armed.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
@@ -728,16 +728,14 @@ function seedFrom(
   // Declared sources (honesty layer 2): a ruled tool's decoration carries `from` —
   // inside the ledger's `_findings` under `.findings()`, or as the reserved
   // argument's only property without it (the slot's `sourcesOnWire` twin).
-  const isRuled = (s: LLMToolSchema): boolean =>
-    deps.argumentSources === true && carriesRules(ruledTools?.get(s.name));
-  const planted = (s: LLMToolSchema): LLMToolSchema =>
-    isRuled(s) ? withFindingsArgument(s, { from: true }) : withFindingsArgument(s);
-  scope.dynamicToolSchemas =
-    deps.findings === true
-      ? ruled.map((s) => planted(s))
-      : deps.argumentSources === true && ruled.some(isRuled)
-      ? ruled.map((s) => (isRuled(s) ? withSourcesArgument(s) : s))
-      : ruled;
+  scope.dynamicToolSchemas = sourceSchemasOnWire(
+    ruled,
+    ruledTools,
+    deps.findings === true,
+    deps.argumentSources === true,
+    withFindingsArgument,
+    withSourcesArgument,
+  );
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and
   // only when a layer is armed.
   if (deps.honestyLayers !== undefined) scope.honestyLayers = deps.honestyLayers;

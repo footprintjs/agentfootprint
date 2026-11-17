@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { anthropic } from '../../../src/providers.js';
 import type { LLMProvider } from '../../../src/index.js';
+import { validateToolArgs } from '../../../src/tools/toolArgsValidation.js';
 import {
   QUESTION,
   TOOL,
@@ -91,13 +92,40 @@ function noticeFrom(body: Bag): unknown {
     }
 }
 
+/** This condition reads the actual SDK JSON, not a queued successful model reply. */
+function servesSourceContract(body: Bag): boolean {
+  const tool = (body.tools as Bag[]).find((candidate) => candidate.name === TOOL);
+  const schema = tool?.input_schema;
+  if (
+    !bag(schema) ||
+    !Array.isArray(schema.required) ||
+    !schema.required.includes('_findings') ||
+    !bag(schema.properties)
+  )
+    return false;
+  const declaration = schema.properties._findings;
+  if (
+    !bag(declaration) ||
+    !Array.isArray(declaration.required) ||
+    !declaration.required.includes('from') ||
+    !declaration.required.includes('basis')
+  )
+    return false;
+  return validateToolArgs(nestedArgs(), schema).ok && !validateToolArgs(flatArgs(), schema).ok;
+}
+
 describe('typed native correction crosses the real Anthropic SDK wire', () => {
-  it.each([false, true])(
-    'keeps the real schema and source admission exact (stream=%s)',
-    async (streaming) => {
+  it.each(
+    [false, true].flatMap((streaming) =>
+      [false, true].map((firstContract) => ({ streaming, firstContract })),
+    ),
+  )(
+    'keeps the serialized source contract and admission exact (stream=$streaming, first=$firstContract)',
+    async ({ streaming, firstContract }) => {
       const bodies: Bag[] = [],
         ran: Bag[] = [],
         atRequest: number[] = [];
+      let firstAccepted = false;
       const client = new Anthropic({
         apiKey: 'synthetic-unused-key',
         baseURL: 'https://synthetic.invalid',
@@ -115,15 +143,27 @@ describe('typed native correction crosses the real Anthropic SDK wire', () => {
           let content: Bag[] = [
             { type: 'text', text: 'No typed declaration contract was received.' },
           ];
-          if (bodies.length === 1)
-            content = [{ type: 'tool_use', id: 'flat-proposal', name: TOOL, input: flatArgs() }];
-          else if (bodies.length === 2 && permitsNestedReply(contractIn(noticeFrom(body)), true))
-            content = [
-              { type: 'tool_use', id: 'nested-proposal', name: TOOL, input: nestedArgs() },
-            ];
-          else if (bodies.length === 3 && ran.length === 1)
-            content = [{ type: 'text', text: 'Finished synthetic fixture.' }];
-          else if (bodies.length > 3) throw Error('No extra SDK send was authored.');
+          if (firstContract) {
+            if (bodies.length === 1 && servesSourceContract(body)) {
+              firstAccepted = true;
+              content = [
+                { type: 'tool_use', id: 'nested-proposal', name: TOOL, input: nestedArgs() },
+              ];
+            } else if (bodies.length === 2 && firstAccepted && ran.length === 1)
+              content = [{ type: 'text', text: 'Finished synthetic fixture.' }];
+            else if (bodies.length > 2)
+              throw Error('No extra first-contract SDK send was authored.');
+          } else {
+            if (bodies.length === 1)
+              content = [{ type: 'tool_use', id: 'flat-proposal', name: TOOL, input: flatArgs() }];
+            else if (bodies.length === 2 && permitsNestedReply(contractIn(noticeFrom(body)), true))
+              content = [
+                { type: 'tool_use', id: 'nested-proposal', name: TOOL, input: nestedArgs() },
+              ];
+            else if (bodies.length === 3 && ran.length === 1)
+              content = [{ type: 'text', text: 'Finished synthetic fixture.' }];
+            else if (bodies.length > 3) throw Error('No extra SDK send was authored.');
+          }
           return sdkResponse(content, body.stream === true);
         },
       });
@@ -141,6 +181,7 @@ describe('typed native correction crosses the real Anthropic SDK wire', () => {
           'SOURCE_CONTRACT_SDK_WIRE',
           JSON.stringify({
             streaming,
+            firstContract,
             schemaSha256: bodies.map((body) =>
               createHash('sha256')
                 .update(JSON.stringify((body.tools as Bag[]).map((tool) => tool.input_schema)))
@@ -153,15 +194,17 @@ describe('typed native correction crosses the real Anthropic SDK wire', () => {
           }),
         );
         expect(ran).toEqual([{ vm: VM }]);
-        expect(atRequest).toEqual([0, 0, 1]);
-        const contract = contractIn(noticeFrom(bodies[1]!));
-        expect(contract).toMatchObject({
-          code: 'source-declaration-required',
-          path: ['_findings', 'from'],
-          missingArguments: ['vm'],
-        });
-        expect(JSON.stringify(contract)).not.toContain(VM);
-        expect(JSON.stringify(contract)).not.toContain('flat-proposal');
+        expect(atRequest).toEqual(firstContract ? [0, 1] : [0, 0, 1]);
+        if (!firstContract) {
+          const contract = contractIn(noticeFrom(bodies[1]!));
+          expect(contract).toMatchObject({
+            code: 'source-declaration-required',
+            path: ['_findings', 'from'],
+            missingArguments: ['vm'],
+          });
+          expect(JSON.stringify(contract)).not.toContain(VM);
+          expect(JSON.stringify(contract)).not.toContain('flat-proposal');
+        }
         expect(
           new Set(
             bodies.map((body) =>
@@ -171,13 +214,16 @@ describe('typed native correction crosses the real Anthropic SDK wire', () => {
         ).toBe(1);
         const tool = (bodies[1]!.tools as Bag[]).find((candidate) => candidate.name === TOOL)!;
         const schema = tool.input_schema as Bag;
-        expect(schema.required ?? []).not.toContain('_findings');
+        expect(schema.required ?? []).toContain('_findings');
+        expect(servesSourceContract(bodies[0]!)).toBe(true);
         expect((schema.properties as Bag)._findings).toBeDefined();
         expect((schema.properties as Bag).parent_findings).toBeUndefined();
-        const replay = (bodies[1]!.messages as Bag[])
-          .flatMap((message) => (Array.isArray(message.content) ? message.content : []))
-          .find((block: Bag) => block.type === 'tool_use' && block.id === 'flat-proposal') as Bag;
-        expect(replay.input).toEqual(flatArgs());
+        if (!firstContract) {
+          const replay = (bodies[1]!.messages as Bag[])
+            .flatMap((message) => (Array.isArray(message.content) ? message.content : []))
+            .find((block: Bag) => block.type === 'tool_use' && block.id === 'flat-proposal') as Bag;
+          expect(replay.input).toEqual(flatArgs());
+        }
       } finally {
         await agent.shutdown();
       }
