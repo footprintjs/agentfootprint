@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.9.2] - 2026-11-17
+
+### Fixed
+
+- **Serve the source declaration contract that native input admission enforces.** With argument sources enabled, actual ASK tools require the library-owned `_findings` envelope and `from` list. One shared contract aligns tool schemas, source hints, per-request instructions and correction feedback across all verified source kinds. Optional observations and other tool cohorts retain their existing schemas; native source checks, human fallback and correction allowance remain unchanged. Saved-request views use the same projection and retain uncertainty when privacy withholds the tool schema.
+
+## [14.9.1] - 2026-11-17
+
+### Fixed
+
+- **Explain the exact nesting of missing source declarations.** Native correction feedback now includes a bounded typed contract derived from the library's declaration schema. It names missing arguments without copying their values, preserves the optional tool-schema envelope and existing human fallback, and never turns framework feedback into source evidence.
+
+## [14.9.0] - 2026-11-17
+
+### Added
+
+- **Correct an omitted argument-source declaration once before asking the person.** Opt in with `inputsLayer({ argumentSources: true, declarationCorrection: 'once' })`. The native batch barrier holds every proposed tool call, asks the model for an actual source declaration and verifies its new proposal through the existing checks. False or malformed claims and genuinely missing values keep their human-question or refusal path. The allowance survives same-request pause/crash recovery and resets on a new human turn; framework notices never become source evidence.
+
+## [14.8.0] - 2026-11-17
+
+### Added
+
+- **Check explicitly declared rowsets in the final governed result.** `Tool.resultRowsets` binds named column contracts to inline paths or bounded datasets published by that same native invocation. The existing column-type dial, findings and dispositions apply across ordinary and resumed execution. Availability has a finite value-free event; warn preserves delivery and enforce refuses unavailable or mistyped results. SourceEvidence shares one sealed publication receipt. Existing direct-array `resultColumns` delivery and the default off path retain their behavior. With an enabled dial and a dynamic provider, responses without a current declaring call file honest not-applicable write accounting.
+
+## [14.7.3] - 2026-11-17
+
+### Fixed
+
+- **Native argument questions no longer fail with `checker_dead` before their tools can run.** A batch held for a person's input now records honest no-result encounters for its armed write checks. Completed results and findings, real checker liveness, and successful reply/resume behavior remain intact.
+
 ## [14.7.2] - 2026-11-16
 
 _Internal changes only — nothing a user of the library can see._

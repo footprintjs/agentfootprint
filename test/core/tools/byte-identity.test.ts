@@ -22,6 +22,13 @@
  * equality assertions below are unchanged. Notice admission and historical
  * layout gaps have separate native positive and failing negative controls.
  *
+ * SOURCE CONTRACT PROJECTION: only the two opted-in argument-source scenarios
+ * route to reference/source-contract-projection/. Their prior current captures
+ * and every historical manifest remain frozen. The new pair records required
+ * source envelopes, accepted-origin teaching and the same native instruction's
+ * current-cohort specialization, plus their derived hashes/measurements. No
+ * scenario, record projection, normalizer or equality/update guard is changed.
+ *
  * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
  * says that later preparation notes do not prove what was sent or accepted.
  * Exactly 79 `served[n].view.gaps[n].why` values across 30 references were
@@ -1592,10 +1599,20 @@ const FINDINGS_REFERENCE_CASES = new Set([
   'agent-findings-contingent',
   'agent-arguments-sources',
 ]);
+const SOURCE_CONTRACT_REFERENCE_DIR = new URL(
+  './reference/source-contract-projection/',
+  import.meta.url,
+);
+const SOURCE_CONTRACT_REFERENCE_CASES = new Set([
+  'agent-arguments-sources',
+  'agent-arguments-sources-only',
+]);
 const referencePath = (name: string): URL =>
   new URL(
     `${name}.json`,
-    FINDINGS_REFERENCE_CASES.has(name)
+    SOURCE_CONTRACT_REFERENCE_CASES.has(name)
+      ? SOURCE_CONTRACT_REFERENCE_DIR
+      : FINDINGS_REFERENCE_CASES.has(name)
       ? FINDINGS_REFERENCE_DIR
       : NATIVE_RECORD_CASES.has(name)
       ? NATIVE_REFERENCE_DIR

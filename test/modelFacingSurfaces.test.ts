@@ -81,7 +81,9 @@ import {
   FINDINGS_INSTRUCTION,
   FINDINGS_SOURCES_SCHEMA,
   findingsInstructionFor,
+  withSourcesArgument,
 } from '../src/core/agent/findings/reserved.js';
+import { projectSourceInstructions } from '../src/core/agent/sourceContract.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import { heldLine, UNKNOWN_ZONE_LINE } from '../src/semantics/coverage/timeLimits.js';
 import {
@@ -151,6 +153,14 @@ import {
   PARK_CARD,
   type Surface,
 } from './helpers/modelFacingClaims.js';
+
+import {
+  correctionFixture as sourceCorrectionFixture,
+  batch as sourceCorrectionBatch,
+  proposal as sourceCorrectionProposal,
+  QUESTION as SOURCE_CORRECTION_QUESTION,
+  VM as SOURCE_CORRECTION_VM,
+} from './core/agent/arguments/sourceCorrectionHarness.js';
 
 /** One model-facing producer, and how to make it speak. */
 interface ModelFacingProducer {
@@ -1366,6 +1376,46 @@ function emptyDataRefusals(): readonly string[] {
   ];
 }
 
+/** Compose both persistent correction arms through the actual admitted Agent wire. */
+async function sourceDeclarationFeedback(): Promise<readonly string[]> {
+  let siblingRuns = 0;
+  const siblingName = 'source_correction_sibling';
+  const sibling = defineTool({
+    name: siblingName,
+    description: 'Synthetic sibling held by the native barrier.',
+    execute() {
+      siblingRuns++;
+      return 'Synthetic sibling ran.';
+    },
+  });
+  const fixture = sourceCorrectionFixture(
+    [
+      sourceCorrectionBatch(
+        sourceCorrectionProposal('declaration-omitted', { vm: SOURCE_CORRECTION_VM }),
+        { id: 'held-sibling', name: siblingName, args: {} },
+      ),
+      'Held.',
+    ],
+    { extraTools: [sibling] },
+  );
+  try {
+    expect(await fixture.agent.run(SOURCE_CORRECTION_QUESTION)).toBe('Held.');
+    expect(fixture.ran).toEqual([]);
+    expect(siblingRuns).toBe(0);
+    const notices = (fixture.requests[1]?.messages ?? []).filter(
+      (message) => message.role === 'tool',
+    );
+    expect(notices.map((message) => message.toolCallId)).toEqual([
+      'declaration-omitted',
+      'held-sibling',
+    ]);
+    for (const notice of notices) expect(notice.content).not.toContain(SOURCE_CORRECTION_VM);
+    return notices.map((message) => message.content);
+  } finally {
+    await fixture.agent.shutdown();
+  }
+}
+
 // ─── The registry ────────────────────────────────────────────────────
 
 /**
@@ -1897,10 +1947,30 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /If left out, the tool's rule fills 50, recorded as assumed\./,
       /fills a declared value \(hidden by the tool's view\)/,
       /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it\.$/m,
-      // Step 5 (declared sources): the same rule, and where the model says the person gave it.
-      /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it, and then quote their words for it in `_findings\.from`\.$/m,
+      // The source arm states the consumed namespace and all four verified origin kinds.
+      /^Look-back period\. For a supplied value, declare its actual source in `_findings\.from`: 'user': the person's quoted words; 'result': a named tool result; 'turn': an earlier answered input; 'app': app-supplied context\. The runtime checks the claim; otherwise leave this value out for the person\. Put from inside the call argument _findings object, never at the call root\.$/m,
     ],
     compose: async () => ruledSchemaDescriptions(),
+  },
+  {
+    id: 'source contract — the required ASK instruction on the final offered cohort',
+    module: 'src/core/agent/sourceContract.ts',
+    surface: ALWAYS_ON_INSTRUCTION,
+    lifetimeBecause:
+      'the final request projects only the native findings instruction against the actual ' +
+      'offered schema; receipt and saved-request readers use the same pure projection',
+    drivenBy: ['test/core/agent/arguments/source-contract-projection.test.ts'],
+    reaches: [
+      /where _findings is required/,
+      /in `_findings\.from` inside that call argument object/,
+      /root from is not the declaration/,
+      /Observations on other calls remain optional/,
+    ],
+    compose: async () =>
+      projectSourceInstructions(
+        [{ source: 'instructions', sourceId: 'findings-ledger', rawContent: FINDINGS_INSTRUCTION }],
+        [withSourcesArgument({ name: 'read_source', inputSchema: { type: 'object' } }, true)],
+      ).map((piece) => piece.rawContent),
   },
   {
     id: 'time layer — the person’s windows, served late at the decision point (TQ13, step T6b)',
@@ -2165,6 +2235,20 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
         },
       ]),
     ],
+  },
+  {
+    id: 'inputs layer — one source-declaration correction holds the whole native batch',
+    module: 'src/core/agent/findings/sourceContractFeedback.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'Each fixed role-tool notice is correlated to a withheld proposal and remains in native history; both arms are persistent facts about that past call and batch.',
+    drivenBy: [
+      'test/core/agent/arguments/source-declaration-correction.test.ts',
+      'test/core/agent/arguments/source-correction-privacy.test.ts',
+      'test/core/agent/arguments/source-contract-feedback.test.ts',
+    ],
+    reaches: [/"path":\["_findings","from"\]/, /"declarationSchema"/, /another call/],
+    compose: sourceDeclarationFeedback,
   },
   {
     id: 'inputs layer — the refusals of a ruled call (honesty layer 2)',

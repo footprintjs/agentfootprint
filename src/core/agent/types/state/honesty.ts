@@ -1,4 +1,8 @@
 export interface HonestyState {
+  /** One native protocol correction per human request; never a conversation-derived allowance. */
+  sourceDeclarationCorrectionSpent?: true;
+  /** Already masked omission observations, pending their actual batch-barrier settlement. */
+  argumentSourceOmissionRows?: readonly import('../../arguments/rows.js').ArgumentRow[];
   // ── The honesty layers (`sf-inputs`, …) ───────────────────────
   /**
    * Which honesty layers this run armed — the ONE run constant, written once

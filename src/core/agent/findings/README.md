@@ -66,8 +66,8 @@ downstream (a window strategy, a lens, a check) can tell a fact the answer
 rests on from a probe that found nothing. Asking a second model to judge
 would cost a call per result and put a second voice on the record.
 
-So the ask rides along. Every served tool schema gets one reserved optional
-property, `_findings`, and the model declares on each call why it makes it
+So observations ride in reserved `_findings` metadata and stay optional.
+Source-armed ASK declarations require our envelope. The model declares why it makes a call
 (`basis`) and, on the next call or on a JSON answer, what each previous
 result **is** to it. Zero extra calls. The library peels the property off
 before the tool, the middleware or the validator sees the args, files the

@@ -70,6 +70,7 @@ export const EVENT_NAMES = {
     sessionCloseFailed: 'agentfootprint.tools.session_close_failed',
     effect: 'agentfootprint.tools.effect',
     resultRefused: 'agentfootprint.tools.result_refused',
+    rowsetChecked: 'agentfootprint.tools.rowset_checked',
     repeatedCall: 'agentfootprint.tools.repeated_call',
     absent: 'agentfootprint.tools.absent',
     coverageDeclared: 'agentfootprint.tools.coverage_declared',

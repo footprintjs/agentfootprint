@@ -16,6 +16,11 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `repeatedCall.ts` · `noteFor`, `resultCeiling.ts` · `applyResultCeiling`,
 `toolResultCap.ts`.
 
+`sourceContract.ts` is the pure shared projection of native source grammar:
+actual ASK schemas, accepted-origin hints, current-cohort instructions and
+minimal error data. Admission and correction lifetime remain in `arguments/`;
+the marker describes a schema projection and grants no source authority.
+
 ## What it reads / what it writes
 - The chart builders own the outputMappers that publish the loop's shared facts:
   `activeInjections`, `currentSkillId`, `stepPointer`, `dynamicToolSchemas`

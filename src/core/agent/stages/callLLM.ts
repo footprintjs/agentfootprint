@@ -1,3 +1,4 @@
+import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
 import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
@@ -326,23 +327,6 @@ export function buildCallLLMStage(
         });
       }
     }
-    // The join: injections, then the recovery piece, then the ontology piece,
-    // then the findings piece — a FIXED order `servedView.ts · viewOf`
-    // mirrors. Every request-only piece is composed into `systemPieces` ONLY,
-    // never pushed into `systemPromptInjections`: a piece there would be
-    // exempt from the evidence gate (`evidenceIndex.ts · exemptFromRun`
-    // indexes every injection's rawContent), and the ledger quotes the
-    // model's own words.
-    const systemPieces =
-      recoveryPiece === undefined && ontologyPieceRecord === undefined
-        ? systemPromptInjections
-        : [
-            ...systemPromptInjections,
-            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
-            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
-          ];
-    const systemPrompt = joinSystemPrompt(systemPieces);
-
     // Dynamic schemas — registry tools + injection-supplied tools (Skills'
     // `inject.tools` when their Injection is active). Falls back to the static
     // schemas at startup before the tools slot has run. Computed BEFORE the
@@ -378,6 +362,20 @@ export function buildCallLLMStage(
     // WIRE. It is reported in `llm_start` too, and deliberately: that event's
     // whole claim is "what the model actually saw this call", and a tool the
     // model was forced to use is the last thing to leave out of it.
+    // Actual offered contracts specialize only the native findings instruction.
+    // These request-only copies feed cache, receipts and context recording;
+    // servedView applies the same fold without changing committed injections.
+    const systemPieces = projectSourceInstructions(
+      recoveryPiece === undefined && ontologyPieceRecord === undefined
+        ? systemPromptInjections
+        : [
+            ...systemPromptInjections,
+            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
+          ],
+      registeredToolSchemas,
+    );
+    const systemPrompt = joinSystemPrompt(systemPieces);
     const activeToolSchemas = deps.schemaTool
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;
@@ -1195,15 +1193,15 @@ export function buildCallLLMStage(
         deps.integrityLedger?.current?.note('empty-lookup', 'write', 'not-applicable');
       }
     }
-    // THE COLUMN-TYPE CONTRACT's aliveness half (9.78.0), and it needs its
-    // OWN block rather than a clause in the one above: this check is armed by
-    // `resultColumns`, not by `argumentsFrom`, and an agent that declares one
-    // and not the other is the ordinary case. Same law, same reason — the
-    // rows are judged where a RESULT exists, so a response that asked for no
-    // declaring tool would otherwise leave two armed rows untouched through a
-    // whole run, and an untouched row reads as rot.
+    // Column checks arm independently of argumentsFrom. Results are judged at
+    // write; here, a response with no currently declaring call states NA in
+    // both rows. An opaque provider still owes this note when its set is empty.
+    // A function observes declarations after this iteration's actual discovery.
     if (deps.columnDeclaringTools !== undefined) {
-      const declaring = deps.columnDeclaringTools;
+      const declaring =
+        typeof deps.columnDeclaringTools === 'function'
+          ? deps.columnDeclaringTools(response.toolCalls.map((call) => call.name))
+          : deps.columnDeclaringTools;
       if (!response.toolCalls.some((c) => declaring.has(c.name))) {
         deps.integrityLedger?.current?.note('column-type-mismatch', 'write', 'not-applicable');
         deps.integrityLedger?.current?.note('missing-column', 'write', 'not-applicable');

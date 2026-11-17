@@ -41,7 +41,7 @@ import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
 import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
-import { nativeSourceCapture } from '../../../sourceEvidence/capture.js';
+import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 
 interface ResumedInvocationLinks {
   readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
@@ -76,6 +76,9 @@ export function buildResumedInvocation(
     | 'time'
     | 'negativeClaimsArmed'
     | 'sourceEvidenceConfig'
+    | 'columnCheckMode'
+    | 'resultRowsetsFor'
+    | 'integrityLedger'
     | 'currentRun'
     | 'isRunRetired'
   >,
@@ -128,6 +131,15 @@ export function buildResumedInvocation(
     callChanged?: true;
   }> => {
     const tool = resolved.tool;
+    if (seen !== undefined)
+      seen.resultFinalizer = nativeResultFinalizer(
+        scope,
+        tool,
+        { toolName, toolCallId, iteration },
+        deps,
+        links.runFactsOf(scope)?.runId,
+        resolved.party,
+      );
     /** What the approval covers — the arguments as handed in, before any
      *  `wants` resolution or clock redraw derives the ones `execute` gets. */
     const approved = args;
@@ -266,7 +278,12 @@ export function buildResumedInvocation(
         ),
         hasCredentials: links.hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
-        ...links.toolArtifacts(scope, toolName, toolCallId),
+        ...links.toolArtifacts(
+          scope,
+          toolName,
+          toolCallId,
+          seen?.resultFinalizer?.needsPublications,
+        ),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...links.toolProgress(scope, { toolName, toolCallId, iteration }),
         ...requestEvidenceFor(scope, { toolName, toolCallId, iteration }),
@@ -316,15 +333,7 @@ export function buildResumedInvocation(
               context: executionContext,
             })
           : undefined;
-      const sourceRun = links.runFactsOf(scope)?.runId;
-      if (seen !== undefined)
-        seen.sourceCapture = nativeSourceCapture(
-          scope,
-          tool,
-          executionContext,
-          deps.sourceEvidenceConfig,
-          () => !deps.isRunRetired() && deps.currentRun?.().runId === sourceRun,
-        );
+      seen?.resultFinalizer?.entered(executionContext);
       executed = true;
       if (seen !== undefined) {
         // Read now, before any tool code runs: what the call proposed and
@@ -334,7 +343,7 @@ export function buildResumedInvocation(
         seen.submitted = links.programOfCall(tool, args);
       }
       let result = await tool.execute(args, executionContext);
-      seen?.sourceCapture?.returned();
+      seen?.resultFinalizer?.returned();
       // The runner's facts, at this execute boundary as at the batch loop's.
       const codeRun = links.takeCodeRun(scope, tool, codeRunSlot, {
         toolName,
@@ -521,6 +530,7 @@ export function buildResumedInvocation(
       }
       return { result, executed: true, negativeResultId: negativeDispatch?.resultId };
     } catch (err) {
+      seen?.resultFinalizer?.withheld();
       if (ended !== undefined && err === ended) {
         // Nothing ran; the call's sessions are still released, and the run's
         // end — not a tool failure — is what the stage ends with.

@@ -596,3 +596,5 @@ a private-checkpoint resume these unknown marks join the native record policy as
 record-only selectors; they do not claim caller coverage or become admitted
 private fields. They retain default-deny event serving. Legacy checkpoints without
 the private carrier retain the existing missing-caller-policy refusal.
+
+See [source-correction event views](SOURCE_CORRECTION_EVENTS.md) for the internal same-event serving seam and caller conversation-policy boundary.

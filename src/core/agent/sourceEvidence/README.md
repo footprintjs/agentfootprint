@@ -46,6 +46,12 @@ period come only from the final served wrapper spine; record-only coverage
 fields never reappear. Multiple distinct coverage boundaries refuse retention
 rather than invent a merge.
 
+Finalization seals one metadata-only receipt per actual ToolArtifacts capability.
+Native consumers receive the same immutable getter rather than racing destructive
+takes. Closing withdraws future observation and finalization; already issued
+inert metadata stays stable for its current consumers. Late writes never join
+that receipt. No payload cache or historical membership is created here.
+
 A dataset needs both a successful static capture declaration and an exact
 returned association. Its key/ref/kind must match; returned fields must be an
 exact subset of the declared aliases and paths. A visible ticket alone grants

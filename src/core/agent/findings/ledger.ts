@@ -56,7 +56,7 @@ import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflic
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { FindingsNegativeClaimPayload } from '../../../events/payloads.js';
-import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
+import { emitArgumentRow } from '../arguments/events.js';
 import { isTimeRowKind } from '../../../time/rows.js';
 import {
   PROPOSITION_CHARS,
@@ -447,39 +447,6 @@ function emitNegativeProseRow(scope: FindingsScope, row: NegativeProseFinding): 
   typedEmit(scope, 'agentfootprint.findings.negative_claim', {
     ...payload,
     ...(truncated ? { truncated: true as const } : {}),
-  });
-}
-
-/**
- * The inputs layer's row event (`agentfootprint.findings.argument`) — names,
- * enums and counts only. Never the value, the quote or the proposal (they live
- * on the committed row, in the tool's own argument view), and no `valueChars`
- * when that view hides the argument: the length of a hidden value is itself a
- * leak.
- */
-function emitArgumentRow(scope: FindingsScope, row: ArgumentRow): void {
-  const hidden = row.value === HIDDEN_VALUE;
-  typedEmit(scope, 'agentfootprint.findings.argument', {
-    toolCallId: row.toolCallId,
-    toolName: row.toolName,
-    iteration: row.iteration,
-    turn: row.turn,
-    argument: row.argument,
-    ...(row.rule !== undefined && { rule: row.rule }),
-    ...(row.period === true && { period: true as const }),
-    ...(row.source !== undefined && { source: row.source }),
-    ...(row.asked !== undefined && { asked: row.asked }),
-    ...(row.claimed !== undefined && { claimed: row.claimed }),
-    ...(row.matched !== undefined && { matched: row.matched }),
-    ...(row.reading === true && { reading: true as const }),
-    ...(row.earlier === true && { earlier: true as const }),
-    ...(row.setAside !== undefined && { setAside: row.setAside }),
-    ...(row.argumentsFrom !== undefined && { argumentsFrom: row.argumentsFrom }),
-    ...(row.coincides !== undefined && { coincides: row.coincides }),
-    ...(row.free === true && { free: true as const }),
-    ...(row.failed !== undefined && { failed: row.failed }),
-    ...(row.malformed !== undefined && { malformed: row.malformed }),
-    ...(row.value !== undefined && !hidden && { valueChars: row.value.length }),
   });
 }
 

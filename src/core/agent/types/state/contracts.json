@@ -1,7 +1,7 @@
 {
   "baseline": "5a564bb4ae9708bb3d56cf03b7a8ba18fd5f0d8d",
   "source": "src/core/agent/types.ts#AgentState",
-  "sourceSha256": "a3557a4526544c8ce05f0ef43c28ba5fac0d4d54f1f4c10c0c45c1f4fe7470c6",
+  "sourceSha256": "b66238dea0877374fa69f073aff37854e98d7bc6877c368c14a8bfd2d279b24e",
   "contract": {
     "fields": {
       "sourceEvidence": ["9de2ced3d73584bbaf0735daadf661e09e8852be7689148cbf4c41c00e21d7c4",true,false],
@@ -117,6 +117,8 @@
       "scriptsDropped": ["3bcfecfc4e8c46bb5b797fbbb08a483b2fadafa1fd42497405eb961515590163",true,false],
       "pausedScriptDispatch": ["d6f87ce4617d01d68b3175f00415669b26414d296f587825a2f74d5bf2db1bc1",true,false],
       "pausedScriptPrograms": ["df4ea72550112b8acbf3a17f04398514b6abda5c321697d3955d51152e294334",true,false],
+      "argumentSourceOmissionRows": ["e1f9e31de68b92c2f1575234d2feeb8a0e6d9ebf7c3b32be69a84b033bf7112a",true,false],
+      "sourceDeclarationCorrectionSpent": ["44b845f61c46910592484d0514819a5f1c33403ace6266e3a5d5ef62b5df9d33",true,false],
       "honestyLayers": ["f9d56ccb0fc51ed7324de8f94de1edfb1c4bb6facaae6d467febac9c093a1c1a",true,false],
       "answerAssessment": ["85365f037d801e1da9a9e30e618420c8e09e2cbcc98508e8ff826182d82ad6cb",true,false],
       "answerStandingLine": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
@@ -150,6 +152,8 @@
       "reliabilityFailCauseName": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false]
     },
     "comments": {
+      "16e9dda0484effe708854280ee440bf6552b136d319859833e70010902a1ee60": 1,
+      "509f1b3c0f7a6bdd4af417e600065c4a26c1b828af2b75ab1347c8cfe0d752dc": 1,
       "02258cc96de0343b9e21faf3a75f94985273ef7d15ac7d5e9063cc0ee5fde3e5": 1,
       "ac333f7e62ef1a0226222585c0ee5dd4a64e0094bbb4d86478b8a116bd7e6d51": 1,
       "cd74604f118a966ada927244ec93f118e41b632965313b45e14f0e04173f30d3": 1,

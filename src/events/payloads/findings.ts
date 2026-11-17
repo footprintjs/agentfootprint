@@ -179,6 +179,8 @@ export interface FindingsArgumentPayload {
   readonly source?: ArgumentSource;
   readonly asked?: ArgumentAsked;
   readonly claimed?: ArgumentClaim;
+  readonly correction?: 'source-declaration-required';
+  readonly withheld?: 'batch-preempted';
   readonly matched?: 'quote' | 'phrase' | 'spelling' | 'mention';
   readonly reading?: true;
   readonly earlier?: true;

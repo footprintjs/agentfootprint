@@ -113,6 +113,14 @@ export function seedFactory(environment: SeedEnvironment) {
         run.value.pendingResumeHistory = undefined;
         return h;
       },
+      ...(environment.configuration.sourceDeclarationCorrection === 'once' && {
+        sourceDeclarationCorrection: 'once' as const,
+        consumePendingSourceDeclarationCorrection: () => {
+          const correction = run.value.pendingSourceDeclarationCorrection;
+          run.value.pendingSourceDeclarationCorrection = undefined;
+          return correction;
+        },
+      }),
       ...(environment.configuration.evidenceGate !== undefined &&
         environment.configuration.evidenceGate.posture !== 'assist' && {
           consumePendingEvidenceRecovery: () => {

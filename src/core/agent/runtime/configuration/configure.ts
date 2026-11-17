@@ -257,6 +257,14 @@ export function configureAgent(
     // the marker only to a runner that reads it.
     readsMessageFrom(runner);
   }
+  if (inputsLayer?.declarationCorrection === 'once') {
+    if (config.argumentSourcesArmed !== true) {
+      throw new Error(
+        'Agent: inputsLayer.declarationCorrection requires resolved argumentSources: true.',
+      );
+    }
+    config.sourceDeclarationCorrection = 'once';
+  }
   // A member runs for the run that mounted it: a composition hands it that
   // run as `parentRun` (`core/memberRun.ts`).
   readsParentRun(runner);

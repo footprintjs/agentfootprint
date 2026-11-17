@@ -112,7 +112,7 @@ export async function declaredSourceDatasets(
   declarations: readonly SourceEvidenceDatasetDeclaration[] | undefined,
   served: unknown,
   artifacts: ToolArtifacts,
-  publications: ReadonlyMap<string, ArtifactMeta>,
+  publications: Pick<ReadonlyMap<string, ArtifactMeta>, 'get'>,
   signal?: AbortSignal,
 ): Promise<Readonly<Record<string, SourceEvidenceSource>>> {
   if (declarations === undefined) return {};

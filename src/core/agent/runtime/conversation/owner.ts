@@ -4,6 +4,7 @@ import {
   foldedSpansOf,
   findingsLedgerOf,
   sourceEvidenceOf,
+  sourceDeclarationCorrectionOf,
 } from './checkpointParts.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
@@ -106,6 +107,10 @@ export function checkpointFor(
   const owner = this.conversationOwner(selected!.value);
   const skillCursor = this.continuityCursorOf(state);
   const evidenceRecovery = evidenceRecoveryOf(state);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
+    state,
+    'sourceDeclarationCorrectionSpent',
+  );
   const findingsLedger = findingsLedgerOf(state);
   const turnNumber = this.turnNumberOf(state);
   return {
@@ -127,6 +132,7 @@ export function checkpointFor(
     // exact byte shape.
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
     // The model's standings (9.101.0) — absent unless the run recorded any,
     // by the `folded` rule: an optional key, never a format change.
     ...(findingsLedger !== undefined && { findingsLedger }),
@@ -281,6 +287,16 @@ export function applyContinuation(
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
   requireVerificationOnResume(cp, false);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(cp);
+  if (
+    !appendsUserTurn &&
+    sourceDeclarationCorrection !== undefined &&
+    (this.configuration.sourceDeclarationCorrection !== 'once' ||
+      this.configuration.argumentSourcesArmed !== true)
+  )
+    throw new TypeError(
+      'Continuation requires the source declaration correction setting used by this request.',
+    );
   const sourceEvidence = sourceEvidenceOf(cp);
   if (this.configuration.sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
     throw new TypeError(
@@ -325,6 +341,9 @@ export function applyContinuation(
     !appendsUserTurn && cp.evidenceRecovery !== undefined
       ? structuredClone(cp.evidenceRecovery)
       : undefined;
+  values.pendingSourceDeclarationCorrection = appendsUserTurn
+    ? undefined
+    : sourceDeclarationCorrection;
 }
 
 /** A person's unanswered question outranks a new message — see
