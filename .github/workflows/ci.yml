@@ -103,6 +103,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The candidate receipt reads the PR head, a parent of the tested merge.
+          fetch-depth: 2
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -110,7 +113,7 @@ jobs:
           cache: npm
 
       - name: Context package contract input and guard tests
-        run: node --test scripts/context-package-contract/*.test.mjs
+        run: node --test scripts/context-package-contract/*.test.mjs scripts/publish-archive/candidate.test.mjs
 
       - run: npm ci
       - run: npm ls foottrace
@@ -128,6 +131,26 @@ jobs:
       # Packaging-correctness gate: dual CJS/ESM types resolve in every consumer mode.
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
+
+      # One unchanged, source-bound package for downstream checks. This is a
+      # retained CI artifact, never a publication or a version-staged archive.
+      - name: Retain original source candidate
+        if: matrix.node-version == 24
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir "$RUNNER_TEMP/af-source-candidate"
+          npm pack --ignore-scripts --offline --json --pack-destination "$RUNNER_TEMP/af-source-candidate" > "$RUNNER_TEMP/af-source-pack.json"
+          node scripts/publish-archive/candidate.cjs "$RUNNER_TEMP/af-source-candidate" "$SOURCE_HEAD"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: matrix.node-version == 24
+        with:
+          name: agentfootprint-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/af-source-candidate/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
   # Every example, typechecked AND run end-to-end against mock providers — the
   # code people copy. Once per commit (on Node 22) is enough.

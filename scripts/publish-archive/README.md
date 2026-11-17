@@ -30,3 +30,24 @@ admit 20,000/refuse 20,001 members and refuse expansion above 128 MiB. Format ru
 stay unchanged. The actual directory setup is checked under umask 000 for mode 0700. A real offline npm pack keeps a hostile prepare lifecycle active as a
 counterfactual and verifies suppression at the production npm 11 floor; npm 10
 is retained as its distinct old-toolchain behavior.
+
+## Source candidate for downstream checks
+
+The ordinary CI package job retains one separate offline/scripts-off pack after
+its native package checks succeed. `candidate.cjs` reuses the canonical verifier,
+requires the tested tree to equal the requested source head's tree, rejects dirty
+tracked source, and binds the original manifest and lock bytes to Git. Every
+archive member must match its actual source/build file. It writes `candidate.json`
+with the source/tested identities, archive SHA256/SHA1/SRI and every member hash,
+plus the original source manifest and lock. It never relabels or rewrites a pack.
+
+The pinned upload contains that original tarball and those records. Consumers
+must admit its exact successful run, artifact and bytes before their own strict
+native installs; a source candidate is neither a registry publication nor proof
+that a downstream library is compatible. In particular, this does not turn the
+ordinary registry context control into the four-root strict paired contract.
+The context runner still owns and removes its separate temporary inner archive.
+
+Run the data-only identity/refusal fixtures with
+`node --test scripts/publish-archive/candidate.test.mjs`. They execute no archive
+code, package manager, install or build.

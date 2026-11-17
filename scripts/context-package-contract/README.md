@@ -136,11 +136,12 @@ registry URL and SHA512 oracle. Every installed root still has exactly one
 matching context entry. All source CJS and packed CJS/ESM conflict, legacy-key,
 witness/shared-helper/own-JSON assertions and both declaration modes remain.
 
-Packing occurs BEFORE native version staging. The context archive is newly
-built SOURCE14.7.2 from the 13/2 inputs, never registry14 bytes or a final15
-artifact. Only its two context-consumer roots install it. The audit driver admits the exact
-archive/member identity before either install. The later native15 pack and
-neutral public-version checks are separate required receipts.
+The context archive is packed from the actual source manifest and built output,
+without version staging or relabelling. Only its two context-consumer roots install
+it. The audit driver admits the exact archive/member identity before either install.
+This inner archive is removed with the contract's temporary work root. A separate
+retained source-candidate pack and neutral public-version checks are required for
+downstream reuse; the temporary archive path is not a durable artifact receipt.
 
 Only a complete four-case result with all actual command/guard/restoration
 records may return `complete: true`. Failures carry partial evidence outside
