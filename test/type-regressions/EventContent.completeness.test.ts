@@ -221,6 +221,7 @@ export const EVENT_CONTENT = {
   'agentfootprint.tools.request_attempts': 'structure',
   'agentfootprint.tools.resource_restore': 'structure',
   'agentfootprint.tools.result_refused': 'structure',
+  'agentfootprint.tools.rowset_checked': 'structure',
   'agentfootprint.tools.semantics_declared': 'shape',
   'agentfootprint.tools.session_close_failed': 'fields',
   // `label`: never user data, by its contract
@@ -495,6 +496,7 @@ const CANARY_PAYLOAD: {
       },
     ],
     predicate: 'status',
+    rowset: 'declared-rowset',
     epoch: 1,
     synthetic: true,
     advisory: true,

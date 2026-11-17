@@ -184,6 +184,7 @@ export const fields1 = {
   role: true,
   routing: true,
   rows: true,
+  rowset: true,
   rule: true,
   runId: true,
   runnerId: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   toLocaleLowerCase: true,
   toLocaleUpperCase: true,
   toLowerCase: true,
-  toProvider: true,
 } as const;

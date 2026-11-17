@@ -81,6 +81,8 @@ export const eventDispositions: Readonly<
   'agentfootprint.tools.claim_swallowed': 'A declared tool claim was not preserved.',
   'agentfootprint.tools.answered_off_wire': 'A tool answered outside the recorded model request.',
   'agentfootprint.tools.resource_restore': 'The run recorded a tool resource restoration.',
+  'agentfootprint.tools.rowset_checked':
+    "The run recorded a declared rowset's availability and check status.",
   'agentfootprint.tools.session_started': 'A tool session started.',
   'agentfootprint.tools.session_reused': 'The run reused a tool session.',
   'agentfootprint.tools.session_closed': 'A tool session closed.',

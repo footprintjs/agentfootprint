@@ -53,7 +53,7 @@ export function beginIntegrityLedger(
       // TWO HALVES (9.77.0): the operator's dial AND a declaration to arm on.
       emptyLookup: this.configuration.noticeEmptyLookups && this.integrityDanglingPresent,
       // TWO HALVES (9.78.0), the same law: the operator's dial off `'off'`
-      // AND a tool declaring `resultColumns`.
+      // AND a static columns/rowsets declaration or an opaque provider catalog.
       columnTypes: this.configuration.checkColumnTypes !== 'off' && this.integrityColumnsPresent,
       // TWO HALVES (9.83.0), and here the second is structural rather than
       // a policy choice: the evidence gate owns the extractor that decides

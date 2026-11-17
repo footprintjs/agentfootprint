@@ -12,6 +12,11 @@ import { notServedResult } from '../../stages/toolCalls/index.js';
 import { buildToolResolver } from '../../stages/toolResolver.js';
 import { memberIdentityIn } from '../../../memberRun.js';
 import { buildToolRegistry } from '../../buildToolRegistry.js';
+import {
+  resultRowsetCatalog,
+  resultRowsetsReader,
+  declaringRowsetTools,
+} from '../../resultRowsets/catalog.js';
 import type { AgentContext } from '../contracts.js';
 
 import type { AgentConfiguration } from '../configuration/types.js';
@@ -158,7 +163,20 @@ export function buildSlots(
       tool.resultColumns === undefined ? [] : [[name, tool.resultColumns] as const],
     ),
   );
-  this.integrityColumnsPresent = toolColumns.size > 0;
+  // Static and current provider declarations remain separate from legacy columns.
+  const rowsetCatalog = resultRowsetCatalog(environment.registryByName.entries());
+  const toolRowsets = rowsetCatalog.declarations;
+  const resultRowsetsForValues = (values: AgentRunValues) =>
+    resultRowsetsReader(rowsetCatalog, values.providerToolCache, resolverForValues(values));
+  const rowsetDeclaringToolsForValues = (values: AgentRunValues, names: readonly string[]) =>
+    declaringRowsetTools(rowsetCatalog, values.providerToolCache, resolverForValues(values), names);
+  // A provider's future catalog is opaque at run start. The request stage must
+  // state NA on each response with no current declaring call, rather than let
+  // an initial unarmed NA hide a disconnected provider-only write checker.
+  this.integrityColumnsPresent =
+    toolColumns.size > 0 ||
+    toolRowsets.size > 0 ||
+    this.configuration.externalToolProvider !== undefined;
   // The staged-refs join's other half (grounded numbers): `Tool.wants` by
   // tool name, harvested the same way and with the same ToolProvider caveat.
   // Consumed only by the evidence gate (the callLLM nudge and the recheck
@@ -251,6 +269,9 @@ export function buildSlots(
     displayNameOfFor,
     toolGrounding,
     toolColumns,
+    toolRowsets,
+    resultRowsetsForValues,
+    rowsetDeclaringToolsForValues,
     toolWants,
     toolsSubflow,
   };
