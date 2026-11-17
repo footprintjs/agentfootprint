@@ -356,6 +356,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | — | [`artifact-detail.ts`](artifacts/artifact-detail.ts) | Open bounded sections of a stored proof | Re-authorize each read, follow actual child actions, and keep source caveats with the value. |
 | — | [`dataset-result.ts`](artifacts/dataset-result.ts) | Publish a dataset, then follow its reference | Declare producer-owned rowsets, keep source lineage, and redeem the reference on a later turn. |
 | — | [`dataset-time-axis.ts`](artifacts/dataset-time-axis.ts) | Declare which column is time | A tool declares the time column, its unit and how each row summarises its interval; a viewer reads the ticket instead of guessing and compares times as UTC instants. |
+| — | [`governed-result-rowsets.ts`](artifacts/governed-result-rowsets.ts) | Check the complete current-call dataset | Bind column types to the final payload or a bounded same-call dataset, with no extra query. |
 | — | [`retained-source-evidence.ts`](artifacts/retained-source-evidence.ts) | Retain an exact historical source | Find and freshly authorize stored source evidence across native continuation without requerying. |
 
 ### [`deploy/`](deploy/) — examples

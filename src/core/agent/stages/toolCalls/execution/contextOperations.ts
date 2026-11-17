@@ -120,6 +120,7 @@ export function buildToolContextOperations(
     scope: TypedScope<AgentState>,
     toolName: string,
     toolCallId: string,
+    capturePublications = false,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
     const bindRun = links.runFactsOf(scope);
     let retainPublication:
@@ -211,8 +212,7 @@ export function buildToolContextOperations(
       origin: { ...(bindRun?.runId !== undefined && { runId: bindRun.runId }), toolCallId },
       onEvent,
     });
-    if (deps.sourceEvidenceConfig !== undefined)
-      retainPublication = sourcePublicationSink(artifacts);
+    if (capturePublications) retainPublication = sourcePublicationSink(artifacts);
     return { artifacts, hasArtifacts: true, ...readerAccess(scope, artifacts, toolName) };
   };
 

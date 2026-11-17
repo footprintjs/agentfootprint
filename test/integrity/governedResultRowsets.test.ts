@@ -1,10 +1,11 @@
+import type { AgentfootprintEvent } from '../../src/events.js';
 /**
  * Behavior-first contract for declared, governed result rowsets.
  *
  * These tests deliberately use only the public doors and a real native Agent.
- * The provisional declaration travels as a structural defineTool option so
- * the unchanged baseline can execute it: baseline failures must be missed
- * checks/refusals, not missing imports or a simulated dispatcher.
+ * The original hosted baseline exercised structural declarations against the
+ * unchanged runtime. Its assertions now use the reviewed public metadata type;
+ * recorded baseline failures remain missed checks/refusals, not setup errors.
  *
  * No model, source service, application validator or additional query runs.
  * The bad published row is outside the clean inline preview. Reading that
@@ -20,30 +21,16 @@ import {
   deny,
   inMemoryArtifacts,
   withSourceEvidence,
-  type AgentfootprintEvent,
   type ArtifactStore,
   type ToolExecutionContext,
-  type ToolResultColumns,
+  type ToolResultRowset,
 } from '../../src/index.js';
 import { recordRun } from '../../src/observe.js';
 import { mock } from '../../src/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 
-// Local proposal types are replaced by the public types only after the API
-// review. They do not stand in for runtime recognition or enforcement.
-interface RowsetDeclaration {
-  readonly key: string;
-  readonly columns: ToolResultColumns;
-  readonly source:
-    | { readonly kind: 'inline'; readonly path: readonly string[] }
-    | {
-        readonly kind: 'published-dataset';
-        readonly refPath: readonly string[];
-        readonly artifactKind: string;
-        readonly maxRows: number;
-        readonly maxBytes: number;
-      };
-}
+// The behavioral assertions are retained from the hosted failure-first baseline.
+type RowsetDeclaration = ToolResultRowset;
 
 const TOOL = 'read_vm_disks';
 const CALL = 'native-disks-call';

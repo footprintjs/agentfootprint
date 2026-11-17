@@ -10,6 +10,7 @@ import { memberIdentityIn, memberRequestIn } from '../../../memberRun.js';
 import { buildToolRegistry } from '../../buildToolRegistry.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
+import type { buildSlots } from '../slots/buildSlots.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface ToolCallsEnvironment {
@@ -29,6 +30,8 @@ export interface ToolCallsEnvironment {
   readonly toolColumns: NonNullable<
     Parameters<typeof buildToolCallsHandler>[0]['columnDeclarations']
   >;
+  readonly toolRowsets: ReturnType<typeof buildSlots>['toolRowsets'];
+  readonly resultRowsetsForValues: ReturnType<typeof buildSlots>['resultRowsetsForValues'];
   readonly permissionChecker: AgentConfiguration['permissionChecker'];
   readonly credentialProvider: AgentConfiguration['credentialProvider'];
   readonly artifactStore: AgentConfiguration['artifactStore'];
@@ -113,8 +116,15 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       // that asked for neither hands the handler exactly the deps object it
       // always did.
       ...(environment.configuration.checkColumnTypes !== 'off' &&
-        environment.toolColumns.size > 0 && {
-          columnDeclarations: environment.toolColumns,
+        (environment.toolColumns.size > 0 ||
+          environment.toolRowsets.size > 0 ||
+          environment.configuration.externalToolProvider !== undefined) && {
+          ...(environment.toolColumns.size > 0 && { columnDeclarations: environment.toolColumns }),
+          ...(environment.toolRowsets.size > 0 && { rowsetDeclarations: environment.toolRowsets }),
+          ...((environment.toolRowsets.size > 0 ||
+            environment.configuration.externalToolProvider !== undefined) && {
+            resultRowsetsFor: environment.resultRowsetsForValues(run.value),
+          }),
           columnCheckMode: environment.configuration.checkColumnTypes,
           integrityLedger: run.value.integrityLedger,
         }),

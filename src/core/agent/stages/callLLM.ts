@@ -1195,15 +1195,15 @@ export function buildCallLLMStage(
         deps.integrityLedger?.current?.note('empty-lookup', 'write', 'not-applicable');
       }
     }
-    // THE COLUMN-TYPE CONTRACT's aliveness half (9.78.0), and it needs its
-    // OWN block rather than a clause in the one above: this check is armed by
-    // `resultColumns`, not by `argumentsFrom`, and an agent that declares one
-    // and not the other is the ordinary case. Same law, same reason — the
-    // rows are judged where a RESULT exists, so a response that asked for no
-    // declaring tool would otherwise leave two armed rows untouched through a
-    // whole run, and an untouched row reads as rot.
+    // Column checks arm independently of argumentsFrom. Results are judged at
+    // write; here, a response with no currently declaring call states NA in
+    // both rows. An opaque provider still owes this note when its set is empty.
+    // A function observes declarations after this iteration's actual discovery.
     if (deps.columnDeclaringTools !== undefined) {
-      const declaring = deps.columnDeclaringTools;
+      const declaring =
+        typeof deps.columnDeclaringTools === 'function'
+          ? deps.columnDeclaringTools(response.toolCalls.map((call) => call.name))
+          : deps.columnDeclaringTools;
       if (!response.toolCalls.some((c) => declaring.has(c.name))) {
         deps.integrityLedger?.current?.note('column-type-mismatch', 'write', 'not-applicable');
         deps.integrityLedger?.current?.note('missing-column', 'write', 'not-applicable');

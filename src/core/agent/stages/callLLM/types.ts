@@ -172,16 +172,19 @@ export interface CallLLMStageDeps {
    */
   readonly noticeEmptyLookups?: boolean;
   /**
-   * The names of tools declaring `Tool.resultColumns` (9.78.0), present ONLY
+   * The names of tools declaring columns/rowsets, present ONLY
    * when the operator's `checkColumnTypes` dial is off `'off'` AND at least
-   * one tool declares columns — the same two halves the ledger arms on.
+   * one static declaration or an opaque provider catalog can arm the ledger.
+   * A function reads the actual current provider acquisition, never an old set.
    *
    * This stage owns exactly one thing for the column-type contract, and it is
    * the `noticeEmptyLookups` job above verbatim: the honest `not-applicable`
    * when a response asked for NO declaring tool. The judging happens where
    * the rows are.
    */
-  readonly columnDeclaringTools?: ReadonlySet<string>;
+  readonly columnDeclaringTools?:
+    | ReadonlySet<string>
+    | ((toolNames: readonly string[]) => ReadonlySet<string>);
   /**
    * The staged-refs nudge's harvest (`.namesAndNumbersFromEvidence({ nudge:
    * true })`) — `Tool.wants` by tool name, present ONLY when the dial is on

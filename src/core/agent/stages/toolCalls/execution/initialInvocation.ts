@@ -42,7 +42,6 @@ import {
   repeatOf,
 } from '../../../../../tools/inputRequest.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
-import { nativeSourceCapture } from '../../../sourceEvidence/capture.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -159,7 +158,12 @@ export async function invokeInitialTool(
       ...(frame.authorization.resolvedCredential && {
         credential: frame.authorization.resolvedCredential,
       }),
-      ...frame.toolArtifacts(scope, frame.tc.name, frame.tc.id),
+      ...frame.toolArtifacts(
+        scope,
+        frame.tc.name,
+        frame.tc.id,
+        frame.execution.resultFinalizer?.needsPublications,
+      ),
       ...(frame.wanted.wantedMeta !== undefined && { wanted: frame.wanted.wantedMeta }),
       ...frame.toolProgress(scope, {
         toolName: frame.tc.name,
@@ -196,21 +200,14 @@ export async function invokeInitialTool(
             context: executionContext,
           })
         : undefined;
-    const sourceRun = frame.runFactsOf(scope)?.runId;
-    frame.execution.sourceCapture = nativeSourceCapture(
-      scope,
-      frame.tool,
-      executionContext,
-      deps.sourceEvidenceConfig,
-      () => !deps.isRunRetired() && deps.currentRun?.().runId === sourceRun,
-    );
+    frame.execution.resultFinalizer?.entered(executionContext);
     frame.execution.executed = true;
     frame.execution.submittedProgram = frame.programOfCall(
       frame.tool,
       frame.callArguments.callArgs,
     );
     frame.outcome.result = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
-    frame.execution.sourceCapture?.returned();
+    frame.execution.resultFinalizer?.returned();
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
         scope,
@@ -338,6 +335,7 @@ export async function invokeInitialTool(
     }
     await frame.endCall(scope);
   } catch (err) {
+    frame.execution.resultFinalizer?.withheld();
     // Set when a raise declared a miss the door could not file:
     // the call then errors with this text and does not pause.
     let raisedMissError: string | undefined;
