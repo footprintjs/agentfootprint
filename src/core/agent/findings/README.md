@@ -1042,8 +1042,6 @@ byte-identity references under `test/core/tools/reference/` are unchanged.
 
 ## Where each argument value came from — `_findings.from` (honesty layer 2, step 5)
 
-Native omission feedback reuses `sourceDeclarationSchema` from the same reserved owner: only the required `basis`/`from` members (or sources-only `from`), under the actual `_findings` property. It is immutable protocol data, not another tool decoration or declaration reader. `sourceContractFeedback.ts` bounds the names and framed UTF-8 bytes before native correction is spent; no value or source is inferred and no optional-parent contract changes.
-
 Under `.findings({ argumentSources: true })` (the inputs layer's declared sources) the
 reserved argument carries one more part, on the calls of a RULED tool:
 

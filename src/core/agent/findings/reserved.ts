@@ -252,7 +252,7 @@ function withFromProperty(planted: PlainObject): PlainObject {
 }
 
 /** The base decoration with `from` — built once, served by reference like the base. */
-const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM: PlainObject = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
+export const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
 
 /**
  * The reserved property DECLARED SOURCES plant WITHOUT the findings ledger
@@ -270,30 +270,6 @@ export const FINDINGS_SOURCES_SCHEMA: PlainObject = deepFreeze({
   properties: { from: FINDINGS_FROM_PROPERTY },
   required: ['from'],
 });
-
-/** Project only the canonical required declaration members, with their actual nesting. */
-function requiredDeclarationSchema(planted: PlainObject): PlainObject {
-  const required = planted.required as readonly string[];
-  const properties = planted.properties as PlainObject;
-  return deepFreeze({
-    type: 'object',
-    required: [RESERVED_ARGUMENT],
-    properties: {
-      [RESERVED_ARGUMENT]: {
-        type: planted.type,
-        required,
-        properties: Object.fromEntries(required.map((name) => [name, properties[name]])),
-      },
-    },
-  });
-}
-const LEDGER_SOURCE_CONTRACT = requiredDeclarationSchema(FINDINGS_ARGUMENT_SCHEMA_WITH_FROM);
-const SOURCE_CONTRACT = requiredDeclarationSchema(FINDINGS_SOURCES_SCHEMA);
-
-/** Native error data only; neither the served schema nor its optional parent is changed. */
-export function sourceDeclarationSchema(findings: boolean): PlainObject {
-  return findings ? LEDGER_SOURCE_CONTRACT : SOURCE_CONTRACT;
-}
 
 /**
  * The answer-turn `_findings` property, for a provider's structured output

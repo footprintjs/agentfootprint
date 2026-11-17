@@ -2,8 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ASK_ARGUMENTS } from '../../../../src/tools/declare.js';
 import { TOOL_BATCH_FRAME_PREFIX } from '../../../../src/lib/saidByPerson.js';
-import { prepareSourceContractFeedback } from '../../../../src/core/agent/findings/sourceContractFeedback.js';
-import { sourceDeclarationSchema } from '../../../../src/core/agent/findings/reserved.js';
+import {
+  prepareSourceContractFeedback,
+  sourceDeclarationSchema,
+} from '../../../../src/core/agent/findings/sourceContractFeedback.js';
 import { contractIn, type Bag } from './sourceContractFixture.js';
 
 const call = { id: 'bounded-call' };
