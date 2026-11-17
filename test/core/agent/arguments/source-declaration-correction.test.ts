@@ -223,11 +223,12 @@ describe('failure-first: native source declaration correction is an explicit inp
       );
       expect(disposition).toBeDefined();
       const rows = payload(disposition!).rows as Record<string, unknown>[];
+      // One withheld declaring encounter plus the ordinary final no-tools response.
       for (const check of ['empty-lookup', 'column-type-mismatch', 'missing-column']) {
         expect(rows.find((row) => row.check === check && row.seam === 'write')).toMatchObject({
           checked: 1,
           findings: 0,
-          notApplicable: 1,
+          notApplicable: 2,
           unreachable: 0,
         });
       }
@@ -283,7 +284,7 @@ describe('failure-first: native source declaration correction is an explicit inp
       const rows = payload(disposition!).rows as Record<string, unknown>[];
       expect(
         rows.find((row) => row.check === 'column-type-mismatch' && row.seam === 'write'),
-      ).toMatchObject({ checked: 2, findings: 1, notApplicable: 1, unreachable: 0 });
+      ).toMatchObject({ checked: 2, findings: 1, notApplicable: 2, unreachable: 0 });
       expect(
         f.events
           .filter((event) => event.type === 'agentfootprint.integrity.context_error')
@@ -449,11 +450,12 @@ describe('existing source checks and no-opt-in behavior remain controls', () => 
       );
       expect(disposition).toBeDefined();
       const rows = payload(disposition!).rows as Record<string, unknown>[];
+      // Ordinary completion records its final no-declaring-tool response as NA.
       for (const check of ['empty-lookup', 'column-type-mismatch', 'missing-column'])
         expect(rows.find((row) => row.check === check && row.seam === 'write')).toMatchObject({
           checked: 1,
           findings: 0,
-          notApplicable: 0,
+          notApplicable: 1,
           unreachable: 0,
         });
     } finally {
