@@ -252,7 +252,7 @@ function withFromProperty(planted: PlainObject): PlainObject {
 }
 
 /** The base decoration with `from` — built once, served by reference like the base. */
-const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM: PlainObject = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
+export const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
 
 /**
  * The reserved property DECLARED SOURCES plant WITHOUT the findings ledger
