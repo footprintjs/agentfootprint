@@ -178,6 +178,7 @@ export function buildToolBatchExecution(
                 operations.noticeEmptyLookup(scope, at, call.args, undefined, [], false);
                 operations.judgeColumns(scope, at, undefined);
               }
+              noteUndispatchedRowsets(toolCalls);
               refuseSourceDeclarationBatch(
                 scope,
                 toolCalls,
