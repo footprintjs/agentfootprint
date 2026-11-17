@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -71,6 +71,15 @@ test('retains a source head from a depth-two PR merge checkout with the same tre
   assert.equal(record.tested.head, f.git('rev-parse', 'HEAD'));
   assert.notEqual(record.tested.head, record.source.head);
   assert.equal(record.tested.tree, record.source.tree);
+});
+
+test('accepts a generator rewriting identical tracked bytes without refreshing the index', (t) => {
+  const f = fixture(t);
+  const file = path.join(f.root, 'package.json');
+  writeFileSync(file, readFileSync(file));
+  const later = new Date(Date.now() + 2000);
+  utimesSync(file, later, later);
+  assert.equal(retainCandidate(f.root, f.output, f.head).source.head, f.head);
 });
 
 for (const [name, mutate] of [

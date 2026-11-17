@@ -23,7 +23,9 @@ function retainCandidate(root, output, sourceHead) {
   const sourceTree = git('rev-parse', sourceHead + '^{tree}');
   const tested = { head: git('rev-parse', 'HEAD'), tree: git('rev-parse', 'HEAD^{tree}') };
   assert.equal(tested.tree, sourceTree, 'candidate must use the exact source tree');
-  git('diff-index', '--quiet', 'HEAD', '--');
+  // Generators may rewrite identical bytes. Compare content with HEAD rather
+  // than treating the index's stale stat cache as a source change.
+  git('diff', '--quiet', 'HEAD', '--');
   const manifest = regular(path.join(root, 'package.json'));
   const lock = regular(path.join(root, 'package-lock.json'));
   const sourceFile = (name) => execFileSync('git', ['show', sourceHead + ':' + name], { cwd: root });
