@@ -53,14 +53,14 @@ export function refuseSourceDeclarationBatch(
   if (assistant !== undefined) history.push(assistant);
   for (const call of calls) {
     const reason = omittedCallIds.has(call.id)
-      ? 'This call needs actual _findings.from declarations for its present ask-ruled arguments. ' +
+      ? 'That call lacked actual _findings.from declarations for its present ask-ruled arguments. ' +
         'Declare the actual source without inventing a claim, or ask the person.'
-      : 'This call was held because another call needs an argument-source declaration.';
+      : 'That call was held because another call in that batch lacked an argument-source declaration.';
     history.push({
       role: 'tool',
       content:
         `${TOOL_BATCH_FRAME_PREFIX} — framework feedback: source-declaration-required. ` +
-        `No calls in this batch ran. ${reason} Submit a new batch.]`,
+        `No calls in that batch ran. ${reason} Submit a new batch.]`,
       toolCallId: call.id,
       toolName: call.name,
       toolChars: 0,

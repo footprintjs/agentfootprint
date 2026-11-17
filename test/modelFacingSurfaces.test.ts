@@ -152,6 +152,14 @@ import {
   type Surface,
 } from './helpers/modelFacingClaims.js';
 
+import {
+  correctionFixture as sourceCorrectionFixture,
+  batch as sourceCorrectionBatch,
+  proposal as sourceCorrectionProposal,
+  QUESTION as SOURCE_CORRECTION_QUESTION,
+  VM as SOURCE_CORRECTION_VM,
+} from './core/agent/arguments/sourceCorrectionHarness.js';
+
 /** One model-facing producer, and how to make it speak. */
 interface ModelFacingProducer {
   /** What a reader greps for when this row goes red. */
@@ -1366,6 +1374,46 @@ function emptyDataRefusals(): readonly string[] {
   ];
 }
 
+/** Compose both persistent correction arms through the actual admitted Agent wire. */
+async function sourceDeclarationFeedback(): Promise<readonly string[]> {
+  let siblingRuns = 0;
+  const siblingName = 'source_correction_sibling';
+  const sibling = defineTool({
+    name: siblingName,
+    description: 'Synthetic sibling held by the native barrier.',
+    execute() {
+      siblingRuns++;
+      return 'Synthetic sibling ran.';
+    },
+  });
+  const fixture = sourceCorrectionFixture(
+    [
+      sourceCorrectionBatch(
+        sourceCorrectionProposal('declaration-omitted', { vm: SOURCE_CORRECTION_VM }),
+        { id: 'held-sibling', name: siblingName, args: {} },
+      ),
+      'Held.',
+    ],
+    { extraTools: [sibling] },
+  );
+  try {
+    expect(await fixture.agent.run(SOURCE_CORRECTION_QUESTION)).toBe('Held.');
+    expect(fixture.ran).toEqual([]);
+    expect(siblingRuns).toBe(0);
+    const notices = (fixture.requests[1]?.messages ?? []).filter(
+      (message) => message.role === 'tool',
+    );
+    expect(notices.map((message) => message.toolCallId)).toEqual([
+      'declaration-omitted',
+      'held-sibling',
+    ]);
+    for (const notice of notices) expect(notice.content).not.toContain(SOURCE_CORRECTION_VM);
+    return notices.map((message) => message.content);
+  } finally {
+    await fixture.agent.shutdown();
+  }
+}
+
 // ─── The registry ────────────────────────────────────────────────────
 
 /**
@@ -2165,6 +2213,19 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
         },
       ]),
     ],
+  },
+  {
+    id: 'inputs layer — one source-declaration correction holds the whole native batch',
+    module: 'src/core/agent/stages/toolCalls/batch/refusal.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'Each fixed role-tool notice is correlated to a withheld proposal and remains in native history; both arms are persistent facts about that past call and batch.',
+    drivenBy: [
+      'test/core/agent/arguments/source-declaration-correction.test.ts',
+      'test/core/agent/arguments/source-correction-privacy.test.ts',
+    ],
+    reaches: [/_findings\.from/, /another call/],
+    compose: sourceDeclarationFeedback,
   },
   {
     id: 'inputs layer — the refusals of a ruled call (honesty layer 2)',
