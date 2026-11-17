@@ -62,13 +62,28 @@ function isolated(body) {
   assert.equal(result.stdout.trim(), 'isolated-check-ok');
 }
 
-test('fixed facade imports without setup or child execution and exposes only the three public entries', () => {
+test('fixed facade imports without setup or child execution and exposes only the four public entries', () => {
   isolated(`
 const api = await import(${JSON.stringify(facadeURL)});
-assert.deepEqual(Object.keys(api).sort(), ['CONTEXT_PACKAGE_CONTRACT_PROTOCOL', 'runPairedContextPackageContract', 'runRegistryContextPackageContract'].sort());
+assert.deepEqual(Object.keys(api).sort(), ['CONTEXT_PACKAGE_CONTRACT_PROTOCOL', 'runPairedContextPackageContract', 'runRegistryContextPackageContract', 'runStrictContextPackageContract'].sort());
 assert.equal(api.CONTEXT_PACKAGE_CONTRACT_PROTOCOL, 'agentfootprint.context-package-contract.v1');
 assert.equal(typeof api.runPairedContextPackageContract, 'function');
 assert.equal(typeof api.runRegistryContextPackageContract, 'function');
+assert.equal(typeof api.runStrictContextPackageContract, 'function');
+assert.deepEqual(effects, []);
+console.log('isolated-check-ok');
+`);
+});
+
+test('strict native entry refuses extra commands, invalid heads and source-local evidence before effects', () => {
+  isolated(`
+const api = await import(${JSON.stringify(facadeURL)});
+for (const argv of [
+  ['node', 'strict-cli'],
+  ['node', 'strict-cli', '/unit-evidence', 'a'.repeat(40), '--mode=registry-control'],
+  ['node', 'strict-cli', '/unit-evidence', '--command=install'],
+  ['node', 'strict-cli', ${JSON.stringify(root)}, 'a'.repeat(40)],
+]) await assert.rejects(api.runStrictContextPackageContract(argv));
 assert.deepEqual(effects, []);
 console.log('isolated-check-ok');
 `);

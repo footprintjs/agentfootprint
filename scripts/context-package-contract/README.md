@@ -8,7 +8,8 @@ does no setup, filesystem IO or process execution. This is not a package export.
 The facade exports `CONTEXT_PACKAGE_CONTRACT_PROTOCOL` with value
 `agentfootprint.context-package-contract.v1`,
 `runPairedContextPackageContract(input)`, and the registry CLI's
-`runRegistryContextPackageContract()`. The paired entry has no registry fallback.
+`runRegistryContextPackageContract()`, plus the native CLI's closed
+`runStrictContextPackageContract(argv)` workflow. The paired entry has no registry fallback.
 An installer first binds the NEW fixed facade to its reviewed source tree, then
 checks the protocol/callable. Never import the old executable CLI to detect
 support. A protocol string alone grants no source approval.
@@ -183,8 +184,12 @@ Run them with `node --test scripts/context-package-contract/*.test.mjs`.
 
 ## Real published-cohort adapter
 
-`../check-context-package-strict.mjs` is the fixed native CLI. It admits the
-three exact registry archives selected by the committed lock, verifies SHA512
+`../check-context-package-strict.mjs` is the thin fixed native CLI. It calls only
+the owning facade, which binds its source root and paired runner before entering
+`publishedDriver.mjs`. Outside callers cannot select an internal module, owner
+root or installer; importing the facade still performs no setup or IO. The
+private driver admits the three exact registry archives selected by the committed
+lock, verifies SHA512
 before decoding, and retains every member identity as data. It supplies only
 code-owned installers and guards to the existing four-case runner. No JSON
 supplies a command, executable, callback, expected result or policy override.
