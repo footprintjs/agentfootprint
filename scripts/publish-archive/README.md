@@ -14,6 +14,47 @@ is delayed until all members pass; a bad root path fails archive-path first.
 Missing/non-string/wrong planned versions fail manifest-version explicitly.
 No PAX, prefix, long-path or other format extension is enabled.
 
+`tarReader.cjs` now owns that single bounded gzip/USTAR/member walk. The AF
+`inspectArchive` facade keeps its existing source comparison, JSON treatment,
+member policy, configurable native bounds, report and refusal codes. Header
+units and the CRC law were moved unchanged; no second parser is introduced.
+`archivePolicy.cjs` keeps the existing refusal identities and the closed code
+policies. AF's default does not inherit any dependency-only member allowance.
+
+## Published dependency data
+
+`publishedDependency.cjs` exports
+`inspectPublishedDependency(bytes, {name, version, integrity})` for exactly the
+published FootPrint 13.0.0, Foottrace 2.0.0 and ContextFootprint 0.1.1 inputs.
+It accepts no caller profile, root, limit or command. The fixed dependency
+bounds are 16 MiB compressed, 64 MiB expanded and 10,000 members. A bounded
+owned copy of the original input must match its selected canonical SHA512 SRI
+BEFORE gzip/manifest decoding. No package code, setup or lifecycle runs.
+
+All three use the same closed header/path reader. Native dependencies retain
+their known metadata/dist roots; Context additionally permits CHANGELOG.md,
+NOTICE and examples/, and only its observed inert
+`publishConfig: {access: 'public', registry: 'https://registry.npmjs.org/'}`.
+Those values are retained data, never publishing/installation instructions.
+Setup members, links, duplicate paths, file/directory and case collisions,
+traversal, PAX/GNU, extra gzip members and trailing bytes remain refused.
+AF's publication facade still refuses Context-only roots and publishConfig.
+
+The dependency-only `strictJson.cjs` reuses Ho's bounded structural JSON unit
+from `consumer-source-cohort-20261116/repo/scripts/publish-release/archive/strict-json.cjs`,
+SHA256 `30be8b6addaffccaa6093e70e29114eb44e59b1a66d285a1c9befa75613363f7`;
+only the local refusal-owner import changes. It preserves the 1 MiB, depth-64
+and 100,000-value bounds and refuses decoded duplicate keys and malformed UTF8.
+The old AF manifest parser is unchanged.
+
+The result contains `manifest`, package/version, raw archive SHA256/SHA1/SRI
+and byte count, plus the full `files` inventory of package-prefixed path, size
+and SHA256. Installed member equality belongs to the four-root verifier; SRI
+selection proves neither source-commit identity nor runtime compatibility.
+Inert fixtures do not establish actual fit of the three published archives.
+Run only the data fixtures with
+`node --test scripts/publish-archive/publishedDependency.test.mjs`.
+
 verify.cjs is the native data-only adapter. It rejects symlinks and nonempty
 output directories, writes the inspected buffer once as package.tgz, and emits
 only fixed fields/refusal names. The publishing shell runs npm in that separate

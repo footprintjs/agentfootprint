@@ -85,6 +85,13 @@ test('accepts a generator rewriting identical tracked bytes without refreshing t
 for (const [name, mutate] of [
   ['changed source manifest', (f) => writeFileSync(path.join(f.root, 'package.json'), JSON.stringify({ ...f.manifest, version: '15.0.0-rc.1' }))],
   ['changed tracked lock', (f) => writeFileSync(path.join(f.root, 'package-lock.json'), '{}')],
+  ['staged source change hidden by restored working bytes', (f) => {
+    const file = path.join(f.root, 'package.json');
+    const original = readFileSync(file);
+    writeFileSync(file, '{}');
+    f.git('add', 'package.json');
+    writeFileSync(file, original);
+  }],
   ['wrong packed version', (f) => writeFileSync(path.join(f.output, 'candidate.tgz'), archiveBytes({ ...f.manifest, version: '15.0.0-rc.1' }))],
   ['wrong built member', (f) => writeFileSync(path.join(f.root, 'dist/index.js'), 'exports.fixture = null;\n')],
   ['second archive', (f) => writeFileSync(path.join(f.output, 'second.tgz'), f.bytes)],

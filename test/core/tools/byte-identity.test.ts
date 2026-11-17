@@ -573,6 +573,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import {
+  assertNativeReadWindowMetadata,
+  type NativeWindowAddition,
+} from './native-cohort-metadata.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -1560,6 +1564,16 @@ function projection(snapshot: Snapshot): unknown {
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
+const V15_NATIVE_REFERENCE_DIR = new URL('./reference/v15-native-cohort/', import.meta.url);
+const V15_NATIVE_CAPTURES = new Map(
+  (
+    JSON.parse(readFileSync(new URL('MANIFEST.json', V15_NATIVE_REFERENCE_DIR), 'utf8'))
+      .captures as {
+      case: string;
+      additions: NativeWindowAddition[];
+    }[]
+  ).map((capture) => [capture.case, capture.additions]),
+);
 const NATIVE_RECORD_CASES = new Set([
   'agent-answer-layer',
   'agent-arguments-ask-resumed',
@@ -1610,7 +1624,9 @@ const SOURCE_CONTRACT_REFERENCE_CASES = new Set([
 const referencePath = (name: string): URL =>
   new URL(
     `${name}.json`,
-    SOURCE_CONTRACT_REFERENCE_CASES.has(name)
+    V15_NATIVE_CAPTURES.has(name)
+      ? V15_NATIVE_REFERENCE_DIR
+      : SOURCE_CONTRACT_REFERENCE_CASES.has(name)
       ? SOURCE_CONTRACT_REFERENCE_DIR
       : FINDINGS_REFERENCE_CASES.has(name)
       ? FINDINGS_REFERENCE_DIR
@@ -1628,7 +1644,10 @@ const UPDATE_CASES = new Set(
 describe('byte-identity — exact whole-record contract for native component ownership', () => {
   for (const [name, drive] of Object.entries(SCENARIOS)) {
     it(name, async () => {
-      const observed = projection(await drive());
+      const snapshot = await drive();
+      const additions = V15_NATIVE_CAPTURES.get(name);
+      if (additions) assertNativeReadWindowMetadata(snapshot, additions);
+      const observed = projection(snapshot);
       const text = `${JSON.stringify(observed, null, 2)}\n`;
       if (UPDATE) {
         if (!UPDATE_CASES.has(name))

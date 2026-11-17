@@ -1,8 +1,10 @@
 /** Pure fixed probes for the context-package contract. No file or process effects. */
 import { createHash } from 'node:crypto';
 import { join, sep } from 'node:path';
+import { publicProducerProbe } from './publicProducerProbe.mjs';
 
-export function renderContextProbes(consumerRoot) {
+export function renderContextProbes(consumerRoot, paired = false) {
+  if (typeof paired !== 'boolean') throw new TypeError('Unknown context probe mode');
   const consumer = consumerRoot;
   const verification = `
 const assertion = (value, extra = {}) => ({ subject: { kind: 'entity', id: 'node/11' }, predicate: 'latency',
@@ -43,7 +45,7 @@ const resolved = require.resolve('contextfootprint');
 assert.ok(resolved.startsWith(${JSON.stringify(join(consumer, 'node_modules') + sep)}),
   'The consumer must use its installed dependency, not the author workspace.');
 ${verification}
-`,
+${paired ? publicProducerProbe('cjs') : ''}`,
     },
     {
       id: 'runtime-esm',
@@ -55,7 +57,7 @@ import * as comparison from './dist/esm/integrity/assertion/conflicts.js';
 import * as helpers from './dist/esm/integrity/assertion/types.js';
 import * as shared from 'contextfootprint';
 ${verification}
-`,
+${paired ? publicProducerProbe('esm') : ''}`,
     },
   ];
   for (const { id, relativePath, declarationPath } of [

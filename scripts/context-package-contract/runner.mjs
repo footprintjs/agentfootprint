@@ -184,7 +184,7 @@ export function createContractRunner(ownerRoot, commands) {
         const consumer = caseId.startsWith('consumer-');
         const root = join(temporary, caseId);
         await mkdir(root);
-        const probes = consumer ? renderContextProbes(root) : [];
+        const probes = consumer ? renderContextProbes(root, paired) : [];
         const request = freeze({
           protocol: PROTOCOL,
           source: structuredClone(source),

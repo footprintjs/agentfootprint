@@ -152,8 +152,68 @@ unchanged registry CLI pass, ordinary CI clearance or permission to publish.
 
 ## Modules and checks
 
+`publishedSetup.mjs` is the pure document constructor for the published-stable
+15 RC source with FootPrint 13.0.0, Foottrace 2.0.0 and ContextFootprint 0.1.1.
+`getPublishedInputs(manifestText, lockText)` admits the exact current declared
+ranges and original registry records, retaining their URLs/SRIs and document
+hashes. It performs no install, resolution or archive admission. Other cohorts,
+selected aliases/duplicates/overrides and malformed records refuse; this is no
+general SemVer implementation. Normal strict npm resolution remains mandatory.
+
+`sourceProductionManifest(inputs)` returns a detached temporary projection:
+it drops development dependencies, promotes the required engine peer to an
+exact production dependency, pins Foottrace/context, and preserves the other
+authored production constraints and peers. This explicitly changes the setup
+documents, not the original source oracle: the source lock marks the engine
+development-only, so blindly omitting development dependencies is insufficient.
+`consumerProductionManifest(inputs, artifact)` returns a fixed neutral private
+module package with the original archive file URL and exact engine/Foottrace
+pins. The artifact version must equal the original source version; IO owns its
+hash/member/physical admission. Neither constructor writes or fabricates a lock.
+The installer must generate a normal strict temporary lock before the first
+production-only/scripts-off install, record both original/setup hashes, and
+prove the actual physical dependency graph. The returned `policy` names this
+projection; constructor tests alone prove no real install or compatibility.
+
 The facade fixes real command IO and its owner root; the private runner composes
 that IO with the fixed installation ports. Pure validation/oracle/probe modules
 are tested beside their code. Adjacent fixture tests do no real install or full
 build; their fake command adapters are unreachable through the paired facade.
 Run them with `node --test scripts/context-package-contract/*.test.mjs`.
+
+## Real published-cohort adapter
+
+`../check-context-package-strict.mjs` is the fixed native CLI. It admits the
+three exact registry archives selected by the committed lock, verifies SHA512
+before decoding, and retains every member identity as data. It supplies only
+code-owned installers and guards to the existing four-case runner. No JSON
+supplies a command, executable, callback, expected result or policy override.
+
+The source-family temporary production projection drops development dependencies
+and explicitly promotes the required engine peer into exact production inputs;
+the original lock marks that engine as development-only. This projection is
+recorded separately from the immutable source documents. Each online family
+starts with an empty cache and derives its strict lock before the first
+scripts-off production install. Its distinct offline root reuses only that
+family's admitted setup and populated cache, with actual offline mode. No
+installed tree is copied and no post-install replacement occurs.
+
+The guards join normal/hidden locks, actual package identities, real resolution
+paths, complete admitted member sets and one physical Foottrace image. Every
+before/after/cleanup boundary rechecks source, producer build/compiler bytes,
+setup, archive and graph. Only the exact current source-owned probe descriptors
+may be present. Proof references name actual persisted records outside the
+runner's disposable roots; failed installs and partial evidence remain failures.
+
+The paired runtime probes additionally run one real mock agent through the
+installed public root/providers/observe doors in each native format. The driver
+compares their producer versions and resolved entries to independently admitted
+source and graph inputs. Registry-control probe bodies remain byte-identical;
+the legacy-peer registry adapter is never strict native acceptance. These mock
+runs make no provider calls. Context assertions and both declaration probes
+remain in place.
+
+CI runs this real gate on both supported Node versions, retaining complete or
+partial evidence separately from the durable source candidate. Inert fixture
+success is controller proof only. Neither this gate nor a source artifact is
+permission to merge, publish or claim all downstream consumers are compatible.

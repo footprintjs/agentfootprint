@@ -113,7 +113,7 @@ jobs:
           cache: npm
 
       - name: Context package contract input and guard tests
-        run: node --test scripts/context-package-contract/*.test.mjs scripts/publish-archive/candidate.test.mjs
+        run: node --test scripts/context-package-contract/*.test.mjs scripts/publish-archive/candidate.test.mjs scripts/publish-archive/publishedDependency.test.mjs
 
       - run: npm ci
       - run: npm ls foottrace
@@ -148,6 +148,21 @@ jobs:
         with:
           name: agentfootprint-source-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/af-source-candidate/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+      - name: Four strict native context roots and public producer identities
+        id: native_context
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/check-context-package-strict.mjs "$RUNNER_TEMP/af-strict-context" "$SOURCE_HEAD"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && (steps.native_context.outcome == 'success' || steps.native_context.outcome == 'failure')
+        with:
+          name: agentfootprint-native-context-${{ matrix.node-version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/af-strict-context/
           if-no-files-found: error
           retention-days: 7
           overwrite: true
