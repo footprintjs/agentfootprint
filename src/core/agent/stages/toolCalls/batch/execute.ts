@@ -95,6 +95,19 @@ export function buildToolBatchExecution(
             partyOf: (name) => operations.resolveTool(name).party,
             argumentAsk: true,
           }),
+        ...((deps.emptyLookupGrounding !== undefined || deps.columnDeclarations !== undefined) && {
+          beforePause: () => {
+            // This fresh argument ask holds the WHOLE current batch before
+            // dispatch. A promised write has no result yet, so its existing
+            // checker meets a not-applicable encounter, never a fabricated
+            // pass/finding. Earlier completed batches keep their own notes.
+            for (const call of toolCalls) {
+              const at = { toolName: call.name, toolCallId: call.id, iteration };
+              operations.noticeEmptyLookup(scope, at, call.args, undefined, [], false);
+              operations.judgeColumns(scope, at, undefined);
+            }
+          },
+        }),
         runId: () => operations.runFactsOf(scope)?.runId,
         ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
         ...(deps.time !== undefined && {
