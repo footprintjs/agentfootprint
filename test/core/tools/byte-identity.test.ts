@@ -9,10 +9,16 @@
  * The following notes describe earlier fixture migrations, not current proof
  * of whole-record equality with pre14 releases.
  *
+ * V15 ASSEMBLED COHORT: `agent-stepped-skill`, `agent-answer-layer` and
+ * `agent-scoped-provider` now read reference/v15-assembled-cohort/. Those
+ * captures keep the earlier step-completion and tool-outcome records plus
+ * the native engine's normalized `beganAt` metadata. The assembled cohort's
+ * manifest and fixture contract pin the three deltas; earlier captures remain.
+ *
  * TOOL OUTCOME MARKER: a committed tool message whose call did not complete
  * now carries `outcome` (`execution/callOutcome.ts` · `callOutcomeOf`), the
- * fact the check-in trail reads first. The `agent-scoped-provider` capture
- * under reference/tool-outcome-marker/ adds one refused history entry field.
+ * fact the check-in trail reads first. The retained `agent-scoped-provider`
+ * capture under reference/tool-outcome-marker/ adds one refused history entry field.
  * The earlier capture and its manifest remain under v14-native-components/.
  *
  * FINDINGS REFERENCE CONTEXT: five separately qualified ledger-enabled records
@@ -40,8 +46,8 @@
  * of "Step 1 of 2 done." (`routing/stepOutcome.ts` · `stepOutcomeOf`), and
  * the step nudge says the steps "had not been completed" (and asks for them
  * to be completed) where it said they "had not run". Only
- * `agent-stepped-skill` and `agent-answer-layer` have such a step; both were
- * recaptured with
+ * `agent-stepped-skill` and `agent-answer-layer` have such a step. Their
+ * earlier captures were generated with
  * AF_TOOLS_REFERENCE=update AF_TOOLS_REFERENCE_CASES=agent-stepped-skill,agent-answer-layer
  * and each diff is those two sentences plus the hashes and request sizes
  * computed from them.
