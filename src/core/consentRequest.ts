@@ -91,7 +91,7 @@ import type { AnswerConsumption } from './answerConsumption.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import { looksLikeDecision, type CheckInDecision } from './checkin.js';
 import { hiddenArgsOn, keptHiddenArgs } from './checkInHiddenArgs.js';
-import { requestIdOf } from './consentRequestId.js';
+import { canBindConsentArguments, requestIdOf } from './consentRequestId.js';
 import {
   DecisionRequiredError,
   ResumeDecisionError,
@@ -527,7 +527,7 @@ export function mintConsentRequest(
   } catch {
     return undefined;
   }
-  if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined;
+  if (!canBindConsentArguments(args, call)) return undefined;
   const nonce = randomHex(16);
   const id = requestIdOf(nonce, { ...call, args });
   if (id === undefined) return undefined;

@@ -2,6 +2,8 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { hidesWholeArgumentValue } from '../../../../../lib/argumentDisplay.js';
+import { hiddenArgsOn } from '../../../../checkInHiddenArgs.js';
 import { frozenCopyOf } from '../../../../../lib/frozenCopy.js';
 import type { ConsentGateKind } from '../../../../pause.js';
 import type { MiddlewareDecision } from '../../../middleware/types.js';
@@ -19,7 +21,10 @@ export const boundArgsOf = (
   key: 'pausedAskArgs' | 'pausedCheckInArgs',
 ): Readonly<Record<string, unknown>> => {
   const raw = scope.$getValue(key);
-  return typeof raw === 'object' && raw !== null
+  const protectedWhole =
+    key === 'pausedCheckInArgs' &&
+    hidesWholeArgumentValue(raw, hiddenArgsOn(scope.$getValue('pausedRequest')));
+  return (typeof raw === 'object' && raw !== null) || protectedWhole
     ? (structuredClone(raw) as Readonly<Record<string, unknown>>)
     : {};
 };
