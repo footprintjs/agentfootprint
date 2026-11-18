@@ -20,7 +20,8 @@
  *                 inside retention dispatches, marked;
  *   integration — the clock at dispatch: 30 minutes after the turn's `now` the library's look-back
  *                 fill is redrawn into the tool's absolute form (the tool runs with it, `ctx.time`
- *                 unchanged), the model's own look-back runs as sent and is recorded shifted; the
+ *                 unchanged) and `tool_end.changedArgKeys` names the keys it ran with, the model's
+ *                 own look-back runs as sent and is recorded shifted; the
  *                 same redraw after a check-in pause, at the resume door; the rows cross the
  *                 checkpoint door;
  *   byte identity — without `.time()` a tool's facts refuse nothing and nothing is filed.
@@ -464,6 +465,33 @@ describe('the clock at dispatch (§ 7.4)', () => {
     expect(ofKind(agent, 'call')[0]).toMatchObject({
       drift: { byMs: 30 * 60_000 + 0, outcome: 'redrawn', form: 1 },
     });
+  });
+
+  it('tool_end names the keys the tool ran with after a redraw, not the removed look-back', async () => {
+    vi.setSystemTime(NOW_MS + 30 * 60_000);
+    const { agent } = await build(
+      [call('c1', 'client_activity', {}), answer('x')],
+      [epochTool({}, [], true)],
+      (b) => b.time({ zone: LA }),
+    );
+    const ends: { changedArgKeys?: readonly string[] }[] = [];
+    agent.on('agentfootprint.stream.tool_end', (e) => ends.push(e.payload));
+    await agent.run({ message: 'activity', time: { now: NOW, window: lastHour } });
+    // The model proposed `{}`; the tool ran with the absolute form only.
+    expect([...(ends[0]?.changedArgKeys ?? [])].sort()).toEqual(['end_time', 'start_time']);
+  });
+
+  it('…and within the tool’s step, the filled look-back is the key named', async () => {
+    vi.setSystemTime(NOW_MS + 5_000);
+    const { agent } = await build(
+      [call('c1', 'client_activity', {}), answer('x')],
+      [epochTool({}, [], true)],
+      (b) => b.time({ zone: LA }),
+    );
+    const ends: { changedArgKeys?: readonly string[] }[] = [];
+    agent.on('agentfootprint.stream.tool_end', (e) => ends.push(e.payload));
+    await agent.run({ message: 'activity', time: { now: NOW, window: lastHour } });
+    expect(ends[0]?.changedArgKeys).toEqual(['window']);
   });
 
   it('the model’s own look-back runs as sent and is recorded shifted', async () => {

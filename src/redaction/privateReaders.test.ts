@@ -6,6 +6,7 @@ import { SHOWN_ARGS } from '../core/toolShownArgs.js';
 import { declarationOf } from './declared.js';
 import { servedUnderPolicy } from './marker.js';
 import { answer, scripted } from '../../test/core/agent/arguments/askReviewHarness.js';
+import { nativeRetainsSafeBase } from '../../test/redaction/nativeFoldBase.js';
 
 it('an agent without a hidden argument keeps the native snapshot bytes and no private fields', async () => {
   const mock = scripted([answer('Public answer')]);
@@ -24,7 +25,7 @@ it('an agent without a hidden argument keeps the native snapshot bytes and no pr
   }
 });
 
-it('private-only native coverage keeps public facts readable and reports its missing fold base', async () => {
+it('private-only native coverage keeps public facts readable and separates privacy from its native fold base', async () => {
   const tool = defineTool({
     name: 'lookup',
     description: 'Public lookup',
@@ -50,10 +51,18 @@ it('private-only native coverage keeps public facts readable and reports its mis
     const recording = recorder.toRecording();
     expect(declarationOf(agent)).toEqual({ state: 'declared-none' });
     expect(servedUnderPolicy(recording.snapshot)).toBe(true);
-    expect(recording.snapshot).not.toHaveProperty('initialState');
+    const hasBase = await nativeRetainsSafeBase();
+    expect(recording.snapshot.initialState).toEqual(hasBase ? {} : undefined);
     const views = servedViews(recording.snapshot);
     expect(views.length).toBeGreaterThan(0);
-    expect(views.some((view) => view.gaps.some((gap) => gap.gap === 'no-fold-base'))).toBe(true);
+    expect(views.some((view) => view.gaps.some((gap) => gap.gap === 'no-fold-base'))).toBe(
+      !hasBase,
+    );
+    expect(views.every((view) => view.gaps.some((gap) => gap.gap === 'privacy-policy'))).toBe(true);
+    expect(views[0]?.tools.names).toContain('lookup');
+    expect(views[0]?.messages.asSent.some((message) => message.content === 'Public question')).toBe(
+      true,
+    );
     const account = accountForAnswer(recording);
     expect(account.question.status).toBe('recorded');
     expect(account.answer.status).toBe('recorded');

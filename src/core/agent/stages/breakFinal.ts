@@ -15,7 +15,27 @@
  */
 
 import type { TypedScope } from 'footprintjs';
+import { PRIVATE_FIELDS_KEY } from '../../../redaction/privateFields.js';
 import type { AgentState } from '../types.js';
+
+/** Final reads working state, not the runtime-only private-selector anchor.
+ * Select names before reading values: reading a discarded private carrier
+ * would still teach the engine's mapper taint about its metadata primitives. */
+export function finalBranchInput(parent: object, validated: boolean): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.keys(parent)
+      .filter((key) => key !== PRIVATE_FIELDS_KEY)
+      .map((key) => [key, (parent as Record<string, unknown>)[key]] as const)
+      // Existing writable-key reads still participate in native mapper taint,
+      // even though those fields must not be frozen into Final's input.
+      .filter(
+        ([key]) =>
+          key !== 'finalContent' &&
+          key !== 'newMessages' &&
+          !(validated && key === 'answerValidationCommitted'),
+      ),
+  );
+}
 
 /**
  * Pure stage function — no dependencies, no closure over Agent state.

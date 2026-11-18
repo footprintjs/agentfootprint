@@ -185,7 +185,7 @@ describe('B2 — judge everything; cap only what is listed', () => {
     expect(a.facts.callsOmitted).toBe(5);
     expect(a.facts.errors.failed).toBe(1); // the JUDGING is not
     expect(rowText(a, 'anything-wrong')).toContain(
-      '1 tool call did not run cleanly: 1 failed, 0 refused by a rule, 0 declined by a person, 0 not run.',
+      '1 tool call did not run cleanly: 1 failed, 0 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.',
     );
     expect(a.signals.map((s) => s.id)).toEqual(['undeclared-empty-used']);
     expect(a.summary.tone).toBe('bad');

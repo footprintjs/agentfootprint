@@ -1,3 +1,4 @@
+import { sourceSchemasOnWire } from '../agent/sourceContract.js';
 /**
  * Tools slot subflow builder
  *
@@ -42,7 +43,6 @@ import {
   withFindingsArgument,
   withSourcesArgument,
 } from '../agent/findings/reserved.js';
-import { carriesRules } from '../../tools/declare.js';
 import type { Classifier } from '../../classify/types.js';
 import type { ToolChoiceEntry } from '../agent/toolChoice/types.js';
 import type { ReaderWindows } from '../../time/bind.js';
@@ -217,19 +217,6 @@ const SOURCES_SERVED = Object.freeze({ sources: true as const });
  * served as it was. The SAME list when nothing changed — a wire with no ruled
  * tool commits the bytes it always did.
  */
-function sourcesOnWire(
-  served: readonly LLMToolSchema[],
-  isRuled: (schema: LLMToolSchema) => boolean,
-): readonly LLMToolSchema[] {
-  let changed = false;
-  const decorated = served.map((schema) => {
-    if (!isRuled(schema)) return schema;
-    const next = withSourcesArgument(schema);
-    if (next !== schema) changed = true;
-    return next;
-  });
-  return changed ? decorated : served;
-}
 
 export interface ToolsSlotConfig {
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
@@ -914,16 +901,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       // Declared sources (honesty layer 2): `_findings.from` on a RULED tool only —
       // inside the ledger's decoration under `.findings()`, or as the reserved
       // argument's only property without it (`withSourcesArgument`).
-      const isRuled = (s: LLMToolSchema): boolean =>
-        config.argumentSources === true && carriesRules(winningTools.get(s.name));
-      const from = (s: LLMToolSchema): { from: true } | undefined =>
-        isRuled(s) ? { from: true } : undefined;
-      scope.toolSchemas =
-        config.findings === true
-          ? ruled.map((s) => withFindingsArgument(s, from(s)))
-          : config.argumentSources === true
-          ? sourcesOnWire(ruled, isRuled)
-          : ruled;
+      scope.toolSchemas = sourceSchemasOnWire(
+        ruled,
+        winningTools,
+        config.findings === true,
+        config.argumentSources === true,
+        withFindingsArgument,
+        withSourcesArgument,
+      );
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
         // was not served, so it is not on `current` and takes the off-wire

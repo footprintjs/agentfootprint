@@ -52,6 +52,8 @@
  * `undefined`; the answer account says the record shows no answer).
  */
 
+import { isRecord, str } from './recordValues.js';
+import { argumentRows, type ArgumentRowRead } from './argumentRows.js';
 import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import {
@@ -73,11 +75,6 @@ import type {
   AssessmentRecord,
 } from './types.js';
 import { isPlaceholder, servedUnderPolicy } from '../../../redaction/marker.js';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 
 function fail(message: string): never {
   throw new TypeError(`assessAnswer: ${message}`);
@@ -283,64 +280,6 @@ function readPause(state: Readonly<Record<string, unknown>>, g: Gathered): void 
   }
 }
 
-/** One current `argument` row of this turn — the last per (call, argument). */
-interface ArgumentRowRead {
-  readonly index: number;
-  readonly toolCallId: string;
-  readonly argument: string;
-  readonly source?: string;
-  /** Set on a row that ASKED the person — no source yet. */
-  readonly asked: boolean;
-  readonly ruled: boolean;
-  readonly failed: boolean;
-  /** The declared-sources check judged it (`claimed` present) — and whether it reached a verdict. */
-  readonly sourced?: 'verdict' | 'uncheckable';
-  /** `said` + `reading`: the value is the model's reading of the person's words. */
-  readonly reading: boolean;
-  /** `result` + `setAside`: the value came from a result the model had set aside. */
-  readonly setAside: boolean;
-}
-
-/**
- * This turn's CURRENT argument rows (honesty layer 2): the ledger's `argument`
- * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
- * continued conversation, and a row from an earlier turn is about a call this
- * answer does not rest on — keyed by call, then argument, the LAST row
- * winning. A record with no `turnNumber` reads every argument row (it may
- * over-report; it never hides).
- */
-function argumentRows(state: Readonly<Record<string, unknown>>): readonly ArgumentRowRead[] {
-  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
-  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  const byCall = new Map<string, Map<string, ArgumentRowRead>>();
-  ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'argument') return;
-    if (turn !== undefined && row.turn !== turn) return;
-    const toolCallId = str(row.toolCallId);
-    const argument = str(row.argument);
-    if (toolCallId === undefined || argument === undefined) return;
-    const source = str(row.source);
-    const read: ArgumentRowRead = {
-      index,
-      toolCallId,
-      argument,
-      ...(source !== undefined && { source }),
-      asked: typeof row.asked === 'string' && source === undefined,
-      ruled: row.rule !== undefined || row.period === true,
-      failed: row.failed !== undefined,
-      ...(typeof row.claimed === 'string' && {
-        sourced: row.failed === 'uncheckable' ? ('uncheckable' as const) : ('verdict' as const),
-      }),
-      reading: source === 'said' && row.reading === true,
-      setAside: source === 'result' && typeof row.setAside === 'string',
-    };
-    const forCall = byCall.get(toolCallId) ?? new Map<string, ArgumentRowRead>();
-    forCall.set(argument, read);
-    byCall.set(toolCallId, forCall);
-  });
-  return [...byCall.values()].flatMap((forCall) => [...forCall.values()]);
-}
-
 /**
  * Layer 2, the inputs layer's verdicts. For each ruled argument of this
  * turn's calls, the value the call RAN with decides:
@@ -368,6 +307,7 @@ function readArgumentVerdicts(
   rows: readonly ArgumentRowRead[],
   g: Gathered,
 ): void {
+  rows = rows.filter((row) => !row.withheld);
   if (rows.length === 0) return;
   // The before-tool rewrites (`middlewareDecisions` · `changedKeys`) — the ONE reading the
   // answer's "Assumed" block takes too (`middleware/rewrites.ts` · `argumentRewritesOf`).

@@ -68,6 +68,7 @@ import { withMemoryRecall } from './memoryRecallInjections.js';
 import {
   breakFinalStage,
   breakFinalWithValidationStage,
+  finalBranchInput,
   finalBranchOutput,
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
@@ -1046,17 +1047,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
   const chart = decider
     .addSubFlowChartBranch(SUBFLOW_IDS.FINAL, finalBranchChart, 'Final', {
       tags: milestoneTagsFor(SUBFLOW_IDS.FINAL),
-      inputMapper: (parent) => {
-        const { finalContent: _f, newMessages: _nm, ...rest } = parent;
-        void _f;
-        void _nm;
-        if (deps.hasAnswerValidation === true) {
-          const { answerValidationCommitted: _committed, ...input } = rest;
-          void _committed;
-          return input;
-        }
-        return rest;
-      },
+      inputMapper: (parent) => finalBranchInput(parent, deps.hasAnswerValidation === true),
       outputMapper: (sf) => finalBranchOutput(sf, deps.hasAnswerValidation === true),
       // `final` is a terminal LEAF under the branch-sourced loop; propagateBreak
       // is kept for the terminal onBreak signal (observability), not loop control.

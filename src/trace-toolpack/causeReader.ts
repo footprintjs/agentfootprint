@@ -72,7 +72,14 @@ export async function readCause(
   // Each invocation projects one bounded query. Separate root/impact calls do not share a result yet.
   if (question.nodeId === undefined)
     return causeGap(operation, 'invalid-data', capture, storage, limits.maxChars);
-  const finding = await explain(source.graph, question.nodeId, { ...options, backward, impact });
+  const finding = await explain(source.graph, question.nodeId, {
+    ...options,
+    backward,
+    impact,
+    ...(operation === 'root_cause' && limits.includeBackward === true
+      ? { includeBackward: true }
+      : {}),
+  });
   if (operation === 'impact') {
     return causeResponse(
       operation,

@@ -70,6 +70,7 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../lib/conventions.js';
+import { sourceInputsOf } from './sourceInputs.js';
 import type { SourceCorpus } from '../arguments/checks.js';
 import {
   isRefused,
@@ -104,7 +105,6 @@ import {
 } from '../../../semantics/coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
-import { sourceInputsOf } from './sourceInputs.js';
 import type {
   RanCall,
   CallPeriod,
@@ -169,6 +169,9 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
       toolOf,
       willDispatch,
       emitRows,
+      ...(deps.declarationCorrection !== undefined && {
+        declarationCorrection: deps.declarationCorrection,
+      }),
       ...(deps.time !== undefined && { time: deps.time }),
       ...(deps.toolsOffAfterRevision === true && { toolsOffAfterRevision: true as const }),
     };
@@ -184,7 +187,12 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
           corpus.declaredSourcesOf(
             calls,
             toolOf,
-            sources.basisRows === true ? { basisRows: true } : undefined,
+            sources.basisRows === true || deps.declarationCorrection !== undefined
+              ? {
+                  ...(sources.basisRows === true && { basisRows: true }),
+                  ...(deps.declarationCorrection !== undefined && { declarationCorrection: true }),
+                }
+              : undefined,
           ),
         corpusOf: async (
           inputs: SourceInputs,
@@ -328,6 +336,11 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
             ).ledger,
           }),
           ...(resolutions.length > 0 && { argumentResolutions: [...resolutions] }),
+          ...(deps.declarationCorrection !== undefined && {
+            argumentSourceOmissionRows: [
+              ...((sf.argumentSourceOmissionRows as readonly ArgumentRow[] | undefined) ?? []),
+            ],
+          }),
         };
       },
       arrayMerge: ArrayMergeMode.Replace,

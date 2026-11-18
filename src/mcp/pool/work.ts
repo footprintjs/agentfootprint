@@ -29,7 +29,7 @@ export type WorkKind = 'open' | 'listing' | 'call' | 'ending';
 /** What an operation is, as the budget admits it. */
 export type OperationKind = 'listing' | 'call' | 'acquire' | 'ending';
 
-/** What a request's answer proved, as the pool's fetch read it (`pool.ts`). */
+/** What a request's answer proved, as the pool's fetch read it (`pool/transport.ts`). */
 export type WorkEvidence = 'server-404' | 'handle-lost';
 
 /**

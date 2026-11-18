@@ -8,7 +8,7 @@ import type { DispositionLedger } from '../../integrity/disposition/ledger.js';
 import type { RunCheckpointTracker } from '../runCheckpoint.js';
 import type { ClockDraft, ReadRunTime } from '../../time/clock.js';
 import type { AnsweredAsk } from '../../tools/inputRequest.js';
-import type { EvidenceRecoveryCheckpoint } from '../runCheckpoint.js';
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from '../runCheckpoint.js';
 import type { FindingsLedger } from './findings/types.js';
 import type { FoldedSpan } from './window/types.js';
 import type { buildSeedStage, PendingResumeHistory } from './stages/seed.js';
@@ -20,12 +20,15 @@ import type { RunnerCoreValues } from '../RunnerBase.js';
 import type { ProviderToolCache, ServedToolParties } from '../slots/buildToolsSlot.js';
 import type { buildToolCallsHandler } from './stages/toolCalls/index.js';
 import type { buildRouteDeciderStage } from './stages/route.js';
+import type { SourceEvidenceIndex } from '../../artifacts/sourceEvidence/types.js';
+import type { HostedRecording } from '../runnerLive.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
 export interface AgentRunValues extends RunnerCoreValues {
   identity?: MemoryIdentity;
   request?: RequestContext;
   answer?: string;
+  recording?: HostedRecording;
   checkpointTracker?: RunCheckpointTracker;
   checkpointObservationFailed?: true;
   causalEvidence?: CausalEvidenceRecorderHandle;
@@ -44,7 +47,9 @@ export interface AgentRunValues extends RunnerCoreValues {
   resumePassedTime?: ReadRunTime;
   answeredAsk?: AnsweredAsk;
   pendingResumeHistory?: PendingResumeHistory;
+  pendingResumeSourceEvidence?: SourceEvidenceIndex;
   pendingEvidenceRecovery?: EvidenceRecoveryCheckpoint;
+  pendingSourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'];
   pendingResumeFolded?: readonly FoldedSpan[];
   pendingResumeFindingsLedger?: FindingsLedger;
   pendingResumeSkillCursor?: string;

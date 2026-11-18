@@ -212,9 +212,6 @@ export interface RunRecorder {
  * ```
  */
 export function recordRun(runner: Runner, options: RecordRunOptions = {}): RunRecorder {
-  // Only this opt-in door constructs the optional observer. The Agent's
-  // internal recording coordinator can stay on the default browser graph
-  // without making every consumer carry the trust capture implementation.
   // Validate capture options before acquiring any subscriptions.
   const trust = options.trustBoundaries
     ? trustBoundaryRecorder(options.trustBoundaries === true ? {} : options.trustBoundaries)
@@ -249,14 +246,15 @@ function disposeSubscriptions(
  * neither ever carried such a fact.
  *
  * @internal — the Agent's; not on any door. `recordRun` is the public producer
- * and records everything, as it always has. Optional typed capture is supplied
- * by that public factory; this coordinator never constructs another observer.
+ * and records everything, as it always has. An optional trust filter can
+ * narrow the events its caller-supplied trust recorder receives.
  */
 export function recordRunWhere(
   runner: Runner,
   keep: (event: AgentfootprintEvent) => boolean,
   options: Omit<RecordRunOptions, 'trustBoundaries'> = {},
   trust?: TrustBoundaryRecorder,
+  keepTrust?: (event: AgentfootprintEvent) => boolean,
 ): RunRecorder {
   const subscriptions: Unsubscribe[] = [];
   try {
@@ -283,7 +281,7 @@ export function recordRunWhere(
     const offEvents: Unsubscribe = runner.on('*', (event: AgentfootprintEvent) => {
       if (keep(event)) {
         tail.push(event);
-        onTrustEvent?.(event);
+        if (onTrustEvent && (keepTrust === undefined || keepTrust(event))) onTrustEvent(event);
       }
     });
     subscriptions.push(offEvents);

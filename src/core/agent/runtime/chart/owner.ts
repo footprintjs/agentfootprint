@@ -308,6 +308,9 @@ export function buildChart(
     displayNameOfFor,
     toolGrounding,
     toolColumns,
+    toolRowsets,
+    resultRowsetsForValues,
+    rowsetDeclaringToolsForValues,
     toolWants,
     toolsSubflow,
   } = buildSlots.call(this, {
@@ -348,6 +351,8 @@ export function buildChart(
     toolGrounding,
     toolWants,
     toolColumns,
+    toolRowsets,
+    rowsetDeclaringToolsForValues,
     revisionWithholdsTools: () => this.revisionWithholdsTools(),
   });
 
@@ -462,6 +467,8 @@ export function buildChart(
     answerArmed,
     toolGrounding,
     toolColumns,
+    toolRowsets,
+    resultRowsetsForValues,
     toolClaimants,
     permissionChecker,
     credentialProvider,

@@ -54,6 +54,7 @@
  *          DFS stage).
  */
 
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
 import { negativeProseRowIsWellFormed } from './agent/findings/negativeProse.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from '../thinking/replay.js';
@@ -81,10 +82,8 @@ import {
   type FindingsLedger,
 } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
-import {
-  isClaimVerificationRow,
-  readClaimVerificationRow,
-} from './agent/findings/verificationRow.js';
+import { isClaimVerificationRow } from './agent/findings/verificationRow.js';
+import { checkpointWithCarriers } from './agent/sourceEvidence/checkpointValidation.js';
 import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
 import {
   negativeCheckpointOf,
@@ -92,220 +91,17 @@ import {
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { ownConfigArray } from '../integrity/claim-binding/scope.js';
-import { carriedTicketsOf, ticketsStillServed, type PlacedTicket } from './agent/placedTickets.js';
+import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
 import { admitStoredHistory } from './checkpointHistory.js';
+import type { SourceEvidenceIndex } from '../artifacts/sourceEvidence/types.js';
+import {
+  sourceDeclarationCorrectionOf,
+  sourceEvidenceOf,
+} from './agent/runtime/conversation/checkpointParts.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
-/** Internal repair state kept separately from the human conversation.
- * Restored only when retrying the same failed request, never on a new turn. */
-export interface EvidenceRecoveryCheckpoint {
-  readonly revisionSpent: true;
-  /** Present only when the request carrying this instruction did not complete. */
-  readonly pending?: {
-    readonly instruction: string;
-    /** The figures dial's late line, when the pending revision has one. */
-    readonly conclusion?: string;
-  };
-}
-
-/**
- * JSON-serializable checkpoint of an in-progress agent run. Persist
- * to ANY durable store (Redis / Postgres / S3 / disk / queue) and
- * resume hours / days / deploys later via `agent.resumeOnError(...)`.
- *
- * **Stable shape** — the `version` field guards forward compat. v1
- * → v2 transitions will be supported via a migration helper.
- */
-export interface AgentRunCheckpoint {
-  /** Private admitted negative evidence; keep checkpoints on the trusted host. */
-  readonly negativeClaimState?: NegativeCheckpoint['negativeClaimState'];
-  readonly resultIdentities?: NegativeCheckpoint['resultIdentities'];
-  /** Schema version. v1 = conversation-history-based. */
-  readonly version: 1;
-  /** `runId` of the FAILING run — lets the consumer correlate a
-   *  persisted checkpoint back to the original run's observability.
-   *  NOT reused on resume: `resumeOnError` starts a fresh run with a
-   *  fresh `runId` (only the conversation history is restored). */
-  readonly runId: string;
-  /** Conversation history at the LAST completed iteration boundary
-   *  (LLM messages). The next iteration retries from here. */
-  readonly history: readonly LLMMessage[];
-  /** Index of the last completed iteration in the FAILING run
-   *  (diagnostic — not consumed on resume). The resumed run restores
-   *  this history but re-seeds its own iteration counter at 1 with a
-   *  full `maxIterations` budget. */
-  readonly lastCompletedIteration: number;
-  /** Original input message. Surfaces in observability + lets the
-   *  consumer correlate checkpoint to the user's request. */
-  readonly originalInput: { readonly message: string };
-  /** Wall-clock when the checkpoint was captured. Diagnostic only. */
-  readonly checkpointedAt: number;
-  /**
-   * The same request's bounded evidence repair. `resumeOnError` restores this
-   * budget and any unsent feedback; `run({ continueFrom })` adds a new human
-   * turn and deliberately starts a fresh repair budget. Not conversation text.
-   * Absent for checkpoints written before request-scoped recovery.
-   */
-  readonly evidenceRecovery?: EvidenceRecoveryCheckpoint;
-  /**
-   * Every span this conversation folded into a summary, oldest first — what
-   * makes a compacted conversation still a provable one after the process
-   * that compacted it is gone.
-   *
-   * Written by `.compaction()`; absent on a conversation that never folded,
-   * and absent on one stored by a runtime older than 8.2. Under the default
-   * `retain: 'conversation'` each span carries the folded messages verbatim;
-   * under `retain: 'discard'` the span is still here, naming what left, and
-   * only `messages` is absent.
-   *
-   * Join a summary in {@link history} to its span with `foldedSpanFor(...)` —
-   * by content fingerprint, never by index, because a later fold moves every
-   * index after it.
-   *
-   * **Version 1 still, deliberately.** An optional field is not a format
-   * change: a runtime that has never heard of `folded` reads this checkpoint,
-   * ignores it, and continues the conversation correctly — the summary is an
-   * ordinary message in `history` either way. Bumping the version would make
-   * an older deployment REFUSE a session it can serve perfectly well, which is
-   * the opposite of what the version field is for.
-   */
-  readonly folded?: readonly FoldedSpan[];
-  /**
-   * The model's standings on its tool results (9.101.0) — the committed
-   * `AgentState.findingsLedger`, carried so a continued conversation keeps
-   * what the model already called a fact, left open, ruled out or dismissed,
-   * instead of re-deriving it from results the store no longer serves whole.
-   *
-   * Written only when the run's ledger is non-empty; absent on every
-   * conversation whose agent never called `.findings()` and on any stored by
-   * a runtime older than 9.101.0 — the {@link folded} rule: an optional field
-   * is not a format change, and a runtime that has never heard of this key
-   * reads the checkpoint, ignores it, and continues correctly. The rows are
-   * plain records and arrays only (the shape `recordFindings` writes), so
-   * they round-trip through JSON and `structuredClone` unchanged.
-   *
-   * **Version 1 still**, by the same documented rule as {@link folded} /
-   * {@link skillCursor}.
-   */
-  readonly findingsLedger?: FindingsLedger;
-  /**
-   * Private, opt-in exact evidence and reservation counters. Unlike historical
-   * observations, this carrier can support later checks. A newest-version
-   * continuation must explicitly keep verification enabled, never discard it.
-   * Storage ownership/authenticity remains the checkpoint caller's obligation.
-   */
-  readonly claimVerification?: ClaimVerificationState;
-  /**
-   * The conversation TURN the stored history ends on — the stored run's
-   * `AgentState.turnNumber` — carried while an honesty layer is armed.
-   *
-   * Every ledger row filed while a layer is armed carries its `turn`, and the
-   * answer's standing reads "this turn" by that stamp, so a stamp must never
-   * repeat in one conversation. The count of user messages in `history` cannot
-   * promise that: a window strategy or a compaction trims the stored history,
-   * and the count repeats and goes backwards — an earlier turn's verdict would
-   * then be folded as a later turn's. So the next run starts from this number:
-   * `run({ continueFrom })` is the turn after it, `resumeOnError` the same
-   * turn again. Written by both carriers (`checkpoint()` and the crash
-   * checkpoint), and only while a layer is armed — every other checkpoint
-   * keeps its exact byte shape.
-   *
-   * **Version 1 still**, by the same documented rule as {@link folded} /
-   * {@link findingsLedger}: an optional field is not a format change, and a
-   * runtime that has never heard of it continues the conversation correctly.
-   */
-  readonly turnNumber?: number;
-  /**
-   * The placement tickets the library issued whose `role: 'tool'` messages the
-   * stored `history` still holds — so a continued conversation still knows
-   * which ticket-shaped results are the library's own (`placedTickets.ts`).
-   * Absent when there are none. Version 1 still, by the {@link folded} rule.
-   */
-  readonly placedTickets?: readonly PlacedTicket[];
-  /**
-   * WHO this conversation belongs to — the `identity` the stored run was
-   * given, carried so that continuing it lands in the same namespace it
-   * started in (9.2.0).
-   *
-   * Before this field, continuing a conversation re-seeded identity from the
-   * resuming run's own id: every continued turn wrote its memory under a
-   * FRESH `conversationId`, so turn two's facts were stored somewhere turn
-   * three could not read them. Nothing threw, and the only symptom was an
-   * agent that kept forgetting — the same class of failure as a store that
-   * silently forgot everything looking exactly like a new user.
-   *
-   * Absent on a conversation stored before 9.2.0, and absent when the run
-   * never got an explicit identity (the default is derived from a runId, and
-   * carrying THAT forward would pin a whole conversation to one run's id).
-   * An explicit `identity` on the continuing call always wins.
-   *
-   * **Version 1 still**, on the same reasoning as {@link folded}: an optional
-   * field is not a format change, and a runtime that has never heard of it
-   * continues the conversation correctly.
-   */
-  readonly identity?: MemoryIdentity;
-  /**
-   * WHERE the conversation's skill graph stood when the stored turn ended —
-   * the graph cursor, carried so a continued conversation can default its
-   * next turn's start to it (SG-C, 9.17.0).
-   *
-   * Written ONLY when the recording agent's graph declared
-   * `continuity: 'conversation'`; under the default `'turn'` the field is
-   * never written and the byte shape of every checkpoint is unchanged. On
-   * the continuing side it is honored only under the same declaration, and
-   * the RouteTurn cascade still judges it against the new message — an
-   * inherited cursor is a sticky DEFAULT, not a lock. An id the continuing
-   * graph does not know is dropped and recorded
-   * (`turn_routed.droppedResume`), never silently parked.
-   *
-   * **Version 1 still**, by the same documented rule as {@link folded} /
-   * {@link identity} / {@link agent}: an optional field is not a format
-   * change — an older runtime ignores it and continues correctly.
-   */
-  readonly skillCursor?: string;
-  /**
-   * WHICH agent recorded this conversation — present only when that agent was
-   * given an explicit `Agent.create({ id })` (9.2.0).
-   *
-   * A conversation is a transcript, and a transcript can be replayed on any
-   * agent. Usually that is the point: a deploy that adds a tool or edits a
-   * prompt must still be able to continue yesterday's conversations, so the
-   * runtime cannot refuse on "the agent changed". But replaying the BILLING
-   * agent's conversation on the SUPPORT agent is a different mistake, and it
-   * used to be accepted in silence.
-   *
-   * The rule is the one the embedder fingerprint already uses: **ids decide
-   * only when BOTH sides named themselves.** A default id (`'agent'`) is not
-   * naming yourself, so the majority of callers — who never pass one — are
-   * never refused. Two sides that both chose a name and chose different ones
-   * are refused, by name.
-   *
-   * Version 1 still, for the same reason as the two fields above.
-   */
-  readonly agent?: { readonly id: string };
-  /** Where the failure happened. Diagnostic — surfaces in oncall
-   *  triage so you can tell "LLM 500 mid-iteration" from "tool
-   *  threw" from "validation kept failing". */
-  readonly failurePoint?: {
-    readonly iteration: number;
-    readonly phase: 'iteration' | 'tool' | 'llm' | 'unknown';
-    /**
-     * What was OPEN when it threw — `'call-llm'` for the model call, or the
-     * declared name of the tool that was running (8.14.0).
-     *
-     * Absent when nothing was open (a failure between brackets), which is the
-     * honest answer rather than a guess.
-     *
-     * **Never a URL, never a credential, never request or response content.**
-     * Only the literal string `'call-llm'` or a tool name the app itself
-     * declared. A checkpoint is persisted to Redis / Postgres / S3 and read by
-     * whoever is on call; nothing that could carry a secret goes in it. Do not
-     * "improve" this field into carrying the endpoint.
-     */
-    readonly stage?: string;
-  };
-}
+export type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
 
 /**
  * Thrown by `agent.run()` when a fault occurs mid-run. Carries the
@@ -654,6 +450,8 @@ export function buildCheckpoint(
   /** Private evidence beside the same committed ledger; absent unless explicitly opted in. */
   claimVerification?: ClaimVerificationState,
   negativeClaims?: NegativeCheckpoint,
+  sourceEvidence?: SourceEvidenceIndex,
+  sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
   /** The run's `placedTickets`, kept only for messages the history still holds. */
   placed?: unknown,
 ): AgentRunCheckpoint {
@@ -676,11 +474,21 @@ export function buildCheckpoint(
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    ...(sourceDeclarationCorrection === undefined
+      ? {}
+      : {
+          sourceDeclarationCorrection: sourceDeclarationCorrectionOf({
+            sourceDeclarationCorrection,
+          }),
+        }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
     ...(turnNumber !== undefined && { turnNumber }),
     ...(placedTickets !== undefined && { placedTickets }),
     ...(verification !== undefined && { claimVerification: verification }),
     ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
+    ...(sourceEvidence === undefined
+      ? {}
+      : { sourceEvidence: sourceEvidenceOf({ sourceEvidence }) }),
   };
 }
 
@@ -873,6 +681,8 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
     );
   }
+  const sourceEvidence = sourceEvidenceOf(c);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(c);
   // Optional fields are validated only when PRESENT — absence is the ordinary
   // pre-SG-C checkpoint and must keep deserializing byte-identically.
   if (c.skillCursor !== undefined && typeof c.skillCursor !== 'string') {
@@ -983,18 +793,10 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   admitStoredHistory(c.history as readonly unknown[]);
   negativeCheckpointOf(c);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
-  const hasVerificationRows = c.findingsLedger?.some((row) => row.kind === 'claim-verification');
-  return claimVerification === undefined && !hasVerificationRows
-    ? (c as AgentRunCheckpoint)
-    : ({
-        ...c,
-        ...(claimVerification !== undefined && { claimVerification }),
-        ...(hasVerificationRows && {
-          findingsLedger: c.findingsLedger?.map((row) =>
-            row.kind === 'claim-verification' ? readClaimVerificationRow(row) : row,
-          ),
-        }),
-      } as AgentRunCheckpoint);
+  const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
+  return sourceDeclarationCorrection === undefined
+    ? checkpoint
+    : { ...checkpoint, sourceDeclarationCorrection };
 }
 
 /**

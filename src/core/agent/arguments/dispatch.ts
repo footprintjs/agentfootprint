@@ -47,6 +47,7 @@ import {
  * module's one `import()`.
  */
 export { secondPauseRefusal };
+export { pendingOmissions, onlyOmissions, settleOmissions } from './sourceCorrection.js';
 
 /**
  * This batch's entries of `argumentResolutions`, by call id — only the entries

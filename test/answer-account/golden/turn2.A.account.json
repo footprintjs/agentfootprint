@@ -3,7 +3,7 @@
  "shape": 1,
  "templates": {
   "set": "answer-account",
-  "version": 15
+  "version": 16
  },
  "run": {
   "value": {
@@ -295,6 +295,7 @@
   },
   "errors": {
    "failed": 0,
+   "notExecuted": 0,
    "refused": 0,
    "declined": 0,
    "notDispatched": 0,

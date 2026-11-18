@@ -271,7 +271,7 @@ function answersOf(ledger: readonly unknown[] | undefined, toolOf: ToolOf): Earl
 export function declaredSourcesOf(
   calls: readonly BatchCall[],
   toolOf: ToolOf,
-  options?: { readonly basisRows?: boolean },
+  options?: { readonly basisRows?: boolean; readonly declarationCorrection?: true },
 ): readonly CallSources[] {
   const out: CallSources[] = [];
   for (const call of calls) {
@@ -291,6 +291,8 @@ export function declaredSourcesOf(
       toolCallId: call.id,
       from: read.declaration?.from ?? [],
       ...(malformed !== undefined && { malformed }),
+      ...(options?.declarationCorrection === true &&
+        read.malformed > 0 && { declarationMalformed: true as const }),
     });
   }
   return out;

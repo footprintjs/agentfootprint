@@ -1,5 +1,8 @@
 import type { Classifier } from '../../../../../classify/types.js';
 import type { ResolvedEvidenceGate } from '../../../evidence/types.js';
+import type { ToolResultRowset } from '../../../../../tools/resultRowsets.js';
+import type { Tool } from '../../../../../tools/tools.js';
+import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { InputsRouteArm } from '../../route.js';
 import type { ToolResultColumns } from '../../../../../integrity/column-types/types.js';
 import type { ColumnCheckMode } from '../../../../../integrity/column-types/check.js';
@@ -68,6 +71,7 @@ export interface ToolEvidencePort {
    * `.inputsLayer()`; every other call runs exactly as it always did.
    */
   readonly inputsLayer?: true;
+  readonly declarationCorrection?: 'once';
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
    * true })` or `.inputsLayer({ argumentSources: true })`) — present only
@@ -178,6 +182,14 @@ export interface ToolEvidencePort {
    * about which tools are armed.
    */
   readonly columnDeclarations?: ReadonlyMap<string, ToolResultColumns>;
+  /** Explicit final-surface rowsets, normalized independently from legacy columns. */
+  readonly rowsetDeclarations?: ReadonlyMap<string, readonly ToolResultRowset[]>;
+  /** Native component/catalog-held metadata for the exact current implementation. */
+  readonly resultRowsetsFor?: (
+    toolName: string,
+    tool: Tool,
+    party?: ToolParty,
+  ) => readonly ToolResultRowset[] | undefined;
   /** What the boundary does with a column finding — `'warn'` files and changes
    *  nothing, `'enforce'` refuses the rows. Present with
    *  {@link ToolCallsDeps.columnDeclarations} or not at all. */

@@ -19,7 +19,7 @@ The stable public event contract and the central dispatcher that routes events t
 events/
 ├── types.ts         Shared value objects (EventMeta, ContextSlot, ContextSource, …)
 ├── payloads.ts      payload interfaces (the registry count is pinned by test/events/unit/registry.test.ts)
-├── registry.ts      EVENT_NAMES + AgentfootprintEventMap + ALL_EVENT_TYPES
+├── registry.ts      Facade for EVENT_NAMES + payload map + ALL_EVENT_TYPES
 └── dispatcher.ts    EventDispatcher + .on / .off / .once + wildcards
 ```
 
@@ -29,7 +29,7 @@ events/
 
 Every event implements `AgentfootprintEventEnvelope<type, payload>`. Consumers subscribe by exact type; TypeScript narrows the payload automatically. No hand-parsed strings, no shape drift.
 
-Trade-off: the event-type names are a **closed set** — new domain events require adding to `registry.ts` + a corresponding payload in `payloads.ts`. That's intentional. The registry IS the contract; keeping it in one file makes breakage reviewable in one diff.
+Trade-off: the event-type names are a **closed set** — new domain events require adding to `registry.ts` + a corresponding payload in `payloads.ts`. That's intentional. The registry IS the contract; keeping the closed vocabulary behind one facade makes breakage reviewable in one diff. The name constants live in the sealed `registry/` folder; its adjacent test checks the public names against the exhaustive event list.
 
 A declared event must also have a producer. A never-emitted safety event would
 make silence look like a successful check. The removed `risk.flagged` contract

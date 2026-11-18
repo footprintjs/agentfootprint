@@ -2,8 +2,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
-import type { ContextRole } from '../../../../../events/types.js';
-import { assistantReplayFields } from '../../../assistantReplay.js';
+import { assistantToolTurn } from './assistantTurn.js';
 import { frozenTurnOf } from '../access/bindings.js';
 import { isSealed } from '../../../../../lib/frozenCopy.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
@@ -32,28 +31,9 @@ export function buildDispatchContext(
     timeLineage?: TimeLineage,
   ) => {
     const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
-    // ALWAYS push the assistant turn when there are tool calls — even
-    // if the content was empty — so providers (Anthropic, OpenAI) can
-    // round-trip the tool_use blocks via `LLMMessage.toolCalls`.
-    // Without this, the next iteration's request lacks the assistant
-    // turn that initiated the tool call, and the API rejects the
-    // following tool_result with "preceding tool_use missing".
-    if (scope.llmLatestContent || toolCalls.length > 0) {
-      // v2.14 — attach thinking blocks (if any). Required for
-      // Anthropic signature round-trip: the next request MUST echo
-      // back the signed blocks BYTE-EXACT or Anthropic returns 400.
-      // Empty array (no thinking) → field omitted from message.
-      const thinkingBlocks = (scope as { thinkingBlocks?: readonly unknown[] }).thinkingBlocks;
-      const hasThinking = thinkingBlocks !== undefined && thinkingBlocks.length > 0;
-      newHistory.push({
-        role: 'assistant' as ContextRole,
-        content: scope.llmLatestContent ?? '',
-        ...(toolCalls.length > 0 && { toolCalls }),
-        // Spread = materialize the proxy view (see toolCalls above).
-        ...(hasThinking && { thinkingBlocks: [...thinkingBlocks] as never }),
-        ...assistantReplayFields(scope),
-      });
-    }
+    // Keep the provider's actual assistant call/replay turn, including blank content.
+    const assistant = assistantToolTurn(scope, toolCalls);
+    if (assistant !== undefined) newHistory.push(assistant);
     // ── ONE FROZEN COPY OF THE BATCH, for every pre-execute callback ──
     // The assistant turn just pushed holds every call's arguments — the
     // objects the calls run with. A callback that reads the history (the

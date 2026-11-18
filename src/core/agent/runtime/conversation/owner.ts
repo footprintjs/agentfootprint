@@ -1,5 +1,11 @@
 import type { AgentRunOptions } from '../runOptions/options.js';
-import { evidenceRecoveryOf, foldedSpansOf, findingsLedgerOf } from './checkpointParts.js';
+import {
+  evidenceRecoveryOf,
+  foldedSpansOf,
+  findingsLedgerOf,
+  sourceEvidenceOf,
+  sourceDeclarationCorrectionOf,
+} from './checkpointParts.js';
 import { ticketsStillServed } from '../../placedTickets.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
@@ -102,6 +108,10 @@ export function checkpointFor(
   const owner = this.conversationOwner(selected!.value);
   const skillCursor = this.continuityCursorOf(state);
   const evidenceRecovery = evidenceRecoveryOf(state);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
+    state,
+    'sourceDeclarationCorrectionSpent',
+  );
   const findingsLedger = findingsLedgerOf(state);
   const turnNumber = this.turnNumberOf(state);
   const stored = structuredClone(
@@ -127,6 +137,7 @@ export function checkpointFor(
     // exact byte shape.
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
     // The model's standings (9.101.0) — absent unless the run recorded any,
     // by the `folded` rule: an optional key, never a format change.
     ...(findingsLedger !== undefined && { findingsLedger }),
@@ -138,6 +149,9 @@ export function checkpointFor(
     ...(this.configuration.negativeClaimsConfig === undefined || state === undefined
       ? {}
       : negativeCheckpointOf(state)),
+    ...(this.configuration.sourceEvidenceConfig === undefined
+      ? {}
+      : { sourceEvidence: sourceEvidenceOf(state) }),
   };
 }
 
@@ -264,7 +278,7 @@ export function conversationOwner(
  * would ask the same question twice.
  *
  * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
- * by `seed.ts · historyForTurn` from the message the `'input'` middleware
+ * by `runtime/conversation/seedHistory.ts · historyForTurn` from the message the `'input'` middleware
  * chain let through; an entry built here, before that chain has run, is the
  * caller's raw text — which is what a continued turn served the model
  * through 9.112.1, while the record said the rewrite had happened.
@@ -280,6 +294,22 @@ export function applyContinuation(
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
   requireVerificationOnResume(cp, false);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(cp);
+  if (
+    !appendsUserTurn &&
+    sourceDeclarationCorrection !== undefined &&
+    (this.configuration.sourceDeclarationCorrection !== 'once' ||
+      this.configuration.argumentSourcesArmed !== true)
+  )
+    throw new TypeError(
+      'Continuation requires the source declaration correction setting used by this request.',
+    );
+  const sourceEvidence = sourceEvidenceOf(cp);
+  if (this.configuration.sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
+    throw new TypeError(
+      'Continuation requires the source evidence setting used by the recording agent.',
+    );
+  values.pendingResumeSourceEvidence = sourceEvidence;
   if (
     this.configuration.negativeClaimsConfig === undefined &&
     negativeCheckpointOf(cp) !== undefined
@@ -321,6 +351,9 @@ export function applyContinuation(
     !appendsUserTurn && cp.evidenceRecovery !== undefined
       ? structuredClone(cp.evidenceRecovery)
       : undefined;
+  values.pendingSourceDeclarationCorrection = appendsUserTurn
+    ? undefined
+    : sourceDeclarationCorrection;
 }
 
 /** A person's unanswered question outranks a new message — see
