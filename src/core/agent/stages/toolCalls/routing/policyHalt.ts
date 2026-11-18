@@ -43,6 +43,7 @@ export function haltLandedCall(scope: TypedScope<AgentState>, frame: PolicyHaltF
         ? emitSecurity
         : bindToolSecurityEvents(scope, { toolCallId: inner.toolCallId, iteration }),
     target: inner?.toolName ?? tc.name,
+    ...(inner !== undefined && { innerCallId: inner.toolCallId }),
     // The carrier law every pause carrier follows (`pausedToolArgs`,
     // `pausedCheckInArgs`, `pausedCredentialArgs`): what the call would
     // have RUN with — `callArgs`, peeled under `.findings()` — never the
@@ -69,6 +70,7 @@ export function haltResumedCall(
     haltContext: halt,
     emitSecurity: bindToolSecurityEvents(scope, { toolCallId: halt.call.toolCallId, iteration }),
     target: halt.call.toolName,
+    innerCallId: halt.call.toolCallId,
     args: halt.call.args,
     history: [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
     iteration,
@@ -82,6 +84,7 @@ function endRunOnHalt(
     readonly haltContext: Omit<NonNullable<CallExecution['haltContext']>, 'call'>;
     readonly emitSecurity: CallStartFacts['emitSecurity'];
     readonly target: string;
+    readonly innerCallId?: string;
     readonly args: ToolArgs;
     readonly history: LLMMessage[];
     readonly iteration: number;
@@ -99,10 +102,23 @@ function endRunOnHalt(
   scope.policyHaltReason = haltContext.reason;
   scope.policyHaltTellLLM = haltContext.tellLLM;
   scope.policyHaltTarget = target;
+  if (halt.innerCallId !== undefined) scope.policyHaltInnerCallId = halt.innerCallId;
   scope.policyHaltArgs = args;
   scope.policyHaltIteration = iteration;
   if (haltContext.checkerId !== undefined) {
     scope.policyHaltCheckerId = haltContext.checkerId;
   }
   scope.$break(`policy-halt: ${haltContext.reason}`);
+}
+
+/** A terminal checkpoint closes before either native door can admit work. */
+export function stopStoredPolicyHalt(scope: TypedScope<AgentState>): boolean {
+  if (!('policyHaltReason' in scope)) return false;
+  const reason = scope.$getValue('policyHaltReason');
+  if (reason === undefined) return false;
+  if (typeof reason !== 'string' || typeof scope.$getValue('policyHaltTarget') !== 'string') {
+    throw new TypeError('The stored policy halt is unreadable.');
+  }
+  scope.$break(`policy-halt: ${reason}`);
+  return true;
 }

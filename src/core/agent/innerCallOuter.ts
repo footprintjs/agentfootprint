@@ -24,6 +24,7 @@
  * then `PolicyHaltError` — as for a model call the checker halted.
  */
 
+import type { InnerCallRan } from '../../provider-contract/innerCalls.js';
 import type { ToolArgs } from '../../tools/runChain.js';
 
 /** A checker's `'halt'` on an inner call, carried to its outer call. */
@@ -47,6 +48,12 @@ export interface OuterCallBinding {
   readonly ended: boolean;
   /** The first halt an inner call drew; `undefined` if none. */
   readonly halt: InnerCallHalt | undefined;
+  /** Run one admission at a time, including its synchronous entry boundary. */
+  scheduleAdmission<T>(admit: () => Promise<T>): Promise<T>;
+  /** Record the bound arguments immediately before entering an admitted tool. */
+  admit(call: InnerCallRan): void;
+  /** Return a detached view of calls already admitted by this owner. */
+  admitted(): readonly InnerCallRan[];
   /** End the binding: the outer call has settled. */
   end(): void;
   /** Keep a halt. The first one is the run's; a later one changes nothing. */
@@ -57,6 +64,8 @@ export interface OuterCallBinding {
 export function bindOuterCall(): OuterCallBinding {
   let ended = false;
   let halt: InnerCallHalt | undefined;
+  let tail: Promise<unknown> = Promise.resolve();
+  const admitted: InnerCallRan[] = [];
   return {
     get ended() {
       return ended;
@@ -64,11 +73,23 @@ export function bindOuterCall(): OuterCallBinding {
     get halt() {
       return halt;
     },
+    scheduleAdmission(admit) {
+      const next = tail.then(admit);
+      // A refusal rejects its own caller without stopping later admissions.
+      tail = next.catch(() => undefined);
+      return next;
+    },
+    admit(call) {
+      admitted.push(call);
+    },
+    admitted() {
+      return structuredClone(admitted);
+    },
     end() {
       ended = true;
     },
     halted(next) {
-      if (halt === undefined) halt = next;
+      if (!ended && halt === undefined) halt = next;
     },
   };
 }

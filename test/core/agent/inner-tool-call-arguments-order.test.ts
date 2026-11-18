@@ -473,7 +473,7 @@ describe('what the inner call’s checker is handed', () => {
     expect(rows(agent)[0]?.refusedBy).toBe('middleware');
   });
 
-  it('ids are taken when the call is made, not when its gates answer', async () => {
+  it('keeps call ids and entries in admission order through a delayed gate', async () => {
     const secret = target();
     const checker = checkerOf(async (req) => {
       // The first call's check answers last.
@@ -495,7 +495,7 @@ describe('what the inner call’s checker is handed', () => {
       .build();
     await agent.run({ message: 'go' });
 
-    expect(secret.entered).toEqual([{ account: 'B2' }, { account: 'A1' }]);
+    expect(secret.entered).toEqual([{ account: 'A1' }, { account: 'B2' }]);
     const byId = Object.fromEntries(rows(agent).map((r) => [r.toolCallId, r.args.account]));
     expect(byId).toEqual({ 'c1#inner-1': 'A1', 'c1#inner-2': 'B2' });
   });

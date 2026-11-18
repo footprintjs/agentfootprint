@@ -60,6 +60,7 @@
  * result the id pairs with, like the deny check above.
  */
 
+import type { InnerCallRan } from '../provider-contract/innerCalls.js';
 import type { LLMMessage, ToolCallEntry } from '../provider-contract/types.js';
 
 /** Prefix the framework writes on synthetic deny tool_results. Used to
@@ -92,10 +93,27 @@ export function extractSequence(
   iteration: number,
   options: ExtractSequenceOptions = {},
 ): ToolCallEntry[] {
+  return deriveSequence(history, iteration, options.resolveProviderId, (call) => call.args);
+}
+
+/** The gate's sequence uses the working values. Its public counterparts use the shown view. */
+export function extractSequenceForPolicy(
+  history: readonly LLMMessage[],
+  iteration: number,
+  innerArgsOf: (call: InnerCallRan) => InnerCallRan['args'],
+): ToolCallEntry[] {
+  return deriveSequence(history, iteration, undefined, innerArgsOf);
+}
+
+function deriveSequence(
+  history: readonly LLMMessage[],
+  iteration: number,
+  resolveProviderId: ExtractSequenceOptions['resolveProviderId'],
+  innerArgsOf: (call: InnerCallRan) => InnerCallRan['args'],
+): ToolCallEntry[] {
   const sequence: ToolCallEntry[] = [];
-  const resolveProviderId = options.resolveProviderId;
   const results = resultsById(history);
-  const settled = settledProposals(history);
+  const { settled, innerCalls } = pairedResults(history);
 
   // Track iteration as we walk: each assistant turn with toolCalls
   // increments the iteration counter for the entries it produces. The
@@ -121,10 +139,10 @@ export function extractSequence(
         }),
       };
       sequence.push(entry);
-      for (const inner of answer.calls ?? []) {
+      for (const inner of innerCalls.get(proposalKey(turnAt, callAt)) ?? []) {
         sequence.push({
           name: inner.toolName,
-          args: inner.args,
+          args: innerArgsOf(inner),
           iteration: iterCounter,
           ...(resolveProviderId && {
             providerId: resolveProviderId(inner.toolName) ?? 'local',
@@ -185,8 +203,9 @@ function resultsById(history: readonly LLMMessage[]): Map<string, LLMMessage> {
  * answers nothing, and a turn that proposes the id again opens a new
  * proposal — which is how a reused id keeps its two calls apart.
  */
-function settledProposals(history: readonly LLMMessage[]): Set<string> {
+function pairedResults(history: readonly LLMMessage[]) {
   const settled = new Set<string>();
+  const innerCalls = new Map<string, readonly InnerCallRan[]>();
   /** id → the still-unanswered proposals of it on the latest turn that proposed it, in call order. */
   const open = new Map<string, string[]>();
   for (const [turnAt, msg] of history.entries()) {
@@ -201,7 +220,9 @@ function settledProposals(history: readonly LLMMessage[]): Set<string> {
     }
     if (msg.role !== 'tool' || !msg.toolCallId) continue;
     const answered = open.get(msg.toolCallId)?.shift();
-    if (answered !== undefined && msg.notDispatched !== undefined) settled.add(answered);
+    if (answered === undefined) continue;
+    if (msg.notDispatched !== undefined) settled.add(answered);
+    else if (msg.calls !== undefined) innerCalls.set(answered, msg.calls);
   }
-  return settled;
+  return { settled, innerCalls };
 }

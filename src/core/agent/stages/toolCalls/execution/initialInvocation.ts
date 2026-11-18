@@ -367,10 +367,12 @@ export async function invokeInitialTool(
     // Set when a raise declared a miss the door could not file:
     // the call then errors with this text and does not pause.
     let raisedMissError: string | undefined;
+    const halt = frame.execution.haltContext;
+    const innerHalt = halt?.call === undefined ? undefined : halt;
     // In a batch whose one human question was the inputs layer's ask
     // (`oneQuestionAsked`), the tool's own pause cannot be given: the
     // call settles as an error below, with the refusal sentence.
-    if (isPauseRequest(err) && !frame.oneQuestionAsked) {
+    if (innerHalt === undefined && isPauseRequest(err) && !frame.oneQuestionAsked) {
       // The typed half of the question (9.24.0): a tool that raised
       // `askHuman({ question, component })` nominated a screen
       // component, and the nomination is judged HERE — the raise
@@ -519,6 +521,7 @@ export async function invokeInitialTool(
     frame.outcome.error = true;
     frame.execution.executeThrew = frame.execution.executed;
     frame.outcome.result =
+      (innerHalt !== undefined && isPauseRequest(err) ? innerHalt.tellLLM : undefined) ??
       raisedMissError ??
       (frame.askedLayer !== undefined && isPauseRequest(err)
         ? // Reached only in the batch that asked (a pause anywhere

@@ -19,8 +19,8 @@
  *     schema check's own sentence, whether or not a gate is configured — no
  *     gate is asked about a call that cannot run, and no gate's answer turns
  *     it into `{}`.
- *   - An object `structuredClone` refuses (it holds a function, a symbol, a
- *     foreign proxy): refused, because no copy can be judged and held still.
+ *   - An object that cannot be copied as plain JSON data is refused. The
+ *     checker needs inputs that can be held still and carried through a pause.
  *   - `undefined` (no arguments given) reads as `{}`, the empty object.
  *
  * Example:
@@ -29,6 +29,7 @@
  *   takeArguments({ run: () => 1 })  // { kind: 'not-copyable' }
  */
 
+import { copyJson } from '../../lib/boundedJson.js';
 import type { ToolArgs } from '../../tools/runChain.js';
 import {
   formatToolArgIssues,
@@ -52,7 +53,7 @@ export function takeArguments(args: unknown): TakenArguments {
   if (args === undefined) return { kind: 'copied', args: {} };
   if (!isArgumentObject(args)) return { kind: 'not-object' };
   try {
-    return { kind: 'copied', args: structuredClone(args) };
+    return { kind: 'copied', args: copyJson(args, Number.MAX_SAFE_INTEGER, false) as ToolArgs };
   } catch {
     return { kind: 'not-copyable' };
   }
@@ -78,7 +79,7 @@ export function notObjectRefusal(
 export function notCopyableRefusal(name: string): string {
   return (
     `ctx.tools.call('${name}'): its arguments could not be copied (they hold a function, a ` +
-    `symbol or another value structuredClone refuses), and an inner call runs only on a ` +
+    `symbol or another value that is not plain data), and an inner call runs only on a ` +
     `copy the gates judged — the tool did not run. Pass plain data.`
   );
 }

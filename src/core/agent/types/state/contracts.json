@@ -138,6 +138,7 @@
       "policyHaltReason": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
       "policyHaltTellLLM": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
       "policyHaltTarget": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
+      "policyHaltInnerCallId": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
       "policyHaltArgs": ["3b2a7bb452e9ff9d68f4c93124b1eb97038cfa7a7fbb626bed3e0449cad809fc",true,false],
       "policyHaltIteration": ["3bcfecfc4e8c46bb5b797fbbb08a483b2fadafa1fd42497405eb961515590163",true,false],
       "policyHaltCheckerId": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
@@ -153,6 +154,7 @@
       "reliabilityFailCauseName": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false]
     },
     "comments": {
+      "17d11825d5659977a2ee73f621f22f39cd2a8dbfa56ca030c155301abf764168": 1,
       "16e9dda0484effe708854280ee440bf6552b136d319859833e70010902a1ee60": 1,
       "509f1b3c0f7a6bdd4af417e600065c4a26c1b828af2b75ab1347c8cfe0d752dc": 1,
       "02258cc96de0343b9e21faf3a75f94985273ef7d15ac7d5e9063cc0ee5fde3e5": 1,

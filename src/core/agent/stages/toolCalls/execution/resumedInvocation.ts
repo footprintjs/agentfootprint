@@ -561,7 +561,9 @@ export function buildResumedInvocation(
       if (seen !== undefined && executed) seen.threw = true;
       if (isPauseRequest(err)) {
         return {
-          result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
+          result:
+            binding.halt?.tellLLM ??
+            `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
           error: true,
           // It ran — a tool that asked to pause had already started work.
           executed,

@@ -4,29 +4,23 @@
  * Pattern: one writer for one committed key (the `middleware/ledger.ts` shape).
  * Role:    core/agent. Inner dispatch (`toolDispatch.ts`) decides; this file
  *          is the only thing that writes `innerToolCalls`, one row per inner
- *          call, appended when the call ends.
+ *          call, updated in place when an entered call settles.
  * Emits:   nothing. The gates file their own events under the inner id.
  *
  * WHY A ROW OF ITS OWN. The readers that count the model's calls read
  * `stream.tool_start` / `stream.tool_end` or the history's tool messages —
  * the account of a run, the cost and status recorders, the UI adapters, the
- * tool-call journal, the check-in trail. An inner call is not a call the
- * model made, so it rides none of those; its row sits on a key none of them
- * reads. It is written when the call ends, in the stage of the outer call that
- * made it, so it is committed with that stage's writes, the way
- * `middlewareDecisions` keeps the chain's rows. Two calls leave no row: one
- * whose composing tool did not await it and that ended after that stage
- * committed, and one made through a `ctx.tools` kept past a stage that has
- * committed (refused, `refusedBy: 'ended'` — its row is written only while
- * the outer call's stage is still open). And a chain that threw OUT of the
+ * tool-call journal and the check-in trail. The outer call is their unit.
+ * The inner call's row starts before entry or at refusal. If its result
+ * arrives after the stage committed, the row remains unsettled. Refusals
+ * after the stage closed are returned to the caller. And a chain that threw out of the
  * walker (a link returning nothing at all) files no `middleware.decision`
  * for the inner call: the row's `refusedBy: 'middleware'` is its record.
  *
- * THE ROWS FEED THE SEQUENCE. The rows of one outer call whose function was
- * entered are what a later checker sees of it (`innerCallsRanOf`): handed to
- * the next inner call's checker while the outer call runs, and stamped on the
- * outer call's history message when it lands (`LLMMessage.calls`), so a
- * later turn's sequence keeps them.
+ * THE HISTORY RETAINS THE SHOWN ROWS. The entry boundary keeps the actual
+ * arguments for checks inside the same invocation (`innerCallOuter.ts`).
+ * The outer tool's history message carries the displayed rows and any opaque
+ * references to protected arguments for later checks (`innerCallPolicyArgs.ts`).
  *
  * Example — `tidy_up` (model call `c1`) calls `delete_account`, which the
  * permission checker denies:
@@ -46,7 +40,7 @@
 import type { TypedScope } from 'footprintjs';
 
 import { frozenProjectionOf, frozenView } from '../../lib/frozenCopy.js';
-import { shownArgsOf } from '../toolShownArgs.js';
+import { shownInnerArgs } from './innerCallPolicyArgs.js';
 import type { InnerCallRan } from '../../provider-contract/innerCalls.js';
 import {
   innerCallNumberOf,
@@ -73,7 +67,8 @@ export interface InnerToolCallRow {
   readonly args: Readonly<Record<string, unknown>>;
   /** Whether the tool's function was entered. `false` for every refusal. */
   readonly entered: boolean;
-  /** `'returned'`, `'threw'` and `'paused'` only after `entered`; `'refused'` only before it. */
+  readonly policyArgsRef?: string;
+  /** An entered call begins unsettled and is updated when it returns, throws or pauses. */
   readonly ended: InnerCallEnd;
   /** Who refused it — present exactly when `ended` is `'refused'`. */
   readonly refusedBy?: InnerCallRefuser;
@@ -97,13 +92,16 @@ export function recordInnerToolCall(
   owner: InnerCallOwner,
   facts: InnerCallFacts,
 ): void {
-  const shown = shownArgsOf(facts.tool, facts.args);
+  const shown = facts.recorded?.args ?? shownInnerArgs(facts.tool, facts.args);
   const row: InnerToolCallRow = {
     toolCallId: facts.toolCallId,
     outerToolCallId: owner.toolCallId,
     toolName: facts.toolName,
     iteration: owner.iteration,
     args: frozenView(shown) ?? frozenProjectionOf(shown),
+    ...(facts.recorded?.policyArgsRef !== undefined && {
+      policyArgsRef: facts.recorded.policyArgsRef,
+    }),
     entered: facts.entered,
     ended: facts.ended,
     ...(facts.refusedBy !== undefined && { refusedBy: facts.refusedBy }),
@@ -111,7 +109,13 @@ export function recordInnerToolCall(
   };
   const prior = (scope.innerToolCalls as readonly InnerToolCallRow[] | undefined) ?? [];
   // A plain local array first: a TypedScope array read is a live proxy view.
-  scope.innerToolCalls = [...prior, row];
+  const rows = [...prior];
+  const existing = rows.findIndex(
+    (entry) => entry.toolCallId === row.toolCallId && entry.iteration === row.iteration,
+  );
+  if (existing === -1) rows.push(row);
+  else rows[existing] = row;
+  scope.innerToolCalls = rows;
 }
 
 /** The rows a run's state holds — `[]` before the first inner call. */
@@ -152,7 +156,12 @@ export function innerCallsRanOf(
   return rows
     .filter((r) => r.outerToolCallId === outerToolCallId && r.iteration === iteration && r.entered)
     .sort((a, b) => innerCallNumberOf(a.toolCallId) - innerCallNumberOf(b.toolCallId))
-    .map((r) => ({ toolCallId: r.toolCallId, toolName: r.toolName, args: r.args }));
+    .map((r) => ({
+      toolCallId: r.toolCallId,
+      toolName: r.toolName,
+      args: r.args,
+      ...(r.policyArgsRef !== undefined && { policyArgsRef: r.policyArgsRef }),
+    }));
 }
 
 /**

@@ -793,7 +793,7 @@ export interface LLMProvider {
 export interface ToolCallEntry {
   /** Tool name dispatched. */
   readonly name: string;
-  /** Tool args passed to `tool.execute(args, ctx)`; an inner call's shown through the tool's argument view. */
+  /** Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view. */
   readonly args: Readonly<Record<string, unknown>> | undefined;
   /** ReAct iteration the call was dispatched on. */
   readonly iteration: number;

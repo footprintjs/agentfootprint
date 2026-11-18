@@ -2,9 +2,10 @@ import type { buildCallStart } from '../execution/callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
+import type { InnerCallRan } from '../../../../../provider-contract/innerCalls.js';
 import type { ToolCallEntry } from '../../../../../provider-contract/types.js';
 import type { CallExecution, CallResultCell } from '../contracts/callCells.js';
-import { extractSequence } from '../../../../../security/extractSequence.js';
+import { extractSequenceForPolicy } from '../../../../../security/extractSequence.js';
 import { checkerContextOf } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
@@ -32,6 +33,7 @@ interface CheckToolPermissionFrame {
    * history with the outer call's result; until then, this is where they are.
    */
   readonly innerCallsSoFar?: () => readonly ToolCallEntry[];
+  readonly innerArgsOf: (call: InnerCallRan) => ToolArgs;
 }
 
 /** Existing toolPermission body; the owning handler retains its admission guard and native pause return. */
@@ -42,7 +44,7 @@ export async function checkToolPermission(frame: CheckToolPermissionFrame) {
     // call adds its outer call's inner calls that already ran: they are
     // written to history with the outer call's result, not before.
     const sequence = [
-      ...extractSequence(frame.historyForCallbacks(), frame.iteration),
+      ...extractSequenceForPolicy(frame.historyForCallbacks(), frame.iteration, frame.innerArgsOf),
       ...(frame.innerCallsSoFar?.() ?? []),
     ];
     const decision = await frame.permissionChecker.check({

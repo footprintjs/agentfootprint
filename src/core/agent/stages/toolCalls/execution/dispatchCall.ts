@@ -1,6 +1,7 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
 import { checkToolPermission } from '../access/toolPermission.js';
+import { policyArgsOf } from '../../../innerCallPolicyArgs.js';
 import { askDeclaredCapabilities, buildCapabilityQuestion } from '../access/capabilityQuestion.js';
 import { askSkillRead } from '../access/skillReadQuestion.js';
 import { prepareArgumentGate } from '../access/argumentGate.js';
@@ -73,6 +74,7 @@ export function buildCallDispatch(
       if (!execution.denied && operations.permissionChecker) {
         await checkToolPermission({
           historyForCallbacks,
+          innerArgsOf: (inner) => policyArgsOf(scope, inner),
           iteration: batch.iteration,
           permissionChecker: operations.permissionChecker,
           tc,

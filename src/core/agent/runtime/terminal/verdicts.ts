@@ -2,7 +2,6 @@ import type { ResolvedAnswerValidation } from '../../../../answer-validation/typ
 import { failFastRecordOf } from '../../../../reliability/failFastRecord.js';
 import type { ReliabilityConfig } from '../../../../reliability/types.js';
 import { extractSequence } from '../../../../security/extractSequence.js';
-import { innerToolCallRowsOf } from '../../innerToolCalls.js';
 import type { TerminalVerdict } from '../../../terminalVerdict.js';
 import { evidenceRefusalSentence } from '../../evidence/gate.js';
 import type { ResolvedEvidenceGate } from '../../evidence/types.js';
@@ -35,6 +34,7 @@ export function refusalVerdictOf(
     policyHaltReason?: string;
     policyHaltTellLLM?: string;
     policyHaltTarget?: string;
+    policyHaltInnerCallId?: string;
     policyHaltArgs?: Readonly<Record<string, unknown>>;
     policyHaltIteration?: number;
     policyHaltCheckerId?: string;
@@ -51,9 +51,7 @@ export function refusalVerdictOf(
     // halt landed no synthetic result: the last message is its outer
     // call's own, which ran, so nothing is filtered and the proposed
     // entry is marked `inner` (`innerCallOuter.ts`).
-    const inner = innerToolCallRowsOf(state).some(
-      (row) => row.halted === true && row.toolName === halt.policyHaltTarget,
-    );
+    const inner = halt.policyHaltInnerCallId !== undefined;
     const sequenceWithoutProposed = extractSequence(
       inner ? history : history.slice(0, -1),
       iteration,

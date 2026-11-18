@@ -100,6 +100,7 @@ export const fields1 = {
   placement: true,
   planAction: true,
   policy: true,
+  policyArgsRef: true,
   policyEngine: true,
   policyRuleId: true,
   position: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   timeChecks: true,
   title: true,
   to: true,
-  toAgentId: true,
 } as const;

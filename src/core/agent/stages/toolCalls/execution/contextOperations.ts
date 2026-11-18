@@ -16,6 +16,7 @@ import {
 } from '../../../../../artifacts/capability.js';
 import { agentToolDispatch } from '../../../toolDispatch.js';
 import { recordInnerToolCall } from '../../../innerToolCalls.js';
+import { prepareInnerCallRecord } from '../../../innerCallPolicyArgs.js';
 import { buildInnerCallGates } from '../access/innerCallGates.js';
 import { policyInForce } from '../../../../../redaction/runRedaction.js';
 import { reportingCredentials } from '../decorators/reportingCredentials.js';
@@ -265,10 +266,12 @@ export function buildToolContextOperations(
         toolCallId: call.toolCallId,
         iteration: call.iteration,
         history: call.history,
-        halted: (halt) => call.binding.halted(halt),
+        binding: call.binding,
       }),
       record: (facts) => recordInnerToolCall(scope, call, facts),
+      prepareRecord: (tool, args) => prepareInnerCallRecord(scope, tool, args),
       outer: call.binding,
+      ...(signal !== undefined && { signal }),
       innerContext: (name, innerId) => {
         // An inner call runs inside the same run, under the same policy.
         const redact = policyInForce(scope);

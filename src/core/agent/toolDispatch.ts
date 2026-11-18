@@ -19,7 +19,7 @@
  * the model call's order — `stages/toolCalls/execution/dispatchCall.ts`):
  *   1. the permission checker, about `tool_call` and every capability the
  *      tool declares that the checker governs, handed the run's `sequence`
- *      plus the inner calls of the same outer call that already ran
+ *      plus the inner calls of the same outer call already admitted
  *      (`stages/toolCalls/access/innerCallGates.ts`);
  *   2. the tool's argument rules (`refuseUnaccountedRuledArguments`, below);
  *   3. the before-tool middleware chain — a link's rewrite is what the tool
@@ -61,6 +61,7 @@
  *     for the other forms' arguments.
  */
 
+import { linkedController } from '../../lib/abort.js';
 import type { Credential } from '../../identity/types.js';
 import { formatToolArgIssues, validateToolArgs } from '../../tools/toolArgsValidation.js';
 import {
@@ -72,6 +73,7 @@ import {
   untakenBesides,
 } from '../../tools/declare.js';
 import { formArguments, type PeriodForm } from '../../time/periodForm.js';
+import type { InnerCallRan } from '../../provider-contract/innerCalls.js';
 import type { ToolArgs } from '../../tools/runChain.js';
 import type {
   Tool,
@@ -81,7 +83,7 @@ import type {
 } from '../../tools/tools.js';
 import { isPauseRequest } from '../pause.js';
 import { notCopyableRefusal, notObjectRefusal, takeArguments } from './innerCallArguments.js';
-import type { OuterCallBinding } from './innerCallOuter.js';
+import { bindOuterCall, type OuterCallBinding } from './innerCallOuter.js';
 
 /** The one spelling of an inner call's id: the outer call's id, `#inner-`, its number. */
 export function innerToolCallId(outerToolCallId: string, seq: number): string {
@@ -121,8 +123,8 @@ export interface InnerCallGates {
   readonly skillRead?: (call: InnerCallAsked) => Promise<InnerGateAnswer>;
 }
 
-/** How an inner call ended: `'returned'`, `'threw'` and `'paused'` only after its function was entered. */
-export type InnerCallEnd = 'returned' | 'threw' | 'paused' | 'refused';
+/** How the call settled. An entered call can remain unsettled when its owner stops waiting. */
+export type InnerCallEnd = 'unsettled' | 'returned' | 'threw' | 'paused' | 'refused';
 
 /**
  * Who refused an inner call: a gate; inner dispatch's own refusals (an
@@ -130,7 +132,7 @@ export type InnerCallEnd = 'returned' | 'threw' | 'paused' | 'refused';
  * `'ended'` — the call was made through a `ctx.tools` its outer call had
  * already left.
  */
-export type InnerCallRefuser = 'permission' | 'middleware' | 'dispatch' | 'ended';
+export type InnerCallRefuser = 'permission' | 'middleware' | 'dispatch' | 'ended' | 'halt';
 
 /** The facts of one finished inner call, handed to `deps.record`. */
 export interface InnerCallFacts {
@@ -145,6 +147,8 @@ export interface InnerCallFacts {
    * refused, and that value is not kept).
    */
   readonly args: ToolArgs;
+  /** Prepared display projection and its private working-state reference. */
+  readonly recorded?: Pick<InnerCallRan, 'args' | 'policyArgsRef'>;
   readonly entered: boolean;
   readonly ended: InnerCallEnd;
   readonly refusedBy?: InnerCallRefuser;
@@ -169,8 +173,14 @@ export interface AgentToolDispatchDeps {
   readonly gates?: InnerCallGates;
   /** Keep one row for each inner call, when it ends (`innerToolCalls.ts`). */
   readonly record?: (facts: InnerCallFacts) => void;
+  readonly prepareRecord?: (
+    tool: Tool,
+    args: ToolArgs,
+  ) => Pick<InnerCallRan, 'args' | 'policyArgsRef'>;
   /** The outer call's hold (`innerCallOuter.ts`): a call made after it ended is refused. */
-  readonly outer?: Pick<OuterCallBinding, 'ended'>;
+  readonly outer?: OuterCallBinding;
+  /** A call's optional signal can narrow, but cannot replace, the run's signal. */
+  readonly signal?: AbortSignal;
 }
 
 const GATE_NAMES: Readonly<Record<keyof InnerCallGates, string>> = {
@@ -204,12 +214,14 @@ class GateRefusal extends Error {
  * own credential provider (fail-closed — the provider throws its teaching
  * refusal when none is attached), executes, and returns the result exactly as
  * the tool returned it. Every call — refused, thrown or returned — ends in one
- * `deps.record`. Policy about what a result MEANS — an absence that should
+ * `deps.record` row. Entered calls start unsettled and update the same row.
+ * Policy about what a result MEANS — an absence that should
  * short-circuit, a coverage ledger that should fold — belongs to the consumer
  * wrapping this dispatch, never here.
  */
 export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
   let seq = 0;
+  const outer = deps.outer ?? bindOuterCall();
   return {
     has(name: string): boolean {
       return deps.lookup(name) !== undefined;
@@ -217,11 +229,27 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
     async call(name: string, args: unknown, opts?: ToolDispatchCallOptions): Promise<unknown> {
       seq += 1;
       const toolCallId = innerToolCallId(deps.outerToolCallId, seq);
-      const tool = deps.lookup(name);
-      // Before the first await: the copy every gate, refusal and the tool get.
-      const taken = takeArguments(args);
-      let ran: ToolArgs = taken.kind === 'copied' ? taken.args : {};
+      let tool: Tool | undefined;
+      let ran: ToolArgs = {};
       let entered = false;
+      let recorded: InnerCallFacts['recorded'];
+      const linked =
+        deps.signal !== undefined && opts?.signal !== undefined && deps.signal !== opts.signal
+          ? linkedController(deps.signal, opts.signal)
+          : undefined;
+      const signal = linked?.controller.signal ?? deps.signal ?? opts?.signal;
+      const assertOpen = (): void => {
+        if (outer.ended)
+          throw new GateRefusal(endedRefusal(name, deps.outerToolCallId), 'ended', false);
+        if (outer.halt !== undefined) {
+          throw new GateRefusal(
+            `ctx.tools.call('${name}'): policy halted the outer tool call. The tool did not run.`,
+            'halt',
+            false,
+          );
+        }
+        signal?.throwIfAborted();
+      };
       let refusedBy: InnerCallRefuser = 'dispatch';
       let halted = false;
       const end = (ended: InnerCallEnd): void =>
@@ -230,12 +258,14 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
           toolName: name,
           ...(tool !== undefined && { tool }),
           args: ran,
+          ...(recorded !== undefined && { recorded }),
           entered,
           ended,
           ...(ended === 'refused' && { refusedBy }),
           ...(ended === 'refused' && halted && { halted: true as const }),
         });
       const pass = async (gate: keyof InnerCallGates): Promise<void> => {
+        assertOpen();
         const ask = deps.gates?.[gate];
         if (ask === undefined) return;
         const answer = await askGate(ask, {
@@ -243,11 +273,18 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
           toolName: name,
           ...(tool !== undefined && { tool }),
           args: ran,
-          ...(opts?.signal !== undefined && { signal: opts.signal }),
+          ...(signal !== undefined && { signal }),
         });
         if (answer.kind === 'allow') {
           // Only a rewrite replaces what runs; an allow hands nothing back.
-          if (answer.args !== undefined) ran = answer.args;
+          assertOpen();
+          if (answer.args !== undefined) {
+            const rewritten = takeArguments(answer.args);
+            if (rewritten.kind !== 'copied') {
+              throw new GateRefusal(notCopyableRefusal(name), REFUSERS[gate], false);
+            }
+            ran = rewritten.args;
+          }
           return;
         }
         throw new GateRefusal(
@@ -258,38 +295,58 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
         );
       };
       try {
-        if (deps.outer?.ended === true) {
-          refusedBy = 'ended';
-          throw new Error(endedRefusal(name, deps.outerToolCallId));
-        }
-        if (taken.kind === 'not-object') {
-          throw new Error(
-            tool === undefined
-              ? unknownNameRefusal(name)
-              : notObjectRefusal(name, args, tool.schema.inputSchema),
-          );
-        }
-        if (taken.kind === 'not-copyable') throw new Error(notCopyableRefusal(name));
-        await pass('permission');
-        if (tool !== undefined) refuseUnaccountedRuledArguments(name, tool, ran);
-        await pass('middleware');
-        if (tool === undefined) throw new Error(unknownNameRefusal(name));
-        const validation = validateToolArgs(ran, tool.schema.inputSchema);
-        if (!validation.ok) throw new Error(formatToolArgIssues(name, validation.issues));
-        await pass('skillRead');
-        refuseWhatAnInnerCallCannotHonor(name, tool);
-        const base = deps.innerContext(name, toolCallId);
-        const ctx: ToolExecutionContext = {
-          ...base,
-          ...(opts?.signal !== undefined && { signal: opts.signal }),
-          ...(tool.needs !== undefined && {
-            credential: await resolveInnerCredential(name, tool, base),
-          }),
-        };
-        entered = true;
-        const result = await tool.execute(ran, ctx);
+        assertOpen();
+        tool = deps.lookup(name);
+        // Copy synchronously while the composing tool still owns its input.
+        const taken = takeArguments(args);
+        if (taken.kind === 'copied') ran = taken.args;
+        const { result } = await outer.scheduleAdmission(async () => {
+          assertOpen();
+          if (taken.kind === 'not-object') {
+            throw new Error(
+              tool === undefined
+                ? unknownNameRefusal(name)
+                : notObjectRefusal(name, args, tool.schema.inputSchema),
+            );
+          }
+          if (taken.kind === 'not-copyable') throw new Error(notCopyableRefusal(name));
+          await pass('permission');
+          if (tool !== undefined) refuseUnaccountedRuledArguments(name, tool, ran);
+          await pass('middleware');
+          if (tool === undefined) throw new Error(unknownNameRefusal(name));
+          const validation = validateToolArgs(ran, tool.schema.inputSchema);
+          if (!validation.ok) throw new Error(formatToolArgIssues(name, validation.issues));
+          await pass('skillRead');
+          assertOpen();
+          refuseWhatAnInnerCallCannotHonor(name, tool);
+          const base = deps.innerContext(name, toolCallId);
+          const ctx: ToolExecutionContext = {
+            ...base,
+            ...(signal !== undefined && { signal }),
+            ...(tool.needs !== undefined && {
+              credential: await resolveInnerCredential(name, tool, {
+                ...base,
+                ...(signal && { signal }),
+              }),
+            }),
+          };
+          assertOpen();
+          const submitted = structuredClone(ran);
+          recorded = deps.prepareRecord?.(tool, submitted);
+          outer.admit({ toolCallId, toolName: name, args: submitted });
+          const executionArgs = ran;
+          // The row and policy keep the bound input even if the tool writes to its copy.
+          ran = submitted;
+          entered = true;
+          end('unsettled');
+          // Keep the result inside a cell so admission finishes without awaiting the tool.
+          const result = Promise.resolve(tool.execute(executionArgs, ctx));
+          void result.catch(() => undefined);
+          return { result };
+        });
+        const value = await result;
         end('returned');
-        return result;
+        return value;
       } catch (err) {
         if (err instanceof GateRefusal) {
           refusedBy = err.refusedBy;
@@ -297,6 +354,8 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
         }
         end(!entered ? 'refused' : isPauseRequest(err) ? 'paused' : 'threw');
         throw err;
+      } finally {
+        linked?.unlink();
       }
     },
   };

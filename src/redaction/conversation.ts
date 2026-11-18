@@ -131,6 +131,7 @@ const NAMES = {
     // so the key is named whole, like `middlewareDecisions`; the gates' events
     // still say each decision was made.
     'innerToolCalls',
+    'innerCallPolicyArgs',
     'pausedToolArgs',
     'pausedAskArgs',
     'pausedCheckInArgs',

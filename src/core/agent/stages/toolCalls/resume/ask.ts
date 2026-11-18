@@ -420,7 +420,7 @@ export function buildResumeAsk(
       }
       scriptSeen.resultFinalizer?.assertFinalized();
       const sourceHalt = sourceEvidenceHaltOf(scope);
-      if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
+      if (sourceHalt && innerHalt === undefined) scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let askResultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const askToolChars = askResultStr.length;
       if (deps.negativeClaimsArmed === true)

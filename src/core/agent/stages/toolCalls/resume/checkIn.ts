@@ -208,7 +208,7 @@ export function buildResumeCheckIn(
       }
       scriptSeen.resultFinalizer?.assertFinalized();
       const sourceHalt = sourceEvidenceHaltOf(scope);
-      if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
+      if (sourceHalt && innerHalt === undefined) scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let decisionResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const decisionToolChars = decisionResultStr.length;

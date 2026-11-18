@@ -21,14 +21,14 @@
  *     on the chain;
  *   - the checker's `sequence` is the history's sequence (in which the outer
  *     call is still in flight, so not yet listed) plus the inner calls of the
- *     same outer call that already ran, each `inner: true`
- *     (`innerToolCalls.ts` · `innerCallsRanOf`) — they reach history only
+ *     same outer call already admitted, each `inner: true`
+ *     (`innerCallOuter.ts` · `admitted`). They reach history only
  *     with the outer call's result;
  *   - a refusal is an ANSWER (`refuse`, with the words the model would have
  *     read) handed back to inner dispatch, which refuses by name to the
  *     outer tool; nothing is written into the outer call's result. A `'halt'`
  *     is carried to the outer call (`innerCallOuter.ts`), whose own halt
- *     path ends the run once it settles;
+ *     path ends the run once it settles. Every later admission sees the halt;
  *   - a rewrite's chain row carries no `changedKeys`: the model call's rows
  *     get them from the inputs layer (`middlewareAdmission.ts`), which judges
  *     only the model's own calls, so `middleware/rewrites.ts` ·
@@ -51,8 +51,10 @@ import {
   type ToolCallEntry,
 } from '../../../../../provider-contract/types.js';
 import type { InnerCallAsked, InnerCallGates, InnerGateAnswer } from '../../../toolDispatch.js';
-import type { InnerCallHalt } from '../../../innerCallOuter.js';
-import { innerCallsRanOf, liveInnerToolCallRowsOf } from '../../../innerToolCalls.js';
+import type { OuterCallBinding } from '../../../innerCallOuter.js';
+import { policyArgsOf, shownInnerArgs } from '../../../innerCallPolicyArgs.js';
+import { takeArguments } from '../../../innerCallArguments.js';
+import { carriesArgumentView } from '../../../../toolShownArgs.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
 import { frozenView } from '../../../../../lib/frozenCopy.js';
 import { runToolChain, type ToolArgs } from '../../../../../tools/runChain.js';
@@ -70,7 +72,7 @@ export interface InnerCallOuter {
   /** The history the outer call's own gates were handed. */
   readonly history: () => LLMMessage[];
   /** Carry a checker's `'halt'` to the outer call (`innerCallOuter.ts`). */
-  readonly halted: (halt: InnerCallHalt) => void;
+  readonly binding: OuterCallBinding;
 }
 
 type RunIdentity = { tenant?: string; principal?: string; conversationId: string } | undefined;
@@ -149,9 +151,14 @@ function answerOf(
   if (!execution.denied) return { kind: 'allow' };
   const halt = execution.haltContext;
   if (halt === undefined) return { kind: 'refuse', reason: String(outcome.result) };
-  outer.halted({
+  if (outer.binding.ended) return { kind: 'refuse', reason: String(outcome.result) };
+  outer.binding.halted({
     ...halt,
-    call: { toolCallId: call.toolCallId, toolName: call.toolName, args: call.args },
+    call: {
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      args: shownInnerArgs(call.tool, call.args),
+    },
   });
   return { kind: 'refuse', reason: String(outcome.result), halted: true };
 }
@@ -176,7 +183,8 @@ async function askPermission(
     emitSecurity: question.emitSecurity,
     execution,
     outcome,
-    innerCallsSoFar: () => innerCallsSoFar(scope, outer),
+    innerCallsSoFar: () => innerCallsSoFar(outer),
+    innerArgsOf: (inner) => policyArgsOf(scope, inner),
   });
   if (!execution.denied && call.tool?.capabilities !== undefined) {
     await askDeclaredCapabilities(
@@ -209,13 +217,13 @@ async function askSkill(
 }
 
 /** The inner calls of this outer call that already ran, as sequence entries (`inner: true`). */
-function innerCallsSoFar(
-  scope: TypedScope<AgentState>,
-  outer: InnerCallOuter,
-): readonly ToolCallEntry[] {
-  return innerCallsRanOf(liveInnerToolCallRowsOf(scope), outer.toolCallId, outer.iteration).map(
-    (ran) => ({ name: ran.toolName, args: ran.args, iteration: outer.iteration, inner: true }),
-  );
+function innerCallsSoFar(outer: InnerCallOuter): readonly ToolCallEntry[] {
+  return outer.binding.admitted().map((call) => ({
+    name: call.toolName,
+    args: call.args,
+    iteration: outer.iteration,
+    inner: true,
+  }));
 }
 
 /** The before-tool chain, walked by the one walker; an ask refuses — nobody can be asked here. */
@@ -238,7 +246,20 @@ async function walkChain(
     ...(signal && { signal }),
     askPolicy: 'refuse',
   });
-  recordDecisions(scope, walked.decisions);
+  const publicArgumentView = (value: unknown) => {
+    const taken = takeArguments(value);
+    return taken.kind === 'copied' ? shownInnerArgs(call.tool, taken.args) : 'REDACTED';
+  };
+  recordDecisions(
+    scope,
+    carriesArgumentView(call.tool)
+      ? walked.decisions.map((row) => ({
+          ...row,
+          ...(row.before !== undefined && { before: publicArgumentView(row.before) }),
+          ...(row.after !== undefined && { after: publicArgumentView(row.after) }),
+        }))
+      : walked.decisions,
+  );
   // Only a link that rewrote hands arguments back; a pass-through changes nothing.
   if (walked.kind === 'allow') {
     return walked.args === call.args ? { kind: 'allow' } : { kind: 'allow', args: walked.args };

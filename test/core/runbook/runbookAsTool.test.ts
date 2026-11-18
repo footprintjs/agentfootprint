@@ -1261,16 +1261,27 @@ describe('runbookAsTool — integration: Agent delivers ctx.tools', () => {
         return { content: 'Triage complete.', toolCalls: [] };
       },
     });
-    const agent = Agent.create({ provider, model: 'mock', maxIterations: 5 })
+    const agent = Agent.create({
+      provider,
+      model: 'mock',
+      maxIterations: 5,
+      permissionChecker: {
+        name: 'fixture-policy',
+        check: () => ({ result: 'allow' }),
+      },
+    })
       .tool(inner)
       .tool(runbook)
       .build();
     const coverageEvents: unknown[] = [];
+    const asked: string[] = [];
+    agent.on('agentfootprint.permission.check', (event) => asked.push(event.payload.toolCallId));
     agent.on('agentfootprint.tools.coverage_declared', (event) => coverageEvents.push(event));
 
     const result = await agent.run({ message: 'triage the estate' });
     expect(result).toBe('Triage complete.');
     expect(innerRan).toBe(1);
+    expect(asked).toEqual(['tc-run', 'tc-run#inner-1']);
     // The envelope's af_coverage was recognized at the dispatch boundary —
     // the runbook's honesty rides the same rails as any coverage() tool.
     expect(coverageEvents.length).toBeGreaterThan(0);

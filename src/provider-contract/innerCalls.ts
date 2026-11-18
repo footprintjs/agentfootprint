@@ -7,17 +7,17 @@
  * turn, a resumed run and `agent.resumeOnError` read. A sequence rule ("read a
  * secret, then post it") must see a step a composing tool took for the model as
  * it sees the model's own step, in this run and in the next one, so the inner
- * calls ride the one record that outlives the run. Until the outer call's
- * result lands, its later inner calls' checker reads the same facts from the
- * run's `innerToolCalls` rows (`core/agent/stages/toolCalls/access/innerCallGates.ts`).
+ * calls ride the history in its shown view. The current invocation keeps
+ * the actual arguments through admission, and protected values live in
+ * private working state for later checks in the run.
  *
  * Example — the model calls `compose` (`c1`), whose tool reads a secret
  * through `ctx.tools`; the result message for `c1` carries:
  *
- *   calls: [{ toolCallId: 'c1#inner-1', toolName: 'read_secret', args: { id: 'S1' } }]
+ *   calls: [{ toolCallId: 'c1#inner-1', toolName: 'read_swatch', args: { id: 'S1' } }]
  *
  * and the next model call's checker is handed the sequence
- * `[compose, read_secret (inner)]`.
+ * `[compose, read_swatch (inner)]`.
  */
 
 /** One inner call whose tool's function was entered, as the record shows it. */
@@ -32,4 +32,6 @@ export interface InnerCallRan {
    * `innerToolCalls` row keeps. Never the composing tool's live object.
    */
   readonly args: Readonly<Record<string, unknown>>;
+  /** Internal reference to protected policy arguments, when the displayed value differs. */
+  readonly policyArgsRef?: string;
 }

@@ -146,7 +146,8 @@ export function buildResumeCredential(
       }
       scriptSeen.resultFinalizer?.assertFinalized();
       const sourceHalt = sourceEvidenceHaltOf(scope);
-      if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
+      if (sourceHalt && dispatched.halt === undefined)
+        scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let consentResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const consentToolChars = consentResultStr.length;
