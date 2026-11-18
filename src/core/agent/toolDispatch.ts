@@ -2,18 +2,14 @@
  * toolDispatch — the run's own tool dispatch, delivered as `ctx.tools`.
  *
  * Pattern: a deps-closure factory beside `toolArtifacts` / `toolProgress` in
- *          the tool-calls handler; this module holds the PURE half (the
- *          dispatch object over a lookup, an inner-context maker, the gates
- *          and a row writer) so the handler wires closures and nothing else.
+ *          the tool-calls handler; the dispatch object uses a lookup,
+ *          an inner-context maker, the gates and a row writer.
  * Role:    core/agent — composition over the registry (the runbookAsTool
  *          substrate; any tool may consume it).
- * Emits:   nothing itself. Inner executes flow through the tool's own
- *          channels (`ctx.progress`, its result); they do NOT fire
- *          `tool_start`/`tool_end` — an inner call is the OUTER call's work,
- *          not a turn of the model's, and synthesizing model-facing events
- *          for it would put calls in the record the model never made. The
- *          gates file their own events under the inner call's id, and each
- *          call leaves one row through `deps.record` (`innerToolCalls.ts`).
+ * Emits:   a development warning if a row cannot be written. The tool owns
+ *          its progress and result. The model call owns `tool_start` and
+ *          `tool_end`. Gates file events under the inner call's id. Calls
+ *          made while the outer stage is open leave a row (`innerToolCalls.ts`).
  *
  * What an inner call PASSES (the model's own gates, by the same functions, in
  * the model call's order — `stages/toolCalls/execution/dispatchCall.ts`):
@@ -61,6 +57,7 @@
  *     for the other forms' arguments.
  */
 
+import { isDevMode } from 'footprintjs';
 import { linkedController } from '../../lib/abort.js';
 import type { Credential } from '../../identity/types.js';
 import { formatToolArgIssues, validateToolArgs } from '../../tools/toolArgsValidation.js';
@@ -213,15 +210,33 @@ class GateRefusal extends Error {
  * the module header), resolves a declared `needs` through the inner context's
  * own credential provider (fail-closed — the provider throws its teaching
  * refusal when none is attached), executes, and returns the result exactly as
- * the tool returned it. Every call — refused, thrown or returned — ends in one
- * `deps.record` row. Entered calls start unsettled and update the same row.
+ * the tool returned it. Calls made while the stage is open get one `deps.record`
+ * row. Entered calls start unsettled and update that row while it is writable.
  * Policy about what a result MEANS — an absence that should
  * short-circuit, a coverage ledger that should fold — belongs to the consumer
  * wrapping this dispatch, never here.
  */
 export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
   let seq = 0;
+  let warnedAboutRow = false;
   const outer = deps.outer ?? bindOuterCall();
+  const keepRow = (facts: InnerCallFacts): void => {
+    try {
+      deps.record?.(facts);
+    } catch {
+      if (warnedAboutRow || !isDevMode()) return;
+      warnedAboutRow = true;
+      try {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[agentfootprint] Could not record an inner call to ${JSON.stringify(facts.toolName)} ` +
+            `for outer tool call ${JSON.stringify(deps.outerToolCallId)}.`,
+        );
+      } catch {
+        // A diagnostic sink must not replace the call's outcome.
+      }
+    }
+  };
   return {
     has(name: string): boolean {
       return deps.lookup(name) !== undefined;
@@ -253,7 +268,7 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
       let refusedBy: InnerCallRefuser = 'dispatch';
       let halted = false;
       const end = (ended: InnerCallEnd): void =>
-        keepRow(deps, {
+        keepRow({
           toolCallId,
           toolName: name,
           ...(tool !== undefined && { tool }),
@@ -381,19 +396,6 @@ async function askGate(
 
 /** The reason a gate that threw out of itself refuses with. */
 export const GATE_GAVE_NO_ANSWER = 'the gate gave no answer, and no answer is not an allow.';
-
-/**
- * Keep the call's row. A row that cannot be kept — the composing tool did not
- * await its inner call, and the stage it ran in has already committed — must
- * not turn what the call did into something else, so it is dropped here.
- */
-function keepRow(deps: AgentToolDispatchDeps, facts: InnerCallFacts): void {
-  try {
-    deps.record?.(facts);
-  } catch {
-    // The stage that held the record has ended: nothing is left to write to.
-  }
-}
 
 /** The refusal for a name the dispatch map does not hold. */
 function unknownNameRefusal(name: string): string {

@@ -185,6 +185,8 @@ When an outer tool settles, its handle closes to new admissions and waits for
 decisions already in progress while the run is live. A halt retained during that
 wait still ends the run. Retaining a halt aborts the signal of already-entered
 inner tools. Tools must honor that signal to stop their own work.
+An inner call made while its outer stage is open leaves a row, and after that
+stage commits the caller receives refusals without a row.
 
 `toolSecurityEvents.ts` binds the current tool call's id and iteration once,
 then stamps existing permission and credential events through `typedEmit`.

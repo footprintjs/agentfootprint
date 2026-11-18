@@ -9,12 +9,14 @@
  *     sentence, with or without a gate — no gate turns them into `{}`;
  *   - an inner `read_skill` is asked the checker's `skill_read` question, so a
  *     hidden skill's text never reaches the model through a composing tool;
- *   - a `ctx.tools` used after its outer call ended is refused, with a row;
+ *   - a `ctx.tools` used after its outer call ended is refused, with a row
+ *     while the outer stage is still open;
  *   - gate, middleware and dispatch refusals come in the model call's order;
  *   - what the checker is handed: the outer call's history and iteration, a
  *     frozen copy; and a walker that fails refuses with its own sentence.
  */
-import { describe, expect, it } from 'vitest';
+import { disableDevMode, enableDevMode, isDevMode } from 'footprintjs';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   Agent,
@@ -268,7 +270,9 @@ describe('an inner read_skill', () => {
 });
 
 describe('a ctx.tools used after its outer call ended', () => {
-  function keeperAndLate() {
+  const privateArgument = 'fixture-late-input';
+
+  function keeperAndLate(attempts = 1) {
     const secret = target();
     let kept: { call: (n: string, a: unknown) => Promise<unknown> } | undefined;
     const told: string[] = [];
@@ -286,10 +290,12 @@ describe('a ctx.tools used after its outer call ended', () => {
       description: 'uses the kept ctx.tools',
       inputSchema: { type: 'object', properties: {} },
       execute: async () => {
-        try {
-          told.push(`ran: ${String(await kept!.call('secret', { account: 'B1' }))}`);
-        } catch (err) {
-          told.push(`refused: ${(err as Error).message}`);
+        for (let i = 0; i < attempts; i += 1) {
+          try {
+            told.push(`ran: ${String(await kept!.call('secret', { account: privateArgument }))}`);
+          } catch (err) {
+            told.push(`refused: ${(err as Error).message}`);
+          }
         }
         return told[0]!;
       },
@@ -297,9 +303,10 @@ describe('a ctx.tools used after its outer call ended', () => {
     return { secret, keeper, late, told };
   }
 
-  it('is refused by name in a later iteration, and nothing is asked or run', async () => {
-    const { secret, keeper, late, told } = keeperAndLate();
+  it.each([true, false])('refuses after commit with dev mode %s', async (devMode) => {
+    const { secret, keeper, late, told } = keeperAndLate(2);
     const checker = checkerOf(() => ({ result: 'allow' }));
+    const middlewareAsked: string[] = [];
     const agent = Agent.create({
       provider: mock({
         replies: [
@@ -312,14 +319,52 @@ describe('a ctx.tools used after its outer call ended', () => {
       permissionChecker: checker,
     })
       .tools([secret.tool, keeper, late])
+      .toolMiddleware({
+        name: 'fixture-observer',
+        onToolCall: (call) => {
+          middlewareAsked.push(call.toolName);
+          return allow();
+        },
+      })
       .build();
-    await agent.run({ message: 'go' });
+    const previousMode = isDevMode();
+    const isRowWarning = (message: unknown): boolean =>
+      typeof message === 'string' && message.includes('Could not record an inner call');
+    const warn = vi.spyOn(console, 'warn').mockImplementation((message: unknown) => {
+      if (isRowWarning(message)) throw new Error('fixture diagnostic sink failed');
+    });
+    try {
+      if (devMode) enableDevMode();
+      else disableDevMode();
+      expect(await agent.run({ message: 'go' })).toBe('done');
 
-    expect(secret.entered).toEqual([]);
-    expect(told[0]).toMatch(
-      /^refused: ctx\.tools\.call\('secret'\): this ctx\.tools belonged to tool call 'c1', which has ended/,
-    );
-    expect(checker.asked).toEqual(['tool_call:keeper', 'tool_call:late']);
+      expect(secret.entered).toEqual([]);
+      expect(rows(agent)).toEqual([]);
+      expect(told).toHaveLength(2);
+      for (const refusal of told) {
+        expect(refusal).toMatch(
+          /^refused: ctx\.tools\.call\('secret'\): this ctx\.tools belonged to tool call 'c1', which has ended/,
+        );
+      }
+      expect(checker.asked).toEqual(['tool_call:keeper', 'tool_call:late']);
+      expect(middlewareAsked).toEqual(['keeper', 'late']);
+      const rowWarnings = warn.mock.calls.filter(([message]) => isRowWarning(message));
+      expect(rowWarnings).toEqual(
+        devMode
+          ? [
+              [
+                '[agentfootprint] Could not record an inner call to "secret" for outer tool call "c1".',
+              ],
+            ]
+          : [],
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(privateArgument);
+    } finally {
+      warn.mockRestore();
+      if (previousMode) enableDevMode();
+      else disableDevMode();
+      await agent.shutdown();
+    }
   });
 
   it('leaves a row that says so while the outer call’s stage is still open', async () => {
