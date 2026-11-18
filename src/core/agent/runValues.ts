@@ -21,12 +21,14 @@ import type { ProviderToolCache, ServedToolParties } from '../slots/buildToolsSl
 import type { buildToolCallsHandler } from './stages/toolCalls/index.js';
 import type { buildRouteDeciderStage } from './stages/route.js';
 import type { SourceEvidenceIndex } from '../../artifacts/sourceEvidence/types.js';
+import type { HostedRecording } from '../runnerLive.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
 export interface AgentRunValues extends RunnerCoreValues {
   identity?: MemoryIdentity;
   request?: RequestContext;
   answer?: string;
+  recording?: HostedRecording;
   checkpointTracker?: RunCheckpointTracker;
   checkpointObservationFailed?: true;
   causalEvidence?: CausalEvidenceRecorderHandle;

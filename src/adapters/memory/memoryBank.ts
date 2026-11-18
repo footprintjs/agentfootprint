@@ -137,6 +137,7 @@ import {
   type VertexMemoryMetadataValue,
   type VertexRetrievedMemory,
 } from '../google/aiPlatform.js';
+import { serviceScope } from './memoryBankScope.js';
 
 const ADAPTER = 'memoryBankStore';
 
@@ -257,10 +258,10 @@ export interface MemoryBankStoreOptions extends AiPlatformConnection {
    * that looks exactly like "this person has told us nothing". Changing the
    * convention on a live bank means re-writing every memory in it.
    *
-   * Values may not contain `*`; this adapter replaces any it is handed and
-   * refuses an empty scope outright, because a scope of `{}` is the one value
-   * that matches every other empty-scoped memory in the bank regardless of who
-   * wrote it.
+   * Every part must be text under a non-empty key; any other part is refused,
+   * never dropped, since dropping it widens the scope. A `*` is escaped, and an
+   * empty scope is refused outright: `{}` matches every other empty-scoped
+   * memory in the bank, whoever wrote it.
    */
   readonly scopeFor?: (identity: MemoryIdentity) => MemoryScope;
   /**
@@ -869,32 +870,12 @@ export class MemoryBankStore implements MemoryStore {
     return googleSdkFailure(ADAPTER, operation, err);
   }
 
-  /** The identity's scope, checked for the two values that would break isolation. */
+  /**
+   * The identity's scope, as `memoryBankScope.ts · serviceScope` lets it reach
+   * the service: a part that is not text refused, `*` escaped, `{}` refused.
+   */
   private resolveScope(identity: MemoryIdentity): MemoryScope {
-    const raw = this.scopeFor(identity);
-    const entries = Object.entries(raw ?? {}).filter(
-      ([key, value]) => typeof value === 'string' && key !== '',
-    );
-    if (entries.length === 0) {
-      throw new TypeError(
-        `${ADAPTER}: 'scopeFor' produced an empty scope for conversation ` +
-          `'${identity.conversationId}'.\n` +
-          `  An empty scope is not "no scoping" — it is a real scope that matches every other ` +
-          `empty-scoped memory in the bank, whoever wrote it. Return at least one key.`,
-      );
-    }
-    // The service rejects `*` in a scope value, so one is ESCAPED rather than
-    // passed on — a tenant named with one is a NAME, not a wildcard. Escaped
-    // and not replaced: mapping `*` onto some other character merges two
-    // different scopes into one address, which is the isolation bug this
-    // method exists to prevent (`*` used to become `_`, landing a tenant named
-    // `*` on top of the no-tenant scope). `%` goes first because it introduces
-    // the escape; a value that arrived already encoded is escaped again, which
-    // is unreadable but injective, and unreadable-and-separate beats legible
-    // and shared.
-    return Object.fromEntries(
-      entries.map(([key, value]) => [key, value.replace(/%/g, '%25').replace(/\*/g, '%2A')]),
-    );
+    return serviceScope(ADAPTER, this.scopeFor(identity), identity.conversationId);
   }
 }
 

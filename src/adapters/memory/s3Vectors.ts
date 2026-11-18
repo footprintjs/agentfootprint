@@ -628,11 +628,11 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     async get<T = unknown>(identity: MemoryIdentity, id: string): Promise<MemoryEntry<T> | null> {
       open('read an entry');
       const ns = identityNamespace(identity);
-      const out = (await call((c) => new c.Get({ ...scope, keys: [vectorKey(ns, id)] }))) as
-        | { vectors?: RawVector[] }
-        | undefined;
+      const out = (await call(
+        (c) => new c.Get({ ...scope, keys: [vectorKey(ns, id)], returnMetadata: true }),
+      )) as { vectors?: RawVector[] } | undefined;
       const row = out?.vectors?.[0];
-      if (!row) return null;
+      if (!row || !inNamespace(row, ns)) return null;
       const entry = vectorToEntry<T>(row);
       // Expired reads as absent, the same as every other store. No access
       // counters: S3 Vectors has no in-place metadata update, so bumping one
@@ -730,7 +730,6 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       open('list entries');
       const limit = storeRequestLimit(listOptions?.limit, 'limit') ?? 100;
       const ns = identityNamespace(identity);
-      const prefix = `${ns}#`;
       const tierFilter = listOptions?.tiers ? new Set(listOptions.tiers) : undefined;
 
       const page: MemoryEntry<T>[] = [];
@@ -753,7 +752,7 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
         )) as { vectors?: RawVector[]; nextToken?: string } | undefined;
         token = out?.nextToken;
         for (const row of out?.vectors ?? []) {
-          if (typeof row.key !== 'string' || !row.key.startsWith(prefix)) continue;
+          if (!inNamespace(row, ns)) continue;
           const entry = vectorToEntry<T>(row);
           if (!entry || isExpired(entry.ttl)) continue;
           if (tierFilter && (entry.tier === undefined || !tierFilter.has(entry.tier))) continue;
@@ -811,7 +810,6 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     async forget(identity: MemoryIdentity): Promise<void> {
       open('forget a namespace');
       const ns = identityNamespace(identity);
-      const prefix = `${ns}#`;
       let token: string | undefined;
       do {
         const out = (await call(
@@ -819,13 +817,12 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
             new c.List({
               ...scope,
               maxResults: 500,
+              returnMetadata: true, // `inNamespace` reads the row's `ns`
               ...(token !== undefined && { nextToken: token }),
             }),
         )) as { vectors?: RawVector[]; nextToken?: string } | undefined;
         token = out?.nextToken;
-        const keys = (out?.vectors ?? [])
-          .map((v) => v.key)
-          .filter((k): k is string => typeof k === 'string' && k.startsWith(prefix));
+        const keys = (out?.vectors ?? []).filter((v) => inNamespace(v, ns)).map((v) => v.key);
         // Deleted page by page rather than collected and deleted at the end: a
         // GDPR erasure that fails half way should have erased half, not
         // nothing.
@@ -952,18 +949,21 @@ function refuse(method: string, because: string, why: string, fix: string): neve
 // ─── Keys, payloads, rows ────────────────────────────────────────────
 
 /**
- * `'<namespace>#<id>'`.
- *
- * The namespace is in the KEY as well as in the metadata, and the redundancy is
- * deliberate: `search` filters server-side on the metadata, while `list` and
- * `forget` need to select a namespace out of a page of keys, which ListVectors
- * gives no filter for.
+ * A caller never lists or forgets another namespace's entries. When two entries share this
+ * key, a write can replace or a single delete(id) can remove the other conversation's entry.
+ * A collision-free key needs a major-version migration for stored vectors.
  */
 function vectorKey(namespace: string, id: string): string {
   return `${namespace}#${id}`;
 }
 
-/** The entry id back out of a key. Ids may contain `#` (`'refunds.md#3'`); namespaces may not. */
+/** Whether a returned row is this namespace's: by its own `ns` metadata, never its key alone. */
+function inNamespace(row: RawVector, ns: string): row is RawVector & { key: string } {
+  const { key } = row;
+  return typeof key === 'string' && key.startsWith(`${ns}#`) && readMetaString(row, NS_KEY) === ns;
+}
+
+/** The entry id back out of a key whose namespace is known from its metadata. */
 function idFromKey(key: string, prefixLength: number): string {
   return key.slice(prefixLength);
 }
