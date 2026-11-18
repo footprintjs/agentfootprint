@@ -7,7 +7,7 @@ const selected = {
   agentfootprint: '15.0.0',
   footprintjs: '14.0.0-rc.0',
   foottrace: '2.1.0',
-  'footprint-explainable-ui': '2.1.0',
+  'footprint-explainable-ui': '2.0.0',
   react: '19.2.7',
 };
 const native = {
