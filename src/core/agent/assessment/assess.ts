@@ -42,14 +42,10 @@
  *
  * ## How the turn ended
  *
- * A turn that ended in a PAUSE has no answer yet: a person's reply is what it
- * waits on. The fold reads that from the committed state every pause leaves —
- * `pausedToolCallId`, written by each pause the dispatch loop raises and
- * cleared by each resume — so a snapshot, a checkpoint and a saved recording
- * all say it, and every pause kind reads `ask`. A turn that ended in an ERROR
- * has no answer either, and no committed row says so in this version: the
- * readers settle that before they fold (`Agent.assessment` returns
- * `undefined`; the answer account says the record shows no answer).
+ * Every pause leaves `pausedToolCallId` in committed state until resume, so
+ * a snapshot, checkpoint or recording reads it as `ask`. Readers settle an
+ * error before they fold: `Agent.assessment` returns `undefined` and the answer
+ * account says the record shows no answer.
  */
 
 import { isRecord, str } from './recordValues.js';
@@ -62,6 +58,7 @@ import {
   rowsAtProblem,
   type ValueDeclaration,
 } from '../emptiness.js';
+import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { statePointer } from './pointer.js';
@@ -617,6 +614,7 @@ function readResults(
 function readTurnResults(
   reads: readonly ResultRead[],
   declarations: AssessmentDeclarations | undefined,
+  issued: IssuedPairs,
   g: Gathered,
 ): void {
   const readable: AssessmentPointer[] = [];
@@ -629,6 +627,7 @@ function readTurnResults(
     const rowsAt =
       result.toolName !== undefined ? declarations?.tools?.[result.toolName]?.rowsAt : undefined;
     const reading = readEmptiness(result.content, {
+      placement: { toolCallId: result.toolCallId, issued },
       ...(door !== undefined && { door }),
       ...(rowsAt !== undefined && { rowsAt }),
     });
@@ -1051,7 +1050,7 @@ export function foldState(
   readCoverageRows(coverage, g);
   const calls = readTurnCalls(reads, coverage, g);
   readContingentRows(state, calls, g);
-  readTurnResults(reads, declarations, g);
+  readTurnResults(reads, declarations, issuedTicketsOf(recorded.placedTickets), g);
   readPeriodVerdicts(periodRows(state), argumentVerdicts, g);
   readConflicts(state, { current: calls, earlier: earlierCalls(history, begins) }, g);
   readAnswerRows(state, g);

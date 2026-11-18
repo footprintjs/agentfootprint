@@ -2,16 +2,9 @@
  * servedJson — a served tool result's JSON, read by the JSON grammar when the
  * whole text is NOT one JSON value.
  *
- * Pattern: two pure readers over the JSON grammar (no imports, no state, no
- *          clock): `leadingJsonValues` (the complete values a text OPENS
- *          with, and the text after them) and `jsonPrefixOf` (the leaves of
- *          JSON text cut short, token by token, and the whole words of a
- *          string the cut falls inside).
- * Role:    core/ layer, `evidence/`. Asked by `evidenceIndex.ts` ·
- *          `readResult` — the ONE reading of a result that the evidence index
- *          and the inputs layer's declared-sources check
- *          (`resultCarries.ts` · `resultReader`) share.
- * Emits:   N/A.
+ * `leadingJsonValue` reads the first complete object or array before a
+ * framework note. The evidence index can also read multiple values or
+ * the leaves of a value cut short.
  *
  * ## Why a served result is not always one JSON value
  *
@@ -28,9 +21,8 @@
  * from one (then a needless ask). So the tool's JSON is read by the JSON
  * grammar as far as it goes, and only what follows it is text.
  *
- * The extent of a value is found the way `findings/unsettled.ts` ·
- * `leadingObjectOf` finds the served envelope — strings and their escapes
- * skipped, brackets counted — and each span is parsed once, guarded.
+ * To find the extent of a value, skip strings and their escapes and count
+ * brackets. Parse each resulting span once.
  */
 
 /** Characters that separate JSON tokens outside a string. */
@@ -84,6 +76,22 @@ function parseOne(
   }
 }
 
+function readLeadingValue(
+  text: string,
+  start: number,
+): { readonly value: unknown; readonly end: number } | undefined {
+  if (text[start] !== '{' && text[start] !== '[') return undefined;
+  const end = valueEnd(text, start);
+  if (end < 0) return undefined;
+  const read = parseOne(text.slice(start, end));
+  return read.ok ? { value: read.value, end } : undefined;
+}
+
+/** Read the first complete JSON object or array, before any appended text. */
+export function leadingJsonValue(text: string): unknown {
+  return readLeadingValue(text, skipSpace(text, 0))?.value;
+}
+
 /**
  * The complete JSON values `text` OPENS with — an object or an array, then
  * any further ones separated by whitespace (the blocks of an MCP text result)
@@ -103,13 +111,11 @@ export function leadingJsonValues(text: string): {
 } {
   const values: unknown[] = [];
   let at = skipSpace(text, 0);
-  while (at < text.length && (text[at] === '{' || text[at] === '[')) {
-    const end = valueEnd(text, at);
-    if (end < 0) break;
-    const read = parseOne(text.slice(at, end));
-    if (!read.ok) break;
+  while (at < text.length) {
+    const read = readLeadingValue(text, at);
+    if (read === undefined) break;
     values.push(read.value);
-    at = skipSpace(text, end);
+    at = skipSpace(text, read.end);
   }
   return { values, rest: text.slice(at) };
 }

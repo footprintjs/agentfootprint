@@ -581,8 +581,7 @@ async function peelAnswerStandings(
 ): Promise<string | undefined> {
   if (findings !== true || typeof scope.llmLatestContent !== 'string') return undefined;
   const raw = scope.llmLatestContent;
-  // Loaded only under the arm (`findings/peel.ts`): an unarmed agent returned
-  // on the line above and never loads the scanner.
+  // Only an armed agent loads the findings scanner.
   const { peelAnswerFindings } = await import('../findings/peel.js');
   const peeled = peelAnswerFindings(raw, { captureMalformed: true });
   if (peeled.findings?.previous !== undefined) {
@@ -595,6 +594,7 @@ async function peelAnswerStandings(
       withUnsettledRows(
         standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number, {
           witness: scope.findingsRequest?.[0],
+          placedTickets: scope.placedTickets,
         }),
         known,
         () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],

@@ -144,10 +144,10 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
 - Reads a tool call's args (`splitFindings`), a JSON answer
   (`peelAnswerFindings`), the results the run can identify — the served
   history's `role: 'tool'` messages plus the previous batch's `toolResults`
-  entries (`offer.ts · knownResults`) — and a placed result's ticket through
-  `artifacts/placement.ts · isPlacedToolResult` — the one guarded parse, of a
-  string the library minted. Since 9.113.0 also, for the result a
-  `ruled-out` standing names, that result's served string — its leading
+  entries (`offer.ts · knownResults`). `admission.ts` reads the first JSON
+  value and checks `placedTickets.ts` for the matching call and ref. A
+  standing gets artifact provenance only while both witnesses agree.
+  For the result a `ruled-out` standing names, that result's served string — its leading
   JSON object, read by the one coverage recognizer, is the only source of
   the derived row's words — and, only when that object reads as an absence,
   the dispatch door's coverage rows for the call (`AgentState.coverageDeclared`,

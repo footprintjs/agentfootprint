@@ -94,7 +94,7 @@
  */
 
 import { isArtifactRef } from '../../artifacts/naming.js';
-import { isPlacedToolResult } from '../../artifacts/placement.js';
+import { readPlacement, type IssuedPairs } from './placedTickets.js';
 import { readAbsence, readCoverageLedger } from '../../semantics/coverage/recognize.js';
 
 /**
@@ -140,6 +140,8 @@ export interface ReturnedDoor {
 }
 
 export interface EmptinessContext {
+  /** The call and its conversation's issued placements, when the record carries them. */
+  readonly placement?: { readonly toolCallId: string | undefined; readonly issued: IssuedPairs };
   /** Where the APP says an object result of this tool keeps its rows — a top-level key. */
   readonly rowsAt?: string;
   /**
@@ -298,9 +300,6 @@ function rowsetReading(
   if (keptOut?.(data) === true)
     return { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' };
   if (!isRecord(data)) return { emptiness: 'unknown', undeclaredShape: false };
-  // A placement ticket by its SHAPE: no receipt reaches this reader (`placedTickets.ts`), so a
-  // tool's own ticket-shaped JSON reads the same. Either way the verdict is `unknown`.
-  if (isPlacedToolResult(data)) return UNCOUNTED_TICKET;
   if (rowsAt === undefined) return { emptiness: 'unknown', undeclaredShape: true };
   // Own keys only. A key set to `undefined` is gone too — its JSON (the history, a saved
   // recording) drops it, and the live value must read the same.
@@ -449,5 +448,11 @@ export function readEmptiness(value: unknown, context: EmptinessContext = {}): E
     const described = describedReading(door.described);
     if (described !== undefined) return described;
   }
+  if (
+    context.placement !== undefined &&
+    context.placement.issued.size > 0 &&
+    readPlacement(context.placement.toolCallId, data, context.placement.issued)?.issued === true
+  )
+    return UNCOUNTED_TICKET;
   return boundedReading(data, door, context.rowsAt, 0, context.keptOut);
 }

@@ -43,7 +43,7 @@ import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
-import { leadingJsonValues } from '../evidence/servedJson.js';
+import { leadingJsonValue } from '../../../lib/servedJson.js';
 import { isIssuedTicket, issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
 import { ONTOLOGY_INSTRUCTION_ID } from '../../../ontology/instruction.js';
 import type {
@@ -142,7 +142,7 @@ function standingsOf(
 
 /**
  * Whether the library placed this result: its LEADING JSON value (a ticket a
- * framework note follows is still a ticket, `evidence/servedJson.ts`) is a
+ * framework note follows is still a ticket, `lib/servedJson.ts`) is a
  * ticket the receipt lists for this call (`placedTickets.ts` ·
  * `isIssuedTicket`). A tool that returns ticket-shaped JSON itself is an
  * ordinary result, read for the value like any other.
@@ -150,7 +150,7 @@ function standingsOf(
 function placedByLibrary(id: string, text: string, issued: IssuedPairs): boolean {
   const trimmed = text.trimStart();
   if (issued.size === 0 || !trimmed.startsWith('{')) return false;
-  return isIssuedTicket(id, leadingJsonValues(trimmed).values[0], issued);
+  return isIssuedTicket(id, leadingJsonValue(trimmed), issued);
 }
 
 function servedResultsOf(

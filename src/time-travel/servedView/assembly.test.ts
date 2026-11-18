@@ -334,6 +334,20 @@ describe('one saved epoch, in the order the request was assembled', () => {
     expect(named[0]?.text).toContain("'art_saved' (dataset/rows)");
   });
 
+  it('rebuilds the old whole-message rule and the current leading-value rule', () => {
+    const toolCallId = 'saved-tool';
+    const ref = 'art_saved';
+    const ticket = JSON.stringify({ placed: true, ref, kind: 'dataset/rows', reason: 'saved' });
+    let record = withValue(saved, 'toolWantsByName', { ping: ['dataset/rows'] });
+    record = withValue(record, 'history', [
+      { role: 'tool', toolCallId, content: ticket + ' Step 1 of 1 done. All 1 steps complete.' },
+    ]);
+    const staged = (snapshot: Snapshot) =>
+      rebuild(snapshot).messages.requestOnly.find((line) => line.reason === 'staged-refs-nudge');
+    expect(staged(record)).toBeUndefined();
+    expect(staged(withValue(record, 'placedTickets', [{ toolCallId, ref }]))?.text).toContain(ref);
+  });
+
   it('keeps the late raw ledger read distinct from placeholder-aware reads', () => {
     const damaged = withValue(saved, 'findingsLedger', 'REDACTED');
     rebuild({

@@ -31,6 +31,10 @@ Every subfolder here has its own role and its own README.
 
 `cosine.ts` is the zero-import vector similarity metric shared by memory stores, influence scoring, context bisection and injection scoring. Its own test lives beside it.
 
+`servedJson.ts` reads the first complete JSON value from served tool text
+before a framework note. The same grammar reads consecutive JSON blocks
+and the complete leaves of JSON cut short.
+
 ## What it reads / what it writes
 Nothing on scope. These are zero- or near-zero-import leaves: values in, values
 out, all detached (`spoken()` returns a fresh `{ named, held }`).
