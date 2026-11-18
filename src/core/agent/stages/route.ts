@@ -61,7 +61,8 @@ import { copyScriptsVerdict } from '../scripts/match.js';
 import { scriptRecoveryClause } from '../scripts/recovery.js';
 import { noteAnswerEvidence } from './answerEvidence.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
-import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
+import { derivedFormsOf, evidenceFromHistory } from '../evidence/evidenceIndex.js';
+import { exemptForTurn, loadTimeLineage } from './turnExempt.js';
 import { timeDerivedRow } from '../../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
@@ -76,9 +77,9 @@ import {
 } from '../assessment/witness.js';
 import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
 import type { Disposition } from '../../../integrity/disposition/types.js';
-import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { runKeepsOut } from '../../../redaction/runRedaction.js';
 import type { FixedRouteRationale } from '../../../events/payloads.js';
+import { keptForWrapper } from './routeAnnouncement.js';
 
 export type RouteBranch =
   | 'tool-calls'
@@ -167,11 +168,6 @@ export type TimeLineage = (scope: TypedScope<AgentState>) => {
   readonly derived: readonly string[];
 };
 
-/**
- * The lineage reader for an armed gate (`InputsRouteArm.timeLineage`), loaded
- * through `import()` — `undefined` when `.time()` is not armed. Reads no scope,
- * so loading it before the judges moves no read in the trace.
- */
 /** The figures dial's module (`evidence/figures.ts`), loaded through `import()`
  *  only when the gate is armed with it — off, a plain agent's graph never carries it. */
 type FiguresModule = typeof import('../evidence/figures.js');
@@ -181,13 +177,6 @@ async function loadFigures(
   return gate?.figures === true || gate?.decimalRounding === true
     ? import('../evidence/figures.js')
     : undefined;
-}
-
-async function loadTimeLineage(
-  inputs: InputsRouteArm | undefined,
-): Promise<TimeLineage | undefined> {
-  if (inputs?.timeLineage !== true) return undefined;
-  return (await import('./timeLineage.js')).timeLineageOf;
 }
 
 /**
@@ -640,24 +629,23 @@ async function peelAnswerStandings(
 }
 
 /**
- * A branch that asks the model AGAIN quotes `llmLatestContent` back into the
- * conversation as the turn being corrected — `outputRetry` and `stepNudge`
- * push it into history as the assistant turn, `evidenceRecheck` serves it as
- * the rejected draft — so at those exits it must be the string the model
- * sent, or history holds a turn the model never emitted and the next request
- * echoes it (`outputAttempts` records the verdict, never the text). The
- * judges saw the PEELED answer; the answer that STANDS — every `'final'` — is
- * the peeled one. Nothing peeled: the write-free exit it always was.
+ * A branch that asks the model AGAIN quotes `llmLatestContent` back into the conversation as the
+ * turn being corrected — `outputRetry` and `stepNudge` push it into history as the assistant turn,
+ * `evidenceRecheck` serves it as the rejected draft — so at those exits it must be the string the
+ * model sent, or history holds a turn the model never emitted and the next request echoes it
+ * (`outputAttempts` records the verdict, never the text). The judges saw the PEELED answer; the
+ * answer that STANDS — every `'final'` — is the peeled one. Nothing peeled: the write-free exit.
  */
 function restoreEmission(scope: TypedScope<AgentState>, emission: string | undefined): void {
   if (emission !== undefined) scope.llmLatestContent = emission;
 }
 
-function emitRouteDecided(
+export function emitRouteDecided(
   scope: TypedScope<AgentState>,
   chosen: RouteBranch,
   rationale: string,
 ): void {
+  if (keptForWrapper(scope, chosen, rationale)) return; // a re-routing wrapper announces it
   typedEmit(scope, 'agentfootprint.agent.route_decided', {
     turnIndex: 0,
     iterIndex: scope.iteration as number,
@@ -829,18 +817,7 @@ function judgeEvidence(
   // Under `.time()` (step T7): the turn's time spellings by lineage.
   const time = timeLineage?.(scope);
   const derived = time !== undefined ? derivedFormsOf(time.derived) : undefined;
-  const exempt = exemptFromRun({
-    userMessage: scope.userMessage as string | undefined,
-    history,
-    systemPromptInjections: scope.systemPromptInjections as readonly InjectionRecord[] | undefined,
-    ...(inputs?.declaredDefaults !== undefined && {
-      declaredDefaults: inputs.declaredDefaults(scope),
-    }),
-    ...(inputs?.answeredValues !== undefined && {
-      answeredValues: inputs.answeredValues(scope),
-    }),
-    ...(time !== undefined && { timeSaid: time.said }),
-  });
+  const exempt = exemptForTurn(scope, history, inputs, time?.said);
   // THE ONE JUDGE of this run's evidence, bound to what the run read: asked
   // here of the draft, and by answer validation of the exact candidate it
   // delivers (`answerEvidence.ts`) — never a verdict carried across forms.

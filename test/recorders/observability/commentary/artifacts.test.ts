@@ -386,13 +386,13 @@ describe('routing anti-drift', () => {
     }
   });
 
-  it('an event with no template still falls through to the caller’s humanizer', () => {
-    // `undefined` (fall through, render raw) — NOT `null` (deliberate skip).
+  it('a discovery event gets a sentence instead of a bare fallback', () => {
+    // A fixed sentence names the event without copying its arbitrary error.
     expect(
       selectCommentaryKey(
         ev('agentfootprint.tools.discovery_failed', { providerName: 'p', error: 'e' }),
       ),
-    ).toBeUndefined();
+    ).toBe('event.agentfootprint.tools.discovery_failed');
   });
 });
 

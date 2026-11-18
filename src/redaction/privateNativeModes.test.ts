@@ -9,6 +9,8 @@ import {
   type RunSetup,
 } from 'footprintjs';
 import { createTypedScopeFactory } from 'footprintjs/advanced';
+import { stateAt } from 'foottrace';
+import { nativeRetainsSafeBase } from '../../test/redaction/nativeFoldBase.js';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { resumeRedactionOf } from '../core/agent/run/resumeRedaction.js';
 import { createRunRedaction, markPrivateFields, type RunRedaction } from './runRedaction.js';
@@ -18,16 +20,21 @@ import { privateResumeOf } from './privateCheckpoint.js';
 for (const mode of ['same', 'fresh'] as const)
   it(`actual native ${mode.toUpperCase()} resume keeps private computation out of hooks and snapshot`, async () => {
     const secret = 'private-native-mode-fixture';
+    const publicSeed = 'public inherited native context';
     const ran: unknown[] = [],
+      publicReads: unknown[] = [],
       hooks: unknown[] = [];
     const chart = flowChart(
       'Private native resume',
       (scope) => {
+        scope.$setValue('publicSeed', publicSeed);
         markPrivateFields(scope, [{ root: 'argumentAsk', path: 'progress.0.answer' }]);
         scope.$setValue('argumentAsk', { progress: [{ answer: secret }] });
         scope.$setValue('authorMarked', secret + '-author', true);
         interrupt(scope, { reason: 'Continue public operation?' });
         ran.push(scope.$getValue('argumentAsk'));
+        publicReads.push(scope.$getValue('publicSeed'));
+        scope.$setValue('afterResume', 'public later result');
         return 'public-result';
       },
       'private-native-resume',
@@ -92,6 +99,7 @@ for (const mode of ['same', 'fresh'] as const)
     if (continuation === undefined) throw new Error('No native continuation');
     const checkpoint = structuredClone(continuation.checkpoint());
     expect(checkpoint.sharedState.authorMarked).toBe(secret + '-author');
+    expect(checkpoint.sharedState.publicSeed).toBe(publicSeed);
     expect(JSON.stringify(checkpoint)).toContain(secret);
     expect(resumeRedactionOf(checkpoint, [])).toBeUndefined();
     const entry: RunEntry =
@@ -101,10 +109,35 @@ for (const mode of ['same', 'fresh'] as const)
     await execute(entry, checkpoint);
     expect(paused).toBeDefined();
     expect(ran).toEqual([{ progress: [{ answer: secret }] }]);
+    expect(publicReads).toEqual([publicSeed]);
     expect(JSON.stringify(hooks).includes(secret)).toBe(false);
     const view = lifecycle.view();
     if (view === undefined) throw new Error('No native view');
     const snapshot = view.snapshot({ redact: true });
     expect(JSON.stringify(snapshot).includes(secret)).toBe(false);
-    expect(snapshot).not.toHaveProperty('initialState');
+    expect(snapshot.sharedState.publicSeed).toBe(publicSeed);
+    expect(snapshot.sharedState.afterResume).toBe('public later result');
+    expect(stateAt(snapshot, snapshot.commitLog.length - 1).state.afterResume).toBe(
+      'public later result',
+    );
+    if (!(await nativeRetainsSafeBase())) {
+      expect(snapshot).not.toHaveProperty('initialState');
+      expect(stateAt(snapshot, -1).basis).toBe('log-only');
+    } else if (mode === 'same') {
+      // The reused log retains the original empty base, not its later pause state.
+      expect(snapshot.initialState).toEqual({});
+    } else {
+      // A fresh leg starts at the actual checkpoint: public values survive,
+      // while restored field and author marks keep their original selections.
+      expect(snapshot.initialState).toMatchObject({
+        publicSeed,
+        argumentAsk: { progress: [{ answer: 'REDACTED' }] },
+        authorMarked: 'REDACTED',
+        privateRecordFields: 'REDACTED',
+      });
+      expect(stateAt(snapshot, -1).basis).toBe('initial+log');
+      expect(stateAt(snapshot, -1).state.publicSeed).toBe(publicSeed);
+      expect(stateAt(snapshot, -1).state.afterResume).toBeUndefined();
+      expect(view.snapshot().initialState?.authorMarked).toBe(secret + '-author');
+    }
   });

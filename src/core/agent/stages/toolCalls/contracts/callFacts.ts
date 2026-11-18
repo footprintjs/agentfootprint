@@ -3,9 +3,12 @@ import type { PendingToolTransition } from '../../../../../injection-engine/leas
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type { ProposedCall } from '../batch/paused.js';
 import type { ToolResolution } from '../../toolResolver.js';
+import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 
 /** What a resumed call's `execute` saw — read by its script row (`deps.scriptRecord`). */
 export interface ResumedCallFacts {
+  /** Invocation-local finalization closure; never serialized or filed as script data. */
+  resultFinalizer?: NativeResultFinalizer;
   /** Set once `execute` was about to be handed the call (the program values below were read then). */
   entered?: true;
   /** The declared argument's value as the model proposed it — read before `execute`. */

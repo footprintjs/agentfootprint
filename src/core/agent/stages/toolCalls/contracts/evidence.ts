@@ -1,5 +1,9 @@
 import type { Classifier } from '../../../../../classify/types.js';
 import type { ResolvedEvidenceGate } from '../../../evidence/types.js';
+import type { ToolResultRowset } from '../../../../../tools/resultRowsets.js';
+import type { Tool } from '../../../../../tools/tools.js';
+import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
+import type { InputsRouteArm } from '../../route.js';
 import type { ToolResultColumns } from '../../../../../integrity/column-types/types.js';
 import type { ColumnCheckMode } from '../../../../../integrity/column-types/check.js';
 import type { ReadRunTime } from '../../../../../time/clock.js';
@@ -67,6 +71,7 @@ export interface ToolEvidencePort {
    * `.inputsLayer()`; every other call runs exactly as it always did.
    */
   readonly inputsLayer?: true;
+  readonly declarationCorrection?: 'once';
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({ argumentSources:
    * true })` or `.inputsLayer({ argumentSources: true })`) — present only
@@ -141,6 +146,15 @@ export interface ToolEvidencePort {
    */
   readonly evidenceGate?: ResolvedEvidenceGate;
   /**
+   * What the dispatch moment exempts beside the evidence gate — the SAME arm
+   * the route decider judges the answer with (`runtime/routing/exemptArm.ts`),
+   * so a value the person gave the batch ask, a declared default this turn
+   * assumed, or a time the person said is exempt at both moments
+   * (`turnExempt.ts` · `exemptForTurn`). Present only beside `evidenceGate` with
+   * the inputs layer armed.
+   */
+  readonly evidenceExempt?: InputsRouteArm;
+  /**
    * THE WRITE SEAM (9.77.0, `empty-lookup`) — the declared argument-ground
    * edges (`Tool.argumentsFrom`) by tool name, present ONLY when the operator
    * turned `AgentOptions.noticeEmptyLookups` on AND at least one tool declares
@@ -168,6 +182,14 @@ export interface ToolEvidencePort {
    * about which tools are armed.
    */
   readonly columnDeclarations?: ReadonlyMap<string, ToolResultColumns>;
+  /** Explicit final-surface rowsets, normalized independently from legacy columns. */
+  readonly rowsetDeclarations?: ReadonlyMap<string, readonly ToolResultRowset[]>;
+  /** Native component/catalog-held metadata for the exact current implementation. */
+  readonly resultRowsetsFor?: (
+    toolName: string,
+    tool: Tool,
+    party?: ToolParty,
+  ) => readonly ToolResultRowset[] | undefined;
   /** What the boundary does with a column finding — `'warn'` files and changes
    *  nothing, `'enforce'` refuses the rows. Present with
    *  {@link ToolCallsDeps.columnDeclarations} or not at all. */

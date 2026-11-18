@@ -75,8 +75,8 @@ export const PANEL_RENDER_NOTE =
  *  (the three-outcome honesty: reached, reached-and-clear, DECLINED). */
 export const DECLINED_VERDICT = 'declined';
 
-/** Read the rowset off the final state's `verdicts` key — an array of bags
- *  each carrying a string `verdict`. Anything else reads as "no rowset". */
+/** Select visible valid rows from the final state's `verdicts` key. This
+ *  legacy selection does not establish rowset availability or completeness. */
 export function verdictRowsOf(state: Readonly<Record<string, unknown>>): VerdictRow[] {
   const raw = state.verdicts;
   if (!Array.isArray(raw)) return [];
@@ -87,6 +87,17 @@ export function verdictRowsOf(state: Readonly<Record<string, unknown>>): Verdict
       !Array.isArray(row) &&
       typeof (row as { verdict?: unknown }).verdict === 'string',
   );
+}
+
+/** @internal Bridge reader: any invalid or unavailable member makes the
+ *  complete rowset unknown, including sparse array positions. */
+export function completeVerdictRowsOf(
+  state: Readonly<Record<string, unknown>>,
+): VerdictRow[] | undefined {
+  const raw = state.verdicts;
+  if (!Array.isArray(raw)) return undefined;
+  const rows = verdictRowsOf(state);
+  return rows.length === raw.length ? rows : undefined;
 }
 
 /** The one place a `—` is written for a value the source did not report — a

@@ -8,6 +8,7 @@ import { buildToolRegistry } from '../../buildToolRegistry.js';
 import type { AgentContext } from '../contracts.js';
 
 import type { AgentConfiguration } from '../configuration/types.js';
+import { sourceEvidenceTools } from '../../../../tools/sourceEvidenceTools.js';
 
 export interface CatalogEnvironment {
   readonly registry: AgentConfiguration['registry'];
@@ -31,7 +32,12 @@ export function buildCatalog(
   // skill-supplied tools (with autoActivate scoping); validates
   // name uniqueness; produces the dispatch map.
   const { registryByName, toolSchemas, toolDeclaringSkills, toolClaimants } = buildToolRegistry(
-    environment.registry,
+    this.configuration.sourceEvidenceConfig === undefined
+      ? environment.registry
+      : [
+          ...environment.registry,
+          ...sourceEvidenceTools().map((tool) => ({ name: tool.schema.name, tool })),
+        ],
     this.configuration.injections,
     {
       hasArtifactStore: environment.artifactStore !== undefined,
@@ -194,6 +200,9 @@ export function buildCatalog(
     environment.seededHonestyLayers = honestyLayersOf({
       inputs: inputsArmed,
       argumentSources,
+      ...(this.configuration.sourceDeclarationCorrection !== undefined && {
+        declarationCorrection: this.configuration.sourceDeclarationCorrection,
+      }),
       results: resultsArmed,
       answer: answerArmed,
     });

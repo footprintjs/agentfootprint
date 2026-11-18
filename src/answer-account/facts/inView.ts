@@ -14,7 +14,7 @@
  * The content is parsed from the matching `history` message (by `toolCallId`).
  *
  * Only EARLIER answers' results: `distance` (messages a PERSON wrote after the
- * result, up to and including the current one — `common.ts` · `isPersonEntry`,
+ * result, up to and including the current one — `lib/saidByPerson.ts` · `isPersonEntry`,
  * never a frame the library wrote in the user role) must be at least 1, and a call of this run
  * is never "in view" — on the flagship recording the answering compose also
  * witnesses this run's own `get_array_inventory` result (`events[68]`), which
@@ -38,12 +38,12 @@ import {
   FACT_TEXT_CHARS,
   historyAt,
   historyOf,
-  isPersonEntry,
   readEmptiness,
   rowsAtOf,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
+import { isPersonEntry } from '../../lib/saidByPerson.js';
 
 /** At most this many in-view results are listed, newest first. */
 export const MAX_IN_VIEW = 3;

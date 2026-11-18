@@ -13,10 +13,10 @@ import type { ServedGapCause } from '../servedView.js';
  * policy selected a key — `Agent.create({ redact })`). To this rebuild it is NO
  * value: never a system piece, a tool list or a tool name the view could print
  * as if the request had carried it. Read as absent, which is what the record
- * can show. The view states the cost through the gap a redacted snapshot always
- * carries: it travels without its fold base (footprintjs omits `initialState`
- * from the served view), so `no-fold-base` — "unproven and may be SHORT … reads
- * as empty rather than as unknown" — is on every view of it.
+ * can show. The view states this uncertainty through `privacy-policy`, raised
+ * from the record's positive policy marker. A safe native fold base does not
+ * recover values the policy withheld; `no-fold-base` separately describes only
+ * a base that did not travel with the log.
  *
  * Read so only when the record says a policy covered the run — the snapshot's
  * marker (`redaction/marker.ts` · `servedUnderPolicy`), asked once per call of

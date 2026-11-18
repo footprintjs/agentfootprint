@@ -1,5 +1,7 @@
 **Mixed** — preserve the accepted conversation across native turns.
 `checkpointParts.ts` is the **Fold** of detached checkpoint values;
+`seedHistory.ts` owns the one accepted user-entry writer and its pending
+history type.
 `owner.ts` is the **Walker** that restores and consumes continuation state.
 `liveConversation.ts` decides where a continued conversation came from:
 `followUp()`'s own (read from the agent's last run, never in a caller's hands)

@@ -31,8 +31,9 @@
  *      sees the abort via `ctx.signal` and short-circuits.
  *
  *   3. Failure path — hub is unreachable; `tools.discovery_failed`
- *      fires; the run rejects loudly so a configured `reliability`
- *      rule (or the caller) can decide what to do.
+ *      fires; the run rejects loudly and the caller decides what to do.
+ *      `.reliability()` never sees a discovery failure (it wraps only
+ *      the LLM provider call); retry inside the provider's `list()`.
  *
  * Run:  npx tsx examples/features/10-discovery-provider.ts
  */

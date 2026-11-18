@@ -175,14 +175,14 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   ],
 
   // ── (b) person — the content came from somebody ──
-  'src/core/agent/stages/seed.ts': [
+  'src/core/agent/runtime/conversation/seedHistory.ts': [
     {
       cls: 'person',
       why:
         "the run's request: the message `agent.run({ message })` was given, as the `'input'` " +
         "middleware chain let it through — the fresh run's only entry AND the turn a " +
         'continuation (`run({ continueFrom })`) appends to the restored conversation. One ' +
-        'owner since 9.112.2: `seed.ts · historyForTurn`; `Agent.ts · applyContinuation` ' +
+        'owner since 9.112.2: `runtime/conversation/seedHistory.ts · historyForTurn`; `Agent.ts · applyContinuation` ' +
         'used to build the continued entry itself, from the raw message, before the chain ran',
     },
   ],
@@ -219,15 +219,18 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   ],
 
   // ── (c) never in history — request-only or transcript-only ──
-  'src/core/agent/stages/callLLM.ts': [
+  'src/core/agent/stages/stagedRefsNudge.ts': [
     {
       cls: 'never-in-history',
       why:
-        'the staged-refs nudge: appended to `wireMessages` for ONE request and recomposed ' +
-        'from scratch each iteration. `scope.history` is deliberately untouched — but a ' +
-        'reader of the request sees it last, so it opens with STAGED_DATA_FRAME_PREFIX (G17).',
+        'the staged-refs nudge (`stagedRefsNudgeFor`): CallLLM appends it to `wireMessages` ' +
+        'for ONE request and it is recomposed from scratch each iteration. `scope.history` ' +
+        'is deliberately untouched — but a reader of the request sees it last, so it opens ' +
+        'with STAGED_DATA_FRAME_PREFIX (G17).',
       opening: STAGED_DATA_FRAME_PREFIX,
     },
+  ],
+  'src/core/agent/stages/callLLM.ts': [
     {
       cls: 'never-in-history',
       why:

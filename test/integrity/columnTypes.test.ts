@@ -35,8 +35,8 @@
  * red here (both are exercised by `describe('neutralize-proofs')` below):
  *   • THE TYPE COMPARISON — make `matchesType` answer `true` for everything
  *     (drop the comparison) and the numbers-as-strings case passes silently;
- *   • THE MISSING-COLUMN BRANCH — delete the `rows.every(row => !(name in
- *     row))` branch and the declared-but-never-delivered case passes as a
+ *   • THE MISSING-COLUMN BRANCH — delete the `rows.every(row =>
+ *     !hasColumn(row, name))` branch and the declared-but-never-delivered case passes as a
  *     clean rowset, because a column no row has is a column no row disagrees
  *     with.
  *
@@ -246,6 +246,39 @@ describe('unit: nullable, and what "no value" means', () => {
   it('`nullable` does not excuse a WRONG type', () => {
     const out = judge({ lun: { type: 'number', nullable: true } }, [{ lun: '' }]);
     expect(out.findings.map((f) => f.kind)).toEqual(['column-type-mismatch']);
+  });
+});
+
+describe("unit: a column is present only as the row's OWN key", () => {
+  // Every plain row inherits `constructor`, `toString`, `valueOf` and
+  // `hasOwnProperty` from Object.prototype. Asking `name in row` would find
+  // them, so a column named after one read as present and "holding a
+  // function" in every row that never had it.
+  const INHERITED = ['constructor', 'toString', 'valueOf', 'hasOwnProperty'] as const;
+
+  it('a column named after an inherited member, absent from every row, is `missing-column`', () => {
+    for (const name of INHERITED) {
+      const out = judge({ [name]: 'number' }, [{ a: 1 }, { a: 2 }]);
+      expect(
+        out.findings.map((f) => f.kind),
+        name,
+      ).toEqual(['missing-column']);
+      expect(out.findings[0]!.message, name).not.toContain('function');
+    }
+  });
+
+  it('the same column, nullable and absent from SOME rows, passes as an ordinary name does', () => {
+    const declared = { constructor: { type: 'string' as const, nullable: true } };
+    const out = judge(declared, [{ constructor: 'x' }, { a: 1 }]);
+    expect(out.findings).toEqual([]);
+    expect(out.disposition).toBe('checked-pass');
+    // Under enforce a valid result is not refused.
+    expect(judge(declared, [{ constructor: 'x' }, { a: 1 }], 'enforce').findings).toEqual([]);
+  });
+
+  it('rows parsed from JSON — what a tool result is — are read the same way', () => {
+    const out = judge({ toString: 'number' }, JSON.parse('[{"a":1}]'));
+    expect(out.findings.map((f) => f.kind)).toEqual(['missing-column']);
   });
 });
 

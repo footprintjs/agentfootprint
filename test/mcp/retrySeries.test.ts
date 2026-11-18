@@ -16,6 +16,7 @@
  * Nothing leaves the process: the runtime's endpoint is a stand-in `fetch`.
  */
 
+import { exponentialBackoff, statedWaitFirst } from 'footprintjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpClient } from '../../src/tool-providers/index.js';
@@ -24,7 +25,6 @@ import {
   SESSION_BUSY_RETRY_DEFAULTS,
   type AgentCoreRuntimeRetryOptions,
 } from '../../src/adapters/mcp/agentcoreRuntime/transport.js';
-import { exponentialBackoff, statedWaitFirst } from '../../src/mcp/backoff.js';
 import {
   retryingFetch,
   type ThrottleFetch,
@@ -155,9 +155,9 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
     expect([at('equal', 0), at('equal', 0.5), at('equal', 1)]).toEqual([400, 600, 800]);
     expect([at('full', 0), at('full', 0.5), at('full', 1)]).toEqual([0, 400, 800]);
     expect([at('none', 0), at('none', 0.7)]).toEqual([800, 800]);
-    // Exact, never rounded; a random source outside [0, 1] is refused when asked.
+    // Exact, never rounded; a draw outside [0, 1] is not trusted and waits the ceiling.
     expect(at('equal', 0.123)).toBe(400 + 0.123 * 400);
-    expect(() => at('full', 1.5)).toThrow(RangeError);
+    expect(at('full', 1.5)).toBe(800);
   });
 
   it('a stated wait wins over the schedule; a malformed one falls back to it', () => {
@@ -185,6 +185,53 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
     expect((await drive(fetch(URL_, POST))).status).toBe(200);
     // 500, 1000, then 2000 and 4000 held at the 1500 ms cap.
     expect(retries.map((r) => r.waitMs)).toEqual([500, 1_000, 1_500, 1_500]);
+  });
+
+  it('the default rule (no cap on one wait) builds and waits 100–200 ms, then 200–400 ms', async () => {
+    // `maxDelayMs: Infinity` is the default's "no cap": footprintjs's schedule is
+    // told no cap at all, since it refuses a cap that is not a finite number.
+    const shortest = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const stand = endpoint((n) => (n < 3 ? throttle() : served()));
+    const retries: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      onRetry: (info) => retries.push(info),
+    }) as ThrottleFetch;
+    expect((await drive(fetch(URL_, POST))).status).toBe(200);
+    expect(retries.map((r) => r.waitMs)).toEqual([100, 200]);
+
+    shortest.mockReturnValue(1);
+    const longest = endpoint((n) => (n < 3 ? throttle() : served()));
+    const longRetries: ThrottleRetryInfo[] = [];
+    const fetchLong = retryingFetch(longest.fetch, {
+      onRetry: (info) => longRetries.push(info),
+    }) as ThrottleFetch;
+    await drive(fetchLong(URL_, POST));
+    expect(longRetries.map((r) => r.waitMs)).toEqual([200, 400]);
+  });
+
+  it('a cap below the base waits the cap every time, jitter drawn under it', async () => {
+    // footprintjs refuses `maxDelayMs < baseDelayMs`; the option is accepted
+    // here, so the schedule it builds is the cap as a flat ceiling.
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const stand = endpoint((n) => (n < 4 ? throttle() : served()));
+    const retries: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      maxDelayMs: 50,
+      maxAttempts: 4,
+      onRetry: (info) => retries.push(info),
+    }) as ThrottleFetch;
+    expect((await drive(fetch(URL_, POST))).status).toBe(200);
+    // Ceiling 50 every time (base 200 is above it); equal jitter's shortest draw is half.
+    expect(retries.map((r) => r.waitMs)).toEqual([25, 25, 25]);
+
+    const flat = endpoint((n) => (n < 3 ? throttle() : served()));
+    const flatRetries: ThrottleRetryInfo[] = [];
+    const fetchFlat = retryingFetch(flat.fetch, {
+      maxDelayMs: 0,
+      onRetry: (info) => flatRetries.push(info),
+    }) as ThrottleFetch;
+    await drive(fetchFlat(URL_, POST));
+    expect(flatRetries.map((r) => r.waitMs)).toEqual([0, 0]);
   });
 
   it('capped waits keep their jitter: at the cap, equal jitter still spreads between c/2 and c', () => {

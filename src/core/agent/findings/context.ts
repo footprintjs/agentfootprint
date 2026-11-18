@@ -6,12 +6,12 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import { copyJson } from '../../../lib/boundedJson.js';
 import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { foldLedger } from './ledger.js';
-import { offeredResultIds, servedToolCallIds, undeclaredIds } from './offer.js';
+import { isResultMessage, offeredResultIds, servedToolCallIds, undeclaredIds } from './offer.js';
 import { FINDINGS_OFFER_CAP } from './reserved.js';
 import { FINDINGS_PIECE_LIMITS } from './serve.js';
 import type { FindingsLedger, StandingRow } from './types.js';
 
-export const FINDINGS_LAYOUT = 'late-v1' as const;
+export const FINDINGS_LAYOUT = 'late-v2' as const;
 export const DEFAULT_FINDINGS_CONTEXT_BYTES = 16_384;
 export const MAX_FINDINGS_CONTEXT_BYTES = 262_144;
 
@@ -53,6 +53,14 @@ function bucketsOf(
   ledger: FindingsLedger,
 ): Record<string, readonly unknown[]> {
   const fold = foldLedger(ledger);
+  // Context membership is advisory, never the final request's citation authority.
+  // Count every tool occurrence: a notice sharing an ID makes that ID ambiguous too.
+  const currentResults = new Map<string, boolean>();
+  for (const message of messages) {
+    const id = message.toolCallId;
+    if (message.role !== 'tool' || typeof id !== 'string' || id.length === 0) continue;
+    currentResults.set(id, !currentResults.has(id) && isResultMessage(message));
+  }
   const standings = [...fold.standingOf.values()];
   const noise = standings.filter((row) => row.standing === 'noise').map((row) => row.toolCallId);
   const propositions = new Map<string, string>();
@@ -61,6 +69,10 @@ function bucketsOf(
       propositions.set(row.toolCallId, row.proposition);
   const proposed = (row: StandingRow) => ({
     ...declaration(row),
+    referenceStatus:
+      currentResults.get(row.toolCallId) === true
+        ? 'current-context-result'
+        : 'not-current-context-result',
     ...(propositions.has(row.toolCallId) && { proposition: propositions.get(row.toolCallId)! }),
   });
   return {
@@ -157,8 +169,8 @@ export function findingsContext(
   const encoder = new TextEncoder();
   // Counts start at their maximum, reserving their serialized space before
   // entries are admitted. They only decrease, so overflow cannot hide omissions.
-  if (encoder.encode(encode()).byteLength > limit)
-    throw new Error('Findings context metadata exceeds its byte budget.');
+  let size = encoder.encode(encode()).byteLength;
+  if (size > limit) throw new Error('Findings context metadata exceeds its byte budget.');
   for (const [key, entries] of Object.entries(buckets)) {
     const cap =
       key.endsWith('Ids') || key === 'noise'
@@ -171,12 +183,23 @@ export function findingsContext(
       } catch {
         continue;
       } // Unrepresentable or oversized data is counted, never coerced.
-      data[key]!.push(value);
-      omitted[key]!--;
-      if (encoder.encode(encode()).byteLength > limit) {
-        data[key]!.pop();
-        omitted[key]!++;
-      }
+      // A RUNNING total, not a re-encode of the whole frame per entry: what
+      // admitting this entry adds is its own JSON (serialized exactly as it
+      // will sit inside the frame), a comma unless it is its bucket's first,
+      // and the change in its bucket's omitted-count digits (10 → 9 saves a
+      // byte). The frame is encoded once more at the end, byte for byte what
+      // re-encoding after every entry chose (pinned by context.test.ts).
+      const bucket = data[key]!;
+      const left = omitted[key]!;
+      const grows =
+        encoder.encode(JSON.stringify(value)).byteLength +
+        (bucket.length > 0 ? 1 : 0) +
+        String(left - 1).length -
+        String(left).length;
+      if (size + grows > limit) continue;
+      bucket.push(value);
+      omitted[key] = left - 1;
+      size += grows;
     }
   }
   return encode();

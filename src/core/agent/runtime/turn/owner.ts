@@ -4,12 +4,13 @@ import {
   evidenceRecoveryOf,
   foldedSpansOf,
   findingsLedgerOf,
+  sourceEvidenceOf,
+  sourceDeclarationCorrectionOf,
 } from '../conversation/checkpointParts.js';
-import { runInputWith, throughAroundTurn } from '../../aroundTurn/index.js';
 import type { AgentAroundTurnFailedPayload } from '../../../../events/payloads/agent.js';
 import { isTerminalRunError } from '../../run/terminalRunError.js';
 import { type AgentRunValues } from '../../runValues.js';
-import { finishLeg, type RunnerInvocation } from '../../../runnerExecution.js';
+import { type RunnerInvocation } from '../../../runnerExecution.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
 import { assertRedactionPolicy } from '../../../../redaction/policy.js';
 import { buildEventMeta } from '../../../../bridge/eventMeta.js';
@@ -70,22 +71,7 @@ export function runOwned(
   );
 }
 
-/** The funnel, for a new turn. Every top-level run enters here, inside its lease. */
-export function runTurn<R>(
-  this: Pick<AgentContext, 'configuration' | 'noteAroundTurnFailed'>,
-  invocation: RunnerInvocation<AgentRunValues>,
-  input: AgentInput | string,
-  options: AgentRunOptions | undefined,
-  leg: (turnInput: AgentInput | string) => Promise<R>,
-): Promise<R> {
-  return throughAroundTurn(
-    this.configuration.aroundTurnPort,
-    { kind: 'run', input, options },
-    (changes) => leg(runInputWith(input, options, changes)),
-    (legFailed) => finishLeg(invocation.run, legFailed),
-    (failure) => this.noteAroundTurnFailed(invocation, failure),
-  );
-}
+export { runTurn } from '../../aroundTurn/ownedTurn.js';
 
 /** A wrapper failed after its run: the outcome stands, and the record says so. */
 export function noteAroundTurnFailed(
@@ -322,6 +308,15 @@ export async function runLeg(
         this.configuration.negativeClaimsConfig === undefined
           ? undefined
           : negativeCheckpointOf(this.native.liveSnapshot()?.sharedState ?? {}),
+        this.configuration.sourceEvidenceConfig === undefined
+          ? undefined
+          : sourceEvidenceOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        sourceDeclarationCorrectionOf(
+          this.native.liveSnapshot()?.sharedState as Partial<AgentState>,
+          'sourceDeclarationCorrectionSpent',
+        ),
+        // …and the receipt of the tickets the library placed, as `checkpoint()` keeps it.
+        (this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)?.placedTickets,
       );
       throw new RunCheckpointError(cause, checkpoint);
     }
@@ -349,5 +344,7 @@ export async function runLeg(
     invocation.value.pendingResumeFindingsLedger = undefined;
     invocation.value.pendingResumeSkillCursor = undefined;
     invocation.value.pendingEvidenceRecovery = undefined;
+    invocation.value.pendingSourceDeclarationCorrection = undefined;
+    invocation.value.pendingResumeSourceEvidence = undefined;
   }
 }

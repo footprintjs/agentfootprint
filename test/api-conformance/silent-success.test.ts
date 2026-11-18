@@ -195,7 +195,7 @@ describe('silent success — the conversation', () => {
     // Same key, still two conversations — the behavior a caller must know.
     expect(userTurns(seen[1])).toEqual(['two']);
 
-    const src = read('core/agent/types.ts');
+    const src = read('core/agent/types/input.ts');
     expect(src).toContain('`conversationId` is a namespace key, not a conversation');
     expect(src).toContain('does NOT continue the first');
   });
@@ -559,7 +559,7 @@ describe('silent success — stored conversations', () => {
   });
 
   it('STATED: the fingerprint rule is the embedder rule — both sides, or nothing', () => {
-    const src = read('core/runCheckpoint.ts');
+    const src = read('core/runCheckpointTypes.ts');
     expect(src).toContain('BOTH sides named themselves');
     expect(src).toContain("A default id (`'agent'`) is not");
     expect(src).toContain('the embedder fingerprint already uses');
@@ -674,6 +674,8 @@ const REFUSES_A_SECOND_CALL = [
   // One wrapper per agent: a second would silently decide which work a turn skips.
   'aroundTurn',
   'answerValidation',
+  // A retained-source policy has one host admission authority per Agent.
+  'sourceEvidence',
   // One negative-citation contract per agent; replacing it would silently change the guarantee.
   'negativeClaims',
   'checkIn',
@@ -838,6 +840,10 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .answerValidation({ id: 'first', version: '1', validate: () => ({ checks: [] }) })
           .answerValidation({ id: 'second', version: '1', validate: () => ({ checks: [] }) }),
+      sourceEvidence: () =>
+        base()
+          .sourceEvidence({ admit: (candidate) => candidate })
+          .sourceEvidence({ admit: (candidate) => candidate }),
       negativeClaims: () =>
         base()
           .negativeClaims({ field: 'negatives', tools: ['lookup'] })

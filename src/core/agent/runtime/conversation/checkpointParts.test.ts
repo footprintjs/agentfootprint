@@ -1,7 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { evidenceRecoveryOf, findingsLedgerOf, foldedSpansOf } from './checkpointParts.js';
+import {
+  evidenceRecoveryOf,
+  findingsLedgerOf,
+  foldedSpansOf,
+  sourceDeclarationCorrectionOf,
+} from './checkpointParts.js';
 
 describe('conversation checkpoint parts', () => {
+  it('reads finite correction from native committed state without retaining or invoking arbitrary data', () => {
+    expect(sourceDeclarationCorrectionOf()).toBeUndefined();
+    expect(sourceDeclarationCorrectionOf({})).toBeUndefined();
+    expect(
+      sourceDeclarationCorrectionOf(
+        { sourceDeclarationCorrectionSpent: true },
+        'sourceDeclarationCorrectionSpent',
+      ),
+    ).toEqual({ spent: true });
+    expect(
+      sourceDeclarationCorrectionOf({
+        sourceDeclarationCorrection: Object.assign(Object.create(null), { spent: true }),
+      }),
+    ).toEqual({ spent: true });
+    let reads = 0;
+    const getter = Object.defineProperty({}, 'sourceDeclarationCorrectionSpent', {
+      enumerable: true,
+      get() {
+        reads++;
+        return true;
+      },
+    });
+    for (const value of [
+      { sourceDeclarationCorrectionSpent: false },
+      { sourceDeclarationCorrectionSpent: 'true' },
+      getter,
+    ]) {
+      expect(() =>
+        sourceDeclarationCorrectionOf(value, 'sourceDeclarationCorrectionSpent'),
+      ).toThrow(/source declaration correction/i);
+    }
+    expect(reads).toBe(0);
+  });
+
   it('keeps an unspent repair absent even when pending text exists', () => {
     expect(evidenceRecoveryOf()).toBeUndefined();
     expect(

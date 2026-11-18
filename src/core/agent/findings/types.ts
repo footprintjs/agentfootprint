@@ -56,8 +56,8 @@ import type {
 import type { CoverageItem } from '../../../semantics/coverage/types.js';
 import type { ClaimVerificationRow } from './verificationTypes.js';
 
-/** The reserved optional property every SERVED tool schema carries when armed. */
-export const RESERVED_ARGUMENT = '_findings' as const;
+/** Reserved metadata: optional observations; source-armed ASK declarations require our envelope. */
+export { RESERVED_ARGUMENT } from '../sourceContract.js';
 /** The reserved top-level key a JSON answer may carry its standings under. */
 export const RESERVED_ANSWER_KEY = '_findings' as const;
 

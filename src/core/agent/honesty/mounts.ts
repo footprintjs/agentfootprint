@@ -40,9 +40,11 @@ import { ownsReservedArgument, splitFindings } from '../findings/reserved.js';
  * Under the arm the mount also hands the layer the RAW pieces its checks read
  * (`sourceInputs`): the served history, the composed system prompt's records,
  * the ledger's standing rows and `answered` argument rows (never the whole
- * ledger), the previous batch's result ids and the run's `userMessageFrom`
- * constant — and two closures, both from `honesty/sourceCorpus.ts` (loaded on
- * the first armed batch): the calls' `from` entries through the ONE reader of
+ * ledger), the previous batch's result ids, the run's `userMessageFrom`
+ * constant and the receipt of the tickets the library placed (all read by
+ * `sourceInputs.ts` · `sourceInputsOf`) — and two closures, both from
+ * `honesty/sourceCorpus.ts` (loaded on the first armed batch): the calls'
+ * `from` entries through the ONE reader of
  * `_findings` (`sourceCorpus.ts` · `declaredSourcesOf`, over
  * `findings/reserved.ts` · `readDeclaration`), and the corpora
  * (`sourceCorpus.ts` · `sourceCorpusOf`).
@@ -68,6 +70,8 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../lib/conventions.js';
+import { sourceInputsOf } from './sourceInputs.js';
+import { timeInputsOf } from './timeInputs.js';
 import type { SourceCorpus } from '../arguments/checks.js';
 import {
   isRefused,
@@ -79,18 +83,11 @@ import {
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
-import type {
-  InputsLayerDeps,
-  InputsLayerState,
-  SourceInputs,
-  TimeInputs,
-} from '../arguments/subflow.js';
+import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
 import {
-  answersOf,
   callRowOfCall,
   callWindowOfCall,
   clockOf,
-  readingsOf,
   type CallWindowRow,
 } from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
@@ -114,22 +111,6 @@ import type { AgentState } from '../types.js';
 import type { InputsMountDeps } from './inputsMountContract.js';
 export type { InputsMountDeps } from './inputsMountContract.js';
 
-/**
- * This turn's clock and readings, off the parent's ledger — `undefined` when
- * the turn has no clock (a turn paused by a runtime without the layer).
- */
-function timeInputsOf(parent: Record<string, unknown>): TimeInputs | undefined {
-  const ledger = parent.findingsLedger as readonly unknown[] | undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  const turn = parent.turnNumber as number;
-  return {
-    clock,
-    readings: [...readingsOf(ledger, turn)],
-    answers: [...answersOf(ledger, turn)],
-  };
-}
-
 type StageModule = typeof import('../arguments/subflow.js');
 type CorpusModule = typeof import('./sourceCorpus.js');
 
@@ -139,33 +120,6 @@ let corpusModule: Promise<CorpusModule> | undefined;
 function loadCorpus(): Promise<CorpusModule> {
   corpusModule ??= import('./sourceCorpus.js');
   return corpusModule;
-}
-
-/**
- * The raw pieces the declared-sources corpora are built from — read off the
- * parent's committed state by the input mapping, only under the arm and only
- * for a batch with calls. Never the whole ledger: its standing rows (the
- * model's current reading of each result) and its `answered` argument rows
- * (the person's earlier answers).
- */
-function sourceInputsOf(parent: Record<string, unknown>): SourceInputs {
-  const ledger = ((parent.findingsLedger as readonly FindingsRow[] | undefined) ?? []).filter(
-    (row) => row.kind === 'standing' || (row.kind === 'argument' && row.source === 'answered'),
-  );
-  const injections = (parent.systemPromptInjections as readonly unknown[] | undefined) ?? [];
-  const previous = ((parent.toolResults as readonly Record<string, unknown>[] | undefined) ?? [])
-    .filter((r) => typeof r?.toolCallId === 'string')
-    .map((r) => ({
-      toolCallId: r.toolCallId as string,
-      ...(typeof r.toolName === 'string' && { toolName: r.toolName }),
-    }));
-  return {
-    history: [...((parent.history as readonly unknown[] | undefined) ?? [])],
-    ...(injections.length > 0 && { systemPromptInjections: [...injections] }),
-    ...(ledger.length > 0 && { ledger }),
-    ...(previous.length > 0 && { previousBatch: previous }),
-    ...(parent.userMessageFrom === 'composed' && { composed: true as const }),
-  };
 }
 
 let stageModule: Promise<StageModule> | undefined;
@@ -193,6 +147,9 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
       toolOf,
       willDispatch,
       emitRows,
+      ...(deps.declarationCorrection !== undefined && {
+        declarationCorrection: deps.declarationCorrection,
+      }),
       ...(deps.time !== undefined && { time: deps.time }),
       ...(deps.toolsOffAfterRevision === true && { toolsOffAfterRevision: true as const }),
     };
@@ -208,7 +165,12 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
           corpus.declaredSourcesOf(
             calls,
             toolOf,
-            sources.basisRows === true ? { basisRows: true } : undefined,
+            sources.basisRows === true || deps.declarationCorrection !== undefined
+              ? {
+                  ...(sources.basisRows === true && { basisRows: true }),
+                  ...(deps.declarationCorrection !== undefined && { declarationCorrection: true }),
+                }
+              : undefined,
           ),
         corpusOf: async (
           inputs: SourceInputs,
@@ -352,6 +314,11 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
             ).ledger,
           }),
           ...(resolutions.length > 0 && { argumentResolutions: [...resolutions] }),
+          ...(deps.declarationCorrection !== undefined && {
+            argumentSourceOmissionRows: [
+              ...((sf.argumentSourceOmissionRows as readonly ArgumentRow[] | undefined) ?? []),
+            ],
+          }),
         };
       },
       arrayMerge: ArrayMergeMode.Replace,

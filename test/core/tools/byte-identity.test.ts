@@ -9,6 +9,26 @@
  * The following notes describe earlier fixture migrations, not current proof
  * of whole-record equality with pre14 releases.
  *
+ * FINDINGS REFERENCE CONTEXT: five separately qualified ledger-enabled records
+ * live under reference/findings-reference-context/ for the current-request
+ * schema/instruction, late-v2 layout and advisory referenceStatus changes.
+ * Their original migration records and manifest remain frozen. Pair comparison
+ * classified all 290 leaf deltas per tree: 100 exact schema/instruction strings,
+ * 20 DATA strings containing only the layout/status delta, five layout values,
+ * five matching instruction-content hashes and 160 derived receipt measurements.
+ * Content hashes and measurement deltas were independently recomputed. Every
+ * prior stored JSON reference (all 60) remains byte-identical; no other value
+ * or trace ordering changed. Projection, normalizer, guarded update and strict
+ * equality assertions below are unchanged. Notice admission and historical
+ * layout gaps have separate native positive and failing negative controls.
+ *
+ * SOURCE CONTRACT PROJECTION: only the two opted-in argument-source scenarios
+ * route to reference/source-contract-projection/. Their prior current captures
+ * and every historical manifest remain frozen. The new pair records required
+ * source envelopes, accepted-origin teaching and the same native instruction's
+ * current-cohort specialization, plus their derived hashes/measurements. No
+ * scenario, record projection, normalizer or equality/update guard is changed.
+ *
  * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
  * says that later preparation notes do not prove what was sent or accepted.
  * Exactly 79 `served[n].view.gaps[n].why` values across 30 references were
@@ -1571,8 +1591,33 @@ const NATIVE_RECORD_CASES = new Set([
   'agent-wrap-up',
 ]);
 const NATIVE_REFERENCE_DIR = new URL('./reference/v14-native-components/', import.meta.url);
+const FINDINGS_REFERENCE_DIR = new URL('./reference/findings-reference-context/', import.meta.url);
+const FINDINGS_REFERENCE_CASES = new Set([
+  'agent-findings',
+  'agent-findings-judge',
+  'agent-findings-window',
+  'agent-findings-contingent',
+  'agent-arguments-sources',
+]);
+const SOURCE_CONTRACT_REFERENCE_DIR = new URL(
+  './reference/source-contract-projection/',
+  import.meta.url,
+);
+const SOURCE_CONTRACT_REFERENCE_CASES = new Set([
+  'agent-arguments-sources',
+  'agent-arguments-sources-only',
+]);
 const referencePath = (name: string): URL =>
-  new URL(`${name}.json`, NATIVE_RECORD_CASES.has(name) ? NATIVE_REFERENCE_DIR : REFERENCE_DIR);
+  new URL(
+    `${name}.json`,
+    SOURCE_CONTRACT_REFERENCE_CASES.has(name)
+      ? SOURCE_CONTRACT_REFERENCE_DIR
+      : FINDINGS_REFERENCE_CASES.has(name)
+      ? FINDINGS_REFERENCE_DIR
+      : NATIVE_RECORD_CASES.has(name)
+      ? NATIVE_REFERENCE_DIR
+      : REFERENCE_DIR,
+  );
 const UPDATE = process.env.AF_TOOLS_REFERENCE === 'update';
 const UPDATE_CASES = new Set(
   (process.env.AF_TOOLS_REFERENCE_CASES ?? '').split(',').filter(Boolean),

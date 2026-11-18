@@ -57,7 +57,8 @@ the library's note is the LAST message of every request, so a reader that
 took the last user-role message of what the model was sent — the mock's
 default echo, the window's `currentRequestIndexOf`, a host finding "this
 turn" — anchored on the library's line (G17). Readers of the recorded history
-ask the same rule (`answer-account/facts/common.ts` · `isPersonEntry`), so a
+ask the same rule through one record reader (`saidByPerson.ts` · `isPersonEntry`,
+used by the answer account and the answer's standing alike), so a
 correction frame after a turn's results never becomes "the current request".
 
 ```ts
@@ -192,3 +193,13 @@ each regex's worst case (`test/helpers/workCount.ts`, never a timer).
 - `linearText.ts` — `trimLeading` / `trimTrailing` / `trimBoth` over a
   `CharTest` (`isSlash`, `isHyphen`, `isRegExpWhitespace`, `anyOf`, `either`):
   the regex's answer in one pass.
+
+
+## Module contract: lib/
+
+the leaves every layer agrees on (layer L0): loose zero- or near-zero-import files + `claim/` + `context-contract/`; imports nothing in `src/` outside itself at run time. No feature sub-libraries — each one left for the top-level folder at its own layer (the retriever into `rag/retriever/`)
+
+
+## Module contract: lib/conventions.ts
+
+THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing)

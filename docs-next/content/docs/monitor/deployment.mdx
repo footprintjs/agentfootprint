@@ -23,7 +23,7 @@ The flowchart, recorders, narrative, tests don't change. **Ship the patterns fir
 
 ### 1. Multi-tenant identity at every `agent.run()`
 
-Every memory call namespaces by `MemoryIdentity`. When you omit `identity`, the agent defaults to `{ conversationId: '<runId>' }` — fine for prototypes, but it isolates by run rather than by tenant, so it's DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
+For a standalone agent run without explicit identity, the agent scopes memory by session ID when available and otherwise by run ID. A hosted app must supply its verified tenant identity. Pass per-tenant identity at every call site:
 
 ```ts
 const identity = {
@@ -34,7 +34,7 @@ const identity = {
 await agent.run({ message: req.body.message, identity });
 ```
 
-A bug that omits `tenant` surfaces as "no data found" — never as a cross-tenant leak. Adapters refuse cross-tenant reads at the storage boundary.
+Derive `tenant` from the authenticated caller. Omitting it selects the shared single-tenant namespace, so requests from different tenants can resolve to the same memory when their other identity fields match.
 
 ### 2. Peer-dep SDKs installed
 
@@ -141,7 +141,7 @@ The reliability + governance surfaces that were once roadmap items are live:
 ## Anti-patterns
 
 - Don't wire production keys into your test suite. Use `mock(...)` for tests; reserve real keys for staged env.
-- Don't omit identity in production. Default-global is a footgun.
+- Don't omit identity in production. The default scopes by session (`sessionId`) or by run, never by tenant — and an identity without `tenant` is one scope shared by every tenant that omits it.
 - Don't cache the agent instance across requests when memory is involved. Build fresh per request; the memory layer handles state.
 
 ## Next steps
