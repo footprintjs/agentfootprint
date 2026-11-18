@@ -23,6 +23,7 @@ import type { CoverageItem } from '../../semantics/coverage/types.js';
 import type { ToolDispatch, ToolOwner, ToolResultCeiling } from '../../tools/tools.js';
 import type { ToolResultClass } from '../../semantics/types.js';
 import type { ToolWants } from '../../artifacts/wants.js';
+import type { ChartToolObservability } from '../chartToolObservability.js';
 
 /**
  * The procedure: a factory invoked PER CALL with the run's own tool dispatch
@@ -209,6 +210,10 @@ export interface RunbookAsToolOptions {
   // ── Kept from flowchartAsTool ──────────────────────────────────────────
   /** Observers attached to each invocation's fresh inner executor. */
   readonly recorders?: ReadonlyArray<CombinedRecorder>;
+  /** Native observation-cost controls for each fresh inner executor. Summary
+   *  read/write views do not replace the full commit state. Redaction still
+   *  governs every retained surface. Absent means unchanged native defaults. */
+  readonly observability?: ChartToolObservability;
   /** Keep each invocation's inner record for `inspect_tool_run` descent. */
   readonly keepRecord?: boolean;
   /** Bounded LRU size for kept records (requires `keepRecord: true`). */
@@ -224,8 +229,8 @@ export interface RunbookAsToolOptions {
    *  `servableSnapshot` refolded from its scrubbed history — is closed by
    *  footprintjs 9.20.0 (the floor from 9.89.3): nothing left the log
    *  carries that the served view does not scrub; the checkpoint is not a
-   *  served view. See `FlowchartAsToolOptions.redact` for the two things it
-   *  does not govern: the run's fold base and the resume checkpoint.
+   *  served view. Older engines omit the fold base; newer engines retain a
+   *  policy-filtered base. The resume checkpoint remains an execution value.
    *
    *  Joined with the policy the calling run is covered by (`ctx.redact` — the
    *  agent's own `redact`): the procedure runs nested in that run, and a run's
@@ -335,21 +340,25 @@ export interface RunbookEnvelope {
     // ── the verdict/rowset projection (resultKind 'verdict/*' only) ──────
     readonly verdicts?: readonly VerdictRow[];
     readonly rows_shown?: number;
+    /** Known only when the served state supplied a complete readable rowset.
+     *  Omitted when unavailable; zero means an actual empty rowset. */
     readonly rows_total?: number;
+    /** False when the rowset was unavailable or the visible rows were capped. */
     readonly rows_complete?: boolean;
-    /** Pre-rendered markdown table over the SAME rows as `verdicts`. Present
+    /** Pre-rendered markdown table over the SAME readable rows as `verdicts`. Present
      *  under `presentation: 'prose'` (the default), where the model's prose is
      *  the rowset's only surface. ABSENT — the key itself, not an empty
      *  string — under `'panel'`, where the host draws the rowset and a second
      *  copy in prose would be a retype of what the reader can already see. The
      *  name stays RESERVED in both modes, so a chart's `report` cannot put a
-     *  table back into a panel answer. */
+     *  table back into a panel answer. Unavailable rowsets also omit it. */
     readonly table?: string;
     /** The render law, stated to the model — present with the projection in
      *  BOTH modes, because a rowset always ships with a rule about its
      *  surface. `VERDICT_RENDER_NOTE` under `'prose'` (output the table
      *  verbatim); `PANEL_RENDER_NOTE` under `'panel'` (the rows are already on
-     *  screen — quote the evidence, never reproduce them). */
+     *  screen — quote the evidence, never reproduce them). An unavailable rowset
+     *  instead carries a fixed note that no total or empty result was established. */
     readonly render_note?: string;
     /** branch → meaning, GENERATED from the decider's declared branches and
      *  the rule labels this run's evidence carried — never hand-restated. */

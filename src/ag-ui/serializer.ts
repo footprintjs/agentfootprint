@@ -32,7 +32,7 @@
  *   anything else                      → nothing
  *
  * WHAT LEAVES THE PROCESS. An AG-UI stream goes to a browser, so nothing goes
- * out by default that a person is not meant to read. Every value comes from a
+ * out by default that a person is not meant to read. In record-only mode every value comes from a
  * served payload; `CUSTOM` carries only the event types on an allow-list, each
  * with the fields its projection picks ({@link AG_UI_CUSTOM_EVENTS} — the whole
  * record, such as `context.injected`'s assembled prompt or `error.retried`'s
@@ -40,6 +40,11 @@
  * reasoning goes out only when the app says so; and a failure is described by
  * the record, never by the thrown value. Identity on the meta (`principal`,
  * `tenant`, `sessionId`) is never written.
+ *
+ * HOST DELIVERY is explicit: candidate answer text at every depth stays off
+ * the wire until the host completes. Its final output and allow-listed custom
+ * reply data are app-authorized delivery, not observations from the record.
+ * Tools, steps and progress still use served native events.
  *
  * WHO OWNS AN EVENT. Each agent's turn opens a SCOPE at its mount — the
  * subflow path its `turn_start` fired at (`[]` for the root agent, `step-p/x`
@@ -56,19 +61,19 @@
  * scope answers that call under its own id — or, for a tool the client ran, is
  * not written at all, because the client holds the result it sent.
  *
- * TEXT. The reply is what the record streamed (`stream.token`) — the channel
- * `toSSE({ format: 'text' })` and a hosted reply read. An agent turn whose
- * answer streamed no token (a provider without `stream()`) is written whole
- * from `turn_end.finalContent`, unless the record marks it refused. An
- * agent's `llm_end.content` is a DRAFT the library may be holding back
- * (answer validation, an output policy) and is never written.
+ * TEXT in record-only mode comes from `stream.token`, then from the rest of
+ * `turn_end.finalContent` as its own message (the whole answer if no tokens streamed).
+ * `unstreamedText` uses the same prefix rule as `toSSE({ format: 'text' })`.
+ * Refused final content and an agent's draft `llm_end.content` stay off the wire.
  */
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import type { RunTranslation } from '../hosting/protocolAdapter.js';
+import { unstreamedText } from '../hosting/unstreamedText.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
+import { newScope, type Scope, type OpenText, type AgUiOpenCall } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
 import { failedCallWords } from './toolResultWords.js';
 import {
@@ -81,69 +86,18 @@ import {
   type AgUiSuspension,
 } from './types.js';
 
-/** What a CUSTOM projection is told beside the payload: where the event landed. */
-export interface AgUiCustomContext {
-  /** The AG-UI id of the tool call open where the event happened, when one is. */
-  readonly toolCallId?: string;
-}
-
-/**
- * One allow-listed event's `CUSTOM` value: the fields of its SERVED payload
- * that go out (the payload is the one every listener receives — the
- * placeholder wherever a redaction policy selected a value). Return only what
- * a person using the frontend is meant to read.
- */
-export type AgUiCustomProjection = (
-  payload: Readonly<Record<string, unknown>>,
-  at: AgUiCustomContext,
-) => unknown;
-
-/** The listed fields of `payload`, where present. */
-const pick = (
-  payload: Readonly<Record<string, unknown>>,
-  fields: readonly string[],
-): Record<string, unknown> => {
-  const out: Record<string, unknown> = {};
-  for (const field of fields) if (payload[field] !== undefined) out[field] = payload[field];
-  return out;
-};
-
-/**
- * The agentfootprint events that go out as AG-UI `CUSTOM` by default, each with
- * the fields it carries: progress (which call, which iteration), spend, the
- * loop's route, the answer's standing and a provider's retries — counts and the
- * library's own words. Content (a tool's own progress `payload`,
- * `context.injected`'s assembled prompt, `error.retried`'s raw error, memory,
- * permission and credential facts) stays off the wire unless an app lists it:
- * `agUiSerializer({ ..., custom: { ...AG_UI_CUSTOM_EVENTS, [type]: projection } })`.
- */
-export const AG_UI_CUSTOM_EVENTS: Readonly<Record<string, AgUiCustomProjection>> = Object.freeze({
-  // Which call and which iteration — never the tool author's `payload`, which
-  // is whatever the tool chose to report (list it to send it).
-  'agentfootprint.stream.tool_progress': (payload, at) => ({
-    ...(at.toolCallId !== undefined && { toolCallId: at.toolCallId }),
-    ...pick(payload, ['iteration']),
-  }),
-  'agentfootprint.cost.tick': (payload) =>
-    pick(payload, [
-      'scope',
-      'model',
-      'provider',
-      'tokensInput',
-      'tokensOutput',
-      'estimatedUsd',
-      'cumulative',
-    ]),
-  'agentfootprint.agent.route_decided': (payload) => pick(payload, ['iterIndex', 'chosen']),
-  'agentfootprint.answer.assessed': (payload) =>
-    pick(payload, ['standing', 'assessment', 'reasons', 'checked', 'turn', 'iteration']),
-  'agentfootprint.error.retried': (payload) =>
-    pick(payload, ['attempt', 'maxAttempts', 'backoffMs', 'statedWaitMs']),
-  'agentfootprint.error.recovered': (payload) => pick(payload, ['attempt', 'totalDurationMs']),
-});
+import { AG_UI_CUSTOM_EVENTS, type AgUiCustomProjection } from './customEvents.js';
+export { AG_UI_CUSTOM_EVENTS } from './customEvents.js';
+export type { AgUiCustomContext, AgUiCustomProjection } from './customEvents.js';
 
 /** Options for {@link agUiSerializer}. */
 export interface AgUiSerializerOptions {
+  /** Explicit host delivery: withhold candidate text at every depth until the authorized final output. Record-only is the default. */
+  readonly delivery?: 'host';
+  /** Optional served-only argument projection; default keeps the recorded arguments. */
+  readonly toolArguments?: AgUiCustomProjection;
+  /** Optional served-only result projection; fixed failed-tool words still take precedence. */
+  readonly toolResults?: AgUiCustomProjection;
   /** The conversation this run belongs to — `RunAgentInput.threadId`. */
   readonly threadId: string;
   /** This run's AG-UI id — `RunAgentInput.runId`. Every id the run mints is under it. */
@@ -220,73 +174,6 @@ export const AG_UI_SUBAGENT_UNFINISHED = "The sub-agent's turn ended without an 
 /** Said by `SUBAGENT_ERROR` for a sub-agent still running when its run was cancelled. */
 export const AG_UI_SUBAGENT_CANCELLED = 'The run was cancelled before this sub-agent finished.';
 
-interface OpenText {
-  readonly id: string;
-  readonly address: string;
-  lastTokenIndex: number;
-}
-
-interface OpenReasoning {
-  readonly id: string;
-  readonly iteration: unknown;
-}
-
-interface OpenCall {
-  readonly id: string;
-  /** Its number in this run — `-1` for a call a paused run opened. */
-  readonly n: number;
-  readonly address: string;
-  readonly servedId: unknown;
-  /** Opened by the paused run this one continues: answered by the first result in its scope. */
-  readonly resumed?: boolean;
-  /** Answered by the CLIENT (a frontend tool): its result is never written back. */
-  readonly client?: boolean;
-}
-
-/** One agent's turn (or the root of the run), and what is open in it. */
-interface Scope {
-  readonly mount: readonly string[];
-  /** The AG-UI invocation handle — `undefined` for the root, the parent agent. */
-  readonly subagentRunId: string | undefined;
-  /** `SUBAGENT_STARTED`'s name and parent — kept so a continuation re-opens it the same. */
-  readonly name?: string;
-  readonly parentSubagentRunId?: string;
-  /** The stage execution of the scope's current LLM call — its message's address. */
-  llmAddress: string | undefined;
-  /** An agent's turn opened it (the root: only when the run's runner is an agent). */
-  isAgent: boolean;
-  text: OpenText | undefined;
-  /** The text message of the scope's current LLM call — the parent of its tool calls. */
-  callMessageId: string | undefined;
-  /** A token streamed since the scope's last `llm_start`. */
-  streamed: boolean;
-  reasoning: OpenReasoning | undefined;
-  /** Open step names, in the order they opened. */
-  readonly steps: string[];
-  /** Open tool calls, most recent last. */
-  readonly calls: OpenCall[];
-}
-
-const newScope = (
-  mount: readonly string[],
-  subagentRunId: string | undefined,
-  name?: string,
-  parentSubagentRunId?: string,
-): Scope => ({
-  mount,
-  subagentRunId,
-  ...(name !== undefined && { name }),
-  ...(parentSubagentRunId !== undefined && { parentSubagentRunId }),
-  llmAddress: undefined,
-  isAgent: false,
-  text: undefined,
-  callMessageId: undefined,
-  streamed: false,
-  reasoning: undefined,
-  steps: [],
-  calls: [],
-});
-
 /** Does `prefix` lead `path`, segment by segment? */
 function leads(prefix: readonly string[], path: readonly string[]): boolean {
   if (prefix.length > path.length) return false;
@@ -346,6 +233,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
   const owns = options.owns;
   const toolErrors = options.toolErrors ?? 'withheld';
 
+  const hostDelivery = options.delivery === 'host';
   const root = newScope([], undefined);
   /** Open scopes — the root always, then each nested agent turn in open order. */
   const scopes: Scope[] = [root];
@@ -558,8 +446,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         closeReasoning(scope, out);
         const refused = payload.refused !== undefined;
         const answer = refused ? undefined : text(payload.finalContent);
-        if (!scope.streamed && answer !== undefined && answer.length > 0)
-          wholeText(scope, answer, event, out);
+        if (!hostDelivery && answer !== undefined) {
+          const rest = unstreamedText(scope.streamedText, answer);
+          if (rest !== undefined) wholeText(scope, rest, event, out);
+        }
         if (scope === root) {
           rootResult = answer;
           closeSteps(scope, out);
@@ -568,7 +458,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         endScope(scope, out, (subagentRunId) => ({
           type: 'SUBAGENT_FINISHED',
           subagentRunId,
-          ...(answer !== undefined && { result: answer }),
+          ...(!hostDelivery && answer !== undefined && { result: answer }),
           timestamp: event.meta.wallClockMs,
         }));
         return;
@@ -593,12 +483,13 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const scope = scopeOf(path);
         closeText(scope, out);
         closeReasoning(scope, out);
-        scope.streamed = false;
+        scope.streamedText = undefined;
         scope.callMessageId = undefined;
         scope.llmAddress = address;
         return;
       }
       case 'agentfootprint.stream.token': {
+        if (hostDelivery) return;
         const content = text(payload.content);
         if (content === undefined) return;
         const scope = scopeOf(path);
@@ -621,7 +512,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         } else {
           open.lastTokenIndex = index;
         }
-        scope.streamed = true;
+        scope.streamedText = (scope.streamedText ?? '') + content;
         out.push({
           type: 'TEXT_MESSAGE_CONTENT',
           messageId: (scope.text as OpenText).id,
@@ -632,13 +523,13 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       }
       case 'agentfootprint.stream.llm_end': {
         const scope = scopeOf(path);
+        if (hostDelivery) return;
         closeText(scope, out);
-        // Inside an agent's turn the content is a draft; the turn's answer comes
-        // at turn_end. With no agent around (an LLMCall, a merge by LLM) it IS
-        // the answer — written whole when it streamed nothing.
+        // In an agent's turn the answer comes at turn_end. A standalone call
+        // or an LLM merge writes llm_end content whole if it streamed nothing.
         const content = text(payload.content);
-        if (!scope.isAgent && !scope.streamed && payload.contentWithheld !== true && content)
-          wholeText(scope, content, event, out);
+        const quiet = scope.streamedText === undefined && payload.contentWithheld !== true;
+        if (!scope.isAgent && quiet && content) wholeText(scope, content, event, out);
         return;
       }
       case 'agentfootprint.stream.thinking_delta': {
@@ -739,7 +630,14 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         out.push({
           type: 'TOOL_CALL_ARGS',
           toolCallId: id,
-          delta: toWireJson(payload.args ?? {}),
+          delta: toWireJson(
+            options.toolArguments === undefined
+              ? payload.args
+              : options.toolArguments(payload, {
+                  toolCallId: id,
+                  ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
+                }),
+          ),
           ...owned(scope, event),
         });
         out.push({ type: 'TOOL_CALL_END', toolCallId: id, ...owned(scope, event) });
@@ -768,7 +666,16 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
           messageId:
             call.n < 0 ? ids.next('result', address).id : ids.at('result', call.n, call.address),
           toolCallId: call.id,
-          content: failed ? failedCallWords(payload) : resultText(payload.result),
+          content: failed
+            ? failedCallWords(payload)
+            : resultText(
+                options.toolResults === undefined
+                  ? payload.result
+                  : options.toolResults(payload, {
+                      toolCallId: call.id,
+                      ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
+                    }),
+              ),
           role: 'tool',
           ...owned(scope, event),
         });
@@ -796,10 +703,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
    * where the record still names the call (no redaction policy), the id
    * decides among several.
    */
-  function takeCall(scope: Scope, address: string, servedId: unknown): OpenCall | undefined {
+  function takeCall(scope: Scope, address: string, servedId: unknown): AgUiOpenCall | undefined {
     let at = -1;
     for (let i = scope.calls.length - 1; i >= 0; i--) {
-      const call = scope.calls[i] as OpenCall;
+      const call = scope.calls[i] as AgUiOpenCall;
       if (call.address !== address) continue;
       if (at < 0) at = i;
       if (typeof servedId === 'string' && call.servedId === servedId) {
@@ -1004,6 +911,15 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       out.push(...body);
       return out;
     },
+    publish(name, payload) {
+      if (settled || !hostDelivery) return [];
+      const project = custom[name];
+      if (typeof project !== 'function') return [];
+      const out: AgUiEvent[] = [];
+      start(out);
+      out.push({ type: 'CUSTOM', name, value: withWireErrors(project(payload, {}) ?? null) });
+      return out;
+    },
     settle(settlement) {
       if (settled) return [];
       settled = true;
@@ -1011,6 +927,23 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       start(out);
       switch (settlement.kind) {
         case 'failed':
+          if (settlement.refusal !== undefined && settlement.refusal !== 'ERR_ANSWER_VALIDATION') {
+            out.push({
+              type: 'RUN_ERROR',
+              code: settlement.refusal,
+              message:
+                settlement.refusal === 'ERR_STREAM_LIMIT'
+                  ? 'The stream exceeded its configured delivery limit.'
+                  : settlement.refusal === 'ERR_FRONTEND_TOOLS_UNSUPPORTED'
+                  ? 'This hosting strategy does not support per-request frontend tools.'
+                  : settlement.refusal === 'ERR_IDENTITY_NOT_VERIFIED'
+                  ? 'The caller could not be verified.'
+                  : settlement.refusal === 'ERR_IDENTITY_VERIFIER_UNAVAILABLE'
+                  ? 'Identity verification is unavailable. Try again when the service is reachable.'
+                  : 'The host refused this request.',
+            });
+            return out;
+          }
           // A refusal by its code, in fixed words; otherwise the record's own
           // words for the failure — never the thrown value.
           out.push(
@@ -1073,6 +1006,17 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
           });
           return out;
         case 'finished':
+          if (hostDelivery) {
+            rootResult = settlement.output;
+            if (settlement.output) {
+              const id = ids.next('text', 'host-delivery').id;
+              out.push(
+                { type: 'TEXT_MESSAGE_START', messageId: id, role: 'assistant' },
+                { type: 'TEXT_MESSAGE_CONTENT', messageId: id, delta: settlement.output },
+                { type: 'TEXT_MESSAGE_END', messageId: id },
+              );
+            }
+          }
           endAllNested(out, () => unfinished);
           closeContents(root, out);
           out.push({

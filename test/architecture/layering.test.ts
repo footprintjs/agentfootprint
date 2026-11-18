@@ -21,7 +21,7 @@
  * reported only).
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { ESLint } from 'eslint';
@@ -554,6 +554,22 @@ describe('check-layering — this repository', () => {
   // Read once, while the suite collects: re-reading 900 files inside a test risks its timeout
   // under the coverage run.
   const edges = readEdges(REPO, files) as Edge[];
+
+  it('only the auditShapes facade may enter its sealed folder from outside', () => {
+    const privateFolder = 'src/adapters/observability/auditShapes/';
+    expect(
+      edges.filter(
+        (edge) =>
+          edge.to.startsWith(privateFolder) &&
+          !edge.from.startsWith(privateFolder) &&
+          edge.from !== 'src/adapters/observability/auditShapes.ts',
+      ),
+    ).toEqual([]);
+  });
+
+  it('auditShapes has no index file to compete with the facade', () => {
+    expect(existsSync(join(REPO, 'src/adapters/observability/auditShapes/index.ts'))).toBe(false);
+  });
 
   it('every src file is placed in exactly one layer', () => {
     expect(result.unassigned).toEqual([]);

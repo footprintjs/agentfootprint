@@ -387,17 +387,22 @@ describe('s3VectorsStore — scenario', () => {
         aws.sent.push({ name: c.__name, input: c.__input });
         if (c.__name !== 'ListVectors') return {};
         page += 1;
+        // Rows carry their `ns` metadata, which forget asks for (asserted below).
+        const v = (ns: string, id: string) => ({ key: `${ns}#${id}`, metadata: { ns } });
         return page === 1
-          ? { vectors: [{ key: `${NS}#a` }], nextToken: 'more' }
-          : { vectors: [{ key: `${NS}#b` }, { key: 'other-ns#c' }] };
+          ? { vectors: [v(NS, 'a')], nextToken: 'more' }
+          : { vectors: [v(NS, 'b'), v('other-ns', 'c')] };
       },
     };
     const store = s3VectorsStore({ bucket: 'b', index: 'i', _client: client, _sdk: aws.sdk });
     await store.forget(CORPUS);
     const deletes = aws.sent.filter((c) => c.name === 'DeleteVectors');
     expect(deletes).toHaveLength(2);
-    // The other namespace's key is never deleted — the prefix decides.
+    // The other namespace's key is never deleted — the row's `ns` metadata
+    // decides (r3-62-adapters-memory-2), so forget must ask for it.
     expect(deletes.flatMap((d) => d.input['keys'] as string[])).toEqual([`${NS}#a`, `${NS}#b`]);
+    const lists = aws.sent.filter((c) => c.name === 'ListVectors');
+    expect(lists.every((c) => c.input['returnMetadata'] === true)).toBe(true);
   });
 });
 

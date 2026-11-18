@@ -32,7 +32,7 @@ The tool name the model called (a registered name, or an unknown one it made up)
 
 ### outcome
 
-> `readonly` **outcome**: `"ok"` \| `"error"` \| `"not-run"`
+> `readonly` **outcome**: `"error"` \| `"ok"` \| `"not-run"`
 
 Defined in: [src/answer-validation/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L70)
 

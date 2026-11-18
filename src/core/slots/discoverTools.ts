@@ -5,6 +5,12 @@ import type { Tool } from '../../tools/tools.js';
 import { emitListUses } from '../../tools/mcpClientUse.js';
 import { requirePrivateQuestionSupport } from '../agent/arguments/privateAnswers.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
+import {
+  resultRowsetCatalog,
+  clearProviderRowsets,
+  holdProviderRowsets,
+  type ResultRowsetCatalog,
+} from '../agent/resultRowsets/catalog.js';
 
 type DiscoveryScope = Pick<
   TypedScope<Record<string, unknown>>,
@@ -27,6 +33,7 @@ export async function discoverTools(
 ): Promise<void> {
   const toolProvider = config.provider;
   if (config.cache) {
+    clearProviderRowsets(config.cache);
     config.cache.current = [];
     delete config.cache.resolved;
   }
@@ -66,11 +73,15 @@ export async function discoverTools(
 
   const startMs = Date.now();
   let visibleTools: readonly Tool[];
+  let rowsetCatalog: ResultRowsetCatalog;
   try {
     // Dynamic check — sync providers skip the await microtask.
     const result = toolProvider.list(ctx);
     visibleTools = result instanceof Promise ? await result : result;
     scope.$getEnv().signal?.throwIfAborted();
+    rowsetCatalog = resultRowsetCatalog(
+      visibleTools.map((tool) => [tool.schema.name, tool] as const),
+    );
   } catch (err) {
     // An MCP client pool's use of a client is recorded whether or not its
     // listing succeeded (`tools/mcpClientUse.ts`).
@@ -110,6 +121,7 @@ export async function discoverTools(
   // `structuredClone`d into the transactional memory layer.
   if (config.cache) {
     config.cache.current = visibleTools;
+    holdProviderRowsets(config.cache, rowsetCatalog);
     config.cache.resolved = true;
   }
 }

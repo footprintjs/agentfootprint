@@ -1,0 +1,23 @@
+---
+title: Directory access groups
+description: Admit a directory user through any one of several access groups without increasing password binds.
+---
+
+Use `directoryPasswords` from `agentfootprint/security` when a Windows password
+sign-in should admit people in any one of several AD groups. Its `requiredGroup`
+accepts one group DN or a readonly list. Nested membership is checked with one
+escaped, base-scope OR query after the same single password bind.
+
+<CodeFile path="examples/deploy/directory-groups.ts" region="directory-groups" title="examples/deploy/directory-groups.ts" />
+
+The runnable example uses a synthetic directory; its account belongs only to
+the second group. It asserts one bind and one membership search, and no group
+search after a wrong password. A deployment supplies its existing `ldapDirectory`
+with verified LDAPS trust. This option does not establish MFA or replace the
+sign-in door's attempt limits, identity verification or admission policy.
+
+For environment-based configuration, separate DNs in
+`IDENTITY_LDAP_REQUIRED_GROUP` with semicolons. Escape a semicolon inside a DN
+value as `\;`. A list naming no groups refuses construction. Omitting the
+setting retains the existing every-enabled-account policy and its production
+warning. A one-item list retains the single-string membership filter.

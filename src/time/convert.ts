@@ -83,20 +83,18 @@ import {
   durationMs,
   isDuration,
   LOOKBACK_UNITS,
-  spellDuration,
   type DurationText,
 } from './duration.js';
-import { instantOf, spellInstant, utcWallMs, type InstantText } from './instant.js';
+import { instantOf, type InstantText } from './instant.js';
 import { lookbackRange, reachMs, sameRange, type Edge, type TimeRange } from './range.js';
 
 // `sameRange` moved to `range.ts` (the range owner) so the turn's windows
 // (`windows.ts`) read it without this module; re-exported for its callers.
 export { sameRange };
-import { isZoneName, readWall, wallAt, type WallTime, type ZoneName } from './zone.js';
+import { isZoneName, readWall, type ZoneName } from './zone.js';
 import {
   dateOf,
   DEFAULT_GRANULARITY_MS,
-  epochFromText,
   FACT_UNITS,
   formMaxRange,
   isPlain,
@@ -145,43 +143,11 @@ export type {
   ZoneArgument,
 } from './periodForm.js';
 
-// ─── Wall times and dates as text (the parsers are periodForm.ts') ─────
-
-const pad = (n: number, width: number): string => String(n).padStart(width, '0');
-
-function spellWall(wall: WallTime, withMs: boolean): string {
-  const base =
-    `${pad(wall.year, 4)}-${pad(wall.month, 2)}-${pad(wall.day, 2)}` +
-    `T${pad(wall.hour, 2)}:${pad(wall.minute, 2)}:${pad(wall.second ?? 0, 2)}`;
-  return withMs ? `${base}.${pad(wall.millisecond ?? 0, 3)}` : base;
-}
-
-const spellDate = (d: { year: number; month: number; day: number }): string =>
-  `${pad(d.year, 4)}-${pad(d.month, 2)}-${pad(d.day, 2)}`;
-
-/** The calendar day after `d` (proleptic Gregorian). */
-function nextDay(d: { year: number; month: number; day: number }) {
-  const ms = utcWallMs(d.year, d.month, d.day, 0, 0, 0) + 86_400_000;
-  const t = new Date(ms);
-  return { year: t.getUTCFullYear(), month: t.getUTCMonth() + 1, day: t.getUTCDate() };
-}
-
-/** The calendar day before `d`. */
-function previousDay(d: { year: number; month: number; day: number }) {
-  const ms = utcWallMs(d.year, d.month, d.day, 0, 0, 0) - 86_400_000;
-  const t = new Date(ms);
-  return { year: t.getUTCFullYear(), month: t.getUTCMonth() + 1, day: t.getUTCDate() };
-}
-
-/** The one instant a wall time names in `zone` — `undefined` in a doubled or skipped hour. */
-function uniqueInstant(wall: WallTime, zone: ZoneName): number | undefined {
-  const reading = readWall(wall, zone);
-  return reading.kind === 'unique' ? reading.ms : undefined;
-}
-
-/** The first instant of a calendar day in `zone`, when exactly one instant is it. */
-const midnightOf = (d: { year: number; month: number; day: number }, zone: ZoneName) =>
-  uniqueInstant({ ...d, hour: 0, minute: 0 }, zone);
+import { epochOrText, formZone, readBound, readZone } from './convert/bounds.js';
+import { dateAt, midnightOf, nextDay, spellDate } from './convert/calendar.js';
+import { convertOne } from './convert/exact.js';
+import { absoluteOf, msOf, spanRange, type Ms } from './convert/instants.js';
+import { dayWidened, lookbackWidened } from './convert/widen.js';
 
 // ─── Converting a range into a form ──────────────────────────────────────
 
@@ -209,185 +175,6 @@ export interface Conversion {
   readonly form: number;
   readonly values: Readonly<Record<string, unknown>>;
   readonly rounded?: true;
-}
-
-type Ms = { readonly ms: number; readonly offsetMinutes: number };
-
-/** An instant a range bound names, exactly to the millisecond — `undefined` for a sub-millisecond one. */
-function msOf(text: InstantText): Ms | undefined {
-  const at = instantOf(text, 'strict');
-  if (at === undefined || at.nanos !== 0) return undefined;
-  return { ms: at.ms, offsetMinutes: at.offsetMinutes };
-}
-
-/** The zone a wall or date form is written in: its zone argument's (the window's), else the app's under `wallZone`. */
-function formZone(
-  form: PeriodForm,
-  ctx: { readonly zone?: ZoneName; readonly appZone?: ZoneName },
-) {
-  return 'zone' in form && form.zone !== undefined ? ctx.zone : ctx.appZone;
-}
-
-/** One bound written in `as`: the value, and whether writing it moved the instant (epoch seconds, outward). */
-function writeBound(
-  at: Ms,
-  which: 'from' | 'to',
-  as: BoundAs,
-  edge: Edge,
-  zone: ZoneName | undefined,
-): { readonly value: string | number; readonly rounded: boolean } | undefined {
-  switch (as) {
-    case 'iso': {
-      const step = at.ms % 1000 === 0 ? 1_000 : 1;
-      const ms = which === 'to' && edge === 'inclusive' ? at.ms - step : at.ms;
-      const text = spellInstant({ ms, nanos: 0 }, at.offsetMinutes);
-      return text === undefined ? undefined : { value: text, rounded: false };
-    }
-    case 'epoch-ms':
-      return { value: which === 'to' && edge === 'inclusive' ? at.ms - 1 : at.ms, rounded: false };
-    case 'epoch-s': {
-      const whole =
-        which === 'from' ? Math.floor(at.ms / 1000) * 1000 : Math.ceil(at.ms / 1000) * 1000;
-      const seconds = whole / 1000 - (which === 'to' && edge === 'inclusive' ? 1 : 0);
-      return { value: seconds, rounded: whole !== at.ms };
-    }
-    case 'wall': {
-      if (zone === undefined) return undefined;
-      const step = at.ms % 1000 === 0 ? 1_000 : 1;
-      const ms = which === 'to' && edge === 'inclusive' ? at.ms - step : at.ms;
-      const wall = wallAt(zone, ms);
-      // Exact only when the tool reads the wall time back as this instant.
-      if (uniqueInstant(wall, zone) !== ms) return undefined;
-      return { value: spellWall(wall, step === 1), rounded: false };
-    }
-    case 'date': {
-      if (zone === undefined) return undefined;
-      const wall = wallAt(zone, at.ms);
-      const date = { year: wall.year, month: wall.month, day: wall.day };
-      if (midnightOf(date, zone) !== at.ms) return undefined;
-      const day = which === 'to' && edge === 'inclusive' ? previousDay(date) : date;
-      return { value: spellDate(day), rounded: false };
-    }
-  }
-}
-
-/** The range a form's bounds hold, for a window: a look-back's is `[now − L, now)`. */
-function absoluteOf(window: WindowToConvert, now: InstantText): readonly [Ms, Ms] | undefined {
-  if (window.lookback !== undefined) {
-    const n = msOf(now);
-    const length = durationMs(window.lookback, AXIS_UNITS);
-    if (n === undefined || length === undefined) return undefined;
-    return [
-      { ms: n.ms - length, offsetMinutes: n.offsetMinutes },
-      { ms: n.ms, offsetMinutes: n.offsetMinutes },
-    ];
-  }
-  const from = msOf(window.range.from);
-  const to = msOf(window.range.to);
-  return from === undefined || to === undefined || from.ms >= to.ms ? undefined : [from, to];
-}
-
-function lookbackInto(
-  window: WindowToConvert,
-  form: Extract<PeriodForm, { kind: 'lookback' }>,
-  ctx: ConvertContext,
-): { readonly value: string; readonly rounded: boolean } | undefined {
-  const units = form.units ?? LOOKBACK_UNITS;
-  const sign = form.signed ? '-' : '';
-  if (window.lookback !== undefined) {
-    const ms = durationMs(window.lookback, AXIS_UNITS);
-    const spelled = ms === undefined ? undefined : spellDuration(ms, units);
-    return spelled === undefined ? undefined : { value: `${sign}${spelled}`, rounded: false };
-  }
-  // A range ending at now (within the tool's step): the smallest spelling that covers `from`.
-  const now = msOf(ctx.now);
-  const from = msOf(window.range.from);
-  const to = msOf(window.range.to);
-  if (now === undefined || from === undefined || to === undefined) return undefined;
-  if (Math.abs(to.ms - now.ms) > ctx.granularityMs) return undefined;
-  const need = now.ms - from.ms;
-  if (need <= 0) return undefined;
-  const finest = finestUnitMs(units);
-  const length = Math.ceil(need / finest) * finest;
-  const spelled = spellDuration(length, units);
-  // Rounded when the length grew, or the end moved to now (a look-back ends at now, both ends inside).
-  const endMoved = to.ms !== now.ms && to.ms !== now.ms + 1;
-  return spelled === undefined
-    ? undefined
-    : { value: `${sign}${spelled}`, rounded: length !== need || endMoved };
-}
-
-const UNIT_MS: Readonly<Record<string, number>> = {
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-  d: 86_400_000,
-  w: 604_800_000,
-};
-
-function finestUnitMs(units: string): number {
-  return Math.min(...[...units].map((u) => UNIT_MS[u] as number));
-}
-
-/** One form's exact values for a window, or `undefined` when the form does not hold it exactly. */
-function convertOne(
-  window: WindowToConvert,
-  form: PeriodForm,
-  ctx: ConvertContext,
-): { readonly values: Record<string, unknown>; readonly rounded: boolean } | undefined {
-  if (form.kind === 'lookback') {
-    const sent = lookbackInto(window, form, ctx);
-    return sent === undefined
-      ? undefined
-      : { values: { [form.argument]: sent.value }, rounded: sent.rounded };
-  }
-  const zone = formZone(form, ctx);
-  if (needsZone(form) && zone === undefined) return undefined;
-  const zoneValue: Record<string, unknown> =
-    'zone' in form && form.zone !== undefined ? { [form.zone.argument]: ctx.zone } : {};
-  const span = absoluteOf(window, ctx.now);
-  if (span === undefined) return undefined;
-  const [from, to] = span;
-  if (form.kind === 'day') {
-    const z = zone as ZoneName;
-    const wall = wallAt(z, from.ms);
-    const date = { year: wall.year, month: wall.month, day: wall.day };
-    if (midnightOf(date, z) !== from.ms || midnightOf(nextDay(date), z) !== to.ms) return undefined;
-    return { values: { [form.argument]: spellDate(date), ...zoneValue }, rounded: false };
-  }
-  const fromAs = form.kind === 'bounds' ? form.from.as : form.as;
-  const toAs = form.kind === 'bounds' ? form.to.as : form.as;
-  // `bounds` / `object` declare their edge (TQ18); only a `joined` form (the sugar's) defaults.
-  const edge =
-    form.kind === 'joined'
-      ? form.edge ?? 'inclusive'
-      : form.kind === 'bounds'
-      ? form.to.edge
-      : form.edge;
-  const a = writeBound(from, 'from', fromAs, 'inclusive', zone);
-  const b = writeBound(to, 'to', toAs, edge, zone);
-  if (a === undefined || b === undefined) return undefined;
-  const rounded = a.rounded || b.rounded;
-  switch (form.kind) {
-    case 'bounds':
-      return {
-        values: { [form.from.argument]: a.value, [form.to.argument]: b.value, ...zoneValue },
-        rounded,
-      };
-    case 'joined':
-      return {
-        values: { [form.argument]: `${a.value}${form.joiner}${b.value}`, ...zoneValue },
-        rounded,
-      };
-    case 'object':
-      return {
-        values: {
-          [form.argument]: { [form.keys.from]: a.value, [form.keys.to]: b.value },
-          ...zoneValue,
-        },
-        rounded,
-      };
-  }
 }
 
 /**
@@ -420,82 +207,6 @@ export function convertExact(
 export interface WidenedConversion extends Conversion {
   readonly sent: TimeRange;
   readonly extra: readonly TimeRange[];
-}
-
-/** The parts of `[sentFrom, sentTo)` outside `[from, to)`, in time order. */
-function extraOf(sentFrom: number, sentTo: number, from: number, to: number): TimeRange[] {
-  const parts: TimeRange[] = [];
-  const before = from > sentFrom ? spanRange(sentFrom, from) : undefined;
-  const after = sentTo > to ? spanRange(to, sentTo) : undefined;
-  if (before !== undefined) parts.push(before);
-  if (after !== undefined) parts.push(after);
-  return parts;
-}
-
-/** The calendar date an instant falls on in `zone`. */
-function dateAt(zone: ZoneName, ms: number) {
-  const wall = wallAt(zone, ms);
-  return { year: wall.year, month: wall.month, day: wall.day };
-}
-
-/** A `day` form widened: the one calendar day that holds the whole window. */
-function dayWidened(
-  window: WindowToConvert,
-  form: Extract<PeriodForm, { kind: 'day' }>,
-  ctx: ConvertContext,
-): Omit<WidenedConversion, 'form'> | undefined {
-  const zone = formZone(form, ctx);
-  const span = absoluteOf(window, ctx.now);
-  if (zone === undefined || span === undefined) return undefined;
-  const [from, to] = span;
-  const date = dateAt(zone, from.ms);
-  if (spellDate(dateAt(zone, to.ms - 1)) !== spellDate(date)) return undefined;
-  const start = midnightOf(date, zone);
-  const end = midnightOf(nextDay(date), zone);
-  if (start === undefined || end === undefined) return undefined;
-  const sent = spanRange(start, end);
-  if (sent === undefined) return undefined;
-  const zoneValue = form.zone !== undefined ? { [form.zone.argument]: ctx.zone } : {};
-  return {
-    values: { [form.argument]: spellDate(date), ...zoneValue },
-    sent,
-    extra: extraOf(start, end, from.ms, to.ms),
-  };
-}
-
-/**
- * A `lookback` form widened: a range that ENDS BEFORE now (past the tool's
- * step) is covered by the look-back from now that reaches its `from` — the
- * smallest length in the form's units. A range ending at now is the exact
- * row's; one ending after it no look-back can hold.
- */
-function lookbackWidened(
-  window: WindowToConvert,
-  form: Extract<PeriodForm, { kind: 'lookback' }>,
-  ctx: ConvertContext,
-): Omit<WidenedConversion, 'form'> | undefined {
-  if (window.lookback !== undefined) return undefined;
-  const now = msOf(ctx.now);
-  // `absoluteOf` refuses an empty or inverted range, as every other form's reading does — a
-  // look-back from now "covering" a range that ends before it starts would read a confident
-  // wrong window (its `extra` outside its own `sent`).
-  const span = absoluteOf(window, ctx.now);
-  if (now === undefined || span === undefined) return undefined;
-  const [from, to] = span;
-  if (to.ms >= now.ms - ctx.granularityMs) return undefined;
-  const units = form.units ?? LOOKBACK_UNITS;
-  const finest = finestUnitMs(units);
-  const length = Math.ceil((now.ms - from.ms) / finest) * finest;
-  const spelled = spellDuration(length, units);
-  if (spelled === undefined) return undefined;
-  // The look-back reads `[now − L, now]`, both ends inside (`range.ts` · `lookbackRange`).
-  const sent = lookbackRange(ctx.now, spelled, units);
-  const sentTo = (msOf(sent.to) as Ms).ms;
-  return {
-    values: { [form.argument]: `${form.signed ? '-' : ''}${spelled}` },
-    sent,
-    extra: extraOf(now.ms - length, sentTo, from.ms, to.ms),
-  };
 }
 
 /**
@@ -682,69 +393,6 @@ export function wallGapArgument(
   }
   if (!isPlain(value)) return undefined;
   return inGap(value[form.keys.from]) || inGap(value[form.keys.to]) ? form.argument : undefined;
-}
-
-// ─── Reading a sent value back ───────────────────────────────────────────
-
-/** A bound read back: the instant it names as a half-open end, in milliseconds. */
-function readBound(
-  value: unknown,
-  which: 'from' | 'to',
-  as: BoundAs,
-  edge: Edge,
-  zone: ZoneName | undefined,
-): number | undefined {
-  const inclusiveTo = which === 'to' && edge === 'inclusive';
-  switch (as) {
-    case 'iso': {
-      const at = instantOf(value, 'strict');
-      if (at === undefined || at.nanos !== 0) return undefined;
-      const step = at.precision === 'minute' ? 60_000 : at.precision === 'second' ? 1_000 : 1;
-      return inclusiveTo ? at.ms + step : at.ms;
-    }
-    case 'epoch-ms':
-      if (typeof value !== 'number' || !Number.isSafeInteger(value)) return undefined;
-      return inclusiveTo ? value + 1 : value;
-    case 'epoch-s':
-      if (typeof value !== 'number' || !Number.isSafeInteger(value)) return undefined;
-      return (inclusiveTo ? value + 1 : value) * 1000;
-    case 'wall': {
-      if (zone === undefined) return undefined;
-      const read = wallOf(value);
-      if (read === undefined) return undefined;
-      const ms = uniqueInstant(read.wall, zone);
-      return ms === undefined ? undefined : inclusiveTo ? ms + read.stepMs : ms;
-    }
-    case 'date': {
-      if (zone === undefined) return undefined;
-      const date = dateOf(value);
-      if (date === undefined) return undefined;
-      return midnightOf(inclusiveTo ? nextDay(date) : date, zone);
-    }
-  }
-}
-
-const epochOrText = (as: BoundAs, text: string): unknown =>
-  as === 'epoch-ms' || as === 'epoch-s' ? epochFromText(text) : text;
-
-function spanRange(fromMs: number, toMs: number): TimeRange | undefined {
-  if (!(fromMs < toMs)) return undefined;
-  const from = spellInstant({ ms: fromMs, nanos: 0 }, 0);
-  const to = spellInstant({ ms: toMs, nanos: 0 }, 0);
-  return from === undefined || to === undefined ? undefined : { from, to };
-}
-
-/** The zone `form`'s arguments are read in: the zone argument's value when the form has one, else the app's. */
-function readZone(
-  args: Readonly<Record<string, unknown>>,
-  form: PeriodForm,
-  ctx: { readonly appZone?: ZoneName },
-): ZoneName | undefined {
-  const sentZone = 'zone' in form && form.zone !== undefined ? args[form.zone.argument] : undefined;
-  return formZone(form, {
-    zone: isZoneName(sentZone) ? sentZone : undefined,
-    ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
-  });
 }
 
 /**

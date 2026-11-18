@@ -1,4 +1,4 @@
-import type { At, PayloadOf } from '../vocabulary.js';
+import type { At, ItemOf, PayloadOf } from '../vocabulary.js';
 import {
   blocksMarker,
   bool,
@@ -17,6 +17,18 @@ import { eventShape } from '../vocabulary.js';
 
 export function streamingShapes() {
   return {
+    'agentfootprint.context.recorded': eventShape<'agentfootprint.context.recorded'>({
+      iteration: num,
+      omission: oneOf('not-json'),
+      pieces: listOf(
+        shapeOf<ItemOf<PayloadOf<'agentfootprint.context.recorded'>['pieces']>>({
+          source: str,
+          sourceId: str,
+          rawContent: charsMarker,
+          schema: typeMarker,
+        }),
+      ),
+    }),
     'agentfootprint.stream.llm_end': eventShape<'agentfootprint.stream.llm_end'>({
       iteration: num,
       content: charsMarker,

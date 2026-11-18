@@ -66,7 +66,14 @@ export function findingsAt(
   const ledger = readAtCall(location, 'findingsLedger', served) as FindingsLedger | undefined;
   const recordedLayout = readAfterCall(location, 'findingsLayout');
   const recordedBound = readAfterCall(location, 'findingsContextBytes');
-  let layoutUnknown = recordedLayout !== undefined && recordedLayout !== FINDINGS_LAYOUT;
+  // An undiscriminated record normally has the original legacy layout. This
+  // newer producer marker changed result classification, so its old projection
+  // cannot be inferred safely from an absent discriminator.
+  const changedLegacy =
+    recordedLayout === undefined &&
+    committed.some((message) => message.role === 'tool' && message.toolResultOrigin !== undefined);
+  let layoutUnknown =
+    changedLegacy || (recordedLayout !== undefined && recordedLayout !== FINDINGS_LAYOUT);
   let lateLayout = recordedLayout === FINDINGS_LAYOUT;
   if (lateLayout) {
     try {
@@ -86,11 +93,9 @@ export function findingsAt(
           servedToolCallIds(committed),
           answerAskOf(readRunConstant(location, 'findingsAnswerAsk', served)),
         );
-  const collapsed = collapseJudged(
-    committed,
-    ledger,
-    servedModeOf(readRunConstant(location, 'findingsServe', served)),
-  );
+  const mode = servedModeOf(readRunConstant(location, 'findingsServe', served));
+  // An unknown layout must not run an installed collapse policy over old bytes.
+  const collapsed = layoutUnknown ? committed : collapseJudged(committed, ledger, mode);
   const asSent = collapsed === committed ? history : stripFrameworkFields(collapsed);
   return [findings, asSent, lateLayout, recordedBound, layoutUnknown];
 }

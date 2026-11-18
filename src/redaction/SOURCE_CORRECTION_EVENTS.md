@@ -1,0 +1,5 @@
+## A native writer's shown event view
+
+`typedEmit` / `emitServed` optionally accept a same-event served payload from an internal writer. The original payload still reaches the native private computation and live-reply relay first; only `$emit` receives the writer's shown value through the existing caller-policy funnel. The default three-argument identity, unregistered fail-closed path and retired computation guard stay unchanged. This creates no dispatcher, history cache, public option or new record root.
+
+Source-declaration correction uses this seam for its new `iteration_end`: the current bound batch's actual tool views project peeled arguments, so private framework quotes do not ride the shown call. Prior history is never reinterpreted through today's tool names/parties; opaque replay and raw provider/continuation/crash-checkpoint history remain unchanged. A tool argument view is not a general conversation policy. Use the existing `conversationRedaction()` caller policy to keep conversation values out of all native events, recordings, snapshots and narrative.

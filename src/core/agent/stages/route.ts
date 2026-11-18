@@ -79,6 +79,7 @@ import type { Disposition } from '../../../integrity/disposition/types.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { runKeepsOut } from '../../../redaction/runRedaction.js';
 import type { FixedRouteRationale } from '../../../events/payloads.js';
+import { keptForWrapper } from './routeAnnouncement.js';
 
 export type RouteBranch =
   | 'tool-calls'
@@ -640,24 +641,23 @@ async function peelAnswerStandings(
 }
 
 /**
- * A branch that asks the model AGAIN quotes `llmLatestContent` back into the
- * conversation as the turn being corrected — `outputRetry` and `stepNudge`
- * push it into history as the assistant turn, `evidenceRecheck` serves it as
- * the rejected draft — so at those exits it must be the string the model
- * sent, or history holds a turn the model never emitted and the next request
- * echoes it (`outputAttempts` records the verdict, never the text). The
- * judges saw the PEELED answer; the answer that STANDS — every `'final'` — is
- * the peeled one. Nothing peeled: the write-free exit it always was.
+ * A branch that asks the model AGAIN quotes `llmLatestContent` back into the conversation as the
+ * turn being corrected — `outputRetry` and `stepNudge` push it into history as the assistant turn,
+ * `evidenceRecheck` serves it as the rejected draft — so at those exits it must be the string the
+ * model sent, or history holds a turn the model never emitted and the next request echoes it
+ * (`outputAttempts` records the verdict, never the text). The judges saw the PEELED answer; the
+ * answer that STANDS — every `'final'` — is the peeled one. Nothing peeled: the write-free exit.
  */
 function restoreEmission(scope: TypedScope<AgentState>, emission: string | undefined): void {
   if (emission !== undefined) scope.llmLatestContent = emission;
 }
 
-function emitRouteDecided(
+export function emitRouteDecided(
   scope: TypedScope<AgentState>,
   chosen: RouteBranch,
   rationale: string,
 ): void {
+  if (keptForWrapper(scope, chosen, rationale)) return; // a re-routing wrapper announces it
   typedEmit(scope, 'agentfootprint.agent.route_decided', {
     turnIndex: 0,
     iterIndex: scope.iteration as number,

@@ -90,7 +90,11 @@ export interface IdentityConfig {
   readonly ldapNetbiosDomain?: string;
   /** `IDENTITY_LDAP_BASE_DN` — where accounts are searched. */
   readonly ldapBaseDn?: string;
-  /** `IDENTITY_LDAP_REQUIRED_GROUP` — optional: the group (DN) people must be in, nested. */
+  /**
+   * `IDENTITY_LDAP_REQUIRED_GROUP` — optional: the group (DN) people must be in,
+   * nested; or several DNs separated by `;`, any one of which admits a person
+   * (a `;` inside a DN value is written `\;`, RFC 4514).
+   */
   readonly ldapRequiredGroup?: string;
   /** `IDENTITY_LDAP_LOCKOUT_THRESHOLD` — AD's account-lockout threshold (0 = AD never locks). */
   readonly ldapLockoutThreshold?: number;

@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-156 exported from `agentfootprint`.
+157 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -159,4 +159,5 @@ title: Functions
 - [`verdictRowsOf`](/docs/api/functions/verdictRowsOf)
 - [`warnIfInvalidToolName`](/docs/api/functions/warnIfInvalidToolName)
 - [`withDatasetArtifacts`](/docs/api/functions/withDatasetArtifacts)
+- [`withSourceEvidence`](/docs/api/functions/withSourceEvidence)
 - [`workflow`](/docs/api/functions/workflow)

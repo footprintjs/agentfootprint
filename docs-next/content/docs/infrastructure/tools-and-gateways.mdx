@@ -32,7 +32,7 @@ so everything downstream — the permission gate, the middleware chain, the
 local one.
 
 ```ts
-import { mcpClient, staticTools } from 'agentfootprint/providers';
+import { mcpClient } from 'agentfootprint/providers';
 import { Agent } from 'agentfootprint';
 
 const server = await mcpClient({
@@ -40,8 +40,10 @@ const server = await mcpClient({
   transport: { transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/data'] },
 });
 
-const agent = Agent.create({ provider }).toolProvider(staticTools(await server.tools())).build();
+const agent = Agent.create({ provider, model }).tools(await server.tools()).build();
 ```
+
+Register tools returned by the MCP client with `.tools(...)` to include their declarations in the build-time catalog used by the [integrity checks](doc:arming-context-integrity).
 
 ## Axis 1 — the transport: *when* are the auth headers decided?
 
@@ -463,6 +465,8 @@ const tools = gatedTools(staticTools(await gateway.tools()), (name) => allowed.h
 The gate decides what the model is shown; the permission checker decides what
 actually runs. They compose without knowing about each other. Deep dive:
 [Tool providers](doc:tool-providers).
+
+The chart reads `argumentsFrom`, `resultColumns` and `wants` from statically registered tools and skill tools. A tool supplied only by a `ToolProvider` is outside that catalog. The newer `resultRowsets` declaration is checked against the current provider catalog when column checking is enabled.
 
 ## Axis 3 — the governance verdict
 
