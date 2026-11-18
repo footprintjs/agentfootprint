@@ -628,11 +628,11 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     async get<T = unknown>(identity: MemoryIdentity, id: string): Promise<MemoryEntry<T> | null> {
       open('read an entry');
       const ns = identityNamespace(identity);
-      const out = (await call((c) => new c.Get({ ...scope, keys: [vectorKey(ns, id)] }))) as
-        | { vectors?: RawVector[] }
-        | undefined;
+      const out = (await call(
+        (c) => new c.Get({ ...scope, keys: [vectorKey(ns, id)], returnMetadata: true }),
+      )) as { vectors?: RawVector[] } | undefined;
       const row = out?.vectors?.[0];
-      if (!row) return null;
+      if (!row || !inNamespace(row, ns)) return null;
       const entry = vectorToEntry<T>(row);
       // Expired reads as absent, the same as every other store. No access
       // counters: S3 Vectors has no in-place metadata update, so bumping one
@@ -949,15 +949,15 @@ function refuse(method: string, because: string, why: string, fix: string): neve
 // ─── Keys, payloads, rows ────────────────────────────────────────────
 
 /**
- * `'<namespace>#<id>'`. Not injective, since a namespace may contain `#`: `c` + `x#y` and
- * `c#x` + `y` share a key, a later write replacing the earlier, and `c#` prefixes `c#x`'s keys
- * (r3-62-adapters-memory-2; `inNamespace` selects; a collision-free key re-keys stored data).
+ * A caller never lists or forgets another namespace's entries. When two entries share this
+ * key, a write can replace or a single delete(id) can remove the other conversation's entry.
+ * A collision-free key needs a major-version migration for stored vectors.
  */
 function vectorKey(namespace: string, id: string): string {
   return `${namespace}#${id}`;
 }
 
-/** Whether a ListVectors row is this namespace's: by its own `ns` metadata, never its key alone. */
+/** Whether a returned row is this namespace's: by its own `ns` metadata, never its key alone. */
 function inNamespace(row: RawVector, ns: string): row is RawVector & { key: string } {
   const { key } = row;
   return typeof key === 'string' && key.startsWith(`${ns}#`) && readMetaString(row, NS_KEY) === ns;

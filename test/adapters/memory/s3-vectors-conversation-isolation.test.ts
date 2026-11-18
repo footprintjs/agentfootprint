@@ -1,5 +1,5 @@
 /**
- * s3VectorsStore — one conversation's memory is never listed or erased through
+ * s3VectorsStore — one conversation's memory is never listed or forgotten through
  * another's (finding r3-62-adapters-memory-2, the part that needs no re-keying).
  *
  * A vector's key is `<namespace>#<id>`, and a namespace may itself contain `#`:
@@ -12,7 +12,7 @@
  * What is faked, exactly: the AWS SDK boundary. `_sdk` supplies the six
  * command classes (each records its operation name and input) and `_client`
  * supplies `send()`, backed by a map of stored vectors. The double honours the
- * request flags the way the service documents them — ListVectors returns a
+ * request flags the way the service documents them — GetVectors and ListVectors return a
  * row's `metadata` only when `returnMetadata: true` and its `data` only when
  * `returnData: true` — so a selection that needs metadata it did not ask for
  * selects nothing here, as it would against the real service. Nothing reaches
@@ -68,6 +68,13 @@ function statefulS3Vectors() {
           for (const v of input['vectors'] as StoredVector[])
             vectors.set(v.key, structuredClone(v));
           return {};
+        case 'GetVectors':
+          return {
+            vectors: (input['keys'] as string[]).flatMap((key) => {
+              const row = vectors.get(key);
+              return row ? [shape(row, input)] : [];
+            }),
+          };
         case 'ListVectors':
           return { vectors: [...vectors.values()].map((v) => shape(v, input)) };
         case 'DeleteVectors':
@@ -117,6 +124,22 @@ const C_HASH_X: MemoryIdentity = { tenant: 't', principal: 'p', conversationId: 
 describe('a conversation whose id merely starts with another one’s is not that one', () => {
   it('the two namespaces really do share a key prefix — the premise of this file', () => {
     expect(identityNamespace(C_HASH_X).startsWith(`${identityNamespace(C)}#`)).toBe(true);
+  });
+
+  it('get selects only rows whose stored namespace matches the caller', async () => {
+    const { store, aws } = open();
+    const own = entry('note', 'own value');
+    await store.put(C, own);
+    expect(await store.get(C, own.id)).toMatchObject({ id: own.id, value: own.value });
+
+    // Supply the same SDK row with an unrelated namespace in its metadata.
+    const key = `${identityNamespace(C)}#${own.id}`;
+    const stored = aws.vectors.get(key)!;
+    aws.vectors.set(key, {
+      ...stored,
+      metadata: { ...stored.metadata, ns: identityNamespace(C_HASH_X) },
+    });
+    expect(await store.get(C, own.id)).toBeNull();
   });
 
   it('listing conversation `c` does not show `c#x`’s memory', async () => {
