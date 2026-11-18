@@ -3,6 +3,7 @@ import { Agent, defineTool, inMemoryArtifacts } from '../../src/index.js';
 import { accountForAnswer } from '../../src/answer-account/account.js';
 import { NoOpCacheStrategy } from '../../src/cache/strategies/NoOpCacheStrategy.js';
 import { defineSkill } from '../../src/injection-engine.js';
+import { stepAdvanceSuffix } from '../../src/injection-engine/skillSteps.js';
 import { readEmptiness } from '../../src/core/agent/emptiness.js';
 import { issuedTicketsOf } from '../../src/core/agent/placedTickets.js';
 import type { FindingsRequest } from '../../src/core/agent/findings/admission.js';
@@ -12,6 +13,22 @@ import type { Recording } from '../../src/recorders/observability/recordRun.js';
 const identity = { conversationId: 'placement-receipts' };
 const sourceId = 'fixture-read';
 const readName = 'read_fixture';
+const placementStepNote = stepAdvanceSuffix(
+  {
+    skillId: 'sample-procedure',
+    step: 2,
+    total: 1,
+    skipped: [],
+    advanceOutcomes: { succeeded: 0, notReported: 1 },
+  },
+  {
+    skillId: 'sample-procedure',
+    steps: [{ tool: readName, note: 'Read the sample rows.' }],
+    toolNames: new Set([readName]),
+    onSkip: 'advance',
+  },
+  { outcome: 'not-reported' },
+);
 const declarations = { tools: { [readName]: { rowsAt: 'rows' } } };
 const fixtureTicket = {
   placed: true,
@@ -196,7 +213,7 @@ describe('placement receipts through an actual agent run', () => {
     const { nudged, seen, state } = await run({ placed: true, stepped: true });
     const receipt = state.placedTickets?.find((ticket) => ticket.toolCallId === sourceId);
     expect(receipt?.ref).toBeTypeOf('string');
-    expect(seen[0]?.content).toContain('Step 1 of 1 done. All 1 steps complete.');
+    expect(seen[0]?.content).toContain(placementStepNote);
     expect(nudged[0]).toMatchObject({
       refs: [{ ref: receipt!.ref, kind: 'dataset/rows' }],
       tools: ['render_fixture'],
@@ -218,7 +235,7 @@ describe('placement receipts through an actual agent run', () => {
       const receipt = state.placedTickets?.find((ticket) => ticket.toolCallId === sourceId);
       expect(receipt?.ref).toBeTypeOf('string');
       expect(seen[0]?.content).toContain(receipt!.ref);
-      if (stepped) expect(seen[0]?.content).toContain('Step 1 of 1 done. All 1 steps complete.');
+      if (stepped) expect(seen[0]?.content).toContain(placementStepNote);
       expect(
         readEmptiness(seen[0]?.content, {
           placement: { toolCallId: sourceId, issued: issuedTicketsOf(state.placedTickets) },
