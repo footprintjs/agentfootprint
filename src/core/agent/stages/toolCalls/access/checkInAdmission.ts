@@ -19,6 +19,7 @@ import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { viewedCall } from './viewedCall.js';
+import { pauseGatePolicy } from './resumePolicyRecord.js';
 import {
   markPrivateCheckIn,
   requirePrivateQuestionSupport,
@@ -57,7 +58,7 @@ interface AdmitCheckInCallFrame {
 /** Existing checkInAdmission body; the owning handler retains its admission guard and native pause return. */
 export async function admitCheckInCall(
   scope: TypedScope<AgentState>,
-  deps: Pick<ToolCallsHandlerDeps, 'checkIn'>,
+  deps: Pick<ToolCallsHandlerDeps, 'checkIn' | 'permissionChecker' | 'toolMiddleware'>,
   frame: AdmitCheckInCallFrame,
 ) {
   // Computed ONLY for a checkIn-declaring tool → zero cost otherwise.
@@ -77,6 +78,13 @@ export async function admitCheckInCall(
   // What the person is shown, and the names it hides: the tool's view, run
   // on the call's shared frozen copy (never on the arguments that run), once.
   const viewed = asking ? viewedCall(frame.tool, frame.viewOf, frame.callArguments.callArgs) : {};
+  const policy = asking
+    ? pauseGatePolicy(deps, {
+        gate: 'checkIn',
+        toolCallId: frame.tc.id,
+        iteration: frame.iteration,
+      })
+    : undefined;
   // The request the person would be asked (`core/consentRequest.ts`):
   // an id their decision must quote, bound to a detached copy of this
   // exact call AND to the names the person is told are hidden — minted
@@ -91,6 +99,7 @@ export async function admitCheckInCall(
             party: frame.resolved.party,
             args: frame.callArguments.callArgs,
             hiddenArgs: viewed.hiddenArgs,
+            policy,
           } satisfies GatedCall,
           frame.decisionLedger,
         )
@@ -189,6 +198,7 @@ export async function admitCheckInCall(
     scope.pausedCheckIn = true;
     scope.pausedCheckInArgs = bound.args;
     scope.pausedRequest = bound.request;
+    scope.pausedGatePolicy = policy;
     // Same carrier as the middleware-ask pause (9.92.0).
     if (frame.resolved.party !== undefined) scope.pausedToolParty = frame.resolved.party;
     // Which surface will collect the decision — read back on resume

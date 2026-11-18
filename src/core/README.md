@@ -424,7 +424,11 @@ advisory reads and finite local close receipts. Optional positive reads are
 not proof that a call ran or that a host closed it. Local close evidence is
 scoped to the exact ledger identity and request; eviction or restart loses it.
 
-`pauseRecord.ts` holds the complete native-pause position/reason utilities. `runnerCoreValues.ts` names per-invocation domain values; RunnerBase remains the shared native wiring facade.
+`pauseRecord.ts` provides the position and reason for native pause events.
+`consentRequest.ts`, `agent/resumeAnswer.ts`, and `agent/stages/argumentParties.ts`
+read the paused subflow at the last checkpoint path entry. `agent/checkpointDomain.ts`
+locates the tool-domain state by its mount id. `runnerCoreValues.ts` names per-invocation
+domain values. RunnerBase owns the shared native wiring.
 
 ## What a check-in tells the person is hidden
 

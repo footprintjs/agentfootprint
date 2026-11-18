@@ -9,10 +9,16 @@
  * The following notes describe earlier fixture migrations, not current proof
  * of whole-record equality with pre14 releases.
  *
+ * V15 ASSEMBLED COHORT: `agent-stepped-skill`, `agent-answer-layer` and
+ * `agent-scoped-provider` now read reference/v15-assembled-cohort/. Those
+ * captures keep the earlier step-completion and tool-outcome records plus
+ * the native engine's normalized `beganAt` metadata. The assembled cohort's
+ * manifest and fixture contract pin the three deltas; earlier captures remain.
+ *
  * TOOL OUTCOME MARKER: a committed tool message whose call did not complete
  * now carries `outcome` (`execution/callOutcome.ts` · `callOutcomeOf`), the
- * fact the check-in trail reads first. The `agent-scoped-provider` capture
- * under reference/tool-outcome-marker/ adds one refused history entry field.
+ * fact the check-in trail reads first. The retained `agent-scoped-provider`
+ * capture under reference/tool-outcome-marker/ adds one refused history entry field.
  * The earlier capture and its manifest remain under v14-native-components/.
  *
  * FINDINGS REFERENCE CONTEXT: five separately qualified ledger-enabled records
@@ -40,8 +46,8 @@
  * of "Step 1 of 2 done." (`routing/stepOutcome.ts` · `stepOutcomeOf`), and
  * the step nudge says the steps "had not been completed" (and asks for them
  * to be completed) where it said they "had not run". Only
- * `agent-stepped-skill` and `agent-answer-layer` have such a step; both were
- * recaptured with
+ * `agent-stepped-skill` and `agent-answer-layer` have such a step. Their
+ * earlier captures were generated with
  * AF_TOOLS_REFERENCE=update AF_TOOLS_REFERENCE_CASES=agent-stepped-skill,agent-answer-layer
  * and each diff is those two sentences plus the hashes and request sizes
  * computed from them.
@@ -590,6 +596,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import {
+  assertNativeReadWindowMetadata,
+  type NativeWindowAddition,
+} from './native-cohort-metadata.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -1577,6 +1587,16 @@ function projection(snapshot: Snapshot): unknown {
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
+const V15_NATIVE_REFERENCE_DIR = new URL('./reference/v15-native-cohort/', import.meta.url);
+const V15_NATIVE_CAPTURES = new Map(
+  (
+    JSON.parse(readFileSync(new URL('MANIFEST.json', V15_NATIVE_REFERENCE_DIR), 'utf8'))
+      .captures as {
+      case: string;
+      additions: NativeWindowAddition[];
+    }[]
+  ).map((capture) => [capture.case, capture.additions]),
+);
 const NATIVE_RECORD_CASES = new Set([
   'agent-answer-layer',
   'agent-arguments-ask-resumed',
@@ -1624,19 +1644,19 @@ const SOURCE_CONTRACT_REFERENCE_CASES = new Set([
   'agent-arguments-sources',
   'agent-arguments-sources-only',
 ]);
-const TOOL_OUTCOME_REFERENCE_DIR = new URL('./reference/tool-outcome-marker/', import.meta.url);
-const STEP_COMPLETION_REFERENCE_DIR = new URL(
-  './reference/step-completion-evidence/',
-  import.meta.url,
-);
-const STEP_COMPLETION_REFERENCE_CASES = new Set(['agent-stepped-skill', 'agent-answer-layer']);
+const ASSEMBLED_REFERENCE_DIR = new URL('./reference/v15-assembled-cohort/', import.meta.url);
+const ASSEMBLED_REFERENCE_CASES = new Set([
+  'agent-stepped-skill',
+  'agent-scoped-provider',
+  'agent-answer-layer',
+]);
 const referencePath = (name: string): URL => {
-  if (name === 'agent-scoped-provider') return new URL(`${name}.json`, TOOL_OUTCOME_REFERENCE_DIR);
-  if (STEP_COMPLETION_REFERENCE_CASES.has(name))
-    return new URL(`${name}.json`, STEP_COMPLETION_REFERENCE_DIR);
+  if (ASSEMBLED_REFERENCE_CASES.has(name)) return new URL(`${name}.json`, ASSEMBLED_REFERENCE_DIR);
   return new URL(
     `${name}.json`,
-    SOURCE_CONTRACT_REFERENCE_CASES.has(name)
+    V15_NATIVE_CAPTURES.has(name)
+      ? V15_NATIVE_REFERENCE_DIR
+      : SOURCE_CONTRACT_REFERENCE_CASES.has(name)
       ? SOURCE_CONTRACT_REFERENCE_DIR
       : FINDINGS_REFERENCE_CASES.has(name)
       ? FINDINGS_REFERENCE_DIR
@@ -1655,7 +1675,10 @@ const UPDATE_CASES = new Set(
 describe('byte-identity — exact whole-record contract for native component ownership', () => {
   for (const [name, drive] of Object.entries(SCENARIOS)) {
     it(name, async () => {
-      const observed = projection(await drive());
+      const snapshot = await drive();
+      const additions = V15_NATIVE_CAPTURES.get(name);
+      if (additions) assertNativeReadWindowMetadata(snapshot, additions);
+      const observed = projection(snapshot);
       const text = `${JSON.stringify(observed, null, 2)}\n`;
       if (UPDATE) {
         if (!UPDATE_CASES.has(name))

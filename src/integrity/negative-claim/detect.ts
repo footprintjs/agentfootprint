@@ -6,8 +6,9 @@
  *          (`phrases.ts`, matched by `matcher.ts`). A hedge is not scope and changes nothing here:
  *          "based on the logs, there are no incidents" is a claim. A unit in a fenced block, or a
  *          claim phrase entirely inside inline code, is NOTED (`in-code-block`, with the
- *          phrase's span), not judged; a unit the English grammar cannot read is NOTED
- *          (`language-unsupported`) — never a silent pass.
+ *          phrase's span), not judged; a unit `language.ts` recognizes as another language is
+ *          NOTED (`language-unsupported`). Language detection can miss text, so a short
+ *          non-English negative it does not recognize gets neither a claim nor a note.
  * Role:    integrity/ layer (L3), read by `prose.ts`. Pure and deterministic; linear in the text.
  *
  * A claim carries its span, its unit, its phrase id and the pack version. Its unit's tokens ride

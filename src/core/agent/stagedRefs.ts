@@ -41,6 +41,7 @@ import {
   isIssuedTicket,
   issuedTicketsOf,
   RECORDED_BEFORE_RECEIPT,
+  readPlacement,
   type IssuedTickets,
 } from './placedTickets.js';
 import type { Tool } from '../../tools/tools.js';
@@ -137,24 +138,34 @@ export function findStagedRefs(
   let refsOmitted = 0;
   for (const message of messages) {
     if (message.role !== 'tool') continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(message.content);
-    } catch {
-      continue;
-    }
-    if (!isIssuedTicket(message.toolCallId, parsed, issued)) continue;
-    const kind = (parsed as { kind?: unknown }).kind;
+    const placement =
+      issued === RECORDED_BEFORE_RECEIPT
+        ? legacyTicket(message)
+        : readPlacement(message.toolCallId, message.content, issued);
+    if (placement?.issued !== true) continue;
+    const { kind, ref } = placement.ticket;
     if (typeof kind !== 'string') continue;
     const spenders = spendersByKind.get(kind);
-    if (spenders === undefined || seenRefs.has(parsed.ref)) continue;
-    seenRefs.add(parsed.ref);
-    if (refs.length < MAX_NUDGE_REFS) refs.push({ ref: parsed.ref, kind });
+    if (spenders === undefined || seenRefs.has(ref)) continue;
+    seenRefs.add(ref);
+    if (refs.length < MAX_NUDGE_REFS) refs.push({ ref, kind });
     else refsOmitted += 1;
     for (const name of spenders) if (!tools.includes(name)) tools.push(name);
   }
   if (refs.length === 0) return undefined;
   return { refs, refsOmitted, tools: tools.slice(0, MAX_NUDGE_TOOLS) };
+}
+
+/** Rebuild the historical whole-message parse from before the receipt. */
+function legacyTicket(message: LLMMessage) {
+  try {
+    const parsed: unknown = JSON.parse(message.content);
+    return isIssuedTicket(message.toolCallId, parsed, RECORDED_BEFORE_RECEIPT)
+      ? { issued: true as const, ticket: parsed }
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Most characters of one ref a sentence prints. */

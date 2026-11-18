@@ -244,16 +244,10 @@ export interface AgentOptions {
    * option is byte-identical to one built before the ledger existed: no
    * decoration, no peel, no key, no piece, no event.
    *
-   * `serve` chooses what the answer turn is SERVED from the ledger
-   * (`findings/serve.ts`): once the model has declared a standing, every
-   * later call gets a request-only system piece composed from the folded
-   * ledger, and on the wire only — `history` never changes — a tool result
-   * the model judged `noise` or `ruled-out` is replaced by a ticket.
-   * `'ledger-and-facts'` (the default) keeps fact, open and undeclared
-   * results verbatim beside the piece; `'ledger-only'` collapses fact
-   * results too and is BENCH-GATED: shipped so `bench/findings-shuffle.mjs`
-   * can measure it on a real model, not a recommendation, never a default
-   * until that run shows the answer does not drift under shuffled evidence.
+   * Each armed call appends request-only findings DATA after history. `serve`
+   * controls wire-only collapse. The default keeps fact, open and undeclared
+   * results; `ledger-only` also collapses facts. Both modes collapse results
+   * declared noise or ruled out and preserve the original history.
    * `keepLedgerFacts` is the ceiling of fact turns the WINDOW holds under
    * standing-aware eviction (9.102.0) — the same dial as
    * {@link AgentOptions.keepLedgerFacts}, which says why and what it costs;
@@ -263,19 +257,10 @@ export interface AgentOptions {
    * `'ledger-fact'` pins (`turns.ts · admitPins`) and files the hold on
    * `WindowRecord.ledgerFacts`.
    *
-   * `answerAsk` (9.103.0) appends a second model-facing ask to the served
-   * piece — `findings/reserved.ts · FINDINGS_ANSWER_ASK`, telling the model
-   * HOW to answer from it: copy each fact value as written, name an open
-   * result as unsettled, do not draw on a collapsed ticket, never invent a
-   * value. `'none'` (the default) serves the piece exactly as before, and
-   * `'quote-facts'` is BENCH-GATED: shipped so `bench/findings-shuffle.mjs`
-   * can score it on a real model against the fidelity dip the design page's
-   * fourth run measured (one fact value in twelve restated), not a
-   * recommendation, never a default until that run shows it closes the gap.
-   * Under `'quote-facts'` the record carries the run constant
-   * `AgentState.findingsAnswerAsk` so the rebuild appends the same ask;
-   * under `'none'` no key is written and an armed agent's record is
-   * byte-identical to 9.102.0.
+   * `answerAsk: 'quote-facts'` adds a sentence to the findings instruction
+   * and records `AgentState.findingsAnswerAsk`. Older recordings can use it
+   * to replay `FINDINGS_ANSWER_ASK` in the earlier system piece. `'none'` is
+   * the default and adds neither the sentence nor the recorded key.
    *
    * `judge` (9.104.0) arms a SECOND SOURCE: a calibrated `Classifier`
    * (`agentfootprint/classify`) asked, after every tool result lands and
@@ -292,14 +277,14 @@ export interface AgentOptions {
    */
   readonly findings?: {
     /** What the model is served from the ledger: the default keeps fact results
-     *  verbatim beside the piece; `'ledger-only'` collapses them too (bench-gated). */
+     *  verbatim beside the DATA; `'ledger-only'` collapses them too (bench-gated). */
     readonly serve?: 'ledger-and-facts' | 'ledger-only';
     /** Hard UTF-8 byte ceiling for the request-only findings DATA frame.
      * Whole entries are omitted with counts; identifiers are never clipped.
      * Default 16384; valid integers 1024–262144. */
     readonly maxContextBytes?: number;
-    /** Whether the served piece ends with the answer-turn ask
-     *  (`FINDINGS_ANSWER_ASK`): `'none'` (default) or `'quote-facts'` (bench-gated). */
+    /** Whether to append the quote-facts sentence to the findings instruction.
+     *  `'none'` is the default; `'quote-facts'` records the choice. */
     readonly answerAsk?: 'none' | 'quote-facts';
     /** The ceiling of fact turns the window holds beyond `keepRecentTurns`, or
      *  `false` (= `0`) for no hold — the same dial as
@@ -385,8 +370,8 @@ export interface AgentOptions {
    * contract's `domainDefinitions`, `limitations` and `evidenceRefs`
    * meanings, then the nodes, the sources, which node is held where and
    * read by which tool, the relations, and the nodes with no declared
-   * source as `known, not held here`), joined after the recovery piece and
-   * before the findings piece, hashed on the receipt and rebuilt byte-equal
+   * source as `known, not held here`), joined after the recovery piece. The
+   * receipt hashes it and `servedAt` rebuilds it byte-equal
    * by `servedAt`; and `agentfootprint.ontology.served` fires per call with
    * identities and counts only. The ask the model reads is the always-on
    * instruction `ONTOLOGY_INSTRUCTION`. An agent without this option is

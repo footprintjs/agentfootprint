@@ -3,13 +3,13 @@ the walk calls from inside its stages.
 Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts` (with `llmCallReads.ts`,
 the records that cross into its `sf-llm-call` boundary), `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
-`skillBrains.ts`, `types.ts`, `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
+`skillBrains.ts`, `types.ts`, `watch.ts` (the type for `.watch()`), `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
 the trace toolpack registers there, since the agent may not import it).
 Walker: `assistantReplay.ts`, `toolDispatch.ts` (with `innerCallArguments.ts`, the
 one copy an inner call takes of its arguments, and `innerCallOuter.ts`, the outer
 call's hold on it: ended with `execute`, and a halt it carries back),
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
-Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
+Trace: `runManifest.ts`, `integrityFindings.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `placedTickets.ts` (did the
 library place this result), `emptiness.ts` (which
 artifact-placed results hold no rows — the coverage primitives it reads are
@@ -181,10 +181,11 @@ validation event. Arguments that are not an object are refused with the same
 correction before any gate is asked (`innerCallArguments.ts`). Raw `Tool.execute` stays caller-governed.
 The validator remains a documented subset, not a full JSON Schema engine.
 
-When an outer tool settles, its handle closes to new admissions and waits for
-decisions already in progress while the run is live. A halt retained during that
-wait still ends the run. Retaining a halt aborts the signal of already-entered
-inner tools. Tools must honor that signal to stop their own work.
+When an outer tool returns, its handle closes to new admissions. The outer call
+waits for any checker still deciding about one of its inner calls, up to the
+run's cancellation. A halt retained during that wait still ends the run.
+Retaining a halt aborts the signal of already-entered inner tools. Tools must
+honor that signal to stop their own work.
 An inner call made while its outer stage is open leaves a row, and after that
 stage commits the caller receives refusals without a row.
 

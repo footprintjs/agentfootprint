@@ -6,7 +6,13 @@ The parent handler retains consent admission, durability, clock and findings ord
 
 These functions use the existing tool resolver, invocation and native pause handler. They introduce no dispatcher, scheduler, run registry or additional execution engine. No broad shared finisher replaces the different door contracts.
 
+The check-in, middleware-ask and credential doors use `access/resumedAdmission.ts` before requesting credentials or entering the tool. The policy reads detached copies of the prepared arguments. Each recheck is recorded in order with its resume phase. The paused record identifies required policy, and the approval continues to bind the original call. An approved middleware question is reusable only at the same bound link, call and equivalent question. A component can keep the same immutable artifact ticket across the wait. A fresh ticket changes the question. A newly required question refuses the resumed call. A later ordinary call can ask the person again.
+
+Keep credential consent checkpoints in trusted storage because the resume relies on them for the suspended arguments and the original gate record.
+
 ## The plain door marks a person's typed answer
+
+The plain door lands the answer to a tool that already entered. The next tool entry uses the ordinary dispatch gates.
 
 `plain.ts` · `resumePlain` is the one writer of `LLMMessage.answersAsk`. It stamps `{ requestId }` only when this run's `Agent.resume` accepted the answer to the typed ask this run raised (`ToolCallsHandlerDeps.answeredAsk`) and the value handed to the door is that answer (`tools/typedAnswer.ts` · `isAnswerTo`). Why: any tool can return an `input_received`-shaped result, so every reader of "the person typed this" (`tools/typedAnswer.ts` · `landedTypedAnswer`) counts only a marked message. Every other value this door lands (an `askHuman` reply, a page's frontend-tool result, a string shaped like an answer) lands unmarked, as the tool's result.
 

@@ -47,7 +47,7 @@ for (const [version, config] of [
         archive = path.join(run, 'archive');
       for (const folder of [bin, run, path.join(root, 'scripts/publish-archive')])
         mkdirSync(folder, { recursive: true });
-      for (const name of ['archive.cjs', 'verify.cjs'])
+      for (const name of ['archive.cjs', 'verify.cjs', 'archivePolicy.cjs', 'tarReader.cjs'])
         copyFileSync(
           path.join(ROOT, 'scripts/publish-archive', name),
           path.join(root, 'scripts/publish-archive', name),

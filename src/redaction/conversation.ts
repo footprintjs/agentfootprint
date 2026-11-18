@@ -143,6 +143,7 @@ const NAMES = {
     // guess of the paused call's arguments against the request id
     // (`core/consentRequest.ts`), so it is kept out with them.
     'pausedRequest',
+    'pausedGatePolicy',
     'policyHaltArgs',
     'claimFacts',
     // The findings ledger — and with it every `script` row's `text`, the program

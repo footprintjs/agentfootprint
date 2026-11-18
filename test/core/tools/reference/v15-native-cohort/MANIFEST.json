@@ -1,0 +1,1164 @@
+{
+  "contract": "v15-native-read-window-additions-v1",
+  "evidence": {
+    "repository": "footprintjs/agentfootprint",
+    "runId": 44159054587,
+    "jobId": 134307614013,
+    "sourceHead": "b7b5155435104013c4ee27fadfd8c0fcc91473d3",
+    "sourceTree": "3af98b794b99800f05f7e6715e17551a86210f1c",
+    "testedCheckout": "8cf705547334c6e9c09ad68e3935b30d7cd6565b",
+    "baseHead": "34e7a95763370c4fa5bbf376e8afaedf142b583d",
+    "logSha256": "f8e73e25ea157a2d6630b009da93aedce32a9809054c8a95abfcb3082e06c001",
+    "nodeMajor": 22,
+    "mappingFormatter": {
+      "package": "@vitest/pretty-format",
+      "version": "4.1.12",
+      "maxDepth": 20,
+      "printBasicPrototype": false,
+      "qualification": "Existing formatter used only on historical JSON; every complete hunk context matched exactly, no SDK execution"
+    },
+    "failureLabels": 28,
+    "sharedDiffGroups": 27,
+    "uniqueDiffAddedLines": 151,
+    "perCaptureAddedFields": 155,
+    "deletedLines": 0
+  },
+  "captures": [
+    {
+      "case": "agent-dynamic-static-tool",
+      "previousFile": "v14-native-components/agent-dynamic-static-tool.json",
+      "previousSha256": "e96a04e01110a7ef15ed4ad9aed383a639ebc50340cd62c01e7933af8635f897",
+      "currentSha256": "f34b6f77905ffb0fccee1c52a880b34877a00a56231711ae328883c906d8c3e1",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-dynamic-graph-hop",
+      "previousFile": "v14-native-components/agent-dynamic-graph-hop.json",
+      "previousSha256": "f50fea0e064b0af46bf50316309e22ea91d9aa7e7129acdef090cfa296999f27",
+      "currentSha256": "3f4fece378528149106f98f0d128f0ac0af8a3fdea703aee4f01069a85702e37",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-stepped-skill",
+      "previousFile": "v14-native-components/agent-stepped-skill.json",
+      "previousSha256": "419b423a5caaf9e3c7c4de46f5174e78e465fcf35470f4dba0d4ae55e17c58b6",
+      "currentSha256": "a348250fdc0ba13422cf4bfed44b35383a24a33b231f5f13971c644d057eff41",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-parked-map",
+      "previousFile": "v14-native-components/agent-parked-map.json",
+      "previousSha256": "f48f1b7adcfa52ae02355c7c98114db08b8b7db9c7fb0693d627079f76d8e805",
+      "currentSha256": "029828cf5cfa5ffecde8823686c1a3844ca718876a938a4702270a54098e8099",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-wrap-up",
+      "previousFile": "v14-native-components/agent-wrap-up.json",
+      "previousSha256": "8f1841be04e122bc2197c7a8ea4feb2c37c3b75fd48593f5bc901328c2ca0daa",
+      "currentSha256": "650ebfff95bac3edda87cba222f8f9fc01b10b31609da6456d61a1cc894f1e0f",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/40/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/44/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-tool-forced",
+      "previousFile": "v14-native-components/agent-tool-forced.json",
+      "previousSha256": "6fcc5af56409fbf7cd53ed284bb1738754611e904152daa07f11916055d1a9a0",
+      "currentSha256": "3375158b832b09c8a99424b1f38eda0e0e7db167a232b4a65fcb5461018e91c3",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-provider-three-sources",
+      "previousFile": "v14-native-components/agent-provider-three-sources.json",
+      "previousSha256": "06fad78f947cd7cb693fbcc1ba3d7cc35c7599c288e57b303dd0a434fa2884d3",
+      "currentSha256": "fe4e9a69605a048a55d57a3308a3b3efcade9cdf2784a8eaff47c6d7a8f1d7e5",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/60/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/64/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-scoped-provider",
+      "previousFile": "v14-native-components/agent-scoped-provider.json",
+      "previousSha256": "056ac30a7d92dfeab31654593acb258e755f245598e18488313965977d0bbbd3",
+      "currentSha256": "e14e8a75294c6ee93a02edff428a43ca7c15e9f4dd28102e1c4bf37f216b9fe6",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/60/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/64/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-shared-tool-reference",
+      "previousFile": "v14-native-components/agent-shared-tool-reference.json",
+      "previousSha256": "d84fd681e5106d01e8595dd2a70e7549ee73b6c1f89ea14f738c1df17a89dbd6",
+      "currentSha256": "ce45cccf182e78832b891a0670fab22824c1a1bbb8bdc49e81569ac05357027b",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/60/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/64/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/78/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/82/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-from-active-skill",
+      "previousFile": "v14-native-components/agent-from-active-skill.json",
+      "previousSha256": "7377d88c888f481c0db5d50a7751f4febfc2720dd734d060ce960e96d3d4b6f1",
+      "currentSha256": "66d2086e22ff72e6bc99ccf9eedec22fc9da9f8fa0e21547b935c9e99d1699c4",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-findings",
+      "previousFile": "findings-reference-context/agent-findings.json",
+      "previousSha256": "4250df1017ac8e9a51a01aa5ce8de1a530e5425fb75c3be4c63461af2bc33d9d",
+      "currentSha256": "3fea048f01557e95ad13a1ef481f1efdc48f1a2d238931f4a0d75ae4d087d6b4",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/40/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/44/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-findings-judge",
+      "previousFile": "findings-reference-context/agent-findings-judge.json",
+      "previousSha256": "176af4950804f2ad08d37d303c928caae1ab125f311ebb18a0ab6f6f833614df",
+      "currentSha256": "0bc6c7baa7a18e2e205e8958fa9e0c18cf4d8a72f702eadbc2d95353a253d06d",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/40/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/44/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-findings-window",
+      "previousFile": "findings-reference-context/agent-findings-window.json",
+      "previousSha256": "a180c520dd416e75a1b334b0e33f9680ac391cadb3ad2acbced0590d6b7013b0",
+      "currentSha256": "4f3d392a006f942800a8a8b001a8de84ac658a0d6a3ba57998187968defc40a5",
+      "additions": [
+        {
+          "pointer": "/commitLog/7/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/11/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/25/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/29/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/43/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/47/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/61/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/65/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/79/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/83/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/97/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/101/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/115/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/119/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/133/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/137/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/151/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/155/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-findings-contingent",
+      "previousFile": "findings-reference-context/agent-findings-contingent.json",
+      "previousSha256": "29eaf3e01298ca8b2970ac431d3849a1a082c42824c71c5884c60fb582755912",
+      "currentSha256": "f2ca3c2ad1c3c83862beeab835cd299b4e191db3b59f5732dd272b7f231ef264",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/40/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/44/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-tool-choice",
+      "previousFile": "v14-native-components/agent-tool-choice.json",
+      "previousSha256": "a3f3ce5548f1b129c464e5909990aeecdc6a4230e9db3725a944fdf46f58f83d",
+      "currentSha256": "de998f48e375eab3230f596513c68985fa60a164eb06248229ad225312ca9fc6",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/60/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/64/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-ontology",
+      "previousFile": "v14-native-components/agent-ontology.json",
+      "previousSha256": "913eaac73138fd416ed5dcc1adfbda926a41e263e68d4bab288ab8c5948075b8",
+      "currentSha256": "d6ef8bbaf41537510e59c7b2d1ceb25154f304cc0b760505dc6485998f046f1f",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "message-api-chart",
+      "previousFile": "message-api-chart.json",
+      "previousSha256": "e47cbf10e00f3ff2af5fc1a248cf993941806b12425b4fb39e62fab09c76350d",
+      "currentSha256": "7881aba83ba041696c14e8204347832c8a5ef3179d4fed60621a07c466d5441d",
+      "additions": [
+        {
+          "pointer": "/commitLog/3/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/3/sawUntil",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "case": "agent-message-api-chart-one-turn",
+      "previousFile": "agent-message-api-chart-one-turn.json",
+      "previousSha256": "657e9bea97aa6a04713427bf8ec11e95cd56cc2246c53ccb2adb384ae475b1fb",
+      "currentSha256": "b00c6633e0976109553cb0d57bcbcc2e5ff3d773727bb90d4de8b9a84534c306",
+      "additions": [
+        {
+          "pointer": "/commitLog/3/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/3/sawUntil",
+          "value": 3
+        },
+        {
+          "pointer": "/commitLog/7/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-arguments-assume",
+      "previousFile": "v14-native-components/agent-arguments-assume.json",
+      "previousSha256": "f634df7de101513d9c9dd37485bc67c49aefaafae7cc4132a5bb71ff662c19df",
+      "currentSha256": "14c03079563df3a671467c89a4032c5037926e12296ec374f3534e55af2d3f81",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/29/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/33/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-arguments-assume-limits",
+      "previousFile": "v14-native-components/agent-arguments-assume-limits.json",
+      "previousSha256": "f634df7de101513d9c9dd37485bc67c49aefaafae7cc4132a5bb71ff662c19df",
+      "currentSha256": "14c03079563df3a671467c89a4032c5037926e12296ec374f3534e55af2d3f81",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/29/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/33/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-arguments-ask",
+      "previousFile": "v14-native-components/agent-arguments-ask.json",
+      "previousSha256": "2bbace368950c6e05ed2791f8022d330b244fd7f8033431ad951d35bcea34a19",
+      "currentSha256": "1e3df9d59de012434af38e7eaa9dbec3273065dcbb180222e59f86798c889df9",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-arguments-ask-resumed",
+      "previousFile": "v14-native-components/agent-arguments-ask-resumed.json",
+      "previousSha256": "a0ec7c6186cdc08e4843c5c703731fcc7b4b22b7f8c496e527fc1e4613629d83",
+      "currentSha256": "cc9a5d882346940cb16e8623c5280a5384072c31986f2b4ceea1e1e251573183",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-arguments-sources",
+      "previousFile": "source-contract-projection/agent-arguments-sources.json",
+      "previousSha256": "8a1ea5dfe1f38ce67f86d4de5f479556407f41fe1ba498a1e61782b14a243f65",
+      "currentSha256": "01188844e0c8610f2676038a97b873b664a1a3e65a8c44645f6afa0c68716c6d",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/29/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/33/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-arguments-sources-only",
+      "previousFile": "source-contract-projection/agent-arguments-sources-only.json",
+      "previousSha256": "e96d974910fd2b4def4ac10147e0c2b3a4969c00c97e9ea8ead0a4c2df89b29a",
+      "currentSha256": "4cf7eac00eef59058443f8adfb8bfe60004e747af2049270b604ff1609d145ec",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/29/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/33/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-results-period",
+      "previousFile": "v14-native-components/agent-results-period.json",
+      "previousSha256": "708675bcc10104c0d779cdbc64b358894e123cb11a38c36f2cba28e03b37406b",
+      "currentSha256": "56d6f901c2c01b3aa0cef0ebdce8121810fb0fa07b63064e1933ce667a8deba4",
+      "additions": [
+        {
+          "pointer": "/commitLog/8/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/12/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/31/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/50/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-answer-layer",
+      "previousFile": "v14-native-components/agent-answer-layer.json",
+      "previousSha256": "f70c70fe8ef7b596afe41975b14c2d521785ed46a2ee7b97898a307f15d15c0d",
+      "currentSha256": "0979d6a4257d4c0fe5963ba1a277fdf67b3ecf28f6b45767d50fa753b22da915",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/24/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/28/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/42/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/46/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-script-artifact",
+      "previousFile": "v14-native-components/agent-script-artifact.json",
+      "previousSha256": "3f37f75c2e6768c916e23a6b5eefd89f7e9609ffad5ea32bd2c32f073b42321b",
+      "currentSha256": "896d05ce25f47d6be10db0df4353e99633b8a905e81d7dea1f454d527aeaecd5",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        }
+      ]
+    },
+    {
+      "case": "agent-time-clock",
+      "previousFile": "v14-native-components/agent-time-clock.json",
+      "previousSha256": "65eead7100a487dc0150beb37273e91eee9b06c0113cca7bf37d5c87128ac740",
+      "currentSha256": "8b8721fccd2d73983177f9e888773bd8582770cc38ecf68cbe0ef5b1005acd7d",
+      "additions": [
+        {
+          "pointer": "/commitLog/6/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/10/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/23/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/27/sawUntil",
+          "value": 27
+        },
+        {
+          "pointer": "/commitLog/40/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/44/beganAt",
+          "value": "<volatile>"
+        },
+        {
+          "pointer": "/commitLog/44/sawUntil",
+          "value": 44
+        }
+      ]
+    }
+  ],
+  "preservedJson": [
+    {
+      "file": "agent-answer-layer.json",
+      "sha256": "ee0af9399cd33b3a32aee207866034e63a7202beca275cd51432b1a4be1a3d13"
+    },
+    {
+      "file": "agent-arguments-ask-resumed.json",
+      "sha256": "8e0d0a01b97e7a2ab291b77aabcd32ea43de17e8d73152d611c4a1fbe92e8cc7"
+    },
+    {
+      "file": "agent-arguments-ask.json",
+      "sha256": "58c2283a5050c1acb763553ab5fc944bbc3428f458b8f43b8ff6da5812f3fb04"
+    },
+    {
+      "file": "agent-arguments-assume-limits.json",
+      "sha256": "60f62414331cafc5122272f0446b0c5ee06bd4da60c99cc5b01186e6df7618b8"
+    },
+    {
+      "file": "agent-arguments-assume.json",
+      "sha256": "60f62414331cafc5122272f0446b0c5ee06bd4da60c99cc5b01186e6df7618b8"
+    },
+    {
+      "file": "agent-arguments-sources-only.json",
+      "sha256": "669bc90a7a0cd89bffc2b7d2720a647025d886e6f6e7c06b2f9a02d51574c167"
+    },
+    {
+      "file": "agent-arguments-sources.json",
+      "sha256": "02386f46a82bc8f175dae0266840e62057f064ade444c1f8d49df92783cf2c8a"
+    },
+    {
+      "file": "agent-dynamic-graph-hop.json",
+      "sha256": "02004386aa6f9552450b51d5828619fdf5589a646416bba338949a0400c4f3cb"
+    },
+    {
+      "file": "agent-dynamic-static-tool.json",
+      "sha256": "d8b56ea1c0e8ad57f1fe491e31642f85f65de9811389d3fd6e1807d54ba1a4f7"
+    },
+    {
+      "file": "agent-findings-contingent.json",
+      "sha256": "852dd2c42898bdea23ab2aa6cdc9b2202c2908e282ec518cc8969dbbe77c3104"
+    },
+    {
+      "file": "agent-findings-judge.json",
+      "sha256": "19c686092b85865fac5d98518f8b29f952121b2ab88f12a0abf1e2f13c077ee5"
+    },
+    {
+      "file": "agent-findings-window.json",
+      "sha256": "1d066e894ca8f144965d3a95230fd47541c69049fe152cfcf310109a450d6a1f"
+    },
+    {
+      "file": "agent-findings.json",
+      "sha256": "133bf81b6c25a3f635362ca787561a0f5a0b736f1c80518d6fe800fc13891551"
+    },
+    {
+      "file": "agent-from-active-skill.json",
+      "sha256": "1a736ba9967379b9b385249d6c51b98e01fdd22e8ffbaa5d388975ad5e656449"
+    },
+    {
+      "file": "agent-grouped-graph-hop.json",
+      "sha256": "6cd124adfbbd748270638ce5d5cbbdd073cd515ab9afe1ae0ddb81dc3220bfd4"
+    },
+    {
+      "file": "agent-grouped-static-tool.json",
+      "sha256": "197932fec1b9790504635bae93916ca8a5f2e0e485b9bf83917aa02f2be52c31"
+    },
+    {
+      "file": "agent-message-api-chart-one-turn.json",
+      "sha256": "657e9bea97aa6a04713427bf8ec11e95cd56cc2246c53ccb2adb384ae475b1fb"
+    },
+    {
+      "file": "agent-ontology.json",
+      "sha256": "0bc9f6311ac189107e01f1e71c15f9fcd8c98978539a48c8c32fe750e2113856"
+    },
+    {
+      "file": "agent-parked-map.json",
+      "sha256": "5f1145533ce4dd98cc9488c39d6052a6795c2b82c18fcfcb7636a466c2c14feb"
+    },
+    {
+      "file": "agent-provider-three-sources.json",
+      "sha256": "df23e76a99b59a0e52fda273e42240f58933a0015a7d46f0c1b6f8bdaacdc949"
+    },
+    {
+      "file": "agent-results-period.json",
+      "sha256": "cbbb1c355f05482204f61ac6f78ba2884008f6eb2fb5556088cd2e427d5fc64d"
+    },
+    {
+      "file": "agent-scoped-provider.json",
+      "sha256": "6add5c7952b5d4130f231a28be057e195a53d0b27be1530694f24968471163a4"
+    },
+    {
+      "file": "agent-script-artifact.json",
+      "sha256": "4d9222389e10222217b07bfd56fc42eb5dcb2fc8888048d60806abe3bf7abb29"
+    },
+    {
+      "file": "agent-shared-tool-reference.json",
+      "sha256": "ac83ac688d25ceea3eb7a4294d73e3c68d907a3754da66a04a3d4c091b2e82ac"
+    },
+    {
+      "file": "agent-stepped-skill.json",
+      "sha256": "e9be43186c782ce54e3590c12f7ff1cbc41d2a04d19509143c36948ce285211f"
+    },
+    {
+      "file": "agent-time-clock.json",
+      "sha256": "19e03911c3e34cabf056c2dc4209085caaafe41cf0a11abd4307be5ceac4c968"
+    },
+    {
+      "file": "agent-tool-choice.json",
+      "sha256": "a0e5b9a4ef044e3a7c8695b50338609e72afc73c20c2eed7c2430e8072fa863c"
+    },
+    {
+      "file": "agent-tool-forced.json",
+      "sha256": "4c63fce2c26e6136b474ae5ec6ac817f3e8e83f042438d5b818ca51e4a6b7779"
+    },
+    {
+      "file": "agent-wrap-up.json",
+      "sha256": "a6058c8164efb4af1924dd97dd98ef6ef2f27ad58fa691603b6903082b18481c"
+    },
+    {
+      "file": "findings-reference-context/MANIFEST.json",
+      "sha256": "9646b8f88ec1e97c3c9c6c8e744cdc45f240863de1794f19cc638dd18ae3dddc"
+    },
+    {
+      "file": "findings-reference-context/agent-arguments-sources.json",
+      "sha256": "f3f250ec3ec1f341c062c36992d7daee6c920364c5be7b8a9761397c512be39b"
+    },
+    {
+      "file": "findings-reference-context/agent-findings-contingent.json",
+      "sha256": "29eaf3e01298ca8b2970ac431d3849a1a082c42824c71c5884c60fb582755912"
+    },
+    {
+      "file": "findings-reference-context/agent-findings-judge.json",
+      "sha256": "176af4950804f2ad08d37d303c928caae1ab125f311ebb18a0ab6f6f833614df"
+    },
+    {
+      "file": "findings-reference-context/agent-findings-window.json",
+      "sha256": "a180c520dd416e75a1b334b0e33f9680ac391cadb3ad2acbced0590d6b7013b0"
+    },
+    {
+      "file": "findings-reference-context/agent-findings.json",
+      "sha256": "4250df1017ac8e9a51a01aa5ce8de1a530e5425fb75c3be4c63461af2bc33d9d"
+    },
+    {
+      "file": "llmcall.json",
+      "sha256": "2941eaafd217ee180c6cdd01fa5d6f7fa58229dbef882a63b892897a2659e30e"
+    },
+    {
+      "file": "message-api-chart.json",
+      "sha256": "e47cbf10e00f3ff2af5fc1a248cf993941806b12425b4fb39e62fab09c76350d"
+    },
+    {
+      "file": "source-contract-projection/MANIFEST.json",
+      "sha256": "4a905da81fe26c4743c52cf560467ddfd8465c85907b62e205594260fd184188"
+    },
+    {
+      "file": "source-contract-projection/agent-arguments-sources-only.json",
+      "sha256": "e96d974910fd2b4def4ac10147e0c2b3a4969c00c97e9ea8ead0a4c2df89b29a"
+    },
+    {
+      "file": "source-contract-projection/agent-arguments-sources.json",
+      "sha256": "8a1ea5dfe1f38ce67f86d4de5f479556407f41fe1ba498a1e61782b14a243f65"
+    },
+    {
+      "file": "v14-native-components/MANIFEST.json",
+      "sha256": "e16686a2e3124d9d3616aa7defa5ba0c0dac5a6a1e809cafbd2ae2b4855bf67d"
+    },
+    {
+      "file": "v14-native-components/agent-answer-layer.json",
+      "sha256": "f70c70fe8ef7b596afe41975b14c2d521785ed46a2ee7b97898a307f15d15c0d"
+    },
+    {
+      "file": "v14-native-components/agent-arguments-ask-resumed.json",
+      "sha256": "a0ec7c6186cdc08e4843c5c703731fcc7b4b22b7f8c496e527fc1e4613629d83"
+    },
+    {
+      "file": "v14-native-components/agent-arguments-ask.json",
+      "sha256": "2bbace368950c6e05ed2791f8022d330b244fd7f8033431ad951d35bcea34a19"
+    },
+    {
+      "file": "v14-native-components/agent-arguments-assume-limits.json",
+      "sha256": "f634df7de101513d9c9dd37485bc67c49aefaafae7cc4132a5bb71ff662c19df"
+    },
+    {
+      "file": "v14-native-components/agent-arguments-assume.json",
+      "sha256": "f634df7de101513d9c9dd37485bc67c49aefaafae7cc4132a5bb71ff662c19df"
+    },
+    {
+      "file": "v14-native-components/agent-arguments-sources-only.json",
+      "sha256": "3ef85eddea8565ea4d99dd7e3f5849732d6e4139fefc06fdc7ddb81085a71aa7"
+    },
+    {
+      "file": "v14-native-components/agent-arguments-sources.json",
+      "sha256": "a20ecda5881fc444fa22f9c0cb1084dda752e6f6134ab58679b1b443aa8e4d4f"
+    },
+    {
+      "file": "v14-native-components/agent-dynamic-graph-hop.json",
+      "sha256": "f50fea0e064b0af46bf50316309e22ea91d9aa7e7129acdef090cfa296999f27"
+    },
+    {
+      "file": "v14-native-components/agent-dynamic-static-tool.json",
+      "sha256": "e96a04e01110a7ef15ed4ad9aed383a639ebc50340cd62c01e7933af8635f897"
+    },
+    {
+      "file": "v14-native-components/agent-findings-contingent.json",
+      "sha256": "ca63bd52f99c7f4e4f803af14d4f11862ad6b1cb948ef2c0e0c77b57e9d4b2fa"
+    },
+    {
+      "file": "v14-native-components/agent-findings-judge.json",
+      "sha256": "f14fe4ea6b35ac2feabebdcb4418a759e0eb39df65e4b7c2c98ba7b4c2d29acd"
+    },
+    {
+      "file": "v14-native-components/agent-findings-window.json",
+      "sha256": "1d05a1d5e3b3a888a8b30866d3e6bb50b3b710676b12e8dcb269065c75a4bb44"
+    },
+    {
+      "file": "v14-native-components/agent-findings.json",
+      "sha256": "4204d6ca084e5f76703c3822df5eab2c1558092395042acd2a7db63eb5e4e728"
+    },
+    {
+      "file": "v14-native-components/agent-from-active-skill.json",
+      "sha256": "7377d88c888f481c0db5d50a7751f4febfc2720dd734d060ce960e96d3d4b6f1"
+    },
+    {
+      "file": "v14-native-components/agent-grouped-graph-hop.json",
+      "sha256": "c7a90ec16ea3d1fe2561f91ac6a79ad7a5658375e00bbf0dd674615b20483829"
+    },
+    {
+      "file": "v14-native-components/agent-grouped-static-tool.json",
+      "sha256": "58fa4eff01f3973a8b1141001c91c4493806edef762b52a9abe1648a6315fb97"
+    },
+    {
+      "file": "v14-native-components/agent-ontology.json",
+      "sha256": "913eaac73138fd416ed5dcc1adfbda926a41e263e68d4bab288ab8c5948075b8"
+    },
+    {
+      "file": "v14-native-components/agent-parked-map.json",
+      "sha256": "f48f1b7adcfa52ae02355c7c98114db08b8b7db9c7fb0693d627079f76d8e805"
+    },
+    {
+      "file": "v14-native-components/agent-provider-three-sources.json",
+      "sha256": "06fad78f947cd7cb693fbcc1ba3d7cc35c7599c288e57b303dd0a434fa2884d3"
+    },
+    {
+      "file": "v14-native-components/agent-results-period.json",
+      "sha256": "708675bcc10104c0d779cdbc64b358894e123cb11a38c36f2cba28e03b37406b"
+    },
+    {
+      "file": "v14-native-components/agent-scoped-provider.json",
+      "sha256": "056ac30a7d92dfeab31654593acb258e755f245598e18488313965977d0bbbd3"
+    },
+    {
+      "file": "v14-native-components/agent-script-artifact.json",
+      "sha256": "3f37f75c2e6768c916e23a6b5eefd89f7e9609ffad5ea32bd2c32f073b42321b"
+    },
+    {
+      "file": "v14-native-components/agent-shared-tool-reference.json",
+      "sha256": "d84fd681e5106d01e8595dd2a70e7549ee73b6c1f89ea14f738c1df17a89dbd6"
+    },
+    {
+      "file": "v14-native-components/agent-stepped-skill.json",
+      "sha256": "419b423a5caaf9e3c7c4de46f5174e78e465fcf35470f4dba0d4ae55e17c58b6"
+    },
+    {
+      "file": "v14-native-components/agent-time-clock.json",
+      "sha256": "65eead7100a487dc0150beb37273e91eee9b06c0113cca7bf37d5c87128ac740"
+    },
+    {
+      "file": "v14-native-components/agent-tool-choice.json",
+      "sha256": "a3f3ce5548f1b129c464e5909990aeecdc6a4230e9db3725a944fdf46f58f83d"
+    },
+    {
+      "file": "v14-native-components/agent-tool-forced.json",
+      "sha256": "6fcc5af56409fbf7cd53ed284bb1738754611e904152daa07f11916055d1a9a0"
+    },
+    {
+      "file": "v14-native-components/agent-wrap-up.json",
+      "sha256": "8f1841be04e122bc2197c7a8ea4feb2c37c3b75fd48593f5bc901328c2ca0daa"
+    }
+  ],
+  "preservedDocumentation": [
+    {
+      "file": "findings-reference-context/README.md",
+      "sha256": "a5d31a9230d723e205ba7dcf68330170d833b0a4eeede308ba08c71939e57f4d"
+    },
+    {
+      "file": "source-contract-projection/README.md",
+      "sha256": "969467e3e2b7bb2e0fee20c9c577473c6018135397f4518ea63cd1bc510a6c82"
+    },
+    {
+      "file": "v14-native-components/README.md",
+      "sha256": "37b5d9ae4752a2c0a9236f34e27d4eb190b504733d2f87e8c05d02ce9888436e"
+    }
+  ]
+}

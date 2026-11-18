@@ -60,18 +60,27 @@ const VARIABLE_CLAIMS_LINES: readonly string[] = [
   'only ablation verdicts make causal claims; nothing on this board has been ablated.',
 ];
 
-/** One custody hop per moment — the recorded rewind rail, in commit order. */
-function custodyHop(key: string, m: AgentKeyMoment): BacktrackCustodyHop {
+function readSourceDetail(read: AgentKeyMoment, candidate?: number): string {
+  if (read.orWriteIdxs?.length) {
+    if (candidate !== undefined) return `possible source: commit ${candidate}`;
+    const before =
+      read.fromWriteIdx === undefined ? 'before the run' : `commit ${read.fromWriteIdx}`;
+    const during = read.orWriteIdxs.map((idx) => `commit ${idx}`);
+    return `possible sources: ${[before, ...during].join(' or ')}`;
+  }
+  return read.fromWriteIdx !== undefined
+    ? `the value written at commit ${read.fromWriteIdx}`
+    : 'a value from before the log — initial state / run input / a closure';
+}
+
+/** One hop per moment on the timeline, or a read's custody on a particular writer's card. */
+function custodyHop(key: string, m: AgentKeyMoment, candidate?: number): BacktrackCustodyHop {
   const where = m.loopIndex !== undefined ? `loop ${m.loopIndex}` : 'run setup (no loop)';
   const detail =
     m.kind === 'write'
       ? `${m.stageName} wrote '${key}'${m.verb !== undefined ? ` (${m.verb})` : ''} — ${where}` +
         (m.suspectId !== undefined ? ` · introduced ${m.suspectKind} '${m.suspectId}'` : '')
-      : `${m.stageName} read '${key}'${
-          m.fromWriteIdx !== undefined
-            ? ` (the value written at commit ${m.fromWriteIdx})`
-            : ' (a value from before the log — initial state / run input / a closure)'
-        } — ${where}`;
+      : `${m.stageName} read '${key}' (${readSourceDetail(m, candidate)}) — ${where}`;
   return { step: m.kind, detail, at: m.runtimeStageId, variable: key };
 }
 
@@ -140,7 +149,9 @@ export function variableToBacktrackTrace(
   const ordered = [...writes].reverse();
   const cards: BacktrackSuspectCard[] = ordered.map((w, age) => {
     const readers = agentSlice.moments.filter(
-      (m) => m.kind === 'read' && m.fromWriteIdx === w.commitIdx,
+      (m) =>
+        m.kind === 'read' &&
+        (m.fromWriteIdx === w.commitIdx || m.orWriteIdxs?.includes(w.commitIdx)),
     );
     return {
       kind: w.suspectKind ?? 'stage',
@@ -154,7 +165,7 @@ export function variableToBacktrackTrace(
         label: w.stageName,
         via: w.loopIndex !== undefined ? `loop ${w.loopIndex} commit` : 'run setup commit',
       },
-      custody: [custodyHop(key, w), ...readers.map((r) => custodyHop(key, r))],
+      custody: [custodyHop(key, w), ...readers.map((r) => custodyHop(key, r, w.commitIdx))],
     };
   });
 

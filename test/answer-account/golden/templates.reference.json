@@ -2020,6 +2020,72 @@
   ],
   "source": "library"
  },
+ "checked.refusedAfterApproval.named@1": {
+  "text": "A person approved the call to lookup_volumes, then the rule named by value refused it.",
+  "parts": [
+   {
+    "text": "A person approved the call to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", then the rule named "
+   },
+   {
+    "code": "by value"
+   },
+   {
+    "text": " refused it."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.refusedAfterApproval.rule@1": {
+  "text": "A person approved the call to lookup_volumes, then a rule refused it.",
+  "parts": [
+   {
+    "text": "A person approved the call to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", then a rule refused it."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.refusedAfterApproval.library@1": {
+  "text": "A person approved the call to lookup_volumes, then the library refused it.",
+  "parts": [
+   {
+    "text": "A person approved the call to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", then the library refused it."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.refusedOnResume.library@1": {
+  "text": "It asked to run lookup_volumes, and the library refused it when the call resumed.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": ", and the library refused it when the call resumed."
+   }
+  ],
+  "source": "library"
+ },
  "notChecked.noResults@1": {
   "text": "Nothing to report: no tool call returned a result in this record.",
   "parts": [

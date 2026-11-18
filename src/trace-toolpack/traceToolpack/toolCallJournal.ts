@@ -54,6 +54,8 @@ interface LedgerRow {
   readonly toolCallId?: string;
   readonly iteration?: number;
   readonly outcome?: string;
+  readonly phase?: string;
+  readonly personApproved?: boolean;
   readonly changed?: boolean;
   readonly why?: string;
   readonly after?: unknown;
@@ -71,6 +73,7 @@ interface ToolCallFacts {
   readonly declined: boolean;
   readonly checkIn: boolean;
   readonly invalid: boolean;
+  readonly resumeRefusal?: string;
   /**
    * Present when the call was NEVER DISPATCHED (9.113.0): its bracket carries
    * `notDispatched` on the stream, and its `role: 'tool'` message carries
@@ -80,6 +83,48 @@ interface ToolCallFacts {
    * record of a tool that ran.
    */
   readonly notDispatched?: Settlement;
+}
+
+/** A resume refusal names the actor. Only an earlier explicit answer proves approval. */
+function resumeRefusalOf(
+  evidence: ReturnType<typeof latestCallOccurrence>['evidence'],
+  ledger: readonly LedgerRow[],
+): string | undefined {
+  let approved = false;
+  const refusal = (who: string) =>
+    approved
+      ? `a person approved the call. ${who} then refused the call after the wait.`
+      : `${who} refused the call after the wait.`;
+  const middlewareRefusal = (row: LedgerRow) => {
+    if (row.phase !== 'resume') {
+      if (row.outcome === 'allow' && row.personApproved === true) approved = true;
+      if (row.outcome === 'deny' && row.personApproved === false) approved = false;
+    }
+    if (row.phase !== 'resume' || row.moment !== 'before-tool') return undefined;
+    if (row.outcome === 'refused') return refusal('The library');
+    if (row.outcome === 'deny')
+      return refusal(
+        row.middleware === undefined ? 'A middleware rule' : `Middleware '${row.middleware}'`,
+      );
+    return undefined;
+  };
+  for (const event of evidence) {
+    if (event.type === 'agentfootprint.checkin.decision')
+      approved = event.payload.approved === true;
+    if (event.type === 'agentfootprint.permission.check') {
+      if (event.payload.result === 'deny' || event.payload.result === 'halt')
+        return refusal('The permission policy');
+    }
+    if (event.type === 'agentfootprint.middleware.decision') {
+      const line = middlewareRefusal(event.payload);
+      if (line !== undefined) return line;
+    }
+  }
+  for (const row of ledger) {
+    const line = middlewareRefusal(row);
+    if (line !== undefined) return line;
+  }
+  return undefined;
 }
 
 /** The joined view of a run's tool calls, shared by the two tools that read it. */
@@ -268,6 +313,10 @@ function buildToolCallReader(
     const ledgerRows = ledger().filter((row) => row.toolCallId === toolCallId);
     const rows =
       iteration === undefined ? [] : ledgerRows.filter((row) => row.iteration === iteration);
+    const resumeRefusal = resumeRefusalOf(
+      evidence,
+      !occurrence.reused && proposals <= 1 ? rows : [],
+    );
     return {
       ...(toolName !== undefined && { toolName }),
       ...(proposedArgs !== undefined && { proposedArgs }),
@@ -276,6 +325,7 @@ function buildToolCallReader(
       ...(notDispatched !== undefined && { notDispatched }),
       end,
       rows,
+      ...(resumeRefusal !== undefined && { resumeRefusal }),
       unboundRows:
         iteration === undefined
           ? ledgerRows.length > 0
@@ -376,8 +426,8 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       const marker = facts.notDispatched;
       const settled = typeof marker === 'object' ? marker : undefined;
 
-      const { end, rows, declined, checkIn, invalid, unboundRows } = facts;
-      const denial = rows.find((row) => row.outcome === 'deny');
+      const { end, rows, declined, checkIn, invalid, unboundRows, resumeRefusal } = facts;
+      const denial = rows.find((row) => row.outcome === 'deny' || row.outcome === 'refused');
       const bracketEntry =
         settled !== undefined
           ? 'not-run'
@@ -386,7 +436,12 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
           : toolRanOf(end.payload);
       const ran =
         bracketEntry === 'not-recorded' &&
-        (declined || rows.some((row) => row.outcome === 'deny' && row.moment === 'before-tool'))
+        (declined ||
+          resumeRefusal !== undefined ||
+          rows.some(
+            (row) =>
+              row.moment === 'before-tool' && (row.outcome === 'deny' || row.outcome === 'refused'),
+          ))
           ? 'not-run'
           : bracketEntry;
 
@@ -446,6 +501,10 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
           `not dispatched — the run paused on call '${settled.pausedCall.toolCallId}' ` +
           `to '${settled.pausedCall.toolName}', earlier in the same batch, and resumed ` +
           `without executing call '${toolCallId}'`;
+      } else if (resumeRefusal !== undefined) {
+        outcome = resumeRefusal;
+      } else if (denial?.outcome === 'refused') {
+        outcome = 'the library refused an unrecognised middleware answer';
       } else if (denial) {
         outcome = `denied by '${denial.middleware ?? '?'}'${denial.why ? `: "${denial.why}"` : ''}`;
       } else if (end?.payload.error === true) {

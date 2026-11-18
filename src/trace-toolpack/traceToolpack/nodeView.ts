@@ -4,12 +4,64 @@ import type { Tool } from '../../tools/tools.js';
 import { defineTool } from '../../tools/tools.js';
 import { idProperty } from './parameterSchemas.js';
 import { unknownIdMessage, mountLine } from './navigationHints.js';
-import { stagePartOf, anchorIdxFor } from './packIndex.js';
-import { NODE_WRITE_CAP, NODE_READ_CAP, OVERVIEW_ERROR_CAP } from './structuralLimits.js';
+import { stagePartOf } from './packIndex.js';
+import {
+  NODE_WRITE_CAP,
+  NODE_READ_CAP,
+  NODE_READ_SOURCE_CAP,
+  OVERVIEW_ERROR_CAP,
+} from './structuralLimits.js';
 import { boundedPreview, displayKey, displayText, renderPreview } from '../bounded.js';
-import { commitValueAt, findLastWriterWithBasis } from 'foottrace';
+import { commitValueAt, findLastWriterWithBasis, findReadSources, overlapOf } from 'foottrace';
 import { redactionNote, honestyLine, untrackedSourcesOf } from './valueLines.js';
 import type { HonestyCode } from 'foottrace';
+
+function readSourceLines(
+  index: ToolpackIndex,
+  readerIdx: number | undefined,
+  key: string,
+  codes: HonestyCode[],
+): string[] {
+  const { commitLog } = index;
+  const prefix = `- data: ${displayKey(key)} ← `;
+  if (readerIdx === undefined || commitLog[readerIdx].phase !== undefined) {
+    return [`${prefix}(source not recorded: the reader's first bundle is missing)`];
+  }
+
+  const sources = findReadSources(commitLog, readerIdx, key);
+  const reader = commitLog[readerIdx];
+  const legacy = reader.beganAt === undefined && reader.sawUntil === undefined;
+  const describeSource = (at: number): string => {
+    const writer = commitLog[at];
+    const overlap = overlapOf(sources, at);
+    // Foottrace chose the source above. Retain the writer basis for that exact
+    // candidate, or the absence basis at the legacy before-commit bound.
+    const basis = writer
+      ? findLastWriterWithBasis(commitLog, key, at + 1).basis
+      : legacy
+      ? findLastWriterWithBasis(commitLog, key, readerIdx).basis
+      : [];
+    const reasons = overlap === undefined ? basis : [overlap, ...basis];
+    codes.push(...reasons);
+    const reason = reasons.length > 0 ? ` ⚠ ${reasons.join(', ')}` : '';
+    if (writer === undefined) {
+      const windowNote = legacy ? '' : "; reason not recorded for this read's window";
+      return `(no tracked writer${windowNote}${reason})`;
+    }
+    const commit = overlap === undefined ? '' : ` (commit ${at})`;
+    return `${writer.runtimeStageId} "${writer.stage}"${commit}${reason}`;
+  };
+
+  if (sources.during.length === 0) return [prefix + describeSource(sources.before)];
+  const shownDuring = sources.during.slice(0, NODE_READ_SOURCE_CAP - 1);
+  const omitted = sources.during.length - shownDuring.length;
+  const lines = [
+    `${prefix}possible sources:`,
+    ...[sources.before, ...shownDuring].map((at) => `  - ${describeSource(at)}`),
+  ];
+  if (omitted > 0) lines.push(`  …and ${omitted} more possible sources (output capped)`);
+  return lines;
+}
 
 // ── trace_node ─────────────────────────────────────────────────────────────
 
@@ -22,8 +74,10 @@ function buildTraceNode(
     name: 'trace_node',
     description:
       'Inspect ONE execution step by runtimeStageId: name + description, what it wrote ' +
-      '(bounded previews + true sizes), what it read, its parents (which step provided each ' +
-      'input, plus the decision that routed to it when known), errors, and ⚠ honesty markers. ' +
+      '(bounded previews + true sizes), what it read, possible data parents and the decision ' +
+      'that routed to it when known, errors, and ⚠ honesty markers. Overlapping reads show a ' +
+      'bounded list with the before-window source and a count of any omitted possibilities. ' +
+      'If a stamped read has no tracked writer, its absence reason is unavailable for that window. ' +
       'The drill-down primitive — use ids from run_overview, trace_slice, or who_wrote.',
     inputSchema: {
       type: 'object',
@@ -95,19 +149,11 @@ function buildTraceNode(
         );
       }
 
-      const parentLines: string[] = [];
       const parentCodes: HonestyCode[] = [];
-      const anchorIdx = anchorIdxFor(runtimeStageId, index);
-      for (const key of reads.slice(0, NODE_READ_CAP)) {
-        const { writer, basis } = findLastWriterWithBasis(index.commitLog, key, anchorIdx);
-        parentLines.push(
-          writer
-            ? `- data: ${displayKey(key)} ← ${writer.runtimeStageId} "${writer.stage}"` +
-                (basis.length > 0 ? ` ⚠ ${basis.join(', ')}` : '')
-            : `- data: ${displayKey(key)} ← (no tracked writer ⚠ ${basis.join(', ')})`,
-        );
-        parentCodes.push(...basis);
-      }
+      const readerIdx = index.firstIdxOf.get(runtimeStageId);
+      const parentLines = reads
+        .slice(0, NODE_READ_CAP)
+        .flatMap((key) => readSourceLines(index, readerIdx, key, parentCodes));
       const controlDep = artifacts.controlDeps?.(runtimeStageId);
       if (controlDep) {
         parentLines.push(

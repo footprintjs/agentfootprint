@@ -3,8 +3,9 @@ import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
-import { type ConsentGateKind, isPauseRequest } from '../../../../pause.js';
+import { isPauseRequest } from '../../../../pause.js';
 import {
   type ToolResultStatus,
   readToolResultEnvelope,
@@ -15,9 +16,7 @@ import {
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
 import type { ArtifactMeta } from '../../../../../artifacts/types.js';
-import type { Credential } from '../../../../../identity/types.js';
-import { modelRefusal } from '../../../../../identity/consent.js';
-import { errorClassOf, reportingCredentials } from '../decorators/reportingCredentials.js';
+import { reportingCredentials } from '../decorators/reportingCredentials.js';
 import {
   type NegativeDispatch,
   startNegativeCall,
@@ -29,6 +28,11 @@ import { requestEvidenceFor } from '../../../../../tools/requestEvidence.js';
 import { mcpClientUseFor } from '../../../../../tools/mcpClientUse.js';
 import { runEndedBy, runsAsAsked, gatedCallOf } from '../../../../consentRequest.js';
 import { rewrittenAfterApproval } from '../access/bindings.js';
+import { recheckResumedCall, recordResumedRefusal } from '../access/resumedAdmission.js';
+import { resumedCredential } from './resumedCredential.js';
+import { awaitUnder } from '../../../../../lib/abort.js';
+import type { InputsDispatch } from '../contracts/inputsDispatch.js';
+import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolArtifactsOperations } from '../contracts/operations/artifacts.js';
 import type { ToolCredentialsOperations } from '../contracts/operations/credentials.js';
@@ -50,6 +54,9 @@ import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js
 
 interface ResumedInvocationLinks {
   readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
+  readonly unmountedRules: ToolCatalogOperations['unmountedRules'];
+  readonly parkedNow: ToolCatalogOperations['parkedNow'];
+  readonly historyForCheckIn: ToolSettlementOperations['historyForCheckIn'];
   readonly argumentRefusal: ReturnType<typeof buildArgumentRefusal>;
   readonly noteOffWire: ToolCatalogOperations['noteOffWire'];
   readonly resolveWantsAtDispatch: ToolArtifactsOperations['resolveWantsAtDispatch'];
@@ -76,6 +83,9 @@ interface ResumedInvocationLinks {
 export function buildResumedInvocation(
   deps: Pick<
     ToolCallsHandlerDeps,
+    | 'inputsLayer'
+    | 'permissionChecker'
+    | 'toolMiddleware'
     | 'clearConsentOutstanding'
     | 'reportConsentOutstanding'
     | 'time'
@@ -98,21 +108,20 @@ export function buildResumedInvocation(
   // resume can't re-pause (resume returns void), so that is surfaced as an error.
   //
   // `heldTo` names the consent gate a person approved this call through (a
-  // check-in, an ask). Its arguments are then held to the request once more
+  // check-in, an ask, or credential consent). Its arguments are then held to the request once more
   // at the last moment before `execute` — defence in depth behind the frozen
-  // copies every app callback is handed (`lib/frozenCopy.ts`): arguments that
-  // no longer re-derive the request's id (`runsAsAsked`, the one rule that
-  // binds a decision to its call) do not run (`callChanged`).
+  // copies every app callback is handed (`lib/frozenCopy.ts`). Entry requires
+  // the original bound call to re-derive the request's id (`runsAsAsked`).
   const executeResumed = async (
     binding: OuterCallBinding,
     scope: TypedScope<AgentState>,
     resolved: Resolution,
     toolName: string,
-    args: Readonly<Record<string, unknown>>,
+    approved: Readonly<Record<string, unknown>>,
     toolCallId: string,
     iteration: number,
-    env: { readonly signal?: AbortSignal },
-    heldTo?: ConsentGateKind,
+    env: ReturnType<TypedScope<AgentState>['$getEnv']>,
+    heldTo: PausedGatePolicy['gate'],
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
     const tool = resolved.tool;
@@ -127,7 +136,7 @@ export function buildResumedInvocation(
       );
     /** What the approval covers — the arguments as handed in, before any
      *  `wants` resolution or clock redraw derives the ones `execute` gets. */
-    const approved = args;
+    let prepared = approved;
     const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration });
     // The two refusals share one door here too (9.92.0): a name nothing holds,
     // and a name whose offered party cannot answer on this resume.
@@ -137,7 +146,21 @@ export function buildResumedInvocation(
         error: true,
       };
     }
-    const invalidArgs = links.argumentRefusal(scope, tool, args, {
+    env.signal?.throwIfAborted();
+    if (
+      heldTo === 'credential' &&
+      (tool.needs === undefined || tool.needs.credential !== scope.pausedCredentialService)
+    ) {
+      return { result: `Tool '${toolName}' could not be authorized after the wait.`, error: true };
+    }
+    const inputs: InputsDispatch | undefined =
+      deps.inputsLayer === true ? await import('../../../arguments/dispatch.js') : undefined;
+    const unmounted = links.unmountedRules(tool, toolName);
+    const rulesRefusal =
+      inputs?.resolutionsFor(scope, iteration).get(toolCallId)?.refused ??
+      (unmounted === undefined ? undefined : await unmounted);
+    if (rulesRefusal !== undefined) return { result: rulesRefusal, error: true };
+    const invalidArgs = links.argumentRefusal(scope, tool, approved, {
       toolName,
       toolCallId,
       iteration,
@@ -154,75 +177,12 @@ export function buildResumedInvocation(
         scope,
         toolName,
         tool.wants,
-        args,
+        approved,
         tool.schema.inputSchema,
       );
       if (!resolution.ok) return { result: resolution.refusal, error: true };
-      args = resolution.args;
+      prepared = resolution.args;
       wantedMeta = resolution.wanted;
-    }
-    const runIdentity = scope.runIdentity as
-      | { tenant?: string; principal?: string; conversationId: string }
-      | undefined;
-    let resolvedCredential: Credential | undefined;
-    const need = tool.needs;
-    if (need) {
-      emitSecurity('agentfootprint.credential.requested', {
-        service: need.credential,
-        ...(need.mode && { mode: need.mode }),
-      });
-      try {
-        const cred = await links.credentialsIn(scope, need.credential).getCredential({
-          service: need.credential,
-          ...(need.scopes && { scopes: need.scopes }),
-          ...(need.mode && { mode: need.mode }),
-          ...(runIdentity && {
-            identity: {
-              ...(runIdentity.principal && { principal: runIdentity.principal }),
-              ...(runIdentity.tenant && { tenant: runIdentity.tenant }),
-            },
-          }),
-        });
-        if (cred.status === 'issued') {
-          resolvedCredential = cred.credential;
-          emitSecurity('agentfootprint.credential.acquired', {
-            service: need.credential,
-            kind: cred.credential.kind,
-            ...(cred.expiresAt !== undefined && { expiresAt: cred.expiresAt }),
-          });
-          // The consent that was outstanding for this service has been given.
-          deps.clearConsentOutstanding?.(need.credential);
-        } else {
-          emitSecurity('agentfootprint.credential.authorization_required', {
-            service: need.credential,
-            sessionId: cred.sessionId,
-          });
-          // Still not authorized on the far side of a resume. A resume cannot
-          // pause again (`ResumeFn` returns void), so the honest move is the
-          // URL-free refusal plus `error: true`: the model reads it, the loop
-          // continues, and if it calls the tool again `execute` CAN pause — a
-          // fresh consent round with a fresh URL on `PendingAsk`. The
-          // consent record still goes out on the side channel so the turn
-          // cannot end quietly.
-          deps.reportConsentOutstanding?.({
-            service: need.credential,
-            authorizationUrl: cred.authorizationUrl,
-            sessionId: cred.sessionId,
-            tool: toolName,
-            iteration,
-          });
-          return { result: modelRefusal(need.credential), error: true };
-        }
-      } catch (credErr) {
-        const reason = credErr instanceof Error ? credErr.message : String(credErr);
-        emitSecurity('agentfootprint.credential.failed', {
-          service: need.credential,
-          reason,
-          tool: toolName,
-          ...(errorClassOf(credErr) !== undefined && { errorClass: errorClassOf(credErr) }),
-        });
-        return { result: `credential error for '${need.credential}': ${reason}`, error: true };
-      }
     }
     let executed = false;
     let negativeDispatch: NegativeDispatch | undefined;
@@ -238,12 +198,37 @@ export function buildResumedInvocation(
               { toolCallId, toolName },
               iteration,
               tool,
-              args,
+              prepared,
               deps.time.appZone,
             )
           : undefined;
       const callTime = dispatched?.context;
-      if (dispatched !== undefined) args = dispatched.args;
+      const access = await recheckResumedCall(scope, deps, {
+        gate: heldTo,
+        tool,
+        toolName,
+        toolCallId,
+        iteration,
+        args: dispatched?.args ?? prepared,
+        env,
+        parkedNow: links.parkedNow,
+        historyForCheckIn: links.historyForCheckIn,
+      });
+      if (!access.allowed) return access.refusal;
+      const { args } = access;
+      const credentials = await awaitUnder(env.signal, () =>
+        resumedCredential(
+          scope,
+          deps,
+          links.credentialsIn,
+          tool,
+          toolName,
+          iteration,
+          emitSecurity,
+        ),
+      );
+      if (!credentials.ok) return { result: credentials.result, error: true };
+      const resolvedCredential = credentials.credential;
       // This dispatch's own slot for the runner's facts (`CODE_RUN_SLOT`):
       // facts reach the exact dispatch that ran, never another run's call
       // that happens to reuse the provider's id.
@@ -295,21 +280,21 @@ export function buildResumedInvocation(
       if (ended !== undefined) throw ended;
       // An approved call runs with the arguments its request binds, or not
       // at all — asked here, after every callback that saw them has returned.
-      if (heldTo !== undefined) {
-        const read = (key: string): unknown => scope.$getValue(key);
-        if (!runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved)) {
-          // Nothing ran; the call's sessions are still released, as for a
-          // run that ended here.
-          await links.endCall(scope).catch(() => undefined);
-          return {
-            result: rewrittenAfterApproval(
-              toolName,
-              'those arguments changed before the call could run',
-            ),
-            error: true,
-            callChanged: true,
-          };
-        }
+      const read = (key: string): unknown => scope.$getValue(key);
+      const approvalChanged =
+        heldTo !== 'credential' &&
+        !runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved);
+      if (approvalChanged || !access.matchesPrepared(args)) {
+        // Nothing ran. Release the sessions as for a run that ended here.
+        await links.endCall(scope).catch(() => undefined);
+        recordResumedRefusal(scope, { toolName, toolCallId, iteration }, 'call-changed');
+        return {
+          result: rewrittenAfterApproval(
+            toolName,
+            'those arguments changed before the call could run',
+          ),
+          error: true,
+        };
       }
       // `Tool.search`: reserved, with the dispatch instant, just before the
       // call runs — as in the batch loop.

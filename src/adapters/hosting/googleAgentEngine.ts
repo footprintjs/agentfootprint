@@ -50,11 +50,11 @@
  *     Two consequences worth saying out loud, because they are the difference
  *     between this fix and a plausible-looking one:
  *
- *       • **A state delta MERGES by top-level key.** This store writes exactly
- *         two, both namespaced to this library — {@link SESSION_STATE_KEY} and
- *         {@link SESSION_ID_KEY} — so "merge the delta" and "replace our keys"
- *         are the same outcome for us, and another guest's keys under the same
- *         session are left alone either way. The second arrived in 9.45.0: the
+ *       • **A state delta MERGES by top-level key.** This store writes at most
+ *         three, all namespaced to this library — {@link SESSION_STATE_KEY},
+ *         {@link SESSION_ID_KEY} and the write-once owner (`agentEngineOwner.ts`,
+ *         never written by an anonymous turn) — and another guest's keys under
+ *         the same session are left alone either way. The second arrived in 9.45.0: the
  *         resource id is a lossy fold, so the listing has to carry the id its
  *         CALLER would recognise rather than the composed one. Answering with
  *         the composed id, and making the fold idempotent so that answer could
@@ -111,6 +111,7 @@ import { listedFormatOf } from '../../hosting/answeredPause.js';
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from '../../hosting/envelope.js';
 import { UnreadableEnvelopeError } from '../../hosting/errors.js';
 import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
+import { listedSessionId, OWNER_KEY, signerOf } from './agentEngineOwner.js';
 import type {
   CheckpointEnvelope,
   SessionExpiryPolicy,
@@ -158,8 +159,9 @@ export const SESSION_STATE_KEY = 'agentfootprint.envelope';
  * raw id travels with the conversation instead, and the listing answers with
  * the id its caller would recognise.
  *
- * Sessions written before 9.45.0 do not carry it; `listByUser` falls back to
- * the resource id for those, which is what it always returned.
+ * Sessions written before 9.45.0 do not carry it, and their resource id opens
+ * them only when the fold left it alone; `listByUser` lists such a row only
+ * under an id that opens it, else leaves it out (`agentEngineOwner.ts`).
  */
 export const SESSION_ID_KEY = 'agentfootprint.sessionId';
 
@@ -236,6 +238,8 @@ export interface AgentEngineSessionsOptions extends AiPlatformConnection {
 
 /** What a conversation that named nobody is stored under. */
 export const DEFAULT_USER_ID = 'agentfootprint-anonymous';
+
+const KEYS = { envelope: SESSION_STATE_KEY, sessionId: SESSION_ID_KEY, anonymous: DEFAULT_USER_ID };
 
 /**
  * The `author` on every event this store appends, unless
@@ -372,14 +376,11 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
    * Who already signed for this conversation, as far as this service can say —
    * or `undefined` for a session that is new, or that nobody has signed for.
    *
-   * TWO places have to be consulted, and only this adapter has that problem.
-   * `userId` is the index `ownerOf` answers from, and the service pins it at
-   * CREATE and will not let it change; so a conversation that ran anonymously
-   * on turn one and gained an identity on turn two is stored under the
-   * anonymous placeholder forever, with its real owner recorded only inside
-   * the envelope. Reading `userId` alone would therefore see "nobody owns
-   * this" on a conversation somebody plainly signed for, and let the next
-   * signer overwrite it.
+   * `userId` is pinned at CREATE, so a conversation that ran anonymously on
+   * turn one sits under the anonymous placeholder forever; its signer is kept
+   * in a write-once state key instead, because the envelope is replaced by
+   * every turn, anonymous ones included (r3-56-adapters-hosting-2). The rule,
+   * and how a session written before that key is read, is `signerOf`.
    */
   const signedBy = async (name: string, sessionId: string): Promise<string | undefined> => {
     let session: VertexSession | undefined;
@@ -393,29 +394,7 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       if (isNotFound(err)) return undefined;
       throw googleSdkFailure(ADAPTER, 'sessions.get', err);
     }
-    // A session that EXISTS but whose owner cannot be read is not an unowned
-    // session, and answering `undefined` for both is what let a foreign turn
-    // land. The service REQUIRES userId at create, so a materialised session
-    // always has one and an anonymous conversation carries the explicit
-    // DEFAULT_USER_ID placeholder — an absent userId therefore means the row's
-    // fields have not become readable yet, not that nobody owns it.
-    //
-    // This is the `unreadable-is-not-absent` law of the port, applied to
-    // OWNERSHIP rather than to the conversation: the two answers must stay
-    // different, because only one of them is safe to write on.
-    const userId = session?.userId;
-    if (typeof userId !== 'string' || userId === '') {
-      throw new Error(
-        `[hosting] ${ADAPTER} could not determine who owns session "${sessionId}". The session ` +
-          `exists but came back without a userId, so this store cannot tell an unowned ` +
-          `conversation from somebody else's — and it refuses rather than appending your turn ` +
-          `into a session that may not be yours. Nothing was written. This is transient ` +
-          `(another writer's create is still settling): retry the turn.`,
-      );
-    }
-    if (userId !== DEFAULT_USER_ID) return userId;
-    const stored = session?.sessionState?.[SESSION_STATE_KEY];
-    return stored !== null && typeof stored === 'object' ? envelopeOwner(stored) : undefined;
+    return signerOf(session, sessionId, KEYS, ADAPTER);
   };
 
   const append = async (name: string, stateDelta: Record<string, unknown>): Promise<boolean> => {
@@ -507,6 +486,9 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         // either the append or the create below.
         resolveSessionOwner(sessionId, await signedBy(name, sessionId), incoming);
       }
+      // A signed turn records its signer (the first one, or the same one); an
+      // anonymous turn leaves the owner key alone, so it cannot erase it.
+      const delta = incoming === undefined ? state : { ...state, [OWNER_KEY]: incoming };
 
       // APPEND first, CREATE when there is no session to append to.
       //
@@ -517,7 +499,7 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
       // Appending — not patching. `sessions.patch` with a `sessionState` mask is
       // refused by the live service (module header, fact 2b); it is the verb
       // 9.29.0 used and the reason a second turn could not be stored.
-      if (await append(name, state)) return;
+      if (await append(name, delta)) return;
 
       const userId = resolveUserId(sessionId, checked);
       let created;
@@ -526,7 +508,8 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
           parent: scope.parent,
           sessionId: safeResourceId(sessionId),
           requestBody: {
-            sessionState: state,
+            // `''` marks a conversation that began with no owner (agentEngineOwner.ts).
+            sessionState: { ...state, [OWNER_KEY]: incoming ?? '' },
             ...(options.ttl !== undefined && { ttl: options.ttl }),
             userId,
           },
@@ -546,7 +529,7 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         if (incoming !== undefined) {
           resolveSessionOwner(sessionId, await signedBy(name, sessionId), incoming);
         }
-        if (await append(name, state)) return;
+        if (await append(name, delta)) return;
         // Created by somebody and gone again before we could write to it.
         // Nothing here can say this turn landed, so it does not say it.
         throw googleSdkFailure(ADAPTER, 'sessions.create', err);
@@ -583,27 +566,27 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         throw googleSdkFailure(ADAPTER, 'sessions.list', err);
       }
 
-      const summaries = (page?.sessions ?? []).map((session) => {
-        // The caller's own id when the conversation carries it, the resource id
-        // when it predates that — never the composed id for a session that knows
-        // its real one, because a caller cannot feed the composed one back.
-        const carried = session.sessionState?.[SESSION_ID_KEY];
-        const sessionId =
-          typeof carried === 'string' && carried !== '' ? carried : lastSegment(session.name);
+      const summaries = (page?.sessions ?? []).flatMap((session) => {
+        // Only an id that OPENS the row — never one the fold no longer maps
+        // back to; a row no id can open is left out (r3-56-adapters-hosting-3).
+        const sessionId = listedSessionId(session, KEYS);
+        if (sessionId === undefined) return [];
         const stored = session.sessionState?.[SESSION_STATE_KEY];
         // A listing must not fail because ONE row is unreadable — a sidebar
         // that 500s over a corrupt conversation is worse than one that shows
         // it with an honest zero. The transcript op reads the envelope itself
         // and refuses there, which is where a reader can act on it.
         const readable = stored !== null && typeof stored === 'object' ? stored : undefined;
-        return {
-          sessionId,
-          savedAt: toMillis(session.updateTime ?? session.createTime),
-          // What the row SAYS the session is — a pause whose decision was
-          // already used lists as a conversation (`listedFormatOf`).
-          format: listedFormatOf(readable),
-          messageCount: readable === undefined ? 0 : envelopeTranscript(readable).length,
-        };
+        return [
+          {
+            sessionId,
+            savedAt: toMillis(session.updateTime ?? session.createTime),
+            // What the row SAYS the session is — a pause whose decision was
+            // already used lists as a conversation (`listedFormatOf`).
+            format: listedFormatOf(readable),
+            messageCount: readable === undefined ? 0 : envelopeTranscript(readable).length,
+          },
+        ];
       });
 
       const cursor = page?.nextPageToken;
@@ -773,13 +756,6 @@ function newInvocationId(): string {
   const uuid = (globalThis.crypto as { randomUUID?: () => string } | undefined)?.randomUUID;
   if (typeof uuid === 'function') return `af-${uuid.call(globalThis.crypto)}`;
   return `af-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** The id out of a resource name, which is everything after the last `/`. */
-function lastSegment(name: string | null | undefined): string {
-  if (typeof name !== 'string') return '';
-  const at = name.lastIndexOf('/');
-  return at === -1 ? name : name.slice(at + 1);
 }
 
 /** An RFC 3339 timestamp as unix milliseconds, or 0 when it is not one. */

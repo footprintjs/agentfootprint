@@ -135,7 +135,10 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
     const rowsAt = rowsAtOf(ctx.declarations, toolName);
     const reading = readEmptiness(
       toolBytesOf({ content: message.content, toolChars: message.toolChars }),
-      rowsAt !== undefined ? { rowsAt } : {},
+      {
+        placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
+        ...(rowsAt !== undefined && { rowsAt }),
+      },
     );
     reads.push({
       fact: {

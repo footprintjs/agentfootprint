@@ -6,7 +6,7 @@ import type { AgentState } from '../../../types.js';
 import { extractSequence } from '../../../../../security/extractSequence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
-import type { InnerCallHalt } from '../../../innerCallOuter.js';
+import type { ResumedPolicyHalt } from '../contracts/operations/resumedInvocation.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
@@ -57,20 +57,19 @@ export function haltLandedCall(scope: TypedScope<AgentState>, frame: PolicyHaltF
 }
 
 /**
- * End the run on an inner call's halt at a RESUME door: the door has already
- * landed the outer call's result in `scope.history`, so this is the halt half
- * alone — the same event, flags and break as `haltLandedCall`.
+ * End the run after a resume door lands the result. The halt may belong to
+ * the resumed invocation or to an inner call that invocation made.
  */
 export function haltResumedCall(
   scope: TypedScope<AgentState>,
-  halt: InnerCallHalt,
+  halt: ResumedPolicyHalt,
   iteration: number,
 ): void {
   endRunOnHalt(scope, {
     haltContext: halt,
     emitSecurity: bindToolSecurityEvents(scope, { toolCallId: halt.call.toolCallId, iteration }),
     target: halt.call.toolName,
-    innerCallId: halt.call.toolCallId,
+    ...(halt.outer !== true && { innerCallId: halt.call.toolCallId }),
     args: halt.call.args,
     history: [...((scope.history as readonly LLMMessage[] | undefined) ?? [])],
     iteration,

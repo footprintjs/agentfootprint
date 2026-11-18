@@ -27,6 +27,7 @@ import type { ToolObservationsOperations } from '../contracts/operations/observa
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import { haltResumedCall } from '../routing/policyHalt.js';
+import { takeArguments } from '../../../innerCallArguments.js';
 
 interface ResumeCredentialLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -66,7 +67,9 @@ export function buildResumeCredential(
     deps.resources?.answer.record();
 
     const iteration = scope.iteration as number;
-    const args = (scope.pausedCredentialArgs ?? {}) as Readonly<Record<string, unknown>>;
+    const storedArgs = scope.$getValue('pausedCredentialArgs');
+    const taken = storedArgs === undefined ? undefined : takeArguments(storedArgs);
+    const args = taken?.kind === 'copied' ? taken.args : {};
     const env = scope.$getEnv();
     // Resolved against the party the checkpoint carries (9.92.0).
     const resolved = links.resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
@@ -74,17 +77,20 @@ export function buildResumeCredential(
     /** What the call's `execute` saw — its script row reads it. */
     const scriptSeen: ResumedCallFacts = {};
     try {
-      const dispatched = await links.resolveCredentialAndExecute(
-        scope,
-        resolved,
-        toolName,
-        args,
-        toolCallId,
-        iteration,
-        env,
-        undefined,
-        scriptSeen,
-      );
+      const dispatched =
+        taken?.kind === 'copied'
+          ? await links.resolveCredentialAndExecute(
+              scope,
+              resolved,
+              toolName,
+              args,
+              toolCallId,
+              iteration,
+              env,
+              'credential',
+              scriptSeen,
+            )
+          : { result: `Tool '${toolName}' could not be authorized after the wait.`, error: true };
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
@@ -273,6 +279,7 @@ export function buildResumeCredential(
       scope.pausedToolName = '';
       scope.pausedToolStartMs = 0;
       scope.pausedCredential = false;
+      scope.pausedGatePolicy = undefined;
       scope.pausedCredentialArgs = undefined;
       scope.pausedCredentialService = undefined;
       if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;

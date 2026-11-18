@@ -19,14 +19,20 @@ site, now removed.)
 ## Develop
 
 ```bash
-npm install      # also runs `fumadocs-mdx` (codegen → .source/)
+(cd .. && npm ci && npm run build)
+npm ci           # also runs `fumadocs-mdx` (codegen → .source/)
 npm run dev      # http://localhost:3000 → /docs
 npm run build    # static/server build
 ```
 
-The browser demos share the root library's FootPrint engine and Foottrace record
+The site always builds against the AgentFootprint source beside it, so the docs override Lens's AgentFootprint peer to that link and check compatibility through the build, Try-it and type checking.
+The docs use npm's `install-links` setting to pack the built `file:..` dependency into
+the docs install, where the site and AgentFootprint share one FootPrint and
+Foottrace package. Run `npm ci` again in the docs after rebuilding the root source.
+
+The browser demos share AgentFootprint's installed FootPrint engine and Foottrace record
 implementation. `next.config.mjs` derives exact aliases from both packages' public
-exports, so the linked AgentFootprint runtime and the installed Lens cannot load
+exports, so the AgentFootprint runtime and the installed Lens cannot load
 different physical copies. Webpack applies these aliases only to the client,
 leaving its server resolution unchanged. Turbopack's existing global alias policy
 also covers Foottrace, using relative paths to the same files. `check:browser-demos`
@@ -114,3 +120,12 @@ npm run check:api    # CI guard: regenerate + `git diff --exit-code` (fails if s
 
 Wire `npm run check:api` into CI so a PR that changes the public API but forgets to
 regenerate docs fails the build — the no-stale-docs guarantee.
+
+### Skill graph browser bundle
+
+The skill graph and the full inspector share the public Lens entry point. The documentation
+site compiles the skill graph’s one named import separately so opening that diagram does
+not also download the inspector. The [entry](components/demos/skillGraphView.ts) keeps
+the installed Lens component and its types. The [client loader](scripts/skill-graph-view-loader.cjs)
+leaves React, ReactFlow, styles and layout dependencies to the site’s normal bundler.
+The existing site budget measures all assets the diagram needs.

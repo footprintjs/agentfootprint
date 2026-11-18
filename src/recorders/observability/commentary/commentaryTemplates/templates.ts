@@ -22,6 +22,15 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'skill.rejected': 'The requested skill was refused.',
   ...dispositionTemplates,
   'event.unknown': 'An additional event was recorded.',
+  'middleware.decision.refused': 'The library refused an unrecognised middleware answer.',
+  'checkin.decision.approved': 'A person approved the call.',
+  'permission.check.resume.refused': 'The permission policy refused the call after the wait.',
+  'middleware.decision.resume.libraryRefused': 'The library refused the call after the wait.',
+  'middleware.decision.resume.secondQuestion':
+    'The policy required a second human answer, so the library refused the call after the wait.',
+  'middleware.decision.resume.callChanged':
+    'The tool arguments changed after the wait, so the library refused the call.',
+  'middleware.decision.resume.refused': 'A middleware rule refused the call after the wait.',
   'agent.turn_start': 'User asked {{appName}}: "{{userPrompt}}".',
 
   // `{{agentName}}` resolves to the active agent's display name when

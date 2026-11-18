@@ -165,13 +165,13 @@ export interface LLMMessage {
    * last-tool-result pin, the drop notice, the dangling-reference check); and
    * the trace toolpack's `inspect_tool_call`
    * (`trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`); and, under
-   * `.findings()`, the offer, the identity source, the piece's `undeclared:`
-   * line, the collapse, the window's `droppedStandings` and a turn's standing
-   * (`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,
-   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` ·
-   * `turnStandingOf` — the `'ledger-fact'` pin and
-   * `WindowStrategyInput.standingOf`) — a settled message is not a result to
-   * judge. None of them parses the sentence.
+   * `.findings()`, the offer, the identity source, the findings DATA's `undeclaredResultIds`
+   * (and the replay-only piece's `undeclared:` line), the collapse, the window's
+   * `droppedStandings` and a turn's standing (`core/agent/findings/offer.ts`,
+   * `findings/context.ts` · `findingsContext`, `findings/serve.ts` · `collapseJudged`,
+   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` · `turnStandingOf` — the
+   * `'ledger-fact'` pin and `WindowStrategyInput.standingOf`) — a settled message is not a
+   * result to judge. None of them parses the sentence.
    *
    * **One definition, two carriers.** The settled call's two brackets on the
    * event stream carry the same fact under the same name, typed off THIS field
@@ -932,10 +932,10 @@ export interface PermissionDecision {
    */
   readonly reason?: string;
   /**
-   * v2.12 — content delivered to the LLM as the synthetic `tool_result`
-   * on `'deny'` and `'halt'`. When omitted, defaults to a deliberately
-   * generic `"Tool '${name}' is not available in this context."` —
-   * NEVER falls back to `reason` (which is telemetry, not user-facing).
+   * v2.12 — content for the synthetic `tool_result` on an explicit deny or halt.
+   * A deny defaults to `"[permission denied: ${rationale ?? 'policy'}]"`. The
+   * rationale can reach the model. A halt defaults to `"Tool '${name}' is not
+   * available in this context."` Both defaults leave `reason` in telemetry.
    */
   readonly tellLLM?: ToolResultContent;
 }

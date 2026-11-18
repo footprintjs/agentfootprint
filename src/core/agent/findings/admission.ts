@@ -1,6 +1,7 @@
 /** Request-local structural identity, not assertion truth or a second findings ledger. */
 import type { LLMMessage, LLMRequest } from '../../../provider-contract/types.js';
-import { isPlacedToolResult } from '../../../artifacts/placement.js';
+import { parseMaybeJson } from '../emptiness.js';
+import { readPlacement, type IssuedPairs } from '../placedTickets.js';
 import type { FindingsDeclaration } from './types.js';
 import { isCollapsedToolResult } from './ticket.js';
 
@@ -32,6 +33,7 @@ export function captureFindingsRequest(
   request: LLMRequest,
   origins: readonly LLMMessage[],
   iteration: number,
+  issued?: IssuedPairs,
 ): FindingsRequest {
   const sources = new Map<string, LLMMessage[]>();
   const sent = new Map<string, LLMMessage[]>();
@@ -63,30 +65,11 @@ export function captureFindingsRequest(
         : source.notDispatched !== undefined || source.toolResultOrigin !== undefined
         ? 'not-a-result'
         : undefined;
-    const message = messages[0]!;
-    let ref: string | undefined;
-    let ticket = false;
-    // Equal recorded bytes are body data. A tool may legitimately return a
-    // JSON object that resembles a library ticket; parsing that must not
-    // invent placement, hide its body or import a non-string payload ref.
-    if (message.content !== source?.content) {
-      try {
-        const parsed: unknown = JSON.parse(message.content);
-        if (isPlacedToolResult(parsed)) {
-          ref = parsed.ref;
-          ticket = true;
-        } else if (
-          isCollapsedToolResult(parsed) &&
-          parsed.toolCallId === toolCallId &&
-          (parsed.ref === undefined || typeof parsed.ref === 'string')
-        ) {
-          ref = parsed.ref;
-          ticket = true;
-        }
-      } catch {
-        /* Other changed text has unknown visibility. */
-      }
-    }
+    const message = messages[0];
+    const visibility =
+      reason === undefined && source !== undefined && message !== undefined
+        ? resultVisibility(toolCallId, message, source, issued)
+        : { visibility: 'unknown' as const };
     return {
       toolCallId,
       identified: reason === undefined || reason === 'not-a-result',
@@ -97,20 +80,37 @@ export function captureFindingsRequest(
             (source?.notDispatched !== undefined || source?.toolResultOrigin === 'not-entered')
           ? ('not-dispatched' as const)
           : ('unknown' as const),
-      visibility:
-        reason !== undefined
-          ? ('unknown' as const)
-          : ticket
-          ? ('ticket' as const)
-          : message.content === source?.content
-          ? ('body' as const)
-          : ('unknown' as const),
+      ...visibility,
       ...(reason !== undefined && { reason }),
       ...(reason === undefined && source?.toolName !== undefined && { toolName: source.toolName }),
-      ...(reason === undefined && ref !== undefined && { ref }),
     };
   });
   return { version: 1, iteration, complete: true, results };
+}
+
+/** Use the receipt for a placement, even when the request left its bytes intact. */
+function resultVisibility(
+  toolCallId: string,
+  sent: LLMMessage,
+  source: LLMMessage,
+  issued: IssuedPairs | undefined,
+): Pick<ReferenceObservation, 'visibility' | 'ref'> {
+  const placement = readPlacement(toolCallId, sent.content, issued);
+  if (placement?.issued === true) return { visibility: 'ticket', ref: placement.ticket.ref };
+  if (placement?.issued === false) return { visibility: 'unknown' };
+  if (sent.content === source.content) return { visibility: 'body' };
+
+  // The findings collapse can carry a ref only from the committed
+  // receipt-backed placement it summarizes.
+  const collapsed = parseMaybeJson(sent.content);
+  if (!isCollapsedToolResult(collapsed) || collapsed.toolCallId !== toolCallId)
+    return { visibility: 'unknown' };
+  if (collapsed.ref === undefined) return { visibility: 'ticket' };
+  if (typeof collapsed.ref !== 'string') return { visibility: 'unknown' };
+  const original = readPlacement(toolCallId, source.content, issued);
+  return original?.issued === true && original.ticket.ref === collapsed.ref
+    ? { visibility: 'ticket', ref: collapsed.ref }
+    : { visibility: 'ticket' };
 }
 
 /** No receipt/hash, current ledger or future batch result can fill a missing boundary. */

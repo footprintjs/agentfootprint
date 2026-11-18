@@ -14,7 +14,7 @@
  * reads as grounded and the check quietly passes everything. So a tool result
  * that parses as JSON is WALKED — every key, every leaf — and each leaf is
  * indexed both whole and tokenized; so is the JSON a result OPENS with when a
- * framework note follows it (`readResult`, over `servedJson.ts`). A result
+ * framework note follows it (`readResult`, over `lib/servedJson.ts`). A result
  * that is not JSON is tokenized as text. Either way the comparison is
  * token-exact, never substring. Under `decimalRounding` a whole token of
  * text in scientific notation also files the exact decimal it states
@@ -251,9 +251,9 @@ function add(sink: Sink, raw: string): void {
   const norm = normalizeToken(raw);
   if (norm === '') return;
   for (const form of lookupForms(norm)) {
-    // Re-stamping a form the index already holds costs no entry, so it is
-    // done before the budget is consulted: a truncated index should still
-    // hold the freshest turn for everything it did manage to index.
+    // Re-stamping a held form costs no entry, so it runs before the budget check — but only for a
+    // token that reaches `add`: past the budget a later re-serve is never seen (earlier stamp kept,
+    // no carrier; `indexTruncated: true`). Readers that act on a stamp refuse a truncated index.
     if (sink.values.has(form)) {
       sink.values.set(form, sink.turn);
       carry(sink, form);
@@ -358,7 +358,7 @@ function asEvidence(value: unknown): unknown {
  * blocks) — reads as those leading values, walked, and the text after them as
  * `tail`; one cut short before it closes (a tool that truncated its own
  * output) reads as the leaves the grammar can read, and — cut inside a
- * string — that string's whole words as `tail` (`servedJson.ts` ·
+ * string — that string's whole words as `tail` (`lib/servedJson.ts` ·
  * `jsonPrefixOf`: never the word the cut may have split). Read whole as text,
  * `{"id":4417}` tokenises to `:4417`, and every number and boolean the tool
  * returned would read as absent. Text that opens with a brace and is not JSON

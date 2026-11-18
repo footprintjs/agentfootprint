@@ -4,7 +4,7 @@ title: AnswerValidationOptions<T>
 
 # Interface: AnswerValidationOptions\<T\>
 
-Defined in: [src/answer-validation/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L136)
+Defined in: [src/answer-validation/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L137)
 
 Opt-in contract. The callback cannot replace the accepted answer.
 
@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L239)
+Defined in: [src/answer-validation/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L247)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -88,6 +88,13 @@ way. `mode: 'observe'` records the rows and delivers.
   how many more were never looked up): `unreachable`.
   A clean pass is `not-applicable`: finding a value clears it, and never
   verifies the answer.
+- `'negative-claims'`: the typed `.negativeClaims({ field, tools })`
+  check's rows, ids starting `agent:negative-claims:` (for example
+  `agent:negative-claims:<field>#<n>`), built in
+  `core/agent/stages/answerValidation.ts`. You rarely list it: while typed
+  `.negativeClaims()` is armed the agent adds it for you, so its rows are
+  in the report either way. Listing it adds one thing, a `build()`
+  refusal when typed `.negativeClaims()` is not configured.
 
 No agent row is ever `checked-pass`: these checks can withhold an answer
 and never verify one. `validate` stays required, and only your checks can
@@ -125,7 +132,7 @@ Agent.create({ provider, model })
 
 > `readonly` **id**: `string`
 
-Defined in: [src/answer-validation/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L137)
+Defined in: [src/answer-validation/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L138)
 
 ***
 
@@ -133,7 +140,7 @@ Defined in: [src/answer-validation/types.ts:137](https://github.com/footprintjs/
 
 > `readonly` `optional` **limits?**: `AnswerValidationLimits`
 
-Defined in: [src/answer-validation/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L141)
+Defined in: [src/answer-validation/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L142)
 
 ***
 
@@ -141,7 +148,7 @@ Defined in: [src/answer-validation/types.ts:141](https://github.com/footprintjs/
 
 > `readonly` `optional` **mode?**: `"enforce"` \| `"observe"`
 
-Defined in: [src/answer-validation/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L140)
+Defined in: [src/answer-validation/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L141)
 
 Enforce withholds non-passing results; observe records them. Default enforce.
 
@@ -151,7 +158,7 @@ Enforce withholds non-passing results; observe records them. Default enforce.
 
 > `readonly` **version**: `string`
 
-Defined in: [src/answer-validation/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L138)
+Defined in: [src/answer-validation/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L139)
 
 ## Methods
 
@@ -159,7 +166,7 @@ Defined in: [src/answer-validation/types.ts:138](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L240)
+Defined in: [src/answer-validation/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L248)
 
 #### Parameters
 

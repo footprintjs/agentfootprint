@@ -114,6 +114,7 @@ export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead
       readonly kind?: unknown;
     }[];
     const reading = readEmptiness(toolBytesOf({ content: m.content, toolChars: m.toolChars }), {
+      placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
       ...(rowsAt !== undefined && { rowsAt }),
       ...(mine.length > 0 && {
         door: {

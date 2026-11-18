@@ -4,6 +4,7 @@ import type { CallLLMStageDeps } from './callLLM/types.js';
 import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
+import { issuedTicketsOf } from '../placedTickets.js';
 import { observeRequests } from '../../../provider-contract/requestObserver.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
@@ -297,7 +298,7 @@ export function buildCallLLMStage(
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
-    // findings piece's cache law), so an unchanged map serves unchanged bytes
+    // cached system-prefix contract), so an unchanged map serves unchanged bytes
     // on every call of the run. The composer is loaded through `import()` —
     // the optional-family law of docs-next's site budget (`toolCalls/evidence/judgeLanded.ts ·
     // judgeLanded`): an unarmed agent never loads the module. The event
@@ -357,13 +358,8 @@ export function buildCallLLMStage(
       withheld !== null
         ? EMPTY_TOOL_SCHEMAS
         : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
-    // Under `'tool-forced'` the schema rides along as one more tool ON THE
-    // WIRE. It is reported in `llm_start` too, and deliberately: that event's
-    // whole claim is "what the model actually saw this call", and a tool the
-    // model was forced to use is the last thing to leave out of it.
-    // Actual offered contracts specialize only the native findings instruction.
-    // These request-only copies feed cache, receipts and context recording;
-    // servedView applies the same fold without changing committed injections.
+    // The forced schema rides on the wire and in `llm_start`. Offered contracts
+    // specialize the findings instruction in request-only copies that replay rebuilds.
     const systemPieces = projectSourceInstructions(
       recoveryPiece === undefined && ontologyPieceRecord === undefined
         ? systemPromptInjections
@@ -685,6 +681,8 @@ export function buildCallLLMStage(
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
+    const issued = deps.findings === true ? issuedTicketsOf(scope.placedTickets) : undefined;
+    const capture = (req: LLMRequest) => captureFindingsRequest(req, committed, iteration, issued);
     // THE RUN'S SIGNAL REACHES THE WIRE. Every attempt carries it on its
     // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
     // provider's own HTTP request — the engine stopping the traversal leaves a
@@ -705,8 +703,7 @@ export function buildCallLLMStage(
         withRequestSignal(req, runSignal),
         hooks.providerHooks ?? providerHooks,
       );
-      let candidate =
-        deps.findings === true ? captureFindingsRequest(req, committed, iteration) : undefined;
+      let candidate = deps.findings === true ? capture(req) : undefined;
       const attemptHooks =
         deps.findings === true
           ? observeRequests(
@@ -716,11 +713,11 @@ export function buildCallLLMStage(
                   preparation: Parameters<NonNullable<LLMCallHooks['onReplayPrepared']>>[0],
                 ) => {
                   attempts.hooks.onReplayPrepared?.(preparation);
-                  candidate = captureFindingsRequest(preparation.request, committed, iteration);
+                  candidate = capture(preparation.request);
                 },
               },
               (request) => {
-                candidate = captureFindingsRequest(request, committed, iteration);
+                candidate = capture(request);
               },
             )
           : attempts.hooks;
@@ -803,8 +800,7 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        if (deps.findings === true)
-          candidate = captureFindingsRequest(attempts.request, committed, iteration);
+        if (deps.findings === true) candidate = capture(attempts.request);
         resp = await untilAborted(
           selectedProvider.complete(attempts.request, attemptHooks),
           runSignal,
@@ -916,10 +912,7 @@ export function buildCallLLMStage(
           providerHooks,
           ...((deps.findings === true || deps.outputFormat !== undefined) && {
             prepareFallback: (request: LLMRequest) => {
-              const witness =
-                deps.findings === true
-                  ? captureFindingsRequest(request, committed, iteration)
-                  : undefined;
+              const witness = deps.findings === true ? capture(request) : undefined;
               return () => {
                 // A callback may return arbitrary text; it did not inherit
                 // native generation from the provider response it replaces.
@@ -1121,11 +1114,9 @@ export function buildCallLLMStage(
           })),
           {
             grounded: [
-              // The findings piece is mixed-trust for the same reason the
-              // recovery piece is: it quotes the model's OWN declarations,
-              // so a value that exists only there must not excuse an
-              // argument. Either request-only piece narrows the credited
-              // system text to the trusted injections.
+              // The recovery piece quotes the model's words; only the trusted
+              // system injections count as grounds when that piece is present.
+              // Findings DATA is a request-only message after history.
               ...(recoveryPiece === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []

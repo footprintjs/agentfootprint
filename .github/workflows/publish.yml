@@ -648,7 +648,7 @@ jobs:
       - name: Capture trusted archive verifier
         env:
           VERIFY_DIR: ${{ runner.temp }}/af-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: cp scripts/publish-archive/archive.cjs scripts/publish-archive/verify.cjs "$VERIFY_DIR/"
+        run: cp scripts/publish-archive/archive.cjs scripts/publish-archive/verify.cjs scripts/publish-archive/archivePolicy.cjs scripts/publish-archive/tarReader.cjs "$VERIFY_DIR/"
 
       - name: Read the pinned source manifest
         id: source
