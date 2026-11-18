@@ -49,7 +49,7 @@ function fixture(t, topology = 'packed') {
   if (topology === 'linked') {
     mkdirSync(join(docs, 'node_modules'), { recursive: true });
     symlinkSync(source, join(docs, 'node_modules/agentfootprint'), 'dir');
-    // A normal docs npm ci installs its own direct dependencies beside the link.
+    // A symlink would give the site and AgentFootprint separate peer identities.
     for (const name of ['footprintjs', 'foottrace'])
       packageAt(join(docs, 'node_modules', name), name);
   } else {
@@ -60,32 +60,35 @@ function fixture(t, topology = 'packed') {
   return { source, docs, agent, modules };
 }
 
-for (const topology of ['linked', 'packed']) {
-  test(`${topology} AF owns every browser door without executing packages`, (t) => {
-    const f = fixture(t, topology),
-      result = resolveBrowserLibraries(f.docs);
-    assert.equal(result.agentRoot, f.agent);
-    assert.deepEqual(result.owners, {
-      footprintjs: join(f.modules, 'footprintjs'),
-      foottrace: join(f.modules, 'foottrace'),
-    });
-    assert.deepEqual(
-      Object.keys(result.aliases).sort(),
-      [
-        'footprintjs',
-        'footprintjs/extra',
-        'footprintjs/future/door',
-        'foottrace',
-        'foottrace/extra',
-        'foottrace/future/door',
-      ].sort(),
-    );
-    for (const name of ['footprintjs', 'foottrace']) {
-      assert.equal(result.aliases[name], join(f.modules, name, 'browser/0.mjs'));
-      assert.equal(result.aliases[`${name}/future/door`], join(f.modules, name, 'browser/2.mjs'));
-    }
+test('the packed source owns every browser door without executing packages', (t) => {
+  const f = fixture(t),
+    result = resolveBrowserLibraries(f.docs);
+  assert.equal(result.agentRoot, f.agent);
+  assert.deepEqual(result.owners, {
+    footprintjs: join(f.modules, 'footprintjs'),
+    foottrace: join(f.modules, 'foottrace'),
   });
-}
+  assert.deepEqual(
+    Object.keys(result.aliases).sort(),
+    [
+      'footprintjs',
+      'footprintjs/extra',
+      'footprintjs/future/door',
+      'foottrace',
+      'foottrace/extra',
+      'foottrace/future/door',
+    ].sort(),
+  );
+  for (const name of ['footprintjs', 'foottrace']) {
+    assert.equal(result.aliases[name], join(f.modules, name, 'browser/0.mjs'));
+    assert.equal(result.aliases[`${name}/future/door`], join(f.modules, name, 'browser/2.mjs'));
+  }
+});
+
+test('refuses a symlinked source with its own peer install', (t) => {
+  const f = fixture(t, 'linked');
+  assert.throws(() => resolveBrowserLibraries(f.docs), /divergent footprintjs/);
+});
 
 for (const name of ['footprintjs', 'foottrace']) {
   test(`refuses a different ${name} image beneath AF instead of masking it with an alias`, (t) => {

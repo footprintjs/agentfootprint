@@ -46,12 +46,8 @@ export function resolveBrowserLibraries(docsRoot) {
   const selected = Object.fromEntries(
     ['footprintjs', 'foottrace'].map((name) => [name, packageOwner(agentBrowser, name)]),
   );
-  // In linked development the docs and parent really have separate installs.
-  // The client aliases deliberately select the linked AF owner's dependencies.
-  const linkedParent = agent.root === dirname(realpathSync(docsRoot));
-  const issuers = linkedParent ? [agent.entry] : [docsIssuer, agent.entry];
   for (const [name, owner] of Object.entries(selected)) {
-    for (const issuer of issuers) {
+    for (const issuer of [docsIssuer, agent.entry]) {
       assert.equal(packageOwner(issuer, name).root, owner.root, `divergent ${name} package owner`);
     }
   }

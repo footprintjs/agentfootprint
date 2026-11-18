@@ -10,7 +10,7 @@ const isExport = process.env.EXPORT === 'true';
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
 // ONE engine and ONE record implementation. Follow the AgentFootprint package
-// docs actually resolves: file:.. in development, or the installed archive.
+// the docs resolve. npm packs the built file:.. source into the docs install.
 // Its natural browser dependencies own every public engine/reader door; refuse
 // divergent docs, AF or engine reader roots rather than mask them with aliases.
 // Resolve entries and their package manifests, never guess a dist or parent path.
@@ -28,11 +28,7 @@ const config = {
   // The lens is a sibling package imported client-side, so Turbopack must bundle it.
   transpilePackages: ['agentfootprint-lens', 'storydeck'],
   turbopack: {
-    // Root = the agentfootprint repo (the parent), NOT docs-next. The live "Try it"
-    // demos import `agentfootprint` client-side, and npm links it as a symlink to the
-    // parent repo (docs-next is nested inside it). Turbopack only bundles modules
-    // INSIDE the root, so the root must contain the parent — otherwise the symlinked
-    // agent runtime can't be bundled for the browser.
+    // Use the parent repository as the root for the docs site and its source.
     root: resolve(import.meta.dirname, '..'),
     // agentfootprint's lazyRequire does a CALL-TIME-only `node:module` access (Node-only;
     // never reached by a browser mock agent). Vite/webpack stub node: builtins
