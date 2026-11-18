@@ -136,7 +136,7 @@ A composing tool (`ctx.tools.call`, a [runbook as a tool](doc:runbook-as-tool)) 
 - the checker asked about an **inner** call gets the sequence so far plus the inner calls the same outer call already admitted, including tools still running. Each admission becomes visible before the next check;
 - once the outer call's result lands, every later `tool_call` check — the model's next call or the next inner call — sees the outer call followed by its admitted inner calls.
 
-The permission checker receives the actual arguments each admitted tool started with. History, audit rows and halt reports use the tool's shown arguments. Protected policy arguments survive a native pause and resume in private working state. A later call refuses if its checker needs prior protected values and the continuation lacks them.
+The permission checker receives the actual arguments each admitted tool started with. History, audit rows and halt reports use the tool's shown arguments. Protected policy arguments survive a native pause, a conversation continuation and recoverable run failures through the corresponding private checkpoint carrier. Keep raw checkpoints in trusted storage. If the checkpoint has earlier inner-call rows without evidence of the actual policy inputs, the library refuses subsequent tool-call admission rather than consult the checker with shown values.
 
 A `'halt'` refuses the inner call and ends the run once the outer call settles, even when the outer tool asks to pause. The halt closes further admissions. The `permission.halt` event uses the inner call's id (`<outer call id>#inner-<n>`) and tool name. `PolicyHaltError.proposed` names the same call.
 
