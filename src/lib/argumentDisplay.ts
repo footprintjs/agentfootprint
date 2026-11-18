@@ -5,6 +5,15 @@ export const ARGUMENT_PLACEHOLDER = 'REDACTED';
 
 export type ArgumentRecord = Readonly<Record<string, unknown>>;
 
+/** Read own data fields from a plain record. */
+export function readArgumentRecord(value: unknown): ArgumentRecord | undefined {
+  try {
+    return ownData(value);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Read a detached display record without calling any of its fields as code. */
 export function copyArgumentDisplay(value: unknown): ArgumentRecord | undefined {
   try {

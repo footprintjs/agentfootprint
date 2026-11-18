@@ -9,7 +9,12 @@ import {
 } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { accountForAnswer, recordRun } from '../../../src/observe.js';
-import { argsRedactedBy, SHOWN_ARGS, type ShownArgs } from '../../../src/core/toolShownArgs.js';
+import {
+  argsRedactedBy,
+  SHOWN_ARGS,
+  shownFieldsOf,
+  type ShownArgs,
+} from '../../../src/core/toolShownArgs.js';
 import { argsShownOf } from '../../../src/ag-ui/shownArgs.js';
 import { runAsAgUi } from '../../ag-ui/helpers.js';
 
@@ -64,6 +69,18 @@ const unsupportedDisplays = [
 ] as const;
 
 describe('approval display', () => {
+  it('retains the protected display for an unrecognized argument container', () => {
+    const project = vi.fn(() => ({}));
+    const tool = { [SHOWN_ARGS]: project };
+
+    expect(shownFieldsOf(tool, [] as unknown as Args)).toEqual({ shownArgs: {}, hiddenArgs: [] });
+    expect(shownFieldsOf(tool, [3] as unknown as Args)).toEqual({
+      shownArgs: { 0: 'REDACTED' },
+      hiddenArgs: ['0'],
+    });
+    expect(project).not.toHaveBeenCalled();
+  });
+
   it.each(unsupportedDisplays)(
     'masks an unsupported %s at the wire boundary',
     (_kind, shownArgs) => {

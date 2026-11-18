@@ -33,13 +33,13 @@ import { RedactionRule } from 'footprintjs/advanced';
 
 import type { ToolArgs } from '../tools/runChain.js';
 import { frozenView } from '../lib/frozenCopy.js';
-import { ownData } from '../lib/boundedJson.js';
 import { isJsonFaithful } from '../lib/jsonFaithful.js';
 import {
   ARGUMENT_PLACEHOLDER,
   argumentNames,
   copyArgumentDisplay,
   maskArguments,
+  readArgumentRecord,
 } from '../lib/argumentDisplay.js';
 
 /** The registry symbol a tool carries its arguments view under. */
@@ -82,6 +82,7 @@ export function carriesArgumentView(tool: unknown): boolean {
 interface ArgumentView {
   readonly shown: ToolArgs;
   readonly hiddenArgs: readonly string[];
+  readonly uncertain?: true;
 }
 
 function viewOf(tool: unknown): ShownArgs | undefined {
@@ -91,7 +92,7 @@ function viewOf(tool: unknown): ShownArgs | undefined {
 
 function readView(view: ShownArgs, args: ToolArgs, previous?: ToolArgs): ToolArgs | undefined {
   try {
-    return ownData(previous ?? view(args));
+    return readArgumentRecord(previous ?? view(args));
   } catch {
     return undefined;
   }
@@ -102,6 +103,7 @@ export function shownArgsOf(tool: unknown, args: ToolArgs): ToolArgs {
   const view = viewOf(tool);
   if (view === undefined) return args;
   // Preserve unchanged value identity for callers measuring which arguments the view changed.
+  if (readArgumentRecord(args) === undefined) return maskArguments(argumentNames(args));
   const input = frozenView(args);
   const output = input === undefined ? undefined : readView(view, input);
   const copy = copyArgumentDisplay(output);
@@ -124,7 +126,7 @@ export function shownArgsOf(tool: unknown, args: ToolArgs): ToolArgs {
 
 function allHidden(args: ToolArgs): ArgumentView {
   const hiddenArgs = Object.freeze([...argumentNames(args)]);
-  return { shown: maskArguments(hiddenArgs), hiddenArgs };
+  return { shown: maskArguments(hiddenArgs), hiddenArgs, uncertain: true };
 }
 
 /**
@@ -142,7 +144,7 @@ export function argumentViewOf(
 ): ArgumentView | undefined {
   const view = viewOf(tool);
   if (view === undefined) return input === undefined ? undefined : { shown: input, hiddenArgs: [] };
-  if (input === undefined) return allHidden(args);
+  if (input === undefined || readArgumentRecord(args) === undefined) return allHidden(args);
   const output = readView(view, input, previous);
   const copy = copyArgumentDisplay(output);
   if (output === undefined || copy === undefined) return allHidden(args);
@@ -186,7 +188,7 @@ export function shownFieldsOf(
 ): { readonly shownArgs?: ToolArgs; readonly hiddenArgs?: readonly string[] } {
   if (!carriesArgumentView(tool)) return {};
   const view = protectProposal ? allHidden(args) : argumentViewOf(tool, args);
-  return view === undefined || view.hiddenArgs.length === 0
+  return view === undefined || (!view.uncertain && view.hiddenArgs.length === 0)
     ? {}
     : { shownArgs: view.shown, hiddenArgs: view.hiddenArgs };
 }

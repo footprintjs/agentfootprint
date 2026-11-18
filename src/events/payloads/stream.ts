@@ -114,8 +114,8 @@ export interface ToolStartPayload {
   /**
    * The approval-safe display of the proposal for AG-UI `TOOL_CALL_ARGS`.
    * An unsupported view, or a proposal that can be rewritten before
-   * admission, displays placeholders for every argument. Calls with
-   * nothing to hide omit this field.
+   * admission, displays placeholders for every available argument name.
+   * A valid view that withholds nothing omits this field.
    */
   readonly shownArgs?: Readonly<Record<string, unknown>>;
   /** Names withheld from the proposal's display, in argument order. A check-in
