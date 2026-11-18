@@ -107,13 +107,18 @@ exclusive capabilities or measured superiority in answer accuracy.
 ## Quick start — runs offline, no API key
 
 ```bash
-npm install agentfootprint footprintjs
+npm install 'agentfootprint@^15.0.0' 'footprintjs@^14.0.0-rc.0'
 ```
 
-Agentfootprint 14 works with FootprintJS 11 (from 11.1.0) and FootprintJS 12:
-the peer range is `^11.1.0 || ^12.0.0`. It also needs Foottrace `^1.11.1`.
-FootprintJS is a peer dependency, so install it explicitly as shown above.
-These are stable release ranges.
+Agentfootprint 15 requires FootprintJS `^14.0.0-rc.0` as a peer and Foottrace
+`^2.1.0` as a dependency. Install FootprintJS explicitly as shown above.
+During the release train, pair the published Agentfootprint 15 candidate with
+`footprintjs@14.0.0-rc.0`. Use this command once npm's `next` tag points to the
+Agentfootprint 15 candidate.
+
+```bash
+npm install agentfootprint@next footprintjs@14.0.0-rc.0
+```
 
 ```typescript
 import { Agent, defineTool } from 'agentfootprint';
