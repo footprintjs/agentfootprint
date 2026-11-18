@@ -157,6 +157,17 @@ agent.on('agentfootprint.tools.discovery_failed', (e) => {
 
 The library rethrows the discovery error and the run rejects. The rules passed to `.reliability(...)` wrap the LLM call, which comes after discovery. Handle transient discovery failures inside the provider’s `list(ctx)`, or catch the rejection at `agent.run()`.
 
+For example, keep the original error available to the caller when reporting a failed run:
+
+```ts
+try {
+  await agent.run({ message });
+} catch (error) {
+  console.error('Agent run failed', error);
+  throw error;
+}
+```
+
 ## Observing discovery latency
 
 ```ts
