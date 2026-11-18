@@ -1,5 +1,6 @@
 ---
 type: changed
+bump: major
 ---
 
 **Placement tickets are recognised by the library's own receipt, and small corrections to the claim checks.**
