@@ -4,7 +4,7 @@
  * THE LAW: the user entry a turn adds to the conversation is the message the
  * `'input'` chain let through — on a first turn AND on a continued one
  * (`run({ continueFrom })`, `followUp()`, every stored session behind
- * `standingAgent`). One owner writes that entry: `seed.ts · historyForTurn`,
+ * `standingAgent`). One owner writes that entry: `runtime/conversation/seedHistory.ts · historyForTurn`,
  * called after the chain has run.
  *
  * THE BUG IT PINS. Through 9.112.1, `src/core/agent/runtime/conversation/owner.ts · applyContinuation` pre-built the

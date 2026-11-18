@@ -40,6 +40,8 @@
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
+import type { ArgumentAskDeps } from './argumentAskDeps.js';
+export type { ArgumentAskDeps } from './argumentAskDeps.js';
 import { readToolOwner } from '../../../tools/toolResourceOwner.js';
 
 import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
@@ -65,7 +67,6 @@ import {
   callWindowRowsOf,
   type ArgumentResolution,
   type BatchCall,
-  type ToolOf,
 } from '../arguments/resolve.js';
 import { withFills } from '../arguments/dispatch.js';
 import { markPrivateAsk, requirePrivateQuestionSupport } from '../arguments/privateAnswers.js';
@@ -93,11 +94,9 @@ import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
-import type { TimeAskMessages } from '../../../time/ask.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
 import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
 import { spellRange } from '../../../time/range.js';
-import type { TimePolicy } from '../../../time/resolve.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
 import type { AskTime } from '../arguments/ask.js';
 
@@ -180,40 +179,6 @@ function windowPlanOf(
     now: clock.now,
     zone: clock.zone,
     ...(deps.time?.appZone !== undefined && { appZone: deps.time.appZone }),
-  };
-}
-
-/** What the dispatch stage hands the ask — closures, never scope. */
-export interface ArgumentAskDeps {
-  /** Already refused calls do not acquire new obligations. */
-  readonly excludedCallIds?: readonly string[];
-  readonly admitAnswer?: () => void;
-  readonly saveParties?: () => void;
-  readonly pendingAsk?: boolean;
-  readonly settledAsk?: () => void;
-  readonly refuseMalformedBatch?: () => boolean;
-  readonly argumentSources?: true;
-  /** The implementation that will answer a name — the shared dispatch resolver's. */
-  readonly toolOf: ToolOf;
-  /** The run id a stamped request id carries; absent → the turn's start time. */
-  readonly runId?: () => string | undefined;
-  /** The host's own context for the ask (`AgentOptions.argumentAskContext`). */
-  readonly hostContext?: () => unknown;
-  /**
-   * Present exactly under `.time()`: an answer for a period argument is also
-   * judged against the tool's declared facts at the turn's clock
-   * (`arguments/ask/validation.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
-   * `reader` is present exactly under `.time({ reader })`: a call that left
-   * its period out while the turn's one mention was open is asked THAT
-   * mention's window (the lazy word-driven ask) — `policy` re-reads the
-   * mention after a zone answer, `messages` are the app's catalog overrides.
-   */
-  readonly time?: {
-    readonly appZone?: ZoneName;
-    readonly reader?: {
-      readonly policy: TimePolicy;
-      readonly messages?: Partial<TimeAskMessages>;
-    };
   };
 }
 
@@ -344,6 +309,14 @@ export function askBeforeDispatch(
   const turn = scope.turnNumber as number;
   const calls = batchOf(scope).filter((call) => !deps.excludedCallIds?.includes(call.id));
   const entries = new Map(resolutions);
+  const notifyRefusals = (current: ReadonlyMap<string, ArgumentResolution>) => {
+    if (deps.refusedCalls !== undefined)
+      deps.refusedCalls(
+        [...current.values()]
+          .filter((entry) => entry.refused !== undefined)
+          .map((entry) => entry.toolCallId),
+      );
+  };
   const time = askTimeOf(scope, deps);
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const readings = readingsOf(ledger, turn);
@@ -381,6 +354,7 @@ export function askBeforeDispatch(
       }
     }
   }
+  notifyRefusals(entries);
   const asks: CallAsk[] = [...entries.values()].flatMap((r) =>
     r.refused === undefined && r.ask !== undefined && r.ask.length > 0
       ? [
@@ -397,6 +371,15 @@ export function askBeforeDispatch(
   if (asks.length === 0 && origins.length === 0 && stored === undefined)
     return { resolutions: entries, answered: false };
   if (deps.refuseMalformedBatch?.() === true)
+    return { resolutions: entries, answered: false, refused: true };
+  if (
+    deps.correctOmissions !== undefined &&
+    stored === undefined &&
+    origins.length === 0 &&
+    ![...entries.values()].some((entry) => entry.refused !== undefined) &&
+    !asks.some((ask) => ask.window === true) &&
+    deps.correctOmissions?.(asks) === true
+  )
     return { resolutions: entries, answered: false, refused: true };
   requirePrivateQuestionSupport(
     scope,
@@ -470,6 +453,7 @@ export function askBeforeDispatch(
   let round = nextAskRound(state);
   if (round === undefined && state.partial?.phase === 'complete-arguments') {
     const completed = withSettled(entries, state, calls);
+    notifyRefusals(completed);
     const eligible = origins.filter(
       (origin) => completed.get(origin.call.id)?.refused === undefined,
     );
@@ -509,6 +493,16 @@ export function askBeforeDispatch(
     markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
     scope.argumentAsk = next;
     deps.saveParties?.();
+    deps.beforePause?.(
+      waiting.fieldIndexes.flatMap((index) =>
+        next.fields[index].members.flatMap((member) =>
+          member.toolCallIds.map((toolCallId) => ({
+            toolCallId,
+            argument: member.argument,
+          })),
+        ),
+      ),
+    );
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
@@ -594,5 +588,6 @@ export function askBeforeDispatch(
       }
     }
   }
+  notifyRefusals(settled);
   return { resolutions: settled, answered };
 }

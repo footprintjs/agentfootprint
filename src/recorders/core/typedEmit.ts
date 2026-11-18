@@ -57,6 +57,11 @@ function devWarnIfUnclonable(type: string, payload: unknown): void {
  * the same served payload (`src/redaction/runRedaction.ts` · `emitServed`).
  * With no policy the payload passes through as it is.
  *
+ * Internal writers may supply a same-event `servedPayload` for an actual tool's
+ * shown view. Private computation and the live-reply relay still receive the
+ * original payload; only the native record branch receives that view, then the
+ * caller policy. Both payloads must be detached plain data.
+ *
  * @example
  *   typedEmit(scope, 'agentfootprint.stream.llm_start', {
  *     iteration: 1,
@@ -71,7 +76,9 @@ export function typedEmit<K extends AgentfootprintEventType>(
   scope: EmitableScope,
   type: K,
   payload: AgentfootprintEventMap[K]['payload'],
+  servedPayload?: AgentfootprintEventMap[K]['payload'],
 ): void {
   devWarnIfUnclonable(type, payload);
-  emitServed(scope, type, payload);
+  if (servedPayload !== undefined) devWarnIfUnclonable(type, servedPayload);
+  emitServed(scope, type, payload, servedPayload);
 }

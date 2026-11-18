@@ -68,7 +68,7 @@ person already said the value. Declared sources (next section) are what change t
 
 ## Declared sources — the model says where each value came from; the library checks it
 
-Two doors arm ONE thing (`core/agent/runtime/configuration/configure.ts` resolves them once into `argumentSourcesArmed`):
+Two doors arm ONE thing (`core/agent/runtime/configuration/configure.ts` resolves them once into `argumentSourcesArmed`): Optional native omission correction is described in [SOURCE_CORRECTION.md](SOURCE_CORRECTION.md).
 `.inputsLayer({ argumentSources: true })` — declared sources alone — and
 `.findings({ argumentSources: true })` — beside the findings ledger (`.findings()` +
 `.inputsLayer({ argumentSources: true })` serves exactly the same bytes). The findings door needs

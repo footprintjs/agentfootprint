@@ -34,8 +34,11 @@ import {
 import {
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
+  unknownStatusOf,
+  unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { isPauseRequest } from '../../../../pause.js';
+import { CONSENT_PAUSE_KEY } from '../../../../../identity/consent.js';
 import {
   validateInputDeclaration,
   stampInputRequest,
@@ -96,7 +99,15 @@ interface InvokeInitialToolFrame {
 /** Existing initialInvocation body; original guard and native pause return stay with the handler. */
 export async function invokeInitialTool(
   scope: TypedScope<AgentState>,
-  deps: Pick<ToolCallsHandlerDeps, 'time' | 'negativeClaimsArmed' | 'answeredAsk'>,
+  deps: Pick<
+    ToolCallsHandlerDeps,
+    | 'time'
+    | 'negativeClaimsArmed'
+    | 'answeredAsk'
+    | 'sourceEvidenceConfig'
+    | 'currentRun'
+    | 'isRunRetired'
+  >,
   frame: InvokeInitialToolFrame,
 ) {
   try {
@@ -150,7 +161,12 @@ export async function invokeInitialTool(
       ...(frame.authorization.resolvedCredential && {
         credential: frame.authorization.resolvedCredential,
       }),
-      ...frame.toolArtifacts(scope, frame.tc.name, frame.tc.id),
+      ...frame.toolArtifacts(
+        scope,
+        frame.tc.name,
+        frame.tc.id,
+        frame.execution.resultFinalizer?.needsPublications,
+      ),
       ...(frame.wanted.wantedMeta !== undefined && { wanted: frame.wanted.wantedMeta }),
       ...frame.toolProgress(scope, {
         toolName: frame.tc.name,
@@ -187,12 +203,14 @@ export async function invokeInitialTool(
             context: executionContext,
           })
         : undefined;
+    frame.execution.resultFinalizer?.entered(executionContext);
     frame.execution.executed = true;
     frame.execution.submittedProgram = frame.programOfCall(
       frame.tool,
       frame.callArguments.callArgs,
     );
     frame.outcome.result = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
+    frame.execution.resultFinalizer?.returned();
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
         scope,
@@ -231,6 +249,11 @@ export async function invokeInitialTool(
       // dropped marker in dev mode.
       const nearMiss = explainStatusOnlyNearMiss(frame.outcome.result);
       if (nearMiss !== undefined) frame.warnEffect(frame.tc.name, nearMiss);
+      // An envelope in every way but an unknown status word is data too;
+      // the word is kept for the procedure step, which tells it.
+      frame.outcome.unknownStatus = unknownStatusOf(frame.outcome.result);
+      if (frame.outcome.unknownStatus !== undefined)
+        frame.warnEffect(frame.tc.name, unknownStatusWarning(frame.outcome.unknownStatus));
     }
     // Coverage (this release), on the UNWRAPPED content and before
     // the ceiling — the boundary a tool declared is not the channel
@@ -320,6 +343,7 @@ export async function invokeInitialTool(
     }
     await frame.endCall(scope);
   } catch (err) {
+    frame.execution.resultFinalizer?.withheld();
     // Set when a raise declared a miss the door could not file:
     // the call then errors with this text and does not pause.
     let raisedMissError: string | undefined;
@@ -457,15 +481,14 @@ export async function invokeInitialTool(
               );
         // Returning a defined value triggers footprintjs pause —
         // the returned object becomes the checkpoint's pauseData.
-        return {
-          toolCallId: frame.tc.id,
-          toolName: frame.tc.name,
-          ...(awaitingInput !== undefined
-            ? { question: awaitingInput.question, awaitingInput }
-            : typeof err.data === 'object' && err.data !== null
-            ? (err.data as Record<string, unknown>)
-            : { data: err.data }),
-        };
+        return awaitingInput !== undefined
+          ? {
+              toolCallId: frame.tc.id,
+              toolName: frame.tc.name,
+              question: awaitingInput.question,
+              awaitingInput,
+            }
+          : toolPauseData(frame.tc, err.data);
       }
     }
     // A tool that threw still RAN, and may have opened the thing it
@@ -493,4 +516,53 @@ export async function invokeInitialTool(
         : String(err));
   }
   return undefined;
+}
+
+/**
+ * Keys of `pauseData` the library reads to recognise a pause of its OWN: which
+ * call paused (`toolCallId` / `toolName`), which consent gate or typed ask is
+ * open (`src/core/pause.ts` · `pauseDemandsDecision` reads `checkIn` / `ask`;
+ * `RunnerBase` reads `awaitingInput`), and credential consent
+ * (`identity/consent.ts` · `CONSENT_PAUSE_KEY`, minted only by
+ * `credentialAdmission.ts`, whose URL the caller is told to open). A tool's
+ * own data never carries them, whatever their value: a gate opened by a tool
+ * is a request the library never minted, so no decision can answer it, and a
+ * consent link from a tool would be shown as the library's.
+ *
+ * One library pause IS raised by a tool: an AG-UI frontend tool's
+ * (`agUiFrontendTool`). Its reader does not trust the key; it asks whether the
+ * call's real `toolName` (written below) is one the app declared
+ * (`ag-ui/frontendTools.ts` · `isFrontendToolPause`).
+ */
+const LIBRARY_PAUSE_KEYS = [
+  'toolCallId',
+  'toolName',
+  'checkIn',
+  'ask',
+  'awaitingInput',
+  CONSENT_PAUSE_KEY,
+] as const;
+
+/**
+ * The checkpoint's `pauseData` for a tool's own `pauseHere(data)` /
+ * `askHuman(data)`: the REAL call's `toolCallId` / `toolName`, then the
+ * tool's fields minus the library's keys, so nothing a tool writes can rename
+ * the call or open a gate. Every other field is copied exactly as before
+ * (a spread, so an own `__proto__` key stays a plain field), and the real
+ * keys stay first, the order every plain pause has always serialized in.
+ *
+ * @example a tool raising askHuman({ question: 'ok?', toolName: 'transfer_funds', ask: 'later' })
+ *   from `lookup_weather` call `c1` pauses with
+ *   { toolCallId: 'c1', toolName: 'lookup_weather', question: 'ok?' }
+ */
+function toolPauseData(
+  tc: { readonly id: string; readonly name: string },
+  raised: unknown,
+): Record<string, unknown> {
+  if (typeof raised !== 'object' || raised === null) {
+    return { toolCallId: tc.id, toolName: tc.name, data: raised };
+  }
+  const own: Record<PropertyKey, unknown> = { ...raised };
+  for (const key of LIBRARY_PAUSE_KEYS) delete own[key];
+  return { toolCallId: tc.id, toolName: tc.name, ...own };
 }

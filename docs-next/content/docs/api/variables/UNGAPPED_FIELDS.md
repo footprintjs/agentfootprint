@@ -6,7 +6,7 @@ title: UNGAPPED_FIELDS
 
 > `const` **UNGAPPED\_FIELDS**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/time-travel/servedView/gaps.ts:425](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView/gaps.ts#L425)
+Defined in: [src/time-travel/servedView/gaps.ts:449](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView/gaps.ts#L449)
 
 The fields no gap names, and the reason each one needs none — the OTHER half
 of the account.
@@ -60,5 +60,5 @@ import { SERVED_GAPS, UNGAPPED_FIELDS } from 'agentfootprint';
 
 // Why does nothing explain `callRuntimeStageId`? Because nothing has to.
 UNGAPPED_FIELDS['callRuntimeStageId'];
-Object.keys(SERVED_GAPS).length; // 7 gap kinds
+Object.keys(SERVED_GAPS).length; // the current catalogue's gap count
 ```

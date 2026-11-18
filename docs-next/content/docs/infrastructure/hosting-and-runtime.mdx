@@ -1711,9 +1711,19 @@ The value is a `TurnArtifacts` — one of three shapes:
 
 | Handed | When |
 |---|---|
-| `{ bound: true, artifacts }` | the request named a session and the agent has a store. `artifacts` has the shape a tool gets as `ctx.artifacts` — `put`, `head`, `get`, `delete`, `list` — and none of them takes a scope |
+| `{ bound: true, artifacts, recording? }` | the request named a session and the agent has a store. `artifacts` has the shape a tool gets as `ctx.artifacts` — `put`, `head`, `get`, `delete`, `list` — and none of them takes a scope |
 | `{ bound: false, reason: 'no-session' }` | an anonymous request: its run scoped its artifacts to its own `runId`, which no later request can present, so there is nothing to bind — and nothing is invented. Wins when both apply |
 | `{ bound: false, reason: 'no-store' }` | the serving agent has no artifact store |
+
+The optional `turn.recording` contains the `{ ref, bytes }` published by the
+completed turn's native root recording write. It is present only if the write
+succeeded in this binding's scope and the request was still active at handover.
+This lets the host associate an answer with its recording without searching the
+store or depending on the public mint event. The receipt is server-side and
+retention can still expire the artifact. Redeem it through the same scoped reader
+as any other artifact.
+
+<CodeFile path="examples/artifacts/hosted-recording-receipt.ts" region="receipt" title="Read the exact recording receipt inside the host hook" />
 
 - **Bounded.** The hook and every operation it started must settle within
   `turnArtifactsTimeoutMs` (a `standingAgent` option; default

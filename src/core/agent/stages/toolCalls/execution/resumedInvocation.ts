@@ -10,6 +10,8 @@ import {
   type ToolResultStatus,
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
+  unknownStatusOf,
+  unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -41,6 +43,7 @@ import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
 import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
+import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 
 interface ResumedInvocationLinks {
   readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
@@ -70,7 +73,16 @@ interface ResumedInvocationLinks {
 export function buildResumedInvocation(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'clearConsentOutstanding' | 'reportConsentOutstanding' | 'time' | 'negativeClaimsArmed'
+    | 'clearConsentOutstanding'
+    | 'reportConsentOutstanding'
+    | 'time'
+    | 'negativeClaimsArmed'
+    | 'sourceEvidenceConfig'
+    | 'columnCheckMode'
+    | 'resultRowsetsFor'
+    | 'integrityLedger'
+    | 'currentRun'
+    | 'isRunRetired'
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
@@ -119,8 +131,20 @@ export function buildResumedInvocation(
     /** An approved call's arguments no longer matched its request at the
      *  last moment before `execute` (`heldTo`): the call did not run. */
     callChanged?: true;
+    /** The result was an envelope in every way but an unknown status word —
+     *  that word, cleaned (`unknownStatusOf`); read by the procedure step. */
+    unknownStatus?: string;
   }> => {
     const tool = resolved.tool;
+    if (seen !== undefined)
+      seen.resultFinalizer = nativeResultFinalizer(
+        scope,
+        tool,
+        { toolName, toolCallId, iteration },
+        deps,
+        links.runFactsOf(scope)?.runId,
+        resolved.party,
+      );
     /** What the approval covers — the arguments as handed in, before any
      *  `wants` resolution or clock redraw derives the ones `execute` gets. */
     const approved = args;
@@ -259,7 +283,12 @@ export function buildResumedInvocation(
         ),
         hasCredentials: links.hasCredentials,
         ...(resolvedCredential && { credential: resolvedCredential }),
-        ...links.toolArtifacts(scope, toolName, toolCallId),
+        ...links.toolArtifacts(
+          scope,
+          toolName,
+          toolCallId,
+          seen?.resultFinalizer?.needsPublications,
+        ),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...links.toolProgress(scope, { toolName, toolCallId, iteration }),
         ...requestEvidenceFor(scope, { toolName, toolCallId, iteration }),
@@ -309,6 +338,7 @@ export function buildResumedInvocation(
               context: executionContext,
             })
           : undefined;
+      seen?.resultFinalizer?.entered(executionContext);
       executed = true;
       if (seen !== undefined) {
         // Read now, before any tool code runs: what the call proposed and
@@ -318,6 +348,7 @@ export function buildResumedInvocation(
         seen.submitted = links.programOfCall(tool, args);
       }
       let result = await tool.execute(args, executionContext);
+      seen?.resultFinalizer?.returned();
       // The runner's facts, at this execute boundary as at the batch loop's.
       const codeRun = links.takeCodeRun(scope, tool, codeRunSlot, {
         toolName,
@@ -433,6 +464,11 @@ export function buildResumedInvocation(
                 },
         };
       }
+      // An envelope in every way but an unknown status word is data — read
+      // the word off the value the tool returned, before anything rewrites it.
+      const unknownStatus = unknownStatusOf(result);
+      if (unknownStatus !== undefined)
+        links.warnEffect(toolName, unknownStatusWarning(unknownStatus));
       const searched = links.searchFunnel.compose(scope, searchBoundary(undefined), result);
       if (searched !== undefined) result = searched.value;
       const coverageStatus = links.declareCoverage(
@@ -502,8 +538,14 @@ export function buildResumedInvocation(
           envelope: { content: result, effects: [], status: coverageStatus, malformed: [] },
         };
       }
-      return { result, executed: true, negativeResultId: negativeDispatch?.resultId };
+      return {
+        result,
+        executed: true,
+        negativeResultId: negativeDispatch?.resultId,
+        ...(unknownStatus !== undefined && { unknownStatus }),
+      };
     } catch (err) {
+      seen?.resultFinalizer?.withheld();
       if (ended !== undefined && err === ended) {
         // Nothing ran; the call's sessions are still released, and the run's
         // end — not a tool failure — is what the stage ends with.
@@ -515,8 +557,17 @@ export function buildResumedInvocation(
       await links.endCall(scope);
       if (seen !== undefined && executed) seen.threw = true;
       if (isPauseRequest(err)) {
+        // Name the door this call actually came through (`heldTo`; the
+        // credential door passes none): an ask or a credential resume that
+        // read "an approved check-in" reported a gate nobody opened.
+        const door =
+          heldTo === 'checkIn'
+            ? 'an approved check-in'
+            : heldTo === 'ask'
+            ? 'an approved ask'
+            : 'granted credential consent';
         return {
-          result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
+          result: `tool '${toolName}' requested a pause while resuming ${door}, which is not supported`,
           error: true,
           // It ran — a tool that asked to pause had already started work.
           executed,

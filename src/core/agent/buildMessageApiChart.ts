@@ -1,3 +1,4 @@
+import { recordModelContext } from '../../recorders/core/recordModelContext.js';
 /**
  * buildMessageApiChart — PROOF of the locked "messageAPI merge-tree" shape
  * (MENTAL_MODEL.md ★ LOCKED DESIGN), LLM-only (no tools subflow yet).
@@ -194,6 +195,12 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
       messages,
       model,
     };
+    recordModelContext(scope, () => ({
+      iteration: scope.iteration,
+      systemPieces: (scope.systemPromptInjections ?? []) as readonly InjectionRecord[],
+      tools: [],
+    }));
+
     // ── THE RECEIPT (9.91.0) ───────────────────────────────────────────
     // Minted immediately before the port is called, so it is committed in the
     // call-llm bundle that already exists — and before rather than after on

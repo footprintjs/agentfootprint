@@ -155,6 +155,9 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
   const { toolArtifacts, toolDispatchCtx, runScopeOf } = buildToolContextOperations(deps, {
     runFactsOf,
     registryByName,
+    get lookupTool() {
+      return lookupTool;
+    },
     credentialsIn,
     hasCredentials,
     toolProgress,

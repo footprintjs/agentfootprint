@@ -17,46 +17,55 @@ Causal memory remembers what was *decided*, not only what was *said*.
 
 ## What gets persisted
 
-When you configure `defineMemory({ type: MEMORY_TYPES.CAUSAL, ... })`, every `agent.run()` records a `SnapshotEntry` to the configured store. The snapshot captures the agent's run frozen as JSON — the `(query, finalContent)` pair, the `decisions` collected via `decide()`/`select()`, the `toolCalls` trajectory, an optional rendered `narrative`, plus timing and token usage.
+When you configure `defineMemory({ type: MEMORY_TYPES.CAUSAL, ... })`, the causal writer stores a `SnapshotEntry` (`schemaVersion: 2`) to the configured store. It holds the `(query, finalContent)` pair and the evidence observed during **one component execution leg** of that run: the `decisions` recorded from `decide()`/`select()`, the `toolCalls` trajectory, how many iterations were observed to start, how long the observation window lasted, and the observed token usage. The type has an optional `narrative` field, but the writer does not fill it.
 
-The snapshot is the THING. Subsequent retrievals load it back into context; the LLM reads it on a follow-up turn; the answer is grounded in WHAT THE AGENT ACTUALLY DID, not in what an LLM thinks it probably did.
+The snapshot is recorded evidence with its limits written into it, not a complete account of the run. When a later turn loads it back into context, every projection opens with the same boundary: the past answer may use earlier history, the evidence shows only this component execution leg, evidence from prior legs and missing observations is unknown, and empty lists do not prove that nothing happened. `availability` says how complete the evidence is:
+
+- `observed` — the observer ran for the whole leg and no limit was reached.
+- `partial` — some evidence is missing, and `causes` names why: `observer-failed`, `bounded-observation` (a limit was reached — at most 256 decisions and 256 tool calls are kept, and what was dropped is counted in `omittedObservations`), `incomplete-tool-pairs`, `duplicate-tool-start`, `missing-usage`.
+- `unavailable` — no evidence, and `reason` says why (`not-configured`, `observer-failed`, `collector-failed`). The writer stores the schema version, query, final content, availability and reason. This form has no decision or tool-call lists.
 
 ### Each snapshot answers four typed questions
 
-The snapshot maps directly onto the four backtrack questions every agentfootprint LLM call answers (see [Why § the four backtrack questions](doc:why#the-four-backtrack-questions)):
+The snapshot maps onto the four backtrack questions every agentfootprint LLM call answers (see [Why § the four backtrack questions](doc:why#the-four-backtrack-questions)), within the one leg it covers:
 
 | Question | Where in the snapshot |
 |---|---|
 | **What** happened? | `finalContent` — the answer the agent produced for the `query` |
-| **Who/why** decided it? | `decisions[]` — each `DecisionRecord`: the `stageId`, the `chosen` branch, the matched `rule`, and the `evidence` values that satisfied it |
+| **Who/why** decided it? | `decisions[]` — each `DecisionRecord`: the `stageId` and the `chosen` branch, plus the `rule` label and the `evidence` values when the decision recorded them |
 | **What** did it call? | `toolCalls[]` — each `ToolCallRecord`: tool `name`, `args`, truncated `resultPreview`, `errored` flag |
-| **How long / how much?** | `iterations`, `durationMs`, `tokenUsage` |
+| **How long / how much?** | `observedIterationStarts`, `duration.observationWindowMs` (or `duration.kind: 'unavailable'`), `tokenUsage` (observed input/output only, not the provider bill) |
 
-Causal memory persists all of these. Reading the snapshot back IS asking the four backtrack questions — without re-running the agent.
+An `observed` or `partial` snapshot carries all of these; an `unavailable` one carries only the first row. Reading the snapshot back asks these questions of the recorded leg without re-running the agent.
 
 ## The shape (annotated)
 
-A `SnapshotEntry` looks like this when serialized:
+An `observed` `SnapshotEntry` looks like this when serialized (`decisions` shortened: a real `Agent` run also records its context-slot selection):
 
 ```json
 {
+  "schemaVersion": 2,
   "query": "Should we approve loan #42? Credit: 580. Income: 95k. Amount: 50k.",
   "finalContent": "Application #42: REJECTED. Credit (580) below floor (600). Suggest manual review.",
-  "iterations": 1,
+  "availability": "observed",
+
+  "coverage": {
+    "scope": "component-execution-leg",
+    "runId": "1794552320130-0000000001",
+    "entry": { "kind": "run" },
+    "priorLegs": "not-carried",
+    "source": {
+      "kind": "stage",
+      "runId": "1794552320130-0000000001",
+      "startedAtMs": 1794552320129,
+      "runtimeStageId": "final/sf-memory-write-causal#46",
+      "parentRuntimeStageId": "final/prepare-final#45"
+    }
+  },
 
   "decisions": [
-    {
-      "stageId": "classify-risk",
-      "chosen": "rejected",
-      "rule": "Marginal credit",
-      "evidence": { "creditScore": 580, "threshold": 600 }
-    },
-    {
-      "stageId": "pick-reason",
-      "chosen": "credit-too-low",
-      "rule": "Credit below floor",
-      "evidence": { "creditScore": 580, "incomeAboveFloor": true }
-    }
+    { "stageId": "sf-route", "chosen": "ToolCalls" },
+    { "stageId": "sf-route", "chosen": "Final" }
   ],
 
   "toolCalls": [
@@ -68,36 +77,41 @@ A `SnapshotEntry` looks like this when serialized:
     }
   ],
 
-  "narrative": "[Seed] application #42 received\n[ClassifyRisk] credit 580 < threshold 600 → rejected\n[PickReason] chose credit-too-low (income above floor)",
-
-  "durationMs": 1840,
+  "observedIterationStarts": 2,
+  "lastObservedIteration": 2,
+  "toolAccounting": { "unmatchedStarts": 0, "unmatchedEnds": 0, "duplicateStarts": 0 },
+  "usageAccounting": { "observedCalls": 2, "missingUsage": 0 },
+  "omittedObservations": { "decisions": 0, "toolCalls": 0, "pendingStarts": 0 },
+  "duration": { "kind": "measured", "observationWindowMs": 1840 },
   "tokenUsage": { "input": 1200, "output": 180 }
 }
 ```
 
+A `partial` snapshot has the same fields plus `"causes": [...]`. An `unavailable` one is just `{ "schemaVersion": 2, "query": "…", "finalContent": "…", "availability": "unavailable", "reason": "collector-failed" }`. A stored row of any other shape (an older snapshot without `schemaVersion: 2`, or one with a field the schema does not list) is skipped on read.
+
 The store wraps this value in a `MemoryEntry<SnapshotEntry>` that carries retrieval metadata (`id`, `embedding`, `embeddingModel`, `createdAt`, `ttl`, …) — the query embedding lives on the wrapper's `embedding` field, not on the snapshot itself.
 
 Three fields are load-bearing:
-1. **`decisions`** — every `decide()`/`select()` choice: the `stageId`, the `chosen` branch, the matched `rule`, and the `evidence` values that fed the predicate
+1. **`decisions`** — the `decide()`/`select()` choices observed in the leg: the `stageId`, the `chosen` branch, and the `rule` label and `evidence` values when the decision recorded them
 2. **`finalContent`** — the agent's answer, paired with `query` for retrieval and for SFT/DPO export
 3. **`toolCalls`** — the tool-use trajectory, each with `name` / `args` / truncated `resultPreview`
 
-Together they ARE the agent's reasoning, byte-for-byte.
+Together they are the evidence recorded for one component execution leg — what was observed, not the agent's whole reasoning. Prior legs are not carried, the evidence may be partial (`availability` and `causes` say so), and empty lists do not prove nothing happened.
 
 ## The four projection modes
 
-When a snapshot is RETRIEVED for a follow-up turn, you don't always want the whole thing — context budget matters. `projection` controls what slice gets injected into the next prompt:
+When a snapshot is RETRIEVED for a follow-up turn, you don't always want the whole thing — context budget matters. `projection` controls what slice gets injected into the next prompt. Every projection starts with the same three lines: a header with the past query and its match score, the leg-only limit sentence, and the availability status (`Observed evidence in this leg only.`, `Partial evidence: <causes>.` or `Evidence unavailable: <reason>.`).
 
-| Projection | What lands in the prompt | Use when |
+| Projection | What follows the three lines | Use when |
 |---|---|---|
-| `SNAPSHOT_PROJECTIONS.DECISIONS` (default) | the `decisions[]` evidence — each `stageId → chosen` with `rule` + `evidence` | "Why did the agent decide X?" follow-ups (cheapest) |
-| `SNAPSHOT_PROJECTIONS.COMMITS` | a per-stage `stageId: chose "X"` summary derived from `decisions[]` | "What state did the agent reach?" |
-| `SNAPSHOT_PROJECTIONS.NARRATIVE` | the rendered `narrative` string | Human-readable replay |
+| `SNAPSHOT_PROJECTIONS.DECISIONS` (default) | each recorded decision as `stageId → "chosen"` (with `rule` and `evidence` when present), then `Tool evidence:` lines `name(args) → resultPreview` (`[ERROR]` when the call failed), then `Final answer: …` | "Why did the agent decide X?" follow-ups (smallest projection that carries the evidence) |
+| `SNAPSHOT_PROJECTIONS.COMMITS` | `(no commit log captured)` and `Final answer: …` — no commit log is captured today | — |
+| `SNAPSHOT_PROJECTIONS.NARRATIVE` | the stored `narrative`; the writer never fills it, so today this is `(no narrative captured)` and `Final answer: …` | — |
 | `SNAPSHOT_PROJECTIONS.FULL` | the whole serialized snapshot (largest, most expensive) | Forensic-grade audit |
 
-Most apps use `DECISIONS` — it's the default, the smallest projection that answers the "why" question, and what cheap-model triage works best with.
+The default, `DECISIONS`, is the only projection besides `FULL` that carries the recorded decisions and tool evidence.
 
-> **Note:** a full footprintjs `commitLog` isn't yet captured in `SnapshotEntry`, so `COMMITS` currently projects a compact summary of the `decisions[]` array as a stand-in. The field set is intentionally minimal today; richer commit/narrative capture is a follow-up FlowRecorder integration.
+> **Note:** a footprintjs `commitLog` is not captured in `SnapshotEntry` and the writer does not fill `narrative`, so `COMMITS` and `NARRATIVE` serve only the final answer behind the same three lines.
 
 ## Define the memory
 
@@ -126,13 +140,14 @@ await monday.run({
 });
 // → "Application #42: REJECTED. Credit (580) below floor (600). Suggest manual review."
 
-// (snapshot persisted automatically with decideLog/selectLog from the run)
+// (a v2 snapshot is persisted automatically: the decisions, tool calls and
+//  accounting observed in this run's component execution leg)
 
 // ─── Friday — different user, different conversation ──────────────────
 
 const friday = Agent.create({ provider: anthropic({...}), model: 'claude-haiku-4-5-20251001' })
-  // ↑ NOTE: cheap follow-up model. Causal memory makes this safe — the
-  //   trace IS the reasoning, so a smaller model can read it.
+  // ↑ NOTE: cheap follow-up model. It reads Monday's recorded evidence of
+  //   one execution leg, possibly partial; the projection says which.
   .memory(causal)  // same definition, different agent instance
   .build();
 
@@ -141,23 +156,14 @@ await friday.run({
   identity: { tenant: 'lending', conversationId: 'app-42-followup' },
 });
 // → "Application #42 was rejected because credit score 580 was below
-//    the threshold of 600. The decision was made on Monday at 2:14 PM."
+//    the threshold of 600."
 ```
 
-The Friday agent's prompt includes the projected `decisions[]` entries from Monday's run — the LLM sees the `classify-risk → "rejected"` choice with `evidence: { creditScore: 580, threshold: 600 }`, grounding the follow-up in stored past facts rather than reconstruction.
+The Friday agent's prompt includes Monday's run as the `DECISIONS` projection: the header and the leg-only limit sentence, the availability status, the recorded decisions, the tool evidence (here `lookupCreditBureau({"applicationId":"42"}) → { "score": 580, … }`) and Monday's final answer. The follow-up is grounded in what was recorded about that leg rather than in reconstruction — and the model is told that anything the leg did not record is unknown.
 
-## Why this works — the cheap-model triage economic argument
+## Why this works — cheap-model triage
 
-A trace recorded from your expensive production model (Sonnet-4) is a perfectly good *input* for a small, fast, cheap model (Haiku, GPT-4o-mini) answering follow-up questions about that run. **Reading recorded decision evidence is structurally simpler than re-deriving the answer from first principles** — so a smaller model is enough.
-
-Across a production system that handles audit / explain / "why did the agent do X?" traffic, the cost difference compounds:
-
-| | Cost per turn |
-|---|---|
-| Sonnet-4 re-deriving the answer from raw history | $0.045 |
-| Haiku-4-5 reading the projected `decideLog` from snapshot | ~$0.005 |
-
-**~10× cost reduction** on follow-up traffic. Same correctness — better, in fact, because the cheap model isn't hallucinating from compressed memory; it's reading recorded facts.
+A trace recorded from your expensive production model is an *input* a smaller, cheaper model can read when it answers follow-up questions about that run. Reading recorded evidence is a smaller job than re-deriving the answer from the raw history, so a smaller model may be enough. This page states no cost or accuracy figure for that: no checked-in bench measures one. What the smaller model reads is the evidence of one component execution leg, possibly partial — not the whole of the agent's reasoning — and the projection tells it so.
 
 This is the second of the three downstream consumers fanning out of one recording (see the hero diagram above): **cheap-model triage**.
 
@@ -178,7 +184,7 @@ The export API (`causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'proce
 
 - ❌ **Don't fall back to top-K-anyway when threshold misses.** The library throws by design; garbage past context is worse than no context.
 - ❌ **Don't change embedders between writes and reads.** The framework tags + filters, but only if you respect the contract.
-- ❌ **Don't use `FULL` projection by default.** It's the largest payload; reserve for forensic-grade scenarios. `DECISIONS` covers 90% of real follow-up queries.
+- ❌ **Don't use `FULL` projection by default.** It's the largest payload; reserve for forensic-grade scenarios. `DECISIONS` carries the same decisions and tool evidence in a smaller form.
 - ❌ **Don't share the causal store across tenants.** The `MemoryIdentity` tuple namespaces, but only if you pass per-tenant identity at every `agent.run()` call.
 
 ## Next steps

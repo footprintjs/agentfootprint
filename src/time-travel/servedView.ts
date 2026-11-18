@@ -185,6 +185,7 @@ export type ServedGapKind =
   | 'thinking-replay'
   | 'forced-tool-schema'
   | 'provider-defaults'
+  | 'privacy-policy'
   | 'no-fold-base'
   | 'no-conversation-on-record'
   | 'no-run-log'

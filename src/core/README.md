@@ -9,8 +9,13 @@ filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
 may show), `checkInHiddenArgs.ts` / `checkInWillDo.ts` (what a check-in tells
 the person is hidden), `consentRequestId.ts` (a request id's derivation),
-`resumeDecisionMessage.ts` (a refused resume's sentences), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
-the one input a composition hands them).
+`resumeDecisionMessage.ts` (a refused resume's sentences), `messageFrom.ts`
+(which runners read `AgentInput.messageFrom`, and the one input a composition
+hands them), and `trailBeforeOutcomeMarker.ts` (the check-in trail's text
+test for a tool message with no `outcome` mark).
+The text test preserves refusals in histories stored before the mark. A
+completed result that begins with a refusal form such as "[permission denied: …]"
+also reads `ok: false`.
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
 
