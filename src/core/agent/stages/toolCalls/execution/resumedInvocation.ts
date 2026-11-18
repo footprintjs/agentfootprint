@@ -360,9 +360,9 @@ export function buildResumedInvocation(
         result = await tool.execute(args, executionContext);
       } finally {
         await binding.close(env.signal);
-        ended = runEndedBy(env.signal);
-        if (ended !== undefined) throw ended;
       }
+      ended = runEndedBy(env.signal);
+      if (ended !== undefined) throw ended;
       seen?.resultFinalizer?.returned();
       // The runner's facts, at this execute boundary as at the batch loop's.
       const codeRun = links.takeCodeRun(scope, tool, codeRunSlot, {
@@ -551,11 +551,12 @@ export function buildResumedInvocation(
       return { result, executed: true, negativeResultId: negativeDispatch?.resultId };
     } catch (err) {
       seen?.resultFinalizer?.withheld();
-      if (ended !== undefined && err === ended) {
+      ended ??= runEndedBy(env.signal);
+      if (ended !== undefined) {
         // Nothing ran; the call's sessions are still released, and the run's
         // end — not a tool failure — is what the stage ends with.
         await links.endCall(scope).catch(() => undefined);
-        throw err;
+        throw ended;
       }
       // Settled by throwing is still settled — a tool that opened a session and
       // then failed must not keep it.
@@ -582,9 +583,7 @@ export function buildResumedInvocation(
       };
     }
   };
-  /**
-   * Carry the inner halt to the resume door once the result has landed.
-   */
+  /** Carry the inner halt to the resume door once the result has landed. */
   const resolveCredentialAndExecute: ResumedInvocation['resolveCredentialAndExecute'] = async (
     ...call
   ) => {
