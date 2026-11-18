@@ -1638,16 +1638,14 @@ const SOURCE_CONTRACT_REFERENCE_CASES = new Set([
   'agent-arguments-sources',
   'agent-arguments-sources-only',
 ]);
-const TOOL_OUTCOME_REFERENCE_DIR = new URL('./reference/tool-outcome-marker/', import.meta.url);
-const STEP_COMPLETION_REFERENCE_DIR = new URL(
-  './reference/step-completion-evidence/',
-  import.meta.url,
-);
-const STEP_COMPLETION_REFERENCE_CASES = new Set(['agent-stepped-skill', 'agent-answer-layer']);
+const ASSEMBLED_REFERENCE_DIR = new URL('./reference/v15-assembled-cohort/', import.meta.url);
+const ASSEMBLED_REFERENCE_CASES = new Set([
+  'agent-stepped-skill',
+  'agent-scoped-provider',
+  'agent-answer-layer',
+]);
 const referencePath = (name: string): URL => {
-  if (name === 'agent-scoped-provider') return new URL(`${name}.json`, TOOL_OUTCOME_REFERENCE_DIR);
-  if (STEP_COMPLETION_REFERENCE_CASES.has(name))
-    return new URL(`${name}.json`, STEP_COMPLETION_REFERENCE_DIR);
+  if (ASSEMBLED_REFERENCE_CASES.has(name)) return new URL(`${name}.json`, ASSEMBLED_REFERENCE_DIR);
   return new URL(
     `${name}.json`,
     V15_NATIVE_CAPTURES.has(name)
