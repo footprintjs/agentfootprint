@@ -51,6 +51,7 @@ export function buildToolMiddlewareOperations(
       readonly result: unknown;
       readonly error?: boolean;
       readonly negativeResultId?: string;
+      readonly onSourceWithheld?: () => void;
       readonly history: readonly LLMMessage[];
       readonly identity?: { tenant?: string; principal?: string; conversationId: string };
       readonly signal?: AbortSignal;
@@ -87,6 +88,7 @@ export function buildToolMiddlewareOperations(
     });
     recordDecisions(scope, verdict.decisions);
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
+    if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.
     // A guessed handle must not make the final composer disclose it again.
     // Allowed summaries remain eligible: their native coverage and gaps, not

@@ -36,6 +36,7 @@ import { hostedTurnOf } from './port.js';
 import { identityForRequest, sessionArtifactScope } from '../identity/request.js';
 import { isPaused, pauseDemandsDecision } from '../../../core/pause.js';
 import { toEnvelope, toPausedEnvelope } from '../../envelope.js';
+import { planHostedProtocol, protocolSuspension } from '../../protocolRoute.js';
 import { withHostedConversation } from '../../../core/agent/servingConversation.js';
 
 type TurnOptions = Pick<Configuration, 'turnArtifactsTimeoutMs' | 'sealRequest'> &
@@ -49,19 +50,27 @@ export function createTurnRunner({
   async function answerOne(
     lane: Lane,
     store: SessionLifecycle,
-    request: HostRequest,
+    inbound: HostRequest,
     reply: HostReply,
     sessionId: string | undefined,
     verified: VerifiedIdentity | undefined,
     spendKey: string | undefined,
     note: IngressNote | undefined,
   ): Promise<void> {
+    let request = inbound;
     const runner = lane.agent;
+    let stopProtocolEvents: (() => void) | undefined;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
     lane.activeSessionId = sessionId;
     lane.activeOwner = verified?.userId;
     const bind = (invocation: HostedInvocation) => {
+      if (reply.event !== undefined) {
+        stopProtocolEvents = runner.on('*', (event) => {
+          const runId = invocation.runId();
+          if (runId !== undefined && event.meta?.runId === runId) reply.event?.(event);
+        });
+      }
       lane.turn = { invocation, reply, ...(spendKey !== undefined && { spendKey }) };
       return lane.writer?.capture({
         sessionId,
@@ -115,6 +124,36 @@ export function createTurnRunner({
           // store you chose.
           throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
         }
+      }
+
+      if (request.protocol !== undefined) {
+        const identity = identityForRequest(
+          request.userId,
+          sessionId,
+          prior?.identity ?? paused?.conversation.identity,
+        );
+        request = planHostedProtocol(
+          request,
+          {
+            continues: prior !== undefined || paused !== undefined || answered !== undefined,
+            ...(paused !== undefined && {
+              awaiting: {
+                pending: paused.pending,
+                ...(paused.wire?.protocol === request.protocol.name && {
+                  suspension: paused.wire.record,
+                }),
+              },
+            }),
+          },
+          {
+            headers: request.headers ?? {},
+            keepsConversation: sessionId !== undefined,
+            keepsPauses: sessionId !== undefined,
+            ...(sessionId !== undefined && {
+              thread: { sessionId, ...(identity !== undefined && { identity }) },
+            }),
+          },
+        );
       }
 
       // The signal reaches tools, tool discovery and skill-entry scoring, NOT the
@@ -269,6 +308,7 @@ export function createTurnRunner({
             sessionId,
             offer,
             paused,
+            request,
           );
         } catch (err) {
           // Settle the stored question before reporting a resume or write failure.
@@ -317,7 +357,7 @@ export function createTurnRunner({
         turnOptions,
         bind,
       );
-      await deliver(lane, completed, store, reply, sessionId, offer);
+      await deliver(lane, completed, store, reply, sessionId, offer, undefined, request);
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race
       // the NEXT turn's terminal write and could land after it. The drain's own
@@ -327,6 +367,7 @@ export function createTurnRunner({
       await lane.writer?.settle().catch(() => undefined);
       throw err;
     } finally {
+      stopProtocolEvents?.();
       lane.turn = undefined;
       lane.activeSessionId = undefined;
       lane.activeOwner = undefined;
@@ -342,6 +383,7 @@ export function createTurnRunner({
     sessionId: string | undefined,
     offer: TurnOffer,
     priorPause?: PausedRun,
+    request?: HostRequest,
   ): Promise<void> {
     const runner = lane.agent;
     const { output, ownership } = completed;
@@ -363,7 +405,15 @@ export function createTurnRunner({
         if (sessionId !== undefined && conversation) {
           await store.persist(
             sessionId,
-            toPausedEnvelope({ checkpoint: output.checkpoint, conversation, pending }),
+            toPausedEnvelope({
+              checkpoint: output.checkpoint,
+              conversation,
+              pending,
+              ...(request !== undefined &&
+                protocolSuspension(request) !== undefined && {
+                  wire: protocolSuspension(request)!,
+                }),
+            }),
           );
           stored = true;
           if (reply.awaiting) {

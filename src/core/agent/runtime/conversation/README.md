@@ -1,6 +1,7 @@
 **Mixed** — preserve the accepted conversation across native turns.
 `checkpointParts.ts` is the **Fold** of detached checkpoint values;
-`owner.ts` is the **Walker** that restores and consumes continuation state.
+`seedHistory.ts` owns the one accepted user-entry writer and its pending
+history type. `owner.ts` is the **Walker** that restores and consumes continuation state.
 
 The captured invocation owns checkpoint, clock, identity and pending-question
 facts. Restoration retains the original optional-key shapes and clears each

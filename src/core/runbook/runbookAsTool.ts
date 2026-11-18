@@ -38,9 +38,10 @@
  *     the rowset itself — no table ships, and the note says not to
  *     reproduce rows the reader is already looking at.
  *
- *   THREE OUTCOMES, honestly: a clean envelope; an inner ABSENCE passed
+ *   OUTCOMES, honestly: a clean envelope; an inner ABSENCE passed
  *   through verbatim (the framework still reads it as an absence); and
- *   DECLINED rows counted into the ledger as not-checked ground.
+ *   DECLINED rows counted into the ledger as not-checked ground. An unavailable
+ *   served verdict rowset stays incomplete, with unknown total and a stated gap.
  *
  * The procedure is a FACTORY invoked per call with the run's own tool
  * dispatch (`ctx.tools`) — fresh chart every run, stages close over the
@@ -106,12 +107,17 @@ import { unionRedactionPolicies } from '../../redaction/policy.js';
 import { redactionMarker } from '../../redaction/marker.js';
 import { modelFacingState, servableSnapshot, watchRunRule } from '../servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from '../toolShownArgs.js';
+import {
+  chartToolExecutorOptions,
+  resolveChartToolObservability,
+} from '../chartToolObservability.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../../tools/tools.js';
 import {
   carriedProvenanceOf,
   chartCoverageOf,
   composeLedger,
   foldInnerCoverage,
+  VERDICT_ROWS_UNAVAILABLE_NOTE,
 } from './coverage.js';
 import { absenceSignalOf, probeDispatch, recordingDispatch } from './dispatch.js';
 import { chartRecordingOf, mintChartRecording, resolveRecordingPolicy } from './recording.js';
@@ -124,6 +130,7 @@ import type {
 } from './types.js';
 import {
   composeMeanings,
+  completeVerdictRowsOf,
   DECLINED_VERDICT,
   DEFAULT_MAX_ROWS,
   meaningsRecorder,
@@ -131,7 +138,6 @@ import {
   renderVerdictTable,
   resolveDecider,
   VERDICT_RENDER_NOTE,
-  verdictRowsOf,
 } from './verdicts.js';
 import { DEFAULT_WALK_CAP, mintWalk, projectWalk, type NarrativeEntryView } from './walk.js';
 
@@ -145,12 +151,12 @@ const PRESENTATIONS: readonly RunbookPresentation[] = ['prose', 'panel'];
 
 /**
  * The projection's RESERVED VOCABULARY: the keys this run assembled, plus
- * `table` — which `presentation: 'panel'` deliberately omits so that no table
- * reaches the model at all. A `report` field spelling the freed name would put
- * one straight back, so the mode's promise outranks the vacancy.
+ * `table` and `rows_total` — omitted for a panel or an unavailable rowset.
+ * A chart report cannot fill those omissions with a table or an invented
+ * count, so the projection's boundary outranks the vacancy.
  */
 function reservedProjectionNames(projection: Record<string, unknown> | undefined): string[] {
-  return projection === undefined ? [] : [...Object.keys(projection), 'table'];
+  return projection === undefined ? [] : [...Object.keys(projection), 'table', 'rows_total'];
 }
 
 function bagOf(value: unknown): Record<string, unknown> | undefined {
@@ -277,6 +283,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
     }
   }
 
+  const observability = resolveChartToolObservability(opts.observability, label);
   // ── Definition-time probe: read the chart's declared contract ─────────
   let probeChart: ReturnType<typeof opts.procedure>;
   try {
@@ -339,7 +346,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       const watch = policy !== opts.redact ? watchRunRule(chart) : undefined;
       const executor = new FlowChartExecutor(
         chart,
-        watch !== undefined ? { scopeFactory: watch.scopeFactory } : undefined,
+        chartToolExecutorOptions(observability, watch?.scopeFactory),
       );
       if (policy) {
         executor.setRedactionPolicy(policy);
@@ -481,9 +488,9 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       let shown: VerdictRow[] | undefined;
       let declined: number | undefined;
       if (isVerdictKind) {
-        rows = verdictRowsOf(state);
-        shown = rows.slice(0, maxRows);
-        declined = rows.filter((row) => row.verdict === DECLINED_VERDICT).length;
+        rows = completeVerdictRowsOf(state);
+        shown = rows?.slice(0, maxRows) ?? [];
+        declined = rows?.filter((row) => row.verdict === DECLINED_VERDICT).length;
       }
       const meanings =
         identity !== undefined && harvest !== undefined
@@ -502,6 +509,7 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
         ...(opts.rules !== undefined && { rules: opts.rules }),
         ...(rows !== undefined && { rowsTotal: rows.length }),
         ...(declined !== undefined && { declinedRows: declined }),
+        ...(isVerdictKind && rows === undefined && { rowsetUnavailable: true }),
       });
 
       // ── Provenance — re-emitted FIRST ───────────────────────────────────
@@ -529,13 +537,15 @@ export function runbookAsTool(opts: RunbookAsToolOptions): Tool {
       // host gets no table and the opposite law, because the rows it would
       // retype are already on the reader's screen.
       const projection =
-        shown !== undefined && rows !== undefined
+        shown !== undefined
           ? {
               verdicts: shown,
               rows_shown: shown.length,
-              rows_total: rows.length,
-              rows_complete: shown.length === rows.length,
-              ...(rendersItsOwnRows
+              ...(rows !== undefined && { rows_total: rows.length }),
+              rows_complete: rows !== undefined && shown.length === rows.length,
+              ...(rows === undefined
+                ? { render_note: VERDICT_ROWS_UNAVAILABLE_NOTE }
+                : rendersItsOwnRows
                 ? { render_note: PANEL_RENDER_NOTE }
                 : { table: renderVerdictTable(shown), render_note: VERDICT_RENDER_NOTE }),
               ...(meanings !== undefined && { verdict_meanings: meanings }),

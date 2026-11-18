@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.9.2] - 2026-11-17
+
+### Fixed
+
+- **Serve the source declaration contract that native input admission enforces.** With argument sources enabled, actual ASK tools require the library-owned `_findings` envelope and `from` list. One shared contract aligns tool schemas, source hints, per-request instructions and correction feedback across all verified source kinds. Optional observations and other tool cohorts retain their existing schemas; native source checks, human fallback and correction allowance remain unchanged. Saved-request views use the same projection and retain uncertainty when privacy withholds the tool schema.
+
+## [14.9.1] - 2026-11-17
+
+### Fixed
+
+- **Explain the exact nesting of missing source declarations.** Native correction feedback now includes a bounded typed contract derived from the library's declaration schema. It names missing arguments without copying their values, preserves the optional tool-schema envelope and existing human fallback, and never turns framework feedback into source evidence.
+
+## [14.9.0] - 2026-11-17
+
+### Added
+
+- **Correct an omitted argument-source declaration once before asking the person.** Opt in with `inputsLayer({ argumentSources: true, declarationCorrection: 'once' })`. The native batch barrier holds every proposed tool call, asks the model for an actual source declaration and verifies its new proposal through the existing checks. False or malformed claims and genuinely missing values keep their human-question or refusal path. The allowance survives same-request pause/crash recovery and resets on a new human turn; framework notices never become source evidence.
+
+## [14.8.0] - 2026-11-17
+
+### Added
+
+- **Check explicitly declared rowsets in the final governed result.** `Tool.resultRowsets` binds named column contracts to inline paths or bounded datasets published by that same native invocation. The existing column-type dial, findings and dispositions apply across ordinary and resumed execution. Availability has a finite value-free event; warn preserves delivery and enforce refuses unavailable or mistyped results. SourceEvidence shares one sealed publication receipt. Existing direct-array `resultColumns` delivery and the default off path retain their behavior. With an enabled dial and a dynamic provider, responses without a current declaring call file honest not-applicable write accounting.
+
+## [14.7.3] - 2026-11-17
+
+### Fixed
+
+- **Native argument questions no longer fail with `checker_dead` before their tools can run.** A batch held for a person's input now records honest no-result encounters for its armed write checks. Completed results and findings, real checker liveness, and successful reply/resume behavior remain intact.
+
+## [14.7.2] - 2026-11-16
+
+_Internal changes only — nothing a user of the library can see._
+
+## [14.7.1] - 2026-11-16
+
+_Internal changes only — nothing a user of the library can see._
+
+## [14.7.0] - 2026-11-16
+
+### Added
+
+- `flowchartAsTool` and `runbookAsTool` accept optional `observability` controls for native retained read/write views, commit values, and write provenance. Runbook verdict projections also distinguish an unavailable served rowset from a known empty result, preserving coverage uncertainty and omitting unknown totals.
+
+## [14.6.1] - 2026-11-15
+
+### Fixed
+
+- **Privacy-hidden request fields stay uncertain when a native safe replay base is present.** Saved request views now carry a distinct `privacy-policy` caveat from the recording's positive policy marker. Empty reconstructed system, message and tool values do not establish that the request contained nothing. The native snapshot is forwarded unchanged, including older engines' absent bases and newer engines' safe bases; `no-fold-base` continues to mean an actually missing fold base. Public retained values and stored receipt hashes remain unchanged.
+
+## [14.6.0] - 2026-11-15
+
+### Added
+
+- **Retain exact source evidence across trimmed conversations.** An opt-in native Agent can retain producer-declared subjects, scopes, governed scalars and explicitly permitted dataset fields in the existing artifact store. Bounded find/read tools recheck current host admission and native capabilities on every request, preserve historical status and coverage, and carry only receipt references through native checkpoints. Reads never refresh a source or certify an answer's completeness.
+
+  Mounted findings refusals supply structured recovery through offered retained-source readers while keeping current-request result identity checks strict. Unmounted refusal bytes and terminal decisions remain unchanged.
+
+- **Serve AG-UI through an existing conversation pool.** Event protocols can share the standing host's identity, admission, session lanes, checkpoints and artifact scope. Each run has an isolated translator, explicit host-authorized final delivery, projected custom/tool events and bounded output. The fresh-runner hosting strategy remains available. An opt-in preparation-scoped source metadata reader supports restoring application context from freshly admitted retained evidence without exposing datasets or manufacturing a tool call.
+
+### Fixed
+
+- **Do not offer refused tool calls as findings evidence.** Producer-owned refusal, cancellation and unknown-outcome notices no longer enter advisory result IDs or result identity readers. Historical declarations remain visible with a fresh advisory context-membership status, while citation admission still requires a unique executed result in the actual current request. Stable schemas distinguish those result IDs from historical declarations and artifact references.
+
+  Provider replay and thinking metadata are detached through the native value port before joining assistant history. Valid provider-backed tool proposals retain their call identities in frozen middleware views; the existing unsafe-turn clone guard remains fail-closed.
+
+- **Preserve native sign-in groups and Final input privacy for hosted consumers.** Directory password sign-in accepts any one of several required groups using one bind and one escaped membership search. Empty declarations refuse boot. Final input omits the internal private-selector carrier before reading values while retaining ordinary native secrecy tracking. Both chart builders use the same mapper.
+
+## [14.5.0] - 2026-11-14
+
+### Added
+
+- **Optional backward dependency output for recorded root questions.** A host can set `TraceCauseOptions.includeBackward: true` to include the existing bounded backward nodes, edges and proof references in `root_cause`. Omitted or `false` keeps the current output; `impact` and `attention_list` do not request it. The same single Foottrace query, work limits, deadline, cancellation and character ceiling apply. Oversize output is withheld with a truncated gap, and missing evidence stays uncertain. This display option does not establish semantic derivation or a physical cause.
+
+- **Save repeated model context once and record each call as a change list.**
+  Opt-in context recording uses a value-table port, preserves served text and
+  schema values, and keeps provider requests unchanged. Expansion refuses
+  missing values and malformed references; ordinary recordings still read as
+  before. Commentary now gives every registered event a sentence or an explicit
+  internal exclusion instead of a bare event label.
+
+  Migration: unknown custom events now use the `event.unknown` prose key instead
+  of falling through to a raw payload renderer. Existing template override keys
+  keep their meanings.
+
 ## [14.4.0] - 2026-11-12
 
 ### Added

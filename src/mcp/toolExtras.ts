@@ -37,8 +37,9 @@
  * stated on the way out.
  *
  * ── The asymmetry that matters ──────────────────────────────────────────
- * SERVING validates nothing new: the tool was built by `defineTool`, which
- * already refused every malformed declaration at definition time.
+ * SERVING preserves existing declarations. The new `resultRowsets` field
+ * crosses the same bounded, detached/frozen fence here as at `defineTool`,
+ * including for tools authored directly without that helper.
  *
  * INGEST validates everything and THROWS NOTHING. A bag comes from a server
  * this process does not control, and one server's typo must not take down a
@@ -74,6 +75,7 @@ import {
 } from '../semantics/coverage/search/declaration.js';
 import type { ToolSearch } from '../semantics/coverage/search/types.js';
 import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../time/wire.js';
+import { resultRowsetsOf, type ToolResultRowset } from '../tools/resultRowsets.js';
 
 /**
  * The single `_meta` key every agentfootprint declaration travels under.
@@ -119,6 +121,8 @@ export interface McpToolExtras {
    * of it — the whole defect `toolExtras` was built to end.
    */
   readonly resultColumns?: ToolResultColumns;
+  /** Explicit final-result bindings; malformed/conflicting new fields are dropped at intake. */
+  readonly resultRowsets?: readonly ToolResultRowset[];
   /** The identity edge integrity checks join on — see {@link Tool.owner}. */
   readonly owner?: ToolOwner;
   /** The declared class of this tool's results — see {@link Tool.resultClass}. */
@@ -200,14 +204,16 @@ export function callTimeOf(meta: unknown): TimeContext | undefined {
  * or `undefined` when the tool declares none, so `mcpServe` can leave `_meta`
  * off the listing entirely rather than sending an empty object.
  *
- * Copied verbatim, never inferred or defaulted. This is the SERVE side, and
- * the values were already vetted by `defineTool`.
+ * Never inferred or defaulted. Existing fields keep their serving law;
+ * explicit rowset metadata is normalized even on directly authored tools.
  */
 export function toolExtrasOf(tool: Tool): McpToolExtras | undefined {
+  const resultRowsets = resultRowsetsOf(tool.schema.name, tool, tool.resultColumns);
   const extras: McpToolExtras = {
     ...(tool.argumentsFrom !== undefined && { argumentsFrom: tool.argumentsFrom }),
     ...(tool.resultKind !== undefined && { resultKind: tool.resultKind }),
     ...(tool.resultColumns !== undefined && { resultColumns: tool.resultColumns }),
+    ...(resultRowsets !== undefined && { resultRowsets }),
     ...(tool.owner !== undefined && { owner: tool.owner }),
     ...(tool.resultClass !== undefined && { resultClass: tool.resultClass }),
     ...(tool.resultCeiling !== undefined && { resultCeiling: tool.resultCeiling }),
@@ -272,6 +278,7 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
   const resultColumns = kept('resultColumns', (v) => assertResultColumns(origin.tool, v)) as
     | ToolResultColumns
     | undefined;
+  const resultRowsets = readResultRowsetsExtra(bag, origin, resultColumns);
   const owner = kept('owner', (v) => assertToolOwner(origin.tool, v as ToolOwner)) as
     | ToolOwner
     | undefined;
@@ -314,6 +321,7 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     ...(argumentsFrom !== undefined && { argumentsFrom }),
     ...(resultKind !== undefined && { resultKind }),
     ...(resultColumns !== undefined && { resultColumns }),
+    ...(resultRowsets !== undefined && { resultRowsets }),
     ...(owner !== undefined && { owner }),
     ...(resultClass !== undefined && { resultClass }),
     ...(resultCeiling !== undefined && { resultCeiling }),
@@ -365,6 +373,24 @@ function keepField(
     return undefined;
   }
   return value;
+}
+
+/** New metadata is own inert data; retain valid legacy columns if only the new field fails. */
+function readResultRowsetsExtra(
+  bag: Record<string, unknown>,
+  origin: McpToolExtrasOrigin,
+  legacyColumns: ToolResultColumns | undefined,
+): readonly ToolResultRowset[] | undefined {
+  try {
+    return resultRowsetsOf(origin.tool, bag, legacyColumns);
+  } catch {
+    warnOnce(
+      origin,
+      'resultRowsets',
+      'Use own, plain bounded resultRowsets without resultColumns; accessors and inherited fields are unsupported.',
+    );
+    return undefined;
+  }
 }
 
 // ─── The warning ───────────────────────────────────────────────────

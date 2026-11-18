@@ -51,6 +51,7 @@ import type { ThinkingHandler } from '../../../../thinking/types.js';
 import { requireKeepLedgerFacts, resolveKeepLedgerFacts } from '../../run/ledgerFacts.js';
 import type { Runner } from '../../../runner.js';
 import type { AgentConfigurationValues } from './values.js';
+import { resolveSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
 
 /** Public identity remains on the original runner, at its existing construction points. */
 interface AgentIdentity {
@@ -255,6 +256,14 @@ export function configureAgent(
     // Declared sources read `AgentInput.messageFrom` — a composition hands
     // the marker only to a runner that reads it.
     readsMessageFrom(runner);
+  }
+  if (inputsLayer?.declarationCorrection === 'once') {
+    if (config.argumentSourcesArmed !== true) {
+      throw new Error(
+        'Agent: inputsLayer.declarationCorrection requires resolved argumentSources: true.',
+      );
+    }
+    config.sourceDeclarationCorrection = 'once';
   }
   // A member runs for the run that mounted it: a composition hands it that
   // run as `parentRun` (`core/memberRun.ts`).
@@ -498,6 +507,10 @@ export function configureAgent(
     } else {
       config.artifactStore = opts.artifacts;
     }
+  }
+  if (opts.sourceEvidence !== undefined) {
+    if (!config.artifactStore) throw new Error('Agent.sourceEvidence requires an artifact store.');
+    config.sourceEvidenceConfig = resolveSourceEvidenceOptions(opts.sourceEvidence);
   }
   // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
   // read at exactly one place — the tool-dispatch loop, AFTER

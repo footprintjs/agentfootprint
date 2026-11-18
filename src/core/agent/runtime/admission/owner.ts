@@ -5,6 +5,7 @@ import { type RunnerInvocation } from '../../../runnerExecution.js';
 import { type AttachRecorderOptions, type CombinedRecorder, type RunSetup } from 'footprintjs';
 import type { RunContext } from '../../../../bridge/eventMeta.js';
 import { ContextRecorder } from '../../../../recorders/core/ContextRecorder.js';
+import { contextRecordedRecorder } from '../../../../recorders/core/ContextRecordedRecorder.js';
 import { contextEvaluatedRecorder } from '../../../../recorders/core/ContextEvaluatedRecorder.js';
 import { streamRecorder } from '../../../../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../../../../recorders/core/AgentRecorder.js';
@@ -123,6 +124,9 @@ export function prepareAgentRun(
     (recorder) => ({ recorder }),
   );
   const dispatcher = this.native.getDispatcher();
+
+  // Authoritative source frames must survive a bounded public observer queue.
+  attachments.push({ recorder: contextRecordedRecorder({ dispatcher, getRunContext: getRunCtx }) });
 
   // RFC-001 Block 10 — observer delivery tier. With 'deferred', every
   // bridge below is attached onto footprintjs's bounded capture queue

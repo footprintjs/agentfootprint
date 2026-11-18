@@ -24,6 +24,13 @@ const passwords = directoryPasswords({
 });
 ```
 
+Several required group DNs use `requiredGroup: [readersDn, operatorsDn]`:
+any one admits, using one bind and one base-scope escaped OR membership search.
+An empty list or blank DN refuses construction. A one-item list keeps the exact
+single-string filter. Environment configuration uses semicolon-separated DNs;
+a semicolon inside a DN remains escaped as `\;`. This changes membership
+admission only; Who-am-I, attempt limits and LDAPS trust remain unchanged.
+
 ## Trust the ROOT, or Node's store — never unset
 `ldapDirectory` takes exactly one trust: `caPem` (the company's ROOT CA) or
 `systemCa: true` (Node's default store: Mozilla's public roots, plus
