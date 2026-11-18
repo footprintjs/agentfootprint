@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -13,29 +13,23 @@ export function verifyStagedCandidate(root, sourceArchive, plannedVersion) {
   const manifest = JSON.parse(original);
   const source = verify.inspectFile(sourceArchive, manifest, manifest.version).report;
   const output = mkdtempSync(join(tmpdir(), 'af-ci-staged-'));
+  const stagedName = `agentfootprint-${plannedVersion}.tgz`;
   try {
     try {
       writeFileSync(
         manifestPath,
         JSON.stringify({ ...manifest, version: plannedVersion }, null, 2) + '\n',
       );
-      const packed = JSON.parse(
-        execFileSync(
-          'npm',
-          ['pack', '--ignore-scripts', '--offline', '--json', '--pack-destination', output],
-          { cwd: root, encoding: 'utf8' },
-        ),
+      execFileSync(
+        'npm',
+        ['pack', '--ignore-scripts', '--offline', '--loglevel=error', '--pack-destination', output],
+        { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] },
       );
-      assert.equal(packed.length, 1, 'expected one staged package');
-      assert.equal(packed[0].filename, `agentfootprint-${plannedVersion}.tgz`);
     } finally {
       writeFileSync(manifestPath, original);
     }
-    const staged = verify.inspectFile(
-      join(output, `agentfootprint-${plannedVersion}.tgz`),
-      manifest,
-      plannedVersion,
-    ).report;
+    assert.deepEqual(readdirSync(output), [stagedName], 'expected only the staged package');
+    const staged = verify.inspectFile(join(output, stagedName), manifest, plannedVersion).report;
     const payload = ({ files }) =>
       Object.fromEntries(
         files
