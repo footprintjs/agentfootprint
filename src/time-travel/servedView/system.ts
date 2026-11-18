@@ -1,3 +1,5 @@
+import type { LLMToolSchema } from '../../provider-contract/types.js';
+import { projectSourceInstructions } from '../../core/agent/sourceContract.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { findingsLedgerPiece } from '../../core/agent/findings/serve.js';
 import type { ontologyPiece } from '../../ontology/serve.js';
@@ -39,12 +41,13 @@ export function systemPieces(
   recovery: RecoveryPiece,
   ontology: OntologyPiece | undefined,
   findings: FindingsPiece,
-): readonly [composedPieces: ComposedPiece[], pieces: ServedPiece[]] {
+  tools: readonly LLMToolSchema[] | undefined,
+): readonly [composedPieces: readonly ComposedPiece[], pieces: ServedPiece[]] {
   // ── the system prompt, joined ──────────────────────────────────────────
   // Injections, then the recovery piece, then the ontology piece, then the
   // findings piece — the fixed order the stage joins in. Every request-only
   // piece is joined, never committed as an injection.
-  const composedPieces =
+  const initialPieces =
     recovery === undefined && ontology === undefined && findings === undefined
       ? injections
       : [
@@ -53,6 +56,7 @@ export function systemPieces(
           ...(ontology === undefined ? [] : [ontology]),
           ...(findings === undefined ? [] : [findings]),
         ];
+  const composedPieces = projectSourceInstructions(initialPieces, tools);
   const pieces: ServedPiece[] = contributingPieces(composedPieces).map((record) => ({
     text: record.rawContent,
     slot: record.slot,

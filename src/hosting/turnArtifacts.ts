@@ -68,6 +68,8 @@ export interface TurnArtifactsSource {
   readonly scope: ArtifactScope | undefined;
   /** The run this turn executed, captured when the binding is built — its `origin`. */
   readonly runId: string | undefined;
+  /** Native root mint already checked against this scope by the host composer. */
+  readonly recording?: Extract<TurnArtifacts, { bound: true }>['recording'];
   /** Where the binding's facts go (the hosting door's adapter onto the record). */
   readonly onEvent: ArtifactEventSink;
   /** Where a failed operation or a refused late call is reported. */
@@ -106,7 +108,14 @@ export function openTurnArtifacts(source: TurnArtifactsSource): OpenTurnArtifact
     }),
     source.onFailure,
   );
-  return { turn: Object.freeze({ bound: true, artifacts: live.artifacts }), ...live.lifetime };
+  return {
+    turn: Object.freeze({
+      bound: true,
+      artifacts: live.artifacts,
+      ...(source.recording !== undefined && { recording: source.recording }),
+    }),
+    ...live.lifetime,
+  };
 }
 
 function nothingBound(reason: 'no-session' | 'no-store'): OpenTurnArtifacts {

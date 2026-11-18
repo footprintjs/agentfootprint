@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-392 exported from `agentfootprint`.
+408 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -320,6 +320,21 @@ title: Interfaces
 - [`SlidingWindowRecord`](/docs/api/interfaces/SlidingWindowRecord)
 - [`SlotComposition`](/docs/api/interfaces/SlotComposition)
 - [`SourceClockRow`](/docs/api/interfaces/SourceClockRow)
+- [`SourceEvidenceCandidate`](/docs/api/interfaces/SourceEvidenceCandidate)
+- [`SourceEvidenceDataset`](/docs/api/interfaces/SourceEvidenceDataset)
+- [`SourceEvidenceDatasetDeclaration`](/docs/api/interfaces/SourceEvidenceDatasetDeclaration)
+- [`SourceEvidenceDeclaration`](/docs/api/interfaces/SourceEvidenceDeclaration)
+- [`SourceEvidenceDescriptor`](/docs/api/interfaces/SourceEvidenceDescriptor)
+- [`SourceEvidenceFindArgs`](/docs/api/interfaces/SourceEvidenceFindArgs)
+- [`SourceEvidenceIndex`](/docs/api/interfaces/SourceEvidenceIndex)
+- [`SourceEvidenceLimits`](/docs/api/interfaces/SourceEvidenceLimits)
+- [`SourceEvidenceOptions`](/docs/api/interfaces/SourceEvidenceOptions)
+- [`SourceEvidencePreparation`](/docs/api/interfaces/SourceEvidencePreparation)
+- [`SourceEvidenceProjection`](/docs/api/interfaces/SourceEvidenceProjection)
+- [`SourceEvidenceReadArgs`](/docs/api/interfaces/SourceEvidenceReadArgs)
+- [`SourceEvidenceRecentArgs`](/docs/api/interfaces/SourceEvidenceRecentArgs)
+- [`SourceEvidenceSource`](/docs/api/interfaces/SourceEvidenceSource)
+- [`SourceEvidenceSubject`](/docs/api/interfaces/SourceEvidenceSubject)
 - [`SqliteArtifacts`](/docs/api/interfaces/SqliteArtifacts)
 - [`SqliteArtifactsOptions`](/docs/api/interfaces/SqliteArtifactsOptions)
 - [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)
@@ -369,6 +384,7 @@ title: Interfaces
 - [`ToolResultContext`](/docs/api/interfaces/ToolResultContext)
 - [`ToolResultEnvelope`](/docs/api/interfaces/ToolResultEnvelope)
 - [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
+- [`ToolResultRowset`](/docs/api/interfaces/ToolResultRowset)
 - [`ToolScript`](/docs/api/interfaces/ToolScript)
 - [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 - [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)

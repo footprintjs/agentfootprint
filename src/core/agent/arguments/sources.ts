@@ -42,17 +42,8 @@
 
 import { isMissing } from '../../../tools/declare.js';
 
-/** Where the model says a value came from. */
-export type DeclaredSourceKind = 'user' | 'result' | 'turn' | 'app' | 'assumed';
-
-/** The five, in the order the served schema enumerates them. */
-export const DECLARED_SOURCE_KINDS: readonly DeclaredSourceKind[] = Object.freeze([
-  'user',
-  'result',
-  'turn',
-  'app',
-  'assumed',
-]);
+import { DECLARED_SOURCE_KINDS, type DeclaredSourceKind } from '../sourceContract.js';
+export { DECLARED_SOURCE_KINDS, type DeclaredSourceKind } from '../sourceContract.js';
 
 /** One `_findings.from` entry, as the reader kept it. */
 export interface DeclaredSource {
@@ -147,4 +138,6 @@ export interface CallSources {
   readonly toolCallId: string;
   readonly from: readonly DeclaredSource[];
   readonly malformed?: number;
+  /** Full parser fault, irrespective of which native row owns the display count. Correction arm only. */
+  readonly declarationMalformed?: true;
 }

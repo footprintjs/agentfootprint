@@ -96,6 +96,22 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 
+export {
+  recordContextRun,
+  readContextRecording,
+  applyContextChange,
+  contextCallCommentary,
+  ContextRecordingError,
+  type ContextRunRecorder,
+  type RecordContextRunOptions,
+  type ContextCallChange,
+  type ContextValueWriter,
+  type ContextValueReader,
+  type ContextValueRecording,
+  type OpenContextValues,
+  type ReadContextRecording,
+} from './recorders/observability/contextRecording.js';
+
 // A recording with every repeated value written ONCE — what to store or send
 // when the run is long: plain JSON repeats the history once per place that
 // saw it (K²·R), packed it grows with K·R. `unpackRecording` reads both

@@ -5,7 +5,7 @@
  * Window eviction and retirement remain the same: noise/ruled-out results
  * leave the advisory list, while open/fact results remain revisable.
  * `knownResults` resolves declarations without guessing a positional ID.
- * All readers use `isResultMessage`, so settlement notices never become results.
+ * All readers use `isResultMessage`, so producer-owned notices never become results.
  */
 
 import type { LLMMessage } from '../../../provider-contract/types.js';
@@ -23,14 +23,14 @@ export const RETIRING_STANDINGS: readonly Standing[] = Object.freeze(['noise', '
 /**
  * Is this message a tool's RESULT — the only thing a standing can be about?
  * A `role: 'tool'` message the batch settlement wrote (9.113.0,
- * `LLMMessage.notDispatched`) is not: the call never ran, so there is nothing
- * to stand on. Read off the marker, never the sentence — which is why every
+ * `LLMMessage.notDispatched` or `toolResultOrigin`) is not a completed result.
+ * Read off the marker, never the sentence — which is why every
  * caller hands these functions the COMMITTED conversation, not the wire,
  * where `stripFrameworkFields` has already removed the marker (ids and order
  * are the same either way).
  */
 export function isResultMessage(m: LLMMessage): boolean {
-  return m.role === 'tool' && m.notDispatched === undefined;
+  return m.role === 'tool' && m.notDispatched === undefined && m.toolResultOrigin === undefined;
 }
 
 /**
@@ -127,18 +127,28 @@ export function offeredResultIds(
  * order changes no row; it is the source the rows resolved against before
  * the history joined). An id in neither is `unknownId`, as written. A tool
  * message with no `toolName` yields a result with none: nothing is invented
- * for it. A settled message (`isResultMessage`) is no result, so a model that
- * names its id anyway files `unknownId` — the batch never holds one: a
- * settled call never joins `toolResults`.
+ * for it. A producer-owned notice (`isResultMessage`) is no result. Its history
+ * ID vetoes a matching batch entry too; no notice becomes a result because
+ * delivery also included it in the native batch. Batch-only entries stay valid.
  */
 export function knownResults(
   messages: readonly LLMMessage[],
   previousBatch: readonly PreviousResult[] = [],
 ): readonly PreviousResult[] {
   const seen = new Set<string>();
+  const notices = new Set<string>();
+  for (const message of messages) {
+    if (message.role === 'tool' && !isResultMessage(message) && message.toolCallId !== undefined)
+      notices.add(message.toolCallId);
+  }
   const out: PreviousResult[] = [];
   const add = (entry: PreviousResult) => {
-    if (entry.toolCallId.length === 0 || seen.has(entry.toolCallId)) return;
+    if (
+      entry.toolCallId.length === 0 ||
+      notices.has(entry.toolCallId) ||
+      seen.has(entry.toolCallId)
+    )
+      return;
     seen.add(entry.toolCallId);
     out.push(entry);
   };

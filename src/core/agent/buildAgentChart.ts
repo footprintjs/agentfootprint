@@ -65,6 +65,7 @@ import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/
 import {
   breakFinalStage,
   breakFinalWithValidationStage,
+  finalBranchInput,
   finalBranchOutput,
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
@@ -792,19 +793,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       // Pass through the read-only state the sub-chart needs;
       // OMIT keys the sub-chart writes (finalContent, newMessages)
       // — passing those via inputMapper would freeze them as args.
-      inputMapper: (parent) => {
-        const { finalContent: _f, newMessages: _nm, ...rest } = parent;
-        void _f;
-        void _nm;
-        if (deps.hasAnswerValidation === true) {
-          // This stage writes the commit flag; passing it as an argument
-          // would freeze it before capture. The report remains read-only.
-          const { answerValidationCommitted: _committed, ...input } = rest;
-          void _committed;
-          return input;
-        }
-        return rest;
-      },
+      inputMapper: (parent) => finalBranchInput(parent, deps.hasAnswerValidation === true),
       outputMapper: (sf) => finalBranchOutput(sf, deps.hasAnswerValidation === true),
       // With the branch-sourced loop, `final` is a terminal LEAF — it ends the
       // run on its own (no decider `next` to suppress). propagateBreak is kept

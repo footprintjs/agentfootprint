@@ -10,6 +10,7 @@ export function readBatchResolutions(
   iteration: number,
   toolCalls: readonly Pick<DispatchCall, 'id' | 'name'>[],
   findingsRefusals: readonly unknown[],
+  consumeKept = true,
 ) {
   // THE INPUTS LAYER'S RESOLUTIONS for this batch — read only under the
   // arm, and only the entries resolved for THIS iteration.
@@ -23,7 +24,7 @@ export function readBatchResolutions(
   // A fill the layer took from an answer this turn KEPT (a call of the
   // batch that asked could not finish) is that answer's one use — dropped
   // before anything else (`arguments/dispatch.ts` · `dropUsedKept`).
-  if (inputs !== undefined && resolutions !== undefined) {
+  if (consumeKept && inputs !== undefined && resolutions !== undefined) {
     inputs.dropUsedKept(scope, resolutions, toolCalls);
   }
   return resolutions;

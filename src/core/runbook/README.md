@@ -92,6 +92,33 @@ It says nothing about the WALK's surface. A host that draws the rows usually
 wants to draw the walk too — that is `walk: { recording }` (`recording.ts`), and
 the two dials are independent: either can be on without the other.
 
+These rendering laws apply to a readable rowset. A missing, non-array, or
+partly invalid `verdicts` value establishes no row total: the bridge returns
+`verdicts: []`, `rows_shown: 0`, `rows_complete: false`, omits `rows_total` and
+`table`, and carries a fixed unavailable `render_note` plus a `not_checked`
+coverage entry. A real empty array remains known zero and complete. The public
+`verdictRowsOf` helper still selects visible valid rows; it does not prove the
+whole rowset was available. `completeVerdictRowsOf` is the internal bridge check.
+An omitted `table` or `rows_total` stays reserved against the chart's `report`.
+
+## Native observation costs — `observability`
+
+`observability` is the same optional `ChartToolObservability` on this bridge and
+`flowchartAsTool`. The shared `core/chartToolObservability.ts` validates and
+copies only native `readTracking`, `writeTracking`, `commitValues`, and
+`writeProvenance` values before execution. Unknown fields, accessors and invalid
+values refuse at definition; there is no executor-options or privacy override.
+Absent or empty options keep the old native defaults and option construction.
+
+`readTracking: 'summary'` and `writeTracking: 'summary'` reduce retained
+`stageReads`/`stageWrites` values and native `onCommit` mutation observations.
+They preserve native execution state, per-operation `onWrite`, narrative and
+decider evidence, redaction, and full commit replay under the default
+`commitValues: 'full'`. `commitValues: 'delta'` changes the commit encoding and
+must be read through native folding; `writeProvenance` controls native read-key
+provenance. The native executor owns each behavior and its costs. The bridge
+forwards these four dials beside its existing private `watch.scopeFactory`.
+
 Reserved state keys the bridge reads: `verdicts`, `coverage`, `report`.
 Reserved verdict word: `declined` (counted into the ledger as not-checked).
 Reserved envelope names a `report` may not take: `af_coverage`,

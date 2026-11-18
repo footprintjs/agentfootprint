@@ -16,6 +16,11 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `repeatedCall.ts` · `noteFor`, `resultCeiling.ts` · `applyResultCeiling`,
 `toolResultCap.ts`.
 
+`sourceContract.ts` is the pure shared projection of native source grammar:
+actual ASK schemas, accepted-origin hints, current-cohort instructions and
+minimal error data. Admission and correction lifetime remain in `arguments/`;
+the marker describes a schema projection and grants no source authority.
+
 ## What it reads / what it writes
 - The chart builders own the outputMappers that publish the loop's shared facts:
   `activeInjections`, `currentSkillId`, `stepPointer`, `dynamicToolSchemas`
@@ -35,6 +40,12 @@ generated answer, `'none'` when there is no schema — how the answer's shape
 was secured, beside `answerValidation`, which is about its content.
 
 Automatic output uses `supportsAutoNativeOutputSchema(model)` as positive model knowledge. Unknown Anthropic names, opaque aliases, older unsupported models and custom providers without that declaration use instructions plus local validation. Explicit `strategy: 'native'` retains its forward-compatible capability policy; `strategy: 'instruct'` opts out of the changed default. No API error causes an automatic format downgrade.
+
+Both chart builders select Final input through `stages/breakFinal.ts`'s
+`finalBranchInput`. The runtime-only private-selector carrier is omitted before
+value access; ordinary state values are still read through native mapper
+tracking before writable Final fields are discarded. This preserves caller
+secrecy without letting metadata primitives taint unrelated public facts.
 
 ## The one law here
 A builder declares; it must not decide. Anything that has to be true AT a
@@ -156,3 +167,7 @@ under deferred observation or sanitize provider-authored failure text.
 
 See the role lists above; `types.ts` holds both the public agent types and the
 internal ones the stages share.
+
+`assistantReplay.ts` reads only its owned replay/thinking carrier through the native
+value port and detaches those fields before appending assistant history. Reactive
+proxies never enter frozen callback views; the unsafe whole-turn guard stays closed.

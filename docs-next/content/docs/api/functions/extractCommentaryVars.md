@@ -6,15 +6,7 @@ title: extractCommentaryVars
 
 > **extractCommentaryVars**(`event`, `ctx`, `templates?`): `Record`\<`string`, `string`\>
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:703](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L703)
-
-Build the variable bag for a given event. Flat `name → string` map;
-`renderCommentary` substitutes by name. Templates use whatever names
-this function produces.
-
-Two-step composition for `stream.tool_start`: the optional
-`descClause` is a rendered sub-template. We pre-render it here so
-the outer template stays a single non-recursive substitution pass.
+Defined in: [src/recorders/observability/commentary/commentaryTemplates/vars.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates/vars.ts#L42)
 
 ## Parameters
 

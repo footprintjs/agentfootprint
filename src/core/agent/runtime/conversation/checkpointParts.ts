@@ -1,7 +1,66 @@
 import type { AgentState } from '../../types.js';
 import type { FoldedSpan } from '../../window/types.js';
 import type { FindingsLedger } from '../../findings/types.js';
-import type { EvidenceRecoveryCheckpoint } from '../../../runCheckpoint.js';
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from '../../../runCheckpoint.js';
+import { sourceEvidenceIndex } from '../../../../artifacts/sourceEvidence/guards.js';
+import type { SourceEvidenceIndex } from '../../../../artifacts/sourceEvidence/types.js';
+
+/** One own-data reader for finite request state, at both checkpoint doors. */
+export function sourceDeclarationCorrectionOf(
+  value?: object,
+  field:
+    | 'sourceDeclarationCorrection'
+    | 'sourceDeclarationCorrectionSpent' = 'sourceDeclarationCorrection',
+): AgentRunCheckpoint['sourceDeclarationCorrection'] {
+  if (value === undefined) return undefined;
+  const invalid = (): never => {
+    throw new TypeError('Invalid native source declaration correction checkpoint carrier.');
+  };
+  if (value === null || typeof value !== 'object') return invalid();
+  const slot = Object.getOwnPropertyDescriptor(value, field);
+  if (slot === undefined) {
+    if (field in value) return invalid();
+    return undefined;
+  }
+  if (!slot.enumerable || !('value' in slot)) return invalid();
+  const raw: unknown = slot.value;
+  if (raw === undefined) return undefined;
+  if (field === 'sourceDeclarationCorrectionSpent') {
+    if (raw !== true) return invalid();
+  } else {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return invalid();
+    const prototype = Object.getPrototypeOf(raw);
+    if (prototype !== null && prototype !== Object.prototype) return invalid();
+    const keys = Reflect.ownKeys(raw),
+      spent = Object.getOwnPropertyDescriptor(raw, 'spent');
+    if (
+      keys.length !== 1 ||
+      keys[0] !== 'spent' ||
+      spent?.enumerable !== true ||
+      !('value' in spent) ||
+      spent.value !== true
+    )
+      return invalid();
+  }
+  return { spent: true };
+}
+
+/** One bounded detached reader for both checkpoint writers and restoration doors. */
+export function sourceEvidenceOf(state?: {
+  readonly sourceEvidence?: SourceEvidenceIndex;
+}): SourceEvidenceIndex | undefined {
+  if (state === undefined) return undefined;
+  const slot = Object.getOwnPropertyDescriptor(state, 'sourceEvidence');
+  if (slot === undefined) return undefined;
+  if (!slot.enumerable || !('value' in slot))
+    throw new TypeError('Invalid native source evidence checkpoint carrier.');
+  if (slot.value === undefined) return undefined;
+  try {
+    return sourceEvidenceIndex(slot.value);
+  } catch {
+    throw new TypeError('Invalid native source evidence checkpoint carrier.');
+  }
+}
 
 /** Both checkpoint doors keep the repair budget separately from conversation text. */
 export function evidenceRecoveryOf(

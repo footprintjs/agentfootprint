@@ -76,7 +76,7 @@ export interface ToolRoutingPort {
    * `applyToolEffects` never consults it, because a `propose-transition`
    * comes from a tool — the author's own code — and is admitted under every
    * posture against reachability alone. See `SkillGraphOptions.strictness`
-   * (AgentBuilder.ts), which states the exemption for authors.
+   * (builder/graph/options.ts), which states the exemption for authors.
    */
   readonly skillStrictness?: 'guard' | 'rails';
   /**

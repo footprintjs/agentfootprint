@@ -4,6 +4,7 @@ import { carriesArgumentView } from '../../../toolShownArgs.js';
 import type { InputValue } from '../../../../tools/inputRequest.js';
 import { isRefused, rulesOf, type RuledToolLike } from '../../../../tools/declare.js';
 import { assumeSentence } from './values.js';
+import { SOURCE_ASK_HINT } from '../../sourceContract.js';
 
 type PlainObject = Record<string, unknown>;
 
@@ -30,8 +31,8 @@ export const ASK_SENTENCE =
 /**
  * The sentence a ruled `ask` property carries under DECLARED SOURCES
  * (`.findings({ argumentSources: true })`, `.inputsLayer({ argumentSources:
- * true })`) in place of `ASK_SENTENCE`: the same rule, and — at the place the
- * model decides whether to send the value — where it says the person gave it.
+ * true })`) in place of `ASK_SENTENCE`: at the place the model decides whether
+ * to send a value, it names the nested declaration and all verified source kinds.
  * Under the arm a present value with no traced source is asked of the person
  * (`resolve.ts`), so "leave it out unless the person gave it" alone told the
  * model that SENDING the value was the whole of its statement: in the paid
@@ -39,9 +40,7 @@ export const ASK_SENTENCE =
  * of 32 calls where the person gave none — and a period the person HAD given
  * was traced to their words, unasked, on 7 of 88 calls.
  */
-export const ASK_SOURCES_SENTENCE =
-  "The tool's rule asks the person for this value; leave it out unless the person gave it, and " +
-  'then quote their words for it in `_findings.from`.';
+export const ASK_SOURCES_SENTENCE = SOURCE_ASK_HINT;
 
 /** The options every served-schema composer here takes. */
 export interface ServeOptions {
@@ -49,7 +48,7 @@ export interface ServeOptions {
    * Declared sources are armed (`.findings({ argumentSources: true })` or
    * `.inputsLayer({ argumentSources: true })`) AND this tool's served schema
    * carries `_findings.from`: an `ask` property says where the model declares
-   * the person's words, and an answered note says a later call may cite the
+   * the value's source, and an answered note says a later call may cite the
    * answer. The CALLER decides it per tool, by the rule the planters and the
    * dispatch peel ask (`findings/reserved.ts` · `ownsReservedArgument`, which
    * this leaf cannot import): a tool whose author owns `_findings` is served

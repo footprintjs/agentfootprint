@@ -164,7 +164,7 @@ vocabulary keeps out. `validate.ts` runs the row builder on the same
 frozen candidate as the callback, before it; a throw, a listed check with
 no builder, or a row claiming `checked-pass` is `agent-check-error` (unverified). Host check ids starting
 `agent:` are refused while rows are on (refuse-by-domain: the two id sets
-cannot collide). `core/agent/AgentBuilder.ts` · `build` refuses a listed check
+cannot collide). `core/agent/builder/assembly/contracts.ts` refuses a listed check
 whose builder call is missing.
 
 ## Claim prerequisites — `checkClaimRequirements`

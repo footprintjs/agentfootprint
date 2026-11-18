@@ -23,7 +23,7 @@ silently and a chain that never ran must not look the same afterwards.
 The user entry a run adds to the conversation is the message the `'input'`
 chain let through, on a first turn and on a continued one
 (`run({ continueFrom })`, `followUp()`, a stored session behind
-`standingAgent`). One writer: `stages/seed.ts · historyForTurn`, called after
+`standingAgent`). One writer: `runtime/conversation/seedHistory.ts · historyForTurn`, called after
 the chain. A continuation stashes the stored history and a flag
 (`core/agent/runtime/conversation/owner.ts · applyContinuation`), never a pre-built entry — an entry built
 before the chain runs holds the raw text, which is what 9.112.1 and earlier
