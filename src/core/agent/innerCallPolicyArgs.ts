@@ -1,5 +1,10 @@
 import type { TypedScope } from 'footprintjs';
 import type { InnerCallRan } from '../../provider-contract/innerCalls.js';
+import {
+  INNER_CALL_POLICY_KEY,
+  InnerCallPolicyUnavailableError,
+  type InnerCallPolicyCarrier,
+} from '../../redaction/innerCallPolicyCarrier.js';
 import { markPrivateFields } from '../../redaction/runRedaction.js';
 import type { ToolArgs } from '../../tools/runChain.js';
 import { carriesArgumentView, shownArgsOf } from '../toolShownArgs.js';
@@ -7,7 +12,7 @@ import { takeArguments } from './innerCallArguments.js';
 import type { AgentState } from './types.js';
 
 interface InnerCallPolicyState {
-  readonly innerCallPolicyArgs?: Readonly<Record<string, ToolArgs>>;
+  readonly innerCallPolicyArgs?: InnerCallPolicyCarrier;
 }
 
 export type InnerCallPolicyScope = TypedScope<AgentState & InnerCallPolicyState>;
@@ -27,31 +32,40 @@ export function prepareInnerCallRecord(
   actual: ToolArgs,
 ): Pick<InnerCallRan, 'args' | 'policyArgsRef'> {
   const args = shownInnerArgs(tool, actual);
-  if (args === actual || JSON.stringify(args) === JSON.stringify(actual)) return { args };
+  if (args === actual || JSON.stringify(args) === JSON.stringify(actual))
+    return { args, policyArgsRef: null };
 
   const policyArgsRef = globalThis.crypto.randomUUID();
-  const previous = scope.$getValue('innerCallPolicyArgs') as
+  const previous = scope.$getValue(INNER_CALL_POLICY_KEY) as
     | InnerCallPolicyState['innerCallPolicyArgs']
     | undefined;
   if (previous !== undefined && Object.hasOwn(previous, policyArgsRef)) {
     throw new Error('An inner call policy reference was already assigned.');
   }
-  markPrivateFields(scope, [{ root: 'innerCallPolicyArgs', path: '' }]);
-  scope.$setValue('innerCallPolicyArgs', { ...previous, [policyArgsRef]: actual });
+  restoreInnerCallPolicyArgs(scope, { ...previous, [policyArgsRef]: actual });
   return { args, policyArgsRef };
+}
+
+export function restoreInnerCallPolicyArgs(
+  scope: InnerCallPolicyScope,
+  carrier: InnerCallPolicyCarrier | undefined,
+): void {
+  if (carrier === undefined) return;
+  markPrivateFields(scope, [{ root: INNER_CALL_POLICY_KEY, path: '' }]);
+  scope.$setValue(INNER_CALL_POLICY_KEY, carrier);
 }
 
 /** Read only for a tool-call permission request. Missing private state fails admission closed. */
 export function policyArgsOf(scope: InnerCallPolicyScope, call: InnerCallRan): ToolArgs {
-  if (call.policyArgsRef === undefined) return structuredClone(call.args);
-  const stored = scope.$getValue('innerCallPolicyArgs');
+  if (call.policyArgsRef === null) return structuredClone(call.args);
+  const stored = scope.$getValue(INNER_CALL_POLICY_KEY);
   const raw =
     typeof call.policyArgsRef === 'string' && stored !== null && typeof stored === 'object'
       ? Object.getOwnPropertyDescriptor(stored, call.policyArgsRef)?.value
       : undefined;
   const taken = raw === undefined ? undefined : takeArguments(raw);
   if (taken?.kind !== 'copied') {
-    throw new Error('Policy arguments from an earlier inner call are unavailable.');
+    throw new InnerCallPolicyUnavailableError();
   }
   return taken.args;
 }

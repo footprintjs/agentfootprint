@@ -6,6 +6,7 @@ import type { InnerCallRan } from '../../../../../provider-contract/innerCalls.j
 import type { ToolCallEntry } from '../../../../../provider-contract/types.js';
 import type { CallExecution, CallResultCell } from '../contracts/callCells.js';
 import { extractSequenceForPolicy } from '../../../../../security/extractSequence.js';
+import { InnerCallPolicyUnavailableError } from '../../../../../redaction/innerCallPolicyCarrier.js';
 import { checkerContextOf } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
@@ -100,7 +101,9 @@ export async function checkToolPermission(frame: CheckToolPermissionFrame) {
     // A checker that wrote into its frozen `context` lands here too —
     // said once, in dev mode, so a checker that normalised in place
     // does not deny every call in silence.
-    warnFrozenWrite('permission checker', permErr, 'the call was denied');
+    const policyInputsUnavailable = permErr instanceof InnerCallPolicyUnavailableError;
+    if (!policyInputsUnavailable)
+      warnFrozenWrite('permission checker', permErr, 'the call was denied');
     // A checker that threw is treated as deny-by-default — fail closed:
     // something that did not answer did not say yes.
     //
@@ -127,7 +130,7 @@ export async function checkToolPermission(frame: CheckToolPermissionFrame) {
       actor: 'agent',
       target: frame.tc.name,
       result: 'deny',
-      rationale: `permission-checker threw: ${msg}`,
+      rationale: policyInputsUnavailable ? msg : `permission-checker threw: ${msg}`,
     });
     frame.outcome.result =
       `[permission denied: Tool '${frame.tc.name}' could not be authorized. This will not ` +

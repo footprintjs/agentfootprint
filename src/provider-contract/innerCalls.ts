@@ -32,6 +32,6 @@ export interface InnerCallRan {
    * `innerToolCalls` row keeps. Never the composing tool's live object.
    */
   readonly args: Readonly<Record<string, unknown>>;
-  /** Internal reference to protected policy arguments, when the displayed value differs. */
-  readonly policyArgsRef?: string;
+  /** Reference to protected policy input; `null` confirms that the shown arguments are the bound input. */
+  readonly policyArgsRef?: string | null;
 }

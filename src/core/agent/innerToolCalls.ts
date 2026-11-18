@@ -67,7 +67,7 @@ export interface InnerToolCallRow {
   readonly args: Readonly<Record<string, unknown>>;
   /** Whether the tool's function was entered. `false` for every refusal. */
   readonly entered: boolean;
-  readonly policyArgsRef?: string;
+  readonly policyArgsRef?: string | null;
   /** An entered call begins unsettled and is updated when it returns, throws or pauses. */
   readonly ended: InnerCallEnd;
   /** Who refused it — present exactly when `ended` is `'refused'`. */

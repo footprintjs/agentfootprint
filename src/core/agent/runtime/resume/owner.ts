@@ -3,6 +3,10 @@ import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseKnownSpentAnswer, refuseMissingPlainAnswer } from '../../resumeAnswer.js';
 import { throughAroundTurn } from '../../aroundTurn/index.js';
 import { resumeStateOf, resumeSessionOf } from '../../resumeCheckpoint.js';
+import {
+  admitFoldedInnerCallPolicy,
+  innerCallPolicyReferences,
+} from '../../../../redaction/innerCallPolicyCarrier.js';
 import { admitPauseTypedAnswers } from '../../../checkpointHistory.js';
 import { preservePendingQuestion } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
@@ -192,6 +196,8 @@ export async function resumeLeg(
   if (options?.sessionId !== undefined && options.sessionId !== sessionId)
     throw new ResumeIdentityConflictError('session');
   admitPauseTypedAnswers(state);
+  innerCallPolicyReferences(state.history);
+  admitFoldedInnerCallPolicy(state.foldedSpans);
   // …and the decision must be for THIS request and this exact call
   // (`core/consentRequest.ts`): refused here, before anything moves, when it
   // names no request, another request, a call the checkpoint no longer

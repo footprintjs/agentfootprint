@@ -24,6 +24,11 @@ import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
 import { type ClockDraft, type ReadRunTime } from '../../../../time/clock.js';
 import type { AgentOutput, AgentState } from '../../types.js';
+import {
+  INNER_CALL_POLICY_KEY,
+  innerCallPolicyFor,
+} from '../../../../redaction/innerCallPolicyCarrier.js';
+import { addPrivateRecordFields } from '../../../../redaction/privateFields.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
 import {
   draftAgentClock,
@@ -118,10 +123,12 @@ export function checkpointFor(
     checkpointReplayHistory(history, selected!.value.checkpointTracker),
   );
   const placedTickets = ticketsStillServed(state?.placedTickets, stored);
+  const innerCallPolicyArgs = innerCallPolicyFor(state, stored);
   return {
     version: 1,
     runId: selected!.context.runId,
     history: stored,
+    ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
     originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
     checkpointedAt: Date.now(),
@@ -316,8 +323,18 @@ export function applyContinuation(
     throw new TypeError(
       'Continuation requires the negative-claims setting used by the recording agent.',
     );
+  const history = cp.history.some((message) => message.calls !== undefined)
+    ? structuredClone(cp.history)
+    : cp.history;
+  const innerCallPolicyArgs = innerCallPolicyFor(cp, history);
+  if (innerCallPolicyArgs !== undefined) {
+    values.privateFields = addPrivateRecordFields(values.privateFields, [
+      { root: INNER_CALL_POLICY_KEY, path: '' },
+    ]);
+  }
   values.pendingResumeHistory = {
-    history: cp.history,
+    history,
+    ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     appendsUserTurn,
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.

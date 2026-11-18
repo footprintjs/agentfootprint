@@ -28,6 +28,9 @@ export interface EvidenceRecoveryCheckpoint {
  * → v2 transitions will be supported via a migration helper.
  */
 export interface AgentRunCheckpoint {
+  /** Private policy inputs for trusted checkpoint storage. Keep this field alongside the
+   * checkpoint and out of logs and served records. History holds the shown arguments. */
+  readonly innerCallPolicyArgs?: import('../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
   /** Host-kept native source index. It contains refs only and does not authenticate an imported checkpoint. */
   readonly sourceEvidence?: SourceEvidenceIndex;
   /** Private admitted negative evidence; keep checkpoints on the trusted host. */
