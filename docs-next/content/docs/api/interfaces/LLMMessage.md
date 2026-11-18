@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:18](https://github.com/footprintjs/a
 
 > `readonly` `optional` **answersAsk?**: [`TypedAnswerMark`](/docs/api/interfaces/TypedAnswerMark)
 
-Defined in: [src/provider-contract/types.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L239)
+Defined in: [src/provider-contract/types.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L245)
 
 The library's mark on a person's typed answer: see [TypedAnswerMark](/docs/api/interfaces/TypedAnswerMark).
 
@@ -22,7 +22,7 @@ The library's mark on a person's typed answer: see [TypedAnswerMark](/docs/api/i
 
 > `readonly` `optional` **calls?**: readonly `InnerCallRan`[]
 
-Defined in: [src/provider-contract/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L241)
+Defined in: [src/provider-contract/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L247)
 
 On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent.
 
@@ -40,7 +40,7 @@ Defined in: [src/provider-contract/types.ts:20](https://github.com/footprintjs/a
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L110)
+Defined in: [src/provider-contract/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L116)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -70,7 +70,7 @@ audit-invisible prompts.
 
 > `readonly` `optional` **foldedExempt?**: readonly `string`[]
 
-Defined in: [src/provider-contract/types.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L237)
+Defined in: [src/provider-contract/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L243)
 
 THE EXEMPTION LINEAGE OF A FOLD — on a compaction summary frame
 (`core/agent/window/summarize.ts` · `buildSummaryMessage`), the lookup
@@ -99,7 +99,7 @@ existed) exempts nothing. Absent when the fold carried no exempt value.
 
 > `readonly` `optional` **injectedBy?**: `object`
 
-Defined in: [src/provider-contract/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L130)
+Defined in: [src/provider-contract/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L136)
 
 v7.21 — WHO let this message into the window.
 
@@ -149,7 +149,7 @@ The injection's description, when it had one.
 
 > `readonly` `optional` **notDispatched?**: `object`
 
-Defined in: [src/provider-contract/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L182)
+Defined in: [src/provider-contract/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L188)
 
 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
 DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
@@ -208,11 +208,23 @@ The call in the same batch the run paused on — the one the sentence names.
 
 ***
 
+### outcome?
+
+> `readonly` `optional` **outcome?**: `"refused"` \| `"failed"`
+
+Defined in: [src/provider-contract/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L48)
+
+`role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
+`'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
+Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
+
+***
+
 ### replay?
 
 > `readonly` `optional` **replay?**: `MessageReplay`
 
-Defined in: [src/provider-contract/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L86)
+Defined in: [src/provider-contract/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L92)
 
 Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe.
 
@@ -230,7 +242,7 @@ Defined in: [src/provider-contract/types.ts:19](https://github.com/footprintjs/a
 
 > `readonly` `optional` **thinkingBlocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/provider-contract/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L84)
+Defined in: [src/provider-contract/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L90)
 
 v2.14 — Thinking blocks emitted by the LLM on assistant turns.
 
@@ -282,7 +294,7 @@ For `role: 'tool'` — the tool_use id this result corresponds to.
 
 > `readonly` `optional` **toolCalls?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L57)
+Defined in: [src/provider-contract/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L63)
 
 For `role: 'assistant'` only — the tool calls the LLM requested in this
 turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -303,7 +315,7 @@ is NOT stripped on the way to a provider: it exists to be sent.
 
 > `readonly` `optional` **toolChars?**: `number`
 
-Defined in: [src/provider-contract/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L214)
+Defined in: [src/provider-contract/types.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L220)
 
 THE TOOL-BYTES BOUNDARY (honesty layer 2) — on a `role: 'tool'` message
 whose `content` the library annotated with a note that carries a VALUE

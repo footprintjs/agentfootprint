@@ -254,6 +254,7 @@ export const fields0 = {
   headroomChars: true,
   held: true,
   hidden: true,
+  hiddenArgs: true,
   hint: true,
   history: true,
   id: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   limit: true,
   lines: true,
   link: true,
-  llm: true,
 } as const;
