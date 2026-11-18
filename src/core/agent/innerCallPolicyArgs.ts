@@ -8,7 +8,7 @@ import {
 import { markPrivateFields } from '../../redaction/runRedaction.js';
 import type { ToolArgs } from '../../tools/runChain.js';
 import { carriesArgumentView, shownArgsOf } from '../toolShownArgs.js';
-import { takeArguments } from './innerCallArguments.js';
+import { isArgumentObject, takeArguments } from './innerCallArguments.js';
 import type { AgentState } from './types.js';
 
 interface InnerCallPolicyState {
@@ -25,6 +25,26 @@ export function shownInnerArgs(tool: unknown, args: ToolArgs): ToolArgs {
   return Object.fromEntries(Object.keys(args).map((key) => [key, 'REDACTED']));
 }
 
+// Both trees came from takeArguments. Compare their own JSON data directly,
+// preserving array and object key order as the checker would observe it.
+function sameArgumentData(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left)) {
+    return (
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => sameArgumentData(item, right[index]))
+    );
+  }
+  if (!isArgumentObject(left) || !isArgumentObject(right)) return false;
+  const keys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return (
+    keys.length === rightKeys.length &&
+    keys.every((key, index) => key === rightKeys[index] && sameArgumentData(left[key], right[key]))
+  );
+}
+
 /** Keep protected policy inputs in native private state, never on the displayed call. */
 export function prepareInnerCallRecord(
   scope: InnerCallPolicyScope,
@@ -32,8 +52,7 @@ export function prepareInnerCallRecord(
   actual: ToolArgs,
 ): Pick<InnerCallRan, 'args' | 'policyArgsRef'> {
   const args = shownInnerArgs(tool, actual);
-  if (args === actual || JSON.stringify(args) === JSON.stringify(actual))
-    return { args, policyArgsRef: null };
+  if (sameArgumentData(args, actual)) return { args, policyArgsRef: null };
 
   const policyArgsRef = globalThis.crypto.randomUUID();
   const previous = scope.$getValue(INNER_CALL_POLICY_KEY) as
