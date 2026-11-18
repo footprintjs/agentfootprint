@@ -64,6 +64,7 @@ import type { AgentfootprintEvent } from '../../events/registry.js';
 import type { Unsubscribe } from '../../events/dispatcher.js';
 import { DEFAULT_MAX_EVENTS, eventTail } from '../../events/eventTail.js';
 import { boundaryRecorder, type BoundaryRecorder } from './BoundaryRecorder.js';
+import { createContextShapeCapture, type ContextShapeOptions } from './contextShapes.js';
 import { summarizeEmbeddings } from './embeddingSummary.js';
 import {
   trustBoundaryRecorder,
@@ -87,6 +88,8 @@ export interface Recording {
 }
 
 export interface RecordRunOptions {
+  /** Cheap recorded path types and array lengths by default; deep discovery is explicit. */
+  readonly contextShapes?: ContextShapeOptions | false;
   /**
    * Cap on retained events. The oldest are dropped once the cap is hit,
    * so a long-running server records a bounded tail rather than growing
@@ -300,12 +303,16 @@ export function recordRunWhere(
     subscriptions.push(offAttach);
     const offTyped = boundary.subscribe(runner);
     subscriptions.push(offTyped);
+    const captureShapes = createContextShapeCapture(options.contextShapes);
     let stopped = false;
     let stoppedSnapshot: ReturnType<Runner['getLastSnapshot']>;
 
     const snapshot = (): unknown => {
-      const base = stopped ? stoppedSnapshot : runner.getLastSnapshot();
-      const retained = (keepEmbeddings ? base : summarizeEmbeddings(base)) as typeof base;
+      const base = stopped ? stoppedSnapshot : runner.getLastSnapshot({ contextShapes: false });
+      const retained = captureShapes(
+        (keepEmbeddings ? base : summarizeEmbeddings(base)) as typeof base,
+        base,
+      );
       if (!trust || retained === undefined) return retained;
       // One export owner, one row per capture. Never alter the engine snapshot
       // or replace another recorder's row just because it has the same name.
@@ -360,7 +367,7 @@ export function recordRunWhere(
         // too: a reused runner's later log is never paired with these events.
         let failure: { readonly error: unknown } | undefined;
         try {
-          stoppedSnapshot = runner.getLastSnapshot();
+          stoppedSnapshot = runner.getLastSnapshot({ contextShapes: false });
         } catch (error) {
           failure = { error };
         }
