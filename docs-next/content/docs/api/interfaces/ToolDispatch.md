@@ -21,10 +21,10 @@ taken when it is made: the agent's `permissionChecker` (its `sequence` holds
 the earlier inner calls that ran; a `halt` ends the run once the outer call
 settles) and before-tool middleware, under its derived `toolCallId`
 (`<outer>#inner-<n>`); what they refuse for a model call they refuse here, by
-name. It gets the outer call's facts with `hasArtifacts: false` (an inner
-tool must not mint claim tickets competing with the composed answer's own);
-`needs` resolves fail-closed (an inner call cannot pause). A `ctx.tools` used after
-its outer `execute` settled refuses. Each call leaves an `innerToolCalls` row.
+name. It inherits the outer call's facts with `hasArtifacts: false`.
+Credentials fail closed without an inner approval. A handle used after
+its outer tool settles refuses. Calls during the open stage leave an
+`innerToolCalls` row. After commit, refusals reach the caller without a row.
 
 ## Methods
 
