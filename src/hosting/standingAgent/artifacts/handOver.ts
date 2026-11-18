@@ -1,6 +1,8 @@
 import { type Agent } from '../../../core/Agent.js';
 import { type ArtifactHandOverFailedPayload } from '../../../events/payloads.js';
 import { type ArtifactScope } from '../../../artifacts/types.js';
+import type { HostedRecording } from '../../../core/runnerLive.js';
+import { identityNamespace } from '../../../memory/identity/types.js';
 import { type Attribution, emitArtifactFact, errorClassOf, turnArtifactsFailed } from './facts.js';
 import { type HostReply } from '../../types.js';
 import { type IngressNote } from '../../ingressRecord.js';
@@ -54,9 +56,11 @@ export async function offerTurnArtifacts(
   reply: HostReply,
   offer: TurnOffer,
   runIdOf: () => string | undefined,
+  recording?: HostedRecording,
 ): Promise<void> {
   if (reply.turnArtifacts === undefined) return;
   const session = offer.session;
+  const scope = session?.scope();
   // WHOSE facts these are, captured NOW — the binding owns "whose run", never
   // the agent's mutable current-run state when a late fact lands.
   const runId = session !== undefined ? runIdOf() : undefined;
@@ -68,8 +72,14 @@ export async function offerTurnArtifacts(
     turnArtifactsFailed(agent, attribution, offer.note, failure);
   const opened = openTurnArtifacts({
     store: agent.getArtifactStore(),
-    scope: session?.scope(),
+    scope,
     runId,
+    ...(recording !== undefined &&
+      scope !== undefined &&
+      offer.signal?.aborted !== true &&
+      identityNamespace(recording.scope) === identityNamespace(scope) && {
+        recording: recording.receipt,
+      }),
     onEvent: (fact) => {
       // Only a bound hand-over reports facts, and only a session binds.
       if (attribution !== undefined) emitArtifactFact(agent, fact, attribution);

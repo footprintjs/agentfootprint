@@ -83,6 +83,16 @@ returns an unsubscribe function. `TrustBoundaryEventSource` is that narrow
 subscription port. One active subscription is permitted; this typed observer
 does **not** belong in raw engine `.attach()` or `.watch()`.
 
+If the agent already files recordings as artifacts, supply a factory in
+`artifacts.recordings.trustBoundaries` that creates a fresh
+`trustBoundaryRecorder` from `agentfootprint/observe`. The native recording
+calls it once per invocation and includes one `TrustBoundaries` row in the
+completed recording. Trust facts require the exact invocation's run id. The main
+timeline can also include same-session host events. Omit the factory to leave
+trust capture off.
+
+<CodeFile path="examples/artifacts/hosted-recording-receipt.ts" region="capture" title="Capture trust facts in native recordings" />
+
 ### Facts, not approvals
 
 `TrustBoundaryEventType` selects seven `agentfootprint.` events:

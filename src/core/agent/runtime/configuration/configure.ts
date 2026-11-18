@@ -502,7 +502,13 @@ export function configureAgent(
         typeof opts.artifacts.recordings === 'object' &&
         opts.artifacts.recordings !== null
       ) {
-        config.artifactRecordings = opts.artifacts.recordings;
+        const recordings = opts.artifacts.recordings;
+        const trust = recordings.trustBoundaries;
+        if (trust !== undefined && typeof trust !== 'function')
+          throw new TypeError(
+            'Agent artifacts.recordings.trustBoundaries needs a recorder factory.',
+          );
+        config.artifactRecordings = { ...recordings, trustBoundaries: trust };
       }
     } else {
       config.artifactStore = opts.artifacts;

@@ -37,8 +37,8 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, inMemoryArtifacts } from '../../src/index.js';
-import type { ArtifactMeta } from '../../src/index.js';
+import { Agent, defineTool, inMemoryArtifacts, recordingPutInput } from '../../src/index.js';
+import type { ArtifactMeta, ArtifactStore } from '../../src/index.js';
 import type { AgentfootprintEvent } from '../../src/events.js';
 import { mock } from '../../src/llm-providers.js';
 import { memorySessions, nodeHost, standingAgent, toEnvelope } from '../../src/hosting/index.js';
@@ -57,6 +57,7 @@ import {
   boundOf,
   fileStory,
   filedOf,
+  gatedStore,
   harness,
   inputAgent,
   pausingAgent,
@@ -96,6 +97,130 @@ function storedConversation(identity: {
 // ─── 1. UNIT — the reason for the change, pinned ────────────────────
 
 describe('turnArtifacts — the field bug, pinned (unit)', () => {
+  it('hands the bound host the actual root recording receipt under event redaction', async () => {
+    const store = inMemoryArtifacts();
+    const agent = Agent.create({
+      provider: mock({ reply: 'ok' }),
+      model: 'm',
+      artifacts: { store, recordings: true },
+      redact: { keys: ['ref'] },
+    }).build();
+    const observed: AgentfootprintEvent[] = [];
+    agent.on('*', (event) => observed.push(event));
+    const { host, sessions } = await served(agent, { verify: true });
+
+    const reply = await host.deliver({
+      input: 'hi',
+      sessionId: 's',
+      headers: ALICE,
+      onTurn(turn) {
+        if (turn.bound && turn.recording) return turn.artifacts.head(turn.recording.ref);
+      },
+    });
+    expect(reply.output).toBe('ok');
+    expect(reply.order).toEqual(['turnArtifacts', 'turnArtifacts:settled', 'complete']);
+    const saved = await store.list({ conversationId: 's', principal: 'alice' });
+    expect(saved.artifacts).toHaveLength(1);
+    const expected = saved.artifacts[0]!;
+    const actual = boundOf(reply).recording;
+    expect(actual).toEqual({ ref: expected.ref, bytes: expected.bytes });
+    expect(reply.filed).toEqual([expected]);
+    expect(
+      observed.filter((event) => event.type === 'agentfootprint.artifacts.minted'),
+    ).toHaveLength(1);
+    expect(JSON.stringify(observed)).not.toContain(expected.ref);
+    expect(JSON.stringify(await agent.checkpoint())).not.toContain(expected.ref);
+    expect(JSON.stringify(await sessions.hydrate('s'))).not.toContain(expected.ref);
+    expect((await redeem(host, 's', expected.ref, BOB)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
+  });
+
+  it('withholds the receipt when the root write fails, even with a tool-supplied recording of the same kind', async () => {
+    const storage = inMemoryArtifacts();
+    const store: ArtifactStore = {
+      ...storage,
+      put(scope, input) {
+        if (input.kind === 'recording/run' && input.origin?.toolCallId === undefined)
+          return Promise.reject(new Error('root recording write refused'));
+        return storage.put(scope, input);
+      },
+    };
+    const saveCandidate = defineTool({
+      name: 'save_candidate',
+      description: 'Save a candidate recording.',
+      execute: async (_args, { artifacts }) => {
+        await artifacts.put(recordingPutInput({ rows: [] }));
+        return 'saved';
+      },
+    });
+    const agent = Agent.create({
+      model: 'm',
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'candidate', name: 'save_candidate', args: {} }] },
+          { content: 'ok' },
+        ],
+      }),
+      artifacts: { store, recordings: true },
+    })
+      .tool(saveCandidate)
+      .build();
+    const { host } = await served(agent, { verify: true });
+    const reply = await host.deliver({ input: 'save a recording', sessionId: 's', headers: ALICE });
+    expect(reply.output).toBe('ok');
+    expect(boundOf(reply).recording).toBeUndefined();
+    const { artifacts } = await storage.list({ conversationId: 's', principal: 'alice' });
+    expect(artifacts).toMatchObject([
+      { kind: 'recording/run', origin: { toolCallId: 'candidate' } },
+    ]);
+  });
+
+  it('does not hand out a receipt if the caller aborts during the awaited recording write', async () => {
+    const store = gatedStore((_scope, input) => input.kind === 'recording/run');
+    const { host } = await served(recordingAgent(store), { verify: true });
+    const controller = new AbortController();
+    const turn = host.deliver({
+      input: 'question',
+      sessionId: 's',
+      headers: ALICE,
+      signal: controller.signal,
+    });
+    await store.entered;
+    controller.abort();
+    store.release();
+    const reply = await turn;
+    expect(boundOf(reply).recording).toBeUndefined();
+    expect((await store.list({ conversationId: 's', principal: 'alice' })).artifacts).toHaveLength(
+      1,
+    );
+  });
+
+  it('hands each pooled lane its own receipt when another lane finishes first', async () => {
+    const store = gatedStore(
+      (scope, input) => scope.principal === 'alice' && input.kind === 'recording/run',
+    );
+    const { host } = await served({ agentFactory: () => recordingAgent(store) }, { verify: true });
+    const alice = host.deliver({ input: 'question A', sessionId: 's-a', headers: ALICE });
+    await store.entered;
+    let bob: Awaited<ReturnType<typeof host.deliver>>;
+    try {
+      bob = await host.deliver({ input: 'question B', sessionId: 's-b', headers: BOB });
+      expect(bob.output).toBe('ok');
+    } finally {
+      store.release();
+    }
+    const aliceReceipt = boundOf(await alice).recording!;
+    const bobReceipt = boundOf(bob).recording!;
+    expect(aliceReceipt.ref).not.toBe(bobReceipt.ref);
+    for (const [session, principal, receipt] of [
+      ['s-a', 'alice', aliceReceipt],
+      ['s-b', 'bob', bobReceipt],
+    ] as const) {
+      const rows = (await store.list({ conversationId: session, principal })).artifacts;
+      expect(rows).toHaveLength(1);
+      expect(receipt).toEqual({ ref: rows[0]!.ref, bytes: rows[0]!.bytes });
+    }
+  });
+
   it('filing under a host-composed { conversationId } while signed in is unredeemable', async () => {
     const store = inMemoryArtifacts();
     const agent = recordingAgent(store);
@@ -306,6 +431,7 @@ describe('turnArtifacts — the same scope as redemption (scenario)', () => {
     });
     expect(paused.awaiting?.question).toBe('Approve $10?');
     expect(paused.order).toEqual(['turnArtifacts', 'turnArtifacts:settled', 'awaiting']);
+    expect(boundOf(paused).recording).toBeUndefined();
     const beforeResume = filedOf(paused);
 
     const resumed = await host.deliver({
@@ -321,6 +447,10 @@ describe('turnArtifacts — the same scope as redemption (scenario)', () => {
     // one verified owner (the rung this packet exists for — see KNOWN EDGES for
     // the unverified ones).
     const recordingRef = recordings()[0]?.ref as string;
+    expect(boundOf(resumed).recording).toEqual({
+      ref: recordingRef,
+      bytes: recordings()[0]?.bytes,
+    });
     for (const ref of [beforeResume.ref, afterResume.ref, recordingRef]) {
       expect((await redeem(host, 's-p', ref, ALICE)).artifact?.ref).toBe(ref);
       expect((await redeem(host, 's-p', ref, BOB)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
@@ -390,6 +520,7 @@ describe('turnArtifacts — a wrapping host over a real socket (integration)', (
       minted.push(event);
     });
     const filed: ArtifactMeta[] = [];
+    const receipts: NonNullable<Extract<TurnArtifacts, { bound: true }>['recording']>[] = [];
     const base = nodeHost({ port: 0, hostname: '127.0.0.1' });
     // The field app's shape: wrap the host, forward every member BY PRESENCE,
     // and file inside the awaited hook. No held completion: the composer ends
@@ -408,6 +539,7 @@ describe('turnArtifacts — a wrapping host over a real socket (integration)', (
             ...(reply.emit && { emit: (chunk: string) => reply.emit?.(chunk) }),
             turnArtifacts: async (turn: TurnArtifacts) => {
               if (!turn.bound) return;
+              if (turn.recording) receipts.push(turn.recording);
               filed.push(
                 await turn.artifacts.put({
                   kind: 'story/turn',
@@ -442,8 +574,18 @@ describe('turnArtifacts — a wrapping host over a real socket (integration)', (
         };
       };
 
-      const answered = await post({ input: 'hi', sessionId: 'w1' }, ALICE);
+      const answered = await post(
+        {
+          input: 'hi',
+          sessionId: 'w1',
+          recording: { ref: NEVER_MINTED, bytes: 1 },
+        },
+        ALICE,
+      );
       expect(answered.status).toBe(200);
+      expect(receipts).toEqual([{ ref: recordings()[0]?.ref, bytes: recordings()[0]?.bytes }]);
+      expect(JSON.stringify(answered.body)).not.toContain(receipts[0]!.ref);
+      expect(JSON.stringify(answered.body)).not.toContain(NEVER_MINTED);
       // Filed BEFORE the answer left: the reply waited for the hook.
       expect(filed).toHaveLength(1);
       const ref = filed[0]?.ref as string;
@@ -591,7 +733,9 @@ describe('turnArtifacts — security', () => {
     const text = JSON.stringify(turn);
     expect(text).not.toContain('alice');
     expect(text).not.toContain('s1');
-    expect(Object.keys(turn).sort()).toEqual(['artifacts', 'bound']);
+    expect(Object.keys(turn).sort()).toEqual(['artifacts', 'bound', 'recording']);
+    expect(Object.keys(turn.recording!).sort()).toEqual(['bytes', 'ref']);
+    expect(Object.isFrozen(turn.recording)).toBe(true);
     expect(Object.keys(turn.artifacts).sort()).toEqual(['delete', 'get', 'head', 'list', 'put']);
     expect(Object.isFrozen(turn)).toBe(true);
     expect(Object.isFrozen(turn.artifacts)).toBe(true);
@@ -751,6 +895,7 @@ describe('turnArtifacts — KNOWN EDGES (unverified door): the recording and the
     const turn = await host.deliver({ input: 'hi', sessionId: 's', onTurn: fileStory() });
     const filed = filedOf(turn);
     const recordingRef = recordings()[0]?.ref as string;
+    expect(boundOf(turn).recording).toBeUndefined();
 
     // The run continued under the stored identity (an explicit identity wins
     // in seed), so its recording sits under { acme, ns }…
@@ -771,6 +916,7 @@ describe('turnArtifacts — KNOWN EDGES (unverified door): the recording and the
     const second = await host.deliver({ input: 'two', sessionId: 's', onTurn: fileStory() });
     const filed = filedOf(second);
     const secondRecording = recordings()[1]?.ref as string;
+    expect(boundOf(second).recording).toBeUndefined();
 
     // Turn 2's recording kept the conversation's sticky principal…
     expect(

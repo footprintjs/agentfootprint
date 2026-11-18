@@ -33,6 +33,7 @@ import type { AgentInput } from './agent/types.js';
 import type { AgentRunOptions } from './Agent.js';
 import type { AgentRunCheckpoint } from './runCheckpoint.js';
 import type { TurnMethod } from './agent/aroundTurn/guards.js';
+import type { ArtifactMeta, ArtifactScope } from '../artifacts/types.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
@@ -43,11 +44,18 @@ export interface PauseOwnership {
   abandon(): Promise<void>;
 }
 
-/** Captured inside one invocation, before its lease ends or a host awaits. */
+/** The native root mint and its filing scope, before the host checks its binding. */
+export interface HostedRecording {
+  readonly scope: ArtifactScope;
+  readonly receipt: Pick<ArtifactMeta, 'ref' | 'bytes'>;
+}
+
+/** Captured from one invocation, with its receipt after the native finalizers. */
 export interface HostedTurn {
   readonly output: unknown;
   readonly conversation: AgentRunCheckpoint | undefined;
   readonly ownership: PauseOwnership | undefined;
+  readonly recording?: HostedRecording;
 }
 
 /** The invocation a host admitted, independent of the runner's selected view. */

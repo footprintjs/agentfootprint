@@ -34,36 +34,46 @@ export function hostedTurns(
     body: (run: RunnerInvocation<AgentRunValues>) => Promise<AgentOutput | RunnerPauseOutcome>,
     bind?: BindHostedInvocation,
   ): Promise<HostedTurn> =>
-    execution.withRun(async (run) => {
-      const recorder = bind?.({ view: run.view, runId: () => run.run.origin?.runId });
-      const owned =
-        recorder === undefined
-          ? run
-          : ({
-              ...run,
-              get previous() {
-                return run.previous;
-              },
-              execute: (entry, setup, binding) =>
-                run.execute(
-                  entry,
-                  {
-                    ...setup,
-                    attachments: [...(setup?.attachments ?? []), { recorder }],
-                  },
-                  binding,
-                ),
-            } satisfies RunnerInvocation<AgentRunValues>);
-      const output = await body(owned);
-      return {
-        output,
-        conversation:
-          run.run.origin === undefined
-            ? undefined
-            : ports.checkpoint({ value: run.value, context: run.context(), view: run.view }),
-        ownership: isPaused(output) ? capturePauseOwnership(run.value, output) : undefined,
-      };
-    });
+    execution
+      .withRun(async (run) => {
+        const recorder = bind?.({ view: run.view, runId: () => run.run.origin?.runId });
+        const owned =
+          recorder === undefined
+            ? run
+            : ({
+                ...run,
+                get previous() {
+                  return run.previous;
+                },
+                execute: (entry, setup, binding) =>
+                  run.execute(
+                    entry,
+                    {
+                      ...setup,
+                      attachments: [...(setup?.attachments ?? []), { recorder }],
+                    },
+                    binding,
+                  ),
+              } satisfies RunnerInvocation<AgentRunValues>);
+        const output = await body(owned);
+        return {
+          values: run.value,
+          completed: {
+            output,
+            conversation:
+              run.run.origin === undefined
+                ? undefined
+                : ports.checkpoint({ value: run.value, context: run.context(), view: run.view }),
+            ownership: isPaused(output) ? capturePauseOwnership(run.value, output) : undefined,
+          },
+        };
+      })
+      .then(({ values, completed }) => {
+        // Automatic filing runs in the lease's finalizers. Read its receipt
+        // only after those finish, from the exact bank captured above.
+        const { recording } = values;
+        return recording === undefined ? completed : { ...completed, recording };
+      });
   return {
     replaced: ports.replaced,
     run: (input, options, bind) => capture((run) => ports.run(run, input, options), bind),

@@ -2,7 +2,46 @@
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { ArtifactWireResult } from './artifactWire.js';
 import type { SessionWireResult } from './sessionWire.js';
-import type { PendingAsk, TurnArtifacts } from './types.js';
+import type { ToolArtifacts } from '../artifacts/capability.js';
+import type { ArtifactMeta } from '../artifacts/types.js';
+import type { PendingAsk } from './types.js';
+
+/**
+ * What {@link HostReply.turnArtifacts} is handed: this turn's artifact store,
+ * bound to exactly one scope — or the reason there is none.
+ *
+ * `artifacts` has the shape a tool gets as `ctx.artifacts`: five verbs, none
+ * of which takes a scope, so a binding can reach this request's scope and no
+ * other. The scope itself is deliberately NOT on the value — a tuple a host
+ * can read is a tuple a host can copy, edit and put under. The verbs work only
+ * while the hand-over is live (then `TurnArtifactsExpiredError`, already
+ * handled, reported as `'expired'`).
+ *
+ * A filing's `origin.runId` is the run the turn executed — none for a turn that
+ * executed none. On a PAUSED turn that run files no recording (a pause is not a
+ * finished run; the resumed run records under its own id), so a reader joining
+ * a filing to "its recording" by run id must read the absence as "paused, no
+ * recording", never as "missing".
+ *
+ * `bound: false` says why nothing was bound, checked in this order:
+ *  - `'no-session'` — the request named no session. An anonymous run scopes
+ *    its artifacts to its own run id, which no later request can present, so
+ *    there is no scope to bind — and none is invented. Wins over `'no-store'`
+ *    when both apply.
+ *  - `'no-store'` — the serving agent has no artifact store.
+ */
+export type TurnArtifacts =
+  | {
+      readonly bound: true;
+      readonly artifacts: ToolArtifacts;
+      /**
+       * The completed invocation's successful native recording mint, when it
+       * was filed under this binding's scope. Available to the host hook only.
+       * Use this binding or an authorized artifact request to redeem the ref.
+       */
+      readonly recording?: Pick<ArtifactMeta, 'ref' | 'bytes'>;
+    }
+  | { readonly bound: false; readonly reason: 'no-session' | 'no-store' };
 
 /**
  * The one reply a request gets. Exactly one of {@link HostReply.complete},

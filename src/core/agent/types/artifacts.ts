@@ -1,5 +1,6 @@
 import type { ArtifactStore } from '../../../artifacts/types.js';
 import type { ArtifactPlacement } from '../../../artifacts/placement.js';
+import type { TrustBoundaryRecorder } from '../../../trust-boundaries/types.js';
 
 /**
  * The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
@@ -85,4 +86,11 @@ export interface AgentRecordingsOptions {
    * a plain recording unchanged — adopt the reader first, then pack.
    */
   readonly packed?: boolean;
+  /**
+   * Create a fresh recorder for each invocation, typically with
+   * `trustBoundaryRecorder` from `agentfootprint/observe`. Its snapshot contains
+   * only the invocation's own typed facts. A resumed run captures its own leg.
+   * Omit to leave trust capture off.
+   */
+  readonly trustBoundaries?: () => TrustBoundaryRecorder;
 }
