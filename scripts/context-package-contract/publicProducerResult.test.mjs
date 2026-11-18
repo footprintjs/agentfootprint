@@ -7,7 +7,7 @@ import { Script } from 'node:vm';
 import { spawnSync } from 'node:child_process';
 
 function fixture() {
-  const inputs = { source: { version: '15.0.0-rc.0' }, selected: { footprintjs: { version: '13.0.0' } } };
+  const inputs = { source: { version: '15.0.0-rc.0' }, selected: { footprintjs: { version: '14.0.0-rc.0' } } };
   const graphs = {};
   const cases = ['consumer-online', 'consumer-offline'].map((caseId) => {
     const entries = Object.fromEntries(['cjs', 'esm'].map((format) => [format, Object.fromEntries(['agentfootprint', 'agentfootprint/providers', 'agentfootprint/observe'].map((name) => [name, '/owned/' + caseId + '/' + format + '/' + name + '.js']))]));
@@ -26,7 +26,7 @@ for (const [name, mutate] of [
   ['duplicate report', (f) => { f.evidence.cases[0].commands[0].stdout += f.evidence.cases[0].commands[0].stdout; }],
   ['failed actual command', (f) => { f.evidence.cases[0].commands[0].execution.exitCode = 1; }],
   ['wrong original producer version', (f) => { f.inputs.source.version = '15.0.0-rc.1'; }],
-  ['wrong expected engine', (f) => { f.inputs.selected.footprintjs.version = '13.0.1'; }],
+  ['wrong expected engine', (f) => { f.inputs.selected.footprintjs.version = '14.0.0-rc.1'; }],
   ['another installed image', (f) => { f.graphs['consumer-online'].agentfootprint.entries.cjs.agentfootprint = '/foreign/image.js'; }],
 ]) test('refuses ' + name, () => {
   const f = fixture();

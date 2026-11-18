@@ -11,7 +11,7 @@ function fixture(t) {
   const selected = {};
   const archives = {};
   const packages = {};
-  for (const [name, version] of [['footprintjs', '13.0.0'], ['foottrace', '2.0.0'], ['contextfootprint', '0.1.1']]) {
+  for (const [name, version] of [['footprintjs', '14.0.0-rc.0'], ['foottrace', '2.1.0'], ['contextfootprint', '0.1.1']]) {
     const folder = join(root, 'node_modules', name);
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, 'package.json'), JSON.stringify({ name, version, main: './index.js' }));

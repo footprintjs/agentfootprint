@@ -1,12 +1,12 @@
-/** Pure setup documents for the one admitted published-stable cohort. No IO or resolution. */
+/** Pure setup documents for the one admitted published cohort. No IO or resolution. */
 import { createHash } from 'node:crypto';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertRecord } from './protocol.mjs';
 
 const COHORT = Object.freeze({
-  footprintjs: Object.freeze({ version: '13.0.0', range: '^13.0.0' }),
-  foottrace: Object.freeze({ version: '2.0.0', range: '^2.0.0' }),
+  footprintjs: Object.freeze({ version: '14.0.0-rc.0', range: '^14.0.0-rc.0' }),
+  foottrace: Object.freeze({ version: '2.1.0', range: '^2.1.0' }),
   contextfootprint: Object.freeze({ version: '0.1.1', range: '0.1.1' }),
 });
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
