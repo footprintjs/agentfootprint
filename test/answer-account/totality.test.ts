@@ -349,6 +349,7 @@ function recordingFor(s: Shape): Recording {
         toolCallId: 'c1',
         durationMs: 1,
         result: s.outcome === 'failed' ? 'boom' : result,
+        ...(['ran', 'failed', 'after-deny'].includes(s.outcome) && { entered: true }),
         ...(s.outcome === 'failed' && { error: true }),
         ...(['permission-deny', 'before-deny', 'not-executed'].includes(s.outcome) && {
           notExecuted: true,

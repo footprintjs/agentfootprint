@@ -4,7 +4,7 @@ title: ToolDispatch
 
 # Interface: ToolDispatch
 
-Defined in: [src/tools/tools.ts:838](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L838)
+Defined in: [src/tools/tools.ts:834](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L834)
 
 The run's own tool dispatch, delivered at execute time as `ctx.tools`
 (9.76.0) — how one tool's body calls ANOTHER registered tool through the
@@ -32,7 +32,7 @@ its outer `execute` settled refuses. Each call leaves an `innerToolCalls` row.
 
 > **call**(`name`, `args`, `opts?`): `Promise`\<`unknown`\>
 
-Defined in: [src/tools/tools.ts:842](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L842)
+Defined in: [src/tools/tools.ts:838](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L838)
 
 Run a registered tool; its result comes back exactly as returned (an absence as the absence).
 
@@ -60,7 +60,7 @@ Run a registered tool; its result comes back exactly as returned (an absence as 
 
 > **has**(`name`): `boolean`
 
-Defined in: [src/tools/tools.ts:840](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L840)
+Defined in: [src/tools/tools.ts:836](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L836)
 
 Is this name in the dispatch map? Provider-delivered tools answer false.
 

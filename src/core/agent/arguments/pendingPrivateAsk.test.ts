@@ -10,6 +10,7 @@ import {
   readPendingPrivateAsk,
   requirePendingPrivateViews,
 } from './pendingPrivateAsk.js';
+import { PrivateArgumentRecordError } from './privateAnswers.js';
 
 const plain = defineTool({ name: 'plain', description: 'Plain call', execute: () => 'ok' });
 const guarded = {
@@ -80,6 +81,23 @@ it.each(['lost', 'missing'])(
     );
   },
 );
+
+it('a resumed question missing its saved declaration refuses with the one private-record error', () => {
+  // One refusal family, one class: a caller can tell it by `instanceof` as
+  // well as by its code, wherever in the private-argument path it was raised.
+  let caught: unknown;
+  try {
+    readPendingPrivateAsk(undefined, state, true);
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(PrivateArgumentRecordError);
+  expect(caught).toMatchObject({
+    code: 'ERR_PRIVATE_ARGUMENT_RECORD',
+    message:
+      'A private argument question requires its saved declaration and argument-view capability.',
+  });
+});
 
 it('plain questions omit the field, while protected runs explicitly declare none', () => {
   expect(declarePendingPrivateAsk(state, () => plain, false)).toBeUndefined();

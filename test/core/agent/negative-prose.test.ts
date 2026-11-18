@@ -3,7 +3,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { observeNegativeProse } from '../../../src/core/agent/negativeClaims/prose.js';
 import { negativeProseRowIsWellFormed } from '../../../src/core/agent/findings/negativeProse.js';
-import type { TurnRecord } from '../../../src/integrity/negative-claim/types.js';
+import {
+  PROSE_CLAIM_KINDS,
+  PROSE_NOTE_CODES,
+  type ProseClaimRow,
+  type ProseNoteRow,
+  type TurnRecord,
+} from '../../../src/integrity/negative-claim/types.js';
 
 const TEXT = 'Payments has never had a single incident, anywhere, ever.';
 const EMPTY: TurnRecord = {
@@ -336,6 +342,25 @@ describe('negative prose checkpoint row admission', () => {
         staleSince: { turn: 1, readAt: '2026-10-22T12:00:00.000Z' },
       }),
     ).toBe(true);
+  });
+
+  it('admits every note code and claim kind the row types allow — one list feeds both', () => {
+    // The types are derived from these constants, and admission reads the
+    // same constants, so a member added to one is in the other. Before, the
+    // validator held its own literals: a new code compiled and then made
+    // every saved checkpoint holding it refuse to resume.
+    const everyCode: Record<ProseNoteRow['code'], true> = Object.fromEntries(
+      PROSE_NOTE_CODES.map((code) => [code, true]),
+    ) as Record<ProseNoteRow['code'], true>;
+    const everyClaim: Record<ProseClaimRow['claim'], true> = Object.fromEntries(
+      PROSE_CLAIM_KINDS.map((claim) => [claim, true]),
+    ) as Record<ProseClaimRow['claim'], true>;
+    for (const code of Object.keys(everyCode)) {
+      expect(negativeProseRowIsWellFormed({ ...NOTE, code }), code).toBe(true);
+    }
+    for (const claim of Object.keys(everyClaim)) {
+      expect(negativeProseRowIsWellFormed({ ...CLAIM, claim }), claim).toBe(true);
+    }
   });
 
   for (const [name, value] of [

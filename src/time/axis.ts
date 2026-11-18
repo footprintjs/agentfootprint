@@ -60,9 +60,14 @@
  * ```
  */
 
-import { AXIS_UNITS, durationParts, isDuration } from './duration.js';
-import { instantOf, spellInstant, type Instant, type InstantText } from './instant.js';
-import { isZoneName, readWall, type WallReading, type WallTime, type ZoneName } from './zone.js';
+import { classify, type Classified } from './axis/classify.js';
+import { precisionOf, spellAt } from './axis/instants.js';
+import { resolveOverlaps } from './axis/overlaps.js';
+import { describeValue, isRecord } from './axis/value.js';
+import { intervalAdjective, intervalNoun, joinWords } from './axis/wording.js';
+import { AXIS_UNITS, isDuration } from './duration.js';
+import type { Instant, InstantText } from './instant.js';
+import { isZoneName, type WallReading } from './zone.js';
 
 // ── The declaration ─────────────────────────────────────────────────────────
 
@@ -124,10 +129,6 @@ export interface DatasetTimeAxis {
 }
 
 const KEYS = new Set(['column', 'unit', 'zone', 'interval', 'aggregate']);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isAggregate(value: unknown): value is TimeAxisAggregate {
   return (TIME_AXIS_AGGREGATES as readonly unknown[]).includes(value);
@@ -235,46 +236,6 @@ export function readTimeAxis(meta: unknown): TimeAxisReading {
     : { status: 'declared', axis: value as unknown as DatasetTimeAxis };
 }
 
-// ── The wording ─────────────────────────────────────────────────────────────
-
-const UNIT_WORDS: Record<string, string> = {
-  s: 'second',
-  m: 'minute',
-  h: 'hour',
-  d: 'day',
-  w: 'week',
-};
-const SINGLE: Record<string, string> = {
-  s: 'per-second',
-  m: 'per-minute',
-  h: 'hourly',
-  d: 'daily',
-  w: 'weekly',
-};
-
-/** `'1h'` → `'hourly'`, `'5m'` → `'5-minute'`. */
-function intervalAdjective(interval: string): string {
-  const parts = durationParts(interval, AXIS_UNITS);
-  if (parts === undefined) return interval;
-  return parts.digits === '1'
-    ? (SINGLE[parts.unit] as string)
-    : `${parts.digits}-${UNIT_WORDS[parts.unit] as string}`;
-}
-
-/** `'5m'` → `'5 minutes'`, `'1h'` → `'hour'`. */
-function intervalNoun(interval: string): string {
-  const parts = durationParts(interval, AXIS_UNITS);
-  if (parts === undefined) return interval;
-  return parts.digits === '1'
-    ? (UNIT_WORDS[parts.unit] as string)
-    : `${parts.digits} ${UNIT_WORDS[parts.unit] as string}s`;
-}
-
-function joinWords(words: readonly string[]): string {
-  if (words.length <= 1) return words[0] ?? '';
-  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1] as string}`;
-}
-
 /**
  * The declared SUMMARY in words, for a chart title — the one wording every
  * consumer shares, so two screens never describe one ticket two ways.
@@ -298,17 +259,6 @@ export function describeTimeAxis(axis: DatasetTimeAxis): string | undefined {
     typeof aggregate === 'string' ? [aggregate] : [...new Set(Object.values(aggregate))];
   const how = joinWords(words);
   return interval === undefined ? how : `${intervalAdjective(interval)} ${how}`;
-}
-
-function describeValue(value: unknown): string {
-  if (value === undefined) return 'nothing';
-  try {
-    const text = JSON.stringify(value);
-    if (text === undefined) return typeof value;
-    return text.length > 60 ? `${text.slice(0, 57)}...` : text;
-  } catch {
-    return typeof value;
-  }
 }
 
 // ── The view ────────────────────────────────────────────────────────────────
@@ -393,188 +343,6 @@ export type NormalisedAxis =
       readonly count: number;
       readonly counts: AxisCounts;
     };
-
-/** One value's first reading, before the fall-back rule. */
-type Classified =
-  | { readonly kind: 'missing' | 'unreadable' | 'naive' | 'gap' }
-  | { readonly kind: 'instant'; readonly instant: Instant; readonly wall?: number }
-  | {
-      readonly kind: 'overlap';
-      readonly earlier: Instant;
-      readonly later: Instant;
-      readonly wall: number;
-      readonly day: string;
-    };
-
-const NS_PER_MS = 1_000_000n;
-
-/**
- * An epoch number read EXACTLY as written — through its decimal spelling, so
- * `1726304400.123` is 123 ms and not the double's nearest neighbour. An
- * exponent spelling (`1e21`) or a fraction finer than a nanosecond is
- * unreadable.
- */
-function epochInstant(value: unknown, unit: 'epoch-s' | 'epoch-ms'): Instant | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value));
-  if (m === null) return undefined;
-  const fractionDigits = unit === 'epoch-s' ? 9 : 6; // down to one nanosecond
-  const fraction = m[3] ?? '';
-  if (fraction.length > fractionDigits) return undefined;
-  const magnitude =
-    BigInt(m[2] as string) * 10n ** BigInt(fractionDigits) +
-    BigInt(fraction.padEnd(fractionDigits, '0') || '0');
-  const ns = m[1] === '-' ? -magnitude : magnitude;
-  let ms = ns / NS_PER_MS;
-  if (ns < 0n && ms * NS_PER_MS !== ns) ms -= 1n; // floor, not truncate
-  const whole = Number(ms);
-  if (!Number.isSafeInteger(whole)) return undefined;
-  return { ms: whole, nanos: Number(ns - ms * NS_PER_MS) };
-}
-
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * An ISO value with no offset, read as a UTC WALL reading only to get its
- * fields — never as an instant. `undefined` when it is not a date-time (or a
- * date) with no zone.
- */
-function naiveFields(value: string): Instant | undefined {
-  const spelled = DATE_ONLY.test(value) ? `${value}T00:00Z` : `${value}Z`;
-  return instantOf(spelled, 'lenient');
-}
-
-function wallOf(fields: Instant): WallTime {
-  const d = new Date(fields.ms);
-  return {
-    year: d.getUTCFullYear(),
-    month: d.getUTCMonth() + 1,
-    day: d.getUTCDate(),
-    hour: d.getUTCHours(),
-    minute: d.getUTCMinutes(),
-    second: d.getUTCSeconds(),
-    millisecond: d.getUTCMilliseconds(),
-  };
-}
-
-function spellable(instant: Instant): boolean {
-  return spellInstant(instant, 0) !== undefined;
-}
-
-function classifyIso(
-  value: unknown,
-  zone: ZoneName | undefined,
-  walls: Map<number, WallReading>,
-): Classified {
-  if (typeof value !== 'string') return { kind: 'unreadable' };
-  const instant = instantOf(value, 'lenient');
-  if (instant !== undefined) return { kind: 'instant', instant };
-  const fields = naiveFields(value);
-  if (fields === undefined) return { kind: 'unreadable' };
-  if (zone === undefined) return { kind: 'naive' };
-  const wall = fields.ms;
-  let reading = walls.get(wall);
-  if (reading === undefined) {
-    const w = wallOf(fields);
-    if (w.year > 9999) return { kind: 'unreadable' };
-    reading = readWall(w, zone);
-    walls.set(wall, reading);
-  }
-  const at = (ms: number): Instant => ({ ms, nanos: fields.nanos });
-  if (reading.kind === 'gap') return { kind: 'gap' };
-  if (reading.kind === 'unique') return { kind: 'instant', instant: at(reading.ms), wall };
-  return {
-    kind: 'overlap',
-    earlier: at(reading.earlier),
-    later: at(reading.later),
-    wall,
-    day: value.slice(0, 10),
-  };
-}
-
-function classifyEpoch(value: unknown, unit: 'epoch-s' | 'epoch-ms'): Classified {
-  const instant = epochInstant(value, unit);
-  return instant === undefined ? { kind: 'unreadable' } : { kind: 'instant', instant };
-}
-
-function classify(
-  row: unknown,
-  axis: DatasetTimeAxis,
-  walls: Map<number, WallReading>,
-): Classified {
-  if (!isRecord(row)) return { kind: 'missing' };
-  const value = row[axis.column];
-  if (value === undefined || value === null) return { kind: 'missing' };
-  const read =
-    axis.unit === 'iso' ? classifyIso(value, axis.zone, walls) : classifyEpoch(value, axis.unit);
-  if (read.kind === 'instant' && !spellable(read.instant)) return { kind: 'unreadable' };
-  if (read.kind === 'overlap' && !(spellable(read.earlier) && spellable(read.later))) {
-    return { kind: 'unreadable' };
-  }
-  return read;
-}
-
-/**
- * The fall-back rule over the rows' order: for each overlap day, the one
- * place its wall clock steps back (a value not after the one before it)
- * splits it into `earlier` then `later`. Any step back that is NOT inside one
- * overlap day means the rows are not in time order, and every overlap value
- * is left unplaced; so is a day with no step back or more than one.
- */
-function resolveOverlaps(
-  read: readonly Classified[],
-  nanos: (i: number) => number,
-): Map<number, 'earlier' | 'later'> {
-  const placed = new Map<number, 'earlier' | 'later'>();
-  const walled: number[] = [];
-  for (let i = 0; i < read.length; i++) {
-    const r = read[i] as Classified;
-    if ((r.kind === 'instant' && r.wall !== undefined) || r.kind === 'overlap') walled.push(i);
-  }
-  const wallAt = (i: number): number => (read[i] as { wall: number }).wall;
-  const stepsByDay = new Map<string, number[]>();
-  for (let k = 1; k < walled.length; k++) {
-    const prev = walled[k - 1] as number;
-    const here = walled[k] as number;
-    const notAfter =
-      wallAt(here) < wallAt(prev) || (wallAt(here) === wallAt(prev) && nanos(here) <= nanos(prev));
-    if (!notAfter) continue;
-    const a = read[prev] as Classified;
-    const b = read[here] as Classified;
-    if (a.kind !== 'overlap' || b.kind !== 'overlap' || a.day !== b.day) return placed;
-    stepsByDay.set(a.day, [...(stepsByDay.get(a.day) ?? []), here]);
-  }
-  for (const [day, steps] of stepsByDay) {
-    if (steps.length !== 1) continue;
-    const step = steps[0] as number;
-    for (let i = 0; i < read.length; i++) {
-      const r = read[i] as Classified;
-      if (r.kind === 'overlap' && r.day === day) placed.set(i, i < step ? 'earlier' : 'later');
-    }
-  }
-  return placed;
-}
-
-const pad = (n: number, width: number): string => String(n).padStart(width, '0');
-
-function precisionOf(instants: readonly Instant[]): AxisPrecision {
-  let precision: AxisPrecision = 'second';
-  for (const { ms, nanos } of instants) {
-    if (nanos !== 0) return 'nanosecond';
-    if (((ms % 1000) + 1000) % 1000 !== 0) precision = 'millisecond';
-  }
-  return precision;
-}
-
-/** `instant` in UTC with exactly the digits `precision` names — fixed width, so text order is time order. */
-function spellAt(instant: Instant, precision: AxisPrecision): InstantText {
-  const msPart = ((instant.ms % 1000) + 1000) % 1000;
-  const whole = spellInstant({ ms: instant.ms - msPart, nanos: 0 }, 0) as string;
-  if (precision === 'second') return whole;
-  const fraction = pad(msPart * 1_000_000 + instant.nanos, 9);
-  const digits = precision === 'millisecond' ? fraction.slice(0, 3) : fraction;
-  return `${whole.slice(0, -1)}.${digits}Z`;
-}
 
 /**
  * THE READ-SIDE VIEW of a declared time column: every value turned into a UTC

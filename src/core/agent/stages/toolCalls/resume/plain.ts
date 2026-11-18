@@ -7,6 +7,7 @@ import { argsForPausedCall } from '../batch/paused.js';
 import { pausedNegativeResultId } from '../../../negativeClaims/capture.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { safeStringify } from '../../../validators.js';
+import { isAnswerTo } from '../../../../../tools/typedAnswer.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
@@ -40,7 +41,12 @@ interface ResumePlainLinks {
 export function buildResumePlain(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'inputsLayer' | 'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findingsJudge'
+    | 'inputsLayer'
+    | 'resources'
+    | 'negativeClaimsArmed'
+    | 'stepPlanFor'
+    | 'findingsJudge'
+    | 'answeredAsk'
   >,
   links: ResumePlainLinks,
 ) {
@@ -125,6 +131,17 @@ export function buildResumePlain(
     if (deps.stepPlanFor) {
       resultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
     }
+    // The library's mark on a person's typed answer: stamped only when THIS
+    // run's `Agent.resume` accepted the answer to the ask this run raised
+    // (`answeredAsk`) and the value handed here is that answer. Every other
+    // value this door lands (an `askHuman` reply, a page's frontend-tool
+    // result, a string shaped like an answer) is the tool's result and lands
+    // unmarked. See `tools/typedAnswer.ts`.
+    const answered = deps.answeredAsk?.();
+    const answersAsk =
+      answered !== undefined && isAnswerTo(input, answered.requestId)
+        ? { requestId: answered.requestId }
+        : undefined;
     // The batch settlement (9.113.0) — the door a `requestInput` answer
     // comes back through, and the one most likely to meet a batch: a tool
     // that asks a person mid-lookup, batched with the lookups after it.
@@ -136,7 +153,7 @@ export function buildResumePlain(
           content: resultStr,
           toolCallId,
           toolName,
-          // The inner calls its tool made before it paused, that ran.
+          ...(answersAsk !== undefined && { answersAsk }),
           ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
       ],

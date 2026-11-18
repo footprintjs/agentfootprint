@@ -28,11 +28,9 @@
  * (`stages/routeIntegrity.ts`). Unarmed, the key is never read or written.
  */
 
-import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { integrityFindingRowOf } from '../../integrity/finding/row.js';
 import { contextErrorIdentity, type ContextError } from '../../integrity/finding/types.js';
-import type { AgentState } from './types.js';
 
 /** The run's integrity holder as a seam has it: `answerLayer` says rows are wanted. */
 export interface IntegrityRun {
@@ -40,9 +38,16 @@ export interface IntegrityRun {
   readonly answerLayer?: true;
 }
 
+/**
+ * What the rail needs of a scope: the seen-list keys and the emit channel.
+ * Structural, so a stage inside a subflow with its own state type (the tools
+ * slot's compose backstop) files on the same rail instead of keeping a copy.
+ */
+type RailScope = Parameters<typeof holdIntegrityRows>[0] & Parameters<typeof typedEmit>[0];
+
 /** File findings on the shared seen-list rail, one event per new identity. */
 export function fileIntegrityFindings(
-  scope: TypedScope<AgentState>,
+  scope: RailScope,
   findings: readonly ContextError[],
   iteration: number,
   run?: IntegrityRun,

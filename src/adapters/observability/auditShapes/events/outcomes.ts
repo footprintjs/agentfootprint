@@ -164,6 +164,8 @@ export function outcomesShapes() {
       period: bool,
       source: oneOf('answered', 'app', 'default', 'model', 'result', 'said'),
       asked: oneOf('invalid-answer', 'missing', 'unverified'),
+      correction: oneOf('source-declaration-required'),
+      withheld: oneOf('batch-preempted'),
       claimed: oneOf('app', 'assumed', 'none', 'result', 'turn', 'user'),
       matched: oneOf('mention', 'phrase', 'quote', 'spelling'),
       reading: bool,

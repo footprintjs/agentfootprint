@@ -10,6 +10,7 @@ import { stripKey, rewriteKey, stripBases } from '../../../test/helpers/savedRec
 const observed = vi.hoisted(() => ({
   reads: [] as string[],
   legacyCalls: 0,
+  collapseCalls: 0,
   lateLedgers: [] as unknown[],
   failLate: false,
 }));
@@ -38,6 +39,10 @@ vi.mock('../../core/agent/findings/serve.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../core/agent/findings/serve.js')>();
   return {
     ...real,
+    collapseJudged: (...args: Parameters<typeof real.collapseJudged>) => {
+      observed.collapseCalls += 1;
+      return real.collapseJudged(...args);
+    },
     findingsLedgerPiece: (...args: Parameters<typeof real.findingsLedgerPiece>) => {
       observed.legacyCalls += 1;
       return real.findingsLedgerPiece(...args);
@@ -59,17 +64,23 @@ vi.mock('../../core/agent/findings/context.js', async (importOriginal) => {
 
 type Snapshot = NonNullable<ReturnType<Agent['getSnapshot']>>;
 let saved: Snapshot;
+let actualFindingsData: string | undefined;
 
 beforeAll(async () => {
   const agent = Agent.create({
     provider: {
       name: 'saved-view-order-mock',
-      complete: async (): Promise<LLMResponse> => ({
-        content: 'done',
-        toolCalls: [],
-        usage: { input: 0, output: 0 },
-        stopReason: 'stop',
-      }),
+      complete: async (request): Promise<LLMResponse> => {
+        actualFindingsData = request.messages.find((message) =>
+          message.content.startsWith('[AgentFootprint findings DATA v1]'),
+        )?.content;
+        return {
+          content: 'done',
+          toolCalls: [],
+          usage: { input: 0, output: 0 },
+          stopReason: 'stop',
+        };
+      },
     },
     model: 'mock',
     reactMode: 'dynamic',
@@ -85,6 +96,7 @@ beforeAll(async () => {
 function rebuild(recording: unknown, failLate = false): ServedView {
   observed.reads.length = 0;
   observed.legacyCalls = 0;
+  observed.collapseCalls = 0;
   observed.lateLedgers.length = 0;
   observed.failLate = failLate;
   return servedAt(recording, 1)!;
@@ -123,6 +135,67 @@ const SUFFIX = [
 ];
 
 describe('one saved epoch, in the order the request was assembled', () => {
+  it('reconstructs current late-v2 DATA exactly as the provider received it', () => {
+    const view = rebuild(saved);
+    const data = view.messages.requestOnly.find((line) => line.reason === 'findings-data');
+    expect(actualFindingsData).toBeDefined();
+    expect(data?.text).toBe(actualFindingsData);
+    expect(JSON.parse(data!.text.split('\n')[1]!).layout).toBe('late-v2');
+    expect(view.gaps.some((gap) => gap.gap === 'findings-layout')).toBe(false);
+  });
+
+  it('declares old late-v1 DATA unavailable instead of recomposing new bytes', () => {
+    const view = rebuild(withValue(saved, 'findingsLayout', 'late-v1'));
+    expect(view.gaps[0]?.gap).toBe('findings-layout');
+    expect(view.messages.requestOnly.some((line) => line.reason === 'findings-data')).toBe(false);
+    expect(observed.legacyCalls).toBe(0);
+    expect(observed.collapseCalls).toBe(0);
+    expect(observed.lateLedgers).toEqual([]);
+  });
+
+  it.each(['not-entered', 'input-cancelled', 'outcome-unknown'] as const)(
+    'declares an undiscriminated %s notice layout unavailable without guessing its old rendering',
+    (origin) => {
+      let old = stripKey(stripKey(saved, 'findingsLayout'), 'findingsContextBytes');
+      old = withValue(old, 'history', [
+        { role: 'user', content: 'hello' },
+        {
+          role: 'tool',
+          toolCallId: 'notice',
+          toolName: 'ping',
+          content: 'owned notice',
+          toolResultOrigin: origin,
+        },
+      ]);
+      const view = rebuild(old);
+      expect(view.gaps[0]?.gap).toBe('findings-layout');
+      expect(observed.legacyCalls).toBe(0);
+      expect(observed.collapseCalls).toBe(0);
+      expect(observed.lateLedgers).toEqual([]);
+      expect(view.messages.asSent.some((message) => message.content === 'owned notice')).toBe(true);
+      expect(view.messages.requestOnly.some((line) => line.reason === 'findings-data')).toBe(false);
+    },
+  );
+
+  it('preserves the ordinary undiscriminated legacy layout with only a settlement marker', () => {
+    let old = stripKey(stripKey(saved, 'findingsLayout'), 'findingsContextBytes');
+    old = withValue(old, 'history', [
+      { role: 'user', content: 'hello' },
+      {
+        role: 'tool',
+        toolCallId: 'settled',
+        toolName: 'ping',
+        content: 'settled notice',
+        notDispatched: { reason: 'batch-ended' },
+      },
+    ]);
+    const view = rebuild(old);
+    expect(view.gaps.some((gap) => gap.gap === 'findings-layout')).toBe(false);
+    expect(observed.legacyCalls).toBe(1);
+    expect(observed.collapseCalls).toBe(1);
+    expect(observed.lateLedgers).toEqual([]);
+  });
+
   it('reads late DATA last, after the repeated recovery reads', () => {
     const view = rebuild(saved);
     expect(observed.reads).toEqual([...PREFIX, ...SUFFIX, 'at:findingsLedger']);
@@ -204,6 +277,9 @@ describe('one saved epoch, in the order the request was assembled', () => {
     }
   });
 
+  // This record has `wants` and no ticket receipt: the shape of every recording
+  // made before the receipt existed, whose run named any ticket-shaped result.
+  // The rebuild gives back the line that run really sent.
   it('appends staged refs, time, conclusion and late findings in that order', () => {
     let record = withValue(saved, 'history', [
       {
@@ -234,6 +310,28 @@ describe('one saved epoch, in the order the request was assembled', () => {
     ]);
     expect(view.system.pieces.at(-1)?.text).toBe('saved recovery');
     expect(view.messages.requestOnly[2]?.text).toBe('saved conclusion');
+  });
+
+  it('a record that keeps the receipt names only the tickets it lists', () => {
+    const ticket = { placed: true, ref: 'art_saved', kind: 'dataset/rows', reason: 'saved' };
+    let record = withValue(saved, 'history', [
+      { role: 'tool', toolCallId: 'saved-tool', content: JSON.stringify(ticket) },
+    ]);
+    record = withValue(record, 'toolWantsByName', { ping: ['dataset/rows'] });
+    const staged = (receipt: unknown) =>
+      rebuild(withValue(record, 'placedTickets', receipt)).messages.requestOnly.filter(
+        (line) => line.reason === 'staged-refs-nudge',
+      );
+    // Kept and empty: the tool wrote that ticket itself, so no line went out.
+    expect(staged([])).toEqual([]);
+    // Listed for another ref, or for another call: not this ticket.
+    expect(staged([{ toolCallId: 'saved-tool', ref: 'art_other' }])).toEqual([]);
+    expect(staged([{ toolCallId: 'other-call', ref: 'art_saved' }])).toEqual([]);
+    // Kept out by a redaction policy: a placeholder issues nothing.
+    expect(staged('REDACTED')).toEqual([]);
+    const named = staged([{ toolCallId: 'saved-tool', ref: 'art_saved' }]);
+    expect(named).toHaveLength(1);
+    expect(named[0]?.text).toContain("'art_saved' (dataset/rows)");
   });
 
   it('keeps the late raw ledger read distinct from placeholder-aware reads', () => {

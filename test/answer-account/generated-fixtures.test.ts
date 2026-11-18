@@ -328,7 +328,7 @@ describe('E — the edge set (§2.10)', () => {
     expect(rowText(a, 'checked')).toEqual(['It ran broken, and the tool reported an error.']);
     expect(rowText(a, 'found')).toEqual(['broken returned an error, not a result.']);
     expect(rowText(a, 'anything-wrong')[0]).toBe(
-      '1 tool call did not run cleanly: 1 failed, 0 refused by a rule, 0 declined by a person, 0 not run.',
+      '1 tool call did not run cleanly: 1 failed, 0 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.',
     );
   });
 

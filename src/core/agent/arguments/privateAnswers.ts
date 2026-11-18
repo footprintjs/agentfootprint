@@ -28,10 +28,20 @@ type Calls = readonly Pick<BatchCall, 'id' | 'name' | 'args'>[];
 type SettledFills = ReadonlyMap<string, { readonly fills?: ArgumentResolution['fills'] }>;
 const whole = (root: PrivateFieldRoot): Selection[] => [{ root, path: '' }];
 
-class PrivateArgumentRecordError extends Error {
+/**
+ * THE refusal of the private-argument path, wherever it is raised: missing
+ * recording support at discovery (`requirePrivateQuestionSupport`) or a
+ * resumed question missing its saved declaration or view
+ * (`pendingPrivateAsk.ts`). One class for one code, so a caller tells the
+ * family apart by `instanceof` as well as by `code`; the message says which
+ * case it was. Two classes used to carry this one code.
+ */
+export class PrivateArgumentRecordError extends Error {
   readonly code = 'ERR_PRIVATE_ARGUMENT_RECORD';
-  constructor() {
-    super('A private argument question requires native private-field recording support.');
+  constructor(
+    message = 'A private argument question requires native private-field recording support.',
+  ) {
+    super(message);
     this.name = 'PrivateArgumentRecordError';
   }
 }

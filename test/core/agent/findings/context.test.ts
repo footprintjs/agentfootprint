@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
 import {
   findingsContext,
   findingsContextBytes,
@@ -192,4 +193,73 @@ describe('bounded late findings DATA', () => {
       expect(() => findingsContextBytes(value)).toThrow(RangeError);
     },
   );
+});
+
+describe('findings DATA — the frame is measured once, not once per entry', () => {
+  // The frame used to be re-serialized and re-encoded after every candidate
+  // entry, so its cost grew with candidates times frame size. It now keeps a
+  // running byte total (each entry's own bytes, its comma, the change in its
+  // bucket's omitted-count digits) and encodes the whole frame at the ends.
+  const standings = ['fact', 'open', 'ruled-out', 'noise'] as const;
+  const VALUES = ['a', '雪雪', '😀x', 'q"\\\n', 'v'.repeat(37)];
+  const messages = Array.from({ length: 140 }, (_, i) => result(`id-${i}-${'é'.repeat(i % 5)}`));
+  const rows: FindingsLedger = messages.flatMap((m, i) => {
+    const standing = standings[i % 4]!;
+    return standingRowsFrom(
+      [{ toolCallId: m.toolCallId!, result: 'synthetic', toolName: 'lookup' }],
+      {
+        previous: [
+          {
+            toolCallId: m.toolCallId!,
+            standing,
+            ...(standing === 'noise'
+              ? {}
+              : {
+                  assertions: [
+                    {
+                      subject: { kind: 'port', id: `p${i}` },
+                      predicate: 'state',
+                      value: VALUES[i % 5]!.repeat(1 + (i % 7)),
+                    },
+                  ],
+                }),
+            ...(standing === 'ruled-out' ? { line: 'l'.repeat(i % 50) } : {}),
+            ...(standing === 'open' ? { settles: 's'.repeat(i % 40) } : {}),
+          } as never,
+        ],
+      },
+      'answer',
+      2,
+    );
+  });
+
+  // Reference hashes from the admit-then-re-encode loop with the late-v2
+  // reference status. The running tally must preserve every byte, including
+  // multibyte text and changes in omitted-count digits.
+  it.each([
+    [1024, '4b8f7b93649a2535'],
+    [1500, '845b48f194096641'],
+    [2048, 'ff0c9b5602fa741b'],
+    [3001, '3a5ea07cba30cdf2'],
+    [4096, 'b55db95f6fb13238'],
+    [8192, '9af9f7fa48498c01'],
+    [12000, 'bbf11c8ee98521f7'],
+    [16384, '85188a80a02db291'],
+    [65536, 'f42b6c0493623a25'],
+  ] as const)('byte-identical to the re-encoding loop at a %i-byte budget', (limit, hash) => {
+    const frame = findingsContext(messages, rows, limit);
+    expect(Buffer.byteLength(frame)).toBeLessThanOrEqual(limit);
+    expect(createHash('sha256').update(frame).digest('hex').slice(0, 16)).toBe(hash);
+  });
+
+  it('encodes about the frame size, not candidates times the frame', () => {
+    const encode = vi.spyOn(TextEncoder.prototype, 'encode');
+    try {
+      const frame = findingsContext(messages, rows, 262_144);
+      const encoded = encode.mock.calls.reduce((n, [text]) => n + (text ?? '').length, 0);
+      expect(encoded).toBeLessThanOrEqual(3 * frame.length);
+    } finally {
+      encode.mockRestore();
+    }
+  });
 });

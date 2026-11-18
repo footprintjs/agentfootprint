@@ -561,6 +561,11 @@ describe('UNIT — this turn only', () => {
       tool('c1', []),
       user('[schema check] your answer was not valid JSON'),
       { role: 'user', content: 'delivered by an injection', injectedBy: { id: 'note' } },
+      // A line composed for one request (`LLMMessage.ephemeral`) is never a
+      // person's either — the same rule the answer account reads
+      // (`lib/saidByPerson.ts` · `isPersonEntry`), so the standing
+      // and the account cannot disagree on where this turn begins.
+      { role: 'user', content: 'Previous output failed validation.', ephemeral: true },
       tool('c2', [{ id: 1 }]),
     ];
     const a = run({ history });

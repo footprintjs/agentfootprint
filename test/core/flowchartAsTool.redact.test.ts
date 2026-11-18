@@ -35,6 +35,7 @@ import { flowchartAsTool, type FlowchartToolSnapshot } from '../../src/index.js'
 import { innerRunsOf } from '../../src/observe.js';
 import { servableSnapshot } from '../../src/core/servableSnapshot.js';
 import { unconfiguredCredentialProvider } from '../../src/identity.js';
+import { nativeRetainsSafeBase } from '../redaction/nativeFoldBase.js';
 
 const SECRET = 'sk-live-SUPER-SECRET-BYTES';
 
@@ -130,11 +131,9 @@ describe('flowchartAsTool({ redact }) — the tool serves the redacted view', ()
     expect(snapshot.sharedState.apiKey).toBe('REDACTED');
     expect(snapshot.sharedState.used).toBe('called');
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
-    // footprintjs's own law for the redacted view: the fold base is the raw
-    // pre-run seed, no policy ever touched it, so it is OMITTED rather than
-    // served. A fold of this record reports `basis: 'log-only'` — a partial
-    // answer that says it is partial.
-    expect(snapshot.initialState).toBeUndefined();
+    // Older engines omitted the base; newer ones serve the native safe base.
+    // This chart has no seed. Keep the exact native contract, not an arbitrary object.
+    expect(snapshot.initialState).toEqual((await nativeRetainsSafeBase()) ? {} : undefined);
   });
 });
 

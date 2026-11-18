@@ -1,7 +1,8 @@
 /**
  * Preserve the historical main stream, with the one AF14 migration:
  * domain metadata uses the native run ID instead of a second minted ID.
- * One explicit local resource-status event is added; original payloads, event order, field order and all other metadata remain byte-pinned.
+ * One explicit local resource-status event is added, and tool ends gain an
+ * `entered` stamp. Every other field, its order and event order remain byte-pinned.
  * The historical fixture is NEVER regenerated from this branch.
  */
 import { readFileSync } from 'node:fs';
@@ -39,6 +40,17 @@ describe('no policy preserves the whole stream with native run identity', () => 
       const source = event.meta.sourcePosition;
       if (source?.engineRunId !== undefined) source.engineRunId = nativeAlias(source.engineRunId);
       if (source?.logRunId !== undefined) source.logRunId = nativeAlias(source.logRunId);
+    }
+    // A decided record change: `stream.tool_end` says whether the tool's function was
+    // entered (`entered`). The two calls that never reached a tool — an unknown name
+    // (`c2`) and rejected arguments (`c3`) — carry `entered: false`. The two
+    // successful calls (`c1` and `c4`) carry `entered: true`.
+    const entered = { c1: true, c2: false, c3: false, c4: true } as const;
+    for (const event of events as unknown as { type: string; payload: Record<string, unknown> }[]) {
+      if (event.type !== 'agentfootprint.stream.tool_end') continue;
+      const id = event.payload.toolCallId as keyof typeof entered;
+      expect(Object.hasOwn(entered, id)).toBe(true);
+      event.payload.entered = entered[id];
     }
     (events as unknown[]).splice(73, 0, {
       type: 'agentfootprint.tools.resource_restore',

@@ -203,7 +203,7 @@ const triage = runbookAsTool({ /* … */ resultKind: 'verdict/backup-posture',
 ```
 
 - `verdicts`, `rows_shown`, `rows_total`, `rows_complete` and `verdict_meanings` are **identical** across the two modes for the same run — the dial names who *renders* the rows, never which rows there are.
-- `render_note` is present in both, because a rowset always ships with a rule about its surface. It is `VERDICT_RENDER_NOTE` under `'prose'` and `PANEL_RENDER_NOTE` under `'panel'`; both are exported, so a consumer or a test asserts on the constant rather than on a string literal.
+- For a readable rowset, `render_note` is `VERDICT_RENDER_NOTE` under `'prose'` and `PANEL_RENDER_NOTE` under `'panel'`; both are exported, so a consumer or a test asserts on the constant rather than on a string literal.
 - `table` is the only key that moves, and it is **absent** under `'panel'` — the key itself, not an empty string. Its name stays reserved in both modes, so a chart's `report` cannot put a table back into a panel answer.
 - An unknown value **throws at definition**, never falls back to `'prose'`: a mis-spelled dial that silently keeps working is a dial you cannot trust to have been set.
 
@@ -221,7 +221,21 @@ const triage = runbookAsTool({ /* … */ resultKind: 'verdict/backup-posture',
 
 The reserved verdict word `declined` means "no classification was reached" — those rows are counted into the ledger as not-checked ground, never dressed up as findings.
 
+A missing, non-array, or partly invalid `verdicts` value is **unavailable, not empty**. The bridge returns `verdicts: []`, `rows_shown: 0`, `rows_complete: false`, omits the unknown optional `rows_total` and the prose `table`, and states the gap in a fixed `render_note` and `af_coverage.not_checked`. A real empty array still means known zero and complete. This check uses only the served procedure state; it neither reads private values nor guesses why a value is unavailable. The public `verdictRowsOf` helper remains a visible-row selector, not proof that the whole rowset was readable.
+
 **Spine keys win, and a collision is spoken.** The envelope's own names — `af_coverage`, `af_provenance`, `rule_version`, `walk`, `report_note`, and the projection keys a verdict-shaped run assembled (`verdicts`, `rows_shown`, `rows_total`, `rows_complete`, `table`, `render_note`, `verdict_meanings`) — are reserved. A `report` field spelling one of them is **discarded**, and `result.report_note` names every field that was: a boundary a chart can overwrite is a boundary that reports whatever the chart says about itself. `report_note` is present only when something was actually refused, so the normal path never sees it.
+
+## Native observation costs: `observability`
+
+Both `runbookAsTool` and `flowchartAsTool` accept optional **ChartToolObservability** through their top-level `observability` option. It forwards four public native `RunDials`: `readTracking`, `writeTracking`, `commitValues`, and `writeProvenance`. Omit it to keep the existing native defaults.
+
+The runnable example shares this setting between its prose and panel tools; full commit values remain the native default:
+
+<CodeFile path="examples/features/68-runbook-as-tool.ts" region="observability" title="Native retained observation controls" />
+
+Pass that value as `observability` in either bridge's declaration. `readTracking` and `writeTracking` take `'full'`, `'summary'`, or `'off'`; `commitValues` takes `'full'` or `'delta'`; `writeProvenance` takes `'off'` or `'reads-prefix'`. The declaration must be a plain object of own enumerable data properties. Unknown fields, accessors, and invalid values are refused before execution; this is not a bag of arbitrary executor options or callbacks.
+
+Summary tracking changes retained `stageReads`/`stageWrites` values and native `onCommit` mutation observations. It preserves execution state, per-operation `onWrite` observations, narrative and decider evidence, redaction, and full commit replay when `commitValues` remains `'full'`. Delta commits change the encoding and must be read with native fold readers. These controls change recording detail and cost; they neither turn off privacy nor promise a fixed recording size.
 
 ## The walk, honestly
 

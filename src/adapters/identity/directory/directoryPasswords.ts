@@ -85,8 +85,13 @@ export interface DirectoryPasswordsOptions {
   readonly netbiosDomain: string;
   /** Where the account's entry is searched (`DC=corp,DC=example`). */
   readonly baseDn: string;
-  /** Optional: the DN of a group the person must be in, directly or nested. */
-  readonly requiredGroup?: string;
+  /**
+   * Optional: the DN of a group the person must be in, directly or nested — or
+   * several DNs, any ONE of which lets a person in. Several groups are still ONE
+   * bind and ONE base-scope search (an OR of in-chain clauses), so listing more
+   * groups never adds a bind and never moves AD's lockout counter.
+   */
+  readonly requiredGroup?: string | readonly string[];
   /** Told the directory's refusal reason for an operator log — never the password. */
   readonly log?: (line: string) => void;
 }
@@ -109,6 +114,7 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
     );
   }
   const suffix = `@${domain}`.toLowerCase();
+  const groupFilter = requiredGroupFilter(options.requiredGroup);
 
   return {
     strategy: 'directory-password',
@@ -187,12 +193,8 @@ export function directoryPasswords(options: DirectoryPasswordsOptions): Password
       note({ reason: 'account-unresolved' });
       return undefined;
     }
-    if (options.requiredGroup !== undefined) {
-      const member = await session.search(
-        entry.dn,
-        `(memberOf:${IN_CHAIN}:=${escapeFilterValue(options.requiredGroup)})`,
-        'base',
-      );
+    if (groupFilter !== undefined) {
+      const member = await session.search(entry.dn, groupFilter, 'base');
       if (member.length !== 1) {
         note({ reason: 'not-in-group' });
         return undefined;
@@ -263,6 +265,35 @@ export function accountFilter(authzId: string, netbiosDomain: string): string | 
   const sam = who.slice(slash + 1);
   if (sam.length === 0) return undefined;
   return `(&(objectClass=user)(sAMAccountName=${escapeFilterValue(sam)}))`;
+}
+
+/**
+ * The base-scope membership filter for the required group(s), or `undefined`
+ * when none is set. One group keeps the exact one-clause filter it always had;
+ * several are an OR of the same clause, each DN escaped as a filter value
+ * (RFC 4515). An empty list, an empty DN or a non-string refuses construction:
+ * a list that names nothing must not silently mean "every account".
+ */
+export function requiredGroupFilter(
+  requiredGroup: string | readonly string[] | undefined,
+): string | undefined {
+  if (requiredGroup === undefined) return undefined;
+  const listed = typeof requiredGroup === 'string' ? [requiredGroup] : [...requiredGroup];
+  const groups: string[] = [];
+  for (const g of listed) {
+    if (typeof g !== 'string' || g.trim().length === 0) {
+      throw new TypeError('[identity] directoryPasswords: requiredGroup holds an empty group DN.');
+    }
+    const dn = g.trim();
+    if (!groups.some((seen) => seen.toLowerCase() === dn.toLowerCase())) groups.push(dn);
+  }
+  if (groups.length === 0) {
+    throw new TypeError(
+      '[identity] directoryPasswords: requiredGroup is an empty list — omit it to admit every account.',
+    );
+  }
+  const clauses = groups.map((g) => `(memberOf:${IN_CHAIN}:=${escapeFilterValue(g)})`);
+  return clauses.length === 1 ? clauses[0] : `(|${clauses.join('')})`;
 }
 
 function required(value: string | undefined, name: string): string {

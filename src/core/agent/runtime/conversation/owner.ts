@@ -1,5 +1,12 @@
 import type { AgentRunOptions } from '../runOptions/options.js';
-import { evidenceRecoveryOf, foldedSpansOf, findingsLedgerOf } from './checkpointParts.js';
+import {
+  evidenceRecoveryOf,
+  foldedSpansOf,
+  findingsLedgerOf,
+  sourceEvidenceOf,
+  sourceDeclarationCorrectionOf,
+} from './checkpointParts.js';
+import { ticketsStillServed } from '../../placedTickets.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation, type RunnerSelection } from '../../../runnerExecution.js';
@@ -101,12 +108,20 @@ export function checkpointFor(
   const owner = this.conversationOwner(selected!.value);
   const skillCursor = this.continuityCursorOf(state);
   const evidenceRecovery = evidenceRecoveryOf(state);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
+    state,
+    'sourceDeclarationCorrectionSpent',
+  );
   const findingsLedger = findingsLedgerOf(state);
   const turnNumber = this.turnNumberOf(state);
+  const stored = structuredClone(
+    checkpointReplayHistory(history, selected!.value.checkpointTracker),
+  );
+  const placedTickets = ticketsStillServed(state?.placedTickets, stored);
   return {
     version: 1,
     runId: selected!.context.runId,
-    history: structuredClone(checkpointReplayHistory(history, selected!.value.checkpointTracker)),
+    history: stored,
     lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
     originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
     checkpointedAt: Date.now(),
@@ -122,15 +137,21 @@ export function checkpointFor(
     // exact byte shape.
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
     // The model's standings (9.101.0) — absent unless the run recorded any,
     // by the `folded` rule: an optional key, never a format change.
     ...(findingsLedger !== undefined && { findingsLedger }),
     // The turn this history ends on (honesty layers) — absent unless a
     // layer is armed, so every other checkpoint keeps its byte shape.
     ...(turnNumber !== undefined && { turnNumber }),
+    // The tickets the library placed whose messages the history still holds.
+    ...(placedTickets !== undefined && { placedTickets }),
     ...(this.configuration.negativeClaimsConfig === undefined || state === undefined
       ? {}
       : negativeCheckpointOf(state)),
+    ...(this.configuration.sourceEvidenceConfig === undefined
+      ? {}
+      : { sourceEvidence: sourceEvidenceOf(state) }),
   };
 }
 
@@ -250,14 +271,13 @@ export function conversationOwner(
  * restores history + folded spans, and adopts the conversation's identity so
  * the continued turn writes its memory where the earlier turns are.
  *
- * `appendsUserTurn` is the difference between the two callers, and it is the
- * whole difference. Continuing a conversation ADDS this turn's user message
- * to the stored history; resuming after an error does NOT, because there the
- * message is already the last user turn in that history and appending it
- * would ask the same question twice.
+ * `appendsUserTurn` is the difference between the two callers. Continuing a
+ * conversation ADDS this turn's user message to the stored history; resuming
+ * after an error does NOT, because there the message is already the last user
+ * turn in that history and appending it would ask the same question twice.
  *
  * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
- * by `seed.ts · historyForTurn` from the message the `'input'` middleware
+ * by `runtime/conversation/seedHistory.ts · historyForTurn` from the message the `'input'` middleware
  * chain let through; an entry built here, before that chain has run, is the
  * caller's raw text — which is what a continued turn served the model
  * through 9.112.1, while the record said the rewrite had happened.
@@ -273,6 +293,22 @@ export function applyContinuation(
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
   requireVerificationOnResume(cp, false);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(cp);
+  if (
+    !appendsUserTurn &&
+    sourceDeclarationCorrection !== undefined &&
+    (this.configuration.sourceDeclarationCorrection !== 'once' ||
+      this.configuration.argumentSourcesArmed !== true)
+  )
+    throw new TypeError(
+      'Continuation requires the source declaration correction setting used by this request.',
+    );
+  const sourceEvidence = sourceEvidenceOf(cp);
+  if (this.configuration.sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
+    throw new TypeError(
+      'Continuation requires the source evidence setting used by the recording agent.',
+    );
+  values.pendingResumeSourceEvidence = sourceEvidence;
   if (
     this.configuration.negativeClaimsConfig === undefined &&
     negativeCheckpointOf(cp) !== undefined
@@ -281,11 +317,14 @@ export function applyContinuation(
       'Continuation requires the negative-claims setting used by the recording agent.',
     );
   values.pendingResumeHistory = {
-    history: cp.history as readonly LLMMessage[],
+    history: cp.history,
     appendsUserTurn,
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
     ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
+    // The tickets the library placed in earlier turns (`placedTickets.ts`):
+    // still the library's, so the staged-refs nudge still names them.
+    ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),
     ...(this.configuration.negativeClaimsConfig === undefined
       ? {}
       : { negatives: negativeCheckpointOf(cp) }),
@@ -311,6 +350,9 @@ export function applyContinuation(
     !appendsUserTurn && cp.evidenceRecovery !== undefined
       ? structuredClone(cp.evidenceRecovery)
       : undefined;
+  values.pendingSourceDeclarationCorrection = appendsUserTurn
+    ? undefined
+    : sourceDeclarationCorrection;
 }
 
 /** A person's unanswered question outranks a new message — see

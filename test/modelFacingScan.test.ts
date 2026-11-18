@@ -160,6 +160,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'one citation-correction system frame through evidenceRecoveryPiece in callLLM; the repair budget is spent and tools withheld, and the instruction never enters conversation history or tool evidence',
     },
   ],
+  'src/tools/sourceEvidenceTools.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the retained-source reader description is rebuilt in each request tools array; it teaches issued-receipt navigation, never reports current access or a result in persistent history',
+    },
+  ],
   'src/tools/artifactDetailTool.ts': [
     {
       kind: 'ephemeral',
@@ -298,8 +305,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
     },
     {
       kind: 'unrepaired',
-      count: 2,
-      why: 'two unknown-tool-call RESULT corrections carry standing navigation imperatives; correctly flagged and unchanged by the file split',
+      count: 3,
+      why: 'two unknown-tool-call corrections and the retained-inner-record link carry navigation imperatives in tool results',
+    },
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the boundary line reports the absence of an inner record for the call in the current tool result',
     },
   ],
   'src/trace-toolpack/traceToolpack/innerRecords.ts': [
@@ -636,11 +648,46 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the tool-choice question's instruction — sent to the `Classifier` port (`agentfootprint/classify`) as the `choice` question's `instructions`, never a message on the model's wire; what the MODEL is served is the narrowed schema list, which the registry already reads",
     },
   ],
-  'src/core/agent/AgentBuilder.ts': [
+  'src/core/agent/builder/assembly/steps.ts': [
     {
       kind: 'not-model-facing',
-      count: 9,
+      count: 3,
       why: 'build-time refusals thrown when a declared feature cannot be honored, including `.maps()` with nothing mounted',
+    },
+  ],
+  'src/core/agent/builder/consent/configure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when a declared check-in cannot be honored',
+    },
+  ],
+  'src/core/agent/builder/graph/mount.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 2,
+      why: 'build-time refusals thrown when a declared graph cannot be honored',
+    },
+  ],
+  'src/core/agent/builder/maps/configure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when `.maps()` has nothing mounted',
+    },
+  ],
+  'src/core/agent/builder/selfExplain/configure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when a declared self-explain setup cannot be honored',
+    },
+  ],
+  'src/core/agent/builder/window/guards.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when a declared summarizer cannot be honored',
     },
   ],
   'src/core/agent/stages/route.ts': [
@@ -751,6 +798,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 1,
       why: 'a runbook warning returned to the caller that ran the walk',
+    },
+  ],
+  'src/ag-ui/serializer.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the fixed identity-verifier outage sentence is delivered to the AG-UI caller as RUN_ERROR; it never enters a model request or retained conversation history',
     },
   ],
   'src/hosting/admission.ts': [
@@ -886,6 +940,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the runtime-capability error thrown when node:sqlite is missing',
     },
   ],
+  'src/mcp/toolExtras.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the static MCP metadata-ingest warning hint goes to console while invalid declarations are dropped, never into a native tool reply',
+    },
+  ],
   'src/memory/asRoleRefusal.ts': [
     {
       kind: 'not-model-facing',
@@ -942,7 +1003,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a commentary phrase rendered for PEOPLE watching a run',
     },
   ],
-  'src/recorders/observability/commentary/commentaryTemplates.ts': [
+  'src/recorders/observability/commentary/commentaryTemplates/templates.ts': [
     {
       kind: 'not-model-facing',
       count: 2,
@@ -954,6 +1015,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 3,
       why: 'the answer account\'s template table — sentences rendered for a PERSON reading "Explain this answer" (the lens pane, the print report); `accountForAnswer` is a read-time fold over a finished recording and no model ever reads its output',
+    },
+  ],
+  'src/tools/resultRowsets.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'invalid rowset metadata is refused to the host at definition/registration or catalog discovery; native dispatch reads the already-held declaration rather than serving this diagnostic as a tool reply',
     },
   ],
   'src/tools/skillScopedTools.ts': [
@@ -1373,12 +1441,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 121,
-        total: 208,
+        // The revised journal classifies its inner-record link and boundary line.
+        files: 130,
+        total: 214,
         registry: 8,
-        ephemeral: 26,
-        unrepaired: 35,
-        notModelFacing: 139,
+        ephemeral: 28,
+        unrepaired: 36,
+        notModelFacing: 142,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

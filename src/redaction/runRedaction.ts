@@ -114,6 +114,8 @@ export interface RunRedaction {
  * @internal
  */
 export interface ScopeRun {
+  /** Exact opt-in only: ordinary wildcard sinks never request extra content. */
+  wantsRecordedContext?(): boolean;
   /** What the run is covered by — `unknown` only for a runner whose declaration is unknown. */
   readonly coverage: RedactionCoverage;
   readonly serving: EventServing;
@@ -222,6 +224,7 @@ export function createRunRedaction(args: {
   const slot = (runtimeStageId: string, key: string): string => `${runtimeStageId}\u001f${key}`;
   const coverage = coverageOfOpenedRun(policy);
   const run: ScopeRun = {
+    wantsRecordedContext: () => dispatcher.listenerCount('agentfootprint.context.recorded') > 0,
     coverage,
     serving,
     real(type, payload, stageId) {
@@ -490,6 +493,11 @@ export interface EmitScope {
   $emit(name: string, payload?: unknown): void;
 }
 
+/** Whether this actual native component has an explicit recording subscriber. */
+export function wantsRecordedContext(scope: object): boolean {
+  return scopeRuns.get(scope)?.serving?.run.wantsRecordedContext?.() ?? false;
+}
+
 /**
  * THE way a typed event leaves a stage. The real value goes to the run's own
  * captured component computation, then the existing live-reply relay; the served value goes to footprintjs's `$emit` — and
@@ -499,7 +507,12 @@ export interface EmitScope {
  * this library, not bound to a runner — is a run whose state is unknown: its
  * payload is the placeholder (fail closed), never the payload as made.
  */
-export function emitServed(scope: EmitScope, type: string, payload: unknown): void {
+export function emitServed(
+  scope: EmitScope,
+  type: string,
+  payload: unknown,
+  servedPayload?: unknown,
+): void {
   const registration = scopeRuns.get(scope as object);
   const computation = registration?.computation;
   // Private reduction precedes native $emit: native's later stale-scope refusal
@@ -511,7 +524,10 @@ export function emitServed(scope: EmitScope, type: string, payload: unknown): vo
     return;
   }
   entry.run.real(type, payload, entry.stageId);
-  scope.$emit(type, entry.run.serving.payload(type, payload));
+  scope.$emit(
+    type,
+    entry.run.serving.payload(type, servedPayload === undefined ? payload : servedPayload),
+  );
 }
 
 /** A scope that can set a value — structurally footprintjs's `TypedScope` `$setValue`. */

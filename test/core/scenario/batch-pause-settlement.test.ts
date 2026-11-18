@@ -1,4 +1,5 @@
 import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
+import { withTypedAnswerMark } from '../../helpers/typedAnswerMark.js';
 import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * THE BATCH SETTLEMENT (9.113.0) — a paused batch's un-dispatched siblings.
@@ -29,9 +30,9 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  * brackets on the leg that paused, which ends in a checkpoint and emits no
  * `iteration_end` — unchanged.
  *
- * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle, and its
- * record is pinned against a reference captured on the 9.112.2 tree BEFORE any
- * source edit of this release, by this file in update mode:
+ * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle. The
+ * 9.112.2 reference adds `entered: true` on each successful tool end for the
+ * new entry contract. It was originally captured by this file in update mode:
  *
  *   AF_BATCH_SETTLEMENT_REFERENCE=update npx vitest run test/core/scenario/batch-pause-settlement.test.ts
  */
@@ -604,7 +605,7 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
   return JSON.parse(requestId === undefined ? text : text.split(requestId).join('<requestId>'));
 }
 
-describe('batch settlement — a batch whose LAST call pauses is byte-identical to 9.112.2', () => {
+describe('batch settlement — the pinned record when the last call pauses', () => {
   it.each(KINDS)('%s', async (kind) => {
     const h = build(kind, 2);
     const { answer, requestId } = await pauseAndResume(h, kind);
@@ -623,7 +624,9 @@ describe('batch settlement — a batch whose LAST call pauses is byte-identical 
       all[kind],
       `no reference for '${kind}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(withNativeResourceObservation(all[kind] as { eventTypes: string[] }));
+    const legacy = withNativeResourceObservation(all[kind] as { eventTypes: string[] });
+    // A typed ask's landed answer now carries the library's mark; nothing else moved.
+    expect(record).toEqual(kind === 'input' ? withTypedAnswerMark(legacy) : legacy);
   });
 });
 
@@ -1211,7 +1214,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
     expect(checkIn.checkIn?.evidence.trail).toEqual({
       iteration: 2,
       toolCalls: [{ name: 'collect_input', ok: true }],
-      summary: '1 tool run over 2 iterations',
+      summary: '1 tool call over 2 iterations',
     });
     expect(ran).toEqual([]);
   });
@@ -1425,8 +1428,8 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     return { agent, answer, requests, state };
   }
 
-  it('the offer after the resume lists the calls that ran, never the settled one', async () => {
-    const { answer, requests } = await judgedRun();
+  it('the offer after the resume lists calls that ran, excluding settled and refused notices', async () => {
+    const { agent, answer, requests } = await judgedRun();
     expect(answer).toBe('done');
     expect(requests).toHaveLength(4);
     // Request 3 (the first after the resume) carries all three results on
@@ -1434,8 +1437,13 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     const wireIds = requests[2]!.messages.filter((m) => m.role === 'tool').map((m) => m.toolCallId);
     expect(wireIds).toEqual(['x1', 'c1', 'c2', 'c3']);
     expect(offerOf(requests[2]!)).toEqual(['c2', 'c1']);
-    // …and so does every later request: d1 joins, c3 never does.
-    expect(offerOf(requests[3]!)).toEqual(['d1', 'c2', 'c1']);
+    // d1 cited settled c3, so native admission refused it before execution.
+    // Its required tool_result stays on the wire without becoming evidence.
+    const refused = requests[3]!.messages.find((m) => m.role === 'tool' && m.toolCallId === 'd1');
+    expect(JSON.parse(refused!.content)).toMatchObject({ refused: 'findings-reference', count: 1 });
+    const committed = agent.getSnapshot()?.sharedState.history as readonly LLMMessage[];
+    expect(committed.find((m) => m.toolCallId === 'd1')?.toolResultOrigin).toBe('not-entered');
+    expect(offerOf(requests[3]!)).toEqual(['c2', 'c1']);
   });
 
   it('a model that names the settled id anyway files `unknownId`, as written — never resolved to a tool', async () => {
@@ -1467,17 +1475,18 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     // The control: x1, judged noise, IS collapsed to its ticket.
     const x1 = requests[3]!.messages.find((m) => m.role === 'tool' && m.toolCallId === 'x1');
     expect(x1?.content).toContain('"collapsed":true');
-    expect(findingsFrame(requests[3]!.messages).data.undeclaredResultIds).toEqual([
-      'c1',
-      'c2',
-      'd1',
-    ]);
+    const refused = requests[3]!.messages.find((m) => m.role === 'tool' && m.toolCallId === 'd1');
+    expect(JSON.parse(refused!.content)).toMatchObject({ refused: 'findings-reference', count: 1 });
+    expect(refused!.content).not.toContain('"collapsed":true');
+    expect(findingsFrame(requests[3]!.messages).data.undeclaredResultIds).toEqual(['c1', 'c2']);
     // And no request carried the marker. Requests 3 and 4 were built on the
     // COLLAPSE path (x1's ticket), which collapses the committed conversation
     // — marker and all — and strips afterwards (`callLLM.ts` ·
     // `buildCallLLMStage`); without that strip the marker reaches the provider.
     for (const request of requests) {
-      expect(request.messages.some((m) => 'notDispatched' in m)).toBe(false);
+      expect(request.messages.some((m) => 'notDispatched' in m || 'toolResultOrigin' in m)).toBe(
+        false,
+      );
     }
   });
 

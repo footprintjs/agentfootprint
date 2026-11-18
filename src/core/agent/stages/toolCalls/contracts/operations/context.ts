@@ -11,6 +11,7 @@ export interface ToolContextOperations {
     scope: TypedScope<AgentState>,
     toolName: string,
     toolCallId: string,
+    capturePublications?: boolean,
   ) => Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'>;
   readonly toolDispatchCtx: (
     scope: TypedScope<AgentState>,

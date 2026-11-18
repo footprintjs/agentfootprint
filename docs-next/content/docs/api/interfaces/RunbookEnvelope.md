@@ -4,7 +4,7 @@ title: RunbookEnvelope
 
 # Interface: RunbookEnvelope
 
-Defined in: [src/core/runbook/types.ts:315](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L315)
+Defined in: [src/core/runbook/types.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L320)
 
 The mandatory-spine + optional-projection envelope every runbook returns
  (unless an inner absence passed through — then the answer IS that absence,
@@ -17,7 +17,7 @@ The mandatory-spine + optional-projection envelope every runbook returns
 
 > `readonly` **af\_coverage**: `object`
 
-Defined in: [src/core/runbook/types.ts:316](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L316)
+Defined in: [src/core/runbook/types.ts:321](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L321)
 
 #### cannot\_cover?
 
@@ -49,7 +49,7 @@ The run's own sentence — names the rule set and version.
 
 > `readonly` **result**: `object`
 
-Defined in: [src/core/runbook/types.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L325)
+Defined in: [src/core/runbook/types.ts:330](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/types.ts#L330)
 
 #### Index Signature
 
@@ -77,7 +77,8 @@ The render law, stated to the model — present with the projection in
  BOTH modes, because a rowset always ships with a rule about its
  surface. `VERDICT_RENDER_NOTE` under `'prose'` (output the table
  verbatim); `PANEL_RENDER_NOTE` under `'panel'` (the rows are already on
- screen — quote the evidence, never reproduce them).
+ screen — quote the evidence, never reproduce them). An unavailable rowset
+ instead carries a fixed note that no total or empty result was established.
 
 #### report\_note?
 
@@ -91,6 +92,8 @@ Present ONLY when the chart's `report` spelled one of the envelope's
 
 > `readonly` `optional` **rows\_complete?**: `boolean`
 
+False when the rowset was unavailable or the visible rows were capped.
+
 #### rows\_shown?
 
 > `readonly` `optional` **rows\_shown?**: `number`
@@ -98,6 +101,9 @@ Present ONLY when the chart's `report` spelled one of the envelope's
 #### rows\_total?
 
 > `readonly` `optional` **rows\_total?**: `number`
+
+Known only when the served state supplied a complete readable rowset.
+ Omitted when unavailable; zero means an actual empty rowset.
 
 #### rule\_version
 
@@ -110,13 +116,13 @@ Present ONLY when the chart's `report` spelled one of the envelope's
 
 > `readonly` `optional` **table?**: `string`
 
-Pre-rendered markdown table over the SAME rows as `verdicts`. Present
+Pre-rendered markdown table over the SAME readable rows as `verdicts`. Present
  under `presentation: 'prose'` (the default), where the model's prose is
  the rowset's only surface. ABSENT — the key itself, not an empty
  string — under `'panel'`, where the host draws the rowset and a second
  copy in prose would be a retype of what the reader can already see. The
  name stays RESERVED in both modes, so a chart's `report` cannot put a
- table back into a panel answer.
+ table back into a panel answer. Unavailable rowsets also omit it.
 
 #### verdict\_meanings?
 

@@ -13,10 +13,10 @@ import { withNativeResourceObservation } from '../../helpers/nativeResourceObser
  * differ.
  *
  * Test types (Convention 3):
- *   - BYTE LAW   — a run whose tools declare neither field records exactly
- *                  the bytes the tree recorded BEFORE this change, on all
- *                  five dispatch paths and four envelope shapes. The
- *                  reference was captured on the pre-change tree by:
+ *   - BYTE LAW   — pins five dispatch paths and four envelope shapes without
+ *                  the record-only fields. The historical reference has one
+ *                  additive `entered: true` field per successful tool end.
+ *                  It was captured on the pre-change tree by:
  *                  AF_RECORD_ONLY_REFERENCE=update npx vitest run test/core/agent/coverage-record-only-fields.test.ts
  *   - SCENARIO   — a declaring tool, on each of the five paths × four shapes:
  *                  the model's requests equal the non-declaring run's byte for
@@ -229,7 +229,7 @@ const firstOf = (h: Harness, type: string) => h.events.find((e) => e.type === ty
 
 const REFERENCE = resolve(__dirname, 'reference/coverage-record-only-bytes.json');
 
-describe('record-only fields — a run that declares neither is byte-identical to the tree before', () => {
+describe('record-only fields — the pinned record when a run declares neither field', () => {
   const cases = PATHS.flatMap((path) => SHAPES.map((shape) => [path, shape] as const));
   it.each(cases)('%s × %s', async (path, shape) => {
     const h = build(path, shape, false, false);
@@ -250,7 +250,7 @@ describe('record-only fields — a run that declares neither is byte-identical t
       `no reference for '${key}' — generate it on the pre-change tree`,
     ).toBeDefined();
     expect(record).toEqual(withNativeResourceObservation(all[key] as { eventTypes: string[] }));
-    // And no stamp: the model read `result` itself.
+    // The model read `result` itself, so `modelResult` is absent.
     expect('modelResult' in endOf(h)).toBe(false);
   });
 });
@@ -362,12 +362,18 @@ describe('record-only fields — every serving path goes through the one strip',
     expect(strip).toBeLessThan(body.indexOf('runToolAfterChain('));
   });
 
-  it('every other caller of readCoverageResult is a READER, not a serving path', () => {
+  it('every caller of readCoverageResult has an explicit serving-boundary classification', () => {
     // Pinned list: a new caller must be judged — does it serve the envelope
     // to a model? If so it must serve `reading.served` (or go through
     // `afterMoment`) and be driven by this file.
     const PINNED = [
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
+      // Bounded inspection of the final governed/placed/capped surface for
+      // canonical absence only; this reader serves no envelope or record-only lists.
+      'core/agent/resultRowsets/read.ts',
+      // Captures only the governed surface, strips record-only lists again;
+      // actual retained-read privacy is driven by source-evidence/capture.test.ts.
+      'core/agent/sourceEvidence/capture.ts',
       'core/agent/stages/toolCalls/evidence/coverageOperations.ts', // declareCoverage — records; afterMoment serves
       'core/runbook/coverage.ts', // foldInnerCoverage — folds declared lists upward
       'semantics/check.ts', // declaresCoverage — the build-time gate asks yes/no

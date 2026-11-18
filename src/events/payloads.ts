@@ -47,6 +47,7 @@ export type {
   SkillGuardEvaluationRecord,
   ContextEvaluatedPayload,
 } from './payloads/context.js';
+export type { ContextRecordedPayload, ContextRecordedPiece } from './payloads/contextRecorded.js';
 export type {
   ErrorFatalPayload,
   PauseRequestPayload,
@@ -104,6 +105,7 @@ export type {
   ToolsSessionCloseFailedPayload,
 } from './payloads/toolSessionPayloads.js';
 export type { ValidationArgsInvalidPayload } from './payloads/validation.js';
+export type { ToolRowsetCheckedPayload, ToolRowsetCheckReason } from './payloads/toolRowsets.js';
 export type {
   SkillTurnRoutedPayload,
   SkillActivatedPayload,

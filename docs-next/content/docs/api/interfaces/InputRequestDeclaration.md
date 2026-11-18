@@ -4,7 +4,7 @@ title: InputRequestDeclaration
 
 # Interface: InputRequestDeclaration
 
-Defined in: [src/tools/inputRequest.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L47)
+Defined in: [src/tools/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L48)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/tools/inputRequest.ts:47](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **absence?**: [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: [src/tools/inputRequest.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L71)
+Defined in: [src/tools/inputRequest.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L72)
 
 What the tool LOOKED AT before it asked (9.114.0): the envelope `absent()`
 returns, when a lookup found nothing and raises this request about the
@@ -35,7 +35,7 @@ carries it, as it does a returned miss.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/tools/inputRequest.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L54)
+Defined in: [src/tools/inputRequest.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L55)
 
 Opaque JSON authored by the collecting tool, never editable by the reply.
 
@@ -45,7 +45,7 @@ Opaque JSON authored by the collecting tool, never editable by the reply.
 
 > `readonly` **fields**: readonly [`InputField`](/docs/api/interfaces/InputField)[]
 
-Defined in: [src/tools/inputRequest.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L50)
+Defined in: [src/tools/inputRequest.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L51)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: [src/tools/inputRequest.ts:50](https://github.com/footprintjs/agentf
 
 > `readonly` **id**: `string`
 
-Defined in: [src/tools/inputRequest.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L48)
+Defined in: [src/tools/inputRequest.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L49)
 
 ***
 
@@ -61,7 +61,7 @@ Defined in: [src/tools/inputRequest.ts:48](https://github.com/footprintjs/agentf
 
 > `readonly` **question**: `string`
 
-Defined in: [src/tools/inputRequest.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L49)
+Defined in: [src/tools/inputRequest.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L50)
 
 ***
 
@@ -69,7 +69,7 @@ Defined in: [src/tools/inputRequest.ts:49](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **refused?**: [`InputRefusal`](/docs/api/interfaces/InputRefusal)
 
-Defined in: [src/tools/inputRequest.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L85)
+Defined in: [src/tools/inputRequest.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L86)
 
 The previous answer to this ask was REFUSED, and why: the app
 validated what the person gave, turned it down, and asks again. Carried
@@ -89,6 +89,6 @@ field omitted.
 
 > `readonly` `optional` **supplied?**: `Readonly`\<`Record`\<`string`, [`InputValue`](/docs/api/type-aliases/InputValue)\>\>
 
-Defined in: [src/tools/inputRequest.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L52)
+Defined in: [src/tools/inputRequest.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/inputRequest.ts#L53)
 
 Values the collection tool already knows; never labelled as a person's answer.

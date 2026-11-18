@@ -96,6 +96,7 @@ export function buildEvidenceRecheckStage(
                 ) ?? stagedRefs.staticToolNames()
               ).values(),
             ),
+            scope.placedTickets,
           );
     scope.evidenceRecovery = buildEvidenceRecovery(
       {

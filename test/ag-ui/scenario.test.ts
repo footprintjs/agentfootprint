@@ -23,7 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { Agent, defineTool, flowchartAsTool, Parallel, Sequence } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { agUiSse } from '../../src/ag-ui/framing.js';
-import { AG_UI_RUN_FAILED, AG_UI_TOOL_FAILED } from '../../src/ag-ui/serializer.js';
+import { AG_UI_RUN_FAILED } from '../../src/ag-ui/serializer.js';
+import { AG_UI_TOOL_FAILED } from '../../src/ag-ui/toolResultWords.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 import { replayThroughClient, runAsAgUi } from './helpers.js';
 

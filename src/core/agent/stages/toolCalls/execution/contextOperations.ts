@@ -31,6 +31,10 @@ import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { OuterCallBinding } from '../../../innerCallOuter.js';
 import { recordSourceClock } from '../evidence/sourceClock.js';
 import { madeInRun } from '../evidence/madeInRun.js';
+import { createSourceEvidenceAccess } from '../../../sourceEvidence/access.js';
+import { sourcePublicationSink } from '../../../sourceEvidence/publications.js';
+import { permitSourceEvidence } from '../../../sourceEvidence/permissions.js';
+import { bindSourceEvidenceAccess } from '../../../../../tools/sourceEvidenceAccess.js';
 
 interface ToolContextOperationsLinks {
   readonly runFactsOf: ToolResourcesOperations['runFactsOf'];
@@ -38,6 +42,7 @@ interface ToolContextOperationsLinks {
   readonly credentialsIn: ToolCredentialsOperations['credentialsIn'];
   readonly hasCredentials: boolean;
   readonly toolProgress: ToolProgressOperations['toolProgress'];
+  readonly lookupTool: ToolCatalogOperations['lookupTool'];
   /** Read only when an inner `read_skill` is put to the skill-read question. */
   readonly parkedNow: ToolCatalogOperations['parkedNow'];
 }
@@ -51,11 +56,46 @@ export function buildToolContextOperations(
     | 'isRunRetired'
     | 'time'
     | 'artifactStore'
+    | 'sourceEvidenceConfig'
     | 'permissionChecker'
     | 'toolMiddleware'
   >,
   links: ToolContextOperationsLinks,
 ): ToolContextOperations {
+  const readerAccess = (
+    scope: TypedScope<AgentState>,
+    artifacts: ToolArtifacts,
+    requester: string,
+  ): object => {
+    const options = deps.sourceEvidenceConfig;
+    if (options === undefined) return {};
+    const nativeRun = links.runFactsOf(scope)?.runId;
+    return bindSourceEvidenceAccess(
+      createSourceEvidenceAccess({
+        options,
+        artifacts,
+        index: () => scope.sourceEvidence,
+        currentProducer: (name) => links.lookupTool(name),
+        active: () =>
+          !deps.isRunRetired() &&
+          deps.currentRun?.().runId === nativeRun &&
+          scope.policyHaltReason === undefined,
+        permit: (candidate, context) => {
+          const tool = links.lookupTool(candidate.producer.name);
+          return tool === undefined
+            ? Promise.resolve(false)
+            : permitSourceEvidence(
+                scope,
+                deps.permissionChecker,
+                tool,
+                candidate,
+                context,
+                requester,
+              );
+        },
+      }),
+    );
+  };
   /**
    * `ctx.artifacts` + `ctx.hasArtifacts` for one dispatch — the claim-check
    * capability, shaped exactly like `ctx.credentials` (9.21.0).
@@ -87,8 +127,12 @@ export function buildToolContextOperations(
     scope: TypedScope<AgentState>,
     toolName: string,
     toolCallId: string,
+    capturePublications = false,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
     const bindRun = links.runFactsOf(scope);
+    let retainPublication:
+      | ((meta: import('../../../../../artifacts/types.js').ArtifactMeta) => void)
+      | undefined;
     const emitFact = <K extends AgentfootprintEventType>(
       type: K,
       payload: AgentfootprintEventMap[K]['payload'],
@@ -109,6 +153,7 @@ export function buildToolContextOperations(
       switch (fact.type) {
         case 'minted': {
           const meta = fact.meta;
+          retainPublication?.(meta);
           emitFact('agentfootprint.artifacts.minted', {
             ref: meta.ref,
             kind: meta.kind,
@@ -174,7 +219,8 @@ export function buildToolContextOperations(
       origin: { ...(bindRun?.runId !== undefined && { runId: bindRun.runId }), toolCallId },
       onEvent,
     });
-    return { artifacts, hasArtifacts: true };
+    if (capturePublications) retainPublication = sourcePublicationSink(artifacts);
+    return { artifacts, hasArtifacts: true, ...readerAccess(scope, artifacts, toolName) };
   };
 
   /**
@@ -226,6 +272,7 @@ export function buildToolContextOperations(
       innerContext: (name, innerId) => {
         // An inner call runs inside the same run, under the same policy.
         const redact = policyInForce(scope);
+        const facts = deps.sourceEvidenceConfig !== undefined ? links.runFactsOf(scope) : undefined;
         return {
           toolCallId: innerId,
           iteration: call.iteration,
@@ -250,6 +297,12 @@ export function buildToolContextOperations(
             iteration: call.iteration,
           }),
           ...mcpClientUseFor(scope, { toolCallId: innerId }),
+          ...(deps.sourceEvidenceConfig !== undefined && {
+            ...(facts?.identity !== undefined && { identity: facts.identity }),
+            ...(facts?.runId !== undefined && { runId: facts.runId }),
+            ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),
+            ...readerAccess(scope, toolArtifacts(scope, name, innerId).artifacts, name),
+          }),
         };
       },
     }),
