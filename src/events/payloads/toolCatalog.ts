@@ -46,8 +46,9 @@ export interface ToolsDiscoveryCompletedPayload {
 
 /**
  * Emitted when a custom `ToolProvider.list(ctx)` throws or rejects.
- * The iteration is aborted; a configured `reliability` rule decides
- * whether to retry, fall back, or fail-fast. `providerId` lets
+ * The run then rejects with that error; a configured `.reliability()`
+ * rule never sees it (the rules wrap only the LLM provider call), so
+ * retry or fall back inside the provider's `list()`. `providerId` lets
  * consumers route alerts to the right hub adapter (rube / mcp /
  * custom-discovery). `durationMs` measures how long the failed call
  * spent before throwing, so timeouts vs immediate rejections are

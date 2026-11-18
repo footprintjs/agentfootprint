@@ -23,7 +23,7 @@ The flowchart, recorders, narrative, tests don't change. **Ship the patterns fir
 
 ### 1. Multi-tenant identity at every `agent.run()`
 
-Every memory call namespaces by `MemoryIdentity`. When you omit `identity`, the agent defaults to `{ conversationId: '<runId>' }` — fine for prototypes, but it isolates by run rather than by tenant, so it's DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
+Every memory call namespaces by `MemoryIdentity`. When you omit `identity`, the agent derives one: `{ conversationId: sessionId }` when the run carries a `sessionId` (as `standingAgent` passes for every served request), otherwise `{ conversationId: '<runId>' }`. That is fine for prototypes, but it scopes by session or by run, never by tenant, so it's DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
 
 ```ts
 const identity = {
@@ -34,7 +34,7 @@ const identity = {
 await agent.run({ message: req.body.message, identity });
 ```
 
-A bug that omits `tenant` surfaces as "no data found" — never as a cross-tenant leak. Adapters refuse cross-tenant reads at the storage boundary.
+A bug that passes the WRONG `tenant` reads an empty scope — "no data found", never another tenant's data — because the namespace is the whole identity tuple. A bug that OMITS `tenant` is not refused: a missing tenant is one shared single-tenant scope (the segment `_`), so tenant-less calls from different tenants with the same `principal` and `conversationId` read and overwrite the same memory. Always pass `tenant` in a multi-tenant app.
 
 ### 2. Peer-dep SDKs installed
 
@@ -141,7 +141,7 @@ The reliability + governance surfaces that were once roadmap items are live:
 ## Anti-patterns
 
 - Don't wire production keys into your test suite. Use `mock(...)` for tests; reserve real keys for staged env.
-- Don't omit identity in production. Default-global is a footgun.
+- Don't omit identity in production. The default scopes by session (`sessionId`) or by run, never by tenant — and an identity without `tenant` is one scope shared by every tenant that omits it.
 - Don't cache the agent instance across requests when memory is involved. Build fresh per request; the memory layer handles state.
 
 ## Next steps

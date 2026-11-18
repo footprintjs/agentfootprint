@@ -290,15 +290,22 @@ export interface AgentEngineSessions extends SessionLifecycle {
  * Conversations in Vertex AI's session service — the store that survives a
  * fleet, not just a restart.
  *
- * **Status: field-validated except the write verb, which is field-CORRECTED.**
- * An independent trial ran this adapter against a live Agent Runtime engine
- * (2026-08-14) and everything below answered a real request from Google:
+ * **Status: contract-shaped and tested — not promoted.** `docs/ADAPTER_STATUS.md`
+ * owns this rung. Ownership under concurrent or interleaved live writes is NOT
+ * established: the field trial found a security-sensitive ownership invariant
+ * that did not hold under repeated live interleavings (tracked privately), and
+ * the 9.45.0 fix for an audited ownership race is held only by a test double.
+ * The row moves only when a fresh live trial says so.
+ *
+ * What did pass live, one case at a time: an independent trial ran this
+ * adapter against a live Agent Runtime engine (2026-08-14) and everything
+ * below answered a real request from Google:
  * creating first-turn sessions from real envelopes, hydrating them through a
  * fresh instance, owners preserved, paged `listByUser` filtering, `ownerOf`,
  * an unknown envelope format refused before storage, and idempotent `forget`.
  *
- * The one thing that FAILED was the second write to an existing session — the
- * core job — because 9.29.0 patched `sessionState` and the service refuses
+ * The one single-case check that FAILED was the second write to an existing
+ * session — the core job — because 9.29.0 patched `sessionState` and the service refuses
  * that. The trial recovered the service's own words and verified the repair
  * path (`appendEvent` with `actions.stateDelta`, then a `GET` showing the new
  * state) with a raw diagnostic. This adapter now uses that verb; the repair is

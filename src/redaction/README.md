@@ -29,7 +29,7 @@ the agent computes on or hands back to its caller**.
 | Covered — the placeholder where a selected value was | Never covered — real values |
 |---|---|
 | the commit log (scrubbed at write, by footprintjs) | the model's input |
-| `getLastSnapshot()` — footprintjs's redacted view | the answer `run()` returns; a host's streamed reply; `toSSE({ format: 'text' })` |
+| `getLastSnapshot()` — footprintjs's redacted view, except the final answer in its boundary log (`run.exit`) once a recorder such as `recordRun` is attached ([Named limits](#named-limits)) | the answer `run()` returns; a host's streamed reply; `toSSE({ format: 'text' })` |
 | the narrative (`getLastNarrativeEntries()`) | the conversation it continues: `checkpoint()`, `followUp`, `continueFrom`, a host's session store |
 | every typed event — `agent.on`, recorders on the executor, the deferred tier | the resume checkpoints: a pause's `checkpoint`, `RunCheckpointError.checkpoint` |
 | recordings (`recordRun`, packed or plain), traces, strategies (otel, file, audit, console, CloudWatch, X-Ray, AgentCore) | memory — what a later run recalls, a causal snapshot's tool calls included (`defineMemory({ redact })` is refused; `../memory/redactRefusal.ts`) |
@@ -379,7 +379,8 @@ bytes, for any recording — an agent's or a chart's.)
   string, and footprintjs serves an unnamed root output as it is: a recording's
   `run.exit` boundary payload, the step graph's run node (`exitPayload`) and the
   `onRunEnd` payload of a recorder you attach carry the answer whatever the
-  policy. The vocabulary keeps it out of state and every event (`turn_end`'s
+  policy — and so does `getLastSnapshot()`, whose recorder rows include that
+  `run.exit` payload once such a recorder (for example `recordRun`) is attached. The vocabulary keeps it out of state and every event (`turn_end`'s
   `finalContent`, the streamed tokens); the run's output stays. Closing it needs
   a chart to name its output for footprintjs's rule — a footprintjs change.
 - **A copy under a new name inside a stage.** In STATE, a value written under

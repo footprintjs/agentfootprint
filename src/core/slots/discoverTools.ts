@@ -77,8 +77,10 @@ export async function discoverTools(
     emitListUses(scope, ctx);
     // Discovery failure is loud by design. Emit the typed event
     // with the providerId so consumers can route alerts; then
-    // re-throw so a configured `reliability` rule decides whether
-    // to retry / fall back / fail-fast. Silently dropping tools
+    // re-throw, which rejects the run. `.reliability()` does not see
+    // this error: it wraps only the LLM provider call in CallLLM, and
+    // this runs in the Tools slot before it. Retry or fall back belongs
+    // inside the provider's own `list()`. Silently dropping tools
     // mid-conversation creates non-deterministic agent behavior
     // harder to debug than a crash.
     const errMessage = err instanceof Error ? err.message : String(err);

@@ -3,8 +3,13 @@
  *
  * `buildDynamicReactAgent` here is the SAME function the Dynamic ReAct embed shows
  * (via <CodeFile region="demo">) AND executes when a reader hits Run. This check
- * runs it in Node and asserts the full 4-iteration Dynamic ReAct flow completes, so
- * a broken demo fails the docs build — not the reader's browser.
+ * runs it in Node and asserts what the run DID — each tool's own result, read off
+ * the `stream.tool_start` / `stream.tool_end` events — so a broken demo fails the
+ * docs build, not the reader's browser.
+ *
+ * Why not the final answer alone: the demo's mock LLM SCRIPTS that text, so it
+ * comes back word for word even when the skill never loaded, redaction returned
+ * the raw email, or the refund threw. Only the tool results can tell.
  *
  *   Run:  npm run check:tryit   (from docs-next/; needs the library dist built)
  */
@@ -20,21 +25,54 @@ function fail(msg: string): never {
 }
 
 const agent = buildDynamicReactAgent();
+
+// What each tool call actually returned, in the order the calls ended.
+const toolNames = new Map<string, string>();
+const ended: { name: string; result: unknown; error: boolean }[] = [];
+agent.on('agentfootprint.stream.tool_start', (e) => {
+  toolNames.set(e.payload.toolCallId, e.payload.toolName);
+});
+agent.on('agentfootprint.stream.tool_end', (e) => {
+  ended.push({
+    name: toolNames.get(e.payload.toolCallId) ?? '(unknown call)',
+    result: e.payload.result,
+    error: e.payload.error === true,
+  });
+});
+
 const result = await agent.run({ message: MESSAGE });
 
 if (typeof result !== 'string') fail('agent paused unexpectedly (expected a final answer)');
 
-// The exact final answer proves the WHOLE flow ran in order:
-//   read_skill('billing') → redact_pii (→ [EMAIL]) → process_refund (→ $42) → final.
-// If any iteration broke (skill didn't load, redaction skipped, refund missed), this
-// string would differ.
+// The flow, proved by the tools' own results, in order:
+//   read_skill('billing') → redact_pii (→ [EMAIL]) → process_refund (→ $42).
+// Each step fails with its own message: the skill did not load (so the refund
+// tool was never unlocked), redaction let the raw email through, or the refund
+// failed.
+const seen = ended.map((t) => `${t.name}${t.error ? ' [error]' : ''} → ${String(t.result)}`).join('\n  ');
+const expectStep = (index: number, name: string, ok: (r: string) => boolean, what: string) => {
+  const step = ended[index];
+  if (!step || step.name !== name || step.error || !ok(String(step.result))) {
+    fail(`${what}.\n  tool calls that ended, in order:\n  ${seen || '(none)'}`);
+  }
+};
+if (ended.length !== 3) fail(`expected exactly 3 tool calls, got ${ended.length}:\n  ${seen || '(none)'}`);
+expectStep(0, 'read_skill', (r) => r.includes("Skill 'billing' activated"), 'the billing skill did not load');
+expectStep(
+  1,
+  'redact_pii',
+  (r) => r.includes('[EMAIL]') && !r.includes('alice@example.com'),
+  'redact_pii did not redact the email',
+);
+expectStep(2, 'process_refund', (r) => r === 'Refund of $42 issued.', 'process_refund did not issue the refund');
+
+// The final answer only proves the run COMPLETED (no throw, no pause, a 4th LLM
+// call): its text is scripted by the mock, so it says nothing about the tools.
 if (result !== EXPECTED) {
   fail(`final answer drifted.\n  expected: ${EXPECTED}\n  got:      ${result}`);
 }
-if (!result.includes('[EMAIL]')) fail('PII was not redacted — redact_pii did not run');
-if (!result.includes('$42')) fail('refund did not process — process_refund did not run');
 
-console.log('[check:tryit] OK — the demo ran the full 4-iteration Dynamic ReAct flow');
+console.log('[check:tryit] OK — read_skill, redact_pii and process_refund each returned what the flow needs, in order, and the run finished');
 console.log(`[check:tryit] answer: ${result}`);
 
 // ── Skill-graph demo: the builder draws the routing graph the embed shows. It is

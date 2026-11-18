@@ -257,7 +257,7 @@ jobs:
       # Built as the STATIC EXPORT, with the same root-path env docs.yml
       # deploys with, so this job measures the artifact that actually ships
       # instead of a near-miss of it. Same page render, same twoslash gate.
-      - name: Build docs-next static export (twoslash-gates every code block)
+      - name: Build docs-next static export (twoslash-gates every "ts twoslash" block)
         working-directory: docs-next
         env:
           EXPORT: 'true'

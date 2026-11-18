@@ -1016,13 +1016,23 @@ notes = json.load(open("node_modules/agentfootprint/canonical-notes.json"))
 ABSENCE_NOTE = notes["notes"]["ABSENCE_NOTE"]
 ABSENCE_MARKER = notes["markers"]["ABSENCE_MARKER"]   # "af_absent"
 
-def absent(checked, not_checked=(), cannot_cover=()):
-    return {ABSENCE_MARKER: {
+# The envelope is FLAT: the marker's value is exactly True, and `checked`
+# is a non-empty list of {"what": ...} items beside it, or readAbsence
+# will not recognize it and the model reads plain data.
+def absent(looked_for, checked, not_checked=(), cannot_cover=()):
+    return {
+        ABSENCE_MARKER: True,
+        "outcome": "nothing_found",
+        "looked_for": looked_for,
         "checked": list(checked),
         "not_checked": list(not_checked),
         "cannot_cover": list(cannot_cover),
+        "retry_returns_the_same": True,
         "note": ABSENCE_NOTE,
-    }}
+    }
+
+absent("backup runs for vm-99",
+       [{"what": "every backup job in the export of 2026-08-19T10:12:00Z"}])
 ```
 
 Three things are worth knowing about the file:

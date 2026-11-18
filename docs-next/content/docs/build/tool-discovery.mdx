@@ -157,29 +157,36 @@ agent.on('agentfootprint.tools.discovery_failed', (e) => {
 
 Then re-throws — **discovery failure is loud by design**. Silently dropping tools mid-conversation produces non-deterministic agent behavior (the LLM saw `[a, b, c]` last turn, sees `[]` this turn, hallucinates one anyway) that's harder to debug than a crash.
 
-If you want graceful degradation, configure `.reliability(...)` to route the failure:
+A discovery failure **rejects the run**. `.reliability(...)` does not see it: its rules wrap only the LLM provider call in the CallLLM stage, and discovery runs earlier, in the Tools slot, so a `postDecide` rule that matches the discovery error is never asked. If you want graceful degradation, retry or fall back inside the provider's own `list()` (or in a wrapper around it), or catch the rejection at `agent.run()`:
 
 ```ts
+import type { ToolProvider } from 'agentfootprint/providers';
+
+// Retry inside the provider: the agent sees only the final outcome.
+function withRetry(inner: ToolProvider, attempts = 3): ToolProvider {
+  return {
+    id: inner.id,
+    async list(ctx) {
+      let lastError: unknown;
+      for (let i = 0; i < attempts; i++) {
+        ctx.signal?.throwIfAborted();
+        try {
+          return await inner.list(ctx);
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError; // still loud: discovery_failed fires and the run rejects
+    },
+  };
+}
+
 const agent = Agent.create({ provider: llm, model: 'claude-sonnet-4-5-20250929' })
-  .toolProvider(discoveryProvider({ hub: rubeAdapter, ttlMs: 60_000 }))
-  .reliability({
-    postDecide: [
-      {
-        when: (s) => s.error?.message?.includes('hub unreachable') === true && s.attempt < 3,
-        then: 'retry',
-        kind: 'discovery-transient',
-      },
-      {
-        when: (s) => s.error?.name === 'AbortError',
-        then: 'fail-fast',
-        kind: 'cancelled',
-      },
-    ],
-  })
+  .toolProvider(withRetry(discoveryProvider({ hub: rubeAdapter, ttlMs: 60_000 })))
   .build();
 ```
 
-The `discovery_failed` event still fires; the `reliability` rule decides whether to retry / fall back / fail-fast. See [Reliability gate](doc:reliability-gate).
+Each failed attempt inside the wrapper is invisible to the agent; only a failure that escapes `list()` fires `discovery_failed` and rejects the run.
 
 ## Observing discovery latency
 
@@ -209,7 +216,7 @@ The shipped `mcpClient({ transport })` is itself an async tool source — MCP's 
 - ❌ **Don't cache forever.** A stale catalog is worse than a slow one — the LLM sees tools that don't exist anymore. Use a TTL appropriate to your hub's change rate.
 - ❌ **Don't ignore `ctx.signal`.** When `agent.run({ env: { signal } })` aborts, your in-flight discovery should abort too. Holding the agent open past abort defeats cancellation.
 - ❌ **Don't return a different tool list every call without good reason.** The agent's reference-equality check sees a new array → rebuilds the schemas slot → invalidates provider cache markers. Fine when the catalog changed; wasteful when it didn't.
-- ❌ **Don't swallow errors silently.** Let the framework emit `discovery_failed` and re-throw. Use `.reliability(...)` for graceful retry — never `try { ... } catch { return [] }`.
+- ❌ **Don't swallow errors silently.** Let the framework emit `discovery_failed` and re-throw. Retry inside the provider's `list()` (as above) for graceful degradation — never `try { ... } catch { return [] }`. `.reliability(...)` does not cover discovery.
 
 ## When NOT to use async ToolProvider
 
@@ -222,6 +229,6 @@ The shipped `mcpClient({ transport })` is itself an async tool source — MCP's 
 - [Connect to an MCP server](doc:mcp-client) — the shipped MCP tool source in full
 - [Serve your tools over MCP](doc:mcp-serve) — `mcpServe(tools)`, the other direction
 - [Tool providers](doc:tool-providers) — `staticTools` / `gatedTools` / `skillScopedTools` (the sync 90% case)
-- [Reliability gate](doc:reliability-gate) — declarative retry / fallback / fail-fast over discovery failures
+- [Reliability gate](doc:reliability-gate) — declarative retry / fallback / fail-fast over the LLM provider call (not over discovery failures)
 - [Observability](doc:observability) — the three `tools.discovery_*` events in the full taxonomy
 - [`examples/features/10-discovery-provider.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/10-discovery-provider.ts) — the runnable file behind this page
