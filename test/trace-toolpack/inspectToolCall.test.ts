@@ -129,7 +129,8 @@ describe('inspect_tool_call — the join across four records', () => {
     // The step is still found — the fallback reads which committed history
     // first carries the call's result.
     expect(out).toMatch(/step: .*tool-calls#\d+/);
-    expect(out).toContain('outcome: ok');
+    expect(out).toContain('outcome: ⚠ unknown — this record does not say whether the tool ran');
+    expect(out).not.toContain('ran with: the proposed arguments');
   });
 
   it('a bad id never throws — it names the real ids instead', async () => {
@@ -294,9 +295,8 @@ async function settledBatch(
   };
 }
 
-/** A detached copy with every `notDispatched` key removed from plain objects,
- *  at any depth (anything else — a Map, a class instance — is kept as is). */
-function withoutMarker<T>(value: T): T {
+/** Copy a recording with every existing settlement marker replaced or removed. */
+function replaceMarker<T>(value: T, replacement?: unknown): T {
   const scrub = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(scrub);
     if (node === null || typeof node !== 'object') return node;
@@ -305,6 +305,7 @@ function withoutMarker<T>(value: T): T {
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
       if (key !== 'notDispatched') out[key] = scrub(child);
+      else if (replacement !== undefined) out[key] = replacement;
     }
     return out;
   };
@@ -363,12 +364,27 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
     expectNoRunClaims(out);
   });
 
+  it('a malformed history marker leaves the outcome unknown without an event tail', async () => {
+    const artifacts = await settledBatch({ withEvents: false });
+    const snapshot = replaceMarker(artifacts.snapshot, {});
+    const out = await callTraceTool(
+      traceToolpack({ ...artifacts, snapshot }),
+      'inspect_tool_call',
+      {
+        toolCallId: 'c3',
+      },
+    );
+    expect(out).toContain('outcome: ⚠ unknown — this record does not say whether the tool ran');
+    expect(out).not.toContain('was never executed');
+    expectNoRunClaims(out);
+  });
+
   it('the bracket speaks first: with every history marker scrubbed, its typed field alone still says so', async () => {
     // Since the field rides the stream too (`ToolEndPayload.notDispatched`),
     // the event tail answers on its own — the history is the fallback, not a
     // requirement.
     const artifacts = await settledBatch();
-    const scrubbed = { ...artifacts, snapshot: withoutMarker(artifacts.snapshot) };
+    const scrubbed = { ...artifacts, snapshot: replaceMarker(artifacts.snapshot) };
     expect(JSON.stringify(scrubbed.snapshot)).not.toContain('notDispatched');
     const out = await callTraceTool(traceToolpack(scrubbed), 'inspect_tool_call', {
       toolCallId: 'c3',
@@ -380,7 +396,7 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
 
   it('a bracket without the field is silence, not a denial: the history marker still decides', async () => {
     const artifacts = await settledBatch();
-    const events = (artifacts.events ?? []).map((event) => withoutMarker(event));
+    const events = (artifacts.events ?? []).map((event) => replaceMarker(event));
     expect(JSON.stringify(events)).not.toContain('notDispatched');
     const out = await callTraceTool(traceToolpack({ ...artifacts, events }), 'inspect_tool_call', {
       toolCallId: 'c3',
@@ -412,7 +428,7 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
     // knows the id at all — with no tail and an evicted history the call is
     // unknown, and the tool says so rather than guessing.
     const artifacts = await settledBatch({ evicted: true });
-    const events = (artifacts.events ?? []).map((event) => withoutMarker(event));
+    const events = (artifacts.events ?? []).map((event) => replaceMarker(event));
     expect(JSON.stringify(events)).not.toContain('notDispatched');
     const final = (artifacts.snapshot.sharedState as { history?: readonly LLMMessage[] }).history;
     expect((final ?? []).some((m) => m.toolCallId === 'c3')).toBe(false);
@@ -434,13 +450,8 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
     );
 
   it('a provider that reuses the settled id for a call that then RAN: that call decides — its step, outcome and duration', async () => {
-    // The join reads the LATEST result for an id; the marker follows the same
-    // rule on the stream and in history, so the call that ran is not reported
-    // as the one that was settled. The outcome and the duration are read off
-    // the LAST `tool_end` for the id (`traceToolpack/toolCallJournal.ts` ·
-    // `buildInspectToolCall`), and the step off the first bracket of a call
-    // that ran (`bracketsFor`) — never the settlement's, which comes first on
-    // the tail.
+    // The latest result, step, outcome and duration all refer to the reused
+    // call that ran. The earlier settlement remains a different occurrence.
     const artifacts = await settledBatch({ reused: 'ran' });
     const ends = bracketsOf(artifacts, 'tool_end');
     const starts = bracketsOf(artifacts, 'tool_start');

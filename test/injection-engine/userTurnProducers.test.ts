@@ -219,15 +219,18 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   ],
 
   // ── (c) never in history — request-only or transcript-only ──
-  'src/core/agent/stages/callLLM.ts': [
+  'src/core/agent/stages/stagedRefsNudge.ts': [
     {
       cls: 'never-in-history',
       why:
-        'the staged-refs nudge: appended to `wireMessages` for ONE request and recomposed ' +
-        'from scratch each iteration. `scope.history` is deliberately untouched — but a ' +
-        'reader of the request sees it last, so it opens with STAGED_DATA_FRAME_PREFIX (G17).',
+        'the staged-refs nudge (`stagedRefsNudgeFor`): CallLLM appends it to `wireMessages` ' +
+        'for ONE request and it is recomposed from scratch each iteration. `scope.history` ' +
+        'is deliberately untouched — but a reader of the request sees it last, so it opens ' +
+        'with STAGED_DATA_FRAME_PREFIX (G17).',
       opening: STAGED_DATA_FRAME_PREFIX,
     },
+  ],
+  'src/core/agent/stages/callLLM.ts': [
     {
       cls: 'never-in-history',
       why:
@@ -668,8 +671,8 @@ describe('what the model reads on those two calls survives being re-read', () =>
     const content = nudgeMessage().content;
     expect(content).not.toMatch(/have not run|has not run/);
     expect(content).not.toMatch(/Finish them/);
-    expect(content).toContain('had not run when the answer above was given');
-    expect(content).toContain('This message asked for them to be run');
+    expect(content).toContain('had not been completed when the answer above was given');
+    expect(content).toContain('This message asked for them to be completed');
     expect(content).not.toMatch(/\bthis call\b/i);
   });
 });

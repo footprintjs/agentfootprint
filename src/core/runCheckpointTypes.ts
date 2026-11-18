@@ -1,3 +1,4 @@
+import type { PlacedTicket } from './agent/placedTickets.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
@@ -27,6 +28,9 @@ export interface EvidenceRecoveryCheckpoint {
  * → v2 transitions will be supported via a migration helper.
  */
 export interface AgentRunCheckpoint {
+  /** Private policy inputs for trusted checkpoint storage. Keep this field alongside the
+   * checkpoint and out of logs and served records. History holds the shown arguments. */
+  readonly innerCallPolicyArgs?: import('../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
   /** Host-kept native source index. It contains refs only and does not authenticate an imported checkpoint. */
   readonly sourceEvidence?: SourceEvidenceIndex;
   /** Private admitted negative evidence; keep checkpoints on the trusted host. */
@@ -130,6 +134,13 @@ export interface AgentRunCheckpoint {
    * runtime that has never heard of it continues the conversation correctly.
    */
   readonly turnNumber?: number;
+  /**
+   * The placement tickets the library issued whose `role: 'tool'` messages the
+   * stored `history` still holds — so a continued conversation still knows
+   * which ticket-shaped results are the library's own (`placedTickets.ts`).
+   * Absent when there are none. Version 1 still, by the {@link folded} rule.
+   */
+  readonly placedTickets?: readonly PlacedTicket[];
   /**
    * WHO this conversation belongs to — the `identity` the stored run was
    * given, carried so that continuing it lands in the same namespace it

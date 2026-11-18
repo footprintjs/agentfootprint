@@ -108,7 +108,7 @@ Leave an argument out rather than guess"; the id pointed at `previous[]`) is why
 | `source` in `from` | Needs | Checked against (`checks.ts` · `checkSource`) | Traced as |
 |---|---|---|---|
 | `user` | `quote` | the quote in the PERSON's own messages (`lib/saidByPerson.ts` · `isSaidByPerson`, the window's), then the value in the quote — or a phrase the author declared for that value's own choice (`said`) | `said` + `matched: 'quote' \| 'phrase'`; the words found but the value not in them is a READING (`said` + `reading`) |
-| `result` | `id` | that one result's own bytes, read the way the evidence index reads a result (`evidence/resultCarries.ts` · `resultReader` over `evidence/evidenceIndex.ts` · `readResult`: numbers and booleans in compact JSON are found — also when a framework note follows the JSON, in several MCP text blocks and in a capped result's head (`evidence/servedJson.ts`); this layer's own note is past the tool-bytes boundary) | `result` (+ `setAside` when the model had declared that result `open`, `noise` or `ruled-out`; `argumentsFrom: 'listed' \| 'unlisted'` when the tool declares its grounds) |
+| `result` | `id` | that one result's own bytes, read the way the evidence index reads a result (`evidence/resultCarries.ts` · `resultReader` over `evidence/evidenceIndex.ts` · `readResult`: numbers and booleans in compact JSON are found — also when a framework note follows the JSON, in several MCP text blocks and in a capped result's head (`lib/servedJson.ts`); this layer's own note is past the tool-bytes boundary) | `result` (+ `setAside` when the model had declared that result `open`, `noise` or `ruled-out`; `argumentsFrom: 'listed' \| 'unlisted'` when the tool declares its grounds) |
 | `turn` | — | the person's earlier ANSWERS to the library's ask (the ledger's `answered` rows) of the same argument of the same tool, or of a period — any tool's — in a spelling that converts (`24h` ↔ `-24h`) | `answered` (+ `matched: 'spelling'`, `earlier`) |
 | `app` | — | the app's own text: `role: 'system'` messages, the composed system prompt (the library's own instructions left out), and `AgentOptions.externalGrounds` | `app` (+ `appSource`: the ground's label) |
 | `assumed` (or no entry) | — | nothing: the model's own | `model` |
@@ -517,9 +517,9 @@ declaration synchronously, at definition), the row's shape and its checkpoint ch
 on every armed agent's graph) and the composed-message marker (`core/messageFrom.ts`, which the
 compositions call) — the checks and the corpora load with the layer. Two small armed pieces stay static on purpose: the argument
 row's event (`findings/ledger.ts` · `emitArgumentRow`, inside the one writer's emit half) and
-the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`, which
-refuses before `ctx.tools.call` takes its sequence number — an `await` there would reorder
-concurrent inner calls). `test/trace-toolpack/browserGraph.test.ts` pins the split.
+the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`;
+`ctx.tools.call` numbers each inner call before its first `await`, so concurrent
+inner calls keep the order they were made in). `test/trace-toolpack/browserGraph.test.ts` pins the split.
 
 ## The period argument, and the results layer (honesty step 7b)
 
@@ -627,7 +627,7 @@ the PERFORMANCE block), and the resume adds no model call.
 - **Library suffixes on messages this layer did not annotate** (a step banner, an effect note,
   the repeated-call note) are read as they always were (adopted Q16), as text; they carry names
   and counts, never argument values — but a count can match a small number. What comes BEFORE
-  them is the tool's JSON, and it is read by the JSON grammar (`evidence/servedJson.ts`, through
+  them is the tool's JSON, and it is read by the JSON grammar (`lib/servedJson.ts`, through
   `evidenceIndex.ts` · `readResult` — the evidence gate reads it the same way): read whole as
   text, `{"id":4417}` would tokenise to `:4417`, and a number the tool returned would read as
   absent — a false `not-in-result`, then a needless ask.
@@ -664,9 +664,9 @@ the PERFORMANCE block), and the resume adds no model call.
 - **A kept answer that reaches a check-in rides the check-in's own evidence pack.** The
   check-in shows the person the arguments the call will run with (`core/checkin.ts` ·
   `CheckInRequest`, on its `checkin.request` event and its pause) in the tool's shown argument
-  view. Its evidence assembler receives that same masked view. Approval still names the
-  operation and public context; the consent binding, raw checkpoint and actual execution
-  retain the original arguments.
+  view, and names what it hides (`hiddenArgs`, bound into the request id). Approval still
+  names the operation and public context; the consent binding, raw checkpoint and actual
+  execution retain the original arguments.
 - **A raised miss behind a refused second pause.** A tool whose own `requestInput` carries an
   `absence` in the batch that asked settles as the refusal; that miss is not filed.
 - **Numeric bounds** (`minimum`, `maximum`) are not judged on the person's answer: the one

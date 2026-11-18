@@ -53,8 +53,11 @@ export { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
  * The compaction frame is the one such decision taken: the exempt corpus
  * (`evidenceIndex.ts` · `exemptFromRun`) reads a summary's carried lineage
  * (`LLMMessage.foldedExempt`) instead of its model-written text. That rule
- * lives beside the corpus, not here — this predicate also draws the turn
- * boundary in `evidenceFromHistory`, which the fix did not move.
+ * lives beside the corpus, not here.
+ *
+ * NOT the turn boundary. "Where does this turn begin?" is an authorship
+ * question, and `evidenceFromHistory` asks `isSaidByPerson` for it: this
+ * shorter list let a wrap-up frame or a summary start a new turn.
  */
 export function isLibraryAuthoredTurn(content: string): boolean {
   return (

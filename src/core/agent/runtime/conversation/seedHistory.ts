@@ -32,6 +32,9 @@ export interface PendingResumeHistory {
    */
   readonly turn?: number;
   readonly negatives?: NegativeCheckpoint;
+  readonly innerCallPolicyArgs?: import('../../../../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
+  /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */
+  readonly placedTickets?: readonly import('../../placedTickets.js').PlacedTicket[];
 }
 
 /**

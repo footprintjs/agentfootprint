@@ -1331,9 +1331,12 @@ with. The request to show the person is the pending ask the host replied with.
 **A question no answer can reach is closed, not held.** Some consent pauses can
 never be answered, whatever the decision: one stored by a release before
 requests were named (`'request-not-recorded'`), one whose call changed after the
-ask (`'call-changed'`), and a middleware ask made under rules the serving agent
+ask (`'call-changed'`), a middleware ask made under rules the serving agent
 no longer runs — a redeploy renamed, moved or removed a link after the asking
-one (`'chain-changed'`). Held, such a pause would hold the session for good. So
+one (`'chain-changed'`), and a check-in whose tool's argument view now hides
+other arguments than the person was told (`'view-changed'`, refused by the
+resume itself before the decision is spent). Held, such a pause would hold the
+session for good. So
 both doors close it: the next message continues the conversation, and every call
 the pause left open is settled for the model.
 

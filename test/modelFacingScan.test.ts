@@ -305,8 +305,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
     },
     {
       kind: 'unrepaired',
-      count: 2,
-      why: 'two unknown-tool-call RESULT corrections carry standing navigation imperatives; correctly flagged and unchanged by the file split',
+      count: 3,
+      why: 'two unknown-tool-call corrections and the retained-inner-record link carry navigation imperatives in tool results',
+    },
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the boundary line reports the absence of an inner record for the call in the current tool result',
     },
   ],
   'src/trace-toolpack/traceToolpack/innerRecords.ts': [
@@ -737,8 +742,15 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/pause.ts': [
     {
       kind: 'not-model-facing',
-      count: 5,
-      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape, or with a decision that does not answer the paused request (ResumeDecisionError, its `closed-by-host` sentence included — served as a 409 body, never on a model`s wire)',
+      count: 2,
+      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape (DecisionRequiredError, PauseAnswerRequiredError — never on a model`s wire)',
+    },
+  ],
+  'src/core/resumeDecisionMessage.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 4,
+      why: 'ResumeDecisionError`s sentences, moved out of pause.ts, for a decision that does not answer the paused request — its `closed-by-host` and `view-changed` sentences included — thrown to the caller of resume() and served as a 409 body, never on a model`s wire',
     },
   ],
   'src/core/runCheckpoint.ts': [
@@ -1436,12 +1448,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 130,
-        total: 212,
+        // The combined ledger includes the resume sentence and journal links.
+        files: 131,
+        total: 215,
         registry: 8,
-        ephemeral: 27,
-        unrepaired: 35,
-        notModelFacing: 142,
+        ephemeral: 28,
+        unrepaired: 36,
+        notModelFacing: 143,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

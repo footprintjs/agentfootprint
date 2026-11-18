@@ -38,6 +38,13 @@ here.
   once a later call that runs reuses its id. Settling those two doors with
   the marker is the named follow-up (`src/core/README.md` · "Not covered
   yet").
+  A call a tool made through `ctx.tools.call` whose function was entered
+  rides its outer call's result message (`LLMMessage.calls`) and follows that
+  call in the sequence, marked `inner: true`. Example: `[assistant: compose#c1]
+  [tool c1: 'ok', calls: [read_secret]]` gives `[compose, read_secret
+  (inner)]`. Until the outer call's result lands, the next inner call's
+  checker gets the same entries from the run's `innerToolCalls` rows
+  (`core/agent/stages/toolCalls/access/innerCallGates.ts`).
 - `skillTarget.ts` — one spelling, one owner.
 - `thinkingRedaction.ts` — the deliberate two-view split: unredacted to the
   provider for signature round-trip, redacted into `scope.history`.

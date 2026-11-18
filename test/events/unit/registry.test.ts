@@ -86,7 +86,7 @@ describe('event registry — names + exhaustiveness', () => {
   // them by name. Completeness is proven by
   // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
   // the emitted set from src/ instead of trusting a hand-maintained number.
-  it('ALL_EVENT_TYPES has exactly 131 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 132 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 fallback
@@ -257,7 +257,8 @@ describe('event registry — names + exhaustiveness', () => {
     // the client it touched, why a replacement opened, a refusal's word; ids,
     // digests and outcomes only, never an identity, a session id or a result.
     // +1 context.recorded: explicit opt-in complete logical-call context.
-    expect(ALL_EVENT_TYPES.length).toBe(131);
+    // +1 skill.step_held: a step's tool declared failure or unfinished work.
+    expect(ALL_EVENT_TYPES.length).toBe(132);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

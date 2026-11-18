@@ -298,7 +298,8 @@ function rowsetReading(
   if (keptOut?.(data) === true)
     return { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' };
   if (!isRecord(data)) return { emptiness: 'unknown', undeclaredShape: false };
-  // The library's own placement: the whole result is in the store, and its ticket counts bytes.
+  // A placement ticket by its SHAPE: no receipt reaches this reader (`placedTickets.ts`), so a
+  // tool's own ticket-shaped JSON reads the same. Either way the verdict is `unknown`.
   if (isPlacedToolResult(data)) return UNCOUNTED_TICKET;
   if (rowsAt === undefined) return { emptiness: 'unknown', undeclaredShape: true };
   // Own keys only. A key set to `undefined` is gone too — its JSON (the history, a saved

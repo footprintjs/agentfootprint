@@ -1,9 +1,15 @@
 import type { FlowchartCheckpoint, RedactionMarks, RedactionPolicy } from 'footprintjs';
 import { copyJson, ownData } from '../lib/boundedJson.js';
+import {
+  INNER_CALL_POLICY_KEY,
+  innerCallPolicyOf,
+  innerCallPolicyReferences,
+} from './innerCallPolicyCarrier.js';
 import type { RedactionCoverage } from './coverage.js';
 import type { RunRedaction } from './runRedaction.js';
 import { policyOfMarks, unionRedactionPolicies } from './policy.js';
 import {
+  checkpointOwnSlot,
   checkpointOwnValue,
   checkpointStateSlot,
   checkpointStateValue,
@@ -14,6 +20,7 @@ import {
 } from './privateCaller.js';
 import {
   PRIVATE_FIELDS_KEY,
+  addPrivateRecordFields,
   readPrivateRecordFields,
   type PrivateRecordFields,
 } from './privateFields.js';
@@ -22,7 +29,8 @@ export function privateFieldsOfCheckpoint(
   checkpoint: FlowchartCheckpoint,
 ): PrivateRecordFields | undefined {
   const slot = checkpointStateSlot(checkpoint, PRIVATE_FIELDS_KEY);
-  return slot.present ? readPrivateRecordFields(slot.value) : undefined;
+  const fields = slot.present ? readPrivateRecordFields(slot.value) : undefined;
+  return nativeInnerPolicyFields(checkpoint, fields);
 }
 
 export function callerOfCheckpoint(checkpoint: FlowchartCheckpoint): PrivateCallerDeclaration {
@@ -38,9 +46,12 @@ export function checkpointWithPrivateFields(
   fields: PrivateRecordFields | undefined,
   coverage?: RedactionCoverage,
 ): FlowchartCheckpoint {
-  if (fields === undefined) return checkpoint;
+  const admitted = nativeInnerPolicyFields(
+    checkpoint,
+    fields === undefined ? undefined : readPrivateRecordFields(fields),
+  );
+  if (admitted === undefined) return checkpoint;
   if (coverage === undefined) throw new TypeError('Unknown checkpoint caller coverage.');
-  const admitted = readPrivateRecordFields(fields);
   const prior = readPrivateCaller(checkpointStateValue(checkpoint, 'runRedaction'), admitted);
   if (coverage.state === 'declared-none' && prior.state === 'policy')
     throw new TypeError('Conflicting checkpoint caller coverage.');
@@ -124,4 +135,28 @@ export function resumePoliciesOf(
     return { caller, serving: unionRedactionPolicies(declared, caller) };
   }
   return { caller: handedDown, serving: unionRedactionPolicies(declared, handedDown, marks) };
+}
+
+/** The raw native state may live at the root or on its captured component path. */
+function nativeInnerPolicyFields(
+  checkpoint: FlowchartCheckpoint,
+  fields: PrivateRecordFields | undefined,
+): PrivateRecordFields | undefined {
+  const root = checkpointOwnValue(checkpoint, 'sharedState');
+  const subflows = checkpointOwnValue(checkpoint, 'subflowStates');
+  let admitted = fields;
+  const states = subflows == null ? [] : Object.values(ownData(subflows));
+  for (const state of [root, ...states]) {
+    if (state === undefined || state === null) continue;
+    if (innerCallPolicyOf(state) === undefined) continue;
+    innerCallPolicyReferences(checkpointOwnValue(state, 'history'));
+    const local = state === root ? undefined : checkpointOwnSlot(state, PRIVATE_FIELDS_KEY);
+    const localFields = local?.present ? readPrivateRecordFields(local.value) : undefined;
+    if (admitted?.keys.includes(INNER_CALL_POLICY_KEY)) continue;
+    if (!localFields?.keys.includes(INNER_CALL_POLICY_KEY)) {
+      throw new TypeError('The native checkpoint must keep inner-call policy arguments private.');
+    }
+    admitted = addPrivateRecordFields(admitted, [{ root: INNER_CALL_POLICY_KEY, path: '' }]);
+  }
+  return admitted;
 }

@@ -6,12 +6,14 @@ title: ToolResultStatus
 
 > **ToolResultStatus** = `"success"` \| `"failure"` \| `"denied"` \| `"invalid"` \| `"partial"` \| `"pending"` \| `"absent"`
 
-Defined in: [src/semantics/toolOutcome.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolOutcome.ts#L38)
+Defined in: [src/semantics/toolOutcome.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolOutcome.ts#L40)
 
 Normalized outcome of one tool call, declared by the tool itself. Seven
 values, deliberately closed: routing keyed on meaning needs a vocabulary
-both sides spell identically. A string outside this set makes the value
-NOT an envelope (data path, unchanged).
+both sides spell identically. A word a tool wrote is read by this
+module's `readToolResultStatus`: another case or surrounding spaces still
+name the same word, and a string that names none of the seven makes the
+value NOT an envelope (data path, unchanged).
 
 `'absent'` is the seventh (the `absent()` primitive, from field use), and
 it earns its own word rather than folding into `'success'` or `'failure'`

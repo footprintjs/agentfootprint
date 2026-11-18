@@ -23,12 +23,24 @@
  * real values. It is the form the RECORD may show: the dispatch path compares it
  * with the model's proposal (`changedArgKeys` below) and stamps the NAMES of
  * the keys that differ on `stream.tool_end` (`events/payloads.ts` ·
- * `ToolEndPayload`), never their values.
+ * `ToolEndPayload`), never their values. A check-in shows a person this form
+ * too, and names the arguments it hides (`hiddenArgNames` below →
+ * `CheckInRequest.hiddenArgs`), so an approval given on a hidden value is
+ * given knowingly and recorded as such.
  */
 import type { RedactionPolicy } from 'footprintjs';
 import { RedactionRule } from 'footprintjs/advanced';
 
 import type { ToolArgs } from '../tools/runChain.js';
+import { frozenView } from '../lib/frozenCopy.js';
+import { isJsonFaithful } from '../lib/jsonFaithful.js';
+import {
+  ARGUMENT_PLACEHOLDER,
+  argumentNames,
+  copyArgumentDisplay,
+  maskArguments,
+  readArgumentRecord,
+} from '../lib/argumentDisplay.js';
 
 /** The registry symbol a tool carries its arguments view under. */
 export const SHOWN_ARGS: unique symbol = Symbol.for('agentfootprint.tool.shownArgs');
@@ -51,7 +63,7 @@ export interface ShowsArgs {
  * remembers marked keys for a run, and two calls are not one run.
  */
 export function argsRedactedBy(policy: RedactionPolicy): ShownArgs {
-  return (args) => new RedactionRule(policy).retainRecord(args, 'REDACTED');
+  return (args) => new RedactionRule(policy).retainRecord(args, ARGUMENT_PLACEHOLDER);
 }
 
 /**
@@ -67,20 +79,118 @@ export function carriesArgumentView(tool: unknown): boolean {
   );
 }
 
-/**
- * What an event may say `tool` was called with: its own view when it carries
- * one, else the arguments themselves (same reference). Never throws — a view
- * that fails hides everything rather than show what it could not judge.
- */
-export function shownArgsOf(tool: unknown, args: ToolArgs): ToolArgs {
-  if (tool === null || typeof tool !== 'object') return args;
-  const view = (tool as Partial<ShowsArgs>)[SHOWN_ARGS];
-  if (typeof view !== 'function') return args;
+interface ArgumentView {
+  readonly shown: ToolArgs;
+  readonly hiddenArgs: readonly string[];
+  readonly uncertain?: true;
+}
+
+function viewOf(tool: unknown): ShownArgs | undefined {
+  if (!carriesArgumentView(tool)) return undefined;
+  return (tool as ShowsArgs)[SHOWN_ARGS];
+}
+
+function readView(view: ShownArgs, args: ToolArgs, previous?: ToolArgs): ToolArgs | undefined {
   try {
-    return view(args);
+    return readArgumentRecord(previous ?? view(args));
   } catch {
-    return Object.fromEntries(Object.keys(args).map((key) => [key, 'REDACTED']));
+    return undefined;
   }
+}
+
+/** What an argument view lets the record show. A failed view masks every name. */
+export function shownArgsOf(tool: unknown, args: ToolArgs): ToolArgs {
+  const view = viewOf(tool);
+  if (view === undefined) return args;
+  // Preserve unchanged value identity for callers measuring which arguments the view changed.
+  if (readArgumentRecord(args) === undefined) return maskArguments(argumentNames(args));
+  const input = frozenView(args);
+  const output = input === undefined ? undefined : readView(view, input);
+  const copy = copyArgumentDisplay(output);
+  if (input === undefined || output === undefined || copy === undefined)
+    return maskArguments(argumentNames(args));
+  if (!isJsonFaithful(args)) return copy;
+  const fields = Object.entries(output);
+  if (
+    fields.length === Object.keys(input).length &&
+    fields.every(([name, value]) => Object.hasOwn(input, name) && Object.is(value, input[name]))
+  )
+    return args;
+  return Object.fromEntries(
+    fields.map(([name, value]) => [
+      name,
+      Object.hasOwn(input, name) && Object.is(value, input[name]) ? args[name] : copy[name],
+    ]),
+  );
+}
+
+function allHidden(args: ToolArgs): ArgumentView {
+  const hiddenArgs = Object.freeze([...argumentNames(args)]);
+  return { shown: maskArguments(hiddenArgs), hiddenArgs, uncertain: true };
+}
+
+/**
+ * Read the view once over the frozen call. A missing, replaced or rebuilt key is
+ * hidden. An unchanged string is checked using another string with all siblings
+ * intact. If the probe cannot establish that the value is visible, mask it too.
+ * This reading assumes a view is a function of its input. An unchanged
+ * non-string cannot be distinguished from an equal custom placeholder.
+ */
+export function argumentViewOf(
+  tool: unknown,
+  args: ToolArgs,
+  input = frozenView(args),
+  previous?: ToolArgs,
+): ArgumentView | undefined {
+  const view = viewOf(tool);
+  if (view === undefined) return input === undefined ? undefined : { shown: input, hiddenArgs: [] };
+  if (input === undefined || readArgumentRecord(args) === undefined) return allHidden(args);
+  const output = readView(view, input, previous);
+  const copy = copyArgumentDisplay(output);
+  if (output === undefined || copy === undefined) return allHidden(args);
+
+  const hiddenArgs: string[] = [];
+  const uncertain: string[] = [];
+  for (const key of argumentNames(input)) {
+    const value = input[key];
+    if (!Object.hasOwn(output, key) || !Object.is(output[key], value)) {
+      hiddenArgs.push(key);
+    } else if (typeof value === 'string') {
+      const candidate = `\u0000agentfootprint.shownArgs.standIn:${key}`;
+      const standIn = candidate === value ? `${candidate}\u0000` : candidate;
+      const probe = readView(view, Object.freeze({ ...input, [key]: standIn }));
+      if (probe?.[key] !== standIn) {
+        hiddenArgs.push(key);
+        uncertain.push(key);
+      }
+    }
+  }
+  const shown =
+    uncertain.length === 0 ? copy : Object.freeze({ ...copy, ...maskArguments(uncertain) });
+  return { shown, hiddenArgs: Object.freeze(hiddenArgs) };
+}
+
+/** Names only, for private-answer marks and the resume check. */
+export function hiddenArgNames(tool: unknown, args: ToolArgs, shown?: ToolArgs): readonly string[] {
+  if (!carriesArgumentView(tool)) return [];
+  // A caller supplying the view's output compared it against this same input.
+  return (
+    argumentViewOf(tool, args, shown === undefined ? frozenView(args) : args, shown)?.hiddenArgs ??
+    []
+  );
+}
+
+/** Browser view fields. A proposal that can change before check-in is withheld conservatively. */
+export function shownFieldsOf(
+  tool: unknown,
+  args: ToolArgs,
+  protectProposal = false,
+): { readonly shownArgs?: ToolArgs; readonly hiddenArgs?: readonly string[] } {
+  if (!carriesArgumentView(tool)) return {};
+  const view = protectProposal ? allHidden(args) : argumentViewOf(tool, args);
+  return view === undefined || (!view.uncertain && view.hiddenArgs.length === 0)
+    ? {}
+    : { shownArgs: view.shown, hiddenArgs: view.hiddenArgs };
 }
 
 /**

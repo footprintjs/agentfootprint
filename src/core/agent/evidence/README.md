@@ -52,7 +52,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `figureUnits.ts` | the one measurement-unit vocabulary, shared by figures and ranges |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
-| `servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
+| `../../../lib/servedJson.ts` | a served result that is NOT one JSON value, read by the JSON grammar: its leading value(s) — the tool's JSON before a framework note (a step banner, an effect note, the repeated-call note), an MCP text result's several blocks — and the text after them, and the complete leaves of JSON cut short (a capped result's `head`, a tool that truncated its own output) — never the token the cut falls inside — plus, when the cut falls inside a string, that string's whole words up to its last space, read as text (the word the cut may have split is left out: `mo` may be `more`). Read whole as text, `{"id":4417}` tokenises to `:4417`: every number and boolean the tool returned read as absent, a false flag at the gate and a false `not-in-result` in the inputs layer. Text that opens with a bracket and is not JSON stays text |
 | `resultCarries.ts` | one result, read the index's way (`evidenceIndex.ts` · `readResult`), asked for one value (`resultReader`, `resultCarries`) — the inputs layer's declared-sources check asks whether a result carries the value the model says it took from it; loaded with that layer, never on a plain agent's graph |
 | `figures.ts` | the figures dial (`figures: true`): which numbers the answer writes wearing a unit (`figureNumbersOf`), the results' numbers folded for the derivation question (`figureBasisOf`), and the question itself (`explainFigure`) — a closed set of derivations, at the answer's own precision. Loaded through `import()` by Route under the dial only (`stages/route.ts` · `loadFigures`; pinned off the root graph by `test/trace-toolpack/browserGraph.test.ts`) |
 | `answerCarriers.ts` | which of THIS turn's results the answer's values were read from (`answerCarriersOf`) — identities and counts, the whole list or none; rides `evidence_checked` as `carriedBy` |
@@ -535,7 +535,7 @@ What each check reads AFTER a fold:
 
 | Input | Source after the fold |
 |---|---|
-| exempt corpus | the current request, the live user/system turns (corrections and summary TEXT excluded), the live typed-ask answers, every summary's `foldedExempt`, the system-prompt injections, declared defaults, answered values — each text with its date and clock-time spellings |
+| exempt corpus | the current request, the live user/system turns (corrections and summary TEXT excluded), the live typed-ask answers the library landed, every summary's `foldedExempt`, the system-prompt injections, declared defaults, answered values — each text with its date and clock-time spellings |
 | evidence corpus (gate) | the `role: 'tool'` messages still in the window — a folded result is gone, exactly as a dropped one is; the pins (`keepLastToolResults`, the ledger-fact pin) decide which results stay |
 | carriers + standing (contingent) | carriers from this turn's live tool messages; standing from `scope.findingsLedger`, which compaction never touches — a folded result keeps its standing under its `toolCallId`, and a value whose only carrier was folded has no carrier, so it files no contingent row and is judged by the gate as ungrounded unless exempt |
 
@@ -561,64 +561,18 @@ Pinned by `test/core/agent/evidence/summary-exemption.test.ts`.
 
 ## The person's typed answer, and how they spell a date or a time
 
-**A typed ask's answer is the person's words, and a date or clock time the
-person (or the app) wrote is exempt in its other spellings. Nothing else is
-widened: a value is exempt only when it IS, or respells, something the person
-or the app said.** One owner each: `evidenceIndex.ts` · `typedAskAnswerOf`
-(read by `addHistoryExempt`, so the corpus and a fold's lineage take it the
-same way) and `time/forms.ts` · `timeFormsOf`'s `said` list for a text
-(read through `evidenceIndex.ts` · `addExempt`, the exempt corpus's one text
-door — until time step T7 this was a table private to this folder,
-its `dateAndClockForms` in `normalize.ts`; the job moved, the cases did not).
+**A typed ask's answer is the person's words only when the library landed it
+(its mark, `LLMMessage.answersAsk`, read by `../../../tools/typedAnswer.ts` ·
+`landedTypedAnswer`); a date or clock time the person or the app wrote is
+exempt in its other spellings.** The rules, the reasons, the examples, and
+how the mark is restored are in [person-values.md](person-values.md).
 
-Why: a person asked "what clients connected to SHISOLPLPAP006 during 10/09/26
-8 Am to 8:40 AM PST" and answered the app's typed ask (`requestInput`) with
-Date `2026-10-09`. The answer said "8:00 to 8:40 AM … 2026" and was marked
-"2 values not traced" — `8:00` and `2026`, both the person's. Three gaps:
-
-1. The typed answer lands as a `role: 'tool'` message (`input_received`), so
-   it was read as a tool OBSERVATION, never as the person's words — windowed
-   like a result, absent from a fold's lineage, and indexed as the token
-   `2026-10-09`, which never matches `2026`.
-2. Nothing indexed a date's components.
-3. Nothing read `8 Am` (two tokens: `8`, `am`) as the `8:00` an answer writes.
-
-The rules, each a SPELLING and never a reading:
-
-| the person wrote | also exempt | never |
-|---|---|---|
-| a typed-ask field they answered (`origins[field] === 'response'`) | the value, its tokens, and its spellings below | a field the asking tool supplied (`'declaration'`) — it stays the tool's words, in the evidence corpus; a field the redaction rules hid (it reads as its placeholder) |
-| an ISO date `2026-10-09` | `2026`, `10`, `9` | `10/09/2026` or `09/10/2026` — slash order is a locale, and picking one is reading the date |
-| `8 Am`, `8:40 AM`, `8pm`, `8:40 p.m.` | `8:00` `08:00` `8:00am` · `8:40` `08:40` · `20:00` `8:00pm` · `20:40` `8:40pm` | a pm reading as its am twin (`8:40 p.m.` never exempts `08:40`) |
-| `20:00`, `08:40` | `8:00` `8:00pm` · `8:40` `8:40am` | — the bound: `8:00 PM` tokenizes to `8:00`, so `20:00` also exempts an answer's `8:00`, the same hour on a 12-hour dial |
-| `2h`, `90 min` | nothing — a duration is not a time of day (design Q39) | |
-
-The tool-evidence index is NEVER widened by these forms: a tool's timestamp
-`2026-10-09` does not ground an answer's year `2026` — that stays the gate's
-question. A corpus with no date or clock time in it is byte-for-byte the one
-it always was.
-
-```ts
-timeFormsOf({ text: 'what connected 8 Am to 8:40 AM PST' }).said;
-// ['8:00', '08:00', '8:00am', '8:40', '08:40', '8:40am']
-timeFormsOf({ text: '2026-10-09' }).said; // ['2026', '10', '9']
-timeFormsOf({ text: 'took 2h' }).said;    // []
-
-// The answer to a typed ask, as `Agent.resume` lands it:
-const answered = {
-  role: 'tool', toolCallId: 'c1',
-  content: JSON.stringify({
-    status: 'input_received', requestId: 'r1',
-    values: { date: '2026-10-09' }, origins: { date: 'response' },
-  }),
-};
-exemptFromRun({ history: [answered] }).has('2026'); // true — the year of their date
-exemptFromRun({ history: [answered] }).has('2031'); // false — nobody said it
-```
-
-Pinned by `test/core/agent/evidence/person-values-normalized.test.ts` (the
-field case end to end, an invented `9:15` and year still flagged, redaction,
-the fold's lineage, byte identity).
+**What is trusted as stored.** On loading a conversation or pause checkpoint,
+the library validates each mark's shape, then trusts it as part of the stored
+run state. It cannot establish who wrote a stored field. Keep the session
+store as safe as the run. A pre-mark record's tool results do not count as
+typed answers. A stored summary's `foldedExempt` stays exempt, including
+values that entered a summary under the earlier shape-based rule.
 
 ## Evidence lineage at grain — the person's time parts and the library's spellings (time step T7)
 

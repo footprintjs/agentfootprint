@@ -586,8 +586,8 @@ export class BoundaryRecorder implements CombinedRecorder {
           toolCallId: p.toolCallId,
           ...(p.args !== undefined ? { args: p.args } : {}),
           // The batch settlement's marker (9.113.0), carried as the stream
-          // carries it — the one owner of "this call never ran" for every
-          // projection of this log (the step graph, the rollup, a viewer).
+          // carries it. Not the only "this call never ran": `tool_end.entered` is
+          // not carried here yet (`answer-account/README.md`, "Not covered yet").
           ...(p.notDispatched !== undefined ? { notDispatched: p.notDispatched } : {}),
         });
         break;

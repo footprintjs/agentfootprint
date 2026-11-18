@@ -42,6 +42,7 @@ import {
   assertP1,
   assertP7,
   fixtureA,
+  fixtureAWithEntry,
   FLAGSHIP_RUN_ID,
   HOST_APP_DECLARATIONS,
   utf8Bytes,
@@ -185,7 +186,7 @@ describe('B2 — judge everything; cap only what is listed', () => {
     expect(a.facts.callsOmitted).toBe(5);
     expect(a.facts.errors.failed).toBe(1); // the JUDGING is not
     expect(rowText(a, 'anything-wrong')).toContain(
-      '1 tool call did not run cleanly: 1 failed, 0 refused by a rule, 0 declined by a person, 0 not run.',
+      '1 tool call did not run cleanly: 1 failed, 0 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.',
     );
     expect(a.signals.map((s) => s.id)).toEqual(['undeclared-empty-used']);
     expect(a.summary.tone).toBe('bad');
@@ -326,7 +327,7 @@ describe('S2 — the evidence line reads only the answer’s final verdict', () 
 
 describe('S4 — a call no event names is counted and kept (the reviewer’s H6)', () => {
   it('unread counts it; it is said to be unnamed; never "no tools"', () => {
-    const rec = fixtureA() as unknown as {
+    const rec = fixtureAWithEntry() as unknown as {
       events: E[];
       snapshot: { sharedState: { history: Record<string, unknown>[] } };
     };
@@ -393,6 +394,7 @@ describe('M1 — the mutation survivors', () => {
       result: [],
       durationMs: 1,
       modelResult: 'RULE-REFUSAL-TEXT-XYZ',
+      entered: true,
     };
     rec.events[52]!.payload.outcome = 'deny';
     rec.events[52]!.payload.changed = true;
@@ -408,7 +410,7 @@ describe('M1 — the mutation survivors', () => {
   });
 
   it('a13 — `kind` on a checked item is refused by the reader: no chip, no signal', () => {
-    const rec = fixtureA() as unknown as { events: E[] };
+    const rec = fixtureAWithEntry() as unknown as { events: E[] };
     rec.events[51]!.payload.checked[0].kind = 'existence';
     const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.signals.map((s) => s.id)).not.toContain('existence-not-checked');
@@ -514,17 +516,20 @@ describe('Round 2 — a listing cap never decides a fact', () => {
     expect(found[5]).toBe('…and 50 more tool calls.');
   });
 
-  /** Fixture A plus `count` more calls of this run (start + end), each ran and returned rows. */
+  /** Stamped fixture A plus `count` more calls (start + end), each ran and returned rows. */
   function withCalls(
     count: number,
     extra: (i: number, id: string, rec: { events: E[] }) => void = () => undefined,
   ) {
-    const rec = fixtureA() as unknown as { events: E[] };
+    const rec = fixtureAWithEntry() as unknown as { events: E[] };
     for (let i = 0; i < count; i++) {
       const id = `more-${i}`;
       rec.events.push(
         { ...rec.events[46]!, payload: { toolName: `t${i}`, toolCallId: id, args: {} } },
-        { ...rec.events[59]!, payload: { toolCallId: id, durationMs: 1, result: [{ id: i }] } },
+        {
+          ...rec.events[59]!,
+          payload: { toolCallId: id, durationMs: 1, result: [{ id: i }], entered: true },
+        },
       );
       extra(i, id, rec);
     }

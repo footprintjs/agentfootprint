@@ -9,7 +9,7 @@
  * report, the answer account the hosting op serves, the trace toolpack's
  * views) — so a test can assert a value is in none of them.
  */
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -70,6 +70,7 @@ export async function everySurface(
   agent: Agent,
   message: string,
   identity?: { readonly conversationId: string },
+  run = () => agent.run({ message, ...(identity !== undefined && { identity }) }),
 ) {
   const events: AgentfootprintEvent[] = [];
   agent.on('*', (event) => events.push(event));
@@ -118,23 +119,28 @@ export async function everySurface(
     }),
   });
 
-  const answer = await agent.run({ message, ...(identity !== undefined && { identity }) });
-  await file.flush();
-
-  const recording = recorder.toRecording();
-  return {
-    agent,
-    answer,
-    events,
-    attached,
-    recording,
-    trace: local.getTrace(),
-    stepGraph: flowchart.getSnapshot(),
-    consoleLines,
-    fileText: readFileSync(filePath, 'utf8'),
-    auditBundle: audit.bundle(),
-    spans,
-  };
+  try {
+    const answer = await run();
+    await file.flush();
+    const recording = recorder.toRecording();
+    return {
+      agent,
+      answer,
+      events,
+      attached,
+      recording,
+      trace: local.getTrace(),
+      stepGraph: flowchart.getSnapshot(),
+      consoleLines,
+      fileText: readFileSync(filePath, 'utf8'),
+      auditBundle: audit.bundle(),
+      spans,
+    };
+  } finally {
+    file();
+    await file.flush();
+    rmSync(dir, { recursive: true });
+  }
 }
 
 /** What `everySurface` hands back. */

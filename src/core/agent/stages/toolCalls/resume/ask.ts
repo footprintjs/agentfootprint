@@ -23,6 +23,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
@@ -37,6 +38,9 @@ import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
+import { innerCallsFieldOf } from '../../../innerToolCalls.js';
+import { haltResumedCall } from '../routing/policyHalt.js';
+import type { InnerCallHalt } from '../../../innerCallOuter.js';
 
 interface ResumeAskLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -109,9 +113,11 @@ export function buildResumeAsk(
     let stepToolRan = false;
     /** The effects envelope the resumed call returned (9.19.0). */
     let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
+    let innerHalt: InnerCallHalt | undefined;
     /** What the approved call's `execute` saw — its script row reads it. */
     const scriptSeen: ResumedCallFacts = {};
     try {
@@ -297,6 +303,7 @@ export function buildResumeAsk(
               'ask',
               scriptSeen,
             );
+            innerHalt = dispatched.halt;
             negativeResultId = dispatched.negativeResultId;
             result = dispatched.result;
             error = dispatched.error;
@@ -327,6 +334,7 @@ export function buildResumeAsk(
               dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
             if (dispatched.executed === true && error !== true) {
               resumeEnvelope = dispatched.envelope;
+              resumeUnknownStatus = dispatched.unknownStatus;
             }
             // skip_step behind a middleware ask, approved (9.18.0): the
             // placeholder just landed — replace it with the authoritative
@@ -415,16 +423,27 @@ export function buildResumeAsk(
       }
       scriptSeen.resultFinalizer?.assertFinalized();
       const sourceHalt = sourceEvidenceHaltOf(scope);
-      if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
+      if (sourceHalt && innerHalt === undefined) scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let askResultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const askToolChars = askResultStr.length;
       if (deps.negativeClaimsArmed === true)
         askResultStr = serveNegativeHandle(scope, negativeResultId, askResultStr);
+      // How the call settled — read by the step and by the message's `outcome`.
+      const askSettled: DispatchSettlement = {
+        ran: toolRan,
+        clean: stepToolRan,
+        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        ...(resumeUnknownStatus !== undefined && { unknownStatus: resumeUnknownStatus }),
+      };
       // Step boundary (9.18.0) — a result finalized HERE is as final as one
-      // from the batch loop; the answered call advances the pointer before
-      // the push, exactly as it would have inline.
-      if (deps.stepPlanFor && stepToolRan) {
-        askResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+      // from the batch loop: the answered call advances or holds the step
+      // before the push by the same rule (`stepOutcomeOf`).
+      if (deps.stepPlanFor) {
+        askResultStr = links.applyStepReturn(
+          scope,
+          { toolName, toolCallId, iteration, settled: askSettled },
+          askResultStr,
+        );
       }
       // Typed tool effects (9.19.0) — a resumed call's envelope is judged
       // exactly as an inline one's (fresh single-call batch state).
@@ -450,6 +469,9 @@ export function buildResumeAsk(
             toolCallId,
             toolName,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            ...innerCallsFieldOf(scope, toolCallId, iteration),
+            // A declined ask ran nothing → 'refused'; read by the check-in trail.
+            ...outcomeField(askSettled),
           },
         ],
         { toolName, toolCallId },
@@ -532,6 +554,7 @@ export function buildResumeAsk(
       // written back only when it was there, so an older checkpoint's resume
       // commits exactly what it always did.
       if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
+      if (innerHalt !== undefined) haltResumedCall(scope, innerHalt, iteration);
       return;
     } catch (error) {
       scriptSeen.resultFinalizer?.withheld();

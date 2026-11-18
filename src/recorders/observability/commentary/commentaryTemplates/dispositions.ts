@@ -99,6 +99,7 @@ export const eventDispositions: Readonly<
   'agentfootprint.skill.graph_declared': 'The run recorded its declared skill routes.',
   'agentfootprint.skill.reroute_superseded': 'A proposed skill route was superseded.',
   'agentfootprint.skill.step_advanced': 'The skill advanced to its next step.',
+  'agentfootprint.skill.step_held': 'The tool reported that the skill step was incomplete.',
   'agentfootprint.skill.step_skipped': 'A skill step was skipped.',
   'agentfootprint.skill.steps_unfinished': 'The skill still has unfinished steps.',
   'agentfootprint.permission.check': 'The run recorded a permission decision.',

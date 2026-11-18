@@ -389,6 +389,29 @@ for (const reactMode of MODES) {
       );
     });
 
+    it('route_decided names the citation correction the run took — one announcement per iteration', async () => {
+      const f = fixture([readCall, { content: draft('provider-call-1') }, { content: draft() }], {
+        reactMode,
+      });
+      const agent = f.builder.build();
+      const routes: { chosen: string; iterIndex: number }[] = [];
+      agent.on('agentfootprint.agent.route_decided', (e) =>
+        routes.push({ chosen: e.payload.chosen, iterIndex: e.payload.iterIndex }),
+      );
+      await agent.runTyped<DeliveredReply>(ASK);
+      expect(routes.map((r) => r.chosen)).toEqual(['tool-calls', 'negative-recheck', 'final']);
+      expect(new Set(routes.map((r) => r.iterIndex)).size).toBe(routes.length);
+    });
+
+    it('…and an answer whose citations resolve is announced final once, as before', async () => {
+      const f = fixture([readCall, { content: draft() }], { reactMode });
+      const agent = f.builder.build();
+      const routes: string[] = [];
+      agent.on('agentfootprint.agent.route_decided', (e) => routes.push(e.payload.chosen));
+      await agent.runTyped<DeliveredReply>(ASK);
+      expect(routes).toEqual(['tool-calls', 'final']);
+    });
+
     it('a repeated citation error with an unsolicited write gets no second correction or write', async () => {
       const write = vi.fn(() => 'payment sent');
       const store = new InMemoryStore();

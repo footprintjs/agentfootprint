@@ -43,6 +43,12 @@ export interface AgUiAddress {
   readonly subflowPath?: readonly string[];
   /** The tool call's id as the record serves it — the placeholder under a policy. */
   readonly toolCallId?: string;
+  /**
+   * Not an address: on a tool call (`TOOL_CALL_START`) and on a check-in's
+   * interrupt, the names of the arguments the tool's view hides — the page
+   * was handed the view's output, not their values. Absent when none.
+   */
+  readonly hiddenArgs?: readonly string[];
 }
 
 interface AgUiEventBase<T extends string> {

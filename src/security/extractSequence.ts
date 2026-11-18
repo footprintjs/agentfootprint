@@ -49,8 +49,18 @@
  *     did run. Paired by position, each proposal is judged by its own answer.
  *
  * A history without a settled message pairs exactly as before 9.113.0.
+ *
+ * INNER CALLS. A call a tool made through `ctx.tools.call` whose function was
+ * entered rides the result message of the call the model made
+ * (`LLMMessage.calls`, `provider-contract/innerCalls.ts`). Each one
+ * follows that call in the sequence, in the order the tool made them, marked
+ * `inner: true` — so a rule over "read a secret, then post it" sees a step a
+ * composing tool took exactly where it took it. A refused inner call is not on
+ * the message, as a denied model call is not in the sequence. Read with the
+ * result the id pairs with, like the deny check above.
  */
 
+import type { InnerCallRan } from '../provider-contract/innerCalls.js';
 import type { LLMMessage, ToolCallEntry } from '../provider-contract/types.js';
 
 /** Prefix the framework writes on synthetic deny tool_results. Used to
@@ -83,10 +93,27 @@ export function extractSequence(
   iteration: number,
   options: ExtractSequenceOptions = {},
 ): ToolCallEntry[] {
+  return deriveSequence(history, iteration, options.resolveProviderId, (call) => call.args);
+}
+
+/** The gate's sequence uses the working values. Its public counterparts use the shown view. */
+export function extractSequenceForPolicy(
+  history: readonly LLMMessage[],
+  iteration: number,
+  innerArgsOf: (call: InnerCallRan) => InnerCallRan['args'],
+): ToolCallEntry[] {
+  return deriveSequence(history, iteration, undefined, innerArgsOf);
+}
+
+function deriveSequence(
+  history: readonly LLMMessage[],
+  iteration: number,
+  resolveProviderId: ExtractSequenceOptions['resolveProviderId'],
+  innerArgsOf: (call: InnerCallRan) => InnerCallRan['args'],
+): ToolCallEntry[] {
   const sequence: ToolCallEntry[] = [];
-  const resolveProviderId = options.resolveProviderId;
   const results = resultsById(history);
-  const settled = settledProposals(history);
+  const { settled, innerCalls } = pairedResults(history);
 
   // Track iteration as we walk: each assistant turn with toolCalls
   // increments the iteration counter for the entries it produces. The
@@ -98,8 +125,9 @@ export function extractSequence(
     if (msg.role !== 'assistant' || !msg.toolCalls || msg.toolCalls.length === 0) continue;
     for (const [callAt, tc] of msg.toolCalls.entries()) {
       if (!tc.id) continue;
-      const result = results.get(tc.id);
-      if (result === undefined) continue; // no tool_result yet → in-flight
+      const answer = results.get(tc.id);
+      if (answer === undefined) continue; // no tool_result yet → in-flight
+      const result = typeof answer.content === 'string' ? answer.content : '';
       if (result.startsWith(SYNTHETIC_DENY_PREFIX)) continue; // denied, never ran
       if (settled.has(proposalKey(turnAt, callAt))) continue; // settled on resume, never dispatched
       const entry: ToolCallEntry = {
@@ -111,6 +139,17 @@ export function extractSequence(
         }),
       };
       sequence.push(entry);
+      for (const inner of innerCalls.get(proposalKey(turnAt, callAt)) ?? []) {
+        sequence.push({
+          name: inner.toolName,
+          args: innerArgsOf(inner),
+          iteration: iterCounter,
+          ...(resolveProviderId && {
+            providerId: resolveProviderId(inner.toolName) ?? 'local',
+          }),
+          inner: true,
+        });
+      }
     }
     iterCounter += 1;
   }
@@ -145,11 +184,11 @@ function proposalKey(turnAt: number, callAt: number): string {
  * call that never ran, not a result, so a settled id is not answered by it —
  * and a deny the id carried before a later settlement still reads as a deny.
  */
-function resultsById(history: readonly LLMMessage[]): Map<string, string> {
-  const results = new Map<string, string>();
+function resultsById(history: readonly LLMMessage[]): Map<string, LLMMessage> {
+  const results = new Map<string, LLMMessage>();
   for (const msg of history) {
     if (msg.role !== 'tool' || !msg.toolCallId || msg.notDispatched !== undefined) continue;
-    results.set(msg.toolCallId, typeof msg.content === 'string' ? msg.content : '');
+    results.set(msg.toolCallId, msg);
   }
   return results;
 }
@@ -164,8 +203,9 @@ function resultsById(history: readonly LLMMessage[]): Map<string, string> {
  * answers nothing, and a turn that proposes the id again opens a new
  * proposal — which is how a reused id keeps its two calls apart.
  */
-function settledProposals(history: readonly LLMMessage[]): Set<string> {
+function pairedResults(history: readonly LLMMessage[]) {
   const settled = new Set<string>();
+  const innerCalls = new Map<string, readonly InnerCallRan[]>();
   /** id → the still-unanswered proposals of it on the latest turn that proposed it, in call order. */
   const open = new Map<string, string[]>();
   for (const [turnAt, msg] of history.entries()) {
@@ -180,7 +220,9 @@ function settledProposals(history: readonly LLMMessage[]): Set<string> {
     }
     if (msg.role !== 'tool' || !msg.toolCallId) continue;
     const answered = open.get(msg.toolCallId)?.shift();
-    if (answered !== undefined && msg.notDispatched !== undefined) settled.add(answered);
+    if (answered === undefined) continue;
+    if (msg.notDispatched !== undefined) settled.add(answered);
+    else if (msg.calls !== undefined) innerCalls.set(answered, msg.calls);
   }
-  return settled;
+  return { settled, innerCalls };
 }

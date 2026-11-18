@@ -31,6 +31,7 @@ import {
   assertP7,
   dump,
   fixtureA,
+  fixtureAWithEntry,
   fixtureB,
   FLAGSHIP_RUN_ID,
   linesOf,
@@ -280,7 +281,7 @@ function amplify(seed: number): {
   empty: boolean;
 } {
   const r = rng(seed * 7919);
-  const rec = baseA();
+  const rec = fixtureAWithEntry() as unknown as Rec;
   const kind = AMPLIFY[seed % AMPLIFY.length]!;
   const long = (n: number) => 'L'.repeat(n);
   if (kind === 'permission-verdict') {
@@ -315,6 +316,7 @@ function amplify(seed: number): {
           toolCallId: id,
           durationMs: 1,
           result: i === failAt ? 'down' : isEmpty ? [] : [{ id: i }],
+          entered: true,
           ...(i === failAt && { error: true }),
         },
       };

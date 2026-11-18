@@ -1,5 +1,12 @@
 import { eventDispositions } from './dispositions.js';
 import type { AgentfootprintEvent } from '../../../../events/registry.js';
+import { readNotDispatched, toolRanOf } from '../../../../semantics/toolRan.js';
+
+const TOOL_END_KEYS = {
+  ran: 'stream.tool_end',
+  'not-run': 'stream.tool_end.notExecuted',
+  'not-recorded': 'stream.tool_end.executionUnknown',
+} as const;
 
 /**
  * Pick the template key for an event. Branches encoded in the key
@@ -25,13 +32,15 @@ function routedCommentaryKey(event: AgentfootprintEvent): string | null | undefi
     // A bracket carrying `notDispatched` (9.113.0) is a call that never ran:
     // its start gets the settled key, its end is skipped (the start said it).
     case 'agentfootprint.stream.tool_start':
-      return event.payload.notDispatched !== undefined
+      return readNotDispatched(event.payload.notDispatched) === 'settled'
         ? 'stream.tool_start.notDispatched'
         : 'stream.tool_start';
     case 'agentfootprint.stream.tool_progress':
       return 'stream.tool_progress';
     case 'agentfootprint.stream.tool_end':
-      return event.payload.notDispatched !== undefined ? null : 'stream.tool_end';
+      return readNotDispatched(event.payload.notDispatched) === 'settled'
+        ? null
+        : TOOL_END_KEYS[toolRanOf(event.payload)];
 
     case 'agentfootprint.context.injected':
       switch (event.payload.source) {

@@ -237,7 +237,7 @@ function assertErased(file: string, text: string): void {
 }
 
 describe('AgentState declaration contract', () => {
-  it('preserves every original property, modifier and exact comment byte', () => {
+  it('matches every recorded property, modifier and exact comment byte', () => {
     expect(readState().contract).toEqual(fixture.contract);
   });
 

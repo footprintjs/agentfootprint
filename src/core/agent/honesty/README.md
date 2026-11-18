@@ -1,6 +1,6 @@
 **Mixed** — where the honesty layers mount, and which ones a run armed.
 Map: `armed.ts` (the one run constant, `AgentState.honestyLayers`).
-Walker: `mounts.ts` (the conditional mounts both chart builders call, each layer's input and output mappings, and the answer layer's read list).
+Walker: `mounts.ts` (the conditional mounts both chart builders call, each layer's input and output mappings, and the answer layer's read list), and `sourceInputs.ts` (the raw pieces the declared-sources checks are handed from the parent scope, the ticket receipt among them).
 Fold: `sourceCorpus.ts` (the corpora the inputs layer's declared-sources checks read, built from the served record — the one module on the layer's side that reads both `findings/` and `arguments/`).
 
 **The law.** A layer is a subflow mounted only when armed: an agent that armed none builds
@@ -135,3 +135,5 @@ correctly. See `core/agent/arguments/README.md`, "The batch ask".
 Per layer, from the record alone: how often the layer ran on a batch that dispatched (the
 mount's commits), how many verdicts it filed (the rows), and — with `honestyLayers` — the
 share of armed runs on which it filed nothing. The layers' own pages carry their metrics.
+
+`timeInputs.ts` reads the current turn’s clock, readings and answers for the inputs mount.

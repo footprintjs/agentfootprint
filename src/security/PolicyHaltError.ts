@@ -20,6 +20,12 @@
  *      complete).
  *   4. THEN this error is thrown by `Agent.run()`.
  *
+ * A call one tool makes through `ctx.tools.call` that the checker halts is
+ * refused at once (the composing tool reads `tellLLM` in its refusal); the
+ * same four steps run once its outer call settles, step 1 being the OUTER
+ * call's own result, and the event, `proposed` and the last `sequence` entry
+ * (`inner: true`) name the inner call (`core/agent/innerCallOuter.ts`).
+ *
  * @example
  *   try {
  *     await agent.run({ message: 'help me with order #42' });
@@ -41,16 +47,16 @@ import type { LLMMessage, ToolCallEntry, ToolResultContent } from '../provider-c
 export interface PolicyHaltContext {
   /** Telemetry tag from the matched rule. Stable across versions. */
   readonly reason: string;
-  /** Content delivered to the LLM as the synthetic tool_result. */
+  /** Content delivered to the LLM as the synthetic tool_result (for an inner call: in its refusal). */
   readonly tellLLM?: ToolResultContent;
   /** Sequence of tool calls dispatched this run, including the proposed
    *  call that triggered the halt (which did NOT execute). */
   readonly sequence: readonly ToolCallEntry[];
   /** ReAct iteration the halt fired on. */
   readonly iteration: number;
-  /** Conversation history at halt time, including the synthetic tool_result. */
+  /** Conversation history at halt time, including the synthetic tool_result (an inner call's halt: the outer call's result). */
   readonly history: readonly LLMMessage[];
-  /** The proposed tool call that triggered the halt (not executed). */
+  /** The proposed tool call that triggered the halt (not executed) — the model's, or a tool's inner call. */
   readonly proposed: { readonly name: string; readonly args: unknown };
   /** Identifier of the PermissionChecker that returned `'halt'`. */
   readonly checkerId?: string;

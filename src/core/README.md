@@ -1,14 +1,21 @@
 **Mixed** — the two primitives that build a map, and the wiring that runs one.
 Map: `LLMCall.ts`, `agent/runtime/chart/owner.ts`'s `buildChart`.
-Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
-`durabilityBarrier.ts`.
+Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts` (its stored history
+admitted by `checkpointHistory.ts`), `pause.ts`, `durabilityBarrier.ts`.
 Fold-feeding: `agent/runtime/skills/owner.ts` · `readSkillOfferFor` and `agent/runtime/skills/owner.ts` ·
 `hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
 filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `conversation.ts`, `translator.ts`, `outputFallback.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
-may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
-the one input a composition hands them).
+may show), `checkInHiddenArgs.ts` / `checkInWillDo.ts` (what a check-in tells
+the person is hidden), `consentRequestId.ts` (a request id's derivation),
+`resumeDecisionMessage.ts` (a refused resume's sentences), `messageFrom.ts`
+(which runners read `AgentInput.messageFrom`, and the one input a composition
+hands them), and `trailBeforeOutcomeMarker.ts` (the check-in trail's text
+test for a tool message with no `outcome` mark).
+The text test preserves refusals in histories stored before the mark. A
+completed result that begins with a refusal form such as "[permission denied: …]"
+also reads `ok: false`.
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
 
@@ -62,8 +69,9 @@ about the answer they gave — a silent loop any app can fall into.
   answered it this turn; it crosses checkpoints on the awaiting-input shape
   itself (`Agent.resume` reads `repeat.count` and adds one). `previousAnswer` is
   READ FROM THE RECORD — the `input_received` result that landed, after the
-  tool-result rules (redaction first) ran — and keeps only the fields the
-  person supplied; when a rule replaced that result, only the count travels.
+  tool-result rules (redaction first) ran, and only off a message carrying the
+  library's `answersAsk` mark (`../tools/typedAnswer.ts` · `landedTypedAnswer`)
+  — and keeps only the fields the person supplied; when a rule replaced that result, only the count travels.
   A new `run()` starts from nothing, so a pooled agent never marks one
   session's ask as another's re-ask.
 
@@ -278,7 +286,7 @@ The readers, and what each does with it (paths from `src/`):
 | `core/agent/window/toolNames.ts` · `toolNameOfMessage` — the last-tool-result pin, the drop notice, the dangling-reference check (`core/agent/stages/callLLM.ts`, which names the frame from the history the stage already read at its top — never a second read, which would add a narrative step to every run) | history | named as no tool: the pin stays on the tool's real result |
 | `core/agent/findings/offer.ts` · `isResultMessage` — the offer, `knownResults`, the piece's `undeclared:` line, the collapse (`core/agent/findings/serve.ts` · `collapseJudged`), `WindowRecord.droppedStandings` (`core/agent/stages/window.ts`) | history | no result to judge: never offered, never resolved (a model that names it files `unknownId`), never undeclared, never collapsed, never listed as dropped — the request and its rebuild (`time-travel/servedView.ts`) both read the committed conversation |
 | `core/agent/window/ledgerFactPins.ts` · `turnStandingOf`, `ledgerFactPinsOf` — a turn's standing (`WindowStrategyInput.standingOf`) and the `'ledger-fact'` pin, by the same `isResultMessage` | history | no result to rank: it takes no part in its turn's standing (a batch whose results the model judged all noise stays `noise`), a `fact` filed on its id holds nothing, and a pin never lists its id |
-| `trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf` — `inspect_tool_call` | stream first, history fallback | "not dispatched", with no arguments, duration or inside. For an id a provider reused, the latest bracket and the latest message decide whether it was dispatched; a call that ran under it after a settlement is read off its own bracket — its outcome and duration off the LAST `tool_end` for the id (`buildInspectToolCall`), its step off the first bracket of a call that ran (`bracketsFor`) — never the settlement's `durationMs: 0` |
+| `trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf` — `inspect_tool_call` | stream first, history fallback | "not dispatched", with no arguments, duration or inside. For a reused id, the step, outcome and duration come from the latest occurrence's bracket, and settlement is read from that bracket or its answer in history. |
 | `memory/causal/evidenceRecorder.ts` | stream | no `ToolCallRecord`: no args went to a tool, no result came back |
 | `adapters/observability/audit.ts` | stream | the marker rides verbatim on both chained records (identifiers only, both payload modes), with no `error` |
 | `adapters/observability/otel.ts` | stream | no `execute_tool` span; one span event `agentfootprint.tool.not_dispatched` on the active span — on a leg the adapter traces. **Known limit: no run records it yet.** A trace opens on `agent.turn_start`, a resumed leg emits none under a new `meta.runId`, so none of a resumed leg is traced, and a settled bracket only ever rides one |
@@ -310,8 +318,9 @@ call; what the model read — the check-in's `read` frames and `drivers`
 served text (`integrity/unsupported-argument/check.ts` ·
 `unsupportedArgumentsOf`, handed the frame's non-assistant messages by
 `core/agent/stages/callLLM.ts`); and `core/agent/stagedRefs.ts` ·
-`findStagedRefs`, which takes only a placed-result ticket, and the sentence
-never parses as one.
+`findStagedRefs`, which takes only a ticket the library placed for that very
+call (`core/agent/placedTickets.ts` · `isIssuedTicket`), and the sentence never
+parses as one.
 
 **Not readers yet — five history readers that go by the role.** They see a
 settled message as a tool's served result, and each is a named follow-up
@@ -416,3 +425,29 @@ not proof that a call ran or that a host closed it. Local close evidence is
 scoped to the exact ledger identity and request; eviction or restart loses it.
 
 `pauseRecord.ts` holds the complete native-pause position/reason utilities. `runnerCoreValues.ts` names per-invocation domain values; RunnerBase remains the shared native wiring facade.
+
+## What a check-in tells the person is hidden
+
+A tool can carry an argument view (`toolShownArgs.ts`, `flowchartAsTool({ redact })`,
+`runbookAsTool({ redact })`). The check-in computes the display and
+`CheckInRequest.hiddenArgs` together from the bound call. An unsupported view masks
+every argument. A string returned unchanged is checked independently with a stand-in
+and its siblings intact. An inconclusive probe masks that argument and names it in
+the list. The projection takes its names from the call itself. A tool schema provides
+no evidence that a value is safe to show.
+
+The reading assumes the view is a function of the arguments. It cannot reliably
+classify a view that depends on external state or distinguish an unchanged non-string
+from an equal custom placeholder. With the built-in view for `to`, a real
+`memo: 'REDACTED'` remains visible while `to` is listed as hidden.
+
+The request binds the names into its id (`consentRequestId.ts`, omitted when empty)
+and pause. The private argument marks and decision record use that same list
+(`checkInHiddenArgs.ts`). A resume compares the current view's hidden names before
+spending the decision and refuses a changed set with `'view-changed'`. Older
+pauses without the list record `'not-recorded'`.
+
+Argument views receive frozen copies. AG-UI receives the projected proposal,
+with every argument masked if the inputs layer or middleware may rewrite the call.
+The check-in itself projects the arguments after those steps. Where protected
+arguments were withheld, a consent record documents the scope of the person's approval.
