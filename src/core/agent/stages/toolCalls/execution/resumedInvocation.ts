@@ -6,7 +6,6 @@ import type { AgentState } from '../../../types.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
 import { type ConsentGateKind, isPauseRequest } from '../../../../pause.js';
 import {
-  type ReadToolResultEnvelope,
   type ToolResultStatus,
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
@@ -42,7 +41,10 @@ import type { ToolSemanticsOperations } from '../contracts/operations/semantics.
 import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
 import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
-import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
+import type {
+  ResumedCallResult,
+  ResumedInvocation,
+} from '../contracts/operations/resumedInvocation.js';
 import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js';
 
@@ -111,32 +113,8 @@ export function buildResumedInvocation(
     iteration: number,
     env: { readonly signal?: AbortSignal },
     heldTo?: ConsentGateKind,
-    /** Filled for the call's script row (`deps.scriptRecord`): what `execute`
-     *  was handed, the runner's facts, a ceiling refusal, a throw. */
     seen?: ResumedCallFacts,
-  ): Promise<{
-    result: unknown;
-    error?: boolean;
-    executed?: boolean;
-    negativeResultId?: string;
-    /** The recognized effects envelope, when the tool returned one (9.19.0)
-     *  — `result` above is already its unwrapped `content`. When the ceiling
-     *  fired this carries the refusal as `content` and status `'invalid'`
-     *  (synthesized empty-effects for a non-envelope result), so every resume
-     *  path routes the status without knowing about ceilings. */
-    envelope?: ReadToolResultEnvelope;
-    /** The tool's own `resultCeiling` refused the result (9.20.0): `result`
-     *  is the teaching refusal, the true size is on the record. The call ran
-     *  — but it must not complete a procedure step (the model was told to
-     *  call again). */
-    ceilingRefused?: true;
-    /** An approved call's arguments no longer matched its request at the
-     *  last moment before `execute` (`heldTo`): the call did not run. */
-    callChanged?: true;
-    /** The result was an envelope in every way but an unknown status word —
-     *  that word, cleaned (`unknownStatusOf`); read by the procedure step. */
-    unknownStatus?: string;
-  }> => {
+  ): Promise<ResumedCallResult> => {
     const tool = resolved.tool;
     if (seen !== undefined)
       seen.resultFinalizer = nativeResultFinalizer(
@@ -266,8 +244,6 @@ export function buildResumedInvocation(
           : undefined;
       const callTime = dispatched?.context;
       if (dispatched !== undefined) args = dispatched.args;
-      // `let`, not `const`: the semantic projection below replaces the value
-      // on the non-envelope path exactly as the batch loop does.
       // This dispatch's own slot for the runner's facts (`CODE_RUN_SLOT`):
       // facts reach the exact dispatch that ran, never another run's call
       // that happens to reuse the provider's id.
