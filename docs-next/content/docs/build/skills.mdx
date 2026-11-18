@@ -737,7 +737,7 @@ step**:
   active skill's tools, the baseline `.tool()` registry and provider tools
   all stay offered under narrowing. Only tools that the stepped skill
   *alone* brought are held back;
-- **or stop and say why** — a final answer with steps unrun gets **one**
+- **or stop and say why** — a final answer with unfinished steps gets **one**
   teaching nudge per turn (`steps_unfinished { action: 'nudged' }`, an
   ordinary loop turn); stopping again is honored (`'accepted'`), and a
   limit ending the turn is honored too (`'cut-short'`). A procedure is a
@@ -745,15 +745,13 @@ step**:
 
 A step whose tool asks a human (`askHuman` / `pauseHere`) pauses the run
 mid-procedure; the pointer rides the checkpoint and the person's answer
-advances the step on resume — human-in-the-loop as an ordinary step. The
-answer is a value, never read for a status (even an envelope-shaped one), so
-that step advances as "ran; its tool declared no status" and can never be
-held — a person's "no" to an approval step advances it too. Two other kinds
-of step tool can never declare a status either, so they always advance the
-same way: an MCP tool read in the default text mode (its result reaches the
-agent as a string; a structured mode can carry an envelope) and a
-frontend tool whose result the page sends back (it arrives as the answer to
-a pause). A step resumed after an approved check-in, an approved middleware
+advances the step on resume. The answer reaches the model as a plain value
+and the step records `'not-reported'`. Even an envelope-shaped answer or
+a person's "no" follows this rule. A page-answered frontend tool uses the
+same pause path. An MCP tool read in default text mode returns a string,
+so its returned result also advances the step as `'not-reported'`.
+Structured MCP modes can carry a status envelope. A step resumed after
+an approved check-in, an approved middleware
 `ask` or granted credential consent is decided by the same rule as one that
 ran inline:
 
@@ -812,8 +810,8 @@ fires at every call that held its step because its tool declared a failure
 or unfinished work, with `outcome` (`'failed'` / `'not-finished'`) and the
 declared `status`; `agentfootprint.skill.step_skipped` records a decline
 with the model's own reason and the declared policy; and
-`agentfootprint.skill.steps_unfinished` records how a turn ended with steps
-unrun — `'nudged'`, `'accepted'`, or `'cut-short'`.
+`agentfootprint.skill.steps_unfinished` records how a turn ended with unfinished
+steps — `'nudged'`, `'accepted'`, or `'cut-short'`.
 
 ## Artifact vocabularies (`produces` / `consumes`, 9.25.0)
 
