@@ -983,10 +983,7 @@ All from `agentfootprint`:
 
 ### Reading the canonical notes from another language (9.70.0)
 
-Not every tool is written in JavaScript. A sidecar in Python, Go or Rust that
-mints one of these shapes has to reproduce the note and the marker **byte for
-byte**, or the recognizer will not take its envelope and the note on the wire
-will not be the sentence the docs promise. Field report: a Python sidecar did
+Not every tool is written in JavaScript. A sidecar in Python, Go or Rust can read the canonical marker and note from the package. For an absence, the recognizer checks the marker and the coverage list. The note supplies the wording sent to the model. Field report: a Python sidecar did
 the only thing the package made possible and regex-scraped the compiled ESM
 under `node_modules/agentfootprint/dist/esm` at import time. Reading the value
 rather than copying it was the right instinct; the door was wrong, and the
@@ -1009,20 +1006,32 @@ const path = require.resolve('agentfootprint/canonical-notes.json');
 The whole scrape becomes one read:
 
 ```python
-import json, pathlib
+import json
 
-notes = json.load(open("node_modules/agentfootprint/canonical-notes.json"))
+with open("node_modules/agentfootprint/canonical-notes.json") as source:
+    notes = json.load(source)
 
 ABSENCE_NOTE = notes["notes"]["ABSENCE_NOTE"]
 ABSENCE_MARKER = notes["markers"]["ABSENCE_MARKER"]   # "af_absent"
 
-def absent(checked, not_checked=(), cannot_cover=()):
-    return {ABSENCE_MARKER: {
-        "checked": list(checked),
+# readAbsence recognizes the marker True beside a non-empty checked list.
+def absent(looked_for, checked, not_checked=(), cannot_cover=()):
+    checked = list(checked)
+    if not checked:
+        raise ValueError("supply at least one checked source")
+    return {
+        ABSENCE_MARKER: True,
+        "outcome": "nothing_found",
+        "looked_for": looked_for,
+        "checked": checked,
         "not_checked": list(not_checked),
         "cannot_cover": list(cannot_cover),
+        "retry_returns_the_same": True,
         "note": ABSENCE_NOTE,
-    }}
+    }
+
+absent("backup runs for vm-99",
+       [{"what": "every backup job in the export of 2026-08-19T10:12:00Z"}])
 ```
 
 Three things are worth knowing about the file:

@@ -17,6 +17,8 @@ export interface ToolMiddlewareOperations {
       readonly result: unknown;
       readonly error?: boolean;
       readonly negativeResultId?: string;
+      /** Invocation-local native withdrawal, never part of middleware input. */
+      readonly onSourceWithheld?: () => void;
       readonly history: readonly LLMMessage[];
       readonly identity?: { tenant?: string; principal?: string; conversationId: string };
       readonly signal?: AbortSignal;

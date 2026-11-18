@@ -13,3 +13,11 @@ coerced into correlation keys. Refusal is framework feedback for the whole batch
 Other finite checkpoint call bounds apply only when the batch needs an argument
 or time ask. Ordinary non-asking batches with supported primitive IDs retain their existing
 per-call semantics, including numeric, empty, duplicate and long IDs.
+
+A newly raised batch argument ask holds every current call before execution.
+The internal `beforePause` callback records existing no-result/not-applicable
+encounters for armed write contracts at that precise boundary. It creates no
+lookup result or type finding, never relabels prior completed batches, and does
+not run when the earlier interrupt consumes a successful reply. Partial replies
+kept at the resume door retain their native short-circuit lifecycle. Checker
+liveness and mid-batch tool-owned pauses keep their existing owners.

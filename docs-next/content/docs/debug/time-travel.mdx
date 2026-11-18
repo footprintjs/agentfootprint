@@ -508,6 +508,12 @@ nothing had been lost. The one blind spot left is a claim nobody wrote an
 assertion for: an assertion can be weaker than the clause it checks, and only a
 person reading the two together sees the difference.
 
+- **`privacy-policy`** → fields: `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.schemaHashes`, `tools.names`, `tools.forced`, `tools.withheld`, `epoch`
+  Privacy rules may withhold values from this view. Empty values and counts do
+  not establish that the request contained nothing. This caveat follows the
+  recording's positive policy marker, including after a JSON round trip. It
+  does not claim that every value was hidden: retained public values remain
+  readable, and stored receipt hashes and basis facts stay unchanged.
 - **`no-fold-base`** → fields: `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.schemaHashes`, `tools.names`, `tools.forced`, `tools.withheld`, `epoch`
   The recording travelled without `initialState`, so anything the run inherited
   rather than set reads as absent. On a resumed run that is most of it.
@@ -687,10 +693,10 @@ recording's own `runId`.
 Redaction is the **executor's**: an agent's `redact`, and
 `flowchartAsTool({ redact })` / `runbookAsTool({ redact })`, scrub the run's
 *commit log* at write time and serve everything else from the same redacted
-view. A snapshot served under a policy omits `initialState`, so folding it
-reports `basis: 'log-only'` and `servedAt` raises `no-fold-base` rather than
-quietly rebuilding a short view — the gap that already says a value it could not
-recover reads as empty rather than as unknown.
+view. Older native engines omit the safe fold base; newer ones retain its
+privacy projection. `no-fold-base` describes an actually absent base, while
+`privacy-policy` warns that the policy may withhold values even when that base
+is present. Render those limitations alongside empty fields and counts.
 </Callout>
 
 <Callout title="Turning the receipt off">

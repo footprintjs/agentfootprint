@@ -8,8 +8,8 @@ title: verdictRowsOf
 
 Defined in: [src/core/runbook/verdicts.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/verdicts.ts#L80)
 
-Read the rowset off the final state's `verdicts` key — an array of bags
- each carrying a string `verdict`. Anything else reads as "no rowset".
+Select visible valid rows from the final state's `verdicts` key. This
+ legacy selection does not establish rowset availability or completeness.
 
 ## Parameters
 

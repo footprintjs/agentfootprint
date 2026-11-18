@@ -94,7 +94,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FlowChartExecutor } from 'footprintjs';
+import { FlowChartExecutor, type RedactionPolicy } from 'footprintjs';
+import { conversationRedaction } from '../../src/doors/security.js';
 import {
   Agent,
   defineTool,
@@ -244,6 +245,16 @@ const call = (id: string, name: string): Reply => ({
 });
 const aTool = (name: string) =>
   defineTool({ name, description: `the ${name} tool`, execute: () => `${name} result` });
+
+async function privacyRun(redact: RedactionPolicy): Promise<Run> {
+  const { provider, wire } = scripted([answer('done')]);
+  const agent = Agent.create({ provider: provider as never, model: 'mock', redact })
+    .system('SYSTEM_PRIVACY_SENTENCE_FIXTURE')
+    .tool(aTool('offered_tool_fixture'))
+    .build();
+  await agent.run({ message: 'go' });
+  return { snapshot: agent.getSnapshot(), wire };
+}
 
 /** One run's recording and the requests that really went out. */
 interface Run {
@@ -1082,6 +1093,62 @@ const ACCOUNT: readonly Entry[] = [
             { boundary: 'provider-adapter', phase: 'prepared', omittedBlocks: 1 },
           ]);
           expect(failed.failure).toBeInstanceOf(Error);
+        },
+      },
+    ],
+  },
+
+  {
+    site: 'privacy-policy',
+    sentence: gapSentence('privacy-policy'),
+    clauses: [
+      {
+        quote: 'Privacy rules may withhold values from this view',
+        claim:
+          'a policy can hide request values or retain them, without changing what the provider received',
+        fields: ['view:system.text', 'view:tools.names'],
+        assert: async () => {
+          const hidden = await privacyRun(
+            conversationRedaction({ keys: ['dynamicToolSchemas', 'toolSchemas'] }),
+          );
+          const retained = await privacyRun({ keys: ['not_on_this_run'] });
+          const hiddenView = servedAt(hidden.snapshot, 1)!;
+          const retainedView = servedAt(retained.snapshot, 1)!;
+          expect(hidden.wire[0]!.systemPrompt).toBe('SYSTEM_PRIVACY_SENTENCE_FIXTURE');
+          expect(hidden.wire[0]!.tools!.map((tool) => tool.name)).toEqual(['offered_tool_fixture']);
+          expect(hiddenView.system.text).toBe('');
+          expect(hiddenView.tools.names).toEqual([]);
+          expect(retainedView.system.text).toBe(retained.wire[0]!.systemPrompt);
+          expect(retainedView.tools.names).toEqual(
+            retained.wire[0]!.tools!.map((tool) => tool.name),
+          );
+          expect(kindsOf(hiddenView)).toContain('privacy-policy');
+          expect(kindsOf(retainedView)).toContain('privacy-policy');
+        },
+      },
+      {
+        quote: 'Empty values and counts do not establish that the request contained nothing',
+        claim:
+          'the rebuild is empty while the actual request and its unchanged receipt retain nonempty counts',
+        fields: [
+          'view:system.text',
+          'view:tools.names',
+          'receipt:system.chars',
+          'receipt:tools.names',
+        ],
+        assert: async () => {
+          const run = await privacyRun(
+            conversationRedaction({ keys: ['dynamicToolSchemas', 'toolSchemas'] }),
+          );
+          const view = servedAt(run.snapshot, 1)!;
+          const receipt = receiptAt(run.snapshot, 1)!;
+          expect(view.system.text).toBe('');
+          expect(view.tools.names).toEqual([]);
+          expect(run.wire[0]!.systemPrompt!.length).toBeGreaterThan(0);
+          expect(run.wire[0]!.tools!.length).toBeGreaterThan(0);
+          expect(receipt.system.chars).toBe(run.wire[0]!.systemPrompt!.length);
+          expect(receipt.tools.names).toHaveLength(run.wire[0]!.tools!.length);
+          expect(kindsOf(view)).toContain('privacy-policy');
         },
       },
     ],

@@ -76,3 +76,9 @@ skipped. Not at `getSpec()`, which readers that mount nothing use too. `standing
 beside them: `failure-table.test.ts`, `doors.test.ts`, `context-and-time.test.ts`,
 `finalization.test.ts`.
 The hosted half is pinned by `../../../hosting/around-turn.test.ts`.
+
+`ownedTurn.ts` keeps the admitted run wrapper and optional retained-source
+preparation lease. A source mount with explicit `preparation.admit` adds the
+metadata-only `turn.sourceEvidence.recent` capability on run turns. It is revoked
+before `proceed` starts and on wrapper exit; resumes expose none. The ordinary
+wrapper and unmounted run path retain their original promise and finalizer order.

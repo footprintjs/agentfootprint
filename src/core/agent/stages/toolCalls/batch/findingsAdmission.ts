@@ -9,10 +9,11 @@ import { referenceRefusalRow } from '../../../findings/refusal.js';
 import { withUnsettledRows } from '../../../findings/unsettled.js';
 import type { DeclaredCoverage } from '../../../../../semantics/coverage/index.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
+import { withSourceFindingsRecovery } from '../../../sourceEvidence/findingsRecovery.js';
 
 /** Compose the existing synchronous findingsAdmission phase; no additional await or checkpoint state. */
 export function buildFindingsAdmission(
-  deps: Pick<ToolCallsHandlerDeps, 'findings'>,
+  deps: Pick<ToolCallsHandlerDeps, 'findings' | 'sourceEvidenceConfig' | 'servedTools'>,
   links: Pick<ToolCatalogOperations, 'peelCall' | 'turnStampOf'>,
 ) {
   const admitFindingsBatch = (scope: TypedScope<AgentState>) => {
@@ -36,14 +37,17 @@ export function buildFindingsAdmission(
     // Freeze admission before batch asks, kept-answer consumption or any
     // policy/credential callback. A sibling result never enlarges it.
     const findingsPeels = deps.findings === true ? toolCalls.map(peelCall) : [];
-    const findingsRefusals = findingsPeels.map((peeled) =>
-      findingsReferenceRefusal(
+    const findingsRefusals = findingsPeels.map((peeled) => {
+      const refusal = findingsReferenceRefusal(
         peeled.findings,
         scope.findingsRequest?.[0],
         iteration,
         peeled.malformed,
-      ),
-    );
+      );
+      return deps.sourceEvidenceConfig === undefined
+        ? refusal
+        : withSourceFindingsRecovery(refusal, deps.servedTools?.current);
+    });
     if (
       deps.findings === true &&
       findingsPeels.some((p) => p.findings !== undefined || p.malformed) &&

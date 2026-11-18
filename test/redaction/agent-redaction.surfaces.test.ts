@@ -45,6 +45,7 @@ import {
   withoutAnswerBoundary,
 } from './fixture.js';
 import { everySurface, type Surfaced } from './everySurface.js';
+import { nativeRetainsSafeBase } from './nativeFoldBase.js';
 
 // ─── The one run, with every surface attached (`./everySurface.ts`) ──
 
@@ -73,13 +74,12 @@ describe('agent redaction — the run itself', () => {
 });
 
 describe('agent redaction — snapshot and narrative', () => {
-  it('getLastSnapshot() is the redacted view: no secret, placeholders, no fold base', () => {
+  it('getLastSnapshot() is the native redacted view: no secret, placeholders, native safe-base contract', async () => {
     expectServed((r) => r.agent.getLastSnapshot());
     const snapshot = run.agent.getLastSnapshot() as RuntimeSnapshot;
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
     expect((snapshot.sharedState as Record<string, unknown>)['history']).toBe('REDACTED');
-    // footprintjs omits the raw pre-run base from the served view.
-    expect(snapshot.initialState).toBeUndefined();
+    expect(snapshot.initialState).toEqual((await nativeRetainsSafeBase()) ? {} : undefined);
   });
 
   it('getSnapshot() is the same served view', () => {
