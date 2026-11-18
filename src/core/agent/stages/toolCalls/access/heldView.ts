@@ -3,7 +3,6 @@ import type { AgentState } from '../../../types.js';
 import type { ToolResolver } from '../../toolResolver.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import { boundArgsOf } from './bindings.js';
-import { frozenView } from '../../../../../lib/frozenCopy.js';
 import { hiddenArgNames } from '../../../../toolShownArgs.js';
 import { ResumeDecisionError } from '../../../../pause.js';
 import {
@@ -40,7 +39,7 @@ export function buildHeldView(resolveTool: () => ToolResolver) {
     if (tool === undefined) return;
     // The view runs on a frozen copy: it never touches what an approval runs.
     const args = boundArgsOf(scope, 'pausedCheckInArgs');
-    const change = hiddenViewChange(asked, hiddenArgNames(tool, frozenView(args) ?? args));
+    const change = hiddenViewChange(asked, hiddenArgNames(tool, args));
     if (change !== undefined) throw new ResumeDecisionError('view-changed', 'checkIn', change);
   };
 }

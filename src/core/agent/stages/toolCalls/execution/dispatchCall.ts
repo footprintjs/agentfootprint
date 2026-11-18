@@ -55,6 +55,7 @@ export function buildCallDispatch(
       batch.frozenTurn,
       batch.callbackHistory,
       batch.frozenArgsAt,
+      batch.inputs !== undefined,
     );
     const { outcome, resolution, runArgs, callArguments, execution } = prepareCallState(
       tc,

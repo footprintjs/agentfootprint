@@ -23,31 +23,48 @@
  * redaction policy covers them.
  */
 
+import { argumentNames, copyArgumentDisplay, maskArguments } from '../lib/argumentDisplay.js';
+import type { AgUiCustomProjection } from './customEvents.js';
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** The arguments a page may be shown for a `stream.tool_start` payload. */
-export function argsShownOf(payload: Readonly<Record<string, unknown>>): unknown {
-  return isRecord(payload.shownArgs) ? payload.shownArgs : payload.args ?? {};
+interface ToolCallView {
+  readonly args: unknown;
+  readonly address: { readonly toolCallId?: string; readonly hiddenArgs?: readonly string[] };
+}
+
+/** The wire arguments and names are decided together. A custom projector cannot widen a tool view. */
+export function argsShownOf(
+  payload: Readonly<Record<string, unknown>>,
+  id: string,
+  project?: AgUiCustomProjection,
+): ToolCallView {
+  const toolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
+  if (!Object.hasOwn(payload, 'shownArgs') && !Object.hasOwn(payload, 'hiddenArgs')) {
+    const args =
+      project === undefined
+        ? payload.args ?? {}
+        : project(payload, {
+            toolCallId: id,
+            ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
+          });
+    return { args, address: { toolCallId } };
+  }
+
+  const names = hiddenNamesOf(payload.hiddenArgs);
+  const shown = copyArgumentDisplay(payload.shownArgs);
+  if (shown !== undefined) return { args: shown, address: { toolCallId, ...names } };
+
+  const hiddenArgs = [...new Set([...argumentNames(payload.args), ...(names.hiddenArgs ?? [])])];
+  return { args: maskArguments(hiddenArgs), address: { toolCallId, ...hiddenNamesOf(hiddenArgs) } };
 }
 
 /** `{ hiddenArgs }` for address metadata when `list` names any, else nothing. */
-export function hiddenNamesOf(list: unknown): { readonly hiddenArgs?: readonly string[] } {
+function hiddenNamesOf(list: unknown): { readonly hiddenArgs?: readonly string[] } {
   return Array.isArray(list) && list.length > 0 && list.every((n) => typeof n === 'string')
     ? { hiddenArgs: [...(list as string[])] }
     : {};
-}
-
-/** A tool call's address extras: its served id, and the names its view hides. */
-export function toolCallAddressOf(payload: Readonly<Record<string, unknown>>): {
-  readonly toolCallId?: string;
-  readonly hiddenArgs?: readonly string[];
-} {
-  const id = payload.toolCallId;
-  return {
-    toolCallId: typeof id === 'string' ? id : undefined,
-    ...hiddenNamesOf(payload.hiddenArgs),
-  };
 }
 
 /** The names a paused check-in's request carried (`pause.request` → `questionPayload.checkIn`). */

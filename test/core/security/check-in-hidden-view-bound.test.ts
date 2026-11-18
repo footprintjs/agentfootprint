@@ -201,14 +201,12 @@ describe('a changed view voids the approval (reviews M, F, F2)', () => {
 describe('the check-in reads the view on a frozen copy (review F10, the paths this change adds)', () => {
   it('a view that writes into its input throws there, so every argument is listed', async () => {
     const writing: ShownArgs = (a) => {
-      (a as Record<string, unknown>).to = 'acct-ATTACKER';
+      (a as Record<string, unknown>).to = 'replacement';
       return a;
     };
     const { request } = await pausedOn(writing);
     expect(request.hiddenArgs).toEqual(['to', 'amount', 'memo']);
-    // Not covered here: `execution/dispatchCall.ts` runs the view on the call's own
-    // arguments for `tool_end.changedArgKeys` before the check-in (as on main), so such
-    // a view still changes the call that runs. Named in src/core/README.md.
+    expect(request.args).toEqual({ to: 'REDACTED', amount: 'REDACTED', memo: 'REDACTED' });
   });
 });
 

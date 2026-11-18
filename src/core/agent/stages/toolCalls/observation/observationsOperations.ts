@@ -22,6 +22,7 @@ export function buildToolObservationsOperations(
     scope: TypedScope<AgentState>,
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_start']['payload'],
     tool?: unknown,
+    protectProposal = false,
   ): void => {
     // A listener sees the call's frozen copy — the dispatch loop's shared one
     // when it hands that over — never the arguments the tool runs with: one
@@ -30,8 +31,9 @@ export function buildToolObservationsOperations(
     // of them — never as their live objects. A tool whose argument view hides
     // something adds the view's output and the hidden names, read from that
     // same copy (`toolShownArgs.ts` · `shownFieldsOf`).
-    const args = frozenView(payload.args) ?? frozenProjectionOf(payload.args);
-    const shown = shownFieldsOf(tool, args);
+    const copy = frozenView(payload.args);
+    const args = copy ?? frozenProjectionOf(payload.args);
+    const shown = shownFieldsOf(tool, copy ?? payload.args, protectProposal || copy === undefined);
     typedEmit(scope, 'agentfootprint.stream.tool_start', { ...payload, args, ...shown });
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;

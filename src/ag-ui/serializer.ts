@@ -76,7 +76,7 @@ import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
 import { newScope, type Scope, type OpenText, type AgUiOpenCall } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
-import { argsShownOf, checkInHiddenNamesOf, toolCallAddressOf } from './shownArgs.js';
+import { argsShownOf, checkInHiddenNamesOf } from './shownArgs.js';
 import {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,
@@ -95,7 +95,7 @@ export type { AgUiCustomContext, AgUiCustomProjection } from './customEvents.js'
 export interface AgUiSerializerOptions {
   /** Explicit host delivery: withhold candidate text at every depth until the authorized final output. Record-only is the default. */
   readonly delivery?: 'host';
-  /** Optional served-only argument projection; default keeps the recorded arguments. */
+  /** Optional served-only projection for calls without a protected argument view. */
   readonly toolArguments?: AgUiCustomProjection;
   /** Optional served-only result projection; fixed failed-tool words still take precedence. */
   readonly toolResults?: AgUiCustomProjection;
@@ -619,25 +619,19 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const { id, n } = ids.next('tool', address);
         scope.calls.push({ id, n, address, servedId: payload.toolCallId });
         const toolCallName = text(payload.toolName) ?? '';
+        const view = argsShownOf(payload, id, options.toolArguments);
         out.push({
           type: 'TOOL_CALL_START',
           toolCallId: id,
           toolCallName,
           parentMessageId: scope.callMessageId,
           ...owned(scope, event),
-          metadata: addressOf(event, toolCallAddressOf(payload)),
+          metadata: addressOf(event, view.address),
         });
         out.push({
           type: 'TOOL_CALL_ARGS',
           toolCallId: id,
-          delta: toWireJson(
-            options.toolArguments !== undefined && payload.shownArgs === undefined
-              ? options.toolArguments(payload, {
-                  toolCallId: id,
-                  ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
-                })
-              : argsShownOf(payload),
-          ),
+          delta: toWireJson(view.args),
           ...owned(scope, event),
         });
         out.push({ type: 'TOOL_CALL_END', toolCallId: id, ...owned(scope, event) });

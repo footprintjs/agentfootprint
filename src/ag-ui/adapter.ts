@@ -99,7 +99,7 @@ export interface AgUiOptions {
   readonly translation?: AgUiTranslationStrategy;
   /** The CUSTOM allow-list — see {@link AgUiSerializerOptions.custom}. */
   readonly custom?: AgUiSerializerOptions['custom'];
-  /** Project served tool arguments without replacing native lifecycle/ids. */
+  /** Project served tool arguments on calls without a protected argument view. */
   readonly toolArguments?: AgUiSerializerOptions['toolArguments'];
   /** Project served tool results; default failed-tool withholding stays authoritative. */
   readonly toolResults?: AgUiSerializerOptions['toolResults'];

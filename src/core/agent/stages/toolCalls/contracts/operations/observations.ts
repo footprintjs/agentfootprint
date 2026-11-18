@@ -9,6 +9,7 @@ export interface ToolObservationsOperations {
     scope: TypedScope<AgentState>,
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_start']['payload'],
     tool?: unknown,
+    protectProposal?: boolean,
   ) => void;
   readonly emitToolEnd: (
     scope: TypedScope<AgentState>,
