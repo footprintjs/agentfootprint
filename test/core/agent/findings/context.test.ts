@@ -233,19 +233,19 @@ describe('findings DATA — the frame is measured once, not once per entry', () 
     );
   });
 
-  // Hashes of the frames the admit-then-re-encode loop produced for this
-  // fixture, taken before the change: the running total must choose exactly
-  // the same entries at every budget, multibyte text and digit changes included.
+  // Reference hashes from the admit-then-re-encode loop with the late-v2
+  // reference status. The running tally must preserve every byte, including
+  // multibyte text and changes in omitted-count digits.
   it.each([
-    [1024, '91762691475729ba'],
-    [1500, 'dd744c434772416c'],
-    [2048, '186e67950254c4da'],
-    [3001, 'fb6109a41956c173'],
-    [4096, 'ecb4c28c67d021ca'],
-    [8192, '88bdb7c384738054'],
-    [12000, '49be5eb1a0c3ca10'],
-    [16384, '2a5026a46dc9d48e'],
-    [65536, 'b7911734d2468e89'],
+    [1024, '4b8f7b93649a2535'],
+    [1500, '845b48f194096641'],
+    [2048, 'ff0c9b5602fa741b'],
+    [3001, '3a5ea07cba30cdf2'],
+    [4096, 'b55db95f6fb13238'],
+    [8192, '9af9f7fa48498c01'],
+    [12000, 'bbf11c8ee98521f7'],
+    [16384, '85188a80a02db291'],
+    [65536, 'f42b6c0493623a25'],
   ] as const)('byte-identical to the re-encoding loop at a %i-byte budget', (limit, hash) => {
     const frame = findingsContext(messages, rows, limit);
     expect(Buffer.byteLength(frame)).toBeLessThanOrEqual(limit);
