@@ -8,7 +8,11 @@ import { defineTool } from '../../tools/tools.js';
 import { TOOL_CALL_SUGGESTION_CAP, TOOL_RESULT_PREVIEW_CHARS } from './structuralLimits.js';
 import { displayText, renderPreview, boundedPreview } from '../bounded.js';
 import { readNotDispatched, toolRanOf } from '../../semantics/toolRan.js';
-import { latestCallOccurrence, type ToolEndEvent } from './toolCallOccurrence.js';
+import {
+  latestCallOccurrence,
+  type ToolBracketEvent,
+  type ToolEndEvent,
+} from './toolCallOccurrence.js';
 
 // ── inspect_tool_call ──────────────────────────────────────────────────────
 
@@ -217,6 +221,16 @@ function buildToolCallReader(
       : undefined;
   };
 
+  const notDispatchedOf = (
+    toolCallId: string,
+    stepId: string | undefined,
+    bracket: ToolBracketEvent | undefined,
+  ): Settlement | undefined =>
+    settlementMarkerOf(bracket?.payload.notDispatched) ??
+    (bracket?.type === 'agentfootprint.stream.tool_start'
+      ? undefined
+      : settledInHistory(toolCallId, stepId));
+
   const factsFor = (toolCallId: string): ToolCallFacts => {
     let toolName: string | undefined;
     let proposedArgs: Record<string, unknown> | undefined;
@@ -250,9 +264,7 @@ function buildToolCallReader(
         : undefined;
     const open = end === undefined && bracket !== undefined;
     if (open) result = undefined;
-    const notDispatched =
-      settlementMarkerOf(bracket?.payload.notDispatched) ??
-      (open ? undefined : settledInHistory(toolCallId, step));
+    const notDispatched = notDispatchedOf(toolCallId, step, bracket);
     const ledgerRows = ledger().filter((row) => row.toolCallId === toolCallId);
     const rows =
       iteration === undefined ? [] : ledgerRows.filter((row) => row.iteration === iteration);

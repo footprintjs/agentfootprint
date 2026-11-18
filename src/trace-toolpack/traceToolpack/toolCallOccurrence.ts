@@ -13,7 +13,7 @@ type Decision = Extract<
   }
 >;
 
-type CallEvent = Start | ToolEndEvent;
+export type ToolBracketEvent = Start | ToolEndEvent;
 
 function onSameStep(left: AgentfootprintEvent, right: AgentfootprintEvent): boolean {
   const a = left.meta;
@@ -33,7 +33,7 @@ function onSameStep(left: AgentfootprintEvent, right: AgentfootprintEvent): bool
  * lost the start, only evidence on the end's own step can speak for it.
  */
 export function latestCallOccurrence(events: readonly AgentfootprintEvent[], toolCallId: string) {
-  let bracket: CallEvent | undefined;
+  let bracket: ToolBracketEvent | undefined;
   let start: Start | undefined;
   let endAt = events.length;
   let startAt = -1;
