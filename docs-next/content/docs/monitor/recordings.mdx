@@ -55,16 +55,6 @@ the run facts, an optional privacy statement and an optional `configuration`
 override; `run` is a `RecordingRunFacts` — the half of the truth the library
 cannot derive.
 
-## Read a value's type and array length
-
-`recordRun(agent)` includes a `contextShapes` index in eligible snapshots. It describes the initial top-level values and records changes at their commit positions. An array description carries its length. A viewer can read this index independently of the full values.
-
-<CodeFile path="examples/observability/28-recorded-value-shapes.ts" region="history" title="Read the recorded lengths of the message history" />
-
-To track a nested array such as `inventory.rows`, pass `{ contextShapes: { paths: [['inventory', 'rows']] } }` to the recorder or live snapshot getter. Supplying a path reads just that field. `scan: 'full'` opts into visiting nested entries of initial and newly assigned values and can increase recording size significantly. Pass `{ contextShapes: false }` to omit the index.
-
-An older recording or an incomplete log can have no index. Individual paths can also be unavailable, for example when a redaction hides a value or an array merge would require inspecting its items. Treat a missing length as unknown. A recorded zero means an empty array.
-
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its

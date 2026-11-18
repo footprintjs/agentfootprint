@@ -1,6 +1,5 @@
 import { getAgentRuntime, initializeAgentRuntime } from './agent/runtime/native/host.js';
 import { RunnerBase } from './RunnerBase.js';
-import type { RunnerSnapshotOptions } from './runnerSnapshot.js';
 import type { AgentNativeBindings } from './agent/runtime/native/bindings.js';
 import type { AgentRunValues } from './agent/runValues.js';
 import * as nativeOperations from './agent/runtime/native/operations.js';
@@ -27,6 +26,7 @@ import {
   type CombinedNarrativeEntry,
   type FlowchartCheckpoint,
   type ObserverDrainResult,
+  type RuntimeSnapshot,
 } from 'footprintjs';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
@@ -298,8 +298,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * its policy-filtered base. The agent's logic reads the live run for
    * `checkpoint()`, `followUp()` and crash recovery, so continuation stays raw.
    */
-  override getLastSnapshot(options?: RunnerSnapshotOptions) {
-    return super.getLastSnapshot(options);
+  override getLastSnapshot(): RuntimeSnapshot | undefined {
+    return super.getLastSnapshot();
   }
   /**
    * Structured narrative entries from the most recent run. Pairs with
