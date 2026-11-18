@@ -25,8 +25,9 @@ nothing fits and the new head is already a user turn, the drop is silent toward
 the model. An empty remaining window or a non-user message at the head requires
 a notice. If none fits, the drop is refused (`replacement-not-smaller`) and nothing
 leaves. A removal that does not reach the front (a drop from the middle of the
-window) is always silent toward the model. Whenever something leaves, the record
-names it.
+window) is always silent toward the model. Every dropped message counts as an
+eviction. `removedStageIds` names the stage IDs of the dropped messages that
+have an origin.
 
 ## A strategy never reads the ledger; the stage hands it what it may know
 

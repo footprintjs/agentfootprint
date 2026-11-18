@@ -14,9 +14,11 @@ Support: `turns.ts`, `toolNames.ts`, `options.ts`, `strategy.ts`, `errors.ts`,
   edits the WINDOW, never the LEDGER.
 
 ## The one law here
-An attention omission must be on the RECORD: every removal is named in the
-window stage’s record (`WindowRecord.removedStageIds`). The request receipt
-(`omittedForAttention`) keeps the omitted message count and hashes when present. The MODEL is told only sometimes: a drop
+An attention omission must be on the RECORD: every dropped message counts
+as an eviction. `WindowRecord.removedStageIds` names the stage IDs of the
+dropped messages that have an origin. The request receipt
+(`omittedForAttention`) keeps the omitted message count and hashes when present.
+The MODEL is told only sometimes: a drop
 (`slidingWindow`, `tokenBudget`) inserts a past-tense notice only when the
 removal reaches the front of what may leave AND a notice is shorter than the
 span it replaces. When the remaining window is empty or begins with a non-user
