@@ -1,5 +1,6 @@
 ---
 type: changed
+bump: major
 ---
 **A procedure step is done only when its tool says so; a declared failure holds the step.** A step of a skill's `steps` used to advance whenever its tool returned without throwing. A tool that returned `{ content, effects: [], status: 'failure' }` moved the procedure on, the next step's tool was offered, the model read "Step 1 of 2 done." and `skill.step_advanced` was recorded. Now what the tool declared decides, by one rule, in the tool loop and on every resume (after an `askHuman` answer, an approved check-in, an approved middleware `ask`, and granted credential consent), on agents with a skill graph and on plain agents alike:
 
@@ -15,7 +16,7 @@ What an app will notice, and what to do:
 
 - `skill.step_advanced` always carries `outcome` (`'succeeded'` or `'not-reported'`; `SkillStepAdvancedPayload.outcome` is a required field), plus `status` (`'success'` / `'absent'`) when it succeeded and `unknownStatus` when the tool wrote a word the library does not know. A payload built by hand no longer compiles without `outcome`: add it. A recording made before this change has none of the three, which proves nothing either way.
 - A step whose tool declares a failure, denial, invalid result, pending or partial no longer advances, and the next step's tool is not offered until it succeeds or is skipped: a procedure that relied on moving past a failed step needs a `skip_step` (or the tool must declare success).
-- A listener for `skill.*` receives the new `step_held` event (`SkillStepHeldPayload`): handle or ignore it; an app that counts event names sees one more (130).
+- A listener for `skill.*` receives the new `step_held` event (`SkillStepHeldPayload`): handle or ignore it; an app that counts event names sees one more.
 - The model's tool message for a step whose tool returns a plain value says "ran; its tool declared no status." instead of "done": return `{ content, effects: [], status: 'success' }` where the tool can say its work was done. Three kinds of step tool cannot declare a status and always read this way (and can never hold their step): an MCP tool read in the default text mode (its result reaches the agent as a string; a structured mode can carry an envelope), a frontend tool whose result the page sends back, and an `askHuman` / `pauseHere` step (the person's answer is never read for a status, so a "no" advances the step too). Saved prompts, transcripts or tests that pin "Step k of n done." for such a tool must be updated.
 - A tool that returned an envelope with a status in another case or with spaces (`'Success'`, `' denied '`) now has it read: its content is unwrapped for the model, `stream.tool_end` carries the word, `onToolStatus` edges can fire on it, the committed tool message's `outcome` reads it, and `readToolResultEnvelope` returns it lower-case. Check any route edge or test that depended on such a value being data.
 - The step nudge's sentence changed as quoted above: update tests or transcripts that pin "had not run".

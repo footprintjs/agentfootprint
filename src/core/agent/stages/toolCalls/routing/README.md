@@ -17,7 +17,7 @@ A status word is read once, before it gets here (`semantics/toolOutcome.ts` · `
 | an envelope but for a status word the library does not know | `not-reported` | advances, not held; `step_advanced` carries `unknownStatus` (cleaned); "Step 1 of 2 ran; its tool reported "queued", a status this library does not know, so the step was not held." |
 | declared `failure`, `denied` or `invalid` | `failed` | holds; `skill.step_held`; "Step 1 of 2 was not completed: its tool reported 'failure'." |
 | declared `pending` or `partial` | `not-finished` | holds the same way; the sentence adds "so its work was not finished" |
-| did not run, threw, or its result was withheld | `stopped` | holds; no event and no sentence (the refusal or error already speaks) |
+| did not run, threw, or its result was withheld | `stopped` | holds; no step event or step sentence (the refusal or error keeps its own record) |
 
 Why `absent` counts as done: it is the library's word for "looked and found nothing" (`semantics/toolOutcome.ts` keeps it apart from `failure` for exactly that reason). The look finished, so holding the step would trap a correct procedure that found nothing. The event keeps the word (`status: 'absent'`), so a reader can still tell a nothing-found from a plain success.
 

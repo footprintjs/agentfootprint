@@ -46,6 +46,7 @@ export const fields2 = {
   type: true,
   unit: true,
   unknownId: true,
+  unknownStatus: true,
   unreachable: true,
   unsupported: true,
   upgraded: true,
