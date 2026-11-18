@@ -17,8 +17,10 @@
  * ```
  */
 
-/** Throws a `TypeError` naming the first entry that is not `{ role: string, content: string }`. */
-export function admitStoredHistory(history: readonly unknown[]): void {
+import { assertStoredTypedAnswerMark } from '../tools/typedAnswer.js';
+
+/** Admit stored conversation messages and any marks on their retained folded originals. */
+export function admitStoredHistory(history: readonly unknown[], folded: unknown): void {
   for (const [i, msg] of history.entries()) {
     if (!msg || typeof msg !== 'object') {
       throw new TypeError(
@@ -38,5 +40,27 @@ export function admitStoredHistory(history: readonly unknown[]): void {
           `would otherwise surface deep inside the run rather than here.`,
       );
     }
+    assertStoredTypedAnswerMark(m, `history[${i}]`);
+  }
+  admitFoldedMarks(folded, 'folded');
+}
+
+/** Native resume owns the rest of the pause checkpoint's history validation. */
+export function admitPauseTypedAnswers(state: Record<string, unknown>): void {
+  admitMarks(state.history, 'sharedState.history');
+  admitFoldedMarks(state.foldedSpans, 'sharedState.foldedSpans');
+}
+
+function admitMarks(messages: unknown, location: string): void {
+  if (!Array.isArray(messages)) return;
+  for (const [index, message] of messages.entries()) {
+    assertStoredTypedAnswerMark(message, `${location}[${index}]`);
+  }
+}
+
+function admitFoldedMarks(spans: unknown, location: string): void {
+  if (!Array.isArray(spans)) return;
+  for (const [index, span] of spans.entries()) {
+    admitMarks(span?.messages, `${location}[${index}].messages`);
   }
 }

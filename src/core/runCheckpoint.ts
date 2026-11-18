@@ -790,7 +790,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         `turn the stored history ends on, written while an honesty layer is armed.`,
     );
   }
-  admitStoredHistory(c.history as readonly unknown[]);
+  admitStoredHistory(c.history, c.folded);
   negativeCheckpointOf(c);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);

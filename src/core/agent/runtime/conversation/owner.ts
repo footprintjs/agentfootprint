@@ -22,7 +22,6 @@ import {
 import { requireVerificationOnResume } from '../../findings/verificationCheckpoint.js';
 import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
-import { restoredConversation } from './liveConversation.js';
 import { type ClockDraft, type ReadRunTime } from '../../../../time/clock.js';
 import type { AgentOutput, AgentState } from '../../types.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
@@ -276,8 +275,6 @@ export function conversationOwner(
  * conversation ADDS this turn's user message to the stored history; resuming
  * after an error does NOT, because there the message is already the last user
  * turn in that history and appending it would ask the same question twice.
- * `fromLive` says where the conversation came from: `followUp()`'s own (marks
- * kept) or a caller's (marks removed) — see `./liveConversation.ts`.
  *
  * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
  * by `runtime/conversation/seedHistory.ts · historyForTurn` from the message the `'input'` middleware
@@ -293,7 +290,6 @@ export function applyContinuation(
   cp: AgentRunCheckpoint,
   door: string,
   appendsUserTurn: boolean,
-  fromLive: boolean,
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
   requireVerificationOnResume(cp, false);
@@ -320,9 +316,8 @@ export function applyContinuation(
     throw new TypeError(
       'Continuation requires the negative-claims setting used by the recording agent.',
     );
-  const restored = restoredConversation(cp, fromLive);
   values.pendingResumeHistory = {
-    history: restored.history,
+    history: cp.history,
     appendsUserTurn,
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
@@ -337,7 +332,7 @@ export function applyContinuation(
   // The folded spans beside it. A conversation stored before 8.2 has none,
   // and `undefined` is the right answer there — it means "this conversation
   // recorded no folds", which is exactly true.
-  values.pendingResumeFolded = restored.folded;
+  values.pendingResumeFolded = cp.folded;
   // The findings ledger beside it (9.101.0). Stashed whether or not THIS
   // agent is armed: seed restores it only under `.findings()` (the deps
   // gate), and an unarmed continuation consumes and ignores it — exactly

@@ -567,13 +567,12 @@ Pinned by `test/core/agent/evidence/summary-exemption.test.ts`.
 exempt in its other spellings.** The rules, the reasons, the examples, and
 where the mark stays or goes: [person-values.md](person-values.md).
 
-**What is trusted as stored, today.** A pause checkpoint carries the mark as
-stored, so an answer landed in one leg counts in the next leg of the same run.
-A stored compaction summary's `foldedExempt` is read as stored, including a
-value a lookalike put there under an earlier version: after a continuation
-from outside, a folded typed answer stays exempt while an unfolded one does
-not. Both rest on the store being trusted. A mark only the library can have
-written is a planned change of its own.
+**What is trusted as stored.** On loading a conversation or pause checkpoint,
+the library validates each mark's shape, then trusts it as part of the stored
+run state. It cannot establish who wrote a stored field. Keep the session
+store as safe as the run. A pre-mark record's tool results do not count as
+typed answers. A stored summary's `foldedExempt` stays exempt, including
+values that entered a summary under the earlier shape-based rule.
 
 ## Evidence lineage at grain — the person's time parts and the library's spellings (time step T7)
 

@@ -4,7 +4,7 @@ title: TypedAnswerMark
 
 # Interface: TypedAnswerMark
 
-Defined in: [src/provider-contract/typedAnswerMark.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/typedAnswerMark.ts#L46)
+Defined in: [src/provider-contract/typedAnswerMark.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/typedAnswerMark.ts#L43)
 
 THE LIBRARY'S MARK ON A PERSON'S TYPED ANSWER — `LLMMessage.answersAsk`, on
 the `role: 'tool'` message a typed ask's answer (`requestInput`) landed as:
@@ -23,21 +23,18 @@ Written by one door, `core/agent/stages/toolCalls/resume/plain.ts` ·
 `resumePlain`, and never copied from a tool's output: the library builds
 every tool message from named fields.
 
-Where it stays: `agent.followUp()` continues the agent's own last run, a
-conversation that never left the library, so the mark stays there and the
-answer is still the person's words in the next turn. Where it goes: a
-conversation a caller hands in (`run({ continueFrom })`, `resumeOnError`,
-a hosted session store) loses it, in its history and in its folded
-originals (`tools/typedAnswer.ts` · `withoutTypedAnswerMarks`), so its
-typed answers read there as tool results. A history written before this
-field existed carries no mark, and its typed answers read as tool results
-too.
+The live run knows who wrote the message from the path that landed it.
+`agent.followUp()` retains the mark in the same live conversation. When
+a pause or conversation checkpoint is loaded, the library validates the
+mark's shape on history and retained folded originals, then trusts it
+as stored. The checkpoint is the run's own state, and the library cannot
+establish who wrote a stored field. Keep the session store as safe as
+the run.
 
-Trusted as stored, today: a pause checkpoint carries the mark as stored,
-and a stored compaction summary's `foldedExempt` is read as stored,
-including a value a lookalike put there under an earlier version. Both
-rest on the store being trusted; a mark only the library can have written
-is a planned change of its own.
+A record written before this field existed has no mark. Its tool results
+do not count as typed answers. A stored compaction summary's
+`foldedExempt` remains trusted as stored, including a value a lookalike
+added under an earlier version.
 
 **Never reaches a provider.** `core/agent/composeRequest.ts` ·
 `stripFrameworkFields` removes it with the other framework fields.
@@ -57,6 +54,6 @@ is a planned change of its own.
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/provider-contract/typedAnswerMark.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/typedAnswerMark.ts#L48)
+Defined in: [src/provider-contract/typedAnswerMark.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/typedAnswerMark.ts#L45)
 
 The request `Agent.resume` checked the answer against, for the ask the landing run raised.

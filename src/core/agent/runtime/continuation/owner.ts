@@ -8,7 +8,6 @@ import { NoConversationError } from '../../../conversation.js';
 import type { AgentOutput } from '../../types.js';
 import { requestOf } from '../../../requestOfRun.js';
 import type { AgentContext } from '../contracts.js';
-import { asLiveConversation } from '../conversation/liveConversation.js';
 
 export async function followUp(
   this: Pick<AgentContext, 'checkpointFor' | 'lastInputRefused' | 'native' | 'runOwned'>,
@@ -35,13 +34,7 @@ export async function followUp(
     }
     if (conversation.identity !== undefined)
       refuseFollowUpIdentity(options?.identity, conversation.identity);
-    // The run's own conversation, never in a caller's hands: marked live, so
-    // a typed answer of an earlier turn stays the person's words.
-    return this.runOwned(
-      invocation,
-      { message, continueFrom: asLiveConversation(conversation) },
-      options,
-    );
+    return this.runOwned(invocation, { message, continueFrom: conversation }, options);
   });
 }
 
@@ -77,8 +70,7 @@ export async function resumeOnError(
     // reads + clears it before scope.history initializes. No message is
     // appended — the failing run's message is already the last user turn in
     // that history, and adding it again would ask twice.
-    // A checkpoint handed in by the caller: not live, so a typed answer's mark goes.
-    this.applyContinuation(invocation.value, cp, 'Agent.resumeOnError', false, false);
+    this.applyContinuation(invocation.value, cp, 'Agent.resumeOnError', false);
     return this.runOwned(
       invocation,
       {

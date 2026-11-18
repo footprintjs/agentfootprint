@@ -19,7 +19,7 @@ see; the agent composes the request, an adapter carries it.
 - `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.
 - `typedAnswerMark.ts` — `TypedAnswerMark`, the type of `LLMMessage.answersAsk`:
   the library's mark on a person's typed answer, with its whole explanation
-  (who writes it, where it stays or goes, what is trusted as stored). Its own
+  (who writes it, how checkpoints restore it, and why the store is trusted). Its own
   file so `types.ts` stays within its size limit; `types.ts` re-exports it.
 - `codeSandbox.ts` — the code-session port's refusals (`CodeSandboxError`, one
   `reason` per refusal) and its ONE path rule, `sandboxPath`: a session path is

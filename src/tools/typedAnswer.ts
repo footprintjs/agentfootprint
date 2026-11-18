@@ -19,18 +19,9 @@
  * The mark lives OUTSIDE the content, so a tool cannot write it: the library
  * builds every tool message from named fields, never from a tool's output.
  * `core/agent/composeRequest.ts` · `stripFrameworkFields` keeps it off every
- * request a provider sees, with the library's other fields. A conversation a
- * caller hands to a new run (`run({ continueFrom })`, `resumeOnError`, a
- * hosted session store) goes through {@link withoutTypedAnswerMarks}: it was in
- * the caller's hands, so a mark in it may not be the library's. `followUp()`
- * keeps the marks: its conversation is read from the agent's own last run and
- * never leaves the library (`core/agent/runtime/conversation/liveConversation.ts`).
- *
- * Trusted as stored, today: a pause checkpoint carries the mark as stored, and
- * a stored summary's `foldedExempt` is read as stored (including a value a
- * lookalike put there under an earlier version). Both rest on the store being
- * trusted; a mark only the library can have written is a planned change of
- * its own.
+ * request a provider sees, with the library's other fields. A stored pause
+ * or conversation validates the mark's shape at the checkpoint door and
+ * then trusts it as stored. A record from before the mark has no mark.
  *
  * @example
  * ```ts
@@ -43,8 +34,8 @@
  * ```
  */
 
-import type { LLMMessage } from '../provider-contract/types.js';
-import { object, own } from './inputRequest/data.js';
+import { ownData } from '../lib/boundedJson.js';
+import { nonempty, object } from './inputRequest/data.js';
 
 /** A landed answer as its content holds it: what {@link isAnswerTo} proves. */
 export interface LandedTypedAnswer {
@@ -76,13 +67,28 @@ export function isAnswerTo(landed: unknown, requestId: string): landed is Landed
   );
 }
 
-/** The ask the library's mark names, or `undefined` when the message carries no well-formed mark. */
-function markedRequestOf(message: TypedAnswerCandidate): string | undefined {
-  if (!own(message, 'answersAsk')) return undefined;
-  const mark = message.answersAsk;
-  if (!object(mark)) return undefined;
-  const { requestId } = mark;
-  return typeof requestId === 'string' && requestId.length > 0 ? requestId : undefined;
+/** The request named by a mark in the form the landing door writes. */
+function markedRequestOf(mark: PropertyDescriptor | undefined): string | undefined {
+  if (!mark?.enumerable || !('value' in mark)) return undefined;
+  try {
+    const { requestId } = ownData(mark.value, ['requestId']);
+    return nonempty(requestId) ? requestId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Refuse a malformed mark at a checkpoint door. Unmarked messages predate or bypass a typed ask. */
+export function assertStoredTypedAnswerMark(message: unknown, location: string): void {
+  if (typeof message !== 'object' || message === null) return;
+  const mark = Object.getOwnPropertyDescriptor(message, 'answersAsk');
+  if (mark === undefined) return;
+  const { role, content } = message as Partial<TypedAnswerCandidate>;
+  if (role === 'tool' && typeof content === 'string' && markedRequestOf(mark) !== undefined) return;
+  throw new TypeError(
+    `Invalid checkpoint ${location}.answersAsk: expected { requestId: string } ` +
+      'with a non-empty request ID on a tool message with text content.',
+  );
 }
 
 /** `JSON.parse` of the content, or `undefined` for text that is not JSON. */
@@ -109,35 +115,8 @@ export function landedTypedAnswer<M extends TypedAnswerCandidate>(
   read: (marked: M & { readonly content: string }) => unknown = parsedContentOf,
 ): LandedTypedAnswer | undefined {
   if (message.role !== 'tool' || typeof message.content !== 'string') return undefined;
-  const requestId = markedRequestOf(message);
+  const requestId = markedRequestOf(Object.getOwnPropertyDescriptor(message, 'answersAsk'));
   if (requestId === undefined) return undefined;
   const landed = read(message as M & { readonly content: string });
   return isAnswerTo(landed, requestId) ? landed : undefined;
-}
-
-/**
- * The same history without the library's typed-answer mark, for a
- * conversation a caller hands to a new run (`run({ continueFrom })`,
- * `resumeOnError`, a hosted session store). The mark says the library asked
- * the question and landed the answer; a handed-in conversation has been in
- * the caller's hands, where anyone could have written one, so its answers
- * read as ordinary tool results here. `followUp()` does not come through here:
- * its conversation never left the library. Only the mark goes: every other
- * field and every message stays. A history with no mark is returned by
- * reference.
- *
- * @example
- * ```ts
- * withoutTypedAnswerMarks([{ role: 'tool', toolCallId: 'c1', content, answersAsk: { requestId: 'r1' } }]);
- * // [{ role: 'tool', toolCallId: 'c1', content }]
- * ```
- */
-export function withoutTypedAnswerMarks(history: readonly LLMMessage[]): readonly LLMMessage[] {
-  if (!history.some((m) => own(m, 'answersAsk'))) return history;
-  return history.map((m) => {
-    if (!own(m, 'answersAsk')) return m;
-    const { answersAsk: _mark, ...rest } = m;
-    void _mark;
-    return rest;
-  });
 }

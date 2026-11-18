@@ -11,10 +11,11 @@
  *     exempt corpus, the fold's lineage and the re-ask) accepts a message only
  *     with that mark; the content's shape alone never suffices;
  *   • nothing from outside can set it: a local tool, a remote MCP server, a
- *     page answering a frontend tool, a provider's response and a
- *     conversation a caller hands in (continueFrom, resumeOnError, a hosted
- *     store; history and folded originals) each reach the history without it;
- *   • `agent.followUp()` continues the agent's own run, so the mark stays;
+ *     page answering a frontend tool and a provider's response each reach the
+ *     history without it;
+ *   • a saved conversation is trusted after shape validation, including
+ *     its folded originals. A conversation saved before the mark counts
+ *     no typed answers by shape;
  *   • a real typed answer keeps its exemption, before and after a real
  *     `.compaction()` fold, and the redaction rules still apply to it.
  *
@@ -43,7 +44,7 @@ import { checkAnswer, resolveEvidenceGate } from '../../../../src/core/agent/evi
 import { stripFrameworkFields } from '../../../../src/core/agent/composeRequest.js';
 import { buildSummaryMessage } from '../../../../src/core/agent/window/summarize.js';
 import { repeatOf } from '../../../../src/tools/inputRequest.js';
-import { landedTypedAnswer, withoutTypedAnswerMarks } from '../../../../src/tools/typedAnswer.js';
+import { landedTypedAnswer } from '../../../../src/tools/typedAnswer.js';
 import { agUi } from '../../../../src/ag-ui/adapter.js';
 import { readAgUiRunInput } from '../../../../src/ag-ui/request.js';
 import type { AgUiRunInput, AgUiSuspension } from '../../../../src/ag-ui/types.js';
@@ -368,54 +369,72 @@ describe('nothing from outside can set the mark', () => {
     const planned = agUi({}).plan(readAgUiRunInput(body) as AgUiRunInput, held, facts);
     expect(planned.turn).toEqual({ kind: 'answer', answer: LOOKALIKE });
   });
+});
 
-  it('a stored conversation loaded again: the mark is removed, and its answer reads as a tool’s', async () => {
-    const { agent } = await answeredTypedAsk();
-    const stored = agent.checkpoint();
-    if (stored === undefined) throw new Error('expected a conversation checkpoint');
-    expect(carriesMark(stored.history as readonly LLMMessage[])).toBe(true);
-    const { provider } = scripted([{ content: ANSWER }]);
+describe('stored conversations restore typed answers after checking the mark', () => {
+  const doors = ['continueFrom', 'resumeOnError'] as const;
+
+  it.each(doors)('%s keeps a genuine mark across a JSON round trip', async (door) => {
+    const { agent, requestId } = await answeredTypedAsk();
+    const stored = JSON.parse(JSON.stringify(agent.checkpoint()));
+    const { provider, requests } = scripted([{ content: ANSWER }]);
     const next = Agent.create({ provider, model: 'mock' })
       .tool(askDue)
       .namesAndNumbersFromEvidence()
       .build();
-    await next.run({ message: 'And when is it due again?', continueFrom: stored });
-    expect(historyOf(next).some(isStoredAnswer)).toBe(true);
-    expect(carriesMark(historyOf(next))).toBe(false);
-    // An earlier run asked that question: in this run its answer is a tool result.
-    expect(flaggedOf(next)).toEqual(['2031']);
+    if (door === 'continueFrom')
+      await next.run({ message: 'And when is it due again?', continueFrom: stored });
+    else await next.resumeOnError(stored);
+    expect(historyOf(next).find(isStoredAnswer)?.answersAsk).toEqual({ requestId });
+    expect(flaggedOf(next)).toBeUndefined();
+    for (const req of requests) expect(carriesMark(req.messages)).toBe(false);
   });
 
-  it('a stored conversation handed to resumeOnError: the mark is removed there too', async () => {
-    const { agent } = await answeredTypedAsk();
-    const stored = agent.checkpoint();
-    if (stored === undefined) throw new Error('expected a conversation checkpoint');
-    expect(carriesMark(stored.history as readonly LLMMessage[])).toBe(true);
-    const { provider } = scripted([{ content: ANSWER }]);
-    const next = Agent.create({ provider, model: 'mock' })
-      .tool(askDue)
-      .namesAndNumbersFromEvidence()
-      .build();
-    await next.resumeOnError(JSON.parse(JSON.stringify(stored)));
-    expect(historyOf(next).some(isStoredAnswer)).toBe(true);
-    expect(carriesMark(historyOf(next))).toBe(false);
-    expect(flaggedOf(next)).toEqual(['2031']);
-  });
+  it.each([
+    ['absent', undefined, ['2031']],
+    ['a different request', { requestId: 'older-request' }, ['2031']],
+  ] as const)(
+    'continues a saved result with %s as an ordinary tool result',
+    async (_, mark, flags) => {
+      const { agent } = await answeredTypedAsk();
+      const stored = JSON.parse(JSON.stringify(agent.checkpoint()));
+      stored.history = (stored.history as LLMMessage[]).map(({ answersAsk, ...message }) =>
+        answersAsk === undefined || mark === undefined ? message : { ...message, answersAsk: mark },
+      );
+      const { provider } = scripted([{ content: ANSWER }]);
+      const next = Agent.create({ provider, model: 'mock' }).namesAndNumbersFromEvidence().build();
+      await next.run({ message: 'And when is it due again?', continueFrom: stored });
+      expect(historyOf(next).some(isStoredAnswer)).toBe(true);
+      expect(flaggedOf(next)).toEqual(flags);
+    },
+  );
 
-  it('withoutTypedAnswerMarks drops only the mark, and passes an unmarked history by reference', () => {
-    const plain: LLMMessage[] = [{ role: 'user', content: 'hi' }];
-    expect(withoutTypedAnswerMarks(plain)).toBe(plain);
-    const marked: LLMMessage = {
-      role: 'tool',
-      toolCallId: 'c1',
-      content: LOOKALIKE,
-      toolChars: 3,
-      answersAsk: { requestId: 'r-forged' },
-    };
-    expect(withoutTypedAnswerMarks([marked])).toEqual([
-      { role: 'tool', toolCallId: 'c1', content: LOOKALIKE, toolChars: 3 },
-    ]);
-  });
+  it.each([
+    ['continueFrom', 'tool', null],
+    ['continueFrom', 'tool', ['r1']],
+    ['continueFrom', 'tool', { requestId: 32 }],
+    ['continueFrom', 'tool', { requestId: ' ' }],
+    ['continueFrom', 'tool', { requestId: 'r1', extra: true }],
+    ['continueFrom', 'user', { requestId: 'r1' }],
+    ['resumeOnError', 'tool', {}],
+  ] as const)(
+    '%s refuses a malformed mark on a %s message (%j)',
+    async (door, role, answersAsk) => {
+      const { agent } = await answeredTypedAsk();
+      const stored = JSON.parse(JSON.stringify(agent.checkpoint()));
+      const marked = stored.history.findIndex(isStoredAnswer);
+      expect(marked).toBeGreaterThanOrEqual(0);
+      stored.history[marked] = { ...stored.history[marked], role, answersAsk };
+      const { provider, requests } = scripted([{ content: ANSWER }]);
+      const next = Agent.create({ provider, model: 'mock' }).namesAndNumbersFromEvidence().build();
+      const attempt =
+        door === 'continueFrom'
+          ? next.run({ message: 'And when is it due again?', continueFrom: stored })
+          : next.resumeOnError(stored);
+      await expect(attempt).rejects.toThrow(`checkpoint history[${marked}].answersAsk`);
+      expect(requests).toEqual([]);
+    },
+  );
 });
 
 describe('the one recogniser', () => {
@@ -462,7 +481,7 @@ describe('the one recogniser', () => {
 });
 
 describe('the hosting doors and a resumed run', () => {
-  it('a hosted session store: a stored conversation continued by standingAgent loses the mark', async () => {
+  it('a hosted session store: standingAgent restores the saved answer and its mark', async () => {
     const { agent } = await answeredTypedAsk();
     const stored = agent.checkpoint();
     if (stored === undefined) throw new Error('expected a conversation checkpoint');
@@ -483,58 +502,78 @@ describe('the hosting doors and a resumed run', () => {
     } finally {
       await handle.close();
     }
-    // The stored answer is in this run's history, unmarked.
-    expect(historyOf(next).some(isStoredAnswer)).toBe(true);
-    expect(carriesMark(historyOf(next))).toBe(false);
-    expect(flaggedOf(next)).toEqual(['2031']);
+    expect(historyOf(next).find(isStoredAnswer)?.answersAsk).toEqual(
+      (stored.history as readonly LLMMessage[]).find(isStoredAnswer)?.answersAsk,
+    );
+    expect(flaggedOf(next)).toBeUndefined();
   });
 
-  it('a pause checkpoint keeps the mark: an answer landed in one leg still counts in the next', async () => {
-    const askEnd = defineTool({
-      name: 'ask_end',
-      description: 'ask the person for the end date',
-      inputSchema: { type: 'object', properties: {} },
-      execute: () =>
-        requestInput({
-          id: 'end',
-          question: 'When does it end?',
-          fields: [{ id: 'end', type: 'string', required: true }],
-        }),
-    });
-    const { provider } = scripted([
-      callTool('ask_due', 'c1'),
-      callTool('ask_end', 'c2'),
-      { content: 'Due in 2031, ending in 2032.' },
-    ]);
-    const agent = Agent.create({ provider, model: 'mock' })
-      .tool(askDue)
-      .tool(askEnd)
-      .namesAndNumbersFromEvidence()
-      .build();
-    const first = (await agent.run({ message: 'When is the renewal due?' })) as {
-      checkpoint: unknown;
-      awaitingInput: { requestId: string };
-    };
-    const second = (await agent.resume(first.checkpoint as never, {
-      requestId: first.awaitingInput.requestId,
-      values: { due: '2031-05-05' },
-    })) as unknown as { checkpoint: unknown; awaitingInput: { requestId: string } };
-    if (!isInputPause(second as never)) throw new Error('expected a second input pause');
-    // The checkpoint as a host stores it.
-    const stored = JSON.parse(JSON.stringify(second.checkpoint)) as never;
-    await agent.resume(stored, {
-      requestId: second.awaitingInput.requestId,
-      values: { end: '2032-01-01' },
-    });
-    const marks = historyOf(agent)
-      .filter((m) => m.role === 'tool')
-      .map((m) => m.answersAsk?.requestId);
-    expect(marks).toEqual([first.awaitingInput.requestId, second.awaitingInput.requestId]);
-    expect(flaggedOf(agent)).toBeUndefined();
-  });
+  it.each(['valid', 'malformed'] as const)(
+    'a saved pause checkpoint with a %s mark',
+    async (kind) => {
+      const askEnd = defineTool({
+        name: 'ask_end',
+        description: 'ask the person for the end date',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () =>
+          requestInput({
+            id: 'end',
+            question: 'When does it end?',
+            fields: [{ id: 'end', type: 'string', required: true }],
+          }),
+      });
+      const { provider } = scripted([
+        callTool('ask_due', 'c1'),
+        callTool('ask_end', 'c2'),
+        { content: 'Due in 2031, ending in 2032.' },
+      ]);
+      const agent = Agent.create({ provider, model: 'mock' })
+        .tool(askDue)
+        .tool(askEnd)
+        .namesAndNumbersFromEvidence()
+        .build();
+      const first = await agent.run({ message: 'When is the renewal due?' });
+      if (!isInputPause(first)) throw new Error('expected the first input pause');
+      const second = await agent.resume(first.checkpoint, {
+        requestId: first.awaitingInput.requestId,
+        values: { due: '2031-05-05' },
+      });
+      if (!isInputPause(second)) throw new Error('expected the second input pause');
+
+      const stored = JSON.parse(JSON.stringify(second.checkpoint));
+      const index = stored.sharedState.history.findIndex(isStoredAnswer);
+      expect(stored.sharedState.history[index]?.answersAsk).toEqual({
+        requestId: first.awaitingInput.requestId,
+      });
+      if (kind === 'malformed') stored.sharedState.history[index].answersAsk = { requestId: null };
+      const nextProvider = scripted([{ content: 'Due in 2031, ending in 2032.' }]);
+      const next = Agent.create({ provider: nextProvider.provider, model: 'mock' })
+        .tool(askDue)
+        .tool(askEnd)
+        .namesAndNumbersFromEvidence()
+        .build();
+      const attempt = next.resume(stored, {
+        requestId: second.awaitingInput.requestId,
+        values: { end: '2032-01-01' },
+      });
+      if (kind === 'malformed') {
+        await expect(attempt).rejects.toThrow(
+          `checkpoint sharedState.history[${index}].answersAsk`,
+        );
+        expect(nextProvider.requests).toEqual([]);
+        return;
+      }
+      await attempt;
+      const marks = historyOf(next)
+        .filter((m) => m.role === 'tool')
+        .map((m) => m.answersAsk?.requestId);
+      expect(marks).toEqual([first.awaitingInput.requestId, second.awaitingInput.requestId]);
+      expect(flaggedOf(next)).toBeUndefined();
+    },
+  );
 });
 
-describe('where a continued conversation comes from decides whether the mark stays', () => {
+describe('the live conversation and subsequent tool results', () => {
   it('agent.followUp(): the live conversation keeps the mark, and the earlier answer stays the person’s words', async () => {
     const { agent, requestId } = await answeredTypedAsk();
     expect(flaggedOf(agent)).toBeUndefined();
@@ -545,41 +584,6 @@ describe('where a continued conversation comes from decides whether the mark sta
       .map((m) => m.answersAsk?.requestId);
     expect(marks).toEqual([requestId]);
     expect(flaggedOf(agent)).toBeUndefined();
-  });
-
-  it('the same agent’s own conversation handed in through run({ continueFrom }) still loses the mark', async () => {
-    const { agent } = await answeredTypedAsk();
-    const stored = agent.checkpoint();
-    if (stored === undefined) throw new Error('expected a conversation checkpoint');
-    await agent.run({ message: 'And when is it due again?', continueFrom: stored });
-    // The door decides, not the agent: a handed-in conversation was in the caller's hands.
-    expect(historyOf(agent).some(isStoredAnswer)).toBe(true);
-    expect(carriesMark(historyOf(agent))).toBe(false);
-    expect(flaggedOf(agent)).toEqual(['2031']);
-  });
-
-  it('a stored conversation carrying a forged mark: stripped at continueFrom and at resumeOnError', async () => {
-    for (const door of ['continueFrom', 'resumeOnError'] as const) {
-      const { agent } = await toolReturning(LOOKALIKE);
-      const stored = JSON.parse(JSON.stringify(agent.checkpoint())) as {
-        history: LLMMessage[];
-      };
-      // The store was edited: the lookalike now carries a mark naming its own request id.
-      stored.history = stored.history.map((m) =>
-        m.role === 'tool' ? { ...m, answersAsk: { requestId: 'r-forged' } } : m,
-      );
-      expect(carriesMark(stored.history)).toBe(true);
-      const { provider } = scripted([{ content: ANSWER }]);
-      const next = Agent.create({ provider, model: 'mock' })
-        .tool(askDue)
-        .namesAndNumbersFromEvidence()
-        .build();
-      if (door === 'continueFrom')
-        await next.run({ message: 'And when is it due again?', continueFrom: stored as never });
-      else await next.resumeOnError(stored);
-      expect(carriesMark(historyOf(next))).toBe(false);
-      expect(flaggedOf(next)).toEqual(['2031']);
-    }
   });
 
   it('a lookalike carrying the request id of an ask this run really raised is still a tool’s result', async () => {
@@ -715,7 +719,7 @@ describe('a real compaction run', () => {
     expect(flaggedOf(fake.agent)).toEqual(['2031']);
   });
 
-  it('continued from outside, the folded originals lose the mark too; the stored lineage is trusted as stored', async () => {
+  it('a saved conversation retains the folded originals’ marks and the summary’s lineage', async () => {
     const { agent } = await foldedRun('real');
     const stored = JSON.parse(JSON.stringify(agent.checkpoint())) as {
       folded?: { messages?: LLMMessage[] }[];
@@ -731,7 +735,7 @@ describe('a real compaction run', () => {
       foldedSpans?: { messages?: LLMMessage[] }[];
     };
     expect(state.foldedSpans?.length).toBeGreaterThan(0);
-    expect(foldedMarks(state.foldedSpans)).toBe(0);
+    expect(foldedMarks(state.foldedSpans)).toBe(1);
     // The summary's `foldedExempt` is read as stored: the folded answer stays exempt.
     expect(flaggedOf(next)).toBeUndefined();
   });

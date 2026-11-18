@@ -98,23 +98,12 @@ exemptLineageOf([lookalike]);                         // [] — nothing rides a 
 - The mark is outside the content, so a tool cannot write it: every tool
   message is built from named fields. `stripFrameworkFields` keeps it off
   every provider request.
-- `agent.followUp()` keeps the mark. It continues the agent's own last run:
-  the conversation is read from that run's snapshot and handed to the next
-  turn without ever reaching a caller
-  (`../runtime/conversation/liveConversation.ts`), so the person's answer of
-  an earlier turn is still the person's words there.
-- A conversation a caller hands in loses the mark, in its history and in its
-  folded originals: `run({ continueFrom })` (even with the same agent's own
-  `agent.checkpoint()`), `resumeOnError`, and every hosted session store,
-  which continues through `continueFrom` (`typedAnswer.ts` ·
-  `withoutTypedAnswerMarks`). It was in the caller's hands, where anyone could
-  have written a mark. A history stored before the mark existed has none
-  either. There is no fallback by shape or by request id. A value already in
-  a stored summary's `foldedExempt` stays exempt (see the README: trusted as
-  stored), so a folded typed answer still counts after such a continuation
-  and an unfolded one does not.
-- A pause checkpoint keeps the mark as stored. It is the run's own state, the
-  same record `Agent.resume` reads to decide which ask this run raised, so an
-  answer landed in one leg still counts in the next leg of the same run.
+- `agent.followUp()` keeps the mark in the live conversation. A saved
+  conversation (`run({ continueFrom })`, `resumeOnError()`, a hosted session
+  store or a resumed pause) keeps its marks after the checkpoint door
+  validates their shape in the history and retained folded originals.
+  See the [README](README.md) for what the library trusts as stored.
+- History written before the mark existed has no marks. A tool result needs
+  the mark as well as matching content, even when its request ID is real.
 
 Pinned by `test/core/agent/evidence/typed-answer-mark.test.ts`.
