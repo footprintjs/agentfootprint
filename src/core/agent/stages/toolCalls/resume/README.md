@@ -6,7 +6,9 @@ The parent handler retains consent admission, durability, clock and findings ord
 
 These functions use the existing tool resolver, invocation and native pause handler. They introduce no dispatcher, scheduler, run registry or additional execution engine. No broad shared finisher replaces the different door contracts.
 
-The check-in, middleware-ask and credential doors use `access/resumedAdmission.ts` before requesting credentials or entering the tool. The policy reads detached copies of the prepared arguments. Each recheck is recorded in order with its resume phase. The paused record identifies required policy, and the approval continues to bind the original call. An approved middleware question is reusable only at the same bound link, call and equivalent question. When a component refers to data that cannot be compared here, the question needs fresh approval. A newly required question refuses the resumed call. A later ordinary call can ask the person again.
+The check-in, middleware-ask and credential doors use `access/resumedAdmission.ts` before requesting credentials or entering the tool. The policy reads detached copies of the prepared arguments. Each recheck is recorded in order with its resume phase. The paused record identifies required policy, and the approval continues to bind the original call. An approved middleware question is reusable only at the same bound link, call and equivalent question. A component can keep the same immutable artifact ticket across the wait. A fresh ticket changes the question. A newly required question refuses the resumed call. A later ordinary call can ask the person again.
+
+Keep credential consent checkpoints in trusted storage because the resume relies on them for the suspended arguments and the original gate record.
 
 ## The plain door marks a person's typed answer
 

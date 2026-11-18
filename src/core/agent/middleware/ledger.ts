@@ -67,6 +67,7 @@ export function recordDecisions(scope: LedgerScope, rows: readonly MiddlewareDec
       moment: row.moment,
       at: row.at,
       ...(row.phase !== undefined && { phase: row.phase }),
+      ...(row.personApproved !== undefined && { personApproved: row.personApproved }),
       ...(row.toolName !== undefined && { toolName: row.toolName }),
       ...(row.toolCallId !== undefined && { toolCallId: row.toolCallId }),
       iteration: row.iteration,

@@ -52,6 +52,25 @@ describe('paused tool policy provenance', () => {
     );
   });
 
+  it('compares component questions by their immutable artifact tickets', () => {
+    const component = { componentId: 'sample-picker', propsRef: 'art_sample_options' };
+    const original = { ...question, component };
+    const recorded = pauseGatePolicy({}, address, original);
+    const restored = pausedGatePolicyOf(JSON.parse(JSON.stringify(recorded)), address);
+    const fingerprint = restored?.question;
+
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(fingerprintAskedQuestion({ ...original, component: { ...component } })).toBe(
+      fingerprint,
+    );
+    expect(
+      fingerprintAskedQuestion({
+        ...original,
+        component: { ...component, propsRef: 'art_new_sample_options' },
+      }),
+    ).not.toBe(fingerprint);
+  });
+
   it('distinguishes a pause without a before-tool hook from missing provenance', () => {
     const checkIn = { ...address, gate: 'checkIn' } as const;
     const record = pauseGatePolicy({}, checkIn);

@@ -354,6 +354,9 @@ describe('middleware — integration', () => {
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toBe('declined by human: not this one');
+    expect(ledger(agent)).toContainEqual(
+      expect.objectContaining({ outcome: 'deny', personApproved: false }),
+    );
   });
 
   // 8.13.0 — this used to DECLINE silently, filing a `checkin.decision` with
@@ -486,7 +489,7 @@ describe('middleware — integration', () => {
     const rows = ledger(agent).filter((row) => row.moment === 'before-tool');
     expect(rows).toMatchObject([
       { middleware: 'gate', outcome: 'ask', why: 'approve?' },
-      { middleware: 'gate', outcome: 'allow', why: 'approved by alice' },
+      { middleware: 'gate', outcome: 'allow', personApproved: true, why: 'approved by alice' },
       { middleware: 'gate', outcome: 'ask', phase: 'resume', why: 'approve?' },
       { middleware: 'after', outcome: 'allow', phase: 'resume' },
     ]);

@@ -136,7 +136,32 @@ function routedCommentaryKey(event: AgentfootprintEvent): string | null | undefi
     case 'agentfootprint.tools.result_refused':
       return 'tools.result_refused';
 
+    case 'agentfootprint.checkin.decision':
+      return event.payload.approved === true ? 'checkin.decision.approved' : undefined;
+
+    case 'agentfootprint.permission.check':
+      if (
+        event.payload.phase === 'resume' &&
+        (event.payload.result === 'deny' || event.payload.result === 'halt')
+      )
+        return 'permission.check.resume.refused';
+      return undefined;
+
     case 'agentfootprint.middleware.decision':
+      if (event.payload.phase === 'resume') {
+        if (event.payload.outcome === 'refused') {
+          switch (event.payload.why) {
+            case 'second-question':
+              return 'middleware.decision.resume.secondQuestion';
+            case 'call-changed':
+              return 'middleware.decision.resume.callChanged';
+            default:
+              return 'middleware.decision.resume.libraryRefused';
+          }
+        }
+        if (event.payload.outcome === 'deny') return 'middleware.decision.resume.refused';
+      } else if (event.payload.outcome === 'allow' && event.payload.personApproved === true)
+        return 'checkin.decision.approved';
       return event.payload.outcome === 'refused' ? 'middleware.decision.refused' : undefined;
 
     case 'agentfootprint.tools.repeated_call':

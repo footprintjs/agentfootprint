@@ -3,10 +3,9 @@
  *
  * Outcome, from typed fields only (never a `why` prose):
  *   - `not-dispatched` — `tool_end.notDispatched` (a batch settled on a pause);
- *   - `declined`       — a person was asked and declined: a before-tool deny on
- *                        the call a RESUMED leg answers (its start is in the
- *                        earlier leg), or a `checkin.decision` with
- *                        `approved: false`;
+ *   - `declined`       — a person was asked and declined: a check-in or a
+ *                        middleware answer. Legacy records identify a decline
+ *                        by an unphased before-tool denial on the paused call;
  *   - `refused`        — BEFORE-tool only: `tool_end.notExecuted`, a deny
  *                        `middleware.decision` with `moment: 'before-tool'`, or a
  *                        `permission.check` for this call that did not allow;
@@ -34,8 +33,9 @@
  */
 
 import { strip } from '../../semantics/coverage/read.js';
-import { readNotDispatched, toolRanOf } from '../../semantics/toolRan.js';
+import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
+import { outcomeOf, type CallIndex } from './callOutcome.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
@@ -102,6 +102,8 @@ export interface CallRead {
   readonly end?: ViewEvent;
   /** The decision or permission row that refused / withheld it. */
   readonly ruleEvent?: ViewEvent;
+  /** The recorded human approval before a policy recheck refused the call. */
+  readonly approvalEvent?: ViewEvent;
   readonly coverage?: CoverageRead;
   /** The `tools.semantics_declared` row: the described envelope as the record keeps it. */
   readonly described?: ViewEvent;
@@ -143,8 +145,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 /** One pass per event type: toolCallId → its events, in recording order. */
-type CallIndex = (type: string, id: string) => readonly ViewEvent[];
-
 function indexByCall(ctx: ReadContext): CallIndex {
   const cache = new Map<string, Map<string, ViewEvent[]>>();
   return (type, id) => {
@@ -314,120 +314,6 @@ function toolNameFor(
   return { name: message.toolName as string, pointer: historyAt(index, '/toolName', id) };
 }
 
-/**
- * The permission rows between this call's start and end that name its tool —
- * and no other call. A tool that calls a tool (`ctx.tools.call`) has its inner
- * call's checks filed in that window under the inner call's own id
- * (`c1#inner-1`); a row that names a different call is not a verdict on this
- * one, even when both calls name the same tool. A row that names no call (an
- * app's own `agent.emit`) is still read by its window and tool name.
- */
-function permissionRows(
-  ctx: ReadContext,
-  id: string,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): ViewEvent[] {
-  if (start === undefined) return [];
-  const upTo = end?.index ?? Number.POSITIVE_INFINITY;
-  return ctx.view.ofType('permission.check').filter((e) => {
-    const call = str(e.payload.toolCallId);
-    return (
-      e.index > start.index &&
-      e.index < upTo &&
-      e.payload.target === toolName &&
-      (call === undefined || call === id)
-    );
-  });
-}
-
-/** The permission verdicts that stop a call before it runs. */
-export const PERMISSION_REFUSALS: ReadonlySet<unknown> = new Set(['deny', 'halt']);
-
-interface Outcome {
-  readonly outcome: ToolCallFact['outcome'];
-  readonly refusedBy?: string;
-  readonly withheldBy?: string;
-  readonly ruleEvent?: ViewEvent;
-}
-
-/** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
-const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'entered', 'error'] as const;
-
-function outcomeOf(
-  ctx: ReadContext,
-  byCall: CallIndex,
-  id: string,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): Outcome {
-  const decisions = byCall('middleware.decision', id);
-  const stoppedByMiddleware = (e: ViewEvent) =>
-    e.payload.outcome === 'deny' || e.payload.outcome === 'refused';
-  const beforeDeny = decisions.find(
-    (e) => e.payload.moment === 'before-tool' && stoppedByMiddleware(e),
-  );
-  const afterDeny = decisions.find(
-    (e) => e.payload.moment === 'after-tool' && stoppedByMiddleware(e),
-  );
-  // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
-  // allow || gate_open), so it is never a refusal.
-  const permissionDeny = permissionRows(ctx, id, toolName, start, end).find((e) =>
-    PERMISSION_REFUSALS.has(e.payload.result),
-  );
-  const checkInDeclined = byCall('checkin.decision', id).find((e) => e.payload.approved === false);
-  const pausedId = str(ctx.view.state?.pausedToolCallId);
-  const isPausedCall =
-    ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
-
-  // The record keeps out a field that says how the call ended (a redaction
-  // policy's placeholder): how it ended cannot be told, so it is not guessed.
-  if (end !== undefined) {
-    if (OUTCOME_FIELDS.some((field) => keptOut(end, field))) return { outcome: 'unknown' };
-    const settlement = readNotDispatched(end.payload.notDispatched);
-    if (settlement === 'settled') return { outcome: 'not-dispatched', ruleEvent: end };
-    if (settlement === 'malformed')
-      return { outcome: end.payload.error === true ? 'ended-in-error' : 'unknown' };
-  }
-  if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
-  if (beforeDeny?.payload.outcome === 'deny' && isPausedCall)
-    return { outcome: 'declined', ruleEvent: beforeDeny };
-  if (beforeDeny !== undefined) {
-    const by =
-      beforeDeny.payload.outcome === 'refused' ? undefined : str(beforeDeny.payload.middleware);
-    return {
-      outcome: 'refused',
-      ruleEvent: beforeDeny,
-      ...(by !== undefined && { refusedBy: by }),
-    };
-  }
-  if (permissionDeny !== undefined) {
-    const by = str(permissionDeny.payload.policyRuleId);
-    return {
-      outcome: 'refused',
-      ruleEvent: permissionDeny,
-      ...(by !== undefined && { refusedBy: by }),
-    };
-  }
-  if (end?.payload.notExecuted === true) return { outcome: 'refused', ruleEvent: end };
-  if (end === undefined) return { outcome: 'unknown' };
-  // No rule and no person stopped it: whether its tool ran is the record's
-  // own word (`entered`), never inferred from `error`.
-  // A leaf no writer writes (`toolRanOf` reads `'not-recorded'`) with no `error`
-  // says nothing about how the call ended: not guessed, as a kept-out field.
-  const ran = toolRanOf(end.payload);
-  if (ran === 'not-run') return { outcome: 'not-executed' };
-  if (end.payload.error === true) return { outcome: ran === 'ran' ? 'failed' : 'ended-in-error' };
-  if (ran === 'not-recorded') return { outcome: 'unknown' };
-  const by =
-    afterDeny?.payload.outcome === 'refused' ? 'library' : str(afterDeny?.payload.middleware);
-  return afterDeny !== undefined
-    ? { outcome: 'ran', ruleEvent: afterDeny, ...(by !== undefined && { withheldBy: by }) }
-    : { outcome: 'ran' };
-}
-
 /** The one leaf on `tool_end` that says how the call ended, as the account read it. */
 export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordPointer {
   if (readNotDispatched(end.payload.notDispatched) === 'settled') {
@@ -539,6 +425,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ...(start !== undefined && { start }),
     ...(end !== undefined && { end }),
     ...(outcome.ruleEvent !== undefined && { ruleEvent: outcome.ruleEvent }),
+    ...(outcome.approvalEvent !== undefined && { approvalEvent: outcome.approvalEvent }),
     ...(coverage !== undefined && { coverage }),
     ...(described !== undefined && { described }),
     emptiness,

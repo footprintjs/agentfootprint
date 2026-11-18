@@ -142,6 +142,17 @@ export function projectTrustBoundary(
         fact.moment = choice(field(payload, 'moment'), LOOP_MOMENTS);
         fact.outcome = choice(field(payload, 'outcome'), middlewareOutcomes);
         if (field(payload, 'phase') === 'resume') fact.phase = 'resume';
+        else {
+          const personApproved = field(payload, 'personApproved');
+          if (personApproved !== undefined) {
+            if (
+              typeof personApproved !== 'boolean' ||
+              fact.outcome !== (personApproved ? 'allow' : 'deny')
+            )
+              throw invalid;
+            fact.personApproved = personApproved;
+          }
+        }
         const changed = field(payload, 'changed');
         if (typeof changed !== 'boolean') throw invalid;
         fact.changed = changed;

@@ -687,11 +687,12 @@ describe('the record of an inner call', () => {
       .build();
     const paused = await agent.run({ message: 'go' });
     if (!isCheckInPause(paused)) throw new Error('expected a check-in pause');
+    expect(checker.asked).toEqual(['tool_call:compose']);
     await agent.resume(paused.checkpoint, checkInApproved({ request: paused.checkIn, by: 'ops' }));
 
     expect(secret.entered).toEqual([]);
     expect(told[0]).toContain('permission check');
-    expect(checker.asked).toEqual(['tool_call:compose', 'tool_call:secret']);
+    expect(checker.asked).toEqual(['tool_call:compose', 'tool_call:compose', 'tool_call:secret']);
     expect(rows(agent).map((r) => [r.toolCallId, r.refusedBy])).toEqual([
       ['c1#inner-1', 'permission'],
     ]);

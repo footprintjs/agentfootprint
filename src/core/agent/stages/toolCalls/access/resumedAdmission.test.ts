@@ -24,6 +24,54 @@ function capture(policy: unknown, prior: readonly MiddlewareDecision[] = []) {
 }
 
 describe('resumed tool admission without execution', () => {
+  it('returns the same detached bytes that asynchronous policy saw', async () => {
+    const swatch = new Uint8Array(new SharedArrayBuffer(1));
+    swatch[0] = 7;
+    let acknowledge!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      acknowledge = resolve;
+    });
+    let release!: () => void;
+    const delay = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const check = vi.fn(async (_question: { readonly context?: unknown }) => {
+      acknowledge();
+      await delay;
+      return { result: 'allow' as const };
+    });
+    const deps = { permissionChecker: { name: 'swatch-catalogue', check } };
+    const scope = capture(pauseGatePolicy(deps, address));
+
+    const pending = recheckResumedCall(scope as never, deps, { ...frame, args: { swatch } });
+    await waiting;
+    swatch[0] = 8;
+    release();
+    const admission = await pending;
+
+    expect(check.mock.calls[0]?.[0].context).toEqual({ swatch: Uint8Array.of(7) });
+    expect(admission).toMatchObject({ allowed: true, args: { swatch: Uint8Array.of(7) } });
+    if (!admission.allowed) throw new Error('Expected an admitted swatch.');
+    expect(admission.matchesPrepared(admission.args)).toBe(true);
+  });
+
+  it('refuses prepared values it cannot detach before asking the policy', async () => {
+    const check = vi.fn();
+    const deps = { permissionChecker: { name: 'swatch-catalogue', check } };
+    const scope = capture(pauseGatePolicy(deps, address));
+
+    const admission = await recheckResumedCall(scope as never, deps, {
+      ...frame,
+      args: { formatter: () => 'sample' },
+    });
+
+    expect(admission).toEqual({
+      allowed: false,
+      refusal: { result: "Tool 'sample' could not be authorized after the wait.", error: true },
+    });
+    expect(check).not.toHaveBeenCalled();
+  });
+
   it('keeps the policy question and the library’s second-question refusal in order', async () => {
     const middleware: ToolMiddleware = {
       name: 'example-rule',
@@ -43,9 +91,12 @@ describe('resumed tool admission without execution', () => {
     const scope = capture(pauseGatePolicy(deps, address), [prior]);
 
     await expect(recheckResumedCall(scope as never, deps, frame)).resolves.toEqual({
-      result:
-        "Tool 'sample' did not run because the current policy requires a person's answer again. The tool may be called again.",
-      error: true,
+      allowed: false,
+      refusal: {
+        result:
+          "Tool 'sample' did not run because the current policy requires a person's answer again. The tool may be called again.",
+        error: true,
+      },
     });
     expect(scope.middlewareDecisions).toMatchObject([
       prior,
@@ -60,7 +111,7 @@ describe('resumed tool admission without execution', () => {
     const deps = { toolMiddleware: [{ name: 'example-rule', onToolCall }] };
 
     const result = await recheckResumedCall(scope as never, deps, frame);
-    expect(result?.error).toBe(true);
+    expect(result).toMatchObject({ allowed: false, refusal: { error: true } });
     expect(onToolCall).not.toHaveBeenCalled();
     expect(scope.$emit.mock.calls.map(([type]) => type)).toEqual([
       'agentfootprint.permission.check',
@@ -75,7 +126,7 @@ describe('resumed tool admission without execution', () => {
 
     const result = await recheckResumedCall(scope as never, { toolMiddleware: [current] }, frame);
 
-    expect(result?.error).toBe(true);
+    expect(result).toMatchObject({ allowed: false, refusal: { error: true } });
     expect(onToolCall).not.toHaveBeenCalled();
     expect(scope.middlewareDecisions).toMatchObject([
       { middleware: 'agentfootprint', phase: 'resume', outcome: 'refused' },
@@ -93,10 +144,15 @@ describe('resumed tool admission without execution', () => {
 
     const result = await recheckResumedCall(scope as never, deps, frame);
 
-    expect(result?.halt).toMatchObject({
-      outer: true,
-      reason: 'sample-verdict',
-      call: { toolName: frame.toolName, toolCallId: address.toolCallId, args: frame.args },
+    expect(result).toMatchObject({
+      allowed: false,
+      refusal: {
+        halt: {
+          outer: true,
+          reason: 'sample-verdict',
+          call: { toolName: frame.toolName, toolCallId: address.toolCallId, args: frame.args },
+        },
+      },
     });
     expect(scope.$emit.mock.calls.map(([type]) => type)).toEqual([
       'agentfootprint.permission.check',

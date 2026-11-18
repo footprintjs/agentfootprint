@@ -13,7 +13,7 @@
  *     while the outer stage is still open;
  *   - gate, middleware and dispatch refusals come in the model call's order;
  *   - what the checker is handed: the outer call's history and iteration, a
- *     frozen copy; and a walker that fails refuses with its own sentence.
+ *     frozen copy; and an unrecognised middleware answer records a library refusal.
  */
 import { disableDevMode, enableDevMode, isDevMode } from 'footprintjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -496,7 +496,7 @@ describe('what the inner call’s checker is handed', () => {
     expect(proposed).toEqual(['c1']);
   });
 
-  it('a walker that fails on an answer it cannot read refuses with its own sentence, and files no chain row', async () => {
+  it('an unrecognised middleware answer refuses the inner call and records a library refusal', async () => {
     const secret = target();
     const compose = composing(async (call) => call('secret', { account: 'A1' }));
     const silent: ToolMiddleware = {
@@ -512,9 +512,12 @@ describe('what the inner call’s checker is handed', () => {
     expect(secret.entered).toEqual([]);
     expect(compose.told[0]).toBe(
       "refused: ctx.tools.call('secret'): the tool middleware refused this inner call, so the " +
-        'tool did not run: the gate gave no answer, and no answer is not an allow.',
+        'tool did not run: The library refused an unrecognised middleware answer.',
     );
-    expect(decisions(agent).map((d) => d.toolCallId)).toEqual(['c1']);
+    expect(decisions(agent).map((d) => [d.toolCallId, d.outcome])).toEqual([
+      ['c1', 'allow'],
+      ['c1#inner-1', 'refused'],
+    ]);
     expect(rows(agent)[0]?.refusedBy).toBe('middleware');
   });
 
