@@ -14,7 +14,7 @@
     "src/adapters/llm/OllamaProvider.ts": 1028,
     "src/adapters/llm/OpenAIProvider.ts": 1171,
     "src/adapters/memory/agentcore.ts": 1485,
-    "src/adapters/memory/memoryBank.ts": 1322,
+    "src/adapters/memory/memoryBank.ts": 1303,
     "src/adapters/memory/pgVector.ts": 1017,
     "src/adapters/memory/s3Vectors.ts": 1091,
     "src/adapters/memory/sqliteVector.ts": 1135,
