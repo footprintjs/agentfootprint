@@ -397,27 +397,31 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       const marker = facts.notDispatched;
       const settled = typeof marker === 'object' ? marker : undefined;
 
-      // The LAST `tool_end` for the id — the call the result line shows,
-      // since a provider may reuse an id and the latest message decides the
-      // result. After a settlement that is the call that ran under the id
-      // again; a settled call itself never reaches the outcome lines
-      // (`settled`). Whether its tool ran is the record's own word, read by
-      // the one reader (`semantics/toolRan.ts` · `toolRanOf`): an unknown
-      // tool name ends in an error without its tool ever running.
+      // The latest bracket belongs to the result shown when a provider reuses
+      // a call id. A recorded decision can explain an unstamped bracket.
       const end = eventsOf('agentfootprint.stream.tool_end')
         .reverse()
         .find((event) => event.payload.toolCallId === toolCallId);
-      const ran =
+      const rows = rowsFor(toolCallId);
+      const denial = rows.find((row) => row.outcome === 'deny');
+      const declined = eventsOf('agentfootprint.checkin.decision').some(
+        (event) => event.payload.toolCallId === toolCallId && event.payload.approved === false,
+      );
+      const bracketEntry =
         settled !== undefined
           ? 'not-run'
           : marker === 'malformed' || end === undefined
           ? 'not-recorded'
           : toolRanOf(end.payload);
+      const ran =
+        bracketEntry === 'not-recorded' &&
+        (declined || rows.some((row) => row.outcome === 'deny' && row.moment === 'before-tool'))
+          ? 'not-run'
+          : bracketEntry;
 
       // Ran-with args: the ledger is the ONLY record of a rule rewriting
       // them. No ledger row means no rule changed anything — say that
       // plainly rather than leaving the reader to assume it.
-      const rows = rowsFor(toolCallId);
       const rewrite = [...rows]
         .reverse()
         .find((row) => row.changed === true && row.moment === 'before-tool');
@@ -461,15 +465,11 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
 
       // Outcome + duration: the event tail is the only clock a run has,
       // read off the same `end` as above.
-      const denial = rows.find((row) => row.outcome === 'deny');
       const checkIn = eventsOf('agentfootprint.checkin.request').some(
         (event) => event.payload.toolCallId === toolCallId,
       );
       const invalid = eventsOf('agentfootprint.validation.args_invalid').some(
         (event) => event.payload.toolCallId === toolCallId,
-      );
-      const declined = eventsOf('agentfootprint.checkin.decision').some(
-        (event) => event.payload.toolCallId === toolCallId && event.payload.approved === false,
       );
       let outcome: string;
       if (settled !== undefined) {
@@ -501,7 +501,7 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       } else if (facts.result !== undefined) {
         outcome = 'ok';
       } else {
-        outcome = '⚠ unknown — no ledger row, no result, no end event';
+        outcome = '⚠ unknown — the tool ran, but its result is not in the kept history';
       }
       lines.push(`outcome: ${outcome}`);
       if (invalid) {

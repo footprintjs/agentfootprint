@@ -73,13 +73,14 @@ const lookup = (execute: (args: Record<string, unknown>) => unknown) => ({
 const NEW_FIELDS = ['modelResult', 'changedArgKeys', 'notExecuted'];
 const newFieldsOn = (p: Payload): string[] => NEW_FIELDS.filter((k) => k in p);
 
-describe('BOUNDARY — the byte law: no configured rule, no new field', () => {
+describe('BOUNDARY — no configured rule adds no rule-specific field', () => {
   it('a call that ran', async () => {
     const { ends } = await runCapturing((b) => b.tool(lookup(() => ({ balance: 1 }))), {
       name: 'lookup',
       args: { account: 'A-1' },
     });
-    expect(Object.keys(ends[0]!).sort()).toEqual(['durationMs', 'result', 'toolCallId']);
+    expect(Object.keys(ends[0]!).sort()).toEqual(['durationMs', 'entered', 'result', 'toolCallId']);
+    expect(ends[0]!.entered).toBe(true);
   });
 
   it('an unknown tool name — error: true, entered: false', async () => {

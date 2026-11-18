@@ -15,35 +15,26 @@
  *   passes, stamps the field from the `ran` flag every dispatch path already
  *   hands it. One other emitter writes `tool_end` without it: the demo chart
  *   `core/agent/buildAgentMessageApiChart.ts` · `toolExec`, which runs no tool
- *   function at all (it answers `[name result]` for any name). Its unstamped
- *   brackets match the success shape without proving a tool ran.
+ *   function at all (it answers `[name result]` for any name). Its brackets
+ *   leave entry unrecorded.
  * - `toolRanOf` is the reader: the answer account (`answer-account/facts/
  *   calls.ts` · `outcomeOf`), the tool-call ledger (`answer-validation/
  *   toolLedger.ts` · `toolOutcomeOf`), the trace toolpack
- *   (`trace-toolpack/traceToolpack/toolCallJournal.ts`) and the chat-interface
- *   door (`ag-ui/toolResultWords.ts`) ask it. Readers that do not ask it yet
- *   are listed in `answer-account/README.md`, "Not covered yet".
+ *   (`trace-toolpack/traceToolpack/toolCallJournal.ts`), teaching commentary
+ *   and the chat-interface door (`ag-ui/toolResultWords.ts`) ask it. Readers
+ *   that do not ask it yet are listed in `answer-account/README.md`.
  *
  * What the field proves, on a record written by this version:
  *   - `entered: false` — the tool's function was never entered. Stamped on
  *     every bracket of such a call, except one that already says so another
  *     way (`notExecuted`: a rule refused it; `notDispatched`: a paused batch
  *     settled it), which keeps the bytes it had.
- *   - `entered: true`  — the function was entered AND the call ended in an
- *     error (`error: true`). Only beside `error`.
- *   - absent, on a bracket with no `notExecuted` and no `notDispatched` — a
- *     call that ended without `error` and whose function was entered: a
- *     success keeps exactly the bytes it always had. (A bracket WITH one of
- *     those markers has no `entered` either, and its function was not
- *     entered: the marker says so.)
+ *   - `entered: true` — the function was entered, whether it returned or threw.
  *
  * A record written BEFORE this version carries no `entered` anywhere, so
- * there its absence proves nothing: an `error` bracket without it reads
- * `'not-recorded'`. A bracket without `error` and without any marker reads
- * `'ran'` on a record of any version; on an older record a resumed leg's call
- * that a person declined or a rule refused also looks like that, and the
- * account tells it apart by its `checkin.decision` / `middleware.decision`
- * row, which it reads first.
+ * without a refusal or settlement marker the bracket reads `'not-recorded'`.
+ * The account and journal can also read a separate recorded decision that
+ * establishes a refusal or decline.
  *
  * The same fact has a second spelling on the conversation history, which
  * carries no `tool_end`: `LLMMessage.toolResultOrigin: 'not-entered'`,
@@ -58,7 +49,8 @@
  *   toolRanOf({ error: true, entered: true })  // 'ran'         — the tool threw
  *   toolRanOf({ error: true })                 // 'not-recorded' — written before this version
  *   toolRanOf({ error: 'yes' })                // 'not-recorded' — a leaf no writer writes
- *   toolRanOf({})                              // 'ran'         — it returned
+ *   toolRanOf({ entered: true })               // 'ran'         — it returned
+ *   toolRanOf({})                              // 'not-recorded' — no entry fact
  */
 
 /** The answer to "did this call's tool run?" read off its `tool_end` bracket. */
@@ -103,8 +95,8 @@ const unreadable = (leaf: unknown): boolean => leaf !== undefined && typeof leaf
 
 /**
  * Validate saved boolean fields before using them as evidence, then read the
- * refusal or settlement marker and the entry stamp. An error without a
- * stamp is an older bracket that does not say whether the tool ran.
+ * refusal or settlement marker and the entry stamp. A bracket with neither
+ * a marker nor a stamp does not say whether the tool ran.
  */
 export function toolRanOf(bracket: ToolRanFields): ToolRan {
   if ([bracket.entered, bracket.error, bracket.notExecuted].some(unreadable)) return 'not-recorded';
@@ -114,20 +106,18 @@ export function toolRanOf(bracket: ToolRanFields): ToolRan {
   if (bracket.notExecuted === true) return 'not-run';
   if (bracket.entered === false) return 'not-run';
   if (bracket.entered === true) return 'ran';
-  if (bracket.error === true) return 'not-recorded';
-  return 'ran';
+  return 'not-recorded';
 }
 
 /**
  * THE writer. `ran` is the dispatch's own fact: the tool's `execute` was
- * entered. Returns `bracket` itself when nothing is stamped (a success, or a
- * bracket another marker already explains), so those bytes cannot move.
+ * entered. Returns `bracket` itself when another marker already explains
+ * why the tool did not run.
  *
  * @example withEntered({ toolCallId: 'c1', result: 'Unknown tool…', durationMs: 0, error: true }, false)
  *   // → { …, error: true, entered: false }
  */
 export function withEntered<T extends ToolRanFields>(bracket: T, ran: boolean): T {
   if (bracket.notDispatched !== undefined || bracket.notExecuted === true) return bracket;
-  if (!ran) return { ...bracket, entered: false };
-  return bracket.error === true ? { ...bracket, entered: true } : bracket;
+  return { ...bracket, entered: ran };
 }
