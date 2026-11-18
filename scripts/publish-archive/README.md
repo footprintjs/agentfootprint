@@ -28,8 +28,8 @@ policies. AF's default does not inherit any dependency-only member allowance.
 published FootPrint 14.0.0-rc.0, Foottrace 2.1.0 and ContextFootprint 0.1.1 inputs.
 The engine RC is an exact selected version, not a range or a lookup of `next`;
 old versions and adjacent RC/stable versions are refused. This dependency profile
-does not change the AgentFootprint 15.0.0-rc.0 source candidate identity or widen
-the default AgentFootprint archive policy.
+keeps the authored AgentFootprint source version and the default AgentFootprint
+archive policy.
 It accepts no caller profile, root, limit or command. The fixed dependency
 bounds are 16 MiB compressed, 64 MiB expanded and 10,000 members. A bounded
 owned copy of the original input must match its selected canonical SHA512 SRI

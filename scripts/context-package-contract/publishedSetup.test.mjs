@@ -62,13 +62,22 @@ test('refuses another RC or stable engine archive instead of relabelling it as t
   }
 });
 
-test('a later authored cohort release keeps its own original version rather than being staged back to the pilot label', () => {
-  for (const version of ['15.0.0', '15.0.1', '15.1.0-rc.2']) {
+test('the authored source version remains bound to the manifest, lock and original archive', () => {
+  for (const version of ['14.10.0', '15.0.0', '15.0.1', '15.1.0-rc.2', '16.0.0']) {
     const f = fixture();
     f.manifest.version = f.lock.version = f.lock.packages[''].version = version;
     const inputs = admit(f);
     assert.equal(sourceProductionManifest(inputs).version, version);
     assert.equal(consumerProductionManifest(inputs, { ...artifact(), sourceVersion: version }).dependencies.agentfootprint, pathToFileURL(artifact().path).href);
+    assert.throws(() => consumerProductionManifest(inputs, artifact()), /artifact version/);
+  }
+});
+
+test('coherent source documents still refuse noncanonical and oversized versions', () => {
+  for (const version of ['014.10.0', '14.10.00', '14.10.0\n', '15.0.0-rc.01', '9007199254740992.0.0']) {
+    const f = fixture();
+    f.manifest.version = f.lock.version = f.lock.packages[''].version = version;
+    assert.throws(() => admit(f), /source identity/);
   }
 });
 

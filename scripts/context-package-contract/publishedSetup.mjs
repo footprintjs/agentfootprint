@@ -61,8 +61,9 @@ function selectedRecord(packages, name) {
 
 function sourceVersion(version) {
   if (typeof version !== 'string' || version.length > 128) return false;
-  const match = /^15\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?$/.exec(version);
-  return Boolean(match && match.slice(1).every((part) => part === undefined || Number.isSafeInteger(Number(part))));
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?$/.exec(version);
+  return Boolean(match && match[0] === version &&
+    match.slice(1).every((part) => part === undefined || Number.isSafeInteger(Number(part))));
 }
 
 /** Admit the original documents; exact ranges are a closed policy, not a SemVer implementation. */
