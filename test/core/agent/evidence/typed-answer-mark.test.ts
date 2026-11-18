@@ -703,9 +703,6 @@ describe('a real compaction run', () => {
     return { agent, history, summary };
   }
 
-  const foldedMarks = (spans: readonly { messages?: readonly LLMMessage[] }[] | undefined) =>
-    (spans ?? []).flatMap((s) => s.messages ?? []).filter((m) => 'answersAsk' in m).length;
-
   it('a real typed answer folded away still counts; a folded lookalike does not', async () => {
     const real = await foldedRun('real');
     expect(real.summary).toBeDefined();
@@ -719,24 +716,59 @@ describe('a real compaction run', () => {
     expect(flaggedOf(fake.agent)).toEqual(['2031']);
   });
 
-  it('a saved conversation retains the folded originals’ marks and the summary’s lineage', async () => {
-    const { agent } = await foldedRun('real');
-    const stored = JSON.parse(JSON.stringify(agent.checkpoint())) as {
-      folded?: { messages?: LLMMessage[] }[];
-    };
-    expect(foldedMarks(stored.folded)).toBe(1);
+  it.each(['valid', 'without summary lineage', 'malformed'] as const)(
+    'a saved folded conversation with a %s mark',
+    async (kind) => {
+      const { agent } = await foldedRun('real');
+      const stored = JSON.parse(JSON.stringify(agent.checkpoint()));
+      const spans = stored.folded as { messages?: LLMMessage[] }[];
+      const span = spans.findIndex(({ messages }) => messages?.some(isStoredAnswer));
+      const index = spans[span]?.messages?.findIndex(isStoredAnswer) ?? -1;
+      const original = spans[span]?.messages?.[index];
+      expect(original?.answersAsk).toBeDefined();
+      if (kind === 'malformed') stored.folded[span].messages[index].answersAsk = {};
+      if (kind === 'without summary lineage') {
+        stored.history = (stored.history as LLMMessage[]).map(({ foldedExempt, ...message }) =>
+          foldedExempt === undefined ? message : { ...message, foldedExempt: [] },
+        );
+      }
+      const { provider, requests } = scripted([{ content: ANSWER }]);
+      const next = Agent.create({ provider, model: 'mock' }).namesAndNumbersFromEvidence().build();
+      const attempt = next.run({ message: 'And when is it due again?', continueFrom: stored });
+      if (kind === 'malformed') {
+        await expect(attempt).rejects.toThrow(
+          `checkpoint folded[${span}].messages[${index}].answersAsk`,
+        );
+        expect(requests).toEqual([]);
+        return;
+      }
+
+      await attempt;
+      expect(next.getLastSnapshot()?.sharedState.foldedSpans).toEqual(stored.folded);
+      expect(historyOf(next).some(isStoredAnswer)).toBe(false);
+      expect(flaggedOf(next)).toEqual(kind === 'valid' ? undefined : ['2031']);
+    },
+  );
+
+  it('continues a pre-mark summary with the lineage it had recorded', async () => {
+    const { agent } = await foldedRun('lookalike');
+    const stored = JSON.parse(JSON.stringify(agent.checkpoint()));
+    expect(carriesMark(stored.history)).toBe(false);
+    // Mimic the saved lineage from before this change, when shape alone counted.
+    stored.history = [
+      buildSummaryMessage('Earlier the renewal came up.', {
+        foldedMessageCount: 2,
+        iteration: 2,
+        model: 'mock',
+        retain: 'conversation',
+        foldedExempt: ['2031-05-05', '2031', '5'],
+      }),
+      ...stored.history,
+    ];
     const { provider } = scripted([{ content: ANSWER }]);
-    const next = Agent.create({ provider, model: 'mock' })
-      .tool(askDue)
-      .namesAndNumbersFromEvidence()
-      .build();
-    await next.run({ message: 'And when is it due again?', continueFrom: stored as never });
-    const state = next.getLastSnapshot()?.sharedState as {
-      foldedSpans?: { messages?: LLMMessage[] }[];
-    };
-    expect(state.foldedSpans?.length).toBeGreaterThan(0);
-    expect(foldedMarks(state.foldedSpans)).toBe(1);
-    // The summary's `foldedExempt` is read as stored: the folded answer stays exempt.
+    const next = Agent.create({ provider, model: 'mock' }).namesAndNumbersFromEvidence().build();
+    await next.run({ message: 'And when is it due again?', continueFrom: stored });
+    expect(carriesMark(historyOf(next))).toBe(false);
     expect(flaggedOf(next)).toBeUndefined();
   });
 });

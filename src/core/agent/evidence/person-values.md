@@ -102,6 +102,8 @@ exemptLineageOf([lookalike]);                         // [] — nothing rides a 
   conversation (`run({ continueFrom })`, `resumeOnError()`, a hosted session
   store or a resumed pause) keeps its marks after the checkpoint door
   validates their shape in the history and retained folded originals.
+  The gate reads the active history and the summary's saved lineage.
+  The retained originals are for inspecting past messages.
   See the [README](README.md) for what the library trusts as stored.
 - History written before the mark existed has no marks. A tool result needs
   the mark as well as matching content, even when its request ID is real.

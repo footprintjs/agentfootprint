@@ -565,7 +565,7 @@ Pinned by `test/core/agent/evidence/summary-exemption.test.ts`.
 (its mark, `LLMMessage.answersAsk`, read by `../../../tools/typedAnswer.ts` ·
 `landedTypedAnswer`); a date or clock time the person or the app wrote is
 exempt in its other spellings.** The rules, the reasons, the examples, and
-where the mark stays or goes: [person-values.md](person-values.md).
+how the mark is restored are in [person-values.md](person-values.md).
 
 **What is trusted as stored.** On loading a conversation or pause checkpoint,
 the library validates each mark's shape, then trusts it as part of the stored
