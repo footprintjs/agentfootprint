@@ -33,9 +33,9 @@
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
-    "agentfootprint-lens": "^0.81.0",
-    "footprint-explainable-ui": "^0.38.0",
-    "footprintjs": "^12.0.0",
+    "agentfootprint-lens": "file:vendor/lens/agentfootprint-lens-0.83.0.tgz",
+    "footprint-explainable-ui": "^2.0.0",
+    "footprintjs": "^14.0.0-rc.0",
     "fumadocs-core": "^16.10.5",
     "fumadocs-mdx": "^15.0.12",
     "fumadocs-twoslash": "^3.2.0",
@@ -50,6 +50,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "semver": "^7.8.5",
     "tsx": "^4.19.2"
   },
   "overrides": {

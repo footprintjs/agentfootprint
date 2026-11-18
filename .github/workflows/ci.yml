@@ -270,11 +270,6 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-      actions: read
-    env:
-      NATIVE_DOCS: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 383 && github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -288,62 +283,37 @@ jobs:
             package-lock.json
             docs-next/package-lock.json
 
-      - name: Check candidate docs guards
-        if: env.NATIVE_DOCS == 'true'
-        run: node --test scripts/docs-candidate/*.test.mjs docs-next/lib/browser-library-aliases.test.mjs
-
-      - name: Open an isolated checkout of the exact tested commit
-        id: projection
-        if: env.NATIVE_DOCS == 'true'
-        run: node scripts/docs-candidate/workspace.mjs open
-
-      - name: Fetch the reviewed original packages
-        if: env.NATIVE_DOCS == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INPUT_DIR: ${{ steps.projection.outputs.inputs }}
-        run: node scripts/docs-candidate/inputs.mjs --out "$INPUT_DIR"
-
       - name: Install root deps
-        working-directory: ${{ steps.projection.outputs.root || github.workspace }}
         run: npm ci
 
-      # docs-next's prebuild generators (gen-agent-flowchart / gen-replay-trace) import
-      # agentfootprint at runtime → need dist/esm. Build the library first, like docs.yml.
+      # docs-next's prebuild generators import the built library through file:...
       - name: Build library (dist for the docs generators)
-        working-directory: ${{ steps.projection.outputs.root || github.workspace }}
         run: npm run build
 
-      - name: Apply the locked candidate dependencies
-        if: env.NATIVE_DOCS == 'true'
-        working-directory: ${{ steps.projection.outputs.root }}
-        env:
-          PROJECT_DIR: ${{ steps.projection.outputs.dir }}
-        run: node scripts/docs-candidate/project.mjs "$PROJECT_DIR"
-
       - name: Install docs-next deps
-        working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root || github.workspace) }}
-        run: npm ci ${{ env.NATIVE_DOCS == 'true' && '--strict-peer-deps' || '' }}
+        working-directory: docs-next
+        run: npm ci --strict-peer-deps
 
-      - name: Verify installed bytes and dependency resolution
-        if: env.NATIVE_DOCS == 'true'
-        working-directory: ${{ steps.projection.outputs.root }}
-        run: node scripts/docs-candidate/installed.mjs
+      - name: Check when the docs can use a published Lens
+        working-directory: docs-next
+        run: |
+          node --test vendor/lens/check-published.test.mjs
+          node vendor/lens/check-published.mjs
 
       # The "Try it live" embed runs this builder in the reader's browser. The
       # deploy (docs.yml) checks it too — too late: npm already has the version.
       - name: Check the Try-it demo runs end-to-end
-        working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root || github.workspace) }}
+        working-directory: docs-next
         run: npm run check:tryit
 
       # Built as the STATIC EXPORT, with the same root-path env docs.yml
       # deploys with, so this job measures the artifact that actually ships
       # instead of a near-miss of it. Same page render, same twoslash gate.
       - name: Build docs-next static export (twoslash-gates every code block)
-        working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root || github.workspace) }}
+        working-directory: docs-next
         env:
           EXPORT: 'true'
-          DOCS_WEBPACK_STATS: ${{ env.NATIVE_DOCS == 'true' && '1' || '' }}
+          NEXT_PUBLIC_BASE_PATH: ''
         run: npm run build
 
       # Site-budget RATCHET, on every PR and push — where site growth is caught:
@@ -361,25 +331,11 @@ jobs:
       # the release PR skips this job. Over budget at release time, the site
       # waits — docs.yml refuses to deploy it — and the npm version does not.
       - name: Enforce site performance budgets
-        id: budget
-        working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root || github.workspace) }}
+        working-directory: docs-next
         run: npm run check:site-budget
 
-      - name: Show the modules in an over-budget demo
-        if: failure() && env.NATIVE_DOCS == 'true' && steps.budget.outcome == 'failure'
-        working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root) }}
-        run: node scripts/demo-chunk-modules.mjs
-
-      - name: Compare regenerated API pages with the reviewed source
-        if: env.NATIVE_DOCS == 'true'
-        working-directory: ${{ steps.projection.outputs.root }}
+      - name: Compare regenerated API pages
         run: git diff --exit-code HEAD -- docs-next/content/docs/api
-
-      - name: Clean up candidate output and verify the original checkout
-        if: always() && steps.projection.outputs.dir != ''
-        env:
-          PROJECT_DIR: ${{ steps.projection.outputs.dir }}
-        run: node scripts/docs-candidate/workspace.mjs close "$PROJECT_DIR"
 
   # Generated files are committed, so they must be regenerated WITH the change
   # that made them stale: the API mirror, the docs-truth report, the examples
