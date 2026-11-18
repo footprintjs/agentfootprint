@@ -74,7 +74,7 @@
     "src/hosting/signin/door.ts": 813,
     "src/hosting/sqliteSessions.ts": 762,
     "src/hosting/streamHandler.ts": 817,
-    "src/hosting/types.ts": 1635,
+    "src/hosting/types.ts": 1607,
     "src/hosting/webSocketConversation.ts": 774,
     "src/index.ts": 1370,
     "src/injection-engine/buildInjectionEngineSubflow.ts": 920,
