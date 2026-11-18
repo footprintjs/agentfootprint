@@ -24,6 +24,8 @@ npm run dev      # http://localhost:3000 → /docs
 npm run build    # static/server build
 ```
 
+The site always builds against the AgentFootprint source beside it, so the docs override Lens's AgentFootprint peer to that link and check compatibility through the build, Try-it and type checking.
+
 The browser demos share the root library's FootPrint engine and Foottrace record
 implementation. `next.config.mjs` derives exact aliases from both packages' public
 exports, so the linked AgentFootprint runtime and the installed Lens cannot load
