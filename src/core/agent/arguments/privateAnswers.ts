@@ -5,7 +5,6 @@ import {
 } from '../../../redaction/runRedaction.js';
 import type { PrivateFieldRoot, PrivateRecordFields } from '../../../redaction/privateFields.js';
 import { carriesArgumentView, hiddenArgNames } from '../../toolShownArgs.js';
-import { frozenView } from '../../../lib/frozenCopy.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolArgs } from '../../../tools/runChain.js';
 import type { ArgumentAskState } from './ask.js';
@@ -84,7 +83,7 @@ function keptFacts(prior: PrivateRecordFields | undefined, before: unknown) {
 
 /** The view runs on a frozen copy: it is the tool author's code, and `args` may be what runs. */
 function hiddenKeys(tool: unknown, args: ToolArgs): ReadonlySet<string> {
-  return new Set(hiddenArgNames(tool, frozenView(args) ?? args));
+  return new Set(hiddenArgNames(tool, args));
 }
 
 /** Resolve index selectors to this exact call/iteration, never by matching answer values. */
@@ -289,9 +288,10 @@ export function markPrivateResolutions(
   );
 }
 
-export function markPrivateCheckIn(scope: object, tool: Tool, args: ToolArgs): void {
+/** Reuse the names the check-in already bound rather than evaluating its view again. */
+export function markPrivateCheckIn(scope: object, hiddenArgs: readonly string[]): void {
   mark(
     scope,
-    [...hiddenKeys(tool, args)].map((path) => ({ root: 'pausedCheckInArgs', path })),
+    hiddenArgs.map((path) => ({ root: 'pausedCheckInArgs', path })),
   );
 }

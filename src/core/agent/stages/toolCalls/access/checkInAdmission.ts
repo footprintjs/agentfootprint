@@ -127,7 +127,8 @@ export async function admitCheckInCall(
     frame.outcome.error = true;
     frame.outcome.result = unboundCallRefusal(frame.tc.name, 'checkIn');
   } else {
-    markPrivateCheckIn(scope, frame.tool, bound.args);
+    const hiddenArgs = bound.request.hiddenArgs ?? [];
+    markPrivateCheckIn(scope, hiddenArgs);
     // The tool's declared decision component (9.24.0), judged BEFORE
     // the evidence pack is assembled — a gate that cannot be honored
     // as declared refuses before any work, and a dangling propsRef is
@@ -144,7 +145,6 @@ export async function admitCheckInCall(
     const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
     // The person is told what they cannot see; the request id commits to
     // it and the decision's record repeats it (`resume/checkIn.ts`).
-    const hiddenArgs = bound.request.hiddenArgs ?? [];
     const hidden = hiddenArgs.length > 0 ? { hiddenArgs } : {};
     let evidence: CheckInRequest['evidence'];
     try {

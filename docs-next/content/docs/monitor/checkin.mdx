@@ -44,7 +44,7 @@ The `evidence` pack (`'standard'`) has four plain-named fields:
 
 ### When the tool hides an argument's value
 
-A tool can declare an argument view that hides some argument values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`). A check-in on such a tool still asks the person, through that view. With those two helpers `checkIn.args` shows a hidden value as `'REDACTED'`; a view set by hand may show another form or leave the key out. Either way the person is told which values are hidden.
+A tool can declare an argument view that hides some argument values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`). A check-in on such a tool still asks the person, through that view. With those two helpers `checkIn.args` shows a hidden value as `'REDACTED'`; a view set by hand may show another form or leave the key out. The request names the hidden arguments. An unsupported or throwing view displays a placeholder for every argument and lists each name. If the library cannot decide whether an unchanged string is visible, it masks that value and lists its name.
 
 ```ts
 // a wire tool whose view hides `to`; the model proposed { to: 'acct-9', amount: 5000 }
@@ -60,9 +60,9 @@ out.checkIn.evidence.willDo; // 'Wire money. — with to=REDACTED, amount=5000. 
 - **A changed view voids the approval.** If the resumed tool's view would hide a different set of names than the request carried (a redeploy widened or removed it), the resume is refused with `'view-changed'`, before anything runs. The message names the difference by argument name, never by value.
 - Under a run's redaction policy, the names in the record are masked like any other string the library did not write (the tool's name is too).
 
-**What the view does not cover.** It decides what a person is shown at the check-in, and what the chat-interface page is sent (below). The run's own events still carry the real arguments: `stream.tool_start` (`args`, beside the view's `shownArgs` and `hiddenArgs`) and `agent.iteration_end` (its `history`). So do the recorded history and its snapshots, unless the app's redaction policy covers them. The answer account shows a check-in decision's `approved`, `toolName` and `toolCallId` only, not its `hiddenArgs`.
+**Run observations.** The run's own `stream.tool_start.args`, `agent.iteration_end.history`, recorded history and snapshots retain real arguments subject to the app's run-wide redaction policy. The answer account exposes the check-in decision's approval, tool name and call id. Approval given on a hidden view records consent for that call with limited visibility.
 
-**The chat-interface page (AG-UI).** For a tool whose view hides values, the adapter streams the view's output as the call's `TOOL_CALL_ARGS`, never the real values. The hidden names travel on the `TOOL_CALL_START` event and on a check-in's interrupt, as `metadata.agentfootprint.hiddenArgs`. A custom assembler's own words still reach the page as the interrupt's `message`.
+**The chat-interface page (AG-UI).** `TOOL_CALL_ARGS` streams the projected proposal for a tool with a protected view. If input fills or middleware can change that proposal before the check-in, the early event withholds every argument value. The check-in uses the projection of the bound call. `TOOL_CALL_START` and the check-in interrupt each carry the names hidden from their own display in `metadata.agentfootprint.hiddenArgs`. The built-in argument translation uses placeholders when view data is unsupported. The `toolArguments` option applies to calls without a protected view. A custom evidence assembler supplies its own interrupt message.
 
 ### The ask can name the screen that collects the decision
 

@@ -32,6 +32,11 @@ private values. Ordinary event translation still consumes served values only;
 standalone defaults and redaction property tests remain unchanged.
 
 ## How a run maps
+- `TOOL_CALL_ARGS` uses the tool's protected argument view when an event
+  carries one. Unsupported view data shows placeholders for the argument names
+  present on the event. A proposal that can change before approval is masked
+  early. Its check-in interrupt reports the view of the bound call. The
+  custom `toolArguments` projector applies to calls without a protected view.
 - An agent turn mounted inside a composition is an AG-UI sub-agent: its
   `turn_start` opens a scope at its subflow path, and every event under that
   path carries the scope's `subagentRunId` — parallel branches have different

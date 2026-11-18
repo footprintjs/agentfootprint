@@ -426,23 +426,26 @@ scoped to the exact ledger identity and request; eviction or restart loses it.
 
 ## What a check-in tells the person is hidden
 
-A tool can carry an argument view (`toolShownArgs.ts`; `flowchartAsTool({ redact })`,
-`runbookAsTool({ redact })`). A check-in shows the person the view's output and names the
-arguments it hides (`CheckInRequest.hiddenArgs`). That list is the library's READING of the
-view (`toolShownArgs.ts` · `hiddenArgNames`), never of the shown text: a name is listed when
-the view's output for it differs from the input, or when the library could not decide (a
-string handed back unchanged is probed on its own with a stand-in; a probe the view throws
-on is listed). Two cases it cannot see: a view that is not a function of its input alone (a
-clock, a counter, outside state), and a placeholder that is not a string equal to the real
-value. Example: a view hiding `to` reads `{ to: 'REDACTED', memo: 'REDACTED' }` → `['to']`
-when the real `memo` is the string `'REDACTED'`.
+A tool can carry an argument view (`toolShownArgs.ts`, `flowchartAsTool({ redact })`,
+`runbookAsTool({ redact })`). The check-in computes the display and
+`CheckInRequest.hiddenArgs` together from the bound call. An unsupported view masks
+every argument. A string returned unchanged is checked independently with a stand-in
+and its siblings intact. An inconclusive probe masks that argument and names it in
+the list. The projection takes its names from the call itself. A tool schema provides
+no evidence that a value is safe to show.
 
-The list is bound when the request is made: it is part of what the request id is computed
-from (`consentRequestId.ts`, left out when empty), kept on the paused request and read back
-on resume (`checkInHiddenArgs.ts`); a resume whose tool's view would hide another set is
-refused `'view-changed'` (`agent/stages/toolCalls/access/heldView.ts`). A pause stored before
-the list existed reads `'not-recorded'`. At the ask (`access/viewedCall.ts`), the resume's
-check, `stream.tool_start` and the private-answer marks the view runs on a frozen copy, so
-those readings cannot change the call. Not covered yet: `execution/dispatchCall.ts` takes
-`stream.tool_end`'s `changedArgKeys` by running the view on the call's own arguments, before
-the check-in, so a view that writes into its input still changes the call that runs.
+The reading assumes the view is a function of the arguments. It cannot reliably
+classify a view that depends on external state or distinguish an unchanged non-string
+from an equal custom placeholder. With the built-in view for `to`, a real
+`memo: 'REDACTED'` remains visible while `to` is listed as hidden.
+
+The request binds the names into its id (`consentRequestId.ts`, omitted when empty)
+and pause. The private argument marks and decision record use that same list
+(`checkInHiddenArgs.ts`). A resume compares the current view's hidden names before
+spending the decision and refuses a changed set with `'view-changed'`. Older
+pauses without the list record `'not-recorded'`.
+
+Argument views receive frozen copies. AG-UI receives the projected proposal,
+with every argument masked if the inputs layer or middleware may rewrite the call.
+The check-in itself projects the arguments after those steps. Where protected
+arguments were withheld, a consent record documents the scope of the person's approval.
