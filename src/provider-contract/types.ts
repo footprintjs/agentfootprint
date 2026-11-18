@@ -932,10 +932,10 @@ export interface PermissionDecision {
    */
   readonly reason?: string;
   /**
-   * v2.12 — content delivered to the LLM as the synthetic `tool_result`
-   * on `'deny'` and `'halt'`. When omitted, defaults to a deliberately
-   * generic `"Tool '${name}' is not available in this context."` —
-   * NEVER falls back to `reason` (which is telemetry, not user-facing).
+   * v2.12 — content for the synthetic `tool_result` on an explicit deny or halt.
+   * A deny defaults to `"[permission denied: ${rationale ?? 'policy'}]"`. The
+   * rationale can reach the model. A halt defaults to `"Tool '${name}' is not
+   * available in this context."` Both defaults leave `reason` in telemetry.
    */
   readonly tellLLM?: ToolResultContent;
 }

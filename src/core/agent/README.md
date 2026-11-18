@@ -3,13 +3,13 @@ the walk calls from inside its stages.
 Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts` (with `llmCallReads.ts`,
 the records that cross into its `sf-llm-call` boundary), `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
-`skillBrains.ts`, `types.ts`, `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
+`skillBrains.ts`, `types.ts`, `watch.ts` (the type for `.watch()`), `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
 the trace toolpack registers there, since the agent may not import it).
 Walker: `assistantReplay.ts`, `toolDispatch.ts` (with `innerCallArguments.ts`, the
 one copy an inner call takes of its arguments, and `innerCallOuter.ts`, the outer
 call's hold on it: ended with `execute`, and a halt it carries back),
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
-Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
+Trace: `runManifest.ts`, `integrityFindings.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `placedTickets.ts` (did the
 library place this result), `emptiness.ts` (which
 artifact-placed results hold no rows — the coverage primitives it reads are

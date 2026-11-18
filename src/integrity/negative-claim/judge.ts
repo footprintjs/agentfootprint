@@ -7,8 +7,10 @@
  *          maps the verdict to a disposition and composes the statement (`statement.ts`). An
  *          established claim CLEARS the claim (`not-applicable`) — it never verifies the answer,
  *          so no row is `checked-pass`.
- * Role:    integrity/ layer (L3). Not wired: PR 4 mounts it behind `.negativeClaims()` and
- *          `agentChecks: ['negative-claims']`.
+ * Role:    integrity/ layer (L3). Mounted by `core/agent/negativeClaims/delivery.ts` behind
+ *          typed `.negativeClaims({ field, tools })` (which
+ *          `.answerValidation({ agentChecks: ['negative-claims'] })` requires). An agent
+ *          without typed `.negativeClaims()` never calls it.
  *
  * A row carries identities, tool names and codes — never a value and never a sentence; the
  * statement travels beside it.
