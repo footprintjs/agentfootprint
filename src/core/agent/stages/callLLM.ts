@@ -298,7 +298,7 @@ export function buildCallLLMStage(
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
-    // findings piece's cache law), so an unchanged map serves unchanged bytes
+    // cached system-prefix contract), so an unchanged map serves unchanged bytes
     // on every call of the run. The composer is loaded through `import()` —
     // the optional-family law of docs-next's site budget (`toolCalls/evidence/judgeLanded.ts ·
     // judgeLanded`): an unarmed agent never loads the module. The event
@@ -1114,11 +1114,9 @@ export function buildCallLLMStage(
           })),
           {
             grounded: [
-              // The findings piece is mixed-trust for the same reason the
-              // recovery piece is: it quotes the model's OWN declarations,
-              // so a value that exists only there must not excuse an
-              // argument. Either request-only piece narrows the credited
-              // system text to the trusted injections.
+              // The recovery piece quotes the model's words; only the trusted
+              // system injections count as grounds when that piece is present.
+              // Findings DATA is a request-only message after history.
               ...(recoveryPiece === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []

@@ -102,7 +102,7 @@ export function verificationCheckpointOf(container: unknown): ClaimVerificationS
   return readVerificationCheckpoint(descriptor.value, ledger);
 }
 
-/** Never silently discard a previously opted-in verifier on newest-version resume. */
+/** Refuses a saved verification carrier when the resume door cannot keep its evidence. */
 export function requireVerificationOnResume(
   container: unknown,
   enabled: boolean,

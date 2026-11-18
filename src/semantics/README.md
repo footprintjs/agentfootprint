@@ -291,9 +291,10 @@ absences, and `authoritative-names` for every `among.authoritative`. The laws:
   any absence, and any effects envelope whose status says it read nothing
   (`invalid`, `denied`, `failure`). `authoritative-names` is a review item and
   stays a warning.
-- **Closed, versioned phrase lists** (`OVERCLAIM_PHRASES_VERSION`), matched
-  after NFC, case and apostrophe folding. A phrasing they miss is a missed
-  finding, never a pass.
+- **Closed, versioned phrase lists**, matched after NFC, case and apostrophe
+  folding. A phrasing they miss is a missed finding, never a pass. The version
+  (`OVERCLAIM_PHRASES_VERSION`, on no public door) is bumped with every list
+  change. The version is metadata for the phrase lists and is absent from `OverclaimIssue` findings.
 - **The library's own refusal sentences are pinned** to carry no absence, no
   non-existence claim beside the value asked for
   (`test/semantics/refusal-sentences.test.ts`).

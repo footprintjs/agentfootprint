@@ -109,8 +109,8 @@ export interface AgentRunCheckpoint {
   readonly findingsLedger?: FindingsLedger;
   /**
    * Private, opt-in exact evidence and reservation counters. Unlike historical
-   * observations, this carrier can support later checks. A newest-version
-   * continuation must explicitly keep verification enabled, never discard it.
+   * observations, this carrier can support later checks. `resume`, `continueFrom`
+   * and `resumeOnError` refuse a checkpoint holding it in the current release.
    * Storage ownership/authenticity remains the checkpoint caller's obligation.
    */
   readonly claimVerification?: ClaimVerificationState;

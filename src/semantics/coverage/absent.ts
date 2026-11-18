@@ -5,7 +5,7 @@
  *          envelope precedent). A return shape the framework does not
  *          understand is a convention, and a convention cannot set a status,
  *          keep a value out of the evidence corpus, or stop a retry loop.
- * Role:    core/ layer, pure. The dispatch loop calls `readAbsence` at the
+ * Role:    semantics/ layer (L1), pure. The dispatch loop calls `readAbsence` at the
  *          execute boundary; `absent()` is what a tool author writes.
  * Emits:   N/A (the caller emits `agentfootprint.tools.absent`).
  *
