@@ -158,7 +158,12 @@ describe('the sequence an inner call’s checker sees', () => {
     const history = (agent.getLastSnapshot()?.sharedState as { history: LLMMessage[] }).history;
     const composed = history.find((m) => m.role === 'tool' && m.toolCallId === 'c1');
     expect(composed?.calls).toEqual([
-      { toolCallId: 'c1#inner-1', toolName: 'read_secret', args: { account: 'A1' } },
+      {
+        toolCallId: 'c1#inner-1',
+        toolName: 'read_secret',
+        args: { account: 'A1' },
+        policyArgsRef: null,
+      },
     ]);
     // … and no request a provider was sent carries the field.
     expect(requests.length).toBeGreaterThan(1);

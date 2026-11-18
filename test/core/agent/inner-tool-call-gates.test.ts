@@ -511,6 +511,7 @@ describe('the record of an inner call', () => {
         toolName: 'secret',
         iteration: 1,
         args: { account: 'A1' },
+        policyArgsRef: null,
         entered: true,
         ended: 'returned',
       },

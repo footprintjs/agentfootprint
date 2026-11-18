@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { policyArgsOf } from '../../../src/core/agent/innerCallPolicyArgs.js';
 import { refusalVerdictOf } from '../../../src/core/agent/runtime/terminal/verdicts.js';
 import { stopStoredPolicyHalt } from '../../../src/core/agent/stages/toolCalls/routing/policyHalt.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
@@ -70,4 +71,13 @@ it('pairs recorded inner calls to each occurrence of a reused outer id', () => {
     'first',
     'second',
   ]);
+});
+
+it('requires positive provenance for displayed arguments from a prior inner call', () => {
+  const scope = { $getValue: () => undefined } as never;
+  const displayed = { toolCallId: 'fixture#inner-1', toolName: 'sample', args: { count: 1 } };
+  expect(() => policyArgsOf(scope, displayed)).toThrow(
+    'Policy arguments from an earlier inner call are unavailable.',
+  );
+  expect(policyArgsOf(scope, { ...displayed, policyArgsRef: null })).toEqual({ count: 1 });
 });

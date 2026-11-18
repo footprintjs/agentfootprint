@@ -76,4 +76,83 @@ describe('the account and inner calls', () => {
     expect(account.facts.calls.map((c) => [c.toolCallId, c.outcome])).toEqual([['c1', 'ran']]);
     expect(account.facts.errors.refused).toBe(0);
   });
+
+  it('records an entered inner call as unsettled when its outer call finishes first', async () => {
+    let signalEntry!: () => void;
+    let releaseResult!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      signalEntry = resolve;
+    });
+    const resultMaySettle = new Promise<void>((resolve) => {
+      releaseResult = resolve;
+    });
+    let pendingResult: Promise<unknown> | undefined;
+    const sample = defineTool<Record<string, unknown>, string>({
+      name: 'sample',
+      description: 'holds a sample result until released by the test',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => {
+        signalEntry();
+        await resultMaySettle;
+        return 'sample finished';
+      },
+    });
+    const compose = defineTool<Record<string, unknown>, string>({
+      name: 'compose',
+      description: 'returns after the sample starts',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async (_args, ctx) => {
+        pendingResult = ctx.tools!.call('sample', {});
+        await Promise.race([entered, pendingResult]);
+        return 'compose finished';
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [{ toolCalls: [{ id: 'c1', name: 'compose', args: {} }] }, { content: 'done' }],
+      }),
+      model: 'mock',
+    })
+      .tools([compose, sample])
+      .build();
+    const recorder = recordRun(agent);
+    const recordedRows = (recording: Recording) =>
+      (recording.snapshot as { sharedState: { innerToolCalls?: unknown } }).sharedState
+        .innerToolCalls;
+    const unsettled = {
+      toolCallId: 'c1#inner-1',
+      outerToolCallId: 'c1',
+      toolName: 'sample',
+      entered: true,
+      ended: 'unsettled',
+    };
+
+    try {
+      expect(await agent.run({ message: 'prepare the example' })).toBe('done');
+      const recording = recorder.toRecording();
+      expect(recordedRows(recording)).toMatchObject([unsettled]);
+      expect(
+        recording.events
+          .filter(
+            ({ type }) =>
+              type === 'agentfootprint.stream.tool_start' ||
+              type === 'agentfootprint.stream.tool_end',
+          )
+          .map(({ payload }) => payload.toolCallId),
+      ).toEqual(['c1', 'c1']);
+      const account = accountForAnswer(recording, {});
+      expect(account.facts.calls.map(({ toolCallId, outcome }) => [toolCallId, outcome])).toEqual([
+        ['c1', 'ran'],
+      ]);
+      expect(account.facts.errors).toMatchObject({ failed: 0, refused: 0, notExecuted: 0 });
+
+      releaseResult();
+      await expect(pendingResult).resolves.toBe('sample finished');
+      expect(recordedRows(recorder.toRecording())).toMatchObject([unsettled]);
+    } finally {
+      releaseResult();
+      recorder.stop();
+      await pendingResult?.catch(() => undefined);
+    }
+  });
 });
