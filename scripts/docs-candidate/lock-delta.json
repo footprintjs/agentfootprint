@@ -1,0 +1,262 @@
+{
+  "baseSha256": "065eda8344b2b8ab86c4fb77a2ebce5f32cb4c4e112e1534073a58e2417d46e3",
+  "resultSha256": "a1ed90f16721c6183150be706dbf5e1dd366ee13bbfeadd87c08528012e0f6d2",
+  "remove": [
+    ".."
+  ],
+  "set": {
+    "": {
+      "name": "agentfootprint-docs",
+      "version": "0.0.0",
+      "hasInstallScript": true,
+      "dependencies": {
+        "@tailwindcss/postcss": "^4.3.1",
+        "@types/mdx": "^2.0.14",
+        "@types/node": "^26.0.0",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "@xyflow/react": "^12.11.0",
+        "agentfootprint": "file:vendor/native-candidate/agentfootprint.tgz",
+        "agentfootprint-lens": "file:vendor/native-candidate/agentfootprint-lens.tgz",
+        "footprint-explainable-ui": "file:vendor/native-candidate/footprint-explainable-ui.tgz",
+        "footprintjs": "14.0.0-rc.0",
+        "foottrace": "2.1.0",
+        "fumadocs-core": "^16.10.5",
+        "fumadocs-mdx": "^15.0.12",
+        "fumadocs-twoslash": "^3.2.0",
+        "fumadocs-ui": "^16.10.5",
+        "next": "^16.3.8",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "storydeck": "file:vendor/storydeck/storydeck-0.2.0.tgz",
+        "tailwindcss": "^4.3.1",
+        "twoslash": "^0.3.8",
+        "typescript": "^6.0.3",
+        "zod": "^4.4.3"
+      },
+      "devDependencies": {
+        "tsx": "^4.19.2"
+      }
+    },
+    "node_modules/agentfootprint": {
+      "version": "15.0.0-rc.0",
+      "resolved": "file:vendor/native-candidate/agentfootprint.tgz",
+      "integrity": "sha512-j1X9y0y4T6u8Gqps3mTl73N6qkbxCe0CB5hjAlOd0fAtQygXIAL3OoEF+ihBZFEcwnpRQ6WfNNgXLrvQsh98+w==",
+      "license": "MIT",
+      "dependencies": {
+        "contextfootprint": "0.1.1",
+        "foottrace": "^2.1.0"
+      },
+      "bin": {
+        "agentfootprint-check-semantics": "bin/agentfootprint-check-semantics.mjs",
+        "agentfootprint-index": "bin/agentfootprint-index.mjs",
+        "agentfootprint-lint-tools": "bin/agentfootprint-lint-tools.mjs",
+        "agentfootprint-setup": "ai-instructions/setup.sh"
+      },
+      "engines": {
+        "node": ">=22"
+      },
+      "peerDependencies": {
+        "@ag-ui/core": "^1.0.0",
+        "@ag-ui/encoder": "^1.0.0",
+        "@anthropic-ai/sdk": "*",
+        "@aws-sdk/client-bedrock-agent-runtime": "*",
+        "@aws-sdk/client-bedrock-agentcore": "*",
+        "@aws-sdk/client-bedrock-runtime": "*",
+        "@aws-sdk/client-cloudwatch-logs": "*",
+        "@aws-sdk/client-s3": "*",
+        "@aws-sdk/client-s3vectors": "*",
+        "@aws-sdk/client-xray": "*",
+        "@azure/identity": "*",
+        "@google-cloud/firestore": "*",
+        "@google-cloud/storage": "*",
+        "@google/genai": "*",
+        "@googleapis/aiplatform": "*",
+        "@huggingface/transformers": "*",
+        "@modelcontextprotocol/sdk": "*",
+        "@opentelemetry/api": "*",
+        "@yarflam/potion-base-8m": "*",
+        "footprintjs": "^14.0.0-rc.0",
+        "google-auth-library": "*",
+        "ioredis": "*",
+        "jose": "*",
+        "ldapts": "*",
+        "openai": "*",
+        "openid-client": "*",
+        "pg": "*",
+        "unpdf": "*",
+        "zod": "*"
+      },
+      "peerDependenciesMeta": {
+        "@ag-ui/core": {
+          "optional": true
+        },
+        "@ag-ui/encoder": {
+          "optional": true
+        },
+        "@anthropic-ai/sdk": {
+          "optional": true
+        },
+        "@aws-sdk/client-bedrock-agent-runtime": {
+          "optional": true
+        },
+        "@aws-sdk/client-bedrock-agentcore": {
+          "optional": true
+        },
+        "@aws-sdk/client-bedrock-runtime": {
+          "optional": true
+        },
+        "@aws-sdk/client-cloudwatch-logs": {
+          "optional": true
+        },
+        "@aws-sdk/client-s3": {
+          "optional": true
+        },
+        "@aws-sdk/client-s3vectors": {
+          "optional": true
+        },
+        "@aws-sdk/client-xray": {
+          "optional": true
+        },
+        "@azure/identity": {
+          "optional": true
+        },
+        "@google-cloud/firestore": {
+          "optional": true
+        },
+        "@google-cloud/storage": {
+          "optional": true
+        },
+        "@google/genai": {
+          "optional": true
+        },
+        "@googleapis/aiplatform": {
+          "optional": true
+        },
+        "@huggingface/transformers": {
+          "optional": true
+        },
+        "@modelcontextprotocol/sdk": {
+          "optional": true
+        },
+        "@opentelemetry/api": {
+          "optional": true
+        },
+        "@yarflam/potion-base-8m": {
+          "optional": true
+        },
+        "google-auth-library": {
+          "optional": true
+        },
+        "ioredis": {
+          "optional": true
+        },
+        "jose": {
+          "optional": true
+        },
+        "ldapts": {
+          "optional": true
+        },
+        "openai": {
+          "optional": true
+        },
+        "openid-client": {
+          "optional": true
+        },
+        "pg": {
+          "optional": true
+        },
+        "unpdf": {
+          "optional": true
+        },
+        "zod": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/agentfootprint-lens": {
+      "version": "0.83.0",
+      "resolved": "file:vendor/native-candidate/agentfootprint-lens.tgz",
+      "integrity": "sha512-JX67QllnqG4KHEmrO1fHsXHcUXPvIoLLrM2jBcotzqg4HQJk4vqw9vcKqfUfThDimUSV5kKYByG754M0RJGqbg==",
+      "license": "MIT",
+      "dependencies": {
+        "dagre": "^0.8.5"
+      },
+      "engines": {
+        "node": ">=22"
+      },
+      "peerDependencies": {
+        "@xyflow/react": "^12.0.0",
+        "agentfootprint": "^15.0.0-rc.0",
+        "footprint-explainable-ui": ">=0.34.0 <1.0.0 || ^1.0.0",
+        "footprintjs": "^14.0.0-rc.0",
+        "foottrace": "^2.1.0",
+        "react": "^18.0.0 || ^19.0.0",
+        "react-dom": "^18.0.0 || ^19.0.0"
+      }
+    },
+    "node_modules/contextfootprint": {
+      "version": "0.1.1",
+      "resolved": "https://registry.npmjs.org/contextfootprint/-/contextfootprint-0.1.1.tgz",
+      "integrity": "sha512-svx/T10drbS9/PHdYL9vFsLBjkyTi/80TS83xvC/jc58ILXYGOTuOxAajDQYUDK7wGWsuN824YXE+jJ2IQe5Jg==",
+      "license": "MIT"
+    },
+    "node_modules/footprint-explainable-ui": {
+      "version": "1.1.1",
+      "resolved": "file:vendor/native-candidate/footprint-explainable-ui.tgz",
+      "integrity": "sha512-cekKo9gjDwoLi/1pcMHDEr4LC/z7NffVaWO14CK9wlsKi/F6zpXX/T6yIH6RqvZQNK82o+BMU4k2R9/SDNthkw==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=18"
+      },
+      "peerDependencies": {
+        "@xyflow/react": "^12.0.0",
+        "dagre": "^0.8.5",
+        "foottrace": "^2.0.0",
+        "react": ">=18.0.0",
+        "react-dom": ">=18.0.0"
+      },
+      "peerDependenciesMeta": {
+        "@xyflow/react": {
+          "optional": true
+        },
+        "dagre": {
+          "optional": true
+        },
+        "foottrace": {
+          "optional": true
+        },
+        "react-dom": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/footprintjs": {
+      "version": "14.0.0-rc.0",
+      "resolved": "https://registry.npmjs.org/footprintjs/-/footprintjs-14.0.0-rc.0.tgz",
+      "integrity": "sha512-oBaE4kZFgLso4DzntWDgTJ03WVdcjMxBmyMa0mqt6XzcIEkBMuOe2P9TKTJSL4L5ZyxjHPutUbPRpYu+APcfDA==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=22"
+      },
+      "peerDependencies": {
+        "foottrace": "^2.1.0",
+        "zod": "^3.0.0 || ^4.0.0"
+      },
+      "peerDependenciesMeta": {
+        "zod": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/foottrace": {
+      "version": "2.1.0",
+      "resolved": "https://registry.npmjs.org/foottrace/-/foottrace-2.1.0.tgz",
+      "integrity": "sha512-FaFqEPRvawnfy1AA9mNQ8DqKBlAXNAcM9tLnz7ZDTyYHebQRCawIHI6z4hFl0GOaMokWbIwp8E2jp0naUXNfgQ==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=22"
+      }
+    }
+  }
+}

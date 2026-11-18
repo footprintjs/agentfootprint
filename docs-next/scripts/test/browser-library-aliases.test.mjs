@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { test } from 'node:test';
+import { resolveBrowserLibraries } from '../../lib/browser-library-aliases.mjs';
 
 // Import the actual config without starting unrelated MDX content generation.
 const previousMdx = process.env._FUMADOCS_MDX;
@@ -12,8 +13,9 @@ else process.env._FUMADOCS_MDX = previousMdx;
 
 const docsRoot = resolve(import.meta.dirname, '../..');
 const libraries = ['footprintjs', 'foottrace'];
+const { owners: libraryOwners } = resolveBrowserLibraries(docsRoot);
 function publicDoors(name) {
-  const root = resolve(docsRoot, '../node_modules', name);
+  const root = libraryOwners[name];
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
   return Object.entries(pkg.exports)
     .filter(([door, target]) => {
