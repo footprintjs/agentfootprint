@@ -193,7 +193,7 @@ describe('the landing door marks a real typed answer, and the mark never reaches
     const history = historyOf(agent);
     const answer = history.find((message) => message.toolCallId === 'due-step');
     expect(answer?.answersAsk).toEqual({ requestId });
-    expect(answer?.content).toContain('Step 1 of 1 done.');
+    expect(answer?.content).toContain('Step 1 of 1 ran; its tool declared no status.');
     expect(carriesMark(requests.flatMap((request) => request.messages))).toBe(false);
     expect(exemptFromRun({ history }).has('2031')).toBe(true);
     expect(second.awaitingInput.repeat).toEqual({
