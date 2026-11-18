@@ -553,8 +553,8 @@ export function buildResumedInvocation(
       seen?.resultFinalizer?.withheld();
       ended ??= runEndedBy(env.signal);
       if (ended !== undefined) {
-        // Nothing ran; the call's sessions are still released, and the run's
-        // end — not a tool failure — is what the stage ends with.
+        // Release the call's sessions and report the run's cancellation as
+        // the stage outcome, even when the tool had already entered.
         await links.endCall(scope).catch(() => undefined);
         throw ended;
       }
