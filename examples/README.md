@@ -422,6 +422,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 25 | [`25-declared-vs-derived-stops.ts`](observability/25-declared-vs-derived-stops.ts) | Declared vs derived stops — the tag is the fact | The agent's charts declare their milestones as footprintjs tags ('milestone:llm-turn'), so footprintjs's own tagStops scrubs a recording with no id conventions; the same run scrubbed by a DERIVED mark (a write-set predicate: stops where currentSkillId was written), with the measured cost of each — and of the fold-per-stop derivation that makes the declaration the fact. |
 | 26 | [`26-localize-conclusion.ts`](observability/26-localize-conclusion.ts) | Read what a localizer report's verdicts add up to (BETA) | Three bugs in one refunds agent, read by report.conclusion: one planted fact is named as the one cause, two facts that are each enough alone are found as a pair, and a mistake that several true facts appear to cause is reported as no single cause. |
 | 27 | [`27-context-values.ts`](observability/27-context-values.ts) | Context recorded once, each call as changes | Opt-in value-table recording with unchanged model requests; call prose reads the change list. |
+| 28 | [`28-recorded-value-shapes.ts`](observability/28-recorded-value-shapes.ts) | Record value types and array lengths | Read the length of the recorded message history without opening its messages. |
 
 ### [`rag/`](rag/) — examples
 
