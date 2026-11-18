@@ -233,11 +233,11 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
       let ran: ToolArgs = {};
       let entered = false;
       let recorded: InnerCallFacts['recorded'];
-      const linked =
-        deps.signal !== undefined && opts?.signal !== undefined && deps.signal !== opts.signal
-          ? linkedController(deps.signal, opts.signal)
-          : undefined;
-      const signal = linked?.controller.signal ?? deps.signal ?? opts?.signal;
+      const signals = [...new Set([deps.signal, opts?.signal, deps.outer?.haltSignal])].filter(
+        (source) => source !== undefined,
+      );
+      const linked = signals.length > 1 ? linkedController(...signals) : undefined;
+      const signal = linked?.controller.signal ?? signals[0];
       const assertOpen = (): void => {
         if (outer.ended)
           throw new GateRefusal(endedRefusal(name, deps.outerToolCallId), 'ended', false);

@@ -49,6 +49,8 @@ export interface OuterCallBinding {
   readonly ended: boolean;
   /** The first halt an inner call drew; `undefined` if none. */
   readonly halt: InnerCallHalt | undefined;
+  /** Aborted when the first halt is kept, for work that has already entered. */
+  readonly haltSignal: AbortSignal;
   /** Run one admission at a time, including its synchronous entry boundary. */
   scheduleAdmission<T>(admit: () => Promise<T>): Promise<T>;
   /** Record the bound arguments immediately before entering an admitted tool. */
@@ -70,6 +72,7 @@ export function bindOuterCall(): OuterCallBinding {
   let runSignal: AbortSignal | undefined;
   let tail: Promise<unknown> = Promise.resolve();
   const admitted: InnerCallRan[] = [];
+  const controller = new AbortController();
   return {
     get ended() {
       return ended;
@@ -77,6 +80,7 @@ export function bindOuterCall(): OuterCallBinding {
     get halt() {
       return halt;
     },
+    haltSignal: controller.signal,
     scheduleAdmission(admit) {
       const next = tail.then(admit);
       // A refusal rejects its own caller without stopping later admissions.
@@ -105,6 +109,7 @@ export function bindOuterCall(): OuterCallBinding {
     halted(next) {
       if (closed || runSignal?.aborted || halt !== undefined) return false;
       halt = next;
+      controller.abort();
       return true;
     },
   };

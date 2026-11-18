@@ -78,6 +78,51 @@ describe('composed call admission', () => {
     expect(outer.halt).toBeUndefined();
   });
 
+  it('delivers the retained halt to cooperative work that already entered', async () => {
+    const outer = bindOuterCall();
+    const entered = latch();
+    const run = new AbortController();
+    const call = new AbortController();
+    let observed: unknown;
+    const { tool } = target('sample', {
+      execute: async (_args, ctx) => {
+        const signal = ctx.signal!;
+        await new Promise<void>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              observed = outer.halt;
+              resolve();
+            },
+            { once: true },
+          );
+          entered.release();
+        });
+        return signal.aborted ? 'stopped' : 'finished';
+      },
+    });
+    const dispatch = agentToolDispatch({
+      outer,
+      outerToolCallId: 'sample-owner',
+      lookup: () => tool,
+      innerContext: () => ({} as ToolExecutionContext),
+      signal: run.signal,
+    });
+    const result = dispatch.call('sample', {}, { signal: call.signal });
+    await entered.wait;
+
+    try {
+      expect(outer.halted(fixtureHalt)).toBe(true);
+      await expect(result).resolves.toBe('stopped');
+      expect(observed).toEqual(fixtureHalt);
+      expect(run.signal.aborted).toBe(false);
+      expect(call.signal.aborted).toBe(false);
+    } finally {
+      call.abort();
+      await result;
+    }
+  });
+
   it('holds the next admission until the current call enters, then releases before it returns', async () => {
     const outer = bindOuterCall();
     const gate = latch();
