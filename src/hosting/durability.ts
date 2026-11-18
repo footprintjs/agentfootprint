@@ -47,7 +47,7 @@
 import type { CombinedRecorder, CommitEvent } from 'footprintjs';
 
 import { installDurabilityBarrier } from '../core/durabilityBarrier.js';
-import { SessionOwnershipConflictError } from './errors.js';
+import { SessionNotFoundError, SessionOwnershipConflictError } from './errors.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
@@ -149,11 +149,10 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
           failure = undefined;
         },
         (err: unknown) => {
-          // A refusal by OWNER is not a store that failed to keep up: it is the
-          // store's answer that this caller may not write here, now that every
-          // save carries the owner (r3-45-hosting-1). It reaches the caller by
-          // its own name, as it does when only the final write is made.
-          if (err instanceof SessionOwnershipConflictError) {
+          // The store can refuse a different owner or a session whose owner it
+          // cannot determine (r3-45-hosting-1, r3-56-adapters-hosting-2).
+          // Both reach the caller by name in every durability mode.
+          if (err instanceof SessionOwnershipConflictError || err instanceof SessionNotFoundError) {
             failure = err;
             return;
           }

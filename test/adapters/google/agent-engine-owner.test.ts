@@ -173,6 +173,16 @@ describe('the first signer stays the owner (r3-56-adapters-hosting-2)', () => {
       expect(await outcome(google.store().persist('s1', envelopeOf('mine', 'bob')))).toBe(
         'ERR_SESSION_NOT_FOUND',
       );
+      for (const durability of ['sync', 'async'] as const) {
+        const { handle, send } = await door(google.store(), durability);
+        try {
+          expect(await send({ input: 'continue', sessionId: 's1', userId: 'bob' })).toBe(
+            'ERR_SESSION_NOT_FOUND',
+          );
+        } finally {
+          await handle.close();
+        }
+      }
     });
 
     it('names alice: alice continues it, bob is refused', async () => {
@@ -192,7 +202,10 @@ describe('the first signer stays the owner (r3-56-adapters-hosting-2)', () => {
 
 // ── Contract 2, through the hosted door ─────────────────────────────
 
-async function door(store: ReturnType<ReturnType<typeof service>['store']>) {
+async function door(
+  store: ReturnType<ReturnType<typeof service>['store']>,
+  durability: 'sync' | 'async' = 'sync',
+) {
   let handler: HostHandler | undefined;
   const agent = Agent.create({ provider: mock({ reply: 'fine' }), model: 'mock' }).build();
   const handle = await standingAgent({
@@ -201,7 +214,7 @@ async function door(store: ReturnType<ReturnType<typeof service>['store']>) {
     // Saves in the middle of the run too: on the release this patch follows,
     // that save dropped the owner, which is how a hosted turn naming nobody
     // erased it here (r3-45-hosting-1 meeting r3-56-adapters-hosting-2).
-    durability: 'sync',
+    durability,
     host: {
       name: 'two-callers',
       capabilities: [],
