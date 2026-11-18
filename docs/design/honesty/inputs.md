@@ -19,7 +19,7 @@ overturn. Nothing here is built yet.**
 > framework note joined AFTER the tool's JSON (a step banner, an effect note, the repeated-call
 > note — Q16 kept them unannotated) made the whole message fail to parse, and the text fallback
 > read `{"id":4417}` as `:4417`. `readResult` now reads the JSON a result opens with by the JSON
-> grammar (`evidence/servedJson.ts`) — several MCP text blocks and a capped result's cut `head`
+> grammar (`lib/servedJson.ts`) — several MCP text blocks and a capped result's cut `head`
 > too — and only what follows as text; the evidence gate reads through the same function, so
 > its identical false flag is gone with it.
 > A `turn` claim resolves to an earlier answer of the SAME argument of the SAME tool, or of a

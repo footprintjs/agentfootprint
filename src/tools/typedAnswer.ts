@@ -35,6 +35,8 @@
  */
 
 import { ownData } from '../lib/boundedJson.js';
+import { leadingJsonValue } from '../lib/servedJson.js';
+import { toolBytesOf } from '../lib/toolBytes.js';
 import { nonempty, object } from './inputRequest/data.js';
 
 /** A landed answer as its content holds it: what {@link isAnswerTo} proves. */
@@ -91,32 +93,21 @@ export function assertStoredTypedAnswerMark(message: unknown, location: string):
   );
 }
 
-/** `JSON.parse` of the content, or `undefined` for text that is not JSON. */
-function parsedContentOf(message: TypedAnswerCandidate & { readonly content: string }): unknown {
-  try {
-    return JSON.parse(message.content);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * The person's typed answer this message carries, or `undefined` for every
  * message the library did not land as one. A message counts only when it is a
  * `role: 'tool'` message, it carries the library's mark, and its content is
  * the answer to the very ask the mark names.
  *
- * `read` parses a marked message's content. A reader with its own parser
- * passes it (the evidence index reads only the tool's own bytes, through its
- * bounded reader); the default is `JSON.parse` of the whole content.
+ * The answer is the first JSON value in the result's own bytes. A procedure
+ * can append a step-completion note after the answer.
  */
-export function landedTypedAnswer<M extends TypedAnswerCandidate>(
-  message: M,
-  read: (marked: M & { readonly content: string }) => unknown = parsedContentOf,
-): LandedTypedAnswer | undefined {
-  if (message.role !== 'tool' || typeof message.content !== 'string') return undefined;
+export function landedTypedAnswer(message: TypedAnswerCandidate): LandedTypedAnswer | undefined {
+  if (message.role !== 'tool') return undefined;
   const requestId = markedRequestOf(Object.getOwnPropertyDescriptor(message, 'answersAsk'));
   if (requestId === undefined) return undefined;
-  const landed = read(message as M & { readonly content: string });
+  const content = toolBytesOf(message);
+  if (typeof content !== 'string') return undefined;
+  const landed = leadingJsonValue(content);
   return isAnswerTo(landed, requestId) ? landed : undefined;
 }

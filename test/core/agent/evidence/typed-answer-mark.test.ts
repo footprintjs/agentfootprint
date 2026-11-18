@@ -27,6 +27,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Agent, allow, defineTool, isInputPause, requestInput } from '../../../../src/index.js';
+import { defineSkill } from '../../../../src/injection-engine.js';
 import { pauseHere } from '../../../../src/core/pause.js';
 import type {
   LLMMessage,
@@ -161,6 +162,44 @@ describe('the landing door marks a real typed answer, and the mark never reaches
   it('its values stay the person’s words: the answer that repeats them is clean', async () => {
     const { agent } = await answeredTypedAsk();
     expect(flaggedOf(agent)).toBeUndefined();
+  });
+
+  it('carries the previous date when a procedure step asks again', async () => {
+    const renewal = defineSkill({
+      id: 'renewal',
+      description: 'Collect the renewal date',
+      body: 'Ask for the renewal date.',
+      tools: [askDue],
+      steps: [{ tool: 'ask_due', note: 'Collect the renewal date' }],
+    });
+    const { provider, requests } = scripted([
+      { toolCalls: [{ id: 'read', name: 'read_skill', args: { id: 'renewal' } }] },
+      callTool('ask_due', 'due-step'),
+      callTool('ask_due', 'due-again'),
+    ]);
+    const agent = Agent.create({ provider, model: 'mock' })
+      .injection(renewal)
+      .namesAndNumbersFromEvidence()
+      .build();
+    const first = await agent.run({ message: 'When is the renewal due?' });
+    if (!isInputPause(first)) throw new Error('expected the step to ask for the date');
+    const { requestId } = first.awaitingInput;
+    const second = await agent.resume(first.checkpoint, {
+      requestId,
+      values: { due: '2031-05-05' },
+    });
+    if (!isInputPause(second)) throw new Error('expected a second date request');
+
+    const history = historyOf(agent);
+    const answer = history.find((message) => message.toolCallId === 'due-step');
+    expect(answer?.answersAsk).toEqual({ requestId });
+    expect(answer?.content).toContain('Step 1 of 1 done.');
+    expect(carriesMark(requests.flatMap((request) => request.messages))).toBe(false);
+    expect(exemptFromRun({ history }).has('2031')).toBe(true);
+    expect(second.awaitingInput.repeat).toEqual({
+      count: 1,
+      previousAnswer: { due: '2031-05-05' },
+    });
   });
 
   it('the redaction rules still apply: a hidden field lands marked and exempts nothing', async () => {
@@ -455,6 +494,8 @@ describe('the one recogniser', () => {
     expect(landedTypedAnswer(shaped('r1'))).toBeUndefined();
     expect(landedTypedAnswer(shaped('r1', 'r2'))).toBeUndefined();
     expect(landedTypedAnswer({ ...shaped('r1', 'r1'), role: 'user' })).toBeUndefined();
+    const marked = shaped('r1', 'r1');
+    expect(landedTypedAnswer({ ...marked, content: `{}\n${marked.content}` })).toBeUndefined();
     expect(
       landedTypedAnswer({ ...shaped('r1'), answersAsk: 'r1' } as unknown as LLMMessage),
     ).toBeUndefined();

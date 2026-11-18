@@ -15,6 +15,7 @@ import {
   readSkillStepIntro,
 } from '../../../../../injection-engine/skillSteps.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
+import { appendStepReturn } from '../../../../../lib/servedJson.js';
 import type { ToolStepsOperations } from '../contracts/operations/steps.js';
 
 /** Compose the existing steps callbacks once for this handler. */
@@ -99,17 +100,17 @@ export function buildToolStepsOperations(
    * Advance-on-return — the caller has just finalized a NON-error,
    * NON-denied, NON-refused result for `toolName`. When that call is the
    * current step's tool: pointer + 1, `step_advanced` (with `completed` on
-   * the last), and the returned suffix joins the model-visible result
-   * BEFORE the history push. Empty string otherwise. Eligibility (ran,
-   * not denied/rejected/errored) is judged by the CALLING site, because
-   * each dispatch path knows its own truth about that.
+   * the last), and the completion note joins the model-visible result
+   * BEFORE the history push. Otherwise the result is returned as supplied.
+   * Eligibility is judged by the calling site.
    */
   const applyStepReturn = (
     scope: TypedScope<AgentState>,
     call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    result: string,
   ): string => {
     const state = stepStateOf(scope);
-    if (!state || state.step.tool !== call.toolName) return '';
+    if (!state || state.step.tool !== call.toolName) return result;
     const { ptr, plan, step } = state;
     const next: StepPointer = {
       skillId: ptr.skillId,
@@ -126,7 +127,7 @@ export function buildToolStepsOperations(
       toolCallId: call.toolCallId,
       ...(completed && { completed: true as const }),
     });
-    return stepAdvanceSuffix(next, plan);
+    return appendStepReturn(result, stepAdvanceSuffix(next, plan));
   };
 
   /** The `read_skill` activation intro for a STEPPED skill — where its
