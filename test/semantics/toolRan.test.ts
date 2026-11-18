@@ -80,6 +80,14 @@ describe('withEntered — the writer', () => {
 });
 
 describe('toolRanOf — a saved record is data', () => {
+  it.each([null, true, {}, { pausedCall: {} }])(
+    'does not claim a settlement for a malformed marker (%j)',
+    (notDispatched) => {
+      expect(toolRanOf({ notDispatched })).toBe('not-recorded');
+      expect(toolRanOf({ notDispatched, error: true, entered: true })).toBe('not-recorded');
+    },
+  );
+
   it('a leaf that is not a boolean is a record that does not say: it never proves the tool ran', () => {
     expect(toolRanOf({ error: true, entered: 'true' })).toBe('not-recorded');
     expect(toolRanOf({ error: true, entered: 1 })).toBe('not-recorded');

@@ -34,7 +34,7 @@
  */
 
 import { strip } from '../../semantics/coverage/read.js';
-import { toolRanOf } from '../../semantics/toolRan.js';
+import { readNotDispatched, toolRanOf } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
@@ -368,10 +368,13 @@ function outcomeOf(
 
   // The record keeps out a field that says how the call ended (a redaction
   // policy's placeholder): how it ended cannot be told, so it is not guessed.
-  if (end !== undefined && OUTCOME_FIELDS.some((field) => keptOut(end, field)))
-    return { outcome: 'unknown' };
-  if (end?.payload.notDispatched !== undefined)
-    return { outcome: 'not-dispatched', ruleEvent: end };
+  if (end !== undefined) {
+    if (OUTCOME_FIELDS.some((field) => keptOut(end, field))) return { outcome: 'unknown' };
+    const settlement = readNotDispatched(end.payload.notDispatched);
+    if (settlement === 'settled') return { outcome: 'not-dispatched', ruleEvent: end };
+    if (settlement === 'malformed')
+      return { outcome: end.payload.error === true ? 'ended-in-error' : 'unknown' };
+  }
   if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
   if (beforeDeny !== undefined && isPausedCall)
     return { outcome: 'declined', ruleEvent: beforeDeny };
@@ -409,7 +412,7 @@ function outcomeOf(
 
 /** The one leaf on `tool_end` that says how the call ended, as the account read it. */
 export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordPointer {
-  if (isRecord(end.payload.notDispatched)) {
+  if (readNotDispatched(end.payload.notDispatched) === 'settled') {
     return at(end, 'notDispatched', 'pausedCall', 'toolCallId');
   }
   // A call whose tool never ran: the leaf that says so.
