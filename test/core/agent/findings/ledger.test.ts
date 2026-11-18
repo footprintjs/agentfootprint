@@ -318,16 +318,16 @@ describe('standingRowsFrom — provenance and the placed ticket', () => {
     expect(rows.every((r) => !Object.prototype.hasOwnProperty.call(r, 'ref'))).toBe(true);
   });
 
-  it("a placed result gives 'artifact:<ref>' and puts the ref on the row", () => {
+  it('a requestless standing cannot take an artifact ref from a ticket-shaped result', () => {
     const [row] = standingRowsFrom(
       BATCH,
       declaring(fact('call_3', state('fc1/7', 'up'))),
       ON_CALL,
       2,
     );
-    expect(row.ref).toBe('art_9f3c');
+    expect(row.ref).toBeUndefined();
     expect(row.toolName).toBe('fetch_log');
-    expect(row.assertions[0].provenance).toBe('artifact:art_9f3c');
+    expect(row.assertions[0].provenance).toBe('tool:call_3');
   });
 
   it('a ticket-shaped string the library did not mint is not a ticket (the predicate, not inference)', () => {

@@ -4,7 +4,8 @@
  *
  * Reads every `.ts` file under `src/`, works out which imports survive compilation (the
  * RUNTIME edges), and checks them against the layer table in `layering.config.cjs`. The
- * fence is CLOSED: no upward runtime edge is allowed, and none may be named.
+ * fence is CLOSED: no upward runtime edge is allowed, and none may be named. Literal
+ * JavaScript imports under `scripts/` also obey inferred same-name facade boundaries.
  *
  *   FAILS on
  *   1. unassigned files    — a src file no layer pattern matches (or two match equally);
@@ -20,6 +21,8 @@
  *                            `src/*.ts` modules are ONE node, `(root)`);
  *   9. unresolved imports  — a relative specifier that names no file at all, so an edge
  *                            cannot drop out of the analysis unseen.
+ *  10. sealed scripts       — an outside import into x/ beside an x.mjs/cjs/js facade,
+ *                            instead of through that owning facade.
  *
  *   REPORTS (never fails)
  *   - file-level value cycles;
@@ -41,9 +44,9 @@
  * Exit code: 0 clean, 1 any failure.
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -71,7 +74,20 @@ export function folderOf(file) {
 export function readEdges(root, files, unresolved = []) {
   const known = new Set(files);
   const resolveSpec = (from, spec, line) => {
-    const to = defaultConfig.resolveRelative(from, spec, (candidate) => known.has(candidate));
+    let to = defaultConfig.resolveRelative(from, spec, (candidate) => known.has(candidate));
+    // Explicit JS files belong to the script fence, not to the TypeScript layer table.
+    // Keep the existing .js -> .ts resolution first and unchanged for source files.
+    if (to === null && spec.startsWith('.')) {
+      const base = posix.join(posix.dirname(from), spec);
+      to =
+        [
+          base,
+          ...['.js', '.mjs', '.cjs'].flatMap((extension) => [
+            base + extension,
+            base + '/index' + extension,
+          ]),
+        ].find((candidate) => known.has(candidate)) ?? null;
+    }
     if (!spec.startsWith('.')) return to;
     const literal = join(root, dirname(from), spec);
     const excludedTest = defaultConfig.resolveRelative(
@@ -183,6 +199,34 @@ export function readEdges(root, files, unresolved = []) {
     visit(source);
   }
   return edges;
+}
+
+/** Infer script x.mjs/cjs/js + x/ ownership from the tree; never execute those modules. */
+export function sealedScriptEscapes(root) {
+  const files = [];
+  const walk = (directory) => {
+    if (!existsSync(directory)) return;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const full = join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && /\.(?:mjs|cjs|js)$/.test(entry.name))
+        files.push(relative(root, full).split(sep).join('/'));
+    }
+  };
+  walk(join(root, 'scripts'));
+  files.sort();
+  const facades = files
+    .map((facade) => ({ facade, folder: facade.replace(/\.(?:mjs|cjs|js)$/, '') + '/' }))
+    .filter(({ folder }) => files.some((file) => file.startsWith(folder)));
+  if (facades.length === 0) return [];
+  return readEdges(root, files).flatMap((edge) =>
+    facades
+      .filter(
+        ({ facade, folder }) =>
+          edge.to.startsWith(folder) && edge.from !== facade && !edge.from.startsWith(folder),
+      )
+      .map(({ facade }) => ({ ...edge, facade })),
+  );
 }
 
 /**
@@ -370,6 +414,7 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
     root,
     files.filter((f) => matchesAny(barrelFiles, f)),
   );
+  const scriptEscapes = sealedScriptEscapes(root);
 
   const result = {
     files: files.length,
@@ -395,6 +440,7 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
     closedEscapes,
     barrelStatements: barrels,
     unresolved,
+    sealedScriptEscapes: scriptEscapes,
   };
   result.ok =
     unassigned.length === 0 &&
@@ -407,7 +453,8 @@ export function analyse({ root = REPO_ROOT, config = {} } = {}) {
     closedEscapes.length === 0 &&
     barrels.length === 0 &&
     folderCycles.length === 0 &&
-    unresolved.length === 0;
+    unresolved.length === 0 &&
+    scriptEscapes.length === 0;
   return result;
 }
 
@@ -484,6 +531,9 @@ export function format(result) {
     lines.push(`  ${short(b.file)}:${b.line} ${b.text}   [a barrel holds only \`export … from\`]`);
   for (const u of result.unresolved)
     lines.push(`  ${short(u.from)}:${u.line} -> '${u.spec}'   [names no file]`);
+  lines.push(`sealed-script escapes: ${result.sealedScriptEscapes.length}`);
+  for (const edge of result.sealedScriptEscapes)
+    lines.push(`  ${edge.from}:${edge.line} -> ${edge.to}   [sealed-script facade ${edge.facade}]`);
   lines.push('');
   lines.push(result.ok ? 'OK' : 'FAIL');
   return lines.join('\n');

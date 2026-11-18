@@ -92,11 +92,14 @@ let finalBranch = startFinalBranch(deps.answerLayer, prepareFinalFor(deps), deps
 `argumentSources: true` when its declared sources are armed too, by either door — `armed.ts` ·
 `readInputsLayerOption` reads the `.inputsLayer()` option once), and nothing on a run that armed
 none. A reader of the record tells "this layer was armed and filed nothing" from "this layer was
-never armed" by this key; which door armed the sources is on the record too (the findings
+never armed" by this key (the inputs bench does, `bench/inputs/harness.mjs`; the standing fold
+in `assessment/assess.ts` does not read it, so the standing cannot make that distinction
+today); which door armed the sources is on the record too (the findings
 ledger's own run constant, `findingsServe`, exists exactly when `.findings()` did). While any
 layer is armed, the one writer stamps every ledger row with its `turn`, a continued
 conversation's ledger is restored, and the checkpoint carries the turn it ended on
-(`AgentRunCheckpoint.turnNumber`) — seed continues the stamp from it and from the restored
+(`AgentRunCheckpoint.turnNumber`; `runtime/conversation/owner.ts` · `turnNumberOf` also
+carries it when no layer is armed but `.negativeClaims()` is configured) — seed continues the stamp from it and from the restored
 ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`), because a window strategy trims the
 stored history and a count of its user messages repeats.
 

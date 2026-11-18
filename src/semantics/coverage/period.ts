@@ -9,7 +9,7 @@
  *          elsewhere (a Python helper, an older or newer process) without
  *          repairing it. Both ask {@link periodProblem}, so a mint and a read
  *          cannot disagree about what a well-formed period is.
- * Role:    core/ layer leaf of the result doors (honesty layer 3). Imports only
+ * Role:    semantics/ layer (L1) leaf of the result doors (honesty layer 3). Imports only
  *          `refusal.ts`, the dev-mode flag and the time layer's one instant
  *          parser (`time/instant.ts` · `instantOf`, lenient profile) and its
  *          person-facing renderer (`time/present.ts`). The results layer

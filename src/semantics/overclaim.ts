@@ -43,7 +43,7 @@
  * they miss is a missed finding, never a pass. The fuller detection grammar
  * (clauses, negation scope, languages) belongs to the delivery check, a later
  * piece; it may reuse these lists. {@link OVERCLAIM_PHRASES_VERSION} changes
- * whenever a list does.
+ * whenever a list does. The version is kept with the authored phrase lists.
  */
 
 import { readAbsence, readCoverageLedger } from './coverage/recognize.js';

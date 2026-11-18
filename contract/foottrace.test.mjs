@@ -48,6 +48,10 @@ function contracts(ft, cause) {
     commit('answer', 1, 'answer', 4, 'set', ['input']),
     commit('rewrite', 2, 'input', 9),
   ];
+  const earlierWrites = [log[0], commit('rewrite', 1, 'input', 9)];
+  const unstampedReader = commit('answer', 2, 'answer', 4, 'set', ['input']);
+  const pinnedReader = { ...unstampedReader, beganAt: 1 };
+  const overlappingReader = { ...pinnedReader, sawUntil: 2 };
   const reads = (id) => (id === 'answer#1' ? ['input'] : []);
   const chain = () => ft.causalChain(log, 'answer#1', reads);
   const slice = () => ft.sliceForKey(log, 'answer', reads);
@@ -164,6 +168,24 @@ function contracts(ft, cause) {
       assert.deepEqual(ft.findLastWriterWithBasis(log, 'input', 2), { writer: log[0], basis: [] });
       assert.deepEqual(ft.findLastWriterWithBasis(log, 'missing').basis, ['never-written']);
     },
+    'foottrace:findReadSources': () => {
+      assert.deepEqual(ft.findReadSources([...earlierWrites, pinnedReader], 2, 'input'), {
+        before: 0,
+        during: [],
+      });
+      assert.deepEqual(ft.findReadSources([...earlierWrites, overlappingReader], 2, 'input'), {
+        before: 0,
+        during: [1],
+      });
+      assert.deepEqual(ft.findReadSources([...earlierWrites, unstampedReader], 2, 'input'), {
+        before: 1,
+        during: [],
+      });
+      assert.deepEqual(ft.findReadSources([...earlierWrites, pinnedReader], 2, 'missing'), {
+        before: -1,
+        during: [],
+      });
+    },
     'foottrace:flattenCausalDAG': () =>
       assert.deepEqual(
         ft.flattenCausalDAG(chain()).map((node) => node.runtimeStageId),
@@ -205,6 +227,13 @@ function contracts(ft, cause) {
       const source = ft.keysReadFromMap(new Map([['answer#1', ['input']]]));
       assert.deepEqual(source.lookup('answer#1'), ['input']);
       assert.deepEqual(source.lookup('missing#0'), []);
+    },
+    'foottrace:overlapOf': () => {
+      const overlaps = ft.findReadSources([...earlierWrites, overlappingReader], 2, 'input');
+      assert.equal(ft.overlapOf(overlaps, 0), 'replaced-while-running');
+      assert.equal(ft.overlapOf(overlaps, 1), 'written-while-running');
+      const pinned = ft.findReadSources([...earlierWrites, pinnedReader], 2, 'input');
+      assert.equal(ft.overlapOf(pinned, 0), undefined);
     },
     'foottrace:parseRuntimeStageId': () =>
       assert.deepEqual(ft.parseRuntimeStageId('outer/answer#12'), {

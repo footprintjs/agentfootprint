@@ -183,7 +183,7 @@ export interface StandingRow {
    * named none (`unknownId`), or when the served message carried no name.
    */
   readonly toolName?: string;
-  /** The placement ticket's `art_` ref when the result was placed (`isPlacedToolResult`). */
+  /** The placement ticket's `art_` ref when the placement is backed by the library receipt. */
   readonly ref?: string;
   readonly standing: Standing;
   readonly sought?: boolean;

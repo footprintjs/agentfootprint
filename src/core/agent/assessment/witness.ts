@@ -15,9 +15,10 @@
  * Role:    core/ layer leaf of the answer layer. Static on purpose: the
  *          checkpoint door (`core/runCheckpoint.ts` · `validateCheckpoint`,
  *          a synchronous door) asks `witnessRowIsWellFormed`, so this module
- *          imports nothing but the script labels (`../scripts/label.ts`, a
- *          leaf) and the finding table (`integrityReasons.ts`, data) and stays
- *          small.
+ *          keeps its imports static and few: the finding table
+ *          (`integrityReasons.ts`, data), the integrity-finding row type, the
+ *          script types and `../scripts/match.ts · blockVerdictOf` (which
+ *          itself imports `evidence/codeRegions.ts`).
  * Emits:   N/A. A witness row emits nothing of its own — the verdict's event
  *          (`agentfootprint.agent.evidence_checked`,
  *          `agentfootprint.skill.steps_unfinished`) already fired, beside the
@@ -156,7 +157,7 @@ export interface ClaimUnsettledRow {
   readonly field: string;
 }
 
-/** Either witness row. */
+/** Any of the five witness row kinds this module checks. */
 export type AnswerWitnessRow =
   | GroundedRow
   | StepsUnfinishedRow

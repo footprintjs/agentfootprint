@@ -19,8 +19,7 @@
 import { describe, expect, it } from 'vitest';
 import { BoundaryRecorder } from '../../../src/recorders/observability/BoundaryRecorder.js';
 import { buildStepGraph } from '../../../src/recorders/observability/FlowchartRecorder.js';
-import type { FlowSubflowEvent } from 'footprintjs';
-import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
+import type { FlowRunEvent, FlowSubflowEvent } from 'footprintjs';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
 

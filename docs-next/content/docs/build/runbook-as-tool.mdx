@@ -299,7 +299,7 @@ The consumer redeems it with the artifact op it already has — `{ op: 'artifact
 
 ## What is not here yet
 
-- **Pause**: a procedure that pauses throws with the checkpoint attached (exactly like `flowchartAsTool`). The approval-gate phase brings typed resume through the agent rail.
+- **Pause**. A wrapped chart attaches its checkpoint to a thrown error. A direct caller of `execute` can read that checkpoint. The Agent handles the throw through its tool-error path and does not create an Agent pause for it.
 - **Inner dispatch ceilings**: `checkIn` and `wants` tools refuse by name, and so does a middleware `ask` (an inner call cannot pause); a checker's `'halt'` refuses the inner call and ends the turn once the procedure's own call settles; composition depth stops at one (an inner tool does not get `ctx.tools`); a `tools` kept past the procedure's `execute` refuses every later call.
 
 ## The API surface

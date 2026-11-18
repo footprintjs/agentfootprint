@@ -1,6 +1,11 @@
 /**
- * Internal dispatch/return/delivery receipt boundary, not mounted in the Agent.
- * The eventual runtime adapter reserves a namespace/run/ordinal before await,
+ * Internal dispatch/return/delivery receipt boundary. Only part of it is live.
+ * The result-identity codec (`resultIdentityOf`, `readResultIdentity`) runs on
+ * every `search` tool call and every armed negative-claims call: the coverage
+ * row's `claim-result/<namespace>/<runId>/<n>` ID comes from it. The capture
+ * functions (`captureDispatch`, `captureReturnedEvidence`, `finalizeEvidence`,
+ * `evidenceSnapshot`) are not mounted in the Agent; only tests call them. The
+ * eventual runtime adapter reserves a namespace/run/ordinal before await,
  * captures at actual execute, then finalizes against the authorized served value.
  */
 import { decodePresentIdentityField, encodeIdentityField } from '../../memory/identity/encode.js';

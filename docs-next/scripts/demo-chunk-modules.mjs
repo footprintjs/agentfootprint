@@ -56,7 +56,7 @@ function leaves(module) {
 
 function label(name) {
   if (!name) return '(unnamed)';
-  const lib = name.match(/\.\.\/dist\/esm\/(.+)$/);
+  const lib = name.match(/(?:\.\.|node_modules\/agentfootprint)\/dist\/esm\/(.+)$/);
   if (lib) return `af:${lib[1]}`;
   const fp = name.match(/footprintjs\/dist\/esm\/(.+)$/);
   if (fp) return `fp:${fp[1]}`;

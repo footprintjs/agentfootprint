@@ -2,12 +2,12 @@ import { referenceRefusalRow } from '../findings/refusal.js';
 import { findingsReferenceRefusal } from '../findings/admission.js';
 import { assertAnswerReferences, withFindingsAdmission } from '../findings/answerAdmission.js';
 /**
- * route — decider that branches the ReAct loop into 'tool-calls' or 'final'.
+ * route — the decider after CallLLM: which of the seven `RouteBranch` values the ReAct loop takes
+ * next.
  *
- * Runs after CallLLM. If the LLM returned tool calls AND we haven't hit
- * `maxIterations`, route to the tool execution branch (which loops back
- * to PromptBuilder). Otherwise route to the final-branch subflow which
- * persists memory writes and breaks the loop.
+ * In short: 'tool-calls' when the LLM returned tool calls and `willDispatch` lets them run; else
+ * 'final', unless pending calls at `maxIterations` go to a mounted 'wrap-up' or an armed judge
+ * sends the answer round once more. Each branch's rule: this folder's README, row `route.ts`.
  *
  * Emits `agentfootprint.agent.route_decided` with the chosen branch +
  * a human-readable rationale (visible in narrative + observability).
@@ -581,8 +581,7 @@ async function peelAnswerStandings(
 ): Promise<string | undefined> {
   if (findings !== true || typeof scope.llmLatestContent !== 'string') return undefined;
   const raw = scope.llmLatestContent;
-  // Loaded only under the arm (`findings/peel.ts`): an unarmed agent returned
-  // on the line above and never loads the scanner.
+  // Only an armed agent loads the findings scanner.
   const { peelAnswerFindings } = await import('../findings/peel.js');
   const peeled = peelAnswerFindings(raw, { captureMalformed: true });
   if (peeled.findings?.previous !== undefined) {
@@ -595,6 +594,7 @@ async function peelAnswerStandings(
       withUnsettledRows(
         standingRowsFrom(known, peeled.findings, 'answer', scope.iteration as number, {
           witness: scope.findingsRequest?.[0],
+          placedTickets: scope.placedTickets,
         }),
         known,
         () => [...((scope.coverageDeclared ?? []) as readonly DeclaredCoverage[])],

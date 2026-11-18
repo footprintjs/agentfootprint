@@ -1,5 +1,29 @@
 import type { SpokenIds } from '../../../../../lib/spokenIds.js';
 
+/**
+ * What a call gets back when the party whose contract the model read under
+ * this name cannot answer it, and no other party may (9.92.0).
+ *
+ * Two doors reach here. A name that LEFT the wire — the model read a
+ * provider's contract on an earlier call and the provider withdrew the name —
+ * whose only remaining holder is a party the model was never shown under that
+ * name (a scoped skill that never activated): dispatching that holder would
+ * hand the model's belief to a stranger's function, which is the silent
+ * identity swap this release closed. And a resume in a fresh Agent instance
+ * of a provider-served call, where the served party is on the checkpoint but
+ * the provider's list has not been resolved on this instance.
+ *
+ * It names no roster on purpose: `unknownToolResult`'s roster is the DISPATCH
+ * map, and the map here holds exactly the implementation this sentence is
+ * refusing. Anchored past tense, one clause, like every persistent result.
+ */
+export function notServedResult(toolName: string): string {
+  return (
+    `Tool '${toolName}' did not run on that call: the implementation whose contract was ` +
+    `offered under that name was not available to answer it.`
+  );
+}
+
 // LENS · tool-result · persistent-history
 // reads: the dispatchable roster ← `toolCalls/execution/catalogOperations.ts` · dispatchRoster: registry ∪ provider cache, filtered through scope.hiddenSkillIds
 // law: may omit, never deny; every clause anchored to the call it was composed on.
@@ -44,30 +68,6 @@ import type { SpokenIds } from '../../../../../lib/spokenIds.js';
  * Exported for the producer registry, and used by BOTH dispatch doors so they
  * cannot drift.
  */
-/**
- * What a call gets back when the party whose contract the model read under
- * this name cannot answer it, and no other party may (9.92.0).
- *
- * Two doors reach here. A name that LEFT the wire — the model read a
- * provider's contract on an earlier call and the provider withdrew the name —
- * whose only remaining holder is a party the model was never shown under that
- * name (a scoped skill that never activated): dispatching that holder would
- * hand the model's belief to a stranger's function, which is the silent
- * identity swap this release closed. And a resume in a fresh Agent instance
- * of a provider-served call, where the served party is on the checkpoint but
- * the provider's list has not been resolved on this instance.
- *
- * It names no roster on purpose: `unknownToolResult`'s roster is the DISPATCH
- * map, and the map here holds exactly the implementation this sentence is
- * refusing. Anchored past tense, one clause, like every persistent result.
- */
-export function notServedResult(toolName: string): string {
-  return (
-    `Tool '${toolName}' did not run on that call: the implementation whose contract was ` +
-    `offered under that name was not available to answer it.`
-  );
-}
-
 export function unknownToolResult(toolName: string, dispatchable: SpokenIds): string {
   const head = `Unknown tool '${toolName}' on that call.`;
   if (dispatchable.named.length > 0) {

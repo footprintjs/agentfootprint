@@ -6,7 +6,7 @@
  *          conversation: there, text the library wrote into a `role: 'user'`
  *          turn must not become user-supplied evidence; here, text the MODEL
  *          supplied that a tool echoed back must not become tool evidence.
- * Role:    core/ layer, pure.
+ * Role:    semantics/ layer (L1), pure.
  * Emits:   N/A.
  *
  * ## The bug this file exists to prevent

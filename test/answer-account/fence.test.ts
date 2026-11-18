@@ -121,6 +121,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'core/agent/assessment/compose.ts', // standingLineOf + its inputs — the ONE composer of the standing line
       'core/agent/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
+      'core/agent/placedTickets.ts', // issuedTicketsOf reads the native placement receipt
       'core/agent/scripts/attachment.ts', // scriptsBlock + recordedScripts — the ONE composer of the attached scripts, and the ONE reader of `turn_end.scripts`
       'core/agent/scripts/match.ts', // recordedBlocks — the ONE reader of `evidence_checked.scripts`, the checkpoint door's rule
       'core/agent/scripts/rows.ts', // scriptRowsOfTurn + scriptRowIsWellFormed — the ONE reader of a turn's script rows, and the row rule

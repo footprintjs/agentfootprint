@@ -87,7 +87,11 @@ function emitRow(scope: ToolChoiceScope, row: ToolChoiceEntry): void {
   });
 }
 
-/** The pick or pick-error row filed for `iteration`, or nothing — the call had no pick. */
+/**
+ * The `pick` row filed for `iteration`, or nothing. A `pick-error` row is never
+ * returned (the return type cannot hold one): nothing means "no pick row",
+ * which is not the same as "no pick was attempted" — ask `pickAttemptedFor`.
+ */
 export function pickRowFor(
   rows: readonly ToolChoiceEntry[] | undefined,
   iteration: number,

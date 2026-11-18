@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { ToolSessionTier } from '../toolSessions.js';
+import { TOOL_SESSION_MAX_LIVE, ToolSessionTier } from '../toolSessions.js';
 import { newToolOwner, nextToolDispatch } from '../toolResourceOwner.js';
 
 const owner = (runId: string) => nextToolDispatch(newToolOwner({ runId, ordinal: 0 }));
@@ -41,12 +41,13 @@ it.each(['call', 'run', 'session'] as const)(
   },
 );
 
-it('conservative restoration reporting does not change global shutdown dedup or lifetime', async () => {
+it('keeps one global shutdown disposer across more owners than the default live limit', async () => {
   const tier = new ToolSessionTier();
   const closed: string[] = [];
-  for (const id of ['A', 'B']) {
+  for (let index = 0; index <= TOOL_SESSION_MAX_LIVE; index++) {
+    const id = String(index);
     const call = owner(id),
-      view = tier.borrow(call, facts(id));
+      view = tier.borrow(call, facts(id, id));
     const result = view.register(
       call.pending!,
       { tool: 'shared', toolCallId: id },
@@ -55,11 +56,12 @@ it('conservative restoration reporting does not change global shutdown dedup or 
       },
       { scope: 'shutdown', key: 'global' },
     );
-    expect(result.outcome).toBe(id === 'A' ? 'started' : 'reused');
+    expect(result.outcome).toBe(index === 0 ? 'started' : 'reused');
+    await view.fireCall(call.pending!);
     await view.finish(false);
   }
   expect(closed).toEqual([]);
   expect(tier.liveCount()).toBe(1);
   await tier.fireShutdown();
-  expect(closed).toEqual(['A']);
+  expect(closed).toEqual(['0']);
 });
