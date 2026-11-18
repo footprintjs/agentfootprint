@@ -306,6 +306,50 @@ describe('a record that does not say (written before `entered`)', () => {
   });
 });
 
+describe('a malformed settlement marker in a saved account', () => {
+  it.each([null, true, {}, { pausedCall: {} }])(
+    'reports an unknown outcome for a malformed marker (%j)',
+    async (notDispatched) => {
+      const { recording } = await runAndRead([{ id: 'ok1', name: 'lookup', args: { id: 'r1' } }]);
+      const edited = {
+        ...recording,
+        events: recording.events.map((e) =>
+          String(e.type).endsWith('stream.tool_end')
+            ? { ...e, payload: { ...e.payload, notDispatched } }
+            : e,
+        ),
+      } as Recording;
+      const account = read(edited);
+      expect(account.facts.calls[0]).toMatchObject({ outcome: 'unknown' });
+      expect(rowText(account, 'checked')).toEqual([
+        'It started lookup; how the call ended is not recorded.',
+      ]);
+      expect(rowText(account, 'found')).toEqual(['What lookup returned is not recorded.']);
+      expect(account.facts.errors.notDispatched).toBe(0);
+    },
+  );
+
+  it('preserves a recorded error without asserting that the tool ran or was settled', async () => {
+    const { recording } = await runAndRead([{ id: 't1', name: 'crash', args: {} }]);
+    const edited = {
+      ...recording,
+      events: recording.events.map((e) =>
+        String(e.type).endsWith('stream.tool_end')
+          ? { ...e, payload: { ...e.payload, notDispatched: null } }
+          : e,
+      ),
+    } as Recording;
+    const account = read(edited);
+    expect(account.facts.calls[0]).toMatchObject({ outcome: 'ended-in-error' });
+    expect(rowText(account, 'checked')).toEqual([
+      'It asked to run crash; the call ended in an error.',
+    ]);
+    expect(rowText(account, 'found')).toEqual([
+      'The call to crash ended in an error, not a result.',
+    ]);
+  });
+});
+
 describe('the byte law: a call that succeeded keeps exactly its bytes', () => {
   it('a success has no `entered`', async () => {
     const { entered, recording, account } = await runAndRead([

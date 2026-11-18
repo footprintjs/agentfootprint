@@ -71,12 +71,31 @@ export type ToolRan = 'ran' | 'not-run' | 'not-recorded';
  * or `notExecuted` leaf that is not a boolean is not a value any writer
  * writes (a hand-edited record, a placeholder), so the bracket reads
  * `'not-recorded'`: such a leaf never proves that a tool ran or did not run.
+ * A malformed settlement marker leaves execution unrecorded as well.
  */
 export interface ToolRanFields {
   readonly error?: unknown;
   readonly entered?: unknown;
   readonly notExecuted?: unknown;
   readonly notDispatched?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Read the saved shape written by `batch/settle.ts` · `notDispatchedMarker`. */
+export function readNotDispatched(value: unknown): 'absent' | 'malformed' | 'settled' {
+  if (value === undefined) return 'absent';
+  if (!isRecord(value) || !Object.hasOwn(value, 'pausedCall')) return 'malformed';
+  const { pausedCall } = value;
+  if (!isRecord(pausedCall)) return 'malformed';
+  return Object.hasOwn(pausedCall, 'toolCallId') &&
+    typeof pausedCall.toolCallId === 'string' &&
+    Object.hasOwn(pausedCall, 'toolName') &&
+    typeof pausedCall.toolName === 'string'
+    ? 'settled'
+    : 'malformed';
 }
 
 /** A leaf that is present but not a boolean: the record does not say. */
@@ -89,7 +108,9 @@ const unreadable = (leaf: unknown): boolean => leaf !== undefined && typeof leaf
  */
 export function toolRanOf(bracket: ToolRanFields): ToolRan {
   if ([bracket.entered, bracket.error, bracket.notExecuted].some(unreadable)) return 'not-recorded';
-  if (bracket.notDispatched !== undefined) return 'not-run';
+  const settlement = readNotDispatched(bracket.notDispatched);
+  if (settlement === 'malformed') return 'not-recorded';
+  if (settlement === 'settled') return 'not-run';
   if (bracket.notExecuted === true) return 'not-run';
   if (bracket.entered === false) return 'not-run';
   if (bracket.entered === true) return 'ran';
