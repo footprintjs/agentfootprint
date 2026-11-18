@@ -541,14 +541,24 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       // says "not traced" is replaced by the call that opens it. One line,
       // and it teaches the id it takes: the SAME toolCallId, one level down.
       const inner = artifacts.innerRuns?.get(toolCallId);
-      lines.push(
-        ran === 'not-run'
-          ? `inside: nothing — call '${toolCallId}' never reached the tool.`
-          : inner !== undefined
-          ? `inside: a retained record for this call contains ${inner.steps} step(s), ` +
-            `${inner.outcome}. Descend with inspect_tool_run({ toolCallId: '${toolCallId}' }).`
-          : '⚠ boundary: what happened INSIDE the tool is not traced — no inner record is available.',
-      );
+      if (ran === 'not-run') {
+        lines.push(`inside: nothing — call '${toolCallId}' never reached the tool.`);
+      } else if (inner !== undefined) {
+        const description =
+          ran === 'ran'
+            ? 'this tool kept its own record of the run —'
+            : 'a retained record for this call contains';
+        lines.push(
+          `inside: ${description} ${inner.steps} step(s), ${inner.outcome}. ` +
+            `Descend with inspect_tool_run({ toolCallId: '${toolCallId}' }).`,
+        );
+      } else {
+        const detail =
+          ran === 'ran'
+            ? 'this is the envelope (arguments in, result out) plus what the run itself decided about it.'
+            : 'no inner record is available.';
+        lines.push(`⚠ boundary: what happened INSIDE the tool is not traced — ${detail}`);
+      }
       return lines.join('\n');
     },
   });
