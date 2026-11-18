@@ -62,6 +62,8 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'stream.tool_progress': 'The `{{toolName}}` tool reported progress while it was still running.',
 
   'stream.tool_end': 'The tool returned its result. {{agentName}} will share it with the LLM next.',
+  'stream.tool_end.notExecuted': 'The tool call was not executed.',
+  'stream.tool_end.executionUnknown': 'The record does not say whether the tool ran.',
 
   // A call the paused batch never dispatched (9.113.0) — its `tool_start`
   // carries `notDispatched`. A NEW key, not a split of `stream.tool_start`:

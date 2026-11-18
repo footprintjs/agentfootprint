@@ -305,8 +305,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
     },
     {
       kind: 'unrepaired',
-      count: 2,
-      why: 'two unknown-tool-call RESULT corrections carry standing navigation imperatives; correctly flagged and unchanged by the file split',
+      count: 3,
+      why: 'two unknown-tool-call corrections and the retained-inner-record link carry navigation imperatives in tool results',
+    },
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the boundary line reports the absence of an inner record for the call in the current tool result',
     },
   ],
   'src/trace-toolpack/traceToolpack/innerRecords.ts': [
@@ -1436,11 +1441,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
+        // The revised journal classifies its inner-record link and boundary line.
         files: 130,
-        total: 212,
+        total: 214,
         registry: 8,
-        ephemeral: 27,
-        unrepaired: 35,
+        ephemeral: 28,
+        unrepaired: 36,
         notModelFacing: 142,
         unrepairedEntries: 21,
       });

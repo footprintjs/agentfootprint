@@ -33,6 +33,11 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { callTraceTool, recordRun, traceToolpack } from '../../src/observe.js';
+import {
+  defaultCommentaryTemplates,
+  selectCommentaryKey,
+} from '../../src/recorders/observability/commentary/commentaryTemplates.js';
+import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { CredentialProvider } from '../../src/identity.js';
 import { accountForAnswer } from '../../src/answer-account/account.js';
 import type { AnswerAccount, RowId } from '../../src/answer-account/types.js';
@@ -480,6 +485,37 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
       { toolCallId: id },
     );
 
+  it('journal leaves the arguments proposed on an old schema-rejection bracket', async () => {
+    const { recording, entered } = await runAndRead([
+      { id: 'old1', name: 'lookup', args: { id: 7 } },
+    ]);
+    expect(entered.lookup).toBe(0);
+    const out = await journal(writtenBeforeEntered(recording), 'old1');
+    expect(out).toContain('error — this record does not say whether the tool ran');
+    expect(out).toContain('the arguments above were proposed');
+    expect(out).not.toContain('ran with: the proposed arguments');
+  });
+
+  it('journal reads an empty saved stream settlement marker as unknown', async () => {
+    const { recording, entered } = await runAndRead([
+      { id: 'ok1', name: 'lookup', args: { id: 'r1' } },
+    ]);
+    expect(entered.lookup).toBe(1);
+    const edited = {
+      ...recording,
+      events: recording.events.map((event) =>
+        String(event.type).endsWith('stream.tool_end')
+          ? { ...event, payload: { ...event.payload, notDispatched: {} } }
+          : event,
+      ),
+    } as Recording;
+    expect(read(edited).facts.calls[0]?.outcome).toBe('unknown');
+    const out = await journal(edited, 'ok1');
+    expect(out).not.toContain('was never executed');
+    expect(out).not.toContain('outcome: ok');
+    expect(out).toContain('this record does not say whether the tool ran');
+  });
+
   it('an unknown tool name: it ran with nothing, and was not executed', async () => {
     const { recording } = await runAndRead([{ id: 'u1', name: 'reboot_host', args: {} }]);
     const out = await journal(recording, 'u1');
@@ -585,6 +621,31 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
     );
     expect(await journal(writtenBeforeEntered(recording), 't1')).toContain(
       'outcome: error — this record does not say whether the tool ran',
+    );
+  });
+});
+
+describe('teaching commentary for tool ends', () => {
+  function commentary(recording: Recording): string {
+    const end = recording.events.find((event) => String(event.type).endsWith('stream.tool_end'));
+    const key = selectCommentaryKey(end as AgentfootprintEvent);
+    expect(key).toBeTruthy();
+    return defaultCommentaryTemplates[key!]!;
+  }
+
+  it('teaching commentary says a recorded argument refusal did not execute', async () => {
+    const { recording, entered } = await runAndRead([
+      { id: 'talk1', name: 'lookup', args: { id: 7 } },
+    ]);
+    expect(entered.lookup).toBe(0);
+    expect(ends(recording)[0]).toMatchObject({ entered: false });
+    expect(commentary(recording)).toBe('The tool call was not executed.');
+  });
+
+  it('teaching commentary leaves execution unknown on the same old error bracket', async () => {
+    const { recording } = await runAndRead([{ id: 'talk1', name: 'lookup', args: { id: 7 } }]);
+    expect(commentary(writtenBeforeEntered(recording))).toBe(
+      'The record does not say whether the tool ran.',
     );
   });
 });

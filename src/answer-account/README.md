@@ -310,9 +310,10 @@ that error or a separate refusal, decline or settlement, it says how the call
 ended is unknown. The account handles redaction placeholders first via
 `keptOut`.
 
-**Not covered yet.** These readers still answer "did this call run?" without
-asking `toolRanOf`. They are part of the planned change "one answer to: did
-this call run", which builds on this one:
+**Not covered yet.** The trace call journal and teaching commentary now read
+execution evidence through `semantics/toolRan.ts`. Other readers still use
+their own interpretation or project the bracket for downstream consumers.
+The planned change "one answer to: did this call run" builds on this one:
 
 - `adapters/observability/auditBounding.ts` · `createToolRunTracker`, and the
   OpenTelemetry adapter's `ranTools` (filled in `otel/events/dispatch.ts`,
@@ -323,6 +324,27 @@ this call run", which builds on this one:
   `{ entered: false }`), so they count it as run, and the OpenTelemetry
   adapter exports its arguments and its "declined by human" text as tool
   content.
+- `recorders/observability/StatusRecorder.ts` can say it got a result after a
+  decline. `AgentThinkingTraceRecorder.ts` still classifies the structured
+  beat as a return or error independently of the teaching sentence.
+- `memory/causal/evidenceRecorder.ts` records call results and
+  `recorders/observability/ToolLineageRecorder.ts` indexes returned values as
+  tool provenance without consulting the entry stamp.
+- `adapters/observability/xray.ts` sets the closing span status from the
+  bracket. `LiveStateRecorder.ts`, `core/agent/componentObservers.ts` and
+  `recorders/observability/status/statusTemplates.ts` use the bracket to
+  close active calls or UI status.
+- `recorders/observability/BoundaryRecorder.ts` copies `error` without
+  `entered` into `tool.end`. `FlowchartRecorder.ts` uses the projected
+  event to connect the result to the next model step. `bug-report/transcript.ts`
+  also copies the error and omits the stamp. These projections cannot tell a
+  tool that threw from a call that ended before entry.
+- The trace toolpack's separate `inspect_tool_run` descent helper
+  (`trace-toolpack/traceToolpack/innerRecords.ts`) can name a tool as having
+  run from the call inventory alone.
+
+Two other views use committed history instead of `tool_end`:
+
 - The approver's trail, `core/checkin.ts` · `buildTrail`: each
   `CheckInTrail.toolCalls[].ok` is read from the history message's text, so an
   unknown tool name reaches the approver as `ok: true`. It is built from
@@ -330,11 +352,6 @@ this call run", which builds on this one:
   comes with pull request 343 (`LLMMessage.outcome`), and is open until it
   merges. Only the summary sentence changed here ("1 tool call over 2
   iterations": calls, never runs).
-- Projections that drop `entered`: `recorders/observability/BoundaryRecorder.ts`
-  (the `tool.end` domain event copies `error`, never `entered`) and
-  `bug-report/transcript.ts` (a step copies `error`, drops `entered`). Lens,
-  the step graph and a bug report still show a call that never reached its
-  tool as an errored tool step, the same as one that ran and threw.
 - The account's rows before a pause (`facts/pausedLeg.ts`, read by
   `facts/checked.ts` · `checkedBeforePauseBlock`): they are read from committed
   history, which carries no `tool_end`, so an unknown tool name before a pause
