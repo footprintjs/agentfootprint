@@ -19,6 +19,18 @@ import { t, type AccountTemplate } from './templateEntry.js';
 export const DID_IT_RUN_TEMPLATES = {
   'checked.notExecuted': t('It asked to run {{tool:code}}; the call was not executed.'),
   'checked.endedInError': t('It asked to run {{tool:code}}; the call ended in an error.'),
+  'checked.refusedAfterApproval.named': t(
+    'A person approved the call to {{tool:code}}, then the rule named {{by:code}} refused it.',
+  ),
+  'checked.refusedAfterApproval.rule': t(
+    'A person approved the call to {{tool:code}}, then a rule refused it.',
+  ),
+  'checked.refusedAfterApproval.library': t(
+    'A person approved the call to {{tool:code}}, then the library refused it.',
+  ),
+  'checked.refusedOnResume.library': t(
+    'It asked to run {{tool:code}}, and the library refused it when the call resumed.',
+  ),
   // No call returned a result, and at least one of them may have run (`facts/checked.ts` ·
   // `knownNotRun`): "none ran" would be false of a tool that ran and threw.
   'notChecked.noResults': t('Nothing to report: no tool call returned a result in this record.'),

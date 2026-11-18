@@ -117,7 +117,7 @@ export function buildResumedInvocation(
     scope: TypedScope<AgentState>,
     resolved: Resolution,
     toolName: string,
-    args: Readonly<Record<string, unknown>>,
+    approved: Readonly<Record<string, unknown>>,
     toolCallId: string,
     iteration: number,
     env: ReturnType<TypedScope<AgentState>['$getEnv']>,
@@ -136,7 +136,7 @@ export function buildResumedInvocation(
       );
     /** What the approval covers — the arguments as handed in, before any
      *  `wants` resolution or clock redraw derives the ones `execute` gets. */
-    const approved = args;
+    let prepared = approved;
     const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration });
     // The two refusals share one door here too (9.92.0): a name nothing holds,
     // and a name whose offered party cannot answer on this resume.
@@ -160,7 +160,7 @@ export function buildResumedInvocation(
       inputs?.resolutionsFor(scope, iteration).get(toolCallId)?.refused ??
       (unmounted === undefined ? undefined : await unmounted);
     if (rulesRefusal !== undefined) return { result: rulesRefusal, error: true };
-    const invalidArgs = links.argumentRefusal(scope, tool, args, {
+    const invalidArgs = links.argumentRefusal(scope, tool, approved, {
       toolName,
       toolCallId,
       iteration,
@@ -177,11 +177,11 @@ export function buildResumedInvocation(
         scope,
         toolName,
         tool.wants,
-        args,
+        approved,
         tool.schema.inputSchema,
       );
       if (!resolution.ok) return { result: resolution.refusal, error: true };
-      args = resolution.args;
+      prepared = resolution.args;
       wantedMeta = resolution.wanted;
     }
     let executed = false;
@@ -198,32 +198,24 @@ export function buildResumedInvocation(
               { toolCallId, toolName },
               iteration,
               tool,
-              args,
+              prepared,
               deps.time.appZone,
             )
           : undefined;
       const callTime = dispatched?.context;
-      if (dispatched !== undefined) args = dispatched.args;
-      try {
-        args = structuredClone(args);
-      } catch {
-        return {
-          result: `Tool '${toolName}' could not hold its arguments for recheck.`,
-          error: true,
-        };
-      }
       const access = await recheckResumedCall(scope, deps, {
         gate: heldTo,
         tool,
         toolName,
         toolCallId,
         iteration,
-        args,
+        args: dispatched?.args ?? prepared,
         env,
         parkedNow: links.parkedNow,
         historyForCheckIn: links.historyForCheckIn,
       });
-      if (access !== undefined) return access;
+      if (!access.allowed) return access.refusal;
+      const { args } = access;
       const credentials = await awaitUnder(env.signal, () =>
         resumedCredential(
           scope,
@@ -288,21 +280,21 @@ export function buildResumedInvocation(
       if (ended !== undefined) throw ended;
       // An approved call runs with the arguments its request binds, or not
       // at all — asked here, after every callback that saw them has returned.
-      if (heldTo !== 'credential') {
-        const read = (key: string): unknown => scope.$getValue(key);
-        if (!runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved)) {
-          // Nothing ran; the call's sessions are still released, as for a
-          // run that ended here.
-          await links.endCall(scope).catch(() => undefined);
-          recordResumedRefusal(scope, { toolName, toolCallId, iteration }, 'call-changed');
-          return {
-            result: rewrittenAfterApproval(
-              toolName,
-              'those arguments changed before the call could run',
-            ),
-            error: true,
-          };
-        }
+      const read = (key: string): unknown => scope.$getValue(key);
+      const approvalChanged =
+        heldTo !== 'credential' &&
+        !runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved);
+      if (approvalChanged || !access.matchesPrepared(args)) {
+        // Nothing ran. Release the sessions as for a run that ended here.
+        await links.endCall(scope).catch(() => undefined);
+        recordResumedRefusal(scope, { toolName, toolCallId, iteration }, 'call-changed');
+        return {
+          result: rewrittenAfterApproval(
+            toolName,
+            'those arguments changed before the call could run',
+          ),
+          error: true,
+        };
       }
       // `Tool.search`: reserved, with the dispatch instant, just before the
       // call runs — as in the batch loop.

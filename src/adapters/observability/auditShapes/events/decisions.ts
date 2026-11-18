@@ -166,6 +166,7 @@ export function decisionsShapes() {
       toolCallId: str,
       iteration: num,
       outcome: oneOf('allow', 'ask', 'deny', 'refused'),
+      personApproved: bool,
       changed: bool,
       why: charsMarker,
       componentId: str,

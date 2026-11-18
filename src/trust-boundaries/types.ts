@@ -40,7 +40,7 @@ export type TrustBoundaryFact = FactOrigin &
         readonly phase?: 'resume';
       } & Pick<
         MiddlewareDecisionPayload,
-        'middleware' | 'moment' | 'outcome' | 'changed' | 'iteration'
+        'middleware' | 'moment' | 'outcome' | 'changed' | 'iteration' | 'personApproved'
       >)
     | ({ readonly eventType: 'agentfootprint.permission.check' } & Pick<
         PermissionCheckPayload,

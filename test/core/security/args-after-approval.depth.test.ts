@@ -90,7 +90,11 @@ describe('defence in depth — an approved call runs only with the arguments its
       | undefined;
     const rows = state?.middlewareDecisions ?? [];
     const last = rows.filter((row) => row.moment === 'before-tool').at(-1);
-    expect(last).toMatchObject({ middleware: 'approval', outcome: 'deny' });
+    expect(last).toMatchObject({
+      middleware: 'agentfootprint',
+      phase: 'resume',
+      outcome: 'refused',
+    });
     expect(last?.why).toContain('call-changed');
   });
 });

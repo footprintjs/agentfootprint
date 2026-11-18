@@ -26,6 +26,7 @@ import { checkToolPermission } from './toolPermission.js';
 import { askDeclaredCapabilities, buildCapabilityQuestion } from './capabilityQuestion.js';
 import { askSkillRead } from './skillReadQuestion.js';
 import { changedAfterApproval, rewrittenAfterApproval } from './bindings.js';
+import { preparedArgumentWitness } from './preparedArgumentWitness.js';
 import {
   fingerprintAskedQuestion,
   beforeToolPolicyNames,
@@ -33,6 +34,16 @@ import {
 } from './resumePolicyRecord.js';
 
 type AccessDeps = Pick<ToolCallsHandlerDeps, 'permissionChecker' | 'toolMiddleware'>;
+type ResumedAdmission =
+  | {
+      readonly allowed: true;
+      readonly args: ToolArgs;
+      readonly matchesPrepared: (args: ToolArgs) => boolean;
+    }
+  | { readonly allowed: false; readonly refusal: ResumedCallResult };
+
+const refused = (refusal: ResumedCallResult): ResumedAdmission => ({ allowed: false, refusal });
+
 interface ResumeGateFrame {
   readonly gate: PausedGatePolicy['gate'];
   readonly tool: Tool;
@@ -114,12 +125,12 @@ export async function recheckResumedCall(
   scope: TypedScope<AgentState>,
   deps: AccessDeps,
   frame: ResumeGateFrame,
-): Promise<ResumedCallResult | undefined> {
-  const { gate, tool, toolName, toolCallId, iteration, args, env } = frame;
+): Promise<ResumedAdmission> {
+  const { gate, tool, toolName, toolCallId, iteration, env } = frame;
   const read = (key: string): unknown => scope.$getValue(key);
   const policy = pausedGatePolicyOf(read('pausedGatePolicy'), { gate, toolCallId, iteration });
   const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration }, 'resume');
-  const permissionRefusal = (rationale: string): ResumedCallResult => {
+  const permissionRefusal = (rationale: string): ResumedAdmission => {
     emitSecurity('agentfootprint.permission.check', {
       capability: 'tool_call',
       actor: 'agent',
@@ -127,7 +138,10 @@ export async function recheckResumedCall(
       result: 'deny',
       rationale,
     });
-    return { result: `Tool '${toolName}' could not be authorized after the wait.`, error: true };
+    return refused({
+      result: `Tool '${toolName}' could not be authorized after the wait.`,
+      error: true,
+    });
   };
   env.signal?.throwIfAborted();
   if (policy === undefined)
@@ -135,6 +149,25 @@ export async function recheckResumedCall(
   const permissionChecker = deps.permissionChecker;
   if (policy.permission && permissionChecker === undefined)
     return permissionRefusal('The permission checker required by the paused call is unavailable.');
+
+  // Keep the prepared values stable while every gate is awaited. A plain
+  // structured clone can still share the backing memory of prepared bytes.
+  const uncopiable = (): ResumedAdmission =>
+    permissionRefusal('The prepared arguments could not be held for recheck.');
+  let snapshot: ToolArgs | undefined;
+  try {
+    snapshot = frozenCopyOf(frame.args);
+  } catch {
+    return uncopiable();
+  }
+  if (snapshot === undefined) return uncopiable();
+  const args = snapshot;
+  let matchesPrepared: (current: ToolArgs) => boolean;
+  try {
+    matchesPrepared = preparedArgumentWitness(args);
+  } catch {
+    return uncopiable();
+  }
 
   const historyForCallbacks = (): LLMMessage[] => {
     const history = frozenCopyOf((read('history') ?? []) as LLMMessage[]);
@@ -162,17 +195,18 @@ export async function recheckResumedCall(
     outcome,
   };
   const askCapability = buildCapabilityQuestion({ ...bindings, permissionChecker, callArguments });
-  const deniedByPolicy = (): ResumedCallResult => ({
-    result: outcome.result,
-    error: true,
-    ...(execution.haltContext !== undefined && {
-      halt: {
-        ...execution.haltContext,
-        outer: true as const,
-        call: { toolCallId, toolName, args },
-      },
-    }),
-  });
+  const deniedByPolicy = (): ResumedAdmission =>
+    refused({
+      result: outcome.result,
+      error: true,
+      ...(execution.haltContext !== undefined && {
+        halt: {
+          ...execution.haltContext,
+          outer: true as const,
+          call: { toolCallId, toolName, args },
+        },
+      }),
+    });
   if (permissionChecker !== undefined) {
     await awaitUnder(env.signal, () =>
       checkToolPermission({
@@ -200,9 +234,9 @@ export async function recheckResumedCall(
       scope,
       rows.map((row) => ({ ...row, phase: 'resume' })),
     );
-  const refuse = (why: string, result: string): ResumedCallResult => {
+  const refuse = (why: string, result: string): ResumedAdmission => {
     recordResumedRefusal(scope, { toolName, toolCallId, iteration }, why);
-    return { result, error: true };
+    return refused({ result, error: true });
   };
   const middleware = deps.toolMiddleware;
   const currentNames = beforeToolPolicyNames(middleware);
@@ -243,7 +277,7 @@ export async function recheckResumedCall(
       chain = await awaitUnder(env.signal, () => runToolChain(middleware, next));
       record(chain.decisions);
     }
-    if (chain.kind === 'deny') return { result: chain.reason, error: true };
+    if (chain.kind === 'deny') return refused({ result: chain.reason, error: true });
     if (!sameArguments(args, chain.args)) {
       return refuse(
         'call-changed',
@@ -263,15 +297,26 @@ export async function recheckResumedCall(
     },
   );
   if (execution.denied) return deniedByPolicy();
-  if (
+  const needsAnotherQuestion =
     gate !== 'checkIn' &&
     tool.checkIn !== undefined &&
     shouldCheckIn(tool.checkIn, args, {
       iteration,
       toolCallId,
       history: frame.historyForCheckIn(scope, historyForCallbacks()),
-    })
-  )
-    return refuse('second-question', secondQuestion(toolName));
-  return undefined;
+    });
+  if (!matchesPrepared(args))
+    return refuse(
+      'call-changed',
+      rewrittenAfterApproval(toolName, 'those arguments changed before the call could run'),
+    );
+  if (needsAnotherQuestion) return refuse('second-question', secondQuestion(toolName));
+
+  // Only the invocation gets this copy. A tool still receives ordinary
+  // arguments, even when the policy views were frozen.
+  try {
+    return { allowed: true, args: structuredClone(args), matchesPrepared };
+  } catch {
+    return uncopiable();
+  }
 }

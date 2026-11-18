@@ -12,11 +12,10 @@ export function beforeToolPolicyNames(chain: readonly ToolMiddleware[] | undefin
   return chain?.flatMap((link) => (typeof link.onToolCall === 'function' ? [link.name] : [])) ?? [];
 }
 
-/** A comparison for the whole shown question. A referred component cannot be compared here. */
+/** Compare the whole shown question, including any immutable component ticket. */
 export function fingerprintAskedQuestion(ask: AskPayload): string | undefined {
   try {
     const data = copyJson(ask, Infinity, false) as AskPayload;
-    if (data.component?.propsRef !== undefined) return undefined;
     return sha256Hex(`agentfootprint/paused-tool-question/v1\u001f${canonicalJson(data)}`);
   } catch {
     return undefined;

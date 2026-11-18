@@ -809,6 +809,7 @@
     "middleware": "kept",
     "moment": "kept",
     "outcome": "kept",
+    "personApproved": "kept",
     "phase": "kept",
     "toolCallId": "kept",
     "toolName": "kept",

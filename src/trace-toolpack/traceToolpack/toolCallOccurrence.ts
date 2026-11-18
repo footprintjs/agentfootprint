@@ -7,6 +7,7 @@ type Decision = Extract<
   {
     type:
       | 'agentfootprint.middleware.decision'
+      | 'agentfootprint.permission.check'
       | 'agentfootprint.checkin.request'
       | 'agentfootprint.checkin.decision'
       | 'agentfootprint.validation.args_invalid';
@@ -78,6 +79,7 @@ export function latestCallOccurrence(events: readonly AgentfootprintEvent[], too
       if (i >= endAt || (start === undefined && !onSameStep(event, bracket))) continue;
       if (
         (event.type === 'agentfootprint.middleware.decision' ||
+          (event.type === 'agentfootprint.permission.check' && event.payload?.phase === 'resume') ||
           event.type === 'agentfootprint.checkin.request' ||
           event.type === 'agentfootprint.checkin.decision' ||
           event.type === 'agentfootprint.validation.args_invalid') &&

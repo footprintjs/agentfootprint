@@ -1202,28 +1202,11 @@ describe('a consent gate over the wire — a decision whose resume failed after 
     const host = inProcessHost();
     const handle = await standingAgent({ agent: flakyRefunds(ran, { on: false }), sessions, host });
     try {
-      // Reproduce the CI identifier collision without changing the request-id algorithm.
-      const nonce = '29cddc9f41988d15081b87a77f2c887c';
-      const random = vi
-        .spyOn(globalThis.crypto, 'getRandomValues')
-        .mockImplementation(<T extends ArrayBufferView | null>(array: T): T => {
-          const bytes = array as unknown as Uint8Array;
-          expect(bytes).toHaveLength(16);
-          for (let index = 0; index < bytes.length; index++) {
-            bytes[index] = parseInt(nonce.slice(index * 2, index * 2 + 2), 16);
-          }
-          return array;
-        });
-      let asked: Awaited<ReturnType<typeof host.deliver>>;
-      try {
-        asked = await host.deliver({ input: 'refund me', sessionId: 'b' });
-      } finally {
-        random.mockRestore();
-      }
-      expect(pausedRequest(asked.awaiting).id).toContain('4242');
-      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'bob' });
-      // A secret marker must not be a substring of an unrelated hexadecimal identifier.
-      const secret = 'session-a-only:4242';
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'b' });
+      const request = pausedRequest(asked.awaiting);
+      const decision = checkInApproved({ request, by: 'bob' });
+      // The full marker identifies the other conversation even when its suffix is also in the ID.
+      const secret = `session-a-only:${request.id.slice(0, 4)}`;
       const other = await host.deliver({ input: `my secret is ${secret}`, sessionId: 'a' });
       expect(other.output).toBe(`noted: my secret is ${secret}`);
 

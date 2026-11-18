@@ -94,6 +94,7 @@ export const fields1 = {
   period: true,
   periods: true,
   permission: true,
+  personApproved: true,
   phase: true,
   phraseId: true,
   picked: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   thinkingRetired: true,
   threshold: true,
   timeAxis: true,
-  timeChecks: true,
 } as const;

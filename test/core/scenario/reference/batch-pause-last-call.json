@@ -371,6 +371,7 @@
       "agentfootprint.pause.resume",
       "agentfootprint.agent.run_configured",
       "agentfootprint.middleware.decision",
+      "agentfootprint.middleware.decision",
       "agentfootprint.stream.tool_end",
       "agentfootprint.agent.iteration_end",
       "agentfootprint.context.evaluated",

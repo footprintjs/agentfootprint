@@ -566,6 +566,7 @@ const CANARY_PAYLOAD: {
     moment: 'before-tool',
     at: 'tool',
     phase: 'input',
+    personApproved: false,
     toolName: 'refund_order',
     toolCallId: 'call-2',
     iteration: 1,

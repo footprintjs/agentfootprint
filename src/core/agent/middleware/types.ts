@@ -339,6 +339,8 @@ export interface MiddlewareDecision {
   readonly at: 'tool' | 'message';
   /** Message boundary phase, or `resume` when a tool gate is asked again. */
   readonly phase?: 'input' | 'output' | 'resume';
+  /** The person's answer to a middleware ask. Present only on the answer row. */
+  readonly personApproved?: boolean;
   /** Tool chain only. */
   readonly toolName?: string;
   /** Tool chain only. */
