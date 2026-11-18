@@ -12,9 +12,9 @@
  * committed tool message (`LLMMessage.outcome`, stripped before any provider
  * sees it) and `core/checkin.ts` · `buildTrail` reads the field. A host's
  * notice standing in for a result (`LLMMessage.toolResultOrigin`) is not a
- * completed call either, so it reads not ok. A message with no mark (a
- * completed call, and every message of a history stored by an earlier
- * version) is still read by the earlier text test (`core/trailBeforeOutcomeMarker.ts`), so a stored refusal
+ * completed call either, so it reads not ok. The earlier text test still
+ * reads unmarked tool messages, for example a completed result or a tool
+ * message written before the mark (`core/trailBeforeOutcomeMarker.ts`). A stored refusal
  * reads as it did before the upgrade, and a completed result that opens with
  * a refusal form still reads not ok, on the careful side. (A stored host
  * notice carrying `toolResultOrigin` is the one row that reads differently.)

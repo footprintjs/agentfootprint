@@ -19,8 +19,8 @@ export interface DispatchSettlement {
  * call worked. It used to guess from the first words of the tool message, so a
  * tool that threw ("connection refused") read as ok and a tool that returned
  * "declined by human: …" read as refused. Those words are still the trail's
- * fallback for a message with no mark (a completed call, and every message of
- * a history stored by an earlier version: `core/trailBeforeOutcomeMarker.ts`),
+ * fallback for an unmarked tool message (for example, a completed result or
+ * a tool message written before the mark: `core/trailBeforeOutcomeMarker.ts`),
  * so that second tool still reads not ok, on the careful side; a marked call
  * is never judged by them. The dispatch doors that commit a call's result
  * (the batch loop, `deliveredResult.ts`, and the check-in, ask and credential

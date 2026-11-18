@@ -1,15 +1,10 @@
 /**
  * A permission answer the library does not recognise is a refusal.
  *
- * Before this, the tool gate and the capability gate refused only on an exact
- * `'deny'` or `'halt'`, so a checker that answered `'ask'`, `{}`, `'ALLOW'`,
- * `'deny '` (a trailing space from a remote policy service) or `null` RAN the
- * tool — while the skill menu, asking the same checker, hid the skill for the
- * same answer. One reader now owns the rule
- * (`provider-contract/permissionDecision.ts` · `readPermissionDecision`): only
- * `'allow'` / `'gate_open'` allow; anything else is refused fail-closed, and
- * the record says the answer was not recognised instead of carrying the raw
- * value as if it had been acted on.
+ * The tool and governed capability gates refuse an answer outside the
+ * permission vocabulary. The shared reader also handles a missing decision.
+ * Null and undefined were already refused. The record now reports a missing
+ * decision for these returns.
  *
  *   Unit      — the reader itself: src/provider-contract/permissionDecision.test.ts
  *   Scenario  — tool_call gate, governed capability gate, skill menu (here)
@@ -31,7 +26,8 @@ const UNRECOGNISED: ReadonlyArray<readonly [string, unknown]> = [
   ['DENY', { result: 'DENY' }],
   ['a null result', { result: null }],
   ['a number', { result: 1 }],
-  ['no decision at all', null],
+  ['a null decision', null],
+  ['an undefined decision', undefined],
 ];
 
 interface Seen {
@@ -52,20 +48,20 @@ async function run(answer: (capability: string) => unknown, governed = false): P
   } as unknown as PermissionChecker;
   const agent = Agent.create({
     provider: mock({
-      replies: [{ toolCalls: [{ id: 'c1', name: 'wire', args: {} }] }, { content: 'done' }],
+      replies: [{ toolCalls: [{ id: 'c1', name: 'read_sample', args: {} }] }, { content: 'done' }],
     }),
     model: 'mock',
     permissionChecker: checker,
   })
     .tool(
       defineTool<Record<string, never>, string>({
-        name: 'wire',
-        description: 'wires money',
+        name: 'read_sample',
+        description: 'Returns a fixed test value',
         inputSchema: { type: 'object', properties: {} },
         ...(governed && { capabilities: ['external_net'] as never }),
         execute: () => {
           ran = true;
-          return 'wired';
+          return 'sample';
         },
       }),
     )
@@ -81,7 +77,7 @@ async function run(answer: (capability: string) => unknown, governed = false): P
   agent.on('agentfootprint.stream.tool_end', (e) => {
     told.push(String((e.payload as { result: unknown }).result));
   });
-  await agent.run({ message: 'go' });
+  await agent.run({ message: 'Read the sample.' });
   return { ran, checks, told: told.join('\n') };
 }
 
@@ -94,7 +90,7 @@ describe('the tool_call gate', () => {
       expect(seen.checks[0].result).toBe('deny');
       expect(seen.checks[0].rationale).toMatch(/not recognised/);
       // The model reads the fixed fail-closed refusal, never the odd value.
-      expect(seen.told).toContain("[permission denied: Tool 'wire' could not be authorized.");
+      expect(seen.told).toContain("[permission denied: Tool 'read_sample' could not be authorized.");
     });
   }
 
