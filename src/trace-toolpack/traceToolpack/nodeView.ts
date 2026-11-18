@@ -5,7 +5,12 @@ import { defineTool } from '../../tools/tools.js';
 import { idProperty } from './parameterSchemas.js';
 import { unknownIdMessage, mountLine } from './navigationHints.js';
 import { stagePartOf } from './packIndex.js';
-import { NODE_WRITE_CAP, NODE_READ_CAP, OVERVIEW_ERROR_CAP } from './structuralLimits.js';
+import {
+  NODE_WRITE_CAP,
+  NODE_READ_CAP,
+  NODE_READ_SOURCE_CAP,
+  OVERVIEW_ERROR_CAP,
+} from './structuralLimits.js';
 import { boundedPreview, displayKey, displayText, renderPreview } from '../bounded.js';
 import { commitValueAt, findLastWriterWithBasis, findReadSources, overlapOf } from 'foottrace';
 import { redactionNote, honestyLine, untrackedSourcesOf } from './valueLines.js';
@@ -39,16 +44,23 @@ function readSourceLines(
     const reasons = overlap === undefined ? basis : [overlap, ...basis];
     codes.push(...reasons);
     const reason = reasons.length > 0 ? ` ⚠ ${reasons.join(', ')}` : '';
-    if (writer === undefined) return `(no tracked writer${reason})`;
+    if (writer === undefined) {
+      const windowNote = legacy ? '' : "; reason not recorded for this read's window";
+      return `(no tracked writer${windowNote}${reason})`;
+    }
     const commit = overlap === undefined ? '' : ` (commit ${at})`;
     return `${writer.runtimeStageId} "${writer.stage}"${commit}${reason}`;
   };
 
   if (sources.during.length === 0) return [prefix + describeSource(sources.before)];
-  return [
+  const shownDuring = sources.during.slice(0, NODE_READ_SOURCE_CAP - 1);
+  const omitted = sources.during.length - shownDuring.length;
+  const lines = [
     `${prefix}possible sources:`,
-    ...[sources.before, ...sources.during].map((at) => `  - ${describeSource(at)}`),
+    ...[sources.before, ...shownDuring].map((at) => `  - ${describeSource(at)}`),
   ];
+  if (omitted > 0) lines.push(`  …and ${omitted} more possible sources (output capped)`);
+  return lines;
 }
 
 // ── trace_node ─────────────────────────────────────────────────────────────
@@ -63,7 +75,9 @@ function buildTraceNode(
     description:
       'Inspect ONE execution step by runtimeStageId: name + description, what it wrote ' +
       '(bounded previews + true sizes), what it read, possible data parents and the decision ' +
-      'that routed to it when known, errors, and ⚠ honesty markers. ' +
+      'that routed to it when known, errors, and ⚠ honesty markers. Overlapping reads show a ' +
+      'bounded list with the before-window source and a count of any omitted possibilities. ' +
+      'If a stamped read has no tracked writer, its absence reason is unavailable for that window. ' +
       'The drill-down primitive — use ids from run_overview, trace_slice, or who_wrote.',
     inputSchema: {
       type: 'object',

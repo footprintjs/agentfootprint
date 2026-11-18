@@ -94,6 +94,58 @@ describe('trace_node read sources', () => {
     expect(out).not.toContain('possible sources');
   });
 
+  it('leaves the reason unknown when a sibling redacts the key after the read window', async () => {
+    const snapshot = quoteSnapshot({ beganAt: 1 });
+    const [first, sibling] = snapshot.commitLog;
+    snapshot.commitLog[0] = { ...first, trace: [], overwrite: {} };
+    snapshot.commitLog[1] = { ...sibling, trace: [], overwrite: {}, redactedPaths: ['quote'] };
+    const out = await readNode(snapshot);
+    expect(out).toContain(
+      "- data: quote ← (no tracked writer; reason not recorded for this read's window)",
+    );
+    expect(out).not.toMatch(/redacted|never-written|second#1/);
+  });
+
+  it('leaves the reason unknown when a redaction precedes the window and a write follows it', async () => {
+    const snapshot = quoteSnapshot({ beganAt: 1 });
+    const [first] = snapshot.commitLog;
+    snapshot.commitLog[0] = { ...first, trace: [], overwrite: {}, redactedPaths: ['quote'] };
+    const out = await readNode(snapshot);
+    expect(out).toContain(
+      "- data: quote ← (no tracked writer; reason not recorded for this read's window)",
+    );
+    expect(out).not.toMatch(/redacted|never-written|second#1/);
+  });
+
+  it('keeps the Foottrace absence codes for unstamped reads', async () => {
+    const snapshot = quoteSnapshot({}, { readKey: 'untouched' });
+    expect(await readNode(snapshot)).toContain(
+      '- data: untouched ← (no tracked writer ⚠ never-written)',
+    );
+    snapshot.commitLog[1].redactedPaths = ['untouched'];
+    expect(await readNode(snapshot)).toContain(
+      '- data: untouched ← (no tracked writer ⚠ redacted)',
+    );
+  });
+
+  it('bounds a wide window, keeps the before candidate and counts the omitted possibilities', async () => {
+    const writerCount = 256;
+    const snapshot = quoteSnapshot({ beganAt: 1, sawUntil: writerCount });
+    const [first, during, reader] = snapshot.commitLog;
+    const overlappingWriters = Array.from({ length: writerCount - 1 }, (_, offset) => {
+      const idx = offset + 1;
+      return { ...during, idx, runtimeStageId: `second#${idx}` };
+    });
+    snapshot.commitLog = [first, ...overlappingWriters, { ...reader, idx: writerCount }];
+    const out = await readNode(snapshot);
+    expect(out).toContain('- data: quote ← possible sources:');
+    expect(out).toMatch(/first#0[^\n]*replaced-while-running/);
+    expect(out).toMatch(/second#1[^\n]*written-while-running/);
+    const displayed = out.split('\n').filter((line) => /^ {2}- (first|second)#/.test(line));
+    expect(displayed).toHaveLength(8);
+    expect(out).toContain('…and 248 more possible sources (output capped)');
+  });
+
   it('distinguishes no tracked writer from a missing reader bundle', async () => {
     const none = await readNode(quoteSnapshot({ beganAt: 1 }, { readKey: 'untouched' }));
     expect(none).toContain('- data: untouched ← (no tracked writer');
