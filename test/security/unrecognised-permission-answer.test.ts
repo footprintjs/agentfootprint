@@ -90,7 +90,9 @@ describe('the tool_call gate', () => {
       expect(seen.checks[0].result).toBe('deny');
       expect(seen.checks[0].rationale).toMatch(/not recognised/);
       // The model reads the fixed fail-closed refusal, never the odd value.
-      expect(seen.told).toContain("[permission denied: Tool 'read_sample' could not be authorized.");
+      expect(seen.told).toContain(
+        "[permission denied: Tool 'read_sample' could not be authorized.",
+      );
     });
   }
 
