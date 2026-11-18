@@ -141,13 +141,21 @@ describe('a check-in is approved, and the permission checker now says no', () =>
 
     expect(seen).toEqual([]);
     // Both answers, in order: yes before the wait, the person's yes, no after it.
-    expect(
-      eventsOf(recording, 'permission.check').map((e) => [e.payload.result, e.payload.phase]),
-    ).toEqual([
-      ['allow', undefined],
-      ['deny', 'resume'],
+    // One list, so the order between the checker's answers and the person's is asserted too.
+    const told = (
+      recording.events as unknown as { type: string; payload: Record<string, unknown> }[]
+    ).flatMap((event) => {
+      if (event.type === 'agentfootprint.permission.check')
+        return [['permission', event.payload.result, event.payload.phase]];
+      if (event.type === 'agentfootprint.checkin.decision')
+        return [['decision', event.payload.approved]];
+      return [];
+    });
+    expect(told).toEqual([
+      ['permission', 'allow', undefined],
+      ['decision', true],
+      ['permission', 'deny', 'resume'],
     ]);
-    expect(eventsOf(recording, 'checkin.decision').map((e) => e.payload.approved)).toEqual([true]);
     const account = accountForAnswer(recording, {});
     expect(account.facts.calls.map((c) => [c.toolCallId, c.outcome])).toEqual([['c1', 'refused']]);
     expect(account.facts.errors.refused).toBe(1);
@@ -287,15 +295,18 @@ describe('a policy that was there at the pause and is gone at the resume', () =>
       .tools([tool])
       .toolMiddleware({ name: 'other', onToolCall: () => allow() })
       .build();
-    const outcome = await after
-      .resume(paused.checkpoint, checkInApproved({ request: pausedRequest(paused), by: 'alice' }))
-      .then(
-        (value: unknown) => ({ value }),
-        (error: unknown) => ({ error }),
-      );
-
+    // The resume itself is refused, by name: the chain the approval was given under has changed.
+    await expect(
+      after.resume(
+        paused.checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+      ),
+    ).rejects.toMatchObject({
+      name: 'ResumeDecisionError',
+      code: 'ERR_RESUME_DECISION',
+      reason: 'chain-changed',
+      gate: 'ask',
+    });
     expect(seen).toEqual([]);
-    // Either the resume is refused outright, or the model is told the call was not authorized.
-    if ('value' in outcome) expect(toolResultOf(after)).toMatch(/could not be authorized|refus/i);
   });
 });
