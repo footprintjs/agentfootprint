@@ -15,7 +15,6 @@ import {
   type DecisionLedger,
 } from '../../../../consentRequest.js';
 import { unboundCallRefusal } from './bindings.js';
-import { hidesWholeArgumentValue } from '../../../../../lib/argumentDisplay.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
@@ -129,8 +128,7 @@ export async function admitCheckInCall(
     frame.outcome.result = unboundCallRefusal(frame.tc.name, 'checkIn');
   } else {
     const hiddenArgs = bound.request.hiddenArgs ?? [];
-    // The whole-value notice has no corresponding field path in the approval's internal carrier.
-    if (!hidesWholeArgumentValue(bound.args, hiddenArgs)) markPrivateCheckIn(scope, hiddenArgs);
+    markPrivateCheckIn(scope, hiddenArgs);
     // The tool's declared decision component (9.24.0), judged BEFORE
     // the evidence pack is assembled — a gate that cannot be honored
     // as declared refuses before any work, and a dangling propsRef is

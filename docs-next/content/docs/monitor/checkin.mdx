@@ -44,7 +44,7 @@ The `evidence` pack (`'standard'`) has four plain-named fields:
 
 ### When the tool hides an argument's value
 
-A tool can declare an argument view that hides some argument values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`). A check-in on such a tool still asks the person, through that view. With those two helpers `checkIn.args` shows a hidden value as `'REDACTED'`; a view set by hand may show another form or leave the key out. The request names the hidden arguments. An unsupported or throwing view displays a placeholder for every argument and lists each name. If the library cannot decide whether an unchanged string is visible, it masks that value and lists its name. When a tool argument view receives a whole scalar, the request shows a placeholder under the fixed name `arguments`. This display rule applies to calls admitted by the configured argument validation.
+A tool can declare an argument view that hides some argument values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`). A check-in on such a tool still asks the person, through that view. With those two helpers `checkIn.args` shows a hidden value as `'REDACTED'`; a view set by hand may show another form or leave the key out. The request names the hidden arguments. An unsupported or throwing view displays a placeholder for every argument and lists each name. If the library cannot decide whether an unchanged string is visible, it masks that value and lists its name. A check-in refuses a call with a whole scalar argument value, and the protected wire display shows that value as hidden under the fixed name `arguments`.
 
 ```ts
 // a wire tool whose view hides `to`; the model proposed { to: 'acct-9', amount: 5000 }

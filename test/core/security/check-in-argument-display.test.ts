@@ -15,8 +15,6 @@ import {
   shownFieldsOf,
   type ShownArgs,
 } from '../../../src/core/toolShownArgs.js';
-import { mintConsentRequest } from '../../../src/core/consentRequest.js';
-import { requestIdOf } from '../../../src/core/consentRequestId.js';
 import { argsShownOf } from '../../../src/ag-ui/shownArgs.js';
 import { runAsAgUi } from '../../ag-ui/helpers.js';
 
@@ -26,7 +24,7 @@ const mask = { label: 'REDACTED', count: 'REDACTED' };
 type Args = Readonly<Record<string, unknown>>;
 
 function previewAgent(
-  display: ShownArgs,
+  display: ShownArgs | undefined,
   {
     rewrite = false,
     proposed = callArgs,
@@ -55,7 +53,7 @@ function previewAgent(
     model: 'mock',
     toolArgValidation,
   })
-    .tool(Object.assign(tool, { [SHOWN_ARGS]: display }))
+    .tool(display === undefined ? tool : Object.assign(tool, { [SHOWN_ARGS]: display }))
     .answerLayer();
   if (rewrite)
     builder.toolMiddleware({
@@ -181,85 +179,49 @@ describe('approval display', () => {
     }
   });
 
-  it('names a scalar argument throughout a real approval pause and resume', async () => {
-    const sample = 'plain-preview-sample';
-    const { agent, recorder, execute } = previewAgent((args) => args, {
-      proposed: sample as unknown as Args,
-      toolArgValidation: 'warn',
-    });
-    const started = await runAsAgUi(agent, { message: 'Preview the sample.' });
-    const pause = started.out;
-    if (!isCheckInPause(pause)) throw new Error('Expected a protected check-in pause.');
+  it.each([true, false])(
+    'refuses a scalar before check-in (protected: %s)',
+    async (protectedView) => {
+      const sample = 'plain-preview-sample';
+      const display: ShownArgs | undefined = protectedView ? (args) => args : undefined;
+      const { agent, recorder, execute } = previewAgent(display, {
+        proposed: sample as unknown as Args,
+        toolArgValidation: 'warn',
+      });
+      const started = await runAsAgUi(agent, { message: 'Preview the sample.' });
 
-    const scalarMask = { arguments: 'REDACTED' };
-    const hiddenArgs = ['arguments'];
-    expect(pause.checkIn.hiddenArgs?.includes('arguments') ?? false).toBe(true);
-    expect(pause.checkIn.args).toEqual(scalarMask);
-    expect(pause.checkIn.hiddenArgs).toEqual(hiddenArgs);
-    expect(pause.checkIn.evidence.willDo).toContain('Values hidden from this view: `arguments`.');
-    expect(started.events.find((event) => event.type === 'TOOL_CALL_ARGS')).toMatchObject({
-      delta: JSON.stringify(scalarMask),
-    });
-    expect(started.events.find((event) => event.type === 'TOOL_CALL_START')).toMatchObject({
-      metadata: { agentfootprint: { hiddenArgs } },
-    });
-    expect(started.events.find((event) => event.type === 'RUN_FINISHED')).toMatchObject({
-      outcome: { interrupts: [{ metadata: { agentfootprint: { hiddenArgs } } }] },
-    });
-    expect(execute).not.toHaveBeenCalled();
+      expect(started.error === undefined).toBe(true);
+      expect(isCheckInPause(started.out)).toBe(false);
+      expect(execute).not.toHaveBeenCalled();
+      expect(recorder.getRequests()).toHaveLength(0);
+      expect(recorder.getDecisions()).toHaveLength(0);
+      expect(started.served.some((event) => event.type === 'agentfootprint.pause.request')).toBe(
+        false,
+      );
+      expect(
+        started.served.find((event) => event.type === 'agentfootprint.validation.args_invalid'),
+      ).toMatchObject({ payload: { enforced: false } });
+      const toolEnd = started.served.find(
+        (event) => event.type === 'agentfootprint.stream.tool_end',
+      );
+      const refusal =
+        toolEnd?.type === 'agentfootprint.stream.tool_end' ? toolEnd.payload.result : undefined;
+      expect(typeof refusal === 'string' && refusal.includes('no approval could be bound')).toBe(
+        true,
+      );
+      expect(typeof refusal === 'string' && refusal.includes(sample)).toBe(false);
 
-    const resumed = await runAsAgUi(agent, undefined, {
-      serializer: { resume: started.translation.suspension() },
-      resume: {
-        checkpoint: pause.checkpoint,
-        answer: checkInApproved({ request: pause.checkIn, by: 'reviewer' }),
-      },
-    });
-    expect(resumed.error).toBeUndefined();
-    expect(resumed.out).toBe('Preview complete.');
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(Object.is(execute.mock.calls[0]?.[0], sample)).toBe(true);
-
-    const decision = resumed.served.find(
-      (event) => event.type === 'agentfootprint.checkin.decision',
-    );
-    expect(decision?.payload).toMatchObject({ approved: true, hiddenArgs });
-    expect(recorder.getDecisions()).toMatchObject([{ approved: true, hiddenArgs }]);
-    const approvalEvents = [...started.served, ...resumed.served].filter((event) =>
-      event.type.startsWith('agentfootprint.checkin.'),
-    );
-    expect(
-      JSON.stringify([
-        started.events,
-        resumed.events,
-        pause.checkIn,
-        approvalEvents,
-        recorder.getRequests(),
-        recorder.getDecisions(),
-      ]).includes(sample),
-    ).toBe(false);
-  });
-
-  it('binds an exact whole value only for a marked check-in', () => {
-    const call = {
-      gate: 'checkIn',
-      tool: 'preview',
-      toolCallId: 'preview-call',
-      args: 'sample',
-    } as const;
-    const marked = { ...call, hiddenArgs: ['arguments'] };
-    expect(mintConsentRequest(call) === undefined).toBe(true);
-    expect(mintConsentRequest({ ...call, hiddenArgs: ['label'] }) === undefined).toBe(true);
-    expect(mintConsentRequest({ ...marked, gate: 'ask' }) === undefined).toBe(true);
-    expect(mintConsentRequest({ ...marked, args: Infinity }) === undefined).toBe(true);
-
-    const bound = mintConsentRequest(marked);
-    if (bound === undefined) throw new Error('Expected a marked whole value to bind.');
-    const { id, nonce } = bound.request;
-    expect(requestIdOf(nonce, marked) === id).toBe(true);
-    expect(requestIdOf(nonce, { ...marked, args: 'another sample' }) === id).toBe(false);
-    expect(requestIdOf(nonce, call) === undefined).toBe(true);
-  });
+      if (protectedView) {
+        expect(started.events.find((event) => event.type === 'TOOL_CALL_ARGS')).toMatchObject({
+          delta: '{"arguments":"REDACTED"}',
+        });
+        expect(started.events.find((event) => event.type === 'TOOL_CALL_START')).toMatchObject({
+          metadata: { agentfootprint: { hiddenArgs: ['arguments'] } },
+        });
+        expect(JSON.stringify(started.events).includes(sample)).toBe(false);
+      }
+    },
+  );
 
   it('keeps the enforcing schema refusal before a scalar check-in', async () => {
     const { agent, execute } = previewAgent((args) => args, {
