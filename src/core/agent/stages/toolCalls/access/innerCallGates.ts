@@ -150,9 +150,9 @@ function answerOf(
   const { execution, outcome } = question;
   if (!execution.denied) return { kind: 'allow' };
   const halt = execution.haltContext;
-  if (halt === undefined) return { kind: 'refuse', reason: String(outcome.result) };
-  if (outer.binding.ended) return { kind: 'refuse', reason: String(outcome.result) };
-  outer.binding.halted({
+  const reason = String(outcome.result);
+  if (halt === undefined) return { kind: 'refuse', reason };
+  const kept = outer.binding.halted({
     ...halt,
     call: {
       toolCallId: call.toolCallId,
@@ -160,7 +160,7 @@ function answerOf(
       args: shownInnerArgs(call.tool, call.args),
     },
   });
-  return { kind: 'refuse', reason: String(outcome.result), halted: true };
+  return { kind: 'refuse', reason, ...(kept && { halted: true as const }) };
 }
 
 /** The permission gate's first half: `tool_call`, then the tool's declared capabilities. */
@@ -186,7 +186,7 @@ async function askPermission(
     innerCallsSoFar: () => innerCallsSoFar(outer),
     innerArgsOf: (inner) => policyArgsOf(scope, inner),
   });
-  if (!execution.denied && call.tool?.capabilities !== undefined) {
+  if (!execution.denied && !call.signal?.aborted && call.tool?.capabilities !== undefined) {
     await askDeclaredCapabilities(
       question.askCapability,
       permissionChecker,

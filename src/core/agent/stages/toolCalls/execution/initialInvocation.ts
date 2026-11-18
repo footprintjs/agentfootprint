@@ -36,6 +36,7 @@ import {
   explainStatusOnlyNearMiss,
 } from '../../../../../semantics/toolEffects.js';
 import { isPauseRequest } from '../../../../pause.js';
+import { throwIfAborted } from '../../../../../lib/abort.js';
 import { bindOuterCall } from '../../../innerCallOuter.js';
 import {
   validateInputDeclaration,
@@ -230,11 +231,11 @@ export async function invokeInitialTool(
         executionContext,
       );
     } finally {
-      // `ctx.tools` ends with `execute`; an inner call's halt becomes this
-      // call's, run by `dispatchCall.ts` once the result has landed.
-      binding.end();
+      // Keep the verdict of an admission already in flight before landing a result or pause.
+      await binding.close(frame.env.signal);
       if (binding.halt !== undefined) frame.execution.haltContext ??= { ...binding.halt };
     }
+    throwIfAborted(frame.env.signal);
     frame.execution.resultFinalizer?.returned();
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
@@ -364,6 +365,10 @@ export async function invokeInitialTool(
     await frame.endCall(scope);
   } catch (err) {
     frame.execution.resultFinalizer?.withheld();
+    if (frame.env.signal?.aborted) {
+      await frame.endCall(scope).catch(() => undefined);
+      throwIfAborted(frame.env.signal);
+    }
     // Set when a raise declared a miss the door could not file:
     // the call then errors with this text and does not pause.
     let raisedMissError: string | undefined;

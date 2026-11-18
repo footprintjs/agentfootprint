@@ -359,7 +359,9 @@ export function buildResumedInvocation(
       try {
         result = await tool.execute(args, executionContext);
       } finally {
-        binding.end(); // `ctx.tools` ends with `execute` (`innerCallOuter.ts`)
+        await binding.close(env.signal);
+        ended = runEndedBy(env.signal);
+        if (ended !== undefined) throw ended;
       }
       seen?.resultFinalizer?.returned();
       // The runner's facts, at this execute boundary as at the batch loop's.
@@ -581,9 +583,7 @@ export function buildResumedInvocation(
     }
   };
   /**
-   * The resumed invocation, with the outer call's hold on the inner calls its
-   * tool makes (`innerCallOuter.ts`): a halt one of them drew rides the answer
-   * as `halt`, for the door to run once the result has landed.
+   * Carry the inner halt to the resume door once the result has landed.
    */
   const resolveCredentialAndExecute: ResumedInvocation['resolveCredentialAndExecute'] = async (
     ...call
@@ -593,7 +593,7 @@ export function buildResumedInvocation(
       const answer = await executeResumed(binding, ...call);
       return binding.halt === undefined ? answer : { ...answer, halt: binding.halt };
     } finally {
-      binding.end();
+      await binding.close();
     }
   };
   return { resolveCredentialAndExecute };

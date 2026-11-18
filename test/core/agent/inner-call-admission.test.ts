@@ -19,7 +19,65 @@ function resultOf(value: Promise<unknown>) {
   );
 }
 
+const fixtureHalt = {
+  reason: 'fixture-stop',
+  tellLLM: 'Fixture stopped.',
+  call: { toolCallId: 'sample-owner#inner-0', toolName: 'earlier', args: {} },
+};
+
 describe('composed call admission', () => {
+  it('waits for an in-flight decision before publishing the first terminal verdict', async () => {
+    const outer = bindOuterCall();
+    const started = latch();
+    const answer = latch();
+    const pending = outer.scheduleAdmission(async () => {
+      started.release();
+      await answer.wait;
+      return outer.halted(fixtureHalt);
+    });
+    await started.wait;
+
+    let finished = false;
+    const close = outer.close().then(() => {
+      finished = true;
+    });
+    expect(outer.ended).toBe(true);
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(finished).toBe(false);
+    } finally {
+      answer.release();
+    }
+    await expect(pending).resolves.toBe(true);
+    await close;
+    expect(outer.halt).toEqual(fixtureHalt);
+    expect(outer.halted({ ...fixtureHalt, reason: 'later' })).toBe(false);
+  });
+
+  it('stops waiting on cancellation and declines a decision reported afterward', async () => {
+    const outer = bindOuterCall();
+    const controller = new AbortController();
+    const started = latch();
+    const answer = latch();
+    const pending = outer.scheduleAdmission(async () => {
+      started.release();
+      await answer.wait;
+      return outer.halted(fixtureHalt);
+    });
+    await started.wait;
+
+    const close = outer.close(controller.signal);
+    try {
+      controller.abort();
+      await close;
+      expect(outer.halt).toBeUndefined();
+    } finally {
+      answer.release();
+    }
+    await expect(pending).resolves.toBe(false);
+    expect(outer.halt).toBeUndefined();
+  });
+
   it('holds the next admission until the current call enters, then releases before it returns', async () => {
     const outer = bindOuterCall();
     const gate = latch();
@@ -89,15 +147,10 @@ describe('composed call admission', () => {
       const first = resultOf(dispatch.call('sample', { account: 'first' }));
       await gateStarted.wait;
       const second = resultOf(dispatch.call('sample', { account: 'second' }));
-      if (state === 'ended') outer.end();
-      else {
-        outer.halted({
-          reason: 'fixture-stop',
-          tellLLM: 'Fixture stopped.',
-          call: { toolCallId: 'sample-owner#inner-0', toolName: 'earlier', args: {} },
-        });
-      }
+      const close = state === 'ended' ? outer.close() : undefined;
+      if (state === 'halt') outer.halted(fixtureHalt);
       gate.release();
+      await close;
       expect(await first).toMatch(state === 'ended' ? /has ended/ : /policy halted/);
       expect(await second).toMatch(state === 'ended' ? /has ended/ : /policy halted/);
       expect(asks).toEqual(['sample-owner#inner-1']);

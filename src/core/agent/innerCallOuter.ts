@@ -11,9 +11,9 @@
  * WHY IT ENDS. A tool can keep `ctx.tools` past its own `execute` — in a
  * module variable, a timer, a promise it never awaited. A call made through it
  * then would be judged with facts of a call that is over (its iteration, its
- * history) and filed under that call's id. So the outer call ENDS the binding
- * when its `execute` settles, and inner dispatch refuses every later call by
- * name — the footprintjs rule for a handle held past its stage.
+ * history) and filed under that call's id. When `execute` settles, the binding
+ * closes to new admissions and entry. An admission already deciding can
+ * still file its verdict until the queue drains or the run is cancelled.
  *
  * WHY A HALT WAITS. A checker's `'halt'` ends the run. For an inner call it
  * cannot end it from inside another tool's `execute`: the outer tool is still
@@ -25,6 +25,7 @@
  */
 
 import type { InnerCallRan } from '../../provider-contract/innerCalls.js';
+import { untilAborted } from '../../lib/abort.js';
 import type { ToolArgs } from '../../tools/runChain.js';
 
 /** A checker's `'halt'` on an inner call, carried to its outer call. */
@@ -54,16 +55,19 @@ export interface OuterCallBinding {
   admit(call: InnerCallRan): void;
   /** Return a detached view of calls already admitted by this owner. */
   admitted(): readonly InnerCallRan[];
-  /** End the binding: the outer call has settled. */
-  end(): void;
-  /** Keep a halt. The first one is the run's; a later one changes nothing. */
-  halted(halt: InnerCallHalt): void;
+  /** Close to entry, then drain admission decisions while the run is live. */
+  close(signal?: AbortSignal): Promise<void>;
+  /** Keep the first halt before the drain ends. True if this halt was kept. */
+  halted(halt: InnerCallHalt): boolean;
 }
 
 /** A fresh binding for one outer call. */
 export function bindOuterCall(): OuterCallBinding {
   let ended = false;
   let halt: InnerCallHalt | undefined;
+  let closed = false;
+  let closing: Promise<void> | undefined;
+  let runSignal: AbortSignal | undefined;
   let tail: Promise<unknown> = Promise.resolve();
   const admitted: InnerCallRan[] = [];
   return {
@@ -85,11 +89,23 @@ export function bindOuterCall(): OuterCallBinding {
     admitted() {
       return structuredClone(admitted);
     },
-    end() {
+    close(signal) {
+      if (closing !== undefined) return closing;
       ended = true;
+      runSignal = signal;
+      // The tail reports completion even for a refusal. Only cancellation
+      // abandons this wait, and the invocation owns reporting that cancellation.
+      closing = untilAborted(tail, signal)
+        .catch(() => undefined)
+        .then(() => {
+          closed = true;
+        });
+      return closing;
     },
     halted(next) {
-      if (!ended && halt === undefined) halt = next;
+      if (closed || runSignal?.aborted || halt !== undefined) return false;
+      halt = next;
+      return true;
     },
   };
 }
