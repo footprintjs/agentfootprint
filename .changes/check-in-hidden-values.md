@@ -1,5 +1,6 @@
 ---
 type: changed
+bump: major
 ---
 A check-in tells the approver which argument values were hidden. The request binds that list to the call and carries it into the decision record.
 
