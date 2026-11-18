@@ -155,8 +155,11 @@ The binding a reply carries (`anthropicThinkingReplay.ts · thinkingReplayBindin
 digests the conversation as the library sent it, BEFORE the cache marks. The
 check re-projects the history with no marks, so it must: a mark turns a string
 turn into a one-block array (`anthropicCacheWire.ts · applyCacheMarkers`), and a
-binding of the marked body never matched on a bound model, so default caching
-stopped every thinking-and-tool agent at its second call (r3-59-adapters-llm-1).
+binding of a body whose mark rewrote a string turn never matched on a bound
+model, so default caching stopped every thinking-and-tool agent at its second
+call (r3-59-adapters-llm-1). A mark that fell only on the system prompt, the
+tools or a turn that was already an array changed nothing: those bindings
+matched before and still do.
 For example, a first call `[{ role: 'user', content: 'What is k1?' }]` goes out
 marked as `[{ type: 'text', text: 'What is k1?', cache_control }]`, and its reply
 is bound to the plain string. Pinned through a real agent in

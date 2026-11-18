@@ -95,9 +95,10 @@ function thinkingSequence(messages: readonly AnthropicMessageParam[]): string[] 
  * is digested from it, as the library sent it BEFORE the cache marks: the
  * marks (`anthropicCacheWire.ts · applyCacheMarkers`) turn a string turn into
  * a one-block array, which `inconsistency` never sees when it re-projects the
- * history — so a binding of the marked body could never match on a bound
- * model (r3-59-adapters-llm-1). Where no mark rewrote a turn, both forms
- * digest the same, so every binding that matched before still matches.
+ * history — so a binding of a body whose mark rewrote a string turn could
+ * never match on a bound model (r3-59-adapters-llm-1). Where no mark rewrote
+ * a turn, both forms digest the same, so every binding that matched before
+ * still matches.
  *
  * @example
  *   const bind = thinkingReplayBinding(body, preparation.request, body.model);
