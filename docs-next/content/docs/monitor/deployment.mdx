@@ -23,7 +23,7 @@ The flowchart, recorders, narrative, tests don't change. **Ship the patterns fir
 
 ### 1. Multi-tenant identity at every `agent.run()`
 
-Every memory call namespaces by `MemoryIdentity`. When you omit `identity`, the agent derives one: `{ conversationId: sessionId }` when the run carries a `sessionId` (as `standingAgent` passes for every served request), otherwise `{ conversationId: '<runId>' }`. That is fine for prototypes, but it scopes by session or by run, never by tenant, so it's DANGEROUS in production multi-tenant apps. Pass per-tenant identity at every call site:
+For a standalone agent run without explicit identity, the agent scopes memory by session ID when available and otherwise by run ID. A hosted app must supply its verified tenant identity. Pass per-tenant identity at every call site:
 
 ```ts
 const identity = {
@@ -34,7 +34,7 @@ const identity = {
 await agent.run({ message: req.body.message, identity });
 ```
 
-A bug that passes the WRONG `tenant` reads an empty scope — "no data found", never another tenant's data — because the namespace is the whole identity tuple. A bug that OMITS `tenant` is not refused: a missing tenant is one shared single-tenant scope (the segment `_`), so tenant-less calls from different tenants with the same `principal` and `conversationId` read and overwrite the same memory. Always pass `tenant` in a multi-tenant app.
+Derive `tenant` from the authenticated caller. Omitting it selects the shared single-tenant namespace, so requests from different tenants can resolve to the same memory when their other identity fields match.
 
 ### 2. Peer-dep SDKs installed
 

@@ -139,10 +139,8 @@ export function buildSlots(
   // remain invisible here. `ToolProvider.list(ctx)` is opaque and
   // per-iteration — there is no build-time list to harvest — so a provider
   // tool declaring `argumentsFrom` arms nothing. (MCP tools are NOT in that
-  // hole when the app registers `mcpClient(...).tools()` with `.tool()` /
-  // `.tools()`, and 9.71.0 carries their declarations across the wire.
-  // Wrapped in `staticTools` / `gatedTools` and passed to `.toolProvider()`,
-  // they ARE in it, like any provider-delivered tool.)
+  // hole: `mcpClient(...).tools()` registers them statically, and 9.71.0
+  // carries their declarations across the wire.)
   const toolGrounding = new Map(
     [...environment.registryByName.entries()]
       .filter(([, tool]) => tool.argumentsFrom !== undefined)
@@ -151,9 +149,8 @@ export function buildSlots(
   this.integrityDanglingPresent = toolGrounding.size > 0;
   // The column-type contract's declared half (9.78.0) — harvested from the
   // SAME catalog and with the same ToolProvider caveat, so an MCP-carried
-  // `resultColumns` (which rides `_meta`) on a tool registered with
-  // `.tool()` / `.tools()` arms the check exactly as a locally-defined one
-  // does; delivered through a ToolProvider, neither arms it.
+  // `resultColumns` (which rides `_meta`) arms the check exactly as a
+  // locally-defined one does.
   // `flatMap` rather than filter-then-assert: the narrowing is real here,
   // so the twin harvest above's non-null assertion is not inherited.
   const toolColumns = new Map(

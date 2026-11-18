@@ -152,10 +152,9 @@ export interface ToolDispatchContext {
  * (e.g., per-skill vs per-tenant vs per-iteration).
  *
  * **Errors.** A throwing or rejecting provider emits
- * `agentfootprint.tools.discovery_failed` and the run rejects with
- * that error. A configured `.reliability()` rule never sees it — the
- * rules wrap only the LLM provider call — so retry or fall back inside
- * `list()` itself (or a wrapper around it). Discovery failure is loud
+ * `agentfootprint.tools.discovery_failed` and aborts the iteration —
+ * the run continues only if a configured `reliability` rule routes
+ * the error (`fail-fast`, `retry`, etc.). Discovery failure is loud
  * by design; silently dropping tools mid-conversation produces
  * non-deterministic agent behavior that's harder to debug than a
  * crash.

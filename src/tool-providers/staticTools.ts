@@ -2,13 +2,9 @@
  * staticTools — the simplest ToolProvider. Wraps a fixed Tool[] list.
  *
  * 90% case. What `agent.tools(arr)` does today, made composable.
- * Shows the model the same tools as passing `arr` to `.tools(arr)`, but
- * it is a `ToolProvider` you can wrap with `gatedTools(...)` for
- * permission filtering or per-skill gating. NOT equivalent for the
- * integrity checks: they read `argumentsFrom`, `resultColumns` and
- * `wants` only from tools registered with `.tool()` / `.tools()` (see
- * `core/agent/runtime/slots/buildSlots.ts`), so a tool delivered
- * through this provider arms none of them.
+ * Equivalent to passing `arr` directly EXCEPT that `staticTools(arr)`
+ * is now a `ToolProvider` you can wrap with `gatedTools(...)` for
+ * permission filtering or per-skill gating.
  *
  * Pattern: identity ToolProvider — no filtering, just exposes the
  *          underlying list verbatim.

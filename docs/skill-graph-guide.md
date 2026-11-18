@@ -6,11 +6,7 @@ repo-internal file is how documentation rots: nothing type-checked its snippets,
 gated its links, and it drifted eleven minor releases behind the code it described.
 
 **The reader-facing documentation is on the docs site**, where every cross-reference is
-gated in CI. Only code blocks fenced `ts twoslash` are type-checked against the shipped
-types at build time: on the four pages below that is 8 of 39 TypeScript blocks
-(architecture 6 of 10, quickstart 2 of 6, `skills.mdx` 0 of 21, `skills-explained.mdx`
-0 of 2). Nothing compiles the others; for code you can trust to run, prefer the runnable
-`examples/`.
+gated in CI. The site build type-checks the blocks marked `ts twoslash` against the shipped types. For complete programs, see the runnable examples.
 
 | What you came for | Where it lives now |
 |---|---|

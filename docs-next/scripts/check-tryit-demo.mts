@@ -44,27 +44,21 @@ const result = await agent.run({ message: MESSAGE });
 
 if (typeof result !== 'string') fail('agent paused unexpectedly (expected a final answer)');
 
-// The flow, proved by the tools' own results, in order:
-//   read_skill('billing') → redact_pii (→ [EMAIL]) → process_refund (→ $42).
-// Each step fails with its own message: the skill did not load (so the refund
-// tool was never unlocked), redaction let the raw email through, or the refund
-// failed.
-const seen = ended.map((t) => `${t.name}${t.error ? ' [error]' : ''} → ${String(t.result)}`).join('\n  ');
-const expectStep = (index: number, name: string, ok: (r: string) => boolean, what: string) => {
-  const step = ended[index];
-  if (!step || step.name !== name || step.error || !ok(String(step.result))) {
-    fail(`${what}.\n  tool calls that ended, in order:\n  ${seen || '(none)'}`);
+// The final response is scripted. Check the results independently, in call order.
+const expectedCalls = [
+  ['read_skill', "Skill 'billing' activated for the next iteration."],
+  ['redact_pii', '[EMAIL] refund $42'],
+  ['process_refund', 'Refund of $42 issued.'],
+] as const;
+if (ended.length !== expectedCalls.length) {
+  fail(`expected ${expectedCalls.length} tool results, received ${ended.length}`);
+}
+for (const [index, [name, expected]] of expectedCalls.entries()) {
+  const call = ended[index];
+  if (call.name !== name || call.error || call.result !== expected) {
+    fail(`tool call ${index + 1} (${name}) did not return its expected result`);
   }
-};
-if (ended.length !== 3) fail(`expected exactly 3 tool calls, got ${ended.length}:\n  ${seen || '(none)'}`);
-expectStep(0, 'read_skill', (r) => r.includes("Skill 'billing' activated"), 'the billing skill did not load');
-expectStep(
-  1,
-  'redact_pii',
-  (r) => r.includes('[EMAIL]') && !r.includes('alice@example.com'),
-  'redact_pii did not redact the email',
-);
-expectStep(2, 'process_refund', (r) => r === 'Refund of $42 issued.', 'process_refund did not issue the refund');
+}
 
 // The final answer only proves the run COMPLETED (no throw, no pause, a 4th LLM
 // call): its text is scripted by the mock, so it says nothing about the tools.

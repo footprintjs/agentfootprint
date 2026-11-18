@@ -27,7 +27,7 @@ export function buildDynamicReactAgent() {
     description: 'Redact personally-identifiable info (emails, phones).',
     inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     execute: ({ text }: { text: string }) =>
-      text,
+      text.replace(/[\w.-]+@[\w.-]+/g, '[EMAIL]').replace(/\d{3}-\d{4}/g, '[PHONE]'),
   });
 
   // Always-on safety policy — part of every system prompt.

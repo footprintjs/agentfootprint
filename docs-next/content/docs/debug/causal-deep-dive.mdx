@@ -17,13 +17,13 @@ Causal memory remembers what was *decided*, not only what was *said*.
 
 ## What gets persisted
 
-When you configure `defineMemory({ type: MEMORY_TYPES.CAUSAL, ... })`, every `agent.run()` that ends with a final answer records a `SnapshotEntry` (`schemaVersion: 2`) to the configured store. It holds the `(query, finalContent)` pair and the evidence observed during **one component execution leg** of that run: the `decisions` recorded from `decide()`/`select()`, the `toolCalls` trajectory, how many iterations were observed to start, how long the observation window lasted, and the observed token usage. The type has an optional `narrative` field, but the writer does not fill it.
+When you configure `defineMemory({ type: MEMORY_TYPES.CAUSAL, ... })`, the causal writer stores a `SnapshotEntry` (`schemaVersion: 2`) to the configured store. It holds the `(query, finalContent)` pair and the evidence observed during **one component execution leg** of that run: the `decisions` recorded from `decide()`/`select()`, the `toolCalls` trajectory, how many iterations were observed to start, how long the observation window lasted, and the observed token usage. The type has an optional `narrative` field, but the writer does not fill it.
 
 The snapshot is recorded evidence with its limits written into it, not a complete account of the run. When a later turn loads it back into context, every projection opens with the same boundary: the past answer may use earlier history, the evidence shows only this component execution leg, evidence from prior legs and missing observations is unknown, and empty lists do not prove that nothing happened. `availability` says how complete the evidence is:
 
 - `observed` — the observer ran for the whole leg and no limit was reached.
 - `partial` — some evidence is missing, and `causes` names why: `observer-failed`, `bounded-observation` (a limit was reached — at most 256 decisions and 256 tool calls are kept, and what was dropped is counted in `omittedObservations`), `incomplete-tool-pairs`, `duplicate-tool-start`, `missing-usage`.
-- `unavailable` — no evidence, and `reason` says why (`not-configured`, `observer-failed`, `collector-failed`). This form holds only `query`, `finalContent`, `availability` and `reason`: no `decisions`, no `toolCalls`.
+- `unavailable` — no evidence, and `reason` says why (`not-configured`, `observer-failed`, `collector-failed`). The writer stores the schema version, query, final content, availability and reason. This form has no decision or tool-call lists.
 
 ### Each snapshot answers four typed questions
 
@@ -109,7 +109,7 @@ When a snapshot is RETRIEVED for a follow-up turn, you don't always want the who
 | `SNAPSHOT_PROJECTIONS.NARRATIVE` | the stored `narrative`; the writer never fills it, so today this is `(no narrative captured)` and `Final answer: …` | — |
 | `SNAPSHOT_PROJECTIONS.FULL` | the whole serialized snapshot (largest, most expensive) | Forensic-grade audit |
 
-Most apps use `DECISIONS` — it's the default and the only projection besides `FULL` that carries the recorded decisions and tool evidence.
+The default, `DECISIONS`, is the only projection besides `FULL` that carries the recorded decisions and tool evidence.
 
 > **Note:** a footprintjs `commitLog` is not captured in `SnapshotEntry` and the writer does not fill `narrative`, so `COMMITS` and `NARRATIVE` serve only the final answer behind the same three lines.
 

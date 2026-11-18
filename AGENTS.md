@@ -378,7 +378,5 @@ nine cursor causes, the three-way `read_skill`, and a worked refusal taken from 
 run — is published as **Skill graph architecture**:
 <https://agentfootprint.dev/docs/build/skill-graph-architecture/>.
 Every capability claim there carries a status — `shipped` / `opt-in` /
-`application-provided` / `planned`. Only its code blocks fenced `ts twoslash` (6 of its
-10 TypeScript blocks) are type-checked against the shipped types at build; the other 4
-are not compiled by anything. Read it rather than this file when the question is "how does
+`application-provided` / `planned`. The site build type-checks blocks marked `ts twoslash` against the shipped types. Read it rather than this file when the question is "how does
 routing actually work"; read this file for what to reach for and what does not exist.

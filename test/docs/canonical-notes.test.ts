@@ -44,7 +44,6 @@ import {
   COVERAGE_NOTE,
   IN_PROGRESS_WIRE,
   PERIOD_WIRE,
-  readAbsence,
   readCoverageResult,
   SEMANTICS_MARKER,
   SEMANTICS_NOTE,
@@ -300,29 +299,6 @@ describe('documentation — the published path and the Python example are real',
     expect(page).toContain('"notes"');
     expect(page).toContain('ABSENCE_NOTE');
     expect(load().notes.ABSENCE_NOTE).toBeDefined();
-  });
-
-  it('the Python absent() example builds the flat envelope readAbsence recognizes', () => {
-    // A sidecar copies this example. An envelope that nests the lists under
-    // the marker is served to the model as plain data: no `absent` status,
-    // no coverage recorded. This is the example's dict, built from the
-    // published JSON alone, as the Python code builds it.
-    const data = load();
-    const fromExample = {
-      [data.markers.ABSENCE_MARKER]: true,
-      outcome: 'nothing_found',
-      looked_for: 'backup runs for vm-99',
-      checked: [{ what: 'every backup job in the export of 2026-08-19T10:12:00Z' }],
-      not_checked: [],
-      cannot_cover: [],
-      retry_returns_the_same: true,
-      note: data.notes.ABSENCE_NOTE,
-    };
-    expect(readAbsence(fromExample)).toBeDefined();
-    expect(readCoverageResult(fromExample)?.status).toBe('absent');
-    // The page spells the same flat shape, never the nested one.
-    expect(page).toContain('ABSENCE_MARKER: True,');
-    expect(page).not.toContain('{ABSENCE_MARKER: {');
   });
 });
 

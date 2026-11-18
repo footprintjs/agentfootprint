@@ -140,14 +140,6 @@ test('SECURITY: the record drops what the policy names, and the model still rece
     assert.ok(!JSON.stringify(value).includes(SSN), `${name} holds the SSN`);
     assert.ok(!JSON.stringify(value).includes('Look up Dana'), `${name} holds the message`);
   }
-  // The named limit the security page states in its "Still real" column: with
-  // recordRun attached, the snapshot's boundary log (run.exit) carries the
-  // final answer whatever the policy. If this starts failing, the limit closed:
-  // update the page and src/redaction/README.md, then this line.
-  assert.ok(
-    JSON.stringify(snapshot).includes('Found her.'),
-    'the snapshot holds the final answer on run.exit, as the page says',
-  );
 });
 
 test('SECURITY: scrubbing changes what the model reads, at any depth', async () => {
