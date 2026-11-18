@@ -303,11 +303,12 @@ name:
   1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.  ⟨wrong.errors@2 · library · recorded⟩
 ```
 
-A `tool_end` leaf that is present but not a boolean (a hand-edited record) is
-not a value any writer writes: `toolRanOf` reads it as a record that does not
-say, and with no `error` beside it the call's outcome is `unknown` ("how the
-call ended is not recorded"), never "It ran". A redaction placeholder on one of
-these leaves is read the same way, earlier, by `keptOut`.
+When a saved bracket has a non-boolean `error`, `entered` or `notExecuted`,
+`toolRanOf` returns `not-recorded` even beside a valid entry stamp. With a
+recorded `error: true`, the account says the call ended in an error. Without
+that error or a separate refusal, decline or settlement, it says how the call
+ended is unknown. The account handles redaction placeholders first via
+`keptOut`.
 
 **Not covered yet.** These readers still answer "did this call run?" without
 asking `toolRanOf`. They are part of the planned change "one answer to: did

@@ -5,7 +5,7 @@
  * arguments the schema rejects, a blocked credential). Its `tool_end` now says
  * so (`entered: false`), a call whose tool ran and threw says that
  * (`entered: true`), and a record from before the field says neither — so the
- * account, the tool-call ledger and every other reader ask one function
+ * account, the tool-call ledger, the journal and AG-UI ask one function
  * (`semantics/toolRan.ts` · `toolRanOf`).
  *
  * Every case is a REAL agent run with a scripted provider, saved by
@@ -447,7 +447,7 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
   });
 
   it('a rule refused it: never "outcome: ok" for a call that did not run', async () => {
-    const { list } = tools();
+    const { list, entered } = tools();
     const agent = Agent.create({
       provider: mock({
         replies: [
@@ -467,14 +467,18 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
     await agent.run({ message: 'go' });
     recorder.stop();
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+    expect(entered.lookup).toBe(0);
     expect(ends(recording)[0]).toMatchObject({ notExecuted: true });
+    const account = read(recording);
+    expect(rowText(account, 'checked')).toContain('It asked to run lookup, and a rule refused it.');
+    expect(rowText(account, 'found')).toContain('lookup did not run, so it found nothing.');
     const out = await journal(recording, 'p1');
     expect(out).toContain("ran with: nothing — call 'p1' was never executed.");
     expect(out).toContain("outcome: refused by a rule — call 'p1' never reached its tool");
     expect(out).not.toContain('outcome: ok');
   });
 
-  it('a person declined its check-in: the decline is said first, never "outcome: ok"', async () => {
+  it('a declined check-in and its undispatched sibling each keep the reason they did not run', async () => {
     let ran = 0;
     const gated = defineTool({
       name: 'gated',
@@ -488,7 +492,15 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
     });
     const agent = Agent.create({
       provider: mock({
-        replies: [{ toolCalls: [{ id: 'g1', name: 'gated', args: {} }] }, { content: 'Done.' }],
+        replies: [
+          {
+            toolCalls: [
+              { id: 'g1', name: 'gated', args: {} },
+              { id: 'g2', name: 'gated', args: {} },
+            ],
+          },
+          { content: 'Done.' },
+        ],
       }),
       model: 'mock',
     })
@@ -503,7 +515,17 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
     recorder.stop();
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
     expect(ran).toBe(0);
-    expect(ends(recording).at(-1)).toMatchObject({ entered: false });
+    expect(ends(recording)).toEqual([
+      expect.objectContaining({ toolCallId: 'g1', entered: false }),
+      expect.objectContaining({ toolCallId: 'g2', notDispatched: expect.anything() }),
+    ]);
+    const account = read(recording);
+    expect(account.facts.calls.map((call) => call.outcome)).toEqual(['declined', 'not-dispatched']);
+    expect(rowText(account, 'checked')).toEqual([
+      'It asked to run gated; a person was asked and declined.',
+      'It asked to run gated, but the call was not run.',
+      "No tool result from before the pause is in this record's history.",
+    ]);
     const out = await journal(recording, 'g1');
     expect(out).toContain("ran with: nothing — call 'g1' was never executed.");
     expect(out).toContain(

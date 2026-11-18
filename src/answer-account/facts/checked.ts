@@ -64,7 +64,8 @@ function rulePointer(call: CallRead): RecordPointer | undefined {
   const e = call.ruleEvent;
   if (e === undefined) return undefined;
   if (e.type.endsWith('middleware.decision')) return at(e, 'middleware');
-  if (e.type.endsWith('permission.check')) return at(e, 'policyRuleId');
+  if (e.type.endsWith('permission.check'))
+    return at(e, call.fact.refusedBy === undefined ? 'result' : 'policyRuleId');
   if (e.type.endsWith('checkin.decision')) return at(e, 'approved');
   return at(e, 'notExecuted');
 }

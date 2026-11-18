@@ -8,15 +8,15 @@
  * so the answer account told a person "It ran reboot_host" for a tool name
  * that does not exist. The dispatch always KNEW the difference (it sets its
  * `executed` flag just before `execute` is entered); the bracket now carries
- * it, and every reader asks this module instead of guessing from `error`.
+ * it for the bracket readers listed below.
  *
  * - `withEntered` is the writer: `observation/observationsOperations.ts` ·
  *   `emitToolEnd`, the door every `tool_end` of the Agent's tool-call stages
  *   passes, stamps the field from the `ran` flag every dispatch path already
  *   hands it. One other emitter writes `tool_end` without it: the demo chart
  *   `core/agent/buildAgentMessageApiChart.ts` · `toolExec`, which runs no tool
- *   function at all (it answers `[name result]` for any name), so its brackets
- *   read `'ran'` here and prove nothing about a tool.
+ *   function at all (it answers `[name result]` for any name). Its unstamped
+ *   brackets match the success shape without proving a tool ran.
  * - `toolRanOf` is the reader: the answer account (`answer-account/facts/
  *   calls.ts` · `outcomeOf`), the tool-call ledger (`answer-validation/
  *   toolLedger.ts` · `toolOutcomeOf`), the trace toolpack
@@ -83,16 +83,16 @@ export interface ToolRanFields {
 const unreadable = (leaf: unknown): boolean => leaf !== undefined && typeof leaf !== 'boolean';
 
 /**
- * THE reader. Markers first (each proves "did not run" on its own), then the
- * stamp, then the leaves no writer writes, then the version gap: an `error`
- * with no stamp is a record that does not say.
+ * Validate saved boolean fields before using them as evidence, then read the
+ * refusal or settlement marker and the entry stamp. An error without a
+ * stamp is an older bracket that does not say whether the tool ran.
  */
 export function toolRanOf(bracket: ToolRanFields): ToolRan {
+  if ([bracket.entered, bracket.error, bracket.notExecuted].some(unreadable)) return 'not-recorded';
   if (bracket.notDispatched !== undefined) return 'not-run';
   if (bracket.notExecuted === true) return 'not-run';
   if (bracket.entered === false) return 'not-run';
   if (bracket.entered === true) return 'ran';
-  if ([bracket.entered, bracket.error, bracket.notExecuted].some(unreadable)) return 'not-recorded';
   if (bracket.error === true) return 'not-recorded';
   return 'ran';
 }

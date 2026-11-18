@@ -1,6 +1,6 @@
 /**
  * `semantics/toolRan.ts` — the one law of "did this call's tool run?", both
- * halves: the writer every `tool_end` passes and the reader every reader asks.
+ * halves: the Agent tool-call stages' shared writer and the bracket reader.
  *
  * Test types: UNIT (each row of the law), PROPERTY (writer → reader agree for
  * every bracket shape the dispatch can hand the door, enumerated exhaustively),
@@ -85,6 +85,8 @@ describe('toolRanOf — a saved record is data', () => {
     expect(toolRanOf({ error: true, entered: 1 })).toBe('not-recorded');
     expect(toolRanOf({ error: 'yes', entered: 'no' })).toBe('not-recorded');
     expect(toolRanOf({ notExecuted: 'true', error: true })).toBe('not-recorded');
+    expect(toolRanOf({ error: 'yes', entered: true })).toBe('not-recorded');
+    expect(toolRanOf({ notExecuted: 'true', entered: true })).toBe('not-recorded');
     // With no `error` at all, too: a placeholder or a hand-edited stamp is not "it returned".
     expect(toolRanOf({ entered: 'false' })).toBe('not-recorded');
     expect(toolRanOf({ entered: '[REDACTED]' })).toBe('not-recorded');
