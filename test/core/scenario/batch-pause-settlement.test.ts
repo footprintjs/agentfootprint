@@ -29,9 +29,9 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  * brackets on the leg that paused, which ends in a checkpoint and emits no
  * `iteration_end` — unchanged.
  *
- * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle, and its
- * record is pinned against a reference captured on the 9.112.2 tree BEFORE any
- * source edit of this release, by this file in update mode:
+ * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle. The
+ * 9.112.2 reference adds `entered: true` on each successful tool end for the
+ * new entry contract. It was originally captured by this file in update mode:
  *
  *   AF_BATCH_SETTLEMENT_REFERENCE=update npx vitest run test/core/scenario/batch-pause-settlement.test.ts
  */
@@ -604,7 +604,7 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
   return JSON.parse(requestId === undefined ? text : text.split(requestId).join('<requestId>'));
 }
 
-describe('batch settlement — a batch whose LAST call pauses is byte-identical to 9.112.2', () => {
+describe('batch settlement — the pinned record when the last call pauses', () => {
   it.each(KINDS)('%s', async (kind) => {
     const h = build(kind, 2);
     const { answer, requestId } = await pauseAndResume(h, kind);

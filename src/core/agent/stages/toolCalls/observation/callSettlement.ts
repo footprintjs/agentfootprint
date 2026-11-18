@@ -70,8 +70,8 @@ export function recordCallSettlement(
       // here: `emitToolEnd` writes `entered` from the `executed` flag passed
       // below, for this path and every resume alike, so a call that failed
       // to run on its own (an unknown name, an args rejection, a credential
-      // block) reads `error: true, entered: false`, and a success keeps its
-      // bytes.
+      // block) reads `error: true, entered: false`, and a success reads
+      // `entered: true`.
       ...(frame.modelResult !== frame.capped.result && { modelResult: frame.modelResult }),
       ...(frame.execution.executed &&
         frame.changedKeys.length > 0 && { changedArgKeys: frame.changedKeys }),

@@ -180,19 +180,12 @@ export interface ToolEndPayload {
    *   call, with or without `error` — except one that already says so with
    *   `notExecuted` (a rule refused it) or `notDispatched` (a paused batch
    *   settled it), which keeps the bytes it had.
-   * - `true`: the function was entered and the call ended in an error. Only
-   *   beside `error: true`.
-   * - absent, on a bracket with no `notExecuted` and no `notDispatched`: the
-   *   function was entered and the call ended without `error` (it returned —
-   *   a declared `failure` status included). A call that succeeded keeps
-   *   exactly the bytes it had before this field existed. (A bracket with one
-   *   of those markers has no `entered` either; the marker says it never ran.)
+   * - `true`: the function was entered, whether it returned or threw.
    *
-   * A record written BEFORE this field existed carries it nowhere, so there
-   * its absence proves nothing: an `error` bracket without it does not say
-   * whether the tool ran. A saved value that is not a boolean (a hand-edited
-   * record, a placeholder) proves nothing either: `toolRanOf` reads it as a
-   * record that does not say.
+   * A bracket with no `entered`, `notExecuted` or `notDispatched` does not
+   * say whether the tool ran. Recordings made before this field existed
+   * have no entry stamp. A saved `entered` value that is not a boolean (a
+   * hand-edited record, a placeholder) also leaves entry unrecorded.
    *
    * @example { toolCallId: 'c1', result: "Unknown tool 'reboot_host'…", durationMs: 0, error: true, entered: false }
    */

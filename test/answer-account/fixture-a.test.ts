@@ -1,7 +1,6 @@
 /**
- * The answer account on the REAL recording (fixture A: `recording-turn2.json`,
- * reduced) — the design's §7.3 table, line by line, and the byte-stable golden
- * of the whole account.
+ * The answer account on the archived recording and a synthetic variant that
+ * supplies the entry stamp for the design's §7.3 table and byte-stable golden.
  *
  * Test types (Convention 3):
  *   - FUNCTIONAL — A (with the app's declarations), A0 (the record alone) and B
@@ -19,6 +18,7 @@ import type { AnswerAccount, RowId } from '../../src/answer-account/types.js';
 import {
   dump,
   fixtureA,
+  fixtureAWithEntry,
   fixtureB,
   FLAGSHIP_RUN_ID,
   golden,
@@ -29,8 +29,17 @@ const rowOf = (account: AnswerAccount, id: RowId) => account.rows.find((r) => r.
 const said = (account: AnswerAccount, id: RowId) =>
   rowOf(account, id).lines.map((l) => [l.text, l.source] as const);
 
-describe('fixture A — the real run, with the app’s declarations', () => {
+it('reads the archived fixture A without attributing entry to its unstamped bracket', () => {
   const rec = fixtureA();
+  const account = accountForAnswer(rec, HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+  expect(account.facts.calls[0]?.outcome).toBe('unknown');
+  expect(said(account, 'checked')).toEqual([
+    ['It started get_array_inventory; how the call ended is not recorded.', 'library'],
+  ]);
+});
+
+describe('fixture A with a recorded entry and the app’s declarations', () => {
+  const rec = fixtureAWithEntry();
   const account = accountForAnswer(rec, HOST_APP_DECLARATIONS, { runId: rec.meta.origin.runId });
 
   it('reads its own run only, and says which', () => {
@@ -156,8 +165,8 @@ describe('fixture A — the real run, with the app’s declarations', () => {
   });
 });
 
-describe('fixture A0 — the same run, the record alone', () => {
-  const rec = fixtureA();
+describe('fixture A0 — the recorded entry without the app’s declarations', () => {
+  const rec = fixtureAWithEntry();
   const account = accountForAnswer(rec, undefined, { runId: rec.meta.origin.runId });
 
   it('the skill is its id; no app line; the in-view line makes no emptiness claim', () => {

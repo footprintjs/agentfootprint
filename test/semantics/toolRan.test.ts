@@ -4,7 +4,7 @@
  *
  * Test types: UNIT (each row of the law), PROPERTY (writer → reader agree for
  * every bracket shape the dispatch can hand the door, enumerated exhaustively),
- * BOUNDARY (a success and a bracket another marker explains keep their bytes,
+ * BOUNDARY (a bracket another marker explains keeps its bytes,
  * by reference; a saved leaf that is not a boolean proves nothing).
  */
 import { describe, expect, it } from 'vitest';
@@ -23,21 +23,23 @@ describe('toolRanOf — the reader', () => {
 
   it('reads `entered: true` as ran, error or not', () => {
     expect(toolRanOf({ error: true, entered: true })).toBe('ran');
+    expect(toolRanOf({ entered: true })).toBe('ran');
   });
 
   it('an error with no stamp is a record that does not say (written before `entered`)', () => {
     expect(toolRanOf({ error: true })).toBe('not-recorded');
   });
 
-  it('a bracket without error or marker is a tool that returned', () => {
-    expect(toolRanOf({})).toBe('ran');
+  it('a bracket without error or marker leaves entry unrecorded', () => {
+    expect(toolRanOf({})).toBe('not-recorded');
+    expect(toolRanOf({ error: false })).toBe('not-recorded');
   });
 });
 
 describe('withEntered — the writer', () => {
-  it('a success keeps its bytes: the same object, nothing added', () => {
+  it('a success adds only the entry stamp', () => {
     const success = { toolCallId: 'c1', result: 'ok', durationMs: 3 };
-    expect(withEntered(success, true)).toBe(success);
+    expect(withEntered(success, true)).toEqual({ ...success, entered: true });
   });
 
   it('a bracket another marker explains keeps its bytes', () => {
@@ -100,7 +102,5 @@ describe('toolRanOf — a saved record is data', () => {
     expect(toolRanOf({ entered: '[REDACTED]' })).toBe('not-recorded');
     expect(toolRanOf({ error: 'true' })).toBe('not-recorded');
     expect(toolRanOf({ notExecuted: 'true' })).toBe('not-recorded');
-    // A boolean `false` leaf is a value a reader can read: it is not a gap.
-    expect(toolRanOf({ error: false })).toBe('ran');
   });
 });
