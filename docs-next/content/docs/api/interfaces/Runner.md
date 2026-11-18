@@ -115,7 +115,7 @@ executor. Sample it live (a closure), never a captured number.
 
 ### getLastSnapshot()
 
-> **getLastSnapshot**(`options?`): `RuntimeSnapshot` & `object` \| `undefined`
+> **getLastSnapshot**(): `RuntimeSnapshot` \| `undefined`
 
 Defined in: [src/core/runner.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runner.ts#L145)
 
@@ -127,15 +127,9 @@ The canonical structure: consumers read this for shape and join
 their own per-stage payload by `runtimeStageId`, rather than
 re-deriving structure from typed events.
 
-#### Parameters
-
-##### options?
-
-`RunnerSnapshotOptions`
-
 #### Returns
 
-`RuntimeSnapshot` & `object` \| `undefined`
+`RuntimeSnapshot` \| `undefined`
 
 ***
 
