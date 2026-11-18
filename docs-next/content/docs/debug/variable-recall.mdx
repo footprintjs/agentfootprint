@@ -36,7 +36,9 @@ A `moments` entry is an `AgentKeyMoment`. Reads carry Foottrace's
 writes inside it. When `orWriteIdxs` is present, each named commit is only a
 possible source. An absent `fromWriteIdx` in that case means a value from
 before the run is also possible. The agent adds `loopIndex` and, for writes
-the classifier recognizes, `suspectKind` and `suspectId`.
+the classifier recognizes, `suspectKind` and `suspectId`. The returned
+`AgentVariableSlice` is flat and JSON-safe, so a board and an LLM tool can
+read the same artifact.
 
 From the tested example, printed off a real run:
 
