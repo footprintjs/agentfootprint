@@ -25,6 +25,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   Agent,
+  allow,
   ask,
   checkInApproved,
   checkInDeclined,
@@ -175,6 +176,64 @@ describe('one recorded entry fact across the account, journal and commentary', (
     expect.soft(entry).toContain("outcome: denied by 'gate'");
     expect.soft(entry).toContain('result: "declined by human"');
     expect.soft(commentary(recording)).toBe('The record does not say whether the tool ran.');
+  });
+
+  it('keeps a declined lookup separate from a later successful lookup with the same id', async () => {
+    const { list, entered } = tools();
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'same', name: 'lookup', args: { id: 'first' } }] },
+          { toolCalls: [{ id: 'same', name: 'lookup', args: { id: 'second' } }] },
+          { content: 'Done.' },
+        ],
+      }),
+      model: 'mock',
+    })
+      .tools(list)
+      .toolMiddleware({
+        name: 'gate',
+        onToolCall: ({ args }) =>
+          args.id === 'first' ? ask({ question: 'Read the first sample?' }) : allow(),
+      })
+      .build();
+    const recorder = recordRun(agent);
+    const paused = await agent.run({ message: 'Read the sample' });
+    if (!isAskPause(paused)) throw new Error('expected approval pause');
+    await agent.resume(
+      paused.checkpoint,
+      checkInDeclined({ request: pausedRequest(paused), by: 'reviewer' }),
+    );
+    recorder.stop();
+    const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+
+    const brackets = ends(recording).filter((end) => end.toolCallId === 'same');
+    expect(brackets.map((end) => end.entered)).toEqual([false, true]);
+    expect(entered.lookup).toBe(1);
+    const entry = await journal(recording, 'same');
+    expect(entry).toContain('proposed by the model: {"id":"second"}');
+    expect(entry).toContain(JSON.stringify('{"rows":[1]}'));
+    expect(entry).toContain('outcome: ok');
+    expect(entry).not.toContain('declined by reviewer');
+
+    // A saved tail may hold the brackets but lack the step/decision events
+    // that link the committed ledger to one of the two occurrences.
+    const unstamped = writtenBeforeEntered(recording);
+    const ambiguous = {
+      ...unstamped,
+      events: unstamped.events
+        .filter((event) =>
+          ['agentfootprint.stream.tool_start', 'agentfootprint.stream.tool_end'].includes(
+            event.type,
+          ),
+        )
+        .map((event) => ({ ...event, meta: { ...event.meta, runtimeStageId: undefined } })),
+    };
+    const oldEntry = await journal(ambiguous, 'same');
+    expect(oldEntry).toContain(
+      'outcome: ⚠ unknown — this record does not say whether the tool ran',
+    );
+    expect(oldEntry).not.toContain('declined by reviewer');
   });
 
   it('records a successful lookup entering its tool and shows its result', async () => {
