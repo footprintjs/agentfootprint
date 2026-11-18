@@ -364,11 +364,13 @@ function outcomeOf(
   end?: ViewEvent,
 ): Outcome {
   const decisions = byCall('middleware.decision', id);
+  const stoppedByMiddleware = (e: ViewEvent) =>
+    e.payload.outcome === 'deny' || e.payload.outcome === 'refused';
   const beforeDeny = decisions.find(
-    (e) => e.payload.moment === 'before-tool' && e.payload.outcome === 'deny',
+    (e) => e.payload.moment === 'before-tool' && stoppedByMiddleware(e),
   );
   const afterDeny = decisions.find(
-    (e) => e.payload.moment === 'after-tool' && e.payload.outcome === 'deny',
+    (e) => e.payload.moment === 'after-tool' && stoppedByMiddleware(e),
   );
   // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
   // allow || gate_open), so it is never a refusal.
@@ -390,10 +392,11 @@ function outcomeOf(
       return { outcome: end.payload.error === true ? 'ended-in-error' : 'unknown' };
   }
   if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
-  if (beforeDeny !== undefined && isPausedCall)
+  if (beforeDeny?.payload.outcome === 'deny' && isPausedCall)
     return { outcome: 'declined', ruleEvent: beforeDeny };
   if (beforeDeny !== undefined) {
-    const by = str(beforeDeny.payload.middleware);
+    const by =
+      beforeDeny.payload.outcome === 'refused' ? undefined : str(beforeDeny.payload.middleware);
     return {
       outcome: 'refused',
       ruleEvent: beforeDeny,
@@ -418,7 +421,8 @@ function outcomeOf(
   if (ran === 'not-run') return { outcome: 'not-executed' };
   if (end.payload.error === true) return { outcome: ran === 'ran' ? 'failed' : 'ended-in-error' };
   if (ran === 'not-recorded') return { outcome: 'unknown' };
-  const by = str(afterDeny?.payload.middleware);
+  const by =
+    afterDeny?.payload.outcome === 'refused' ? 'library' : str(afterDeny?.payload.middleware);
   return afterDeny !== undefined
     ? { outcome: 'ran', ruleEvent: afterDeny, ...(by !== undefined && { withheldBy: by }) }
     : { outcome: 'ran' };

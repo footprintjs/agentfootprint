@@ -19,7 +19,10 @@ import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
-import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
+import type {
+  ResumedInvocation,
+  ResumedPolicyHalt,
+} from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
 import type { ToolArtifactsOperations } from '../contracts/operations/artifacts.js';
 import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
@@ -32,7 +35,6 @@ import type { ToolObservationsOperations } from '../contracts/operations/observa
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import { haltResumedCall } from '../routing/policyHalt.js';
-import type { InnerCallHalt } from '../../../innerCallOuter.js';
 
 interface ResumeCheckInLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -123,7 +125,7 @@ export function buildResumeCheckIn(
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
-    let innerHalt: InnerCallHalt | undefined;
+    let resumedHalt: ResumedPolicyHalt | undefined;
     /** What the approved call's `execute` saw — its script row reads it. */
     const scriptSeen: ResumedCallFacts = {};
     try {
@@ -146,7 +148,7 @@ export function buildResumeCheckIn(
           'checkIn',
           scriptSeen,
         );
-        innerHalt = dispatched.halt;
+        resumedHalt = dispatched.halt;
         negativeResultId = dispatched.negativeResultId;
         result = dispatched.result;
         error = dispatched.error;
@@ -217,7 +219,8 @@ export function buildResumeCheckIn(
       }
       scriptSeen.resultFinalizer?.assertFinalized();
       const sourceHalt = sourceEvidenceHaltOf(scope);
-      if (sourceHalt && innerHalt === undefined) scope.$break(`policy-halt: ${sourceHalt.reason}`);
+      if (sourceHalt && resumedHalt === undefined)
+        scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let decisionResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
       const decisionToolChars = decisionResultStr.length;
@@ -334,13 +337,14 @@ export function buildResumeCheckIn(
       scope.pausedCheckInArgs = undefined;
       // The request was answered — and spent — by this resume.
       scope.pausedRequest = undefined;
+      scope.pausedGatePolicy = undefined;
       // Cleared ONLY when it was set — see the ask path's twin note.
       if (answeredVia !== undefined) scope.pausedComponentId = undefined;
       // The served party the checkpoint carried is consumed with it (9.92.0);
       // written back only when it was there, so an older checkpoint's resume
       // commits exactly what it always did.
       if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
-      if (innerHalt !== undefined) haltResumedCall(scope, innerHalt, iteration);
+      if (resumedHalt !== undefined) haltResumedCall(scope, resumedHalt, iteration);
       return;
     } catch (error) {
       scriptSeen.resultFinalizer?.withheld();

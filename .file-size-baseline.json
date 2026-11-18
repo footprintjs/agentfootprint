@@ -57,7 +57,7 @@
     "src/core/agent/types.ts": 1260,
     "src/core/checkin.ts": 686,
     "src/core/codeRunnerTool.ts": 959,
-    "src/core/consentRequest.ts": 1026,
+    "src/core/consentRequest.ts": 1024,
     "src/core/RunnerBase.ts": 1162,
     "src/core/runCheckpoint.ts": 817,
     "src/core/slots/buildToolsSlot.ts": 1173,

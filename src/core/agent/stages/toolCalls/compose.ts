@@ -228,6 +228,9 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
   const { afterMoment } = buildToolMiddlewareOperations(deps);
   const { resolveCredentialAndExecute } = buildResumedInvocation(deps, {
     dispatchRoster,
+    unmountedRules,
+    parkedNow,
+    historyForCheckIn,
     argumentRefusal,
     noteOffWire,
     resolveWantsAtDispatch,
@@ -253,8 +256,6 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
   const { resumeAsk } = buildResumeAsk(deps, {
     decisionLedger,
     resolveTool,
-    unmountedRules,
-    historyForCheckIn,
     resolveCredentialAndExecute,
     frameworkSkipStepAnswered,
     applySkipStep,

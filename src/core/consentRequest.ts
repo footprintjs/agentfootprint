@@ -120,13 +120,10 @@ export interface GatedCall {
   readonly middleware?: unknown;
   /** `'ask'` only — the asking link's index; the chain resumes after it. */
   readonly askIndex?: unknown;
-  /**
-   * `'ask'` only — the names of the asking link and of every link after it,
-   * in chain order: the rules the call still passes once the person answers.
-   * A position alone would let a redeploy that removed or moved a later rule
-   * resume past it; the names make that a refusal (`'chain-changed'`).
-   */
+  /** `'ask'` only — names of the asking link and its suffix in chain order. */
   readonly chain?: unknown;
+  /** The original gate configuration and any exact question fingerprint. */
+  readonly policy?: unknown;
 }
 
 /** A consent gate's request as the paused run's state carries it (`AgentState.pausedRequest`). */
@@ -545,22 +542,23 @@ export function mintConsentRequest(
  * about what the request was bound to.
  */
 export function gatedCallOf(read: (key: string) => unknown, gate: ConsentGateKind): GatedCall {
+  const subject = {
+    gate,
+    tool: read('pausedToolName'),
+    toolCallId: read('pausedToolCallId'),
+    party: read('pausedToolParty'),
+    policy: read('pausedGatePolicy'),
+  };
   return gate === 'ask'
     ? {
-        gate,
-        tool: read('pausedToolName'),
-        toolCallId: read('pausedToolCallId'),
-        party: read('pausedToolParty'),
+        ...subject,
         args: read('pausedAskArgs'),
         middleware: read('pausedAskMiddleware'),
         askIndex: read('pausedAskIndex'),
         chain: read('pausedAskChain'),
       }
     : {
-        gate,
-        tool: read('pausedToolName'),
-        toolCallId: read('pausedToolCallId'),
-        party: read('pausedToolParty'),
+        ...subject,
         args: read('pausedCheckInArgs'),
         hiddenArgs: hiddenArgsOn(read('pausedRequest')),
       };

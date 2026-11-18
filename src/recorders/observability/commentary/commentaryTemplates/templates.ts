@@ -22,6 +22,7 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'skill.rejected': 'The requested skill was refused.',
   ...dispositionTemplates,
   'event.unknown': 'An additional event was recorded.',
+  'middleware.decision.refused': 'The library refused an unrecognised middleware answer.',
   'agent.turn_start': 'User asked {{appName}}: "{{userPrompt}}".',
 
   // `{{agentName}}` resolves to the active agent's display name when

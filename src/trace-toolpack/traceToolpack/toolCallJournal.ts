@@ -377,7 +377,7 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       const settled = typeof marker === 'object' ? marker : undefined;
 
       const { end, rows, declined, checkIn, invalid, unboundRows } = facts;
-      const denial = rows.find((row) => row.outcome === 'deny');
+      const denial = rows.find((row) => row.outcome === 'deny' || row.outcome === 'refused');
       const bracketEntry =
         settled !== undefined
           ? 'not-run'
@@ -386,7 +386,11 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
           : toolRanOf(end.payload);
       const ran =
         bracketEntry === 'not-recorded' &&
-        (declined || rows.some((row) => row.outcome === 'deny' && row.moment === 'before-tool'))
+        (declined ||
+          rows.some(
+            (row) =>
+              row.moment === 'before-tool' && (row.outcome === 'deny' || row.outcome === 'refused'),
+          ))
           ? 'not-run'
           : bracketEntry;
 
@@ -446,6 +450,8 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
           `not dispatched — the run paused on call '${settled.pausedCall.toolCallId}' ` +
           `to '${settled.pausedCall.toolName}', earlier in the same batch, and resumed ` +
           `without executing call '${toolCallId}'`;
+      } else if (denial?.outcome === 'refused') {
+        outcome = 'the library refused an unrecognised middleware answer';
       } else if (denial) {
         outcome = `denied by '${denial.middleware ?? '?'}'${denial.why ? `: "${denial.why}"` : ''}`;
       } else if (end?.payload.error === true) {

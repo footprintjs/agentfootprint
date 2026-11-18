@@ -19,7 +19,7 @@ those are different facts about a run.
 
 > `readonly` `optional` **after?**: `unknown`
 
-Defined in: [src/core/agent/middleware/types.ts:373](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L373)
+Defined in: [src/core/agent/middleware/types.ts:374](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L374)
 
 The value after this middleware. Present only when `changed`.
 
@@ -39,7 +39,7 @@ Which chain this row came from. The older spelling — see `moment`.
 
 > `readonly` `optional` **before?**: `unknown`
 
-Defined in: [src/core/agent/middleware/types.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L371)
+Defined in: [src/core/agent/middleware/types.ts:372](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L372)
 
 The value before this middleware. Present only when `changed`.
 
@@ -57,7 +57,7 @@ not survive in a record, name it in the agent's `redact`
 
 > `readonly` **changed**: `boolean`
 
-Defined in: [src/core/agent/middleware/types.ts:357](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L357)
+Defined in: [src/core/agent/middleware/types.ts:358](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L358)
 
 True when this row changed the value the chain carries forward.
 
@@ -72,7 +72,7 @@ carry `changed: true` with the real result in `before`.
 
 > `readonly` `optional` **changedKeys?**: readonly `string`[]
 
-Defined in: [src/core/agent/middleware/types.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L392)
+Defined in: [src/core/agent/middleware/types.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L393)
 
 The NAMES of the arguments this before-tool rewrite changed (honesty
 layer 2) — filed only on an agent whose inputs layer is armed, for a call
@@ -86,7 +86,7 @@ rewrite of a RULED argument with no declared origin as assumed.
 
 > `readonly` `optional` **componentId?**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:379](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L379)
+Defined in: [src/core/agent/middleware/types.ts:380](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L380)
 
 The registered component that COLLECTED this decision (9.24.0). Present
 only on the resume-side rows of an `ask` that carried one — the trace
@@ -98,7 +98,7 @@ then says which surface the person answered through. Never inferred.
 
 > `readonly` `optional` **from?**: `Readonly`\<`Record`\<`string`, `"person"` \| `"default"` \| `"app"`\>\>
 
-Defined in: [src/core/agent/middleware/types.ts:384](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L384)
+Defined in: [src/core/agent/middleware/types.ts:385](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L385)
 
 The middleware's own declaration of where the rewritten values came from
 (`allow(args, why, { from })`) — present only when it declared one.
@@ -143,19 +143,21 @@ the newer word for the same fact, and the one to narrow on.
 
 ### outcome
 
-> `readonly` **outcome**: `"allow"` \| `"deny"` \| `"ask"`
+> `readonly` **outcome**: `"refused"` \| `"allow"` \| `"deny"` \| `"ask"`
 
-Defined in: [src/core/agent/middleware/types.ts:348](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L348)
+Defined in: [src/core/agent/middleware/types.ts:349](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L349)
+
+`refused` is the library's decision on an unrecognised middleware answer.
 
 ***
 
 ### phase?
 
-> `readonly` `optional` **phase?**: `"input"` \| `"output"`
+> `readonly` `optional` **phase?**: `"input"` \| `"output"` \| `"resume"`
 
 Defined in: [src/core/agent/middleware/types.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L341)
 
-Message chain only. The older spelling — see `moment`.
+Message boundary phase, or `resume` when a tool gate is asked again.
 
 ***
 
@@ -183,6 +185,6 @@ Tool chain only.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/core/agent/middleware/types.ts:359](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L359)
+Defined in: [src/core/agent/middleware/types.ts:360](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L360)
 
-The transform's `why`, the denial's `reason`, or the ask's `question`.
+The transform's `why`, the denial's `reason`, the ask's `question`, or the library's refusal.

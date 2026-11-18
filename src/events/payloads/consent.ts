@@ -73,7 +73,7 @@ export interface CheckInDecisionPayload {
 
 // ─── middleware (the governance chains) ───────────────────────────────
 /**
- * One link of a `toolMiddleware` / `messageMiddleware` chain answered.
+ * One link of a `toolMiddleware` / `messageMiddleware` chain was asked.
  *
  * Its own domain rather than a `permission.check` with a different label:
  * a middleware decision is not a permission check, and reporting it as one
@@ -91,14 +91,16 @@ export interface MiddlewareDecisionPayload {
   readonly moment: LoopMoment;
   /** The 7.18 spelling of the same fact. Narrow on `moment`. */
   readonly at: 'tool' | 'message';
-  readonly phase?: 'input' | 'output';
+  /** Message boundary phase, or `resume` when a tool gate is asked again. */
+  readonly phase?: 'input' | 'output' | 'resume';
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly iteration: number;
-  readonly outcome: 'allow' | 'deny' | 'ask';
+  /** `refused` is written by the library for an unrecognised answer. */
+  readonly outcome: 'allow' | 'deny' | 'ask' | 'refused';
   /** True when this link changed the value the chain carries forward. */
   readonly changed: boolean;
-  /** The transform's `why`, the denial's `reason`, or the ask's `question`. */
+  /** The transform's `why`, the denial's `reason`, the ask's `question`, or the library's refusal. */
   readonly why?: string;
   /** The registered component that COLLECTED this decision (9.24.0). Present
    *  only on the resume-side rows of an `ask` that carried one. */

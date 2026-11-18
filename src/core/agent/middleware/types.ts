@@ -337,15 +337,16 @@ export interface MiddlewareDecision {
   readonly moment: LoopMoment;
   /** Which chain this row came from. The older spelling — see `moment`. */
   readonly at: 'tool' | 'message';
-  /** Message chain only. The older spelling — see `moment`. */
-  readonly phase?: 'input' | 'output';
+  /** Message boundary phase, or `resume` when a tool gate is asked again. */
+  readonly phase?: 'input' | 'output' | 'resume';
   /** Tool chain only. */
   readonly toolName?: string;
   /** Tool chain only. */
   readonly toolCallId?: string;
   /** ReAct iteration. `0` for the `'input'` phase, which runs before iter 1. */
   readonly iteration: number;
-  readonly outcome: 'allow' | 'deny' | 'ask';
+  /** `refused` is the library's decision on an unrecognised middleware answer. */
+  readonly outcome: 'allow' | 'deny' | 'ask' | 'refused';
   /**
    * True when this row changed the value the chain carries forward.
    *
@@ -355,7 +356,7 @@ export interface MiddlewareDecision {
    * carry `changed: true` with the real result in `before`.
    */
   readonly changed: boolean;
-  /** The transform's `why`, the denial's `reason`, or the ask's `question`. */
+  /** The transform's `why`, the denial's `reason`, the ask's `question`, or the library's refusal. */
   readonly why?: string;
   /**
    * The value before this middleware. Present only when `changed`.

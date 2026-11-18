@@ -836,6 +836,7 @@
     "actor": "kept",
     "capability": "kept",
     "iteration": "kept",
+    "phase": "kept",
     "policyEngine": "kept",
     "policyRuleId": "kept",
     "rationale": "chars",

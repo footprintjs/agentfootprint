@@ -1,9 +1,11 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { Resolution, ResumedCallFacts } from '../callFacts.js';
-import type { ConsentGateKind } from '../../../../../pause.js';
 import type { ReadToolResultEnvelope } from '../../../../../../semantics/toolEffects.js';
 import type { InnerCallHalt } from '../../../../innerCallOuter.js';
+import type { PausedGatePolicy } from '../../../../types/state/pause.js';
+
+export type ResumedPolicyHalt = InnerCallHalt & { readonly outer?: true };
 
 /** The settled facts shared by the executing resume paths. */
 export interface ResumedCallResult {
@@ -22,13 +24,8 @@ export interface ResumedCallResult {
    *  — but it must not complete a procedure step (the model was told to
    *  call again). */
   ceilingRefused?: true;
-  /** An approved call's arguments no longer matched its request at the
-   *  last moment before `execute` (`heldTo`): the call did not run. */
-  callChanged?: true;
-  /** A checker halted one of the inner calls the tool made (`innerCallOuter.ts`):
-   *  the door lands the result, then ends the run (`routing/policyHalt.ts` ·
-   *  `haltResumedCall`). */
-  halt?: InnerCallHalt;
+  /** A checker halted this invocation or an inner call it made. */
+  halt?: ResumedPolicyHalt;
   /** The result was an envelope in every way but an unknown status word —
    *  that word, cleaned (`semantics/toolEffects.ts` · `unknownStatusOf`);
    *  read only by the procedure step. */
@@ -44,8 +41,8 @@ export interface ResumedInvocation {
     args: Readonly<Record<string, unknown>>,
     toolCallId: string,
     iteration: number,
-    env: { readonly signal?: AbortSignal },
-    heldTo?: ConsentGateKind,
+    env: ReturnType<TypedScope<AgentState>['$getEnv']>,
+    heldTo: PausedGatePolicy['gate'],
     /** Filled with the invocation facts for the call's script row. */
     seen?: ResumedCallFacts,
   ) => Promise<ResumedCallResult>;
