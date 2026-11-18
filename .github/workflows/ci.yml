@@ -113,7 +113,7 @@ jobs:
           cache: npm
 
       - name: Context package contract input and guard tests
-        run: node --test scripts/context-package-contract/*.test.mjs scripts/publish-archive/candidate.test.mjs scripts/publish-archive/publishedDependency.test.mjs
+        run: node --test scripts/context-package-contract/*.test.mjs scripts/publish-archive/candidate.test.mjs scripts/publish-archive/publishedDependency.test.mjs scripts/publish-archive/verify-staged-candidate.test.mjs
 
       - run: npm ci
       - run: npm ls foottrace
@@ -152,9 +152,9 @@ jobs:
           retention-days: 7
           overwrite: true
 
-      - name: Compare the current source pack with the admitted docs input
-        if: matrix.node-version == 24 && github.event_name == 'pull_request' && github.event.pull_request.number == 383 && github.event.pull_request.head.repo.full_name == github.repository
-        run: node scripts/docs-candidate/project.mjs --compare-pack "$RUNNER_TEMP/af-source-candidate"
+      - name: Compare the same-run source and RC-staged packs
+        if: matrix.node-version == 24
+        run: node scripts/publish-archive/verify-staged-candidate.mjs "$RUNNER_TEMP/af-source-candidate"
 
       - name: Four strict native context roots and public producer identities
         id: native_context
