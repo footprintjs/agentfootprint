@@ -181,10 +181,11 @@ validation event. Arguments that are not an object are refused with the same
 correction before any gate is asked (`innerCallArguments.ts`). Raw `Tool.execute` stays caller-governed.
 The validator remains a documented subset, not a full JSON Schema engine.
 
-When an outer tool settles, its handle closes to new admissions and waits for
-decisions already in progress while the run is live. A halt retained during that
-wait still ends the run. Retaining a halt aborts the signal of already-entered
-inner tools. Tools must honor that signal to stop their own work.
+When an outer tool returns, its handle closes to new admissions. The outer call
+waits for any checker still deciding about one of its inner calls, up to the
+run's cancellation. A halt retained during that wait still ends the run.
+Retaining a halt aborts the signal of already-entered inner tools. Tools must
+honor that signal to stop their own work.
 An inner call made while its outer stage is open leaves a row, and after that
 stage commits the caller receives refusals without a row.
 

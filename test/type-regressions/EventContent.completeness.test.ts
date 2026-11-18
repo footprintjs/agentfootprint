@@ -583,6 +583,7 @@ const CANARY_PAYLOAD: {
     actor: 'agent',
     target: 'refund_order',
     result: 'deny',
+    phase: 'resume',
     policyEngine: 'custom',
     policyRuleId: 'refund-limit',
     rationale: leaf(c, 'rationale'),

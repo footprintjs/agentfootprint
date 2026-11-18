@@ -1,3 +1,13 @@
+/** The policy present when a tool was stopped before entry. */
+export interface PausedGatePolicy {
+  readonly toolCallId: string;
+  readonly iteration: number;
+  readonly gate: 'ask' | 'checkIn' | 'credential';
+  readonly permission: boolean;
+  readonly middleware: readonly string[];
+  readonly question?: string;
+}
+
 export interface PauseState {
   // Pause checkpoint — set when a tool calls `pauseHere()`, consumed on resume.
   pausedToolCallId: string;
@@ -50,6 +60,8 @@ export interface PauseState {
    * vocabulary: the nonce lets whoever holds it confirm a guess of them.
    */
   pausedRequest?: import('../../../consentRequest.js').PendingRequest;
+  /** The executing resume's original gate configuration, stored atomically. */
+  pausedGatePolicy?: readonly [PausedGatePolicy];
   // Which REGISTERED screen component the outstanding ask nominated to collect
   // its decision (9.24.0) — the `componentId` of the check-in's / middleware
   // ask's `AskComponent`, written at pause time ONLY when one exists and read
@@ -62,8 +74,7 @@ export interface PauseState {
   // discriminated the same way: `pausedAsk` tells resume which kind of question
   // is outstanding. `pausedAskArgs` carries the args AS TRANSFORMED SO FAR (the
   // human approved those, not the model's originals) and `pausedAskIndex` says
-  // which link asked, so resume continues the chain from the NEXT one instead
-  // of re-running decisions the checkpoint already recorded. All survive
+  // which link asked, so its decision can be held to that question. All survive
   // structuredClone. Absent for every other pause.
   pausedAsk?: boolean;
   pausedAskArgs?: Readonly<Record<string, unknown>>;

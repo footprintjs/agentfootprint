@@ -83,8 +83,9 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence | Sentence[] {
       break;
   }
   if (call.fact.withheldBy !== undefined && call.ruleEvent !== undefined) {
+    const who = call.ruleEvent.payload.outcome === 'refused' ? 'outcome' : 'middleware';
     return ctx.say('found.withheld', {
-      vars: { tool, by: v(call.fact.withheldBy, 'library', at(call.ruleEvent, 'middleware')) },
+      vars: { tool, by: v(call.fact.withheldBy, 'library', at(call.ruleEvent, who)) },
       pointers: [at(call.ruleEvent, 'moment'), at(call.ruleEvent, 'outcome')],
     });
   }

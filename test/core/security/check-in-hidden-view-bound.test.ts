@@ -134,12 +134,11 @@ describe('the names are bound when the request is made', () => {
 });
 
 describe('a pause stored before the list existed: the record does not say (review X)', () => {
-  it("records 'not-recorded', not a list worked out from the tool, and the call runs", async () => {
+  it("records 'not-recorded' when only the hidden-name list is absent", async () => {
     const { checkpoint } = await pausedOn(HIDES_TO);
     const state = checkpoint.sharedState;
     const pending = state.pausedRequest as { id: string; nonce: string; hiddenArgs?: unknown };
-    // Rewrite the request the way an earlier build minted it: no list, and an
-    // id computed without one (`consentRequestId.ts`).
+    // Preserve the gate provenance. This fixture varies the hidden-name list.
     delete pending.hiddenArgs;
     const body = {
       gate: 'checkIn',
@@ -147,6 +146,7 @@ describe('a pause stored before the list existed: the record does not say (revie
       toolCallId: state.pausedToolCallId,
       party: state.pausedToolParty,
       args: state.pausedCheckInArgs,
+      policy: state.pausedGatePolicy,
     };
     pending.id = sha256Hex(
       `agentfootprint/consent-request/v1\u001f${pending.nonce}\u001f${canonicalJson(body)}`,

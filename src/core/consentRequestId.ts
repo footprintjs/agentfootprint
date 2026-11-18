@@ -31,6 +31,7 @@ export function requestIdOf(nonce: string, call: GatedCall): string | undefined 
     middleware: call.middleware,
     askIndex: call.askIndex,
     chain: call.chain,
+    policy: call.policy,
   };
   if (!isJsonFaithful(body)) return undefined;
   return sha256Hex(`${DOMAIN}\u001f${nonce}\u001f${canonicalJson(body)}`);

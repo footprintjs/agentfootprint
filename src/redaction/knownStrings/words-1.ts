@@ -229,6 +229,7 @@ export const words1 = {
   'result-period': true,
   'result-shape': true,
   'result-withheld': true,
+  resume: true,
   retained: true,
   retry: true,
   'retry-other': true,
@@ -299,5 +300,4 @@ export const words1 = {
   text: true,
   thinking: true,
   'thinking-retired': true,
-  throttle: true,
 } as const;

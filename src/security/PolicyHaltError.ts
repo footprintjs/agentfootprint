@@ -56,7 +56,7 @@ export interface PolicyHaltContext {
   readonly iteration: number;
   /** Conversation history at halt time, including the synthetic tool_result (an inner call's halt: the outer call's result). */
   readonly history: readonly LLMMessage[];
-  /** The proposed tool call that triggered the halt (not executed) — the model's, or a tool's inner call. */
+  /** The proposed call that triggered the halt. For an inner call, `args` is the shown argument view. */
   readonly proposed: { readonly name: string; readonly args: unknown };
   /** Identifier of the PermissionChecker that returned `'halt'`. */
   readonly checkerId?: string;
@@ -69,6 +69,7 @@ export class PolicyHaltError extends Error {
   readonly sequence: readonly ToolCallEntry[];
   readonly iteration: number;
   readonly history: readonly LLMMessage[];
+  /** The proposed call that triggered the halt. For an inner call, `args` is the shown argument view. */
   readonly proposed: { readonly name: string; readonly args: unknown };
   readonly checkerId?: string;
 

@@ -136,6 +136,9 @@ function routedCommentaryKey(event: AgentfootprintEvent): string | null | undefi
     case 'agentfootprint.tools.result_refused':
       return 'tools.result_refused';
 
+    case 'agentfootprint.middleware.decision':
+      return event.payload.outcome === 'refused' ? 'middleware.decision.refused' : undefined;
+
     case 'agentfootprint.tools.repeated_call':
       // Same event, two truths it can tell (9.62.0): the default match
       // compared the result too, so the sentence can say "gave back the

@@ -26,6 +26,9 @@
  * governance layer whose failure mode is "allow" is not a governance
  * layer.
  *
+ * **The library refuses an unrecognised answer.** That stops the chain and
+ * files a library refusal, distinct from a middleware's own deny.
+ *
  * **A middleware that malfunctions is a denial too** (8.18.0). Two ways to
  * malfunction at the message boundary: answer `ask` where no pause exists to
  * carry it, or `allow` a value that is not text. Both used to fall through to
@@ -47,26 +50,72 @@
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type {
+  AllowOutcome,
+  AskOutcome,
   AskPayload,
+  DenyOutcome,
   MessageMiddleware,
-  MessageOutcome,
   MiddlewareDecision,
   ToolMiddleware,
-  ToolOutcome,
-  ToolResultOutcome,
 } from '../core/agent/middleware/types.js';
 
 /** Tool args, as they travel the chain. */
 export type ToolArgs = Readonly<Record<string, unknown>>;
+
+type ReadOutcome<T> = AllowOutcome<T> | DenyOutcome | AskOutcome | { kind: 'unrecognised' };
+
+const unrecognisedOutcome = { kind: 'unrecognised' } as const;
+const unrecognisedReason = 'The library refused an unrecognised middleware answer.';
+
+/** Read the returned tag once and copy only what the chain can use. */
+function readOutcome<T>(value: unknown): ReadOutcome<T> {
+  try {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      return unrecognisedOutcome;
+    const answer = value as Partial<AllowOutcome<T> & { reason: unknown; payload: unknown }>;
+    const kind: unknown = answer.kind;
+    if (kind === 'allow') {
+      const { value: replacement, why } = answer;
+      if (why !== undefined && typeof why !== 'string') return unrecognisedOutcome;
+      return {
+        kind,
+        value: replacement,
+        why,
+        from: replacement === undefined ? undefined : answer.from,
+      };
+    }
+    if (kind === 'deny') {
+      const reason = answer.reason;
+      return typeof reason === 'string' ? { kind, reason } : unrecognisedOutcome;
+    }
+    if (kind === 'ask') {
+      const payload = answer.payload;
+      if (typeof payload !== 'object' || payload === null || Array.isArray(payload))
+        return unrecognisedOutcome;
+      const { question, detail, component } = payload as Partial<AskPayload>;
+      if (typeof question !== 'string') return unrecognisedOutcome;
+      return {
+        kind,
+        payload: {
+          question,
+          ...(detail !== undefined && { detail }),
+          ...(component !== undefined && { component }),
+        },
+      };
+    }
+  } catch {
+    // A returned value whose fields cannot be read did not give a verdict.
+  }
+  return unrecognisedOutcome;
+}
 
 /**
  * What to do when a middleware answers `ask` somewhere that cannot pause.
  *
  * `'pause'` — the caller will checkpoint (the normal dispatch path).
  * `'refuse'` — the ask is converted into a deny naming the middleware. Used
- * on the resume path (footprintjs's `PausableHandler.resume` returns void,
- * so a resumed dispatch cannot suspend a second time) and by `mcpServe`
- * (MCP is request/response — there is no pause to carry the ask).
+ * for callers that cannot carry a question. Resume admission reads an ask
+ * before deciding whether the existing answer covers it.
  */
 export type AskPolicy = 'pause' | 'refuse';
 
@@ -107,9 +156,8 @@ export interface ToolChainInput {
   readonly identity?: MemoryIdentity;
   readonly signal?: AbortSignal;
   /**
-   * Where to start walking. `0` for a fresh dispatch; `n` on resume, to
-   * continue the chain AFTER the link that asked without re-running the
-   * links whose decisions the checkpoint already carries.
+   * Where to start walking. Resume admission first walks from zero, then
+   * continues after a question covered by the bound approval.
    */
   readonly startIndex?: number;
   readonly askPolicy?: AskPolicy;
@@ -141,9 +189,9 @@ export async function runToolChain(
       ...extra,
     });
 
-    let outcome: ToolOutcome;
+    let answer: unknown;
     try {
-      outcome = await mw.onToolCall({
+      answer = await mw.onToolCall({
         toolName: input.toolName,
         // Present only when the tool HAS a source. An `undefined` key is not
         // the same fact as an absent one to a middleware that spells its rule
@@ -164,9 +212,11 @@ export async function runToolChain(
       return { kind: 'deny', reason, middleware: mw.name, args, decisions };
     }
 
-    if (outcome.kind === 'deny') {
-      decisions.push(row({ outcome: 'deny', why: outcome.reason }));
-      return { kind: 'deny', reason: outcome.reason, middleware: mw.name, args, decisions };
+    const outcome = readOutcome<ToolArgs>(answer);
+    if (outcome.kind === 'deny' || outcome.kind === 'unrecognised') {
+      const reason = outcome.kind === 'deny' ? outcome.reason : unrecognisedReason;
+      decisions.push(row({ outcome: outcome.kind === 'deny' ? 'deny' : 'refused', why: reason }));
+      return { kind: 'deny', reason, middleware: mw.name, args, decisions };
     }
 
     if (outcome.kind === 'ask') {
@@ -275,9 +325,9 @@ export async function runToolAfterChain(
       ...extra,
     });
 
-    let outcome: ToolResultOutcome;
+    let answer: unknown;
     try {
-      outcome = await hook.call(mw, {
+      answer = await hook.call(mw, {
         toolName: input.toolName,
         ...(input.toolSource !== undefined && { toolSource: input.toolSource }),
         toolCallId: input.toolCallId,
@@ -299,20 +349,22 @@ export async function runToolAfterChain(
       return { kind: 'deny', reason, middleware: mw.name, result: real, decisions };
     }
 
-    if (outcome.kind === 'deny') {
+    const outcome = readOutcome<unknown>(answer);
+    if (outcome.kind !== 'allow') {
+      const reason = outcome.kind === 'deny' ? outcome.reason : unrecognisedReason;
       // `changed: true` on purpose: unlike a refusal before dispatch, this one
       // DOES replace something. The real result rides `before` — often the
       // only copy of it in the run.
       decisions.push(
         row({
-          outcome: 'deny',
+          outcome: outcome.kind === 'deny' ? 'deny' : 'refused',
           changed: true,
-          why: outcome.reason,
+          why: reason,
           before: result,
-          after: outcome.reason,
+          after: reason,
         }),
       );
-      return { kind: 'deny', reason: outcome.reason, middleware: mw.name, result: real, decisions };
+      return { kind: 'deny', reason, middleware: mw.name, result: real, decisions };
     }
 
     if (outcome.value !== undefined) {
@@ -372,9 +424,9 @@ export async function runMessageChain(
       ...extra,
     });
 
-    let outcome: MessageOutcome;
+    let answer: unknown;
     try {
-      outcome = await mw.onMessage({
+      answer = await mw.onMessage({
         phase: input.phase,
         content,
         history: input.history,
@@ -389,9 +441,11 @@ export async function runMessageChain(
       return { kind: 'deny', reason, middleware: mw.name, content, decisions };
     }
 
-    if (outcome.kind === 'deny') {
-      decisions.push(row({ outcome: 'deny', why: outcome.reason }));
-      return { kind: 'deny', reason: outcome.reason, middleware: mw.name, content, decisions };
+    const outcome = readOutcome<unknown>(answer);
+    if (outcome.kind === 'deny' || outcome.kind === 'unrecognised') {
+      const reason = outcome.kind === 'deny' ? outcome.reason : unrecognisedReason;
+      decisions.push(row({ outcome: outcome.kind === 'deny' ? 'deny' : 'refused', why: reason }));
+      return { kind: 'deny', reason, middleware: mw.name, content, decisions };
     }
 
     // `ask` at a message boundary (8.18.0). `MessageOutcome` has no ask arm, so
@@ -403,9 +457,8 @@ export async function runMessageChain(
     // boundary is a plain stage with no pause to carry an ask, so the honest
     // answer is the one `askPolicy: 'refuse'` already gives the tool chain: a
     // denial, naming the middleware.
-    if ((outcome as { kind?: string }).kind === 'ask') {
-      const question = (outcome as unknown as { payload?: { question?: string } }).payload
-        ?.question;
+    if (outcome.kind === 'ask') {
+      const { question } = outcome.payload;
       const reason =
         `middleware '${mw.name}' asked a person to decide about the ${input.phase} message, ` +
         `and there is no pause at the message boundary to carry that ask` +
@@ -423,10 +476,7 @@ export async function runMessageChain(
       // became `content: undefined`/an object on the wire, surfacing as
       // `s.slice is not a function` at the input phase and as an unattributed
       // "unexpected result shape" at the output phase.
-      // Cast through `unknown`: the TYPE says `string`, which is exactly why
-      // the check is here — the values that get this far are the ones the type
-      // could not stop.
-      if (typeof (outcome.value as unknown) !== 'string') {
+      if (typeof outcome.value !== 'string') {
         const reason =
           `middleware '${mw.name}' returned allow(${describeValue(outcome.value)}) at the ` +
           `${input.phase} message boundary, and a message is text. Return allow(someString, why) ` +

@@ -35,13 +35,16 @@ interface FactOrigin {
 /** Observed metadata, not an authorization, execution, coverage or redaction guarantee. */
 export type TrustBoundaryFact = FactOrigin &
   (
-    | ({ readonly eventType: 'agentfootprint.middleware.decision' } & Pick<
+    | ({
+        readonly eventType: 'agentfootprint.middleware.decision';
+        readonly phase?: 'resume';
+      } & Pick<
         MiddlewareDecisionPayload,
         'middleware' | 'moment' | 'outcome' | 'changed' | 'iteration'
       >)
     | ({ readonly eventType: 'agentfootprint.permission.check' } & Pick<
         PermissionCheckPayload,
-        'capability' | 'result' | 'target' | 'policyRuleId'
+        'capability' | 'result' | 'target' | 'policyRuleId' | 'phase'
       >)
     | ({ readonly eventType: 'agentfootprint.permission.halt' } & Pick<
         PermissionHaltPayload,

@@ -29,6 +29,7 @@ export type ToolSecurityEmitter = <K extends ToolSecurityEvent>(
 export function bindToolSecurityEvents(
   scope: EmitableScope,
   call: ToolCallEventIdentity,
+  phase?: 'resume',
 ): ToolSecurityEmitter {
   const { toolCallId, iteration } = call;
   return (type, payload): void => {
@@ -38,6 +39,7 @@ export function bindToolSecurityEvents(
       ...payload,
       toolCallId,
       iteration,
+      ...(type === 'agentfootprint.permission.check' && phase !== undefined && { phase }),
     } as AgentfootprintEventMap[typeof type]['payload']);
   };
 }
