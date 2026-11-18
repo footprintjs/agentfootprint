@@ -135,3 +135,5 @@ correctly. See `core/agent/arguments/README.md`, "The batch ask".
 Per layer, from the record alone: how often the layer ran on a batch that dispatched (the
 mount's commits), how many verdicts it filed (the rows), and — with `honestyLayers` — the
 share of armed runs on which it filed nothing. The layers' own pages carry their metrics.
+
+`timeInputs.ts` reads the current turn’s clock, readings and answers for the inputs mount.

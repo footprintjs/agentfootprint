@@ -71,6 +71,7 @@ import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../lib/conventions.js';
 import { sourceInputsOf } from './sourceInputs.js';
+import { timeInputsOf } from './timeInputs.js';
 import type { SourceCorpus } from '../arguments/checks.js';
 import {
   isRefused,
@@ -82,18 +83,11 @@ import {
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
-import type {
-  InputsLayerDeps,
-  InputsLayerState,
-  SourceInputs,
-  TimeInputs,
-} from '../arguments/subflow.js';
+import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
 import {
-  answersOf,
   callRowOfCall,
   callWindowOfCall,
   clockOf,
-  readingsOf,
   type CallWindowRow,
 } from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
@@ -116,22 +110,6 @@ import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
 import type { InputsMountDeps } from './inputsMountContract.js';
 export type { InputsMountDeps } from './inputsMountContract.js';
-
-/**
- * This turn's clock and readings, off the parent's ledger — `undefined` when
- * the turn has no clock (a turn paused by a runtime without the layer).
- */
-function timeInputsOf(parent: Record<string, unknown>): TimeInputs | undefined {
-  const ledger = parent.findingsLedger as readonly unknown[] | undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  const turn = parent.turnNumber as number;
-  return {
-    clock,
-    readings: [...readingsOf(ledger, turn)],
-    answers: [...answersOf(ledger, turn)],
-  };
-}
 
 type StageModule = typeof import('../arguments/subflow.js');
 type CorpusModule = typeof import('./sourceCorpus.js');
