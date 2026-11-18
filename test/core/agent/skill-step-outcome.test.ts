@@ -240,6 +240,62 @@ describe('the batch loop: a declared failure holds the step', () => {
     expect(toolMessage(agent, 't3')).toBe('charged Step 2 of 2 done. All 2 steps complete.');
   });
 
+  it('reports the last step without claiming that a prior tool declared success', async () => {
+    const { agent, advanced } = build(
+      [
+        call('read_skill', 't1', { id: 'refund' }),
+        call('lookup', 't2'),
+        call('charge', 't3'),
+        final('finished'),
+      ],
+      { skill: refund(plainTool('lookup'), statusTool('charge', envelope('success', 'charged'))) },
+    );
+    await agent.run({ message: 'refund' });
+
+    expect(advanced.map((event) => event.outcome)).toEqual(['not-reported', 'succeeded']);
+    expect(toolMessage(agent, 't3')).toBe(
+      'charged Step 2 of 2 done. It was the last step. ' +
+        '1 of 2 steps ran without a recognized declared status.',
+    );
+  });
+
+  it('reports an earlier skip when the last step succeeds', async () => {
+    const { agent, advanced } = build(
+      [
+        call('read_skill', 't1', { id: 'refund' }),
+        call('skip_step', 't2', { reason: 'sample already on file' }),
+        call('charge', 't3'),
+        final('finished'),
+      ],
+      { skill: refund(plainTool('lookup'), statusTool('charge', envelope('success', 'charged'))) },
+    );
+    await agent.run({ message: 'refund' });
+
+    expect(advanced.map((event) => event.outcome)).toEqual(['succeeded']);
+    expect(toolMessage(agent, 't3')).toBe(
+      'charged Step 2 of 2 done. It was the last step. The procedure skipped 1 of 2 steps.',
+    );
+  });
+
+  it('reports both a status the library does not recognize and a skip at the last step', async () => {
+    const { agent, advanced } = build(
+      [
+        call('read_skill', 't1', { id: 'refund' }),
+        call('lookup', 't2'),
+        call('skip_step', 't3', { reason: 'sample already on file' }),
+        final('finished'),
+      ],
+      { skill: refund(statusTool('lookup', envelope('queued', 'sample'))) },
+    );
+    await agent.run({ message: 'refund' });
+
+    expect(advanced[0]).toMatchObject({ outcome: 'not-reported', unknownStatus: 'queued' });
+    expect(toolMessage(agent, 't3')).toBe(
+      'Step 2 skipped: sample already on file. It was the last step. ' +
+        '1 of 2 steps ran without a recognized declared status. The procedure skipped 1 of 2 steps.',
+    );
+  });
+
   it("'absent' (nothing found, declared) is a finished look: it advances as 'succeeded', and the event names 'absent'", async () => {
     const { agent, advanced, held } = build(
       [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
@@ -289,7 +345,8 @@ describe('the batch loop: a declared failure holds the step', () => {
         'refund the charge (tool: `charge`).',
     );
     expect(toolMessage(agent, 't3')).toBe(
-      'charge ran Step 2 of 2 ran; its tool declared no status. It was the last step.',
+      'charge ran Step 2 of 2 ran; its tool declared no status. It was the last step. ' +
+        '2 of 2 steps ran without a recognized declared status.',
     );
     expect(pointer(agent)).toMatchObject({ step: 3, total: 2 });
   });
@@ -484,6 +541,41 @@ describe('a step whose tool keeps failing ends with the turn', () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('every resume door asks the same rule', () => {
+  it.each([
+    ['unreported', 'It was the last step. 1 of 2 steps ran without a recognized declared status.'],
+    ['successful', 'All 2 steps complete.'],
+    ['older checkpoint', 'It was the last step. The record gives no outcome for 1 of 2 steps.'],
+  ] as const)(
+    'keeps the correct completion evidence across a pause (%s)',
+    async (prior, ending) => {
+      const lookup =
+        prior === 'unreported' ? plainTool('lookup') : statusTool('lookup', envelope('success'));
+      const charge = statusTool('charge', envelope('success', 'charged'), { checkIn: 'always' });
+      const { agent } = build(
+        [
+          call('read_skill', 't1', { id: 'refund' }),
+          call('lookup', 't2'),
+          call('charge', 't3'),
+          final('finished'),
+        ],
+        { skill: refund(lookup, charge) },
+      );
+      const paused = await agent.run({ message: 'refund' });
+      if (!isPaused(paused)) throw new Error('expected a check-in before the last tool ran');
+      const checkpoint = structuredClone(paused.checkpoint);
+      if (prior === 'older checkpoint') {
+        // Reproduce the shape stored by a version that did not record advance outcomes.
+        const shared = checkpoint.sharedState as { stepPointer: [{ advanceOutcomes?: unknown }] };
+        delete shared.stepPointer[0].advanceOutcomes;
+      }
+      await agent.resume(
+        checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'ops' }),
+      );
+      expect(toolMessage(agent, 't3')).toBe(`charged Step 2 of 2 done. ${ending}`);
+    },
+  );
+
   it("plain door (askHuman): the person's answer declares no status — advances as 'not-reported'", async () => {
     const { askHuman } = await import('../../../src/core/pause.js');
     const lookup = defineTool<Record<string, never>, string>({

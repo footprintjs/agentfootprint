@@ -182,7 +182,13 @@ describe('functional: foldStepPlans + rekeyStepPointer', () => {
 
 describe('functional: the grammar', () => {
   const plan = foldStepPlans([procedureSkill()]).get('refund')!;
-  const at = (step: number): StepPointer => ({ skillId: 'refund', step, total: 3, skipped: [] });
+  const at = (step: number, advanceOutcomes?: StepPointer['advanceOutcomes']): StepPointer => ({
+    skillId: 'refund',
+    step,
+    total: 3,
+    skipped: [],
+    ...(advanceOutcomes && { advanceOutcomes }),
+  });
 
   it('the banner leads with position and the note', () => {
     expect(stepBannerPrefix(at(2), plan.steps[1]!)).toBe('[Step 2 of 3 — refund the charge] ');
@@ -192,22 +198,29 @@ describe('functional: the grammar', () => {
     expect(stepAdvanceSuffix(at(2), plan, { outcome: 'succeeded' })).toBe(
       ' Step 1 of 3 done. Now on step 2 of 3: refund the charge (tool: `charge`).',
     );
-    expect(stepAdvanceSuffix(at(4), plan, { outcome: 'succeeded' })).toBe(
-      ' Step 3 of 3 done. All 3 steps complete.',
-    );
+    expect(
+      stepAdvanceSuffix(at(4, { succeeded: 3, notReported: 0 }), plan, { outcome: 'succeeded' }),
+    ).toBe(' Step 3 of 3 done. All 3 steps complete.');
     expect(stepAdvanceSuffix(at(2), plan, { outcome: 'not-reported' })).toBe(
       ' Step 1 of 3 ran; its tool declared no status. Now on step 2 of 3: refund the charge ' +
         '(tool: `charge`).',
     );
-    expect(stepAdvanceSuffix(at(4), plan, { outcome: 'not-reported' })).toBe(
-      ' Step 3 of 3 ran; its tool declared no status. It was the last step.',
+    expect(
+      stepAdvanceSuffix(at(4, { succeeded: 2, notReported: 1 }), plan, { outcome: 'not-reported' }),
+    ).toBe(
+      ' Step 3 of 3 ran; its tool declared no status. It was the last step. ' +
+        '1 of 3 steps ran without a recognized declared status.',
     );
     // A word the library does not know is named, quoted (JSON), never "done".
     expect(
-      stepAdvanceSuffix(at(4), plan, { outcome: 'not-reported', unknownStatus: 'say "hi"' }),
+      stepAdvanceSuffix(at(4, { succeeded: 2, notReported: 1 }), plan, {
+        outcome: 'not-reported',
+        unknownStatus: 'say "hi"',
+      }),
     ).toBe(
       ' Step 3 of 3 ran; its tool reported "say \\"hi\\"", a status this library does not ' +
-        'know, so the step was not held. It was the last step.',
+        'know, so the step was not held. It was the last step. ' +
+        '1 of 3 steps ran without a recognized declared status.',
     );
   });
 

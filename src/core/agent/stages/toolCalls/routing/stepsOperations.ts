@@ -7,6 +7,7 @@ import {
   pointerOf,
   stepInProgress,
   currentStepOf,
+  advanceStepPointer,
   skipNothingActiveSentence,
   skipNeedsReasonSentence,
   skipHoldSentence,
@@ -88,9 +89,8 @@ export function buildToolStepsOperations(
     // of a held step are each recorded, because each is a fact.
     if (plan.onSkip === 'hold') return skipHoldSentence(ptr, reason, plan);
     const next: StepPointer = {
-      skillId: ptr.skillId,
+      ...ptr,
       step: ptr.step + 1,
-      total: ptr.total,
       skipped: [...ptr.skipped, ptr.step],
     };
     scope.stepPointer = [next];
@@ -134,12 +134,7 @@ export function buildToolStepsOperations(
       });
       return stepHeldSuffix(ptr, plan, verdict.outcome, verdict.status);
     }
-    const next: StepPointer = {
-      skillId: ptr.skillId,
-      step: ptr.step + 1,
-      total: ptr.total,
-      skipped: [...ptr.skipped],
-    };
+    const next = advanceStepPointer(ptr, verdict.outcome);
     scope.stepPointer = [next];
     const completed = next.step > next.total;
     typedEmit(scope, 'agentfootprint.skill.step_advanced', {

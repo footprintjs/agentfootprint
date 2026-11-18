@@ -1,0 +1,15 @@
+{
+  "previousCohort": "step-outcomes",
+  "captures": [
+    {
+      "case": "agent-answer-layer",
+      "previousSha256": "7801743131805e74ce87ad8280f861864ba5b440ed6ec4ac50092cd6188e6bec",
+      "currentSha256": "c6939431c053968e60bf10b9f53c2d120278d1ae4f187c5f97ef3233c35425e0"
+    },
+    {
+      "case": "agent-stepped-skill",
+      "previousSha256": "f0ec983f7d8c38d992a854f5d9a4cd8f57ebcbbadfbd0b696d81e4f69266b691",
+      "currentSha256": "b959bd5139a64133fa7b3b9263ddb5aaeb7423f4e75312ee5a8073299d8612a4"
+    }
+  ]
+}

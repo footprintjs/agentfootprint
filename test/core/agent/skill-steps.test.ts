@@ -268,7 +268,8 @@ describe('functional: advance at the return boundary', () => {
     );
     const exportResult = hist.find((m) => m.toolName === 'export');
     expect(exportResult?.content).toContain(
-      'Step 3 of 3 ran; its tool declared no status. It was the last step.',
+      'Step 3 of 3 ran; its tool declared no status. It was the last step. ' +
+        '3 of 3 steps ran without a recognized declared status.',
     );
 
     // Pointer complete on the snapshot; the post-completion offer is FULL

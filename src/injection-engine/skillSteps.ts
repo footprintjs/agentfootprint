@@ -86,7 +86,7 @@ export type OnSkipPolicy = 'advance' | 'hold';
 
 /**
  * WHERE a declared procedure stands. 1-based; `step === total + 1` means
- * the procedure completed. `skipped` holds the indexes the model skipped
+ * the procedure reached its end. `skipped` holds the indexes the model skipped
  * under the `'advance'` policy (a `'hold'` skip is recorded on the event
  * stream, not here — the pointer did not move).
  */
@@ -94,11 +94,13 @@ export interface StepPointer {
   /** The tenant this pointer belongs to — the stepped skill whose tenure
    *  is current. A cursor move away from it resets the pointer. */
   readonly skillId: string;
-  /** Current step, 1-based. `total + 1` = procedure complete. */
+  /** Current step, 1-based. `total + 1` = end of the procedure. */
   readonly step: number;
   readonly total: number;
   /** Step indexes skipped-with-reason that the pointer moved past. */
   readonly skipped: readonly number[];
+  /** Recorded advances by a tool. Earlier checkpoints may lack these counts. */
+  readonly advanceOutcomes?: { readonly succeeded: number; readonly notReported: number };
 }
 
 /**
@@ -280,6 +282,35 @@ export function rekeyStepPointer(args: {
   return [{ skillId: args.tenant, step: 1, total: plan.steps.length, skipped: [] }];
 }
 
+function recordedAdvanceOutcomes(ptr: StepPointer): NonNullable<StepPointer['advanceOutcomes']> {
+  const counts = ptr.advanceOutcomes;
+  const toolSteps = ptr.step - 1 - ptr.skipped.length;
+  return counts &&
+    Number.isSafeInteger(counts.succeeded) &&
+    counts.succeeded >= 0 &&
+    Number.isSafeInteger(counts.notReported) &&
+    counts.notReported >= 0 &&
+    counts.succeeded + counts.notReported <= toolSteps
+    ? counts
+    : { succeeded: 0, notReported: 0 };
+}
+
+/** Record only the tool outcome at the boundary where the pointer advances. */
+export function advanceStepPointer(
+  ptr: StepPointer,
+  outcome: 'succeeded' | 'not-reported',
+): StepPointer {
+  const { succeeded, notReported } = recordedAdvanceOutcomes(ptr);
+  return {
+    ...ptr,
+    step: ptr.step + 1,
+    advanceOutcomes: {
+      succeeded: succeeded + Number(outcome === 'succeeded'),
+      notReported: notReported + Number(outcome === 'not-reported'),
+    },
+  };
+}
+
 // ─── The skip_step integrity tool ─────────────────────────────────────
 
 /**
@@ -373,8 +404,7 @@ export function readSkillStepIntro(plan: StepPlan): string {
  * found nothing; the look is finished): "Step 1 of 2 done.".
  * `'not-reported'` — its tool declared no status, so the library cannot say
  * the work was done, only that the step ran: "Step 1 of 2 ran; its tool
- * declared no status." (and "It was the last step." in place of "All 2
- * steps complete."). "Declared" is exact: a status counts only inside an
+ * declared no status." "Declared" is exact: a status counts only inside an
  * effects envelope, so `{ content, status: 'failure' }` without its
  * `effects` marker declared none. When the tool wrote a word the library
  * does not know in an otherwise well-formed envelope, the word is named
@@ -404,16 +434,27 @@ export function stepAdvanceSuffix(
       : ` Step ${ran} of ${next.total} ran; its tool reported ` +
         `${JSON.stringify(verdict.unknownStatus)}, a status this library does not know, ` +
         `so the step was not held.`;
-  if (next.step > next.total) {
-    return verdict.outcome === 'succeeded'
-      ? `${head} All ${next.total} steps complete.`
-      : `${head} It was the last step.`;
-  }
+  if (next.step > next.total) return head + stepEndSentence(next);
   const coming = plan.steps[next.step - 1]!;
   return (
     `${head} Now on step ${next.step} of ${next.total}: ` +
     `${coming.note} (tool: \`${coming.tool}\`).`
   );
+}
+
+/** Reaching the end proves completion only if each step succeeded. */
+function stepEndSentence(ptr: StepPointer): string {
+  const { succeeded, notReported } = recordedAdvanceOutcomes(ptr);
+  const skipped = ptr.skipped.length;
+  if (succeeded === ptr.total && skipped === 0) return ` All ${ptr.total} steps complete.`;
+  const parts = [' It was the last step.'];
+  if (notReported > 0)
+    parts.push(` ${notReported} of ${ptr.total} steps ran without a recognized declared status.`);
+  if (skipped > 0) parts.push(` The procedure skipped ${skipped} of ${ptr.total} steps.`);
+  const unrecorded = ptr.total - succeeded - notReported - skipped;
+  if (unrecorded > 0)
+    parts.push(` The record gives no outcome for ${unrecorded} of ${ptr.total} steps.`);
+  return parts.join('');
 }
 
 // LENS · tool-result · persistent-history
@@ -457,12 +498,8 @@ export function skipAdvanceSentence(
   next: StepPointer,
   plan: StepPlan,
 ): string {
-  if (next.step > next.total) {
-    return (
-      `Step ${skippedIndex} skipped: ${reason}. That was the last step — the ` +
-      `'${next.skillId}' procedure is complete (${next.skipped.length} step(s) skipped).`
-    );
-  }
+  if (next.step > next.total)
+    return `Step ${skippedIndex} skipped: ${reason}.` + stepEndSentence(next);
   const coming = plan.steps[next.step - 1]!;
   return (
     `Step ${skippedIndex} skipped: ${reason}. Now on step ${next.step} of ${next.total}: ` +
