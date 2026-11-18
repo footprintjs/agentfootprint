@@ -30,7 +30,7 @@ function publicDoors(name) {
 }
 function webpackConfig(isServer) {
   return config.webpack(
-    { resolve: { alias: { existing: '/keep/me.js' } }, plugins: [] },
+    { resolve: { alias: { existing: '/keep/me.js' } }, module: { rules: [] }, plugins: [] },
     {
       isServer,
       defaultLoaders: { babel: {} },
@@ -89,4 +89,13 @@ test('server compiler keeps Node library resolution and existing aliases unchang
     }
   }
   assert.equal(aliases.existing, '/keep/me.js');
+});
+
+
+test('only the skill graph client entry gets a separate Lens compilation', () => {
+  const rules = webpackConfig(false).module.rules;
+  assert.equal(rules.length, 1);
+  assert.equal(rules[0].test(resolve(docsRoot, 'components/demos/skillGraphView.ts')), true);
+  assert.equal(rules[0].test(resolve(docsRoot, 'components/DynamicReactTryItInner.tsx')), false);
+  assert.equal(webpackConfig(true).module.rules.length, 0);
 });

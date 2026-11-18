@@ -343,6 +343,7 @@ jobs:
         working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root || github.workspace) }}
         env:
           EXPORT: 'true'
+          DOCS_WEBPACK_STATS: ${{ env.NATIVE_DOCS == 'true' && '1' || '' }}
         run: npm run build
 
       # Site-budget RATCHET, on every PR and push — where site growth is caught:
@@ -360,8 +361,14 @@ jobs:
       # the release PR skips this job. Over budget at release time, the site
       # waits — docs.yml refuses to deploy it — and the npm version does not.
       - name: Enforce site performance budgets
+        id: budget
         working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root || github.workspace) }}
         run: npm run check:site-budget
+
+      - name: Show the modules in an over-budget demo
+        if: failure() && env.NATIVE_DOCS == 'true' && steps.budget.outcome == 'failure'
+        working-directory: ${{ format('{0}/docs-next', steps.projection.outputs.root) }}
+        run: node scripts/demo-chunk-modules.mjs
 
       - name: Compare regenerated API pages with the reviewed source
         if: env.NATIVE_DOCS == 'true'

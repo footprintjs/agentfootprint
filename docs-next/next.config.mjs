@@ -67,6 +67,14 @@ const config = {
   // need replacement before webpack's scheme reader runs; aliases alone are
   // too late for them.
   webpack: (config, { webpack, isServer }) => {
+    if (!isServer) {
+      const entry = resolve(import.meta.dirname, 'components/demos/skillGraphView.ts');
+      config.module.rules.push({
+        test: (file) => file === entry,
+        enforce: 'pre',
+        use: resolve(import.meta.dirname, 'scripts/skill-graph-view-loader.cjs'),
+      });
+    }
     const browserNodeStub = resolve(import.meta.dirname, 'lib/stubs/browser-node-builtins.js');
     config.resolve.alias = {
       ...config.resolve.alias,

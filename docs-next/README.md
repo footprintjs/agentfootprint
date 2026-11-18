@@ -114,3 +114,12 @@ npm run check:api    # CI guard: regenerate + `git diff --exit-code` (fails if s
 
 Wire `npm run check:api` into CI so a PR that changes the public API but forgets to
 regenerate docs fails the build — the no-stale-docs guarantee.
+
+### Skill graph browser bundle
+
+The skill graph and the full inspector share the public Lens entry point. The documentation
+site compiles the skill graph’s one named import separately so opening that diagram does
+not also download the inspector. The [entry](components/demos/skillGraphView.ts) keeps
+the installed Lens component and its types. The [client loader](scripts/skill-graph-view-loader.cjs)
+leaves React, ReactFlow, styles and layout dependencies to the site’s normal bundler.
+The existing site budget measures all assets the diagram needs.
