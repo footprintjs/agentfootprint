@@ -154,12 +154,12 @@ unchanged registry CLI pass, ordinary CI clearance or permission to publish.
 ## Modules and checks
 
 `publishedSetup.mjs` is the pure document constructor for the original source
-with published FootPrint 14.0.0-rc.0, Foottrace 2.1.0 and ContextFootprint 0.1.1.
+with published FootPrint 14.0.0, Foottrace 2.1.0 and ContextFootprint 0.1.1.
 The source version must agree across the source manifest, lock and package.
-The authored engine peer/development range is `^14.0.0-rc.0` and the Foottrace
+The authored engine peer/development range is `^14.0.0` and the Foottrace
 range is `^2.1.0`; the temporary roots use those exact native package versions.
-Earlier engine 13/Foottrace 2.0 inputs, another RC or a stable engine archive
-do not substitute for this candidate. ContextFootprint stays exactly 0.1.1.
+Earlier engine 13/Foottrace 2.0 inputs, engine prereleases and other stable
+engine versions are outside this cohort. ContextFootprint stays exactly 0.1.1.
 `getPublishedInputs(manifestText, lockText)` admits the exact current declared
 ranges and original registry records, retaining their URLs/SRIs and document
 hashes. It performs no install, resolution or archive admission. Other cohorts,

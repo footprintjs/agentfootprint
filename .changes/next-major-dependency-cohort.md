@@ -2,12 +2,12 @@
 type: breaking
 ---
 **Require FootPrint 14 and Foottrace 2.1 or later in major 2.** Agentfootprint 15
-requires the FootPrint peer range `^14.0.0-rc.0` and the Foottrace dependency
+requires the FootPrint peer range `^14.0.0` and the Foottrace dependency
 range `^2.1.0`.
 
-Migration: upgrade to `footprintjs@^14.0.0-rc.0` and `foottrace@^2.1.0`.
+Migration: upgrade to `footprintjs@^14.0.0` and `foottrace@^2.1.0`.
 During the release train, install the published Agentfootprint 15 candidate
-with the exact engine candidate `footprintjs@14.0.0-rc.0`. Regenerate the
+with the exact stable engine `footprintjs@14.0.0`. Regenerate the
 application lockfile with strict peer resolution and run the consumer checks.
 Verify that Agentfootprint and the engine resolve the same physical Foottrace
 installation.

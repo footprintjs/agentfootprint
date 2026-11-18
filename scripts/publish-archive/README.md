@@ -25,9 +25,9 @@ policies. AF's default does not inherit any dependency-only member allowance.
 
 `publishedDependency.cjs` exports
 `inspectPublishedDependency(bytes, {name, version, integrity})` for exactly the
-published FootPrint 14.0.0-rc.0, Foottrace 2.1.0 and ContextFootprint 0.1.1 inputs.
-The engine RC is an exact selected version, not a range or a lookup of `next`;
-old versions and adjacent RC/stable versions are refused. This dependency profile
+published FootPrint 14.0.0, Foottrace 2.1.0 and ContextFootprint 0.1.1 inputs.
+The engine is pinned to the exact published version. The policy refuses
+prereleases and other stable versions. This dependency profile
 keeps the authored AgentFootprint source version and the default AgentFootprint
 archive policy.
 It accepts no caller profile, root, limit or command. The fixed dependency

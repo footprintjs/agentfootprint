@@ -9,7 +9,7 @@ import strictJson from './strictJson.cjs';
 
 const { inspectPublishedDependency } = dependency;
 const hash = (bytes, algorithm = 'sha256', encoding = 'hex') => createHash(algorithm).update(bytes).digest(encoding);
-const versions = { footprintjs: '14.0.0-rc.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
+const versions = { footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
 const manifest = (name) => ({ name, version: versions[name] });
 const expected = (name, bytes) => ({ name, version: versions[name], integrity: 'sha512-' + hash(bytes, 'sha512', 'base64') });
 const code = (run, refusal) => assert.throws(run, (error) => canonical.archiveRefusalCode(error) === refusal);
@@ -33,7 +33,7 @@ for (const name of Object.keys(versions)) {
 
 // This is a closed cohort, not a semver range or an npm tag lookup.
 for (const [name, version] of [
-  ['footprintjs', '13.0.0'], ['footprintjs', '14.0.0'],
+  ['footprintjs', '13.0.0'], ['footprintjs', '14.0.0-rc.0'], ['footprintjs', '14.0.1'],
   ['footprintjs', '14.0.0-rc.1'], ['footprintjs', '14.0.0-rc.00'],
   ['foottrace', '2.0.0'], ['foottrace', '2.1.1'],
 ]) test(`refuses unselected ${name}@${version} even with matching archive identity and SRI`, () => {

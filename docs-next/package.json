@@ -35,7 +35,7 @@
     "agentfootprint": "file:..",
     "agentfootprint-lens": "file:vendor/lens/agentfootprint-lens-0.83.0.tgz",
     "footprint-explainable-ui": "^2.0.0",
-    "footprintjs": "^14.0.0-rc.0",
+    "footprintjs": "^14.0.0",
     "fumadocs-core": "^16.10.5",
     "fumadocs-mdx": "^15.0.12",
     "fumadocs-twoslash": "^3.2.0",

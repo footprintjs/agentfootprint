@@ -107,17 +107,17 @@ exclusive capabilities or measured superiority in answer accuracy.
 ## Quick start — runs offline, no API key
 
 ```bash
-npm install 'agentfootprint@^15.0.0' 'footprintjs@^14.0.0-rc.0'
+npm install 'agentfootprint@^15.0.0' 'footprintjs@^14.0.0'
 ```
 
-Agentfootprint 15 requires FootprintJS `^14.0.0-rc.0` as a peer and Foottrace
+Agentfootprint 15 requires FootprintJS `^14.0.0` as a peer and Foottrace
 `^2.1.0` as a dependency. Install FootprintJS explicitly as shown above.
 During the release train, pair the published Agentfootprint 15 candidate with
-`footprintjs@14.0.0-rc.0`. Use this command once npm's `next` tag points to the
+`footprintjs@14.0.0`. Use this command once npm's `next` tag points to the
 Agentfootprint 15 candidate.
 
 ```bash
-npm install agentfootprint@next footprintjs@14.0.0-rc.0
+npm install agentfootprint@next footprintjs@14.0.0
 ```
 
 ```typescript
