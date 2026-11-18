@@ -30,7 +30,7 @@ const modules = Object.fromEntries(
     ]),
   ),
 );
-function contracts(ft, cause, paths) {
+function contracts(ft, cause) {
   function commit(stage, idx, key, value, verb = 'set', readKeys = []) {
     return {
       idx,
@@ -192,17 +192,6 @@ function contracts(ft, cause, paths) {
         ['answer#1', 'seed#0'],
       ),
     'foottrace:formatCausalChain': () => assert.match(ft.formatCausalChain(chain()), /seed#0/),
-    'foottrace:isCommitBundle': () => {
-      assert.equal(ft.isCommitBundle(log[0]), true);
-      assert.equal(ft.isCommitBundle({ ...log[0], trace: [{}] }), false);
-    },
-    'foottrace/paths:pathSegments': () => {
-      assert.deepEqual(paths.pathSegments('literal.dot\u001fitems'), ['literal.dot', 'items']);
-    },
-    'foottrace/paths:isDeniedSegment': () => {
-      assert.equal(paths.isDeniedSegment('__proto__'), true);
-      assert.equal(paths.isDeniedSegment('items'), false);
-    },
     'foottrace:formatSlice': () => {
       assert.match(ft.formatSlice(slice()), /answer/);
       assert.match(ft.formatSlice(ft.sliceForKey(log, 'absent', reads)), /never/);
@@ -386,9 +375,7 @@ test('physical singleton control refuses a nested copy with identical version an
 
 test('every source-imported runtime symbol has a behavior contract, with no extra Foottrace features', () => {
   assert.deepEqual(
-    Object.keys(
-      contracts(modules.foottrace, modules['foottrace/cause'], modules['foottrace/paths']),
-    ).sort(),
+    Object.keys(contracts(modules.foottrace, modules['foottrace/cause'])).sort(),
     runtime,
     `Source imports:\n${JSON.stringify(imported, null, 2)}`,
   );
@@ -397,7 +384,6 @@ for (const mode of ['import', 'require']) {
   const cases = contracts(
     mode === 'import' ? modules.foottrace : require('foottrace'),
     mode === 'import' ? modules['foottrace/cause'] : require('foottrace/cause'),
-    mode === 'import' ? modules['foottrace/paths'] : require('foottrace/paths'),
   );
   for (const [key, behavior] of Object.entries(cases))
     test(`${mode} ${key}`, { timeout: 5000 }, async () => {
