@@ -241,9 +241,15 @@ describe('agent redaction — with no door, nothing changes', () => {
     live.onRealEvent((event) => real.push(event));
     plain.on('*', (event) => served.push(event));
     await plain.run({ message: MESSAGE });
-    // The served snapshot is footprintjs's own, byte for byte — no mirror, the
-    // fold base present, no marker row.
-    expect(JSON.stringify(plain.getLastSnapshot())).toBe(JSON.stringify(live.liveSnapshot()));
+    const rawSnapshot = live.liveSnapshot();
+    const enriched = plain.getLastSnapshot();
+    expect(enriched?.contextShapes?.version).toBe(1);
+    expect(JSON.stringify(plain.getLastSnapshot({ contextShapes: false }))).toBe(
+      JSON.stringify(rawSnapshot),
+    );
+    expect(JSON.stringify(enriched)).toBe(
+      JSON.stringify({ ...rawSnapshot, contextShapes: enriched?.contextShapes }),
+    );
     expect((plain.getLastSnapshot() as RuntimeSnapshot).initialState).toBeDefined();
     expect(JSON.stringify(plain.getLastSnapshot())).not.toContain(REDACTION_MARKER_ID);
     // Every event reaches a consumer as its producer made it: the same types,

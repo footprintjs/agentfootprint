@@ -8,7 +8,7 @@ import { servedUnderPolicy } from './marker.js';
 import { answer, scripted } from '../../test/core/agent/arguments/askReviewHarness.js';
 import { nativeRetainsSafeBase } from '../../test/redaction/nativeFoldBase.js';
 
-it('an agent without a hidden argument keeps the native snapshot bytes and no private fields', async () => {
+it('an agent without a hidden argument keeps native snapshot bytes when shape metadata is omitted', async () => {
   const mock = scripted([answer('Public answer')]);
   const agent = Agent.create({ provider: mock.provider as never, model: 'fixture' }).build();
   try {
@@ -16,7 +16,11 @@ it('an agent without a hidden argument keeps the native snapshot bytes and no pr
     const raw = runnerLive(agent)?.liveSnapshot();
     const served = agent.getSnapshot();
     expect(raw).toBeDefined();
-    expect(JSON.stringify(served)).toBe(JSON.stringify(raw));
+    expect(JSON.stringify(agent.getSnapshot({ contextShapes: false }))).toBe(JSON.stringify(raw));
+    expect(served?.contextShapes?.version).toBe(1);
+    expect(JSON.stringify(served)).toBe(
+      JSON.stringify({ ...raw, contextShapes: served?.contextShapes }),
+    );
     expect(servedUnderPolicy(served)).toBe(false);
     expect(served).toHaveProperty('initialState');
     expect(served?.sharedState).not.toHaveProperty('privateRecordFields');
