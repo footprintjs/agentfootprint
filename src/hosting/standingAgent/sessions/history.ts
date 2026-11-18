@@ -25,10 +25,9 @@ export function createSessionHistory({ sessions, sharedAgent, identityOptions }:
    * Answer "which conversations are mine?" and "what did we say?" — the two
    * session-history ops (9.26.0) — and "what is it waiting on?" (`pending`).
    *
-   * `pending` is the one that needs no verifier: it opens a session exactly
-   * as a turn or an answer would (`mayOpenSession`, and a caller who names a
-   * user other than the conversation's owner is refused with the one
-   * not-found). The refusals below are for the other two.
+   * `pending` is available without a verifier. It uses `mayOpenSession` and
+   * returns not-found when the caller and the stored conversation's envelope
+   * name different users. The refusals below concern the other two operations.
    *
    * ── Three refusals before an answer is even attempted ────────────────────
    *  1. no verifier on this door → {@link SessionOpNeedsIdentityError}. Reading
@@ -58,14 +57,12 @@ export function createSessionHistory({ sessions, sharedAgent, identityOptions }:
     namedUser: string | undefined,
   ): Promise<void> {
     if (op.op === 'pending') {
-      // Reloading the current question uses the same session admission as a
-      // reply. It neither enumerates sessions nor exposes a checkpoint.
+      // Read the question without enumerating sessions or exposing a checkpoint.
       await sessions.onWake?.(op.sessionId, 'transcript');
       const stored = await sessions.hydrate(op.sessionId);
-      // …and the same owner rule as answering it: a caller who names another
-      // user is refused here as the store refuses that caller's answer
-      // (r3-47-hosting-1). A caller naming nobody is still served at a door
-      // with no verifier, where the session id is the key.
+      // Apply the turn's admission check and compare the named user with the
+      // envelope's owner (r3-47-hosting-1). A caller who names nobody can read
+      // the question by session id at a door without a verifier.
       if (
         stored !== undefined &&
         (!mayOpenSession(stored, verified) || namesAnotherOwner(op.sessionId, stored, namedUser))
@@ -198,9 +195,10 @@ export function createSessionHistory({ sessions, sharedAgent, identityOptions }:
 }
 
 /**
- * Does `named` contradict the owner the stored conversation names? Asked of
- * `resolveSessionOwner`, the one owner rule every store applies to a write, so
- * a read cannot be looser than the answer it would lead to.
+ * Does `named` contradict the owner named in the stored conversation's envelope?
+ * A store that keeps ownership outside the envelope (`agentEngineSessions`)
+ * can refuse to save an answer to a question this read served, and a shared
+ * ownership check through the store port is deferred to a major release.
  */
 function namesAnotherOwner(
   sessionId: string,

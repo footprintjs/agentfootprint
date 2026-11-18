@@ -16,7 +16,7 @@
  * the live service — in particular that its `appendEvent` merges by top-level
  * key, which the adapter's own header states from a field trial.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   agentEngineSessions,
@@ -25,10 +25,10 @@ import {
   SESSION_STATE_KEY,
 } from '../../../src/adapters/hosting/googleAgentEngine.js';
 import { safeResourceId } from '../../../src/adapters/google/aiPlatform.js';
-import { Agent } from '../../../src/index.js';
+import { Agent, defineTool, requestInput } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { envelopeOwner, standingAgent, toEnvelope } from '../../../src/hosting/index.js';
-import type { HostHandler, HostRequest } from '../../../src/hosting/index.js';
+import type { HostHandler, HostReply, HostRequest } from '../../../src/hosting/index.js';
 import type { AgentRunCheckpoint } from '../../../src/core/runCheckpoint.js';
 
 const PARENT = 'projects/p/locations/us-central1/reasoningEngines/engine-1';
@@ -205,9 +205,9 @@ describe('the first signer stays the owner (r3-56-adapters-hosting-2)', () => {
 async function door(
   store: ReturnType<ReturnType<typeof service>['store']>,
   durability: 'sync' | 'async' = 'sync',
+  agent = Agent.create({ provider: mock({ reply: 'fine' }), model: 'mock' }).build(),
 ) {
   let handler: HostHandler | undefined;
-  const agent = Agent.create({ provider: mock({ reply: 'fine' }), model: 'mock' }).build();
   const handle = await standingAgent({
     agent,
     sessions: store,
@@ -224,12 +224,16 @@ async function door(
       },
     },
   });
-  const send = async (request: HostRequest) => {
+  const send = async (
+    request: HostRequest,
+    terminals?: Pick<HostReply, 'awaiting' | 'sessions'>,
+  ) => {
     let answer = 'none';
     await handler!(request, {
       emit: () => undefined,
       complete: () => (answer = 'ok'),
       fail: (err) => (answer = (err as { code?: string }).code ?? err.message),
+      ...terminals,
     });
     return answer;
   };
@@ -272,6 +276,61 @@ describe('through standingAgent at a door with no verifier', () => {
     expect(turns).toEqual(['ok', 'ok', 'ok', 'ERR_SESSION_OWNERSHIP_CONFLICT']);
     const stored = google.read(`${PARENT}/sessions/s1`)!.sessionState[SESSION_STATE_KEY];
     expect(envelopeOwner(stored)).toBe('alice');
+  });
+
+  it('known gap (r3-47-hosting-1, r3-56-adapters-hosting-2): the pending read uses the envelope and the save uses the kept owner', async () => {
+    const google = service();
+    const sessionId = 's1';
+    const rowName = `${PARENT}/sessions/${sessionId}`;
+    await google.store().persist(sessionId, envelopeOf('start'));
+    await google.store().persist(sessionId, envelopeOf('signed', 'alice'));
+    // A nameless save through the store leaves the first signer in its own key.
+    await google.store().persist(sessionId, envelopeOf('nameless'));
+
+    const collect = defineTool({
+      name: 'collect',
+      description: 'Ask for a sample year.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () =>
+        requestInput({ id: 'input', question: 'Year?', fields: [{ id: 'year', type: 'number' }] }),
+    });
+    const agent = Agent.create({
+      model: 'mock',
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'collect-1', name: 'collect', args: {} }] },
+          { content: 'fine' },
+        ],
+      }),
+    })
+      .tool(collect)
+      .build();
+    const { handle, send } = await door(google.store(), 'sync', agent);
+    try {
+      const awaiting = vi.fn<NonNullable<HostReply['awaiting']>>();
+      await send({ input: 'Ask for a sample year', sessionId }, { awaiting });
+      const question = awaiting.mock.calls[0]?.[0];
+      const requestId = question?.awaitingInput?.requestId;
+      expect(requestId).toBeDefined();
+      const saved = google.read(rowName);
+      expect(saved?.sessionState['agentfootprint.owner']).toBe('alice');
+      expect(envelopeOwner(saved?.sessionState[SESSION_STATE_KEY])).toBeUndefined();
+
+      const sessions = vi.fn<NonNullable<HostReply['sessions']>>();
+      await send({ input: '', userId: 'bob', session: { op: 'pending', sessionId } }, { sessions });
+      expect(sessions).toHaveBeenCalledExactlyOnceWith({ op: 'pending', pending: question });
+      expect(
+        await send({
+          input: '',
+          sessionId,
+          userId: 'bob',
+          decision: { requestId, values: { year: 2000 } },
+        }),
+      ).toBe('ERR_SESSION_OWNERSHIP_CONFLICT');
+      expect(google.read(rowName)).toEqual(saved);
+    } finally {
+      await handle.close();
+    }
   });
 });
 

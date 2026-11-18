@@ -16,15 +16,17 @@
  *   `{ op: 'session-transcript', sessionId }`     → that session's messages,
  *                                                    IF the verified caller
  *                                                    owns it
- *   `{ op: 'session-pending', sessionId }`        → the question the session
- *                                                    waits on, to a caller who
- *                                                    may ANSWER it
+ *   `{ op: 'session-pending', sessionId }`        → the waiting question,
+ *                                                    subject to the envelope's
+ *                                                    owner check
  *
- * `session-pending` is not gated on a verifier: it follows the rule of a turn
- * and an answer. At a verifying door only the verified owner opens it; at a
- * door with no verifier the session id is the key, and a caller who names a
- * user other than the conversation's owner is refused with the same not-found
- * (r3-47-hosting-1) — that caller's answer would be refused too.
+ * `session-pending` uses the turn's admission check when a verifier is set.
+ * It returns not-found when the caller and the stored conversation's envelope
+ * name different users (r3-47-hosting-1). At a door without a verifier, a
+ * caller who names nobody can read the question by session id.
+ * A store that keeps ownership outside the envelope (`agentEngineSessions`)
+ * can refuse to save an answer to a question this read served, and a shared
+ * ownership check through the store port is deferred to a major release.
  *
  * ── Why list and transcript REQUIRE verified identity ────────────────────────
  * `HostRequest.userId` is caller data — a string anybody can send, as the port
