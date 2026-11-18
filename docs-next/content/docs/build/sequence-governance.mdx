@@ -133,10 +133,12 @@ The framework derives `sequence` on demand from `scope.history` via the `extract
 
 A composing tool (`ctx.tools.call`, a [runbook as a tool](doc:runbook-as-tool)) takes steps for the model. A rule over "read a secret, then post it" sees those steps where they were taken:
 
-- the checker asked about an **inner** call gets the sequence so far plus the inner calls of the same outer call that already ran — the outer call itself is still in flight, so it is not listed yet, and its inner calls are read from the run's `innerToolCalls` rows, the one place they are before the outer call's result lands;
-- once the outer call's result lands, every later `tool_call` check — the model's next call, the next inner call, a later turn — sees the outer call followed by its inner calls that ran.
+- the checker asked about an **inner** call gets the sequence so far plus the inner calls the same outer call already admitted, including tools still running. Each admission becomes visible before the next check;
+- once the outer call's result lands, every later `tool_call` check — the model's next call or the next inner call — sees the outer call followed by its admitted inner calls.
 
-An inner call the checker refused ran nothing, so it is not in the sequence, as a denied model call is not. An inner entry's `args` are shown through the tool's own argument view (a key the tool hides reads as its placeholder), because they are kept in history. A `'halt'` on an inner call refuses it at once and ends the run once the outer call settles: `permission.halt` fires under the inner call's id (`<outer call id>#inner-<n>`) with the inner tool as `target`, and `PolicyHaltError.proposed` names the inner call.
+The permission checker receives the actual arguments each admitted tool started with. History, audit rows and halt reports use the tool's shown arguments. Protected policy arguments survive a native pause and resume in private working state. A later call refuses if its checker needs prior protected values and the continuation lacks them.
+
+A `'halt'` refuses the inner call and ends the run once the outer call settles, even when the outer tool asks to pause. The halt closes further admissions. The `permission.halt` event uses the inner call's id (`<outer call id>#inner-<n>`) and tool name. `PolicyHaltError.proposed` names the same call.
 
 You can use the helper directly if you need it outside a checker:
 

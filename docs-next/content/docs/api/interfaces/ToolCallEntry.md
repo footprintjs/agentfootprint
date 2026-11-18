@@ -23,7 +23,7 @@ survives `agent.resumeOnError(checkpoint)` correctly.
 
 Defined in: [src/provider-contract/types.ts:797](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L797)
 
-Tool args passed to `tool.execute(args, ctx)`; an inner call's shown through the tool's argument view.
+Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view.
 
 ***
 
