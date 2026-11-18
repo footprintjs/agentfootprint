@@ -8,15 +8,27 @@
  * remembers, and useless for the screen everyone actually builds — a sidebar of
  * your past chats.
  *
- * Two operations answer it, and the shape of the pair is the security design:
+ * Three operations read a stored session, and their rules are the security
+ * design:
  *
  *   `{ op: 'session-list' }`                      → the VERIFIED caller's own
  *                                                    sessions, newest first
  *   `{ op: 'session-transcript', sessionId }`     → that session's messages,
  *                                                    IF the verified caller
  *                                                    owns it
+ *   `{ op: 'session-pending', sessionId }`        → the waiting question,
+ *                                                    subject to the envelope's
+ *                                                    owner check
  *
- * ── Why both REQUIRE verified identity ───────────────────────────────────────
+ * `session-pending` uses the turn's admission check when a verifier is set.
+ * It returns not-found when the caller and the stored conversation's envelope
+ * name different users (r3-47-hosting-1). At a door without a verifier, a
+ * caller who names nobody can read the question by session id.
+ * A store that keeps ownership outside the envelope (`agentEngineSessions`)
+ * can refuse to save an answer to a question this read served, and a shared
+ * ownership check through the store port is deferred to a major release.
+ *
+ * ── Why list and transcript REQUIRE verified identity ────────────────────────
  * `HostRequest.userId` is caller data — a string anybody can send, as the port
  * has said since 9.12. Listing "your" sessions from an unverified header is
  * enumeration with a friendly interface: guess an id, read a stranger's
@@ -55,7 +67,7 @@ export const SESSION_PENDING_OP = WIRE_OPS.sessionPending;
  * One session-history operation, as a request carries it — the port-side shape
  * behind the wire's `{ op, sessionId? }`.
  *
- * `op` is the port's own verb vocabulary (`list` | `transcript`), not the wire
+ * `op` is the port's own verb vocabulary (`list` | `transcript` | `pending`), not the wire
  * spelling, for the same reason the artifact request's is: the wire says
  * `'session-list'` because a body field named `op` has to say which domain it
  * belongs to; the port already knows.

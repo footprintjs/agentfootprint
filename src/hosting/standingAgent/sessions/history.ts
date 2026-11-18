@@ -9,19 +9,25 @@ import {
   SessionIndexUnavailableError,
   SessionNotFoundError,
   SessionOpNeedsIdentityError,
+  SessionOwnershipConflictError,
   UnreadableEnvelopeError,
 } from '../../errors.js';
 import { type VerifiedIdentity } from '../../identityVerification.js';
 import { deliverSessions } from '../artifacts/facts.js';
 import { envelopeOwner, envelopeTranscript } from '../../envelope.js';
 import { readStoredSession, unanswerablePause } from '../../answeredPause.js';
+import { resolveSessionOwner } from '../../sessionOwnership.js';
 
 type HistoryOptions = Pick<Configuration, 'sessions' | 'sharedAgent' | 'identityOptions'>;
 
 export function createSessionHistory({ sessions, sharedAgent, identityOptions }: HistoryOptions) {
   /**
    * Answer "which conversations are mine?" and "what did we say?" — the two
-   * session-history ops (9.26.0).
+   * session-history ops (9.26.0) — and "what is it waiting on?" (`pending`).
+   *
+   * `pending` is available without a verifier. It uses `mayOpenSession` and
+   * returns not-found when the caller and the stored conversation's envelope
+   * name different users. The refusals below concern the other two operations.
    *
    * ── Three refusals before an answer is even attempted ────────────────────
    *  1. no verifier on this door → {@link SessionOpNeedsIdentityError}. Reading
@@ -47,13 +53,20 @@ export function createSessionHistory({ sessions, sharedAgent, identityOptions }:
     op: SessionWireRequest,
     verified: VerifiedIdentity | undefined,
     reply: HostReply,
+    /** The user the request names: the verified one, else the transport's claim. */
+    namedUser: string | undefined,
   ): Promise<void> {
     if (op.op === 'pending') {
-      // Reloading the current question uses the same session admission as a
-      // reply. It neither enumerates sessions nor exposes a checkpoint.
+      // Read the question without enumerating sessions or exposing a checkpoint.
       await sessions.onWake?.(op.sessionId, 'transcript');
       const stored = await sessions.hydrate(op.sessionId);
-      if (stored !== undefined && !mayOpenSession(stored, verified)) {
+      // Apply the turn's admission check and compare the named user with the
+      // envelope's owner (r3-47-hosting-1). A caller who names nobody can read
+      // the question by session id at a door without a verifier.
+      if (
+        stored !== undefined &&
+        (!mayOpenSession(stored, verified) || namesAnotherOwner(op.sessionId, stored, namedUser))
+      ) {
         reply.fail(new SessionNotFoundError(op.sessionId));
         return;
       }
@@ -179,6 +192,26 @@ export function createSessionHistory({ sessions, sharedAgent, identityOptions }:
     return envelopeOwner(stored) === verified?.userId;
   }
   return { answerSessionOp, mayOpenSession };
+}
+
+/**
+ * Does `named` contradict the owner named in the stored conversation's envelope?
+ * A store that keeps ownership outside the envelope (`agentEngineSessions`)
+ * can refuse to save an answer to a question this read served, and a shared
+ * ownership check through the store port is deferred to a major release.
+ */
+function namesAnotherOwner(
+  sessionId: string,
+  stored: CheckpointEnvelope,
+  named: string | undefined,
+): boolean {
+  try {
+    resolveSessionOwner(sessionId, envelopeOwner(stored), named);
+    return false;
+  } catch (err) {
+    if (err instanceof SessionOwnershipConflictError) return true;
+    throw err;
+  }
 }
 
 export type SessionHistory = ReturnType<typeof createSessionHistory>;
