@@ -1,7 +1,0 @@
----
-type: security
----
-**`memoryBankStore` refuses invalid scope parts and `s3VectorsStore` checks the stored namespace on reads and conversation-wide erasure.**
-
-- **Memory Bank.** A scope part whose value is null, undefined or not text, or whose key is empty, previously disappeared from the scope sent to the service. Tenants that differed only in that part could then share memories. When the store resolves a scope, it now throws a `TypeError` naming the invalid key before contacting the service. Convert non-text values to text in `scopeFor`. Correctly typed scopes with nonempty keys keep their existing behavior. Previously written memories retain their original, immutable service scope and remain accessible under that scope until removed.
-- **S3 Vectors.** `get`, `list` and `forget` check the stored namespace. A conversation never lists or forgets another conversation’s rows when their key prefixes overlap. A single read returns `null` for a row outside the caller’s namespace. Rows without namespace metadata are no longer listed or erased by conversation-wide `forget`. Because `forget` requests metadata, it now needs `s3vectors:GetVectors` alongside `s3vectors:ListVectors` and `s3vectors:DeleteVectors`. Stored keys are unchanged. When two entries share one physical key, a later write still replaces the earlier entry and a single `delete(id)` can still remove the other conversation’s entry. Changing those keys requires a major-version migration.

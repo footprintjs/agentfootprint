@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.10.1] - 2026-11-18
+
+### Fixed
+
+- **Thinking agents with tools work again on the newest Claude models with default caching.** With default settings, an agent that used thinking and at least one tool on `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` or `claude-fable-5-1` stopped before its second model call with `UnsafeThinkingReplayError` (`prefix-changed`). A finished thinking turn was wrongly retired from the next request: through an agent that next turn failed with `DataCloneError`; through a direct provider call the thinking was dropped with a `prefix-changed` omission. The conversation had not changed: the saved check of the thinking was taken over the request after the library added its own cache marks, which rewrite a plain text turn into a marked block. The check is now taken over the conversation as the library sent it, before the cache marks, on `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`. `invokeModelGateway()` sends no cache marks by default, so it was affected only when an app turned prompt caching on or passed its own markers.
+
+  What an app will notice: the default setup completes its tool turns, and finished thinking is kept in the next request, so later requests carry the earlier thinking and count more input tokens than a run that had dropped it. Every saved conversation that replayed before still replays. A conversation saved by an earlier release on these models with default caching, whose saved check was taken over a marked turn, still cannot continue: one that waits in a tool turn refuses on resume with the same `prefix-changed` error, and one whose last turn finished with thinking has that turn retired, which through an agent still fails with `DataCloneError` (a separate defect, not fixed here). Start such a conversation again. `caching: 'off'`, which some apps used to get past this, is no longer needed.
+
+### Security
+
+- **`memoryBankStore` refuses invalid scope parts and `s3VectorsStore` checks the stored namespace on reads and conversation-wide erasure.**
+
+  - **Memory Bank.** A scope part whose value is null, undefined or not text, or whose key is empty, previously disappeared from the scope sent to the service. Tenants that differed only in that part could then share memories. When the store resolves a scope, it now throws a `TypeError` naming the invalid key before contacting the service. Convert non-text values to text in `scopeFor`. Correctly typed scopes with nonempty keys keep their existing behavior. Previously written memories retain their original, immutable service scope and remain accessible under that scope until removed.
+  - **S3 Vectors.** `get`, `list` and `forget` check the stored namespace. A conversation never lists or forgets another conversation’s rows when their key prefixes overlap. A single read returns `null` for a row outside the caller’s namespace. Rows without namespace metadata are no longer listed or erased by conversation-wide `forget`. Because `forget` requests metadata, it now needs `s3vectors:GetVectors` alongside `s3vectors:ListVectors` and `s3vectors:DeleteVectors`. Stored keys are unchanged. When two entries share one physical key, a later write still replaces the earlier entry and a single `delete(id)` can still remove the other conversation’s entry. Changing those keys requires a major-version migration.
+
 ## [14.10.0] - 2026-11-18
 
 ### Added
