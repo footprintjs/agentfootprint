@@ -322,6 +322,13 @@ Step-oriented tools use a `runtimeStageId` — `stageId#executionIndex`, for exa
 
 The defaults come from `TraceToolpackOptions` (`previewChars`, `sliceMaxDepth`, `sliceMaxNodes`, `valueMaxChars`), which you pass as the second argument to `traceToolpack` or as `toolpack` on `traceDebugAgent` and `.selfExplain()`. The caps are `TOOLPACK_HARD_CAPS`, and no argument can go past them.
 
+For each read, `trace_node` uses the window on the reader's first commit
+bundle. When several writes could have supplied the value, it lists each as
+a possible source with its Foottrace reason code. A source can also be missing
+because no tracked write supplied the value or because the reader's first
+bundle is missing. Unstamped records still use the last writer before the
+reader's commit.
+
 ### `find_context_errors` — what the run contradicted itself about
 
 When an answer looks wrong, the cheapest move is to ask whether the library already caught the problem. Every [Context Integrity](doc:context-integrity) check files its findings on the run's event stream. This tool reads them. It never re-runs a check and never re-judges one. What it adds is the join: the step each finding was filed at, and the next call to make.
