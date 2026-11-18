@@ -80,7 +80,12 @@ const CATCHES = [
     'stopReason',
     'On the record, and your code decides',
   ],
-  ['A tool', 'Rows that break their declared columns', 'resultColumns', 'On the record'],
+  [
+    'A tool',
+    'Rows that break their declared columns',
+    "resultColumns + checkColumnTypes: 'warn'",
+    'On the record',
+  ],
   ['A tool', 'A lookup that comes back empty', 'noticeEmptyLookups', 'An advisory on the record'],
   ['An MCP tool', 'A result that breaks its schema', 'outputSchema', 'Refused'],
 ] as const;
@@ -173,8 +178,8 @@ export default function SecurityPage() {
           }
         >
           <p>
-            Redaction is opt-in. Turn it on and the conversation, plus the fields you name, stay out
-            of every record the library keeps or serves about the run.
+            Redaction is opt-in. It covers selected fields in recorded state and typed events.
+            A recorder can still capture the final answer as the run’s output.
           </p>
         </ReadingRow>
 
@@ -188,10 +193,12 @@ export default function SecurityPage() {
             </thead>
             <tbody>
               <tr>
-                <td data-label="Kept out">The snapshot, the commit log and the narrative</td>
+                <td data-label="Kept out">Selected fields in snapshot state, the commit log and the narrative</td>
                 <td data-label="Still real">
                   What the model is sent, and what your tools receive:{' '}
-                  <a href="#scrub">clean what the model reads</a>
+                  <a href="#scrub">clean what the model reads</a>. And the final answer in the
+                  snapshot’s boundary log (<code>run.exit</code>), once a recorder such as{' '}
+                  <code>recordRun</code> is attached
                 </td>
               </tr>
               <tr>
@@ -381,6 +388,7 @@ export default function SecurityPage() {
               marks={[
                 'argumentsFrom:',
                 'resultColumns:',
+                'checkColumnTypes:',
                 'namesAndNumbersFromEvidence()',
                 'context_error',
                 'stopReason',

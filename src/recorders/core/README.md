@@ -131,3 +131,15 @@ Rarely. New library-owned domain events (e.g. Phase 4's `composition.*` events) 
 3. The shape is stable — no consumer configuration changes its output.
 
 Everything else is a `recorders/observability/` candidate (opt-in Tier 3).
+
+## Opt-in source-time context
+
+`recordModelContext` reads its lazy factory only for an exact
+`agentfootprint.context.recorded` subscriber. It copies complete JSON pieces
+with the shared descriptor-based `copyJson` (8 MiB per logical call), freezes
+only that owned copy, then serves it through `typedEmit` before native emit.
+A non-JSON or oversized capture emits a fixed `not-json` omission and does not
+change model execution. No accessor or `toJSON` is called by the copier.
+`ContextRecordedRecorder` forwards this frame inline at Agent, LLMCall and
+composition setup; a bounded deferred public queue cannot erase call evidence.
+Tests live beside `recordModelContext` and at `core/agent/stages/callLLM/capture.test.ts`.

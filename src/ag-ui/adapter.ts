@@ -49,6 +49,8 @@ export interface AgUiTranslationRun {
   readonly runId: string;
   /** The paused run this one continues — its translation's `suspension()`, as the server kept it. */
   readonly resume?: AgUiSuspension;
+  /** Hosting delivery policy; independent of agent reuse. */
+  readonly delivery?: 'host';
 }
 
 /**
@@ -97,6 +99,10 @@ export interface AgUiOptions {
   readonly translation?: AgUiTranslationStrategy;
   /** The CUSTOM allow-list — see {@link AgUiSerializerOptions.custom}. */
   readonly custom?: AgUiSerializerOptions['custom'];
+  /** Project served tool arguments without replacing native lifecycle/ids. */
+  readonly toolArguments?: AgUiSerializerOptions['toolArguments'];
+  /** Project served tool results; default failed-tool withholding stays authoritative. */
+  readonly toolResults?: AgUiSerializerOptions['toolResults'];
   /** Write the model's reasoning — see {@link AgUiSerializerOptions.reasoning}. */
   readonly reasoning?: boolean;
   /**
@@ -148,15 +154,20 @@ export function agUi(options: AgUiOptions = {}): ProtocolAdapter<AgUiRunInput, A
     conversation: (input) => input.threadId,
     plan: (input, held, facts) => planAgUiTurn(input, held, facts, rules),
     awaitsCaller: isFrontendToolPause,
-    open: (input, resumed) => {
+    open: (input, resumed, opening) => {
       const resume = resumed === undefined ? undefined : readAgUiSuspension(resumed);
       return translate({
         threadId: input.threadId,
         runId: input.runId,
         ...(resume !== undefined && { resume }),
+        ...(opening !== undefined && { delivery: opening.delivery }),
       });
     },
     framing,
+    refusal: (input, refusal) =>
+      agUiSerializer({ threadId: input.threadId, runId: input.runId })
+        .settle({ kind: 'failed', refusal })
+        .filter((event) => event.type === 'RUN_ERROR'),
   } satisfies ProtocolAdapter<AgUiRunInput, AgUiEvent>);
 }
 
@@ -169,10 +180,15 @@ function strategy<T>(value: T | undefined, name: string): T | undefined {
 
 /** The translation strategy — the app's, or `agUiSerializer` tuned by `custom` and `reasoning`. */
 function translationOf(options: AgUiOptions): AgUiTranslationStrategy {
-  const { custom, reasoning } = options;
+  const { custom, reasoning, toolArguments, toolResults } = options;
   const translation = strategy(options.translation, 'translation');
   if (translation !== undefined) {
-    if (custom !== undefined || reasoning !== undefined)
+    if (
+      custom !== undefined ||
+      reasoning !== undefined ||
+      toolArguments !== undefined ||
+      toolResults !== undefined
+    )
       throw new TypeError(
         'agUi(): `translation` was given with `custom` or `reasoning`, which tune the default ' +
           'translation only — your translation decides both itself. Pass one or the other.',
@@ -196,6 +212,8 @@ function translationOf(options: AgUiOptions): AgUiTranslationStrategy {
       ...run,
       ...(custom !== undefined && { custom }),
       ...(reasoning !== undefined && { reasoning }),
+      ...(toolArguments !== undefined && { toolArguments }),
+      ...(toolResults !== undefined && { toolResults }),
     });
 }
 

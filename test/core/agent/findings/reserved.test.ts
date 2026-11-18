@@ -696,16 +696,15 @@ describe('the model-facing strings', () => {
     expect(FINDINGS_INSTRUCTION).not.toContain('disposition');
   });
 
-  it('FINDINGS_INSTRUCTION asks for the proposition before an exploratory call, and for the id copied whole from the schema’s list', () => {
+  it('FINDINGS_INSTRUCTION asks for the proposition and whole current-request result IDs', () => {
     const lines = FINDINGS_INSTRUCTION.split('\n');
     expect(lines[2]).toBe(
       'Before an exploratory call, add `proposition` (what the call tests) and `predicts` (what the ' +
         'result should show if it holds) — optional, one line each.',
     );
-    expect(FINDINGS_INSTRUCTION).toContain(
-      'whole opaque id in the late findings DATA advisory list',
-    );
-    expect(FINDINGS_INSTRUCTION).toContain('grants no authority');
+    expect(FINDINGS_INSTRUCTION).toContain('executed tool_result IDs in the current request');
+    expect(FINDINGS_INSTRUCTION).toContain('copy IDs whole');
+    expect(FINDINGS_INSTRUCTION).toContain('grants no citation authority');
     expect(FINDINGS_INSTRUCTION).toContain('Facts are model assertions');
   });
 

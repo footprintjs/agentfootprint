@@ -12,8 +12,8 @@ into the AG-UI protocol's events and framed for the wire.
 - Never reads the run's live values (`core/runnerLive.ts`), its state or its
   snapshot. Nothing a policy hides can reach an AG-UI event, at any depth.
 
-## The one law here
-Every value in an AG-UI event comes from a served event, from the record's
+## Record projection and explicit host delivery
+In the default projection every value comes from a served event, from the record's
 address (`runtimeStageId`, `subflowPath` — never selected by a policy), or from
 the AG-UI request's own ids. The record's own `runId` is never written (it
 counts every run the process made); a failed tool call's result is the fixed
@@ -21,6 +21,15 @@ words unless the app chose `toolErrors: 'served'`; a tool's progress `payload`
 goes out only when the app lists it. Every id is minted
 by `ids.ts` from that address under the request's `runId`: injective, unique
 across a thread, and the same with or without a policy.
+
+The standing-host bridge separately opts into `delivery: 'host'`. Candidate
+assistant text at every depth and nested answer results wait for the host's
+authorized `complete(output)`; this is the same caller-facing delivery boundary
+as its existing wire, not a claim that the record served that output. The
+request-local `HostReply.custom` similarly publishes app-authorized data through
+the adapter's allow-list and field projection. A projection must not close over
+private values. Ordinary event translation still consumes served values only;
+standalone defaults and redaction property tests remain unchanged.
 
 ## How a run maps
 - An agent turn mounted inside a composition is an AG-UI sub-agent: its

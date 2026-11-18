@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-153 exported from `agentfootprint`.
+160 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -30,6 +30,7 @@ title: Type Aliases
 - [`BoundAs`](/docs/api/type-aliases/BoundAs)
 - [`BranchOutcome`](/docs/api/type-aliases/BranchOutcome)
 - [`BrowserDriver`](/docs/api/type-aliases/BrowserDriver)
+- [`ChartToolObservability`](/docs/api/type-aliases/ChartToolObservability)
 - [`CheckInAssembler`](/docs/api/type-aliases/CheckInAssembler)
 - [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)
 - [`CheckInScorer`](/docs/api/type-aliases/CheckInScorer)
@@ -116,6 +117,11 @@ title: Type Aliases
 - [`SequenceOutput`](/docs/api/type-aliases/SequenceOutput)
 - [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
 - [`ServedGapKind`](/docs/api/type-aliases/ServedGapKind)
+- [`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata)
+- [`SourceEvidencePreparationContext`](/docs/api/type-aliases/SourceEvidencePreparationContext)
+- [`SourceEvidenceRecentResult`](/docs/api/type-aliases/SourceEvidenceRecentResult)
+- [`SourceEvidenceScalar`](/docs/api/type-aliases/SourceEvidenceScalar)
+- [`SourceEvidenceScope`](/docs/api/type-aliases/SourceEvidenceScope)
 - [`StageRole`](/docs/api/type-aliases/StageRole)
 - [`Standing`](/docs/api/type-aliases/Standing)
 - [`StoredReceipt`](/docs/api/type-aliases/StoredReceipt)
@@ -149,6 +155,7 @@ title: Type Aliases
 - [`ToolResultColumns`](/docs/api/type-aliases/ToolResultColumns)
 - [`ToolResultContent`](/docs/api/type-aliases/ToolResultContent)
 - [`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome)
+- [`ToolResultRowsetSource`](/docs/api/type-aliases/ToolResultRowsetSource)
 - [`ToolResultStatus`](/docs/api/type-aliases/ToolResultStatus)
 - [`ToolWants`](/docs/api/type-aliases/ToolWants)
 - [`UnmatchedReason`](/docs/api/type-aliases/UnmatchedReason)

@@ -1,5 +1,6 @@
 /** Shared native execution adapter, serving, recorders and subscriptions for runners. */
 
+import { compositionRecorders } from './runRecorders.js';
 import type {
   CombinedRecorder,
   FlowChart,
@@ -44,10 +45,6 @@ import {
   type RunnerInvocation,
   type RunnerComponentInstaller,
 } from './runnerExecution.js';
-import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
-import { streamRecorder } from '../recorders/core/StreamRecorder.js';
-import { agentRecorder } from '../recorders/core/AgentRecorder.js';
-import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import {
   adoptParentRun,
   closeParentRun,
@@ -148,9 +145,9 @@ export abstract class RunnerBase<
    * handed down), this is footprintjs's REDACTED view —
    * `getSnapshot({ redact: true })`, through `servableSnapshot`, the one owner
    * of what a run may show: `sharedState` and every subflow's state from the
-   * redacted mirror, the commit log as scrubbed at write time, and no
-   * `initialState` (the raw pre-run base never passed the policy, so a fold of
-   * it reports `basis: 'log-only'`). Private argument selectors use the same
+   * redacted mirror, the scrubbed commit log, and the native engine's fold-base
+   * contract: older views omit it; newer engines serve its safe projection.
+   * Private argument selectors use the same
    * native view; without either arm the snapshot is unchanged. The library's own logic never reads this
    * getter — what it computes on is the live run (`liveSnapshot`).
    */
@@ -252,15 +249,13 @@ export abstract class RunnerBase<
     const redaction = this.prepareRunRedaction(invocation, resumeLeg);
     const getRunContext = () => invocation.context();
     const dispatcher = this.dispatcher;
-    const recorders: readonly CombinedRecorder[] = [
-      ...redaction.recorders,
-      new ContextRecorder({ dispatcher, getRunContext, realWrites: redaction }),
-      streamRecorder({ dispatcher, getRunContext }),
-      agentRecorder({ dispatcher, getRunContext }),
-      compositionRecorder({ dispatcher, getRunContext }),
-      ...extra,
-      ...this.attachedRecorders,
-    ];
+    const recorders = compositionRecorders(
+      dispatcher,
+      getRunContext,
+      redaction,
+      extra,
+      this.attachedRecorders,
+    );
     return {
       setup: {
         redaction: redaction.recordPolicy,

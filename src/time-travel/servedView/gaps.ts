@@ -135,11 +135,35 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'without one. ' +
       RECEIPT_BOUNDARY,
   }),
+  'privacy-policy': Object.freeze({
+    // The recording's positive policy marker, not a placeholder-looking value,
+    // is the authority. This caveat is independent of whether the native engine
+    // retained a safe fold base. It states a possibility, not that any particular
+    // value was omitted: a policy can leave every value this view reads public.
+    // These fields compare the rebuild with the request; stored receipt hashes
+    // and basis facts are neither erased nor reclassified as missing.
+    fields: Object.freeze([
+      'system.hash',
+      'system.chars',
+      'system.pieces',
+      'messages.count',
+      'messages.entries',
+      'messages.requestOnly',
+      'tools.schemaHashes',
+      'tools.names',
+      'tools.forced',
+      'tools.withheld',
+      'epoch',
+    ]),
+    why:
+      'Privacy rules may withhold values from this view. Empty values and counts do not ' +
+      'establish that the request contained nothing.',
+  }),
   'no-fold-base': Object.freeze({
     // MECHANISM (not printed). Raised when `location.basis` or
     // `location.runBasis` is `'log-only'` — the recording travelled without the
-    // `initialState` the fold folds against (`getSnapshot({ redact: true })`
-    // hands back exactly that shape: the log travels, the base does not), so
+    // `initialState` the fold folds against (older redacted snapshots also
+    // had that shape: the log travelled, the base did not), so
     // every read can see only what the log itself wrote. A rebuild that
     // recovered one turn of three reports one; a system prompt it could not
     // read at all is 0 characters rather than unknown; and `EpochLocation.epoch`
@@ -419,7 +443,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
  *
  * // Why does nothing explain `callRuntimeStageId`? Because nothing has to.
  * UNGAPPED_FIELDS['callRuntimeStageId'];
- * Object.keys(SERVED_GAPS).length; // 7 gap kinds
+ * Object.keys(SERVED_GAPS).length; // the current catalogue's gap count
  * ```
  */
 export const UNGAPPED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
@@ -450,10 +474,11 @@ export function gapsOf(
   conversation: readonly LLMMessage[] | undefined,
   read: GapRead,
   forced: string | undefined,
+  served: boolean,
 ): ServedGap[] {
   const receipt = read.receipt;
   // ── what this view cannot prove ────────────────────────────────────────
-  // Order is deliberate: the two that make the WHOLE view suspect come first,
+  // Order is deliberate: limits on the whole reconstructed view come first,
   // so a renderer that shows one gap shows the one that matters most.
   const gaps: ServedGap[] = [];
   if (layoutUnknown) gaps.push(gapOf('findings-layout'));
@@ -468,6 +493,7 @@ export function gapsOf(
   if (location.basis === 'log-only' || location.runBasis === 'log-only') {
     gaps.push(gapOf('no-fold-base'));
   }
+  if (served) gaps.push(gapOf('privacy-policy'));
   if (conversation === undefined) gaps.push(gapOf('no-conversation-on-record'));
   if (!location.hasRunLog) gaps.push(gapOf('no-run-log'));
   // No receipt ⇒ nothing checks the rebuild, and the receipt-only fields are

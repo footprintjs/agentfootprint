@@ -8,6 +8,7 @@
     "sqlite",
     "---[KeyRound]Identity & governance---",
     "identity-and-credentials",
+    "directory-groups",
     "governance-and-policy",
     "---[Server]Runtime & tools---",
     "hosting-and-runtime",

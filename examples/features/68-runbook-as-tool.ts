@@ -45,6 +45,7 @@ import {
   defineTool,
   inMemoryArtifacts,
   runbookAsTool,
+  type ChartToolObservability,
   type LLMProvider,
   type RunbookEnvelope,
   type ToolDispatch,
@@ -152,12 +153,19 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
 
   // The runbook: inventory → bounded fan-out (one decider pass per subject,
   // each an isolated branch) → collect rows + declare the chart's own limits.
+  // #region observability
+  const observability: ChartToolObservability = {
+    readTracking: 'summary',
+    writeTracking: 'summary',
+  };
+  // #endregion observability
   const declaration = {
     description: 'Assess backup protection posture for every subject in the estate.',
     resultKind: 'verdict/backup-posture',
     rules: { name: 'health-signal', version: 'v1' },
     verdicts: { decider: 'Protection posture' },
     composedOf: ['backup_inventory'],
+    observability,
     // OPT-IN (9.79.0): also file the inner chart's own recording, so this
     // walk can be DRAWN. The walk artifact is a ROW projection — a step
     // graph cannot be inferred from sentences about steps — and `structure`

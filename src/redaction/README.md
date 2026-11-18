@@ -230,7 +230,7 @@ and that the answer account says the question and the answer are kept out.
    keep footprintjs's rule, by name, so they stay useful. For full
    observability, run with no policy. Pinned, generated for every event type
    in the registry under random policies — name-only ones included — and
-   adversarial strings (`value-rule.test.ts`, and the public-surface
+   adversarial strings (`knownStrings/value-rule.test.ts`, and the public-surface
    property): no string but a library word survives, and every library word
    does; every copy the library derives from a selected value (a validation
    issue's quote, a check-in's `willDo`, a parser's message, a coverage
@@ -359,8 +359,8 @@ bytes, for any recording — an agent's or a chart's.)
   as values (`core/agent/assessment/assess.ts` · `assessLive`): the live
   snapshot carries the marker too — its commit log IS scrubbed — but its state
   never is.
-- **The served views** (`servedAt`, `servedViews`) read a redacted piece as
-  absent, and name the fold base a served snapshot lacks (`no-fold-base`).
+- **The served views** (`servedAt`, `servedViews`) name privacy uncertainty with
+  `privacy-policy`, independently of an actually absent base (`no-fold-base`).
 - **The context ledger** (`context-ledger/contextLedger.ts`) is not a
   reader of the record but a mechanism: its gates decide what LATER runs are
   offered, so a placeholder must never count as "never used". A runner is read
@@ -397,9 +397,9 @@ bytes, for any recording — an agent's or a chart's.)
   can appear in one. The output-schema warning leaves the parser's message out
   when the run keeps the draft out (`stages/route.ts`); route the rest of your
   console in production as you would any log.
-- **A fold of a redacted snapshot.** `getLastSnapshot()` omits `initialState`
-  under a policy (footprintjs: the raw pre-run base never passed the policy), so
-  a fold of it reports `basis: 'log-only'` and `servedAt` names `no-fold-base`.
+- **A fold of a redacted snapshot.** The installed native engine may omit
+  `initialState` or retain its safe projection. Only an actually missing base
+  raises `no-fold-base`; `privacy-policy` separately names privacy uncertainty.
 - **Who asked and who approved are kept out under a policy.** `principal` and
   `tenant` on every event's meta, and a check-in decision's `by` (on
   `checkin.decision` and on the `pause.resume` that brought it), are no
@@ -580,11 +580,11 @@ arguments and evidence use the tool's shown view, including its chosen mask; the
 approval remains bound to the actual private call. Protect checkpoints at the host
 boundary: their consistency checks are not authentication.
 
-A private-only snapshot carries the native redaction marker and omits `initialState`.
-Its served views therefore report `no-fold-base`; they cannot claim an exact full
-reconstruction. Public answer-account facts remain readable and `assessAnswer` does
-not invent missing caller coverage. A runner without a private mapper or caller
-policy keeps the existing stream bytes, no new mirror, marker or checkpoint field.
+A private-only snapshot carries the native redaction marker and the engine's own
+safe-base contract. Its served views carry `privacy-policy`, and `no-fold-base`
+only when the base is absent. Public answer-account facts remain readable, and
+`assessAnswer` invents no missing caller coverage. A runner without a private mapper
+or caller policy keeps existing bytes, with no new mirror, marker or checkpoint field.
 
 Module size: Agent's whole injected-message validation moved to
 `core/agent/run/injectionDelivery.ts` (step 2 extraction); RunnerBase's complete pause
@@ -597,3 +597,5 @@ a private-checkpoint resume these unknown marks join the native record policy as
 record-only selectors; they do not claim caller coverage or become admitted
 private fields. They retain default-deny event serving. Legacy checkpoints without
 the private carrier retain the existing missing-caller-policy refusal.
+
+See [source-correction event views](SOURCE_CORRECTION_EVENTS.md) for the internal same-event serving seam and caller conversation-policy boundary.

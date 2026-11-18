@@ -57,6 +57,7 @@ import {
   type ToolOf,
 } from './resolve.js';
 import type { CallSources } from './sources.js';
+import { omissionRows } from './sourceCorrection.js';
 import { markPrivateResolutions, privateAnswersInPlay } from './privateAnswers.js';
 
 /**
@@ -120,6 +121,7 @@ export interface InputsLayerState {
   argumentPlan?: readonly PlannedCall[];
   argumentChecks?: readonly CheckedArgument[];
   argumentRows?: readonly ArgumentRow[];
+  argumentSourceOmissionRows?: readonly ArgumentRow[];
   /** Under `.time()` only: one `call-window` row per call to a tool whose period declares forms. */
   argumentWindowRows?: readonly CallWindowRow[];
   argumentResolutions?: readonly ArgumentResolution[];
@@ -127,6 +129,7 @@ export interface InputsLayerState {
 
 /** What the stages are handed from outside the folder — closures, never scope. */
 export interface InputsLayerDeps {
+  readonly declarationCorrection?: 'once';
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
   /** The evidence gate's revision turns the tools off — present only then;
@@ -363,8 +366,15 @@ export function recordArgumentsStage(
           armOf(declaredOf(deps, calls)),
           decisions,
         );
-  scope.argumentRows = rows;
-  if (rows.length > 0) deps.emitRows(scope, rows);
+  const deferred =
+    deps.declarationCorrection === 'once'
+      ? omissionRows(rows, checked, calls, declaredOf(deps, calls) ?? new Map())
+      : [];
+  const pending = new Set(deferred);
+  const filed = deferred.length > 0 ? rows.filter((row) => !pending.has(row)) : rows;
+  scope.argumentRows = filed;
+  if (deps.declarationCorrection === 'once') scope.argumentSourceOmissionRows = deferred;
+  if (filed.length > 0) deps.emitRows(scope, filed);
   if (time !== undefined) scope.argumentWindowRows = callWindowRowsOf(decisions, calls, stamp);
 }
 

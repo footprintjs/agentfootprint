@@ -34,7 +34,7 @@
  * an agent without a store, a wire without the body shape — which no retry
  * and no different request will change.
  */
-export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
+const statuses = {
   ERR_HOST_CLOSED: 503,
   ERR_CONCURRENT_RUN: 409,
   ERR_PAUSE_NOT_CARRIED: 409,
@@ -95,4 +95,16 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   // nothing to deliver. Nothing broke, so never a 5xx. The refusal withholds
   // the answer only: tools the turn already called have run, and are not undone.
   ERR_ANSWER_VALIDATION: 422,
-});
+} as const;
+
+/** Closed native refusal codes; unknown application strings are never promoted to protocol classification. */
+export type HostRefusalCode = keyof typeof statuses;
+
+export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze(statuses);
+
+/** Recognize only an own key in the native status vocabulary. */
+export function hostRefusalCode(value: unknown): HostRefusalCode | undefined {
+  return typeof value === 'string' && Object.hasOwn(statuses, value)
+    ? (value as HostRefusalCode)
+    : undefined;
+}

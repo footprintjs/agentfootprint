@@ -1,5 +1,4 @@
 {
-  "base": "78c11f2908515c4be1cb9a86a566f87487e736f1",
   "exports": [
     "boundScripts",
     "boundAnswerCoverage",
@@ -8,95 +7,6 @@
     "eventShapeTable",
     "eventShapes"
   ],
-  "descriptors": {
-    "__esModule": {
-      "enumerable": false,
-      "configurable": false,
-      "writable": false,
-      "get": "undefined",
-      "value": "boolean"
-    },
-    "boundScripts": {
-      "enumerable": true,
-      "configurable": true,
-      "writable": true,
-      "get": "undefined",
-      "value": "function",
-      "name": "",
-      "length": 1,
-      "ownKeys": [
-        "length",
-        "name"
-      ]
-    },
-    "boundAnswerCoverage": {
-      "enumerable": true,
-      "configurable": true,
-      "writable": true,
-      "get": "undefined",
-      "value": "function",
-      "name": "",
-      "length": 1,
-      "ownKeys": [
-        "length",
-        "name"
-      ]
-    },
-    "boundAnswerNegatives": {
-      "enumerable": true,
-      "configurable": true,
-      "writable": true,
-      "get": "undefined",
-      "value": "function",
-      "name": "",
-      "length": 1,
-      "ownKeys": [
-        "length",
-        "name"
-      ]
-    },
-    "boundMeta": {
-      "enumerable": true,
-      "configurable": true,
-      "writable": true,
-      "get": "undefined",
-      "value": "function",
-      "name": "",
-      "length": 1,
-      "ownKeys": [
-        "length",
-        "name"
-      ]
-    },
-    "eventShapeTable": {
-      "enumerable": true,
-      "configurable": true,
-      "writable": true,
-      "get": "undefined",
-      "value": "function",
-      "name": "eventShapeTable",
-      "length": 1,
-      "ownKeys": [
-        "length",
-        "name",
-        "prototype"
-      ]
-    },
-    "eventShapes": {
-      "enumerable": true,
-      "configurable": true,
-      "writable": true,
-      "get": "undefined",
-      "value": "function",
-      "name": "eventShapes",
-      "length": 1,
-      "ownKeys": [
-        "length",
-        "name",
-        "prototype"
-      ]
-    }
-  },
   "eventKeys": [
     "agentfootprint.tools.absent",
     "agentfootprint.tools.coverage_declared",
@@ -121,6 +31,7 @@
     "agentfootprint.fallback.triggered",
     "agentfootprint.memory.retrieved",
     "agentfootprint.integrity.context_error",
+    "agentfootprint.tools.rowset_checked",
     "agentfootprint.tools.effect",
     "agentfootprint.pause.request",
     "agentfootprint.artifacts.minted",
@@ -151,6 +62,7 @@
     "agentfootprint.agent.thinking_omitted",
     "agentfootprint.agent.around_turn_failed",
     "agentfootprint.agent.budget_exhausted",
+    "agentfootprint.context.recorded",
     "agentfootprint.stream.llm_end",
     "agentfootprint.stream.token",
     "agentfootprint.stream.tool_start",
@@ -228,14 +140,6 @@
     "agentfootprint.artifacts.hand_over_failed",
     "agentfootprint.integrity.disposition"
   ],
-  "plainPrototype": true,
-  "eventDescriptors": true,
-  "fresh": true,
-  "shared": {
-    "scripts": true,
-    "coverage": true,
-    "negatives": true
-  },
   "proxy": {
     "trace": [
       [
@@ -385,6 +289,7 @@
     "agentfootprint.fallback.triggered",
     "agentfootprint.memory.retrieved",
     "agentfootprint.integrity.context_error",
+    "agentfootprint.tools.rowset_checked",
     "agentfootprint.tools.effect",
     "agentfootprint.pause.request",
     "agentfootprint.artifacts.minted",
@@ -415,6 +320,7 @@
     "agentfootprint.agent.thinking_omitted",
     "agentfootprint.agent.around_turn_failed",
     "agentfootprint.agent.budget_exhausted",
+    "agentfootprint.context.recorded",
     "agentfootprint.stream.llm_end",
     "agentfootprint.stream.token",
     "agentfootprint.stream.tool_start",
@@ -491,10 +397,5 @@
     "agentfootprint.artifacts.expired",
     "agentfootprint.artifacts.hand_over_failed",
     "agentfootprint.integrity.disposition"
-  ],
-  "inheritedNames": [
-    false,
-    false,
-    false
   ]
 }

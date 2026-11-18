@@ -8,6 +8,7 @@
 
 import type { AgentfootprintEventMap } from '../../events/registry.js';
 import { type BoundRule } from './auditBounding.js';
+import type { CheckedEventGroups } from './auditShapes/vocabulary.js';
 import { boundScripts as boundScriptsRule } from './auditShapes/pieces/scripts.js';
 import { boundAnswerCoverage as boundAnswerCoverageRule } from './auditShapes/pieces/coverage.js';
 import { boundAnswerNegatives as boundAnswerNegativesRule } from './auditShapes/pieces/coverage.js';
@@ -80,5 +81,15 @@ export function eventShapes(toolRan: (name: string) => boolean): {
     ...resourcesShapes(),
     ...routingShapes(),
     ...outcomesShapes(),
-  };
+  } satisfies CheckedEventGroups<
+    [
+      ReturnType<typeof contentShapes>,
+      ReturnType<typeof decisionsShapes>,
+      ReturnType<typeof lifecycleShapes>,
+      ReturnType<typeof streamingShapes>,
+      ReturnType<typeof resourcesShapes>,
+      ReturnType<typeof routingShapes>,
+      ReturnType<typeof outcomesShapes>,
+    ]
+  >;
 }
