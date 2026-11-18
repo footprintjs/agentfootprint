@@ -3,7 +3,7 @@
  *
  * A call can end in an error before its tool is reached (an unknown name,
  * arguments the schema rejects, a blocked credential). Its `tool_end` now says
- * so (`entered: false`), a call whose tool ran and threw says that
+ * so (`entered: false`), a call whose tool ran says so
  * (`entered: true`), and a record from before the field says neither — so the
  * account, the tool-call ledger, the journal and AG-UI ask one function
  * (`semantics/toolRan.ts` · `toolRanOf`).
@@ -14,11 +14,13 @@
  * field taken off, as a record written before this version has it.
  *
  * Test types: SCENARIO (real runs, each case of the contract), REGRESSION
- * (the byte law: a success keeps its bytes), BOUNDARY (a record that does not
+ * (the byte law: a success adds only the stamp), BOUNDARY (a record that does not
  * say; a stamp that is not a boolean), INTEGRATION (the ledger an answer
  * check reads; a resumed door; the trace toolpack's call journal; the
  * chat-interface door; the summary an approver reads).
  */
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -139,6 +141,64 @@ function writtenBeforeEntered(recording: Recording): Recording {
     }),
   } as Recording;
 }
+
+const journal = (recording: Recording, id: string) =>
+  callTraceTool(
+    traceToolpack({
+      snapshot: recording.snapshot,
+      events: recording.events,
+    } as unknown as TraceToolpackArtifacts),
+    'inspect_tool_call',
+    { toolCallId: id },
+  );
+
+function commentary(recording: Recording): string {
+  const end = recording.events.find((event) => String(event.type).endsWith('stream.tool_end'));
+  const key = selectCommentaryKey(end as AgentfootprintEvent);
+  expect(key).toBeTruthy();
+  return defaultCommentaryTemplates[key!]!;
+}
+
+describe('one recorded entry fact across the account, journal and commentary', () => {
+  it('keeps a historical middleware approval decline without claiming the tool returned', async () => {
+    const file = new URL('./fixtures/legacy-tool-approval-declined.json.gz', import.meta.url);
+    const recording = JSON.parse(gunzipSync(readFileSync(file)).toString('utf8')) as Recording;
+    expect(ends(recording)[0]).toMatchObject({
+      toolCallId: 'legacy-call',
+      result: 'declined by human',
+    });
+    expect(ends(recording)[0]).not.toHaveProperty('entered');
+    expect(ends(recording)[0]).not.toHaveProperty('error');
+    expect(read(recording).facts.calls[0]?.outcome).toBe('declined');
+    const entry = await journal(recording, 'legacy-call');
+    expect.soft(entry).toContain("ran with: nothing — call 'legacy-call' was never executed.");
+    expect.soft(entry).toContain("outcome: denied by 'gate'");
+    expect.soft(entry).toContain('result: "declined by human"');
+    expect.soft(commentary(recording)).toBe('The record does not say whether the tool ran.');
+  });
+
+  it('records a successful lookup entering its tool and shows its result', async () => {
+    const { recording, entered, account } = await runAndRead([
+      { id: 'ok1', name: 'lookup', args: { id: 'r1' } },
+    ]);
+    expect(entered.lookup).toBe(1);
+    expect(ends(recording)[0]).toMatchObject({ entered: true, result: { rows: [1] } });
+    expect(account.facts.calls[0]?.outcome).toBe('ran');
+    const entry = await journal(recording, 'ok1');
+    expect(entry).toContain('ran with: the proposed arguments');
+    expect(entry).toContain('outcome: ok');
+    expect(commentary(recording)).toBe(
+      'The tool returned its result. {{agentName}} will share it with the LLM next.',
+    );
+
+    const unstamped = writtenBeforeEntered(recording);
+    expect(read(unstamped).facts.calls[0]?.outcome).toBe('unknown');
+    const oldEntry = await journal(unstamped, 'ok1');
+    expect(oldEntry).toContain('arguments used: not recorded');
+    expect(oldEntry).toContain('result: "{\\"rows\\":[1]}"');
+    expect(commentary(unstamped)).toBe('The record does not say whether the tool ran.');
+  });
+});
 
 describe('a call that never reached its tool — "It asked to run {tool}; the call was not executed."', () => {
   it('an unknown tool name', async () => {
@@ -355,13 +415,18 @@ describe('a malformed settlement marker in a saved account', () => {
   });
 });
 
-describe('the byte law: a call that succeeded keeps exactly its bytes', () => {
-  it('a success has no `entered`', async () => {
+describe('successful brackets carry the entry stamp', () => {
+  it('a success adds only `entered`', async () => {
     const { entered, recording, account } = await runAndRead([
       { id: 'ok1', name: 'lookup', args: { id: 'r1' } },
     ]);
     expect(entered.lookup).toBe(1);
-    expect(Object.keys(ends(recording)[0]!).sort()).toEqual(['durationMs', 'result', 'toolCallId']);
+    expect(Object.keys(ends(recording)[0]!).sort()).toEqual([
+      'durationMs',
+      'entered',
+      'result',
+      'toolCallId',
+    ]);
     expect(account.facts.calls[0]).toMatchObject({ outcome: 'ran' });
   });
 
@@ -475,16 +540,6 @@ describe('a resumed door writes the same field', () => {
 });
 
 describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
-  const journal = (recording: Recording, id: string) =>
-    callTraceTool(
-      traceToolpack({
-        snapshot: recording.snapshot,
-        events: recording.events,
-      } as unknown as TraceToolpackArtifacts),
-      'inspect_tool_call',
-      { toolCallId: id },
-    );
-
   it('journal leaves the arguments proposed on an old schema-rejection bracket', async () => {
     const { recording, entered } = await runAndRead([
       { id: 'old1', name: 'lookup', args: { id: 7 } },
@@ -626,13 +681,6 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
 });
 
 describe('teaching commentary for tool ends', () => {
-  function commentary(recording: Recording): string {
-    const end = recording.events.find((event) => String(event.type).endsWith('stream.tool_end'));
-    const key = selectCommentaryKey(end as AgentfootprintEvent);
-    expect(key).toBeTruthy();
-    return defaultCommentaryTemplates[key!]!;
-  }
-
   it('teaching commentary says a recorded argument refusal did not execute', async () => {
     const { recording, entered } = await runAndRead([
       { id: 'talk1', name: 'lookup', args: { id: 7 } },

@@ -129,7 +129,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -352,7 +353,8 @@
             "result": {
               "volumes": 3
             }
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -625,7 +627,8 @@
               "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
             }
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -873,7 +876,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -1103,7 +1107,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -1332,7 +1337,8 @@
             "result": {
               "volumes": 3
             }
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -1611,7 +1617,8 @@
               "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
             }
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -1865,7 +1872,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -2095,7 +2103,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -2324,7 +2333,8 @@
             "result": {
               "volumes": 3
             }
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -2603,7 +2613,8 @@
               "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
             }
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -2857,7 +2868,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -3089,7 +3101,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -3320,7 +3333,8 @@
             "result": {
               "volumes": 3
             }
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -3601,7 +3615,8 @@
               "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
             }
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -3857,7 +3872,8 @@
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
           },
-          "status": "absent"
+          "status": "absent",
+          "entered": true
         }
       },
       {
@@ -4056,7 +4072,8 @@
             ],
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -4230,7 +4247,8 @@
             "result": {
               "volumes": 3
             }
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -4426,7 +4444,8 @@
               "retry_returns_the_same": true,
               "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
             }
-          }
+          },
+          "entered": true
         }
       },
       {
@@ -4599,7 +4618,8 @@
             ],
             "retry_returns_the_same": true,
             "note": "The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry."
-          }
+          },
+          "entered": true
         }
       },
       {

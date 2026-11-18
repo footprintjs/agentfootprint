@@ -22,6 +22,15 @@ export function fixtureA(): Recording & { meta: { origin: { runId: string } } } 
   return JSON.parse(readFileSync(resolve(HERE, 'fixtures/turn2.recorded.json'), 'utf8'));
 }
 
+/** A synthetic variant for tests that need a recorded entry. The archived recording stays intact. */
+export function fixtureAWithEntry(): ReturnType<typeof fixtureA> {
+  const rec = fixtureA();
+  const end = rec.events.find((event) => event.type === 'agentfootprint.stream.tool_end');
+  if (end === undefined) throw new Error('Fixture A is missing its tool end');
+  Object.assign(end.payload, { entered: true });
+  return rec;
+}
+
 /** The app's declarations: a skill label, the wrapper shape of one lookup, "the app decides entries". */
 export const HOST_APP_DECLARATIONS: AnswerAccountDeclarations = Object.freeze({
   id: 'host-app',
@@ -40,7 +49,7 @@ type MutableEvent = { type: string; payload: Record<string, any>; meta: Record<s
  * SHPSTRPLPCL003, is in the question, so it was exempt and never looked up).
  */
 export function fixtureB(): Recording {
-  const rec = fixtureA() as unknown as { events: MutableEvent[] };
+  const rec = fixtureAWithEntry() as unknown as { events: MutableEvent[] };
   const absent = rec.events[51]!.payload;
   absent.checked[0].short = 'the array name, as this tool can place an array';
   absent.checked[1].short = 'every VM disk in the RVTools export of 2026-09-19';
