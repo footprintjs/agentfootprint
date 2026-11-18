@@ -7,7 +7,7 @@ import {
 } from '../../redaction/innerCallPolicyCarrier.js';
 import { markPrivateFields } from '../../redaction/runRedaction.js';
 import type { ToolArgs } from '../../tools/runChain.js';
-import { carriesArgumentView, shownArgsOf } from '../toolShownArgs.js';
+import { shownArgsOf } from '../toolShownArgs.js';
 import { isArgumentObject, takeArguments } from './innerCallArguments.js';
 import type { AgentState } from './types.js';
 
@@ -17,12 +17,9 @@ interface InnerCallPolicyState {
 
 export type InnerCallPolicyScope = TypedScope<AgentState & InnerCallPolicyState>;
 
-/** Run a tool's display projection on a copy. An unusable view hides every key. */
+/** Read the same argument view used by the outer call's record. */
 export function shownInnerArgs(tool: unknown, args: ToolArgs): ToolArgs {
-  if (!carriesArgumentView(tool)) return args;
-  const shown = takeArguments(shownArgsOf(tool, structuredClone(args)));
-  if (shown.kind === 'copied') return shown.args;
-  return Object.fromEntries(Object.keys(args).map((key) => [key, 'REDACTED']));
+  return shownArgsOf(tool, args);
 }
 
 // Both trees came from takeArguments. Compare their own JSON data directly,
