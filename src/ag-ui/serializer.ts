@@ -21,7 +21,7 @@
  *   stream.token                       → TEXT_MESSAGE_START/CONTENT/END
  *   stream.llm_end (no agent around)   → one whole TEXT message (an LLM call that streams nothing)
  *   stream.thinking_delta/_end         → REASONING_START … REASONING_END   (only with `reasoning: true`)
- *   stream.tool_start                  → TOOL_CALL_START + TOOL_CALL_ARGS + TOOL_CALL_END
+ *   stream.tool_start                  → TOOL_CALL_START + TOOL_CALL_ARGS (the view) + TOOL_CALL_END
  *   stream.tool_end                    → TOOL_CALL_RESULT
  *   pause.request + settle('paused')   → RUN_FINISHED { outcome: interrupt }
  *   settle('paused', awaiting caller)  → RUN_FINISHED { outcome: success, pendingToolCallIds }
@@ -76,6 +76,7 @@ import { toWireJson, withWireErrors } from '../lib/wireJson.js';
 import { newScope, type Scope, type OpenText, type AgUiOpenCall } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
 import { failedCallWords } from './toolResultWords.js';
+import { argsShownOf, checkInHiddenNamesOf } from './shownArgs.js';
 import {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,
@@ -94,7 +95,7 @@ export type { AgUiCustomContext, AgUiCustomProjection } from './customEvents.js'
 export interface AgUiSerializerOptions {
   /** Explicit host delivery: withhold candidate text at every depth until the authorized final output. Record-only is the default. */
   readonly delivery?: 'host';
-  /** Optional served-only argument projection; default keeps the recorded arguments. */
+  /** Optional served-only projection for calls without a protected argument view. */
   readonly toolArguments?: AgUiCustomProjection;
   /** Optional served-only result projection; fixed failed-tool words still take precedence. */
   readonly toolResults?: AgUiCustomProjection;
@@ -607,8 +608,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       }
       case 'agentfootprint.stream.tool_start': {
         const scope = scopeOf(path);
-        // The call's arguments are complete before it runs: a model's text
-        // message for this call is over, and so is its reasoning.
+        // The call's arguments are complete: its text message and its reasoning are over.
         closeText(scope, out);
         closeReasoning(scope, out);
         // Every call of one LLM response belongs to ONE assistant message: the
@@ -619,25 +619,19 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const { id, n } = ids.next('tool', address);
         scope.calls.push({ id, n, address, servedId: payload.toolCallId });
         const toolCallName = text(payload.toolName) ?? '';
+        const view = argsShownOf(payload, id, options.toolArguments);
         out.push({
           type: 'TOOL_CALL_START',
           toolCallId: id,
           toolCallName,
           parentMessageId: scope.callMessageId,
           ...owned(scope, event),
-          metadata: addressOf(event, { toolCallId: text(payload.toolCallId) }),
+          metadata: addressOf(event, view.address),
         });
         out.push({
           type: 'TOOL_CALL_ARGS',
           toolCallId: id,
-          delta: toWireJson(
-            options.toolArguments === undefined
-              ? payload.args
-              : options.toolArguments(payload, {
-                  toolCallId: id,
-                  ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
-                }),
-          ),
+          delta: toWireJson(view.args),
           ...owned(scope, event),
         });
         out.push({ type: 'TOOL_CALL_END', toolCallId: id, ...owned(scope, event) });
@@ -876,7 +870,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       ...(message !== undefined && { message }),
       ...(call !== undefined && { toolCallId: call.id }),
       ...(scope.subagentRunId !== undefined && { subagentRunId: scope.subagentRunId }),
-      metadata: addressOf(event),
+      metadata: addressOf(event, checkInHiddenNamesOf(payload)),
     };
   };
 

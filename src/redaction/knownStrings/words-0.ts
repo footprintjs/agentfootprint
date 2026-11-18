@@ -112,6 +112,7 @@ export const words0 = {
   'agentfootprint.skill.reroute_superseded': true,
   'agentfootprint.skill.route_conflict': true,
   'agentfootprint.skill.step_advanced': true,
+  'agentfootprint.skill.step_held': true,
   'agentfootprint.skill.step_skipped': true,
   'agentfootprint.skill.steps_unfinished': true,
   'agentfootprint.skill.turn_routed': true,
@@ -301,5 +302,4 @@ export const words0 = {
   fn: true,
   framework: true,
   gate_open: true,
-  gated: true,
 } as const;

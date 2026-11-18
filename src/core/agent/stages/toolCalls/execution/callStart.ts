@@ -26,7 +26,7 @@ interface CallStartLinks {
 
 /** Start one call with its original proposal, frozen views, records and clock. */
 export function buildCallStart(
-  deps: Pick<ToolCallsHandlerDeps, 'findings'>,
+  deps: Pick<ToolCallsHandlerDeps, 'findings' | 'toolMiddleware'>,
   links: CallStartLinks,
 ) {
   const beginDispatchCall = (
@@ -40,6 +40,7 @@ export function buildCallStart(
     frozenTurn: LLMMessage | undefined,
     callbackHistory: () => LLMMessage[],
     frozenArgsAt: (at: number) => ToolArgs | undefined,
+    inputsCanFill: boolean,
   ) => {
     const { resolveTool, peelCall, programOfCall, turnStampOf, emitToolStart } = links;
     const emitSecurity = bindToolSecurityEvents(scope, { toolCallId: tc.id, iteration });
@@ -121,12 +122,19 @@ export function buildCallStart(
       if (frozenTurn === undefined || isSealed(frozenTurn)) callHistory = made;
       return made;
     };
-    emitToolStart(scope, {
-      toolName: tc.name,
-      toolCallId: tc.id,
-      args: viewOf(args) ?? args,
-      ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
-    });
+    emitToolStart(
+      scope,
+      {
+        toolName: tc.name,
+        toolCallId: tc.id,
+        args: viewOf(args) ?? args,
+        ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
+      },
+      tool,
+      // This bracket precedes both input fills and middleware. Their output can
+      // change a conditional argument view before the approval is shown.
+      inputsCanFill || (deps.toolMiddleware?.length ?? 0) > 0,
+    );
     const startMs = Date.now();
     const findingsRefusal = findingsRefusals[callIndex];
     const invalidateViews = (): void => {

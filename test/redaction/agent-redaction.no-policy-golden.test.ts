@@ -4,6 +4,12 @@
  * One explicit local resource-status event is added, and tool ends gain an
  * `entered` stamp. Every other field, its order and event order remain byte-pinned.
  * The historical fixture is NEVER regenerated from this branch.
+ *
+ * Second named migration (tool-outcome marker): a committed tool message whose
+ * call did not run carries `outcome: 'refused'` as its last field
+ * (`execution/callOutcome.ts`). In this scenario that is the unknown tool
+ * (`c2`) and the call refused for invalid arguments (`c3`), wherever a history
+ * carries them. Nothing else changes.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -51,6 +57,11 @@ describe('no policy preserves the whole stream with native run identity', () => 
       const id = event.payload.toolCallId as keyof typeof entered;
       expect(Object.hasOwn(entered, id)).toBe(true);
       event.payload.entered = entered[id];
+    }
+    const refused = new Set(['c2', 'c3']);
+    for (const event of events as { payload?: { history?: Record<string, unknown>[] } }[]) {
+      for (const m of event.payload?.history ?? [])
+        if (m.role === 'tool' && refused.has(m.toolCallId as string)) m.outcome = 'refused';
     }
     (events as unknown[]).splice(73, 0, {
       type: 'agentfootprint.tools.resource_restore',

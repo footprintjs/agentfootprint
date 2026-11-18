@@ -304,6 +304,7 @@
     "approved": "kept",
     "by": "kept",
     "componentId": "kept",
+    "hiddenArgs[]": "kept",
     "iteration": "kept",
     "note": "chars",
     "requestId": "kept",
@@ -958,7 +959,21 @@
   "agentfootprint.skill.step_advanced": {
     "completed": "kept",
     "iteration": "kept",
+    "outcome": "kept",
     "skillId": "kept",
+    "status": "kept",
+    "step.index": "kept",
+    "step.note": "kept",
+    "step.tool": "kept",
+    "step.total": "kept",
+    "toolCallId": "kept",
+    "unknownStatus": "chars"
+  },
+  "agentfootprint.skill.step_held": {
+    "iteration": "kept",
+    "outcome": "kept",
+    "skillId": "kept",
+    "status": "kept",
     "step.index": "kept",
     "step.note": "kept",
     "step.tool": "kept",
@@ -1078,10 +1093,12 @@
   },
   "agentfootprint.stream.tool_start": {
     "args": "keys",
+    "hiddenArgs[]": "kept",
     "notDispatched.pausedCall.toolCallId": "kept",
     "notDispatched.pausedCall.toolName": "kept",
     "parallelCount": "kept",
     "protocol": "kept",
+    "shownArgs": "keys",
     "toolCallId": "kept",
     "toolName": "kept"
   },

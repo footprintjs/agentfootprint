@@ -124,12 +124,19 @@ export function buildResumePlain(
     const modelResult = pauseCapped.modelResult;
     let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
     // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):
-    // the tool paused mid-step, the person's answer IS its result, and the
-    // completed step advances here at the same boundary it would have
-    // inline. The pointer itself crossed the checkpoint for free (it is
-    // committed shared state); this is the half that has to be wired.
+    // the tool paused mid-step and the person's answer IS its result, so the
+    // step is decided here at the same boundary it would have been inline,
+    // by the same rule (`stepOutcomeOf`). The answer is a value, never a
+    // declared status, so the step advances as 'not-reported' and the model
+    // reads that the step ran and its tool declared no status. The pointer
+    // itself crossed the checkpoint for free (it is committed shared state);
+    // this is the half that has to be wired.
     if (deps.stepPlanFor) {
-      resultStr = links.applyStepReturn(scope, { toolName, toolCallId, iteration }, resultStr);
+      resultStr = links.applyStepReturn(
+        scope,
+        { toolName, toolCallId, iteration, settled: { ran: true, clean: true } },
+        resultStr,
+      );
     }
     // The library's mark on a person's typed answer: stamped only when THIS
     // run's `Agent.resume` accepted the answer to the ask this run raised

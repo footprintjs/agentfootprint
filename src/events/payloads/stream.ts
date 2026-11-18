@@ -105,7 +105,22 @@ export interface LLMTokenPayload {
 export interface ToolStartPayload {
   readonly toolName: string;
   readonly toolCallId: string;
+  /**
+   * The arguments as the model proposed them — the REAL values, also for a
+   * tool whose argument view hides some ({@link shownArgs}). Only the run's
+   * redaction policy masks them here.
+   */
   readonly args: Readonly<Record<string, unknown>>;
+  /**
+   * The approval-safe display of the proposal for AG-UI `TOOL_CALL_ARGS`.
+   * An unsupported view, or a proposal that can be rewritten before
+   * admission, displays placeholders for every available argument name.
+   * A valid view that withholds nothing omits this field.
+   */
+  readonly shownArgs?: Readonly<Record<string, unknown>>;
+  /** Names withheld from the proposal's display, in argument order. A check-in
+   * records the names withheld from the bound call it actually shows. */
+  readonly hiddenArgs?: readonly string[];
   readonly parallelCount?: number;
   readonly protocol?: ToolProtocol;
   /**

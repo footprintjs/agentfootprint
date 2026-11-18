@@ -25,7 +25,7 @@
  */
 
 import { readResultIdentity } from '../claim-binding/capture.js';
-import { stableJson } from '../../lib/stableJson.js';
+import { quotedText } from '../../lib/quotedText.js';
 import type { ComposedCoverage, ComposedItem } from '../../semantics/coverage/composedCoverage.js';
 import { periodVerdict } from '../../semantics/coverage/period.js';
 import { resultSpan } from '../../semantics/coverage/search/span.js';
@@ -65,31 +65,11 @@ export function clauseLimit(gaps: number): number {
   return 12_000 + gaps * 300;
 }
 
-/** One text as quoted data, capped at `cap` code points. */
-function quote(value: unknown, cap: number): string {
-  const raw =
-    typeof value === 'string'
-      ? value
-      : typeof value === 'number' || typeof value === 'boolean'
-      ? String(value)
-      : stableJson(value) ?? '';
-  const clean = raw
-    .normalize('NFKC')
-    .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ')
-    .replace(/\p{Cf}/gu, '')
-    .replace(/`/g, "'")
-    .replace(/\s+/gu, ' ')
-    .trim();
-  const points = Array.from(clean);
-  const capped = points.length > cap ? `${points.slice(0, cap).join('')}…` : clean;
-  return `\`${capped}\``;
-}
-
 /** One value as quoted data (64 code points). */
-export const quoteValue = (value: unknown): string => quote(value, VALUE_CHARS);
+export const quoteValue = (value: unknown): string => quotedText(value, VALUE_CHARS);
 
 /** One gap's text as quoted data (its declared 120). */
-const quoteGap = (value: unknown): string => quote(value, GAP_CHARS);
+const quoteGap = (value: unknown): string => quotedText(value, GAP_CHARS);
 
 const capped = (items: readonly string[], cap: number, more: (n: number) => string): string[] =>
   items.length > cap ? [...items.slice(0, cap), more(items.length - cap)] : [...items];

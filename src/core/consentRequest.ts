@@ -18,11 +18,12 @@ import type { AnswerConsumption } from './answerConsumption.js';
  * ── WHY THE ID IS A COMMITMENT, NOT ONLY A NAME ─────────────────────────────
  * `id = sha256(domain ‖ nonce ‖ canonicalJson(call))`, where the call is
  * everything that runs on approval: the gate, the tool, the call id, the
- * served party, the arguments and — for an ask — the middleware, where the
- * chain resumes and the names of the rules from the asking one on (a resume
- * refuses an agent whose chain no longer runs those rules, and a rule after
- * the ask that hands back other arguments than the ones approved — the tool
- * does not run). The nonce is 128 random bits kept in the paused run's state.
+ * served party, the arguments, for a check-in the names its argument view hid
+ * from the person (`checkInHiddenArgs.ts`), and for an ask the middleware,
+ * where the chain resumes and the names of the rules from the asking one on (a
+ * resume refuses an agent whose chain no longer runs those rules, and a rule
+ * after the ask that hands back other arguments than the ones approved). The
+ * nonce is 128 random bits kept in the paused run's state.
  *
  *   - A random nonce makes every pause's id unique and unguessable, so a
  *     decision for one pause can never answer another — even two pauses of
@@ -88,10 +89,9 @@ import type { AnswerConsumption } from './answerConsumption.js';
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
-import { canonicalJson } from '../lib/canonicalJson.js';
-import { isJsonFaithful } from '../lib/jsonFaithful.js';
-import { sha256Hex } from '../lib/sha256.js';
 import { looksLikeDecision, type CheckInDecision } from './checkin.js';
+import { hiddenArgsOn, keptHiddenArgs } from './checkInHiddenArgs.js';
+import { requestIdOf } from './consentRequestId.js';
 import {
   DecisionRequiredError,
   ResumeDecisionError,
@@ -114,6 +114,8 @@ export interface GatedCall {
   readonly party?: unknown;
   /** The arguments the call runs with. */
   readonly args: unknown;
+  /** `'checkIn'` only — the names the view hid (`PendingRequest.hiddenArgs`). */
+  readonly hiddenArgs?: unknown;
   /** `'ask'` only — the middleware that asked. */
   readonly middleware?: unknown;
   /** `'ask'` only — the asking link's index; the chain resumes after it. */
@@ -142,6 +144,9 @@ export interface PendingRequest {
    * pause can never be proven.
    */
   readonly ledger?: string;
+  /** A check-in's argument names its view hid from the person, `[]` for none —
+   *  absent on an ask and on a pause stored before it was recorded. */
+  readonly hiddenArgs?: readonly string[];
 }
 
 /** What {@link mintConsentRequest} hands the dispatch loop. */
@@ -499,7 +504,6 @@ export async function closedByAHost(question: NeverRanQuestion): Promise<boolean
   return true;
 }
 
-const DOMAIN = 'agentfootprint/consent-request/v1';
 const HEX_ID = /^[0-9a-f]{64}$/;
 const HEX_NONCE = /^[0-9a-f]{32}$/;
 
@@ -528,8 +532,9 @@ export function mintConsentRequest(
   const id = requestIdOf(nonce, { ...call, args });
   if (id === undefined) return undefined;
   const mintedUnder = ledger === undefined ? undefined : ledgerIdentityOf(ledger);
+  const kept = keptHiddenArgs(call.hiddenArgs);
   return {
-    request: { id, nonce, ...(mintedUnder !== undefined && { ledger: mintedUnder }) },
+    request: { id, nonce, ...(mintedUnder !== undefined && { ledger: mintedUnder }), ...kept },
     args: args as Readonly<Record<string, unknown>>,
   };
 }
@@ -557,6 +562,7 @@ export function gatedCallOf(read: (key: string) => unknown, gate: ConsentGateKin
         toolCallId: read('pausedToolCallId'),
         party: read('pausedToolParty'),
         args: read('pausedCheckInArgs'),
+        hiddenArgs: hiddenArgsOn(read('pausedRequest')),
       };
 }
 
@@ -939,22 +945,6 @@ export function pausedRequestIdOf(checkpoint: FlowchartCheckpoint): string | und
   } catch {
     return undefined;
   }
-}
-
-/** The request's id for `call` under `nonce`, or `undefined` when the call is not faithful JSON. */
-function requestIdOf(nonce: string, call: GatedCall): string | undefined {
-  const body = {
-    gate: call.gate,
-    tool: call.tool,
-    toolCallId: call.toolCallId,
-    party: call.party,
-    args: call.args,
-    middleware: call.middleware,
-    askIndex: call.askIndex,
-    chain: call.chain,
-  };
-  if (!isJsonFaithful(body)) return undefined;
-  return sha256Hex(`${DOMAIN}\u001f${nonce}\u001f${canonicalJson(body)}`);
 }
 
 /**

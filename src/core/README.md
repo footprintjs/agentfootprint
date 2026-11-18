@@ -7,8 +7,15 @@ Fold-feeding: `agent/runtime/skills/owner.ts` · `readSkillOfferFor` and `agent/
 filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `conversation.ts`, `translator.ts`, `outputFallback.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
-may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
-the one input a composition hands them).
+may show), `checkInHiddenArgs.ts` / `checkInWillDo.ts` (what a check-in tells
+the person is hidden), `consentRequestId.ts` (a request id's derivation),
+`resumeDecisionMessage.ts` (a refused resume's sentences), `messageFrom.ts`
+(which runners read `AgentInput.messageFrom`, and the one input a composition
+hands them), and `trailBeforeOutcomeMarker.ts` (the check-in trail's text
+test for a tool message with no `outcome` mark).
+The text test preserves refusals in histories stored before the mark. A
+completed result that begins with a refusal form such as "[permission denied: …]"
+also reads `ok: false`.
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
 
@@ -418,3 +425,29 @@ not proof that a call ran or that a host closed it. Local close evidence is
 scoped to the exact ledger identity and request; eviction or restart loses it.
 
 `pauseRecord.ts` holds the complete native-pause position/reason utilities. `runnerCoreValues.ts` names per-invocation domain values; RunnerBase remains the shared native wiring facade.
+
+## What a check-in tells the person is hidden
+
+A tool can carry an argument view (`toolShownArgs.ts`, `flowchartAsTool({ redact })`,
+`runbookAsTool({ redact })`). The check-in computes the display and
+`CheckInRequest.hiddenArgs` together from the bound call. An unsupported view masks
+every argument. A string returned unchanged is checked independently with a stand-in
+and its siblings intact. An inconclusive probe masks that argument and names it in
+the list. The projection takes its names from the call itself. A tool schema provides
+no evidence that a value is safe to show.
+
+The reading assumes the view is a function of the arguments. It cannot reliably
+classify a view that depends on external state or distinguish an unchanged non-string
+from an equal custom placeholder. With the built-in view for `to`, a real
+`memo: 'REDACTED'` remains visible while `to` is listed as hidden.
+
+The request binds the names into its id (`consentRequestId.ts`, omitted when empty)
+and pause. The private argument marks and decision record use that same list
+(`checkInHiddenArgs.ts`). A resume compares the current view's hidden names before
+spending the decision and refuses a changed set with `'view-changed'`. Older
+pauses without the list record `'not-recorded'`.
+
+Argument views receive frozen copies. AG-UI receives the projected proposal,
+with every argument masked if the inputs layer or middleware may rewrite the call.
+The check-in itself projects the arguments after those steps. Where protected
+arguments were withheld, a consent record documents the scope of the person's approval.

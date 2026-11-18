@@ -7,16 +7,19 @@ import {
   pointerOf,
   stepInProgress,
   currentStepOf,
+  advanceStepPointer,
   skipNothingActiveSentence,
   skipNeedsReasonSentence,
   skipHoldSentence,
   skipAdvanceSentence,
   stepAdvanceSuffix,
+  stepHeldSuffix,
   readSkillStepIntro,
 } from '../../../../../injection-engine/skillSteps.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { appendStepReturn } from '../../../../../lib/servedJson.js';
 import type { ToolStepsOperations } from '../contracts/operations/steps.js';
+import { stepOutcomeOf } from './stepOutcome.js';
 
 /** Compose the existing steps callbacks once for this handler. */
 export function buildToolStepsOperations(
@@ -87,9 +90,8 @@ export function buildToolStepsOperations(
     // of a held step are each recorded, because each is a fact.
     if (plan.onSkip === 'hold') return skipHoldSentence(ptr, reason, plan);
     const next: StepPointer = {
-      skillId: ptr.skillId,
+      ...ptr,
       step: ptr.step + 1,
-      total: ptr.total,
       skipped: [...ptr.skipped, ptr.step],
     };
     scope.stepPointer = [next];
@@ -97,37 +99,45 @@ export function buildToolStepsOperations(
   };
 
   /**
-   * Advance-on-return — the caller has just finalized a NON-error,
-   * NON-denied, NON-refused result for `toolName`. When that call is the
-   * current step's tool: pointer + 1, `step_advanced` (with `completed` on
-   * the last), and the completion note joins the model-visible result
-   * BEFORE the history push. Otherwise the result is returned as supplied.
-   * Eligibility is judged by the calling site.
+   * A finished call of the current step's tool advances or holds according to
+   * `stepOutcomeOf`. Each result door hands over its settlement before history
+   * is written. A stopped call holds silently. A reported failure or unfinished
+   * call records the hold, and a clean result or one without status advances.
+   * Keep structured answers readable by appending any step wording centrally.
    */
-  const applyStepReturn = (
-    scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
-    result: string,
-  ): string => {
+  const applyStepReturn: ToolStepsOperations['applyStepReturn'] = (scope, call, result) => {
     const state = stepStateOf(scope);
     if (!state || state.step.tool !== call.toolName) return result;
     const { ptr, plan, step } = state;
-    const next: StepPointer = {
-      skillId: ptr.skillId,
-      step: ptr.step + 1,
-      total: ptr.total,
-      skipped: [...ptr.skipped],
-    };
+    const verdict = stepOutcomeOf(call.settled);
+    if (verdict.outcome === 'stopped') return result;
+    const stepFacts = { index: ptr.step, total: ptr.total, tool: step.tool, note: step.note };
+    if (verdict.outcome === 'failed' || verdict.outcome === 'not-finished') {
+      typedEmit(scope, 'agentfootprint.skill.step_held', {
+        skillId: ptr.skillId,
+        step: stepFacts,
+        outcome: verdict.outcome,
+        status: verdict.status,
+        iteration: call.iteration,
+        toolCallId: call.toolCallId,
+      });
+      return appendStepReturn(result, stepHeldSuffix(ptr, plan, verdict.outcome, verdict.status));
+    }
+    const next = advanceStepPointer(ptr, verdict.outcome);
     scope.stepPointer = [next];
     const completed = next.step > next.total;
     typedEmit(scope, 'agentfootprint.skill.step_advanced', {
       skillId: ptr.skillId,
-      step: { index: ptr.step, total: ptr.total, tool: step.tool, note: step.note },
+      step: stepFacts,
+      outcome: verdict.outcome,
+      ...(verdict.outcome === 'succeeded' && { status: verdict.status }),
+      ...(verdict.outcome === 'not-reported' &&
+        verdict.unknownStatus !== undefined && { unknownStatus: verdict.unknownStatus }),
       iteration: call.iteration,
       toolCallId: call.toolCallId,
       ...(completed && { completed: true as const }),
     });
-    return appendStepReturn(result, stepAdvanceSuffix(next, plan));
+    return appendStepReturn(result, stepAdvanceSuffix(next, plan, verdict));
   };
 
   /** The `read_skill` activation intro for a STEPPED skill — where its

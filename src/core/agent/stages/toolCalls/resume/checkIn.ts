@@ -6,6 +6,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { boundArgsOf } from '../access/bindings.js';
+import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
@@ -16,6 +17,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
@@ -93,6 +95,10 @@ export function buildResumeCheckIn(
     // stays exactly what it was — a structured `CheckInDecision`, never
     // parsed from prose — and the record now says which surface asked.
     const answeredVia = scope.pausedComponentId as string | undefined;
+    // The names the person was told were hidden — kept with the request and
+    // bound into its id, never worked out again from the tool as it is now
+    // (`checkInHiddenArgs.ts`); `'not-recorded'` for a pause stored before.
+    const hiddenArgs = recordedHiddenArgs(scope.pausedRequest);
     typedEmit(scope, 'agentfootprint.checkin.decision', {
       toolName,
       toolCallId,
@@ -101,6 +107,7 @@ export function buildResumeCheckIn(
       approved: decision.approved,
       by: decision.by,
       ...(decision.note !== undefined && { note: decision.note }),
+      ...((typeof hiddenArgs === 'string' || hiddenArgs.length > 0) && { hiddenArgs }),
       ...(answeredVia !== undefined && { componentId: answeredVia }),
     });
 
@@ -112,6 +119,7 @@ export function buildResumeCheckIn(
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
     let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
@@ -148,6 +156,7 @@ export function buildResumeCheckIn(
           dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
         if (dispatched.executed === true && error !== true) {
           resumeEnvelope = dispatched.envelope;
+          resumeUnknownStatus = dispatched.unknownStatus;
         }
         // Consent moved the execution to this side of the pause; the rules
         // about results move with it.
@@ -214,12 +223,17 @@ export function buildResumeCheckIn(
       const decisionToolChars = decisionResultStr.length;
       if (deps.negativeClaimsArmed === true)
         decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
-      // Step boundary (9.18.0) — an approved consequential step (a checkIn
-      // tool CAN be a step's tool) advances on the resumed dispatch.
-      if (deps.stepPlanFor && stepToolRan) {
+      // How the call settled — read by the step and by the message's `outcome`.
+      const decisionSettled: DispatchSettlement = {
+        ran: toolRan,
+        clean: stepToolRan,
+        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        ...(resumeUnknownStatus !== undefined && { unknownStatus: resumeUnknownStatus }),
+      };
+      if (deps.stepPlanFor) {
         decisionResultStr = links.applyStepReturn(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, settled: decisionSettled },
           decisionResultStr,
         );
       }
@@ -247,6 +261,8 @@ export function buildResumeCheckIn(
             toolName,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
+            // A decline ran nothing → 'refused'; read by the check-in trail.
+            ...outcomeField(decisionSettled),
           },
         ],
         { toolName, toolCallId },

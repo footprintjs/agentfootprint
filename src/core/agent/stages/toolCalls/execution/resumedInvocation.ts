@@ -10,6 +10,8 @@ import {
   type ToolResultStatus,
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
+  unknownStatusOf,
+  unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -131,6 +133,9 @@ export function buildResumedInvocation(
     /** An approved call's arguments no longer matched its request at the
      *  last moment before `execute` (`heldTo`): the call did not run. */
     callChanged?: true;
+    /** The result was an envelope in every way but an unknown status word —
+     *  that word, cleaned (`unknownStatusOf`); read by the procedure step. */
+    unknownStatus?: string;
   }> => {
     const tool = resolved.tool;
     if (seen !== undefined)
@@ -479,6 +484,11 @@ export function buildResumedInvocation(
                 },
         };
       }
+      // An envelope in every way but an unknown status word is data — read
+      // the word off the value the tool returned, before anything rewrites it.
+      const unknownStatus = unknownStatusOf(result);
+      if (unknownStatus !== undefined)
+        links.warnEffect(toolName, unknownStatusWarning(unknownStatus));
       const searched = links.searchFunnel.compose(scope, searchBoundary(undefined), result);
       if (searched !== undefined) result = searched.value;
       const coverageStatus = links.declareCoverage(
@@ -548,7 +558,12 @@ export function buildResumedInvocation(
           envelope: { content: result, effects: [], status: coverageStatus, malformed: [] },
         };
       }
-      return { result, executed: true, negativeResultId: negativeDispatch?.resultId };
+      return {
+        result,
+        executed: true,
+        negativeResultId: negativeDispatch?.resultId,
+        ...(unknownStatus !== undefined && { unknownStatus }),
+      };
     } catch (err) {
       seen?.resultFinalizer?.withheld();
       ended ??= runEndedBy(env.signal);
@@ -563,10 +578,19 @@ export function buildResumedInvocation(
       await links.endCall(scope);
       if (seen !== undefined && executed) seen.threw = true;
       if (isPauseRequest(err)) {
+        // Name the door this call actually came through (`heldTo`; the
+        // credential door passes none): an ask or a credential resume that
+        // read "an approved check-in" reported a gate nobody opened.
+        const door =
+          heldTo === 'checkIn'
+            ? 'an approved check-in'
+            : heldTo === 'ask'
+            ? 'an approved ask'
+            : 'granted credential consent';
         return {
           result:
             binding.halt?.tellLLM ??
-            `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
+            `tool '${toolName}' requested a pause while resuming ${door}, which is not supported`,
           error: true,
           // It ran — a tool that asked to pause had already started work.
           executed,

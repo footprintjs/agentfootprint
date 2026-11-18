@@ -34,6 +34,11 @@ private values. Ordinary event translation still consumes served values only;
 standalone defaults and redaction property tests remain unchanged.
 
 ## How a run maps
+- `TOOL_CALL_ARGS` uses the tool's protected argument view when an event
+  carries one. Unsupported view data shows placeholders for the argument names
+  present on the event. A proposal that can change before approval is masked
+  early. Its check-in interrupt reports the view of the bound call. The
+  custom `toolArguments` projector applies to calls without a protected view.
 - An agent turn mounted inside a composition is an AG-UI sub-agent: its
   `turn_start` opens a scope at its subflow path, and every event under that
   path carries the scope's `subagentRunId` — parallel branches have different
@@ -127,10 +132,20 @@ agUi({
   structural (no `@ag-ui/*` import).
 - `ids.ts` — the one id grammar.
 - `serializer.ts` — `agUiSerializer`, the per-run translation.
+- `shownArgs.ts` — a tool call's arguments as the page may see them: for a tool
+  whose argument view hides values, the view's output (`stream.tool_start.shownArgs`)
+  as `TOOL_CALL_ARGS`, and the hidden names on `metadata.agentfootprint.hiddenArgs`
+  of `TOOL_CALL_START` and of a check-in's interrupt.
 - `framing.ts` — `agUiSse`, the framing strategy.
 - `request.ts` — the reader port (`AgUiRequestReader`), the core's read
   (`readAgUiRequest` → `readAgUiRunInput`) and the turn a request may ask for.
 - `frontendTools.ts` — the app's allow-listed frontend tools, as tools that pause
-  for the page.
+  for the page. A pause waits on the page only when the name of the call that
+  raised it is one of those tools (`isFrontendToolPause` reads the real call's
+  `toolName`, which the library writes): a server tool whose name is not a
+  declared frontend tool and that puts `agUiFrontendTool` in its own pause data
+  still waits on a person, and the page cannot answer it. Not covered: a server
+  tool named like a declared frontend tool that the page did not enable on this
+  request; the name is all the check sees, so its pause waits on the page.
 - `adapter.ts` — `agUi()`, the `ProtocolAdapter` the host takes: the three
   strategies, composed.

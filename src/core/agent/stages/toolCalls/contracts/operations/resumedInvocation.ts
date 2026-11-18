@@ -40,5 +40,9 @@ export interface ResumedInvocation {
      *  the door lands the result, then ends the run (`routing/policyHalt.ts` ·
      *  `haltResumedCall`). */
     halt?: InnerCallHalt;
+    /** The result was an envelope in every way but an unknown status word —
+     *  that word, cleaned (`semantics/toolEffects.ts` · `unknownStatusOf`);
+     *  read only by the procedure step. */
+    unknownStatus?: string;
   }>;
 }

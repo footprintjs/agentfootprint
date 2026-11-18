@@ -117,9 +117,9 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
  * `foldedExempt`, a compaction summary's exemption lineage (the exempt corpus
- * reads it; the model reads the summary's text), `answersAsk`, the
- * library's mark on a person's typed answer, and `calls`, the inner calls
- * that the permission sequence reads.
+ * reads it; the model reads the summary's text), `answersAsk` for a typed
+ * answer, `calls` for the inner permission sequence, and `outcome` for the
+ * recorded settlement.
  * Messages without any pass through BY REFERENCE, so an agent that delivers,
  * settles and annotates nothing allocates nothing — and the array's length and
  * order are untouched either way, which is what keeps
@@ -149,6 +149,7 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
       foldedExempt: _lineage,
       answersAsk: _typedAnswer,
       calls: _inner,
+      outcome: _settledAs,
       ...composed
     } = m;
     void _delivered;
@@ -158,6 +159,7 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
     void _lineage;
     void _typedAnswer;
     void _inner;
+    void _settledAs;
     return composed;
   });
 }
@@ -171,7 +173,8 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
     message.answersAsk !== undefined ||
-    message.calls !== undefined
+    message.calls !== undefined ||
+    message.outcome !== undefined
   );
 }
 

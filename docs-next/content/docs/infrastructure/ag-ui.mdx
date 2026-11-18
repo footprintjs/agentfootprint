@@ -233,8 +233,13 @@ A call pauses the run: the segment completes with the call in
 `pendingToolCallIds`, the page runs it and sends the result as a `tool` message in
 its next request, and the SAME run continues with it. The tool holds no server
 privilege (no credential, no artifacts), and a name a server tool already has is
-refused when the agent is built. Frontend tools need a host that keeps the paused
-run: `threads` and `sessions`.
+refused when the agent is built. Only a call named like one of these tools waits
+on the page: a server tool whose name is not a declared frontend tool and that
+writes `agUiFrontendTool` into its own pause data still waits on a person,
+because the adapter reads the paused call's real tool name. Not covered: a server
+tool you named like a declared frontend tool that the page did not enable on this
+request; the name is all the adapter sees, so give server tools names of their own.
+Frontend tools need a host that keeps the paused run: `threads` and `sessions`.
 
 ## Interrupts
 
@@ -328,7 +333,7 @@ host supplies the final answer after the run completes.
 |---|---|
 | `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |
 | `agent.turn_end` | the answer as one text message when nothing streamed; after a streamed answer, the text the library appended to it — the limits block, the standing line — as its own message |
-| `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message |
+| `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message. For a tool whose argument view hides values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`), `TOOL_CALL_ARGS` carries the view's output, never the real values, and `TOOL_CALL_START` and a check-in's interrupt carry the hidden names as `metadata.agentfootprint.hiddenArgs` |
 | `stream.tool_end` | `TOOL_CALL_RESULT` |
 | `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` — only with `reasoning: true` |
 | `agent.iteration_start` / `_end` | `STEP_STARTED` / `STEP_FINISHED`, named `iteration <n>` |

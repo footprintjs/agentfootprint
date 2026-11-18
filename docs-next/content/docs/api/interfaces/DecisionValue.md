@@ -4,7 +4,7 @@ title: DecisionValue
 
 # Interface: DecisionValue
 
-Defined in: [src/core/checkin.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L168)
+Defined in: [src/core/checkin.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L193)
 
 What a person CHOSE, when the answer is a value rather than a yes or a no.
 
@@ -39,7 +39,7 @@ Every field must survive `structuredClone`: a decision rides the checkpoint.
 
 > `readonly` `optional` **coverage?**: `object`
 
-Defined in: [src/core/checkin.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L182)
+Defined in: [src/core/checkin.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L207)
 
 What the person could actually see when they chose.
 
@@ -65,7 +65,7 @@ only the screen knows which happened.
 
 > `readonly` `optional` **from?**: `string`
 
-Defined in: [src/core/checkin.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L174)
+Defined in: [src/core/checkin.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L199)
 
 The artifact the choice was made against, when there was one.
 
@@ -75,7 +75,7 @@ The artifact the choice was made against, when there was one.
 
 > `readonly` **kind**: `string`
 
-Defined in: [src/core/checkin.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L170)
+Defined in: [src/core/checkin.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L195)
 
 Consumer vocabulary for what this value IS — e.g. `'row-choice'`.
 
@@ -85,6 +85,6 @@ Consumer vocabulary for what this value IS — e.g. `'row-choice'`.
 
 > `readonly` **value**: `unknown`
 
-Defined in: [src/core/checkin.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L172)
+Defined in: [src/core/checkin.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L197)
 
 The chosen value itself. JSON, clone-safe, small.
