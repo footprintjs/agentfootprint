@@ -1,9 +1,10 @@
 ---
 type: changed
+bump: major
 ---
 **The answer account says "It ran {tool}" only when the record shows the tool ran.** A call that ended in an error before its tool was reached (a tool name that does not exist, arguments the schema rejected, a blocked credential) used to read "It ran reboot_host, and the tool reported an error." and "reboot_host returned an error, not a result.", the same words as a tool that ran and threw, and "Nothing to report: none of the tool calls ran." was said even when a tool had run and thrown. Now such a call reads "It asked to run reboot_host; the call was not executed." and "reboot_host did not run, so it found nothing."; a tool that ran and threw reads as before. "None of the tool calls ran" is said only when every call is known not to have run; otherwise the line is "Nothing to report: no tool call returned a result in this record." The "Anything wrong" line counts such a call as "not executed", never as "failed": "1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run." Answer-account template set 16: six new sentences, and `wrong.errors` at version 2 (it gained the "not executed" count); no other sentence changed.
 
-What an app will notice:
+**Migration:** Check saved tool-end payloads, account outcome handling, and any tests or UI that match the changed wording.
 
 - `stream.tool_end` carries a new field, `entered`: `false` on a bracket of a call whose tool's function was never entered (except a bracket that already says so with `notExecuted` or `notDispatched`, which keeps its bytes), `true` beside `error` on a call whose tool ran. A call that succeeded keeps exactly the bytes it had. A declined check-in or ask on resume now carries `entered: false` too. What to do: an app that compares saved `tool_end` payloads byte for byte accepts `entered` on those brackets.
 - `ToolCallFact.outcome` (the account's `facts.calls`) gains `'not-executed'` (the tool never ran) and `'ended-in-error'` (an error on a record that does not say whether the tool ran); `'failed'` now means the tool ran. What to do: a `switch` over the outcome adds the two new cases.
