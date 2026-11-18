@@ -48,6 +48,12 @@ const ROUTES = [
   },
 ];
 
+// RAISED 2026-11-14 for #364's retained-source guide and 16 new public API pages,
+// under the existing named-feature growth rule. Clean EXPORT=true measurements:
+// base 192f2b9: 2,485,293 B gzip, 10,033,603 B raw, 1,199 search records;
+// feature: 2,495,731 B gzip, 10,087,580 B raw, 1,218 records. The +10,438 B gzip
+// is documented surface, not browser runtime growth. 2,550,000 B is ~2% above
+// that measurement. Raw/record, route, runtime and deferred-demo limits hold.
 // RAISED 2026-10-29 (search gzip), for #248 (mcpClient reads every page of a
 // paged tool list: the McpToolListIncompleteError, McpOutputUncheckedError and
 // McpJsonSchemaValidator section of build/mcp-client) and #251 (the gateway's
@@ -88,7 +94,7 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_490_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_550_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with
@@ -333,7 +339,12 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_490_000, records: 2_000 };
 // duplicate RSC pairs 0, 0.06 MB over the old ceiling. ~2% over that
 // measurement, the rule every raise here follows: 236.8 MB. Files, deferred
 // demo, page, runtime JS, search and duplicate budgets hold unchanged.
-const OUTPUT_LIMITS = { bytes: 236_800_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 2026-11-14 for #364's 17 new documentation routes, under the same
+// named-feature rule. Clean EXPORT=true base 192f2b9: 234,386,606 B / 5,996 files;
+// feature: 237,248,831 B / 6,098 files (+2,862,225 B, +102 files). Both exports
+// have zero duplicate RSC bytes. 242,000,000 B is ~2% above the measured feature.
+// File-count, duplicates, route/runtime and deferred-demo limits remain fixed.
+const OUTPUT_LIMITS = { bytes: 242_000_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the

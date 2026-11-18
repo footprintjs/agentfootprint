@@ -1,0 +1,31 @@
+{
+  "layout": "late-v2",
+  "scope": "Five current-context findings captures, separately qualified without modifying frozen native-component migration records.",
+  "captures": [
+    {
+      "case": "agent-findings",
+      "historicalSha256": "4204d6ca084e5f76703c3822df5eab2c1558092395042acd2a7db63eb5e4e728",
+      "currentSha256": "4250df1017ac8e9a51a01aa5ce8de1a530e5425fb75c3be4c63461af2bc33d9d"
+    },
+    {
+      "case": "agent-findings-judge",
+      "historicalSha256": "f14fe4ea6b35ac2feabebdcb4418a759e0eb39df65e4b7c2c98ba7b4c2d29acd",
+      "currentSha256": "176af4950804f2ad08d37d303c928caae1ab125f311ebb18a0ab6f6f833614df"
+    },
+    {
+      "case": "agent-findings-window",
+      "historicalSha256": "1d05a1d5e3b3a888a8b30866d3e6bb50b3b710676b12e8dcb269065c75a4bb44",
+      "currentSha256": "a180c520dd416e75a1b334b0e33f9680ac391cadb3ad2acbced0590d6b7013b0"
+    },
+    {
+      "case": "agent-findings-contingent",
+      "historicalSha256": "ca63bd52f99c7f4e4f803af14d4f11862ad6b1cb948ef2c0e0c77b57e9d4b2fa",
+      "currentSha256": "29eaf3e01298ca8b2970ac431d3849a1a082c42824c71c5884c60fb582755912"
+    },
+    {
+      "case": "agent-arguments-sources",
+      "historicalSha256": "a20ecda5881fc444fa22f9c0cb1084dda752e6f6134ab58679b1b443aa8e4d4f",
+      "currentSha256": "f3f250ec3ec1f341c062c36992d7daee6c920364c5be7b8a9761397c512be39b"
+    }
+  ]
+}

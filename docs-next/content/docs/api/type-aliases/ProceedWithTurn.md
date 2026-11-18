@@ -6,7 +6,7 @@ title: ProceedWithTurn
 
 > **ProceedWithTurn** = (`changes?`) => `Promise`\<`void`\>
 
-Defined in: [src/core/agent/aroundTurn/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L63)
+Defined in: [src/core/agent/aroundTurn/types.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L66)
 
 Runs the turn. Resolves to nothing: the output, the pause and the checkpoint
 stay with the library. Rejects with the run's own error when the run fails.

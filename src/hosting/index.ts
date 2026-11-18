@@ -108,6 +108,10 @@ export type { NodeHost, NodeHostHandle, NodeHostOptions, JsonWireOptions } from 
 // behind `createRequire`), and a browser bundle must not have to reach through
 // a Node door to mint a session id.
 
+export { protocolRoute } from './protocolRoute.js';
+export type { ProtocolRouteOptions, HttpProtocolRoute } from './protocolRoute.js';
+export type { HostedProtocolRequest, ProtocolOpenOptions } from './protocolAdapter.js';
+
 export { httpHost, headerValue } from './httpHost.js';
 export type {
   ConversationHandshake,

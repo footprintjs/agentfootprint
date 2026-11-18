@@ -77,6 +77,7 @@
  * handler uses is the host's own, to the byte.
  */
 
+import type { AgentfootprintEvent } from '../events/registry.js';
 import { bearerToken, type VerifiedIdentity } from './identityVerification.js';
 import {
   AdmissionRefusedError,
@@ -422,6 +423,13 @@ export function beginIngress(request: HostRequest, sink: IngressSink): IngressNo
       // that defined them unconditionally would tell it the host can describe a
       // pause it cannot, and the named refusal for that case would never fire.
       return {
+        ...(reply.event !== undefined && {
+          event: (event: AgentfootprintEvent) => reply.event?.(event),
+        }),
+        ...(reply.custom !== undefined && {
+          custom: (name: string, payload: Readonly<Record<string, unknown>>) =>
+            reply.custom?.(name, payload),
+        }),
         complete(output: string): void {
           file('served');
           reply.complete(output);

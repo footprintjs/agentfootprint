@@ -1,8 +1,10 @@
 import type { ArtifactStore } from '../../../../../artifacts/types.js';
 import type { ArtifactPlacement } from '../../../../../artifacts/placement.js';
+import type { ResolvedSourceEvidenceOptions } from '../../../../../tools/sourceEvidence.js';
 
 /** The artifacts dependencies of the existing tool-call stage. */
 export interface ToolArtifactsPort {
+  readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
   /**
    * The claim-check store (9.21.0). When present, every dispatch binds it to
    * the run's scope (`scope.runIdentity` — the tuple memory scopes on) as

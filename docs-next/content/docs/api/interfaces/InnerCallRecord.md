@@ -12,7 +12,7 @@ One inner call, as the bridge recorded it.
 
 ### outcome
 
-> `readonly` **outcome**: `"ok"` \| `"absent"` \| `"error"`
+> `readonly` **outcome**: `"absent"` \| `"error"` \| `"ok"`
 
 Defined in: [src/core/runbook/dispatch.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runbook/dispatch.ts#L29)
 

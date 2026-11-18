@@ -294,6 +294,62 @@ onSqlite('sqliteArtifacts — the sessions laws, per store', () => {
     reopened.close();
   });
 
+  it('leaves stored payloads in SQLite for metadata and parent checks', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const selected: string[][] = [];
+    class ObservedDatabase extends DatabaseSync {
+      override prepare(query: string) {
+        const statement = super.prepare(query);
+        if (!/^SELECT .* FROM af_artifacts WHERE/.test(query)) return statement;
+        const get = statement.get.bind(statement);
+        const all = statement.all.bind(statement);
+        statement.get = (...params: Parameters<typeof get>) => {
+          const row = get(...params);
+          if (row) selected.push(Object.keys(row));
+          return row;
+        };
+        statement.all = (...params: Parameters<typeof all>) => {
+          const rows = all(...params);
+          for (const row of rows) selected.push(Object.keys(row));
+          return rows;
+        };
+        return statement;
+      }
+    }
+    const store = sqliteArtifacts({
+      file: join(tempDir(), 'metadata.db'),
+      _sqlite: ObservedDatabase,
+    });
+    try {
+      const data = 'recording content '.repeat(16_384);
+      const { meta } = await store.put(SCOPE, {
+        kind: 'recording/run',
+        mediaType: 'application/json',
+        data,
+        digest: 'sha-256',
+      });
+      selected.length = 0;
+      expect(await store.head(SCOPE, meta.ref)).toEqual(meta);
+      expect((await store.list(SCOPE)).artifacts).toEqual([meta]);
+      const child = await store.put(SCOPE, {
+        kind: 'derived',
+        mediaType: 'text/plain',
+        data: 'child',
+        parentRefs: [meta.ref],
+      });
+      expect(child.meta.parentRefs).toEqual([meta.ref]);
+      expect(selected).toHaveLength(4);
+      expect(selected.flat()).not.toContain('payload');
+      expect(selected.flat()).not.toContain('payload_shape');
+      selected.length = 0;
+      expect(await store.get(SCOPE, meta.ref)).toEqual({ meta, data });
+      expect(selected).toHaveLength(1);
+      expect(selected[0]).toContain('payload');
+    } finally {
+      store.close();
+    }
+  });
+
   it('close() is final — later verbs refuse by name instead of reopening', async () => {
     const store = sqliteArtifacts({ file: join(tempDir(), 'a.db') });
     store.close();

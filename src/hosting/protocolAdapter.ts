@@ -9,9 +9,11 @@
  * future protocol is one more, with no change to the runner, the event stream
  * or the framing seam.
  *
- * An adapter reads the SERVED stream only. That is the whole redaction story
- * for every protocol at once: what a policy hides never reaches an adapter, so
- * no adapter can put it on a wire.
+ * Its observation channel reads the SERVED stream only: what a policy hides
+ * never reaches that translation. Explicit host delivery is a separate channel:
+ * complete(output) and allow-listed publish payloads are app-authorized reply
+ * values, not recorded observations. The host owns that release; it grants no
+ * access to the runner's live state or snapshot.
  *
  * A host that serves a protocol over a request (`streamHandler`) asks one more
  * thing of it — {@link ProtocolAdapter}: read a request as UNTRUSTED input, and
@@ -20,6 +22,7 @@
  * theirs, what was said before, what a paused run is waiting on.
  */
 
+import type { HostRefusalCode } from './refusalStatus.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { Tool } from '../tools/tools.js';
@@ -29,7 +32,7 @@ import type { PendingAsk } from './types.js';
 /** How a run ended, as an adapter is told — once, after its last event. */
 export type RunSettlement =
   /** `run()` resolved with an answer. */
-  | { readonly kind: 'finished' }
+  | { readonly kind: 'finished'; readonly output?: string }
   /**
    * `run()` resolved with a pause (its `pause.request` came first). `awaiting`
    * says on whom: a PERSON's answer (the default — an approval, a question), or
@@ -56,11 +59,29 @@ export type RunSettlement =
   | { readonly kind: 'failed'; readonly refusal?: RunRefusal };
 
 /**
- * A library refusal that ended a run, by its code. `ERR_ANSWER_VALIDATION`:
+ * A native refusal, by its closed code. Host classification preserves the
+ * native status vocabulary without carrying an exception's words. `ERR_ANSWER_VALIDATION`:
  * an enforcing `.answerValidation()` withheld the answer
  * (`AnswerValidationError`) — the same code the HTTP doors answer with (422).
  */
-export type RunRefusal = 'ERR_ANSWER_VALIDATION';
+export type RunRefusal = HostRefusalCode | 'ERR_FRONTEND_TOOLS_UNSUPPORTED' | 'ERR_STREAM_LIMIT';
+
+/** Explicit host reply delivery, independent of the runner's lifetime. */
+export interface ProtocolOpenOptions {
+  /** Candidate answer text waits for the host's authoritative complete(output). */
+  readonly delivery: 'host';
+}
+
+/** A protocol request as read at the transport; input remains an untrusted claim. */
+export interface HostedProtocolRequest {
+  readonly name: string;
+  readonly strategy: 'standing';
+  readonly input: unknown;
+  /** Detached frozen native turn, available only after ownership and protocol planning. */
+  readonly turn?: ProtocolTurn;
+  /** Available after native identity, ownership and protocol planning, before execution. */
+  readonly accepted: Readonly<Record<string, unknown>>;
+}
 
 /**
  * One run's translation into a protocol's events. Opened per run, fed every
@@ -70,6 +91,8 @@ export type RunRefusal = 'ERR_ANSWER_VALIDATION';
 export interface RunTranslation<TEvent> {
   /** The protocol events one served event of the run means — zero, one or several. */
   event(event: AgentfootprintEvent): readonly TEvent[];
+  /** App-authorized reply data, projected by the protocol allow-list; not a recorded observation. */
+  publish?(name: string, payload: Readonly<Record<string, unknown>>): readonly TEvent[];
   /** The closing events. After this, `event` returns nothing. */
   settle(settlement: RunSettlement): readonly TEvent[];
   /**
@@ -234,7 +257,7 @@ export interface ProtocolAdapter<TRequest, TEvent> {
    * pause the run continues ({@link HeldConversation.awaiting}), when the turn
    * answers one.
    */
-  open(request: TRequest, resumed?: unknown): RunTranslation<TEvent>;
+  open(request: TRequest, resumed?: unknown, options?: ProtocolOpenOptions): RunTranslation<TEvent>;
   /**
    * How its events are written — built once per host, so a framing that loads
    * an optional peer refuses when the host is built, not mid-request. One
@@ -243,4 +266,6 @@ export interface ProtocolAdapter<TRequest, TEvent> {
    * (`SseFramePosition`).
    */
   framing(): SseFraming<TEvent>;
+  /** Fixed terminal protocol refusal after a transport budget failed; must not repeat a run start. */
+  refusal?(request: TRequest, refusal: RunRefusal): readonly TEvent[];
 }
