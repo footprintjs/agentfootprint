@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.10.0] - 2026-11-18
+
+### Added
+
+- **Capture trust facts and receive the exact hosted recording.** Supply a fresh
+  `trustBoundaryRecorder` factory in `artifacts.recordings.trustBoundaries` to add
+  one bounded trust bundle per invocation. A bound `HostReply.turnArtifacts` hook can read
+  `turn.recording` for the root recording that was published to its own scope.
+
+  The SQLite store now reads only metadata for artifact heads, lists, and parent
+  checks. Full reads still load the payload and verify its recorded digest.
+
 ## [14.9.2] - 2026-11-17
 
 ### Fixed
