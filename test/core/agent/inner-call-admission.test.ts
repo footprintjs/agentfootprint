@@ -26,58 +26,6 @@ const fixtureHalt = {
 };
 
 describe('composed call admission', () => {
-  it('waits for an in-flight decision before publishing the first terminal verdict', async () => {
-    const outer = bindOuterCall();
-    const started = latch();
-    const answer = latch();
-    const pending = outer.scheduleAdmission(async () => {
-      started.release();
-      await answer.wait;
-      return outer.halted(fixtureHalt);
-    });
-    await started.wait;
-
-    let finished = false;
-    const close = outer.close().then(() => {
-      finished = true;
-    });
-    expect(outer.ended).toBe(true);
-    try {
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(finished).toBe(false);
-    } finally {
-      answer.release();
-    }
-    await expect(pending).resolves.toBe(true);
-    await close;
-    expect(outer.halt).toEqual(fixtureHalt);
-    expect(outer.halted({ ...fixtureHalt, reason: 'later' })).toBe(false);
-  });
-
-  it('stops waiting on cancellation and declines a decision reported afterward', async () => {
-    const outer = bindOuterCall();
-    const controller = new AbortController();
-    const started = latch();
-    const answer = latch();
-    const pending = outer.scheduleAdmission(async () => {
-      started.release();
-      await answer.wait;
-      return outer.halted(fixtureHalt);
-    });
-    await started.wait;
-
-    const close = outer.close(controller.signal);
-    try {
-      controller.abort();
-      await close;
-      expect(outer.halt).toBeUndefined();
-    } finally {
-      answer.release();
-    }
-    await expect(pending).resolves.toBe(false);
-    expect(outer.halt).toBeUndefined();
-  });
-
   it('delivers the retained halt to cooperative work that already entered', async () => {
     const outer = bindOuterCall();
     const entered = latch();

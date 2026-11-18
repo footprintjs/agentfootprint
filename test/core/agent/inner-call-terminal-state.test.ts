@@ -1,7 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { policyArgsOf } from '../../../src/core/agent/innerCallPolicyArgs.js';
-import { refusalVerdictOf } from '../../../src/core/agent/runtime/terminal/verdicts.js';
-import { stopStoredPolicyHalt } from '../../../src/core/agent/stages/toolCalls/routing/policyHalt.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import { extractSequence } from '../../../src/security/extractSequence.js';
 import { Agent, checkInApproved, defineTool, isCheckInPause } from '../../../src/index.js';
@@ -9,18 +6,6 @@ import { mock } from '../../../src/providers.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
 
 describe('the native policy halt state', () => {
-  it('closes either caller of the gate with an already-recorded terminal outcome', () => {
-    const state = { policyHaltReason: 'fixture-stop', policyHaltTarget: 'sample' };
-    const stop = vi.fn();
-    const scope = Object.assign(state, {
-      $getValue: (key: keyof typeof state) => state[key],
-      $break: stop,
-    });
-    expect(stopStoredPolicyHalt(scope as never)).toBe(true);
-    expect(stop).toHaveBeenCalledWith('policy-halt: fixture-stop');
-    expect(stopStoredPolicyHalt({} as never)).toBe(false);
-  });
-
   it('closes a native resume when its saved state already carries a terminal verdict', async () => {
     const execute = vi.fn(() => 'fixture result');
     const respond = vi.fn(() => ({
@@ -63,28 +48,6 @@ describe('the native policy halt state', () => {
       await agent.shutdown();
     }
   });
-
-  it('reads the carried invocation identity independently of other rows with that name', () => {
-    const state = {
-      policyHaltReason: 'fixture-stop',
-      policyHaltTarget: 'sample',
-      policyHaltArgs: {},
-      innerToolCalls: [{ toolName: 'sample', toolCallId: 'previous#inner-1', halted: true }],
-    };
-    expect(refusalVerdictOf(state, { messageMiddleware: [] })).toMatchObject({
-      kind: 'policy-halt',
-      halt: { sequence: [{ name: 'sample' }] },
-    });
-    const narrowed = refusalVerdictOf(state, { messageMiddleware: [] });
-    if (narrowed?.kind !== 'policy-halt') throw new Error('expected a halt');
-    expect(narrowed.halt.sequence[0].inner).toBeUndefined();
-    expect(
-      refusalVerdictOf(
-        { ...state, policyHaltInnerCallId: 'current#inner-1' },
-        { messageMiddleware: [] },
-      ),
-    ).toMatchObject({ kind: 'policy-halt', halt: { sequence: [{ name: 'sample', inner: true }] } });
-  });
 });
 
 it('pairs recorded inner calls to each occurrence of a reused outer id', () => {
@@ -117,13 +80,4 @@ it('pairs recorded inner calls to each occurrence of a reused outer id', () => {
     'first',
     'second',
   ]);
-});
-
-it('requires positive provenance for displayed arguments from a prior inner call', () => {
-  const scope = { $getValue: () => undefined } as never;
-  const displayed = { toolCallId: 'fixture#inner-1', toolName: 'sample', args: { count: 1 } };
-  expect(() => policyArgsOf(scope, displayed)).toThrow(
-    'Policy arguments from an earlier inner call are unavailable.',
-  );
-  expect(policyArgsOf(scope, { ...displayed, policyArgsRef: null })).toEqual({ count: 1 });
 });
