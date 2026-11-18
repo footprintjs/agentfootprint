@@ -56,6 +56,7 @@ import {
 import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
 import { readPausedLeg } from '../../src/answer-account/facts/pausedLeg.js';
+import { recordingView } from '../../src/answer-account/view.js';
 import { type ReadContext } from '../../src/answer-account/facts/common.js';
 import { isPersonEntry } from '../../src/lib/saidByPerson.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../src/lib/saidByPerson.js';
@@ -240,13 +241,7 @@ describe('the answer account’s "current request" is the person’s', () => {
   const ctx = {
     resumedLeg: true,
     declarations: {},
-    // Nothing is kept out of this record (no redaction policy).
-    view: {
-      state: { history },
-      pausedWith: { history },
-      stateKeptOut: [],
-      isStateKeptOut: () => false,
-    },
+    view: recordingView({ snapshot: { initialState: { history }, sharedState: { history } } }),
   } as unknown as ReadContext;
 
   it('names the calls answered before the pause even when a library frame follows them', () => {

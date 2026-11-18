@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
-import { productionSources } from '../helpers/productionSources.js';
 
 const root = join(__dirname, '../..');
 const owners = new Set([
@@ -11,8 +10,12 @@ const owners = new Set([
   'src/time-travel/servedView/requestOnly.ts',
 ]);
 
-it('production placement readers use the issued receipt instead of the ticket shape', () => {
-  const violations = productionSources(join(root, 'src')).flatMap((path) => {
+it('placement readers under src use the issued receipt instead of the ticket shape', () => {
+  const files = readdirSync(join(root, 'src'), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .map((entry) => join(entry.parentPath, entry.name))
+    .sort();
+  const violations = files.flatMap((path) => {
     const file = relative(root, path).replaceAll('\\', '/');
     if (owners.has(file)) return [];
     const text = readFileSync(path, 'utf8');
