@@ -1849,9 +1849,9 @@ describe('.findings() — the offer: every served schema lists the ids the model
       ['look', 'fact', true],
     ]);
     for (const row of standings) expect(row).not.toHaveProperty('toolName');
-    // c1 still has no standing, so it is still offered on the answer call —
-    // the library resolved nothing on the model's behalf.
-    expect(offerOf(seen[2]!)).toEqual(['c2', 'c1']);
+    // c1 remains undeclared. c2 was refused, so its notice is never a result offer.
+    expect(offerOf(seen[2]!)).toEqual(['c1']);
+    expect(seen[2]!.toolIds).toEqual(['c1', 'c2']); // The notice stays on the wire, outside the result offer.
   });
 
   it("the served view's tools.schemas equal the committed decorated schemas — offer included — at every epoch", async () => {

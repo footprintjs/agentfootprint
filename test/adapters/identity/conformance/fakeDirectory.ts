@@ -61,6 +61,8 @@ export interface FakeDirectory extends Directory {
   /** Answer a refused bind as a bare `'invalid'` (a directory that names no sub-code). */
   bareInvalid: boolean;
   lastFilter?: string;
+  /** How many base-scope group-membership searches were sent. */
+  groupSearches: number;
 }
 
 export function fakeDirectory(
@@ -96,6 +98,7 @@ export function fakeDirectory(
     bindTimesOut: false,
     whoAmIForm: 'netbios',
     groups: {},
+    groupSearches: 0,
     bareInvalid: false,
     guidOf: (sam) => (guids.get(sam) as Buffer).toString('base64'),
     async open(): Promise<DirectorySession> {
@@ -138,12 +141,23 @@ export function fakeDirectory(
           fake.lastFilter = filter;
           if (scope === 'base') {
             const account = accounts.find((a) => dnOf(a) === base);
-            const group = /memberOf:1\.2\.840\.113556\.1\.4\.1941:=(.*)\)$/.exec(filter)?.[1];
-            if (account === undefined || group === undefined) return [];
-            const unescaped = group.replace(/\\([0-9a-f]{2})/gi, (_, h) =>
-              String.fromCharCode(parseInt(h as string, 16)),
+            // One in-chain clause, or an OR of them (`(|(…)(…))`). Anything
+            // else matches nothing, so a malformed filter fails the test.
+            const CLAUSE =
+              /\(memberOf:1\.2\.840\.113556\.1\.4\.1941:=((?:[^()\\]|\\[0-9a-f]{2})*)\)/gi;
+            const clauses = [...filter.matchAll(CLAUSE)];
+            const whole = clauses.map((c) => c[0]).join('');
+            const wellFormed =
+              clauses.length > 0 &&
+              (clauses.length === 1 ? filter === whole : filter === `(|${whole})`);
+            if (account === undefined || !wellFormed) return [];
+            const groups = clauses.map((c) =>
+              (c[1] as string).replace(/\\([0-9a-f]{2})/gi, (_, h) =>
+                String.fromCharCode(parseInt(h as string, 16)),
+              ),
             );
-            return inGroup(account.memberOf ?? [], unescaped) ? [entry(account)] : [];
+            fake.groupSearches += 1;
+            return groups.some((g) => inGroup(account.memberOf ?? [], g)) ? [entry(account)] : [];
           }
           const sam = /sAMAccountName=([^)]*)\)/.exec(filter)?.[1];
           const sidMatch = /objectSid=([^)]*)\)/.exec(filter)?.[1];

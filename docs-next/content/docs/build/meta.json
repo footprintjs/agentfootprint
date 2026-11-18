@@ -25,6 +25,7 @@
     "tools",
     "findings-admission",
     "artifacts",
+    "retained-source-evidence",
     "artifacts-architecture",
     "tool-providers",
     "tool-discovery",

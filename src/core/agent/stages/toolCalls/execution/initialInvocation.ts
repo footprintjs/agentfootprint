@@ -99,7 +99,15 @@ interface InvokeInitialToolFrame {
 /** Existing initialInvocation body; original guard and native pause return stay with the handler. */
 export async function invokeInitialTool(
   scope: TypedScope<AgentState>,
-  deps: Pick<ToolCallsHandlerDeps, 'time' | 'negativeClaimsArmed' | 'answeredAsk'>,
+  deps: Pick<
+    ToolCallsHandlerDeps,
+    | 'time'
+    | 'negativeClaimsArmed'
+    | 'answeredAsk'
+    | 'sourceEvidenceConfig'
+    | 'currentRun'
+    | 'isRunRetired'
+  >,
   frame: InvokeInitialToolFrame,
 ) {
   try {
@@ -153,7 +161,12 @@ export async function invokeInitialTool(
       ...(frame.authorization.resolvedCredential && {
         credential: frame.authorization.resolvedCredential,
       }),
-      ...frame.toolArtifacts(scope, frame.tc.name, frame.tc.id),
+      ...frame.toolArtifacts(
+        scope,
+        frame.tc.name,
+        frame.tc.id,
+        frame.execution.resultFinalizer?.needsPublications,
+      ),
       ...(frame.wanted.wantedMeta !== undefined && { wanted: frame.wanted.wantedMeta }),
       ...frame.toolProgress(scope, {
         toolName: frame.tc.name,
@@ -190,12 +203,14 @@ export async function invokeInitialTool(
             context: executionContext,
           })
         : undefined;
+    frame.execution.resultFinalizer?.entered(executionContext);
     frame.execution.executed = true;
     frame.execution.submittedProgram = frame.programOfCall(
       frame.tool,
       frame.callArguments.callArgs,
     );
     frame.outcome.result = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
+    frame.execution.resultFinalizer?.returned();
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
         scope,
@@ -328,6 +343,7 @@ export async function invokeInitialTool(
     }
     await frame.endCall(scope);
   } catch (err) {
+    frame.execution.resultFinalizer?.withheld();
     // Set when a raise declared a miss the door could not file:
     // the call then errors with this text and does not pause.
     let raisedMissError: string | undefined;
@@ -505,7 +521,7 @@ export async function invokeInitialTool(
 /**
  * Keys of `pauseData` the library reads to recognise a pause of its OWN: which
  * call paused (`toolCallId` / `toolName`), which consent gate or typed ask is
- * open (`pause.ts` · `pauseDemandsDecision` reads `checkIn` / `ask`;
+ * open (`src/core/pause.ts` · `pauseDemandsDecision` reads `checkIn` / `ask`;
  * `RunnerBase` reads `awaitingInput`), and credential consent
  * (`identity/consent.ts` · `CONSENT_PAUSE_KEY`, minted only by
  * `credentialAdmission.ts`, whose URL the caller is told to open). A tool's

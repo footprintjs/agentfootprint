@@ -447,6 +447,14 @@
     "threshold": "kept",
     "upstreamRef": "kept"
   },
+  "agentfootprint.context.recorded": {
+    "iteration": "kept",
+    "omission": "kept",
+    "pieces[].rawContent": "chars",
+    "pieces[].schema": "type",
+    "pieces[].source": "kept",
+    "pieces[].sourceId": "kept"
+  },
   "agentfootprint.context.slot_composed": {
     "budget.cap": "kept",
     "budget.headroomChars": "kept",
@@ -592,6 +600,7 @@
     "asked": "kept",
     "claimed": "kept",
     "coincides": "kept",
+    "correction": "kept",
     "earlier": "kept",
     "failed": "kept",
     "free": "kept",
@@ -606,7 +615,8 @@
     "toolCallId": "kept",
     "toolName": "kept",
     "turn": "kept",
-    "valueChars": "kept"
+    "valueChars": "kept",
+    "withheld": "kept"
   },
   "agentfootprint.findings.contingent": {
     "carriers": "kept",
@@ -684,6 +694,7 @@
     "kind": "kept",
     "message": "chars",
     "predicate": "kept",
+    "rowset": "kept",
     "seam": "kept",
     "subjects[].id": "kept",
     "subjects[].kind": "kept",
@@ -1341,6 +1352,16 @@
     "maxChars": "kept",
     "narrowBy[]": "kept",
     "sizeChars": "kept",
+    "toolCallId": "kept",
+    "toolName": "kept"
+  },
+  "agentfootprint.tools.rowset_checked": {
+    "delivery": "kept",
+    "disposition": "kept",
+    "iteration": "kept",
+    "reason": "kept",
+    "rowset": "kept",
+    "source": "kept",
     "toolCallId": "kept",
     "toolName": "kept"
   },

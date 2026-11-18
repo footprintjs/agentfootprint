@@ -49,10 +49,10 @@
  *
  * WHAT IT CANNOT DO. The resume checkpoint (`err.checkpoint` on a paused run)
  * is not a served view: resumption must replay against real values, and it is
- * handed to the agent loop, never to a model. And the redacted view OMITS the
- * run's `initialState` (footprintjs `ExecutionRuntime.getSnapshot`: the raw
- * pre-run seed never passed a policy, so it is dropped rather than served), so
- * a fold of a kept record reports `basis: 'log-only'`; a subflow's
+ * handed to the agent loop, never to a model. Older native redacted views omit
+ * `initialState`; newer engines serve its safe projection. The installed native
+ * contract is forwarded unchanged; missing bases and policy-withheld values
+ * remain separate limitations of an offline rebuild. A subflow's
  * `treeContext.initialState` travels as footprintjs serves it (9.20.0 keeps
  * it — the nested runtime's base BEFORE its seed, which is a commit of its
  * own, `history[0]`).

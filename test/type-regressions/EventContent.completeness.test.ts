@@ -104,6 +104,7 @@ export const EVENT_CONTENT = {
   'agentfootprint.context.evaluated': 'shape',
   'agentfootprint.context.evicted': 'structure',
   'agentfootprint.context.injected': 'fields',
+  'agentfootprint.context.recorded': 'shape',
   'agentfootprint.context.slot_composed': 'fields',
   // cost.*
   'agentfootprint.cost.limit_hit': 'structure',
@@ -222,6 +223,7 @@ export const EVENT_CONTENT = {
   'agentfootprint.tools.request_attempts': 'structure',
   'agentfootprint.tools.resource_restore': 'structure',
   'agentfootprint.tools.result_refused': 'structure',
+  'agentfootprint.tools.rowset_checked': 'structure',
   'agentfootprint.tools.semantics_declared': 'shape',
   'agentfootprint.tools.session_close_failed': 'fields',
   // `label`: never user data, by its contract
@@ -417,6 +419,18 @@ const CANARY_PAYLOAD: {
     rationale: "router chose 'refunds'",
     evidence: { reason: leaf(c, 'evidence.reason'), inRoster: true },
   }),
+  'agentfootprint.context.recorded': (c) => ({
+    iteration: 1,
+    omission: 'not-json',
+    pieces: [
+      {
+        source: 'base',
+        sourceId: 'standing',
+        rawContent: leaf(c, 'pieces[].rawContent'),
+        schema: { description: leaf(c, 'pieces[].schema.description') },
+      },
+    ],
+  }),
   'agentfootprint.context.evaluated': (c) => ({
     iteration: 1,
     activeCount: 1,
@@ -484,6 +498,7 @@ const CANARY_PAYLOAD: {
       },
     ],
     predicate: 'status',
+    rowset: 'declared-rowset',
     epoch: 1,
     synthetic: true,
     advisory: true,
@@ -839,12 +854,19 @@ function expectedBounded(type: ShapeEvent, payload: Record<string, unknown>): un
     return value;
   };
   const records = new Set(RECORD_FIELDS[type] ?? []);
-  return Object.fromEntries(
+  const bounded = Object.fromEntries(
     Object.entries(payload).map(([field, value]) => [
       field,
       records.has(field) ? `[keys: ${Object.keys(value as object).join(', ')}]` : mark(value),
     ]),
   );
+  // A selected schema is opaque content, bounded WHOLE as a type marker.
+  // This literal oracle does not consult the exporter's bounding table.
+  if (type === 'agentfootprint.context.recorded') {
+    const pieces = bounded.pieces as Record<string, unknown>[];
+    return { ...bounded, pieces: pieces.map((piece) => ({ ...piece, schema: '[type: object]' })) };
+  }
+  return bounded;
 }
 
 let clock = 1_000;
