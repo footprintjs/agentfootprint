@@ -126,7 +126,7 @@ function questionFor(
   const scopeEnv = scope.$getEnv();
   const env = call.signal !== undefined ? { ...scopeEnv, signal: call.signal } : scopeEnv;
   const shared = { historyForCallbacks: outer.history, iteration: outer.iteration };
-  const askCapability = buildCapabilityQuestion({
+  const ask = buildCapabilityQuestion({
     ...shared,
     permissionChecker,
     viewOf,
@@ -138,6 +138,10 @@ function questionFor(
     execution: cells.execution,
     outcome: cells.outcome,
   });
+  const askCapability: typeof ask = async (...args) => {
+    // Closing drains the answer already pending, without opening another question.
+    if (!outer.binding.ended && !env.signal?.aborted) await ask(...args);
+  };
   return { tc, ...cells, emitSecurity, viewOf, runIdentity, env, shared, askCapability };
 }
 
@@ -186,7 +190,7 @@ async function askPermission(
     innerCallsSoFar: () => innerCallsSoFar(outer),
     innerArgsOf: (inner) => policyArgsOf(scope, inner),
   });
-  if (!execution.denied && !call.signal?.aborted && call.tool?.capabilities !== undefined) {
+  if (!execution.denied && call.tool?.capabilities !== undefined) {
     await askDeclaredCapabilities(
       question.askCapability,
       permissionChecker,
