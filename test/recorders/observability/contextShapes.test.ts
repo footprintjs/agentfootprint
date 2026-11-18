@@ -25,6 +25,21 @@ const source = (initialState: object, commitLog: readonly unknown[] = []) => ({
 const shapes = (base: object, log: readonly unknown[], opts?: ContextShapeOptions) =>
   createContextShapeCapture(opts)(source(base, log)).contextShapes!;
 const inventory = 'inventory';
+function factAt(index: ReturnType<typeof shapes>, commit: number, path: readonly string[]) {
+  let result: readonly [string, number?] | undefined;
+  const apply = (entries: typeof index.initial) => {
+    for (const entry of entries) {
+      if (entry[0].length !== path.length || !entry[0].every((part, i) => part === path[i]))
+        continue;
+      const [, type, length] = entry;
+      if (type === 'unknown' || type === 'deleted') result = undefined;
+      else result = type === 'array' ? [type, length] : [type];
+    }
+  };
+  apply(index.initial);
+  for (const [at, entries] of index.changes) if (at <= commit) apply(entries);
+  return result;
+}
 const wrapped = (snapshot: unknown, options?: Parameters<typeof recordRun>[1]) => {
   const runner = {
     on: () => () => {},
@@ -127,6 +142,104 @@ describe('recorded context shapes', () => {
       expect(result.changes[0][1]).not.toContainEqual([['box', 'secret'], 'array', 1]);
     }
     expect(shapes({ a: 'REDACTED', b: '[REDACTED]' }, [], { scan: 'full' }).initial).toEqual([]);
+  });
+
+  it('keeps hidden fields unknown through merges and nested writes until a public replacement', () => {
+    const secret = ['a', 'secret'];
+    const leaf = [...secret, '0'];
+    const safe = ['a', 'safe'];
+    const log = [
+      row('a', 'set', { a: { secret: [1, 2, 3], safe: 4 } }, ['a\u001fsecret']),
+      row('a', 'merge', { a: { safe: 5 } }),
+      row('a\u001fsecret\u001f0', 'set', { a: { secret: { '0': 9 } } }),
+      row('a\u001fsecret', 'set', { a: { secret: [8] } }),
+    ];
+    for (const options of [{ scan: 'full' } as const, { paths: [secret, leaf, safe] }]) {
+      const index = shapes({ a: { secret: 'old', safe: 'old' } }, log, options);
+      for (const commit of [0, 1, 2]) {
+        expect(factAt(index, commit, secret)).toBeUndefined();
+        expect(factAt(index, commit, leaf)).toBeUndefined();
+      }
+      expect(factAt(index, 0, safe)).toEqual(['number']);
+      expect(factAt(index, 3, secret)).toEqual(['array', 1]);
+      expect(factAt(index, 3, leaf)).toEqual(['number']);
+      expect(factAt(index, -1, secret)).toEqual(['string']);
+    }
+  });
+
+  it('keeps masks in place when the native fold ignores a denied write', () => {
+    const path = ['a', '__proto__', 'secret'];
+    const patch = { a: { ['__proto__']: { secret: [1, 2, 3] }, safe: 0 } };
+    const log = [
+      row('a', 'set', patch, [path.join('\u001f')]),
+      row(path.join('\u001f'), 'set', patch),
+      row('a', 'merge', { a: { safe: 1 } }),
+    ];
+    for (const options of [{ scan: 'full' } as const, { paths: [path] }]) {
+      const index = shapes({}, log, options);
+      for (const commit of [0, 1, 2]) expect(factAt(index, commit, path)).toBeUndefined();
+    }
+  });
+
+  it('withholds element facts when a masked array operand has ambiguous final indices', () => {
+    const arr = ['a'];
+    const secret = ['a', '2', 'secret'];
+    const leaf = [...secret, '0'];
+    const log = [
+      row('a', 'append', { a: [{ secret: [1, 2, 3] }] }, ['a\u001f0\u001fsecret']),
+      row('other', 'merge', { other: { count: 1 } }),
+      row('a', 'append', { a: [true] }),
+      row('a', 'set', { a: [1, 2, { secret: [] }] }),
+    ];
+    for (const options of [{ scan: 'full' } as const, { paths: [secret, leaf, ['a', '0']] }]) {
+      const index = shapes({ a: [1, 2] }, log, options);
+      expect(factAt(index, -1, ['a', '0'])).toEqual(['number']);
+      for (const commit of [0, 1, 2]) {
+        expect(factAt(index, commit, secret)).toBeUndefined();
+        expect(factAt(index, commit, leaf)).toBeUndefined();
+        expect(factAt(index, commit, ['a', '0'])).toBeUndefined();
+        expect(factAt(index, commit, arr)).toEqual(['array', commit === 2 ? 4 : 3]);
+      }
+      expect(factAt(index, 3, secret)).toEqual(['array', 0]);
+    }
+  });
+
+  it('keeps element masks when an array merge can change their positions', () => {
+    const secret = ['a', '0', 'secret'];
+    const sibling = ['a', '0', 'label'];
+    const log = [
+      row('a', 'set', { a: [{ secret: [1, 2, 3], label: 0 }] }, [secret.join('\u001f')]),
+      row('a', 'merge', { a: [{ label: 1 }] }),
+      row('a', 'merge', { a: [{ label: 2 }] }),
+    ];
+    for (const options of [{ scan: 'full' } as const, { paths: [secret, sibling] }]) {
+      const index = shapes({ a: [] }, log, options);
+      expect(factAt(index, 0, sibling)).toEqual(['number']);
+      for (const commit of [1, 2]) {
+        expect(factAt(index, commit, secret)).toBeUndefined();
+        expect(factAt(index, commit, sibling)).toBeUndefined();
+      }
+    }
+  });
+
+  it('only discovers JSON array indices from initial, assigned, and appended arrays', () => {
+    const decorated = Object.assign([1], { tag: [1, 2], '01': 'extra' });
+    const extras = ['tag', 'length', 'NaN', '01'].map((key) => ['a', key]);
+    const log = [
+      row('a', 'set', { a: decorated }),
+      row('a', 'append', { a: decorated }),
+      row('a\u001ftag', 'set', { a: { tag: true } }),
+    ];
+    for (const options of [
+      { scan: 'full' } as const,
+      { paths: [...extras, ['a', '0'], ['a', '1']] },
+    ]) {
+      const index = shapes({ a: decorated }, log, options);
+      for (const commit of [-1, 0, 1, 2])
+        for (const path of extras) expect(factAt(index, commit, path)).toBeUndefined();
+      expect(factAt(index, 1, ['a'])).toEqual(['array', 2]);
+      expect(factAt(index, 1, ['a', '1'])).toEqual(['number']);
+    }
   });
 
   it('captures after embedding retention; opt out preserves the original snapshot', () => {

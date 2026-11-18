@@ -1,6 +1,7 @@
 import { isCommitBundle } from 'foottrace';
 import { isDeniedSegment, pathSegments } from 'foottrace/paths';
 import {
+  arrayIndex,
   classify,
   deleted,
   lookup,
@@ -12,6 +13,8 @@ import {
   type Shape,
   type ShapeEntry,
 } from './value.js';
+
+import { ShapeRedactions } from './redactions.js';
 
 interface Node {
   shape?: Shape;
@@ -27,10 +30,7 @@ const known = (shape: Shape) => shape[0] !== 'unknown' && shape[0] !== 'deleted'
 export class ShapeBook {
   private readonly root = node();
   private readonly present = new Set<string>();
-  private hiddenPaths: readonly Path[] = [];
-  private hidden(path: Path) {
-    return this.hiddenPaths.some((mask) => prefix(mask, path));
-  }
+  private readonly masks = new ShapeRedactions();
   private pending = new Map<Node, { path: Path; before?: Shape }>();
   constructor(private readonly options: ContextShapeOptions) {}
 
@@ -56,14 +56,21 @@ export class ShapeBook {
     }
   }
   private sample(path: Path, value: unknown, ancestry: Set<object>): void {
-    const shape = this.hidden(path) ? unknown : classify(value);
+    const shape = this.masks.hides(path) ? unknown : classify(value);
     this.set(path, shape);
-    if (this.options.scan !== 'full' || (shape[0] !== 'object' && shape[0] !== 'array')) return;
+    if (
+      this.options.scan !== 'full' ||
+      (shape[0] !== 'object' && shape[0] !== 'array') ||
+      this.masks.hidesChildren(path)
+    )
+      return;
     const object = value as object;
     if (ancestry.has(object)) return;
     ancestry.add(object);
-    for (const key of Object.keys(object))
+    for (const key of Object.keys(object)) {
+      if (Array.isArray(object) && arrayIndex(key) === undefined) continue;
       this.sample([...path, key], lookup(object, [key]), ancestry);
+    }
     ancestry.delete(object);
   }
   private observe(path: Path, value: unknown): void {
@@ -73,7 +80,7 @@ export class ShapeBook {
       if (watched.length > path.length && prefix(path, watched))
         this.set(
           watched,
-          this.hidden(watched) ? unknown : classify(lookup(value, watched.slice(path.length))),
+          this.masks.hides(watched) ? unknown : classify(lookup(value, watched.slice(path.length))),
         );
     }
   }
@@ -91,17 +98,21 @@ export class ShapeBook {
         !bundle.redactedPaths.every((path) => typeof path === 'string'))
     )
       return false;
-    this.hiddenPaths = bundle.redactedPaths?.map(pathSegments) ?? [];
-    for (const hidden of this.hiddenPaths) {
-      const at = this.at(hidden);
-      this.forgetChildren(hidden, at);
-      this.set(hidden, unknown, at);
+    for (const mask of this.masks.advance(bundle.trace, bundle.redactedPaths ?? [])) {
+      const at = this.at(mask.path);
+      this.forgetChildren(mask.path, at);
+      if (!mask.childrenOnly) this.set(mask.path, unknown, at);
     }
     if (this.options.scan === 'full' && bundle.trace.some((row) => row.verb === 'merge')) {
       // Deduplication in a native array merge depends on its contents. Only
       // the explicit full-scan mode pays for the native fold in this case.
       const state = folded();
-      for (const root of new Set(bundle.trace.map((row) => pathSegments(row.path)[0]))) {
+      const roots = new Set<string>();
+      for (const row of bundle.trace) {
+        const path = pathSegments(row.path);
+        if (path.length && !path.some(isDeniedSegment)) roots.add(path[0]);
+      }
+      for (const root of roots) {
         const path = [root];
         this.forgetChildren(path, this.at(path));
         const value = lookup(state, path);
@@ -117,28 +128,30 @@ export class ShapeBook {
       const absentRoot = !this.present.has(path[0]);
       if (row.verb === 'delete' && path.length === 1) this.present.delete(path[0]);
       else if (row.verb !== 'delete') this.present.add(path[0]);
-      for (let i = 1; row.verb !== 'delete' && i < path.length; i++) {
+      let outsideElements = false;
+      for (let i = 1; i < path.length; i++) {
         const parent = path.slice(0, i);
         const holder = this.at(parent);
         // A string-keyed native path creates a plain object if its
         // intermediate container was a primitive. An array index assignment
         // can extend its length; deleting a property never shrinks it.
-        if (this.hidden(parent)) this.set(parent, unknown);
-        else if (holder.shape?.[0] === 'array') {
+        if (holder.shape?.[0] === 'array') {
           const key = path[i];
-          if (key === 'length') {
-            this.forgetChildren(parent, holder);
-            this.set(parent, unknown);
-          } else {
-            const index = Number(key);
-            if (
-              String(index) === key &&
-              Number.isInteger(index) &&
-              index >= 0 &&
-              index < 0xffffffff
-            )
-              this.set(parent, ['array', Math.max(holder.shape[1]!, index + 1)]);
+          const index = arrayIndex(key);
+          if (index === undefined) {
+            if (key === 'length' && row.verb !== 'delete') {
+              this.forgetChildren(parent, holder);
+              this.set(parent, unknown);
+            }
+            outsideElements = true;
+            break;
           }
+          if (row.verb !== 'delete')
+            this.set(parent, ['array', Math.max(holder.shape[1]!, index + 1)]);
+        } else if (row.verb === 'delete') {
+          continue;
+        } else if (this.masks.hides(parent)) {
+          this.set(parent, unknown);
         } else if (
           absentRoot ||
           (holder.shape && known(holder.shape) && holder.shape[0] !== 'object')
@@ -146,21 +159,22 @@ export class ShapeBook {
           this.set(parent, ['object']);
         }
       }
+      if (outsideElements) continue;
       const target = this.at(path);
       const before = target.shape;
-      const hidden = this.hidden(path);
+      const hidden = this.masks.hides(path);
       if (row.verb === 'append' && !hidden && before?.[0] === 'array') {
         const tail = lookup(bundle.overwrite, path);
         if (Array.isArray(tail)) {
           const start = before[1]!;
           this.set(path, ['array', start + tail.length]);
+          if (this.masks.hidesChildren(path)) continue;
           if (this.options.scan === 'full') {
-            for (const index of Object.keys(tail))
-              this.sample(
-                [...path, String(start + Number(index))],
-                lookup(tail, [index]),
-                new Set(),
-              );
+            for (const key of Object.keys(tail)) {
+              const index = arrayIndex(key);
+              if (index !== undefined)
+                this.sample([...path, String(start + index)], lookup(tail, [key]), new Set());
+            }
           } else {
             for (const watched of this.options.paths ?? []) {
               if (watched.length <= path.length || !prefix(path, watched)) continue;
@@ -174,7 +188,7 @@ export class ShapeBook {
               )
                 this.set(
                   watched,
-                  this.hidden(watched)
+                  this.masks.hides(watched)
                     ? unknown
                     : classify(
                         lookup(tail, [String(index - start), ...watched.slice(path.length + 1)]),

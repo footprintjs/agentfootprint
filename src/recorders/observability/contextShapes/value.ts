@@ -31,6 +31,7 @@ export function lookup(root: unknown, path: Path): unknown {
   for (const part of path) {
     if (value === 'REDACTED' || value === '[REDACTED]') return opaque;
     if (value === null || typeof value !== 'object') return missing;
+    if (Array.isArray(value) && arrayIndex(part) === undefined) return missing;
     const descriptor = Object.getOwnPropertyDescriptor(value, part);
     if (!descriptor) return missing;
     if (!('value' in descriptor)) return opaque;
@@ -60,3 +61,11 @@ export function classify(value: unknown): Shape {
 }
 export const prefix = (a: Path, b: Path) =>
   a.length <= b.length && a.every((key, i) => b[i] === key);
+
+/** Enumerable named properties of arrays are outside the JSON element sequence. */
+export function arrayIndex(key: string): number | undefined {
+  const index = Number(key);
+  return String(index) === key && Number.isInteger(index) && index >= 0 && index < 0xffffffff
+    ? index
+    : undefined;
+}

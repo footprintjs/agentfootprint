@@ -65,6 +65,8 @@ To track a nested array such as `inventory.rows`, pass `{ contextShapes: { paths
 
 An older recording or an incomplete log can have no index. Individual paths can also be unavailable, for example when a redaction hides a value or an array merge would require inspecting its items. Treat a missing length as unknown. A recorded zero means an empty array.
 
+A redacted field stays unknown through partial updates until a later public write replaces it. If a masked array update leaves the final position of a hidden item ambiguous, the index withholds element details. The array can still have a recorded length. The recorder also treats the literal strings `REDACTED` and `[REDACTED]` as redaction markers, so their type is unknown.
+
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its
