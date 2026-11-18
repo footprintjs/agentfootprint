@@ -144,9 +144,9 @@ export interface DeliveryState {
    *
    * It is the one input to that nudge that was build-time-only. The nudge is a
    * `role: 'user'` line composed for a single request and written to no
-   * history; with this key on the record, `servedView.ts` · `servedAt` composes
-   * the identical line from committed state — conversation, tools served, and
-   * these declarations — instead of declaring the model's own words a gap.
+   * history. The served view uses the conversation, served tools, declarations
+   * and `placedTickets` to reconstruct the line. An armed resume records an
+   * empty receipt when the checkpoint has none.
    *
    * A plain record rather than the `Map` the join takes, because an object
    * write to scope is JSON-round-tripped and a `Map` round-trips to `{}`.

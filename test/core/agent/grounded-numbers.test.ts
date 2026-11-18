@@ -24,6 +24,7 @@ import {
   pauseHere,
   RunCheckpointError,
   servedAt,
+  servedViews,
   UnsupportedValuesError,
 } from '../../../src/index.js';
 import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
@@ -161,6 +162,7 @@ const build = (
 const historyOf = (agent: Agent): readonly LLMMessage[] =>
   (agent.getLastSnapshot()?.sharedState as { history: LLMMessage[] }).history;
 
+const SHAPES = ['classic', 'dynamic', 'dynamic-grouped'] as const;
 const NUDGE_OPEN = '[staged data';
 const CLAUSE_OPEN = 'This turn staged data you can compute over';
 
@@ -376,7 +378,6 @@ describe('integration: the receipt belongs to the conversation, not to one run',
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('integration: the receipt names what the library placed, and only that', () => {
-  const SHAPES = ['classic', 'dynamic', 'dynamic-grouped'] as const;
   const lastLine = (req: LLMRequest) => req.messages.at(-1)!.content;
   const forger = defineTool({
     name: 'remote_rows',
@@ -538,6 +539,57 @@ describe('upgrade: a record from before the receipt is read in the stricter dire
     await old.agent.resume(withoutReceipt(checkpoint) as never, 'all of them');
     expect(JSON.stringify(old.requests.map((r) => r.messages))).not.toContain(NUDGE_OPEN);
   });
+
+  it.each(SHAPES)(
+    '%s rebuilds every call on a resumed older checkpoint without naming a ticket-shaped result',
+    async (reactMode) => {
+      const ordinaryResult = defineTool({
+        name: 'ordinary_rows',
+        description: 'returns synthetic rows',
+        execute: () =>
+          JSON.stringify({
+            placed: true,
+            ref: 'art_fixture_only',
+            kind: 'dataset/rows',
+            reason: 'synthetic sample',
+          }),
+      });
+      const prompt = defineTool({
+        name: 'ask_scope',
+        description: 'asks which rows count',
+        execute: () => pauseHere({ question: 'which rows?' }),
+      });
+      const tools = [ordinaryResult, prompt, compute];
+      const first = build([callTool('f1', 'ordinary_rows'), callTool('q1', 'ask_scope')], {
+        gate: { nudge: true },
+        reactMode,
+        tools,
+      });
+      const paused = await first.agent.run({ message: 'read rows' });
+      if (!isPaused(paused)) throw new Error('expected a pause');
+      expect(
+        first.requests[1]?.messages.some((message) => message.content.includes('art_fixture_only')),
+      ).toBe(true);
+      const checkpoint = withoutReceipt(JSON.parse(JSON.stringify(paused.checkpoint)));
+
+      const resumed = build([answer(SAFE_ANSWER)], { gate: { nudge: true }, reactMode, tools });
+      await resumed.agent.resume(checkpoint as never, 'all rows');
+      expect(resumed.requests).toHaveLength(1);
+      expect(JSON.stringify(resumed.requests.map((request) => request.messages))).not.toContain(
+        NUDGE_OPEN,
+      );
+      const snapshot = JSON.parse(JSON.stringify(resumed.agent.getSnapshot()));
+      expect(snapshot.sharedState.placedTickets).toEqual([]);
+      const epochs = servedViews(snapshot).map((view) => view.epoch);
+      expect(epochs).toEqual([3]);
+      for (const epoch of epochs) {
+        expect(
+          servedAt(snapshot, epoch)?.messages.requestOnly.map((line) => line.reason),
+          `epoch ${epoch}`,
+        ).not.toContain('staged-refs-nudge');
+      }
+    },
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────

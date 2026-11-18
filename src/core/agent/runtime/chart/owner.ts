@@ -14,6 +14,7 @@ import { type FlowChart } from 'footprintjs';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 
 import { buildWindowStage } from '../../stages/window.js';
+import { resumeStagedRefs } from '../../stages/stagedRefsNudge.js';
 
 import type { MemoryStore } from '../../../../memory/store/index.js';
 
@@ -496,7 +497,10 @@ export function buildChart(
     ),
     resume: bindRunnerStage(
       (scope: TypedScope<AgentState>) => this.native.runExecution().forScope(scope),
-      (run) => (scope, input) => handlerFor(run).resume(scope, input),
+      (run) => (scope, input) => {
+        resumeStagedRefs(scope, seededToolWants !== undefined);
+        return handlerFor(run).resume(scope, input);
+      },
     ),
   };
   const thinkingSubflow = this.configuration.thinkingHandler

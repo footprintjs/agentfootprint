@@ -355,7 +355,9 @@ surface to write. A tool that returns JSON shaped like a ticket is not a
 ticket: the line names only refs the library minted, which it keeps a receipt
 of and carries with a stored conversation (`checkpoint().placedTickets`). A
 conversation stored or paused by an earlier version has no receipt, so its
-tickets are not named. The line is request-only (it never enters the conversation
+tickets are not named. The library trusts a stored receipt as part of the
+checkpoint. It cannot establish who wrote a stored field, so keep the session
+store as safe as the run. The line is request-only (it never enters the conversation
 history) and recomposed per iteration, so it exists exactly while both
 conditions hold; each firing lands as `agentfootprint.agent.grounding_nudged`
 with the refs and tools as data.

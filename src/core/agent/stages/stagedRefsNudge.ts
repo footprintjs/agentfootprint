@@ -1,6 +1,6 @@
 /**
  * stages/stagedRefsNudge — the staged-refs nudge at the stage level: the two
- * record inputs seed writes for it, and the line one request carries.
+ * record inputs seed and resume write, and the line one request carries.
  *
  * The join and the sentence are pure (`../stagedRefs.ts`). What a stage adds
  * is the RECORD around them: seed commits the `wants` declarations and the
@@ -41,6 +41,15 @@ export function seedStagedRefs(
   }
   const tickets = seededTickets(carried, toolWantsByName !== undefined);
   if (tickets !== undefined) scope.placedTickets = tickets;
+}
+
+/**
+ * Record the receipt rule on a resumed leg of a checkpoint that predates it.
+ * Keep a restored receipt as stored. The empty list distinguishes a current
+ * leg with no issued tickets from a recording made under the old shape rule.
+ */
+export function resumeStagedRefs(scope: TypedScope<AgentState>, armed: boolean): void {
+  if (armed && scope.placedTickets === undefined) scope.placedTickets = [];
 }
 
 /**
