@@ -16,12 +16,14 @@ export function githubInputReader() {
   const env = Object.fromEntries(['PATH', 'SYSTEMROOT', 'WINDIR', 'LANG', 'LC_ALL']
     .filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
   Object.assign(env, { GH_TOKEN: token, GH_HOST: 'github.com', GH_CONFIG_DIR: config,
+    XDG_STATE_HOME: join(config, 'state'), XDG_CACHE_HOME: join(config, 'cache'),
+    XDG_DATA_HOME: join(config, 'data'),
     GH_PROMPT_DISABLED: '1', GH_PAGER: 'cat' });
   return {
     get(path, limit = 2 * 1024 * 1024) {
       const operation = apiOperation(path);
       const result = spawnSync('gh', ['api', '--hostname', 'github.com', '--method', 'GET', path],
-        { env, timeout: 45_000, maxBuffer: limit });
+        { env, cwd: config, timeout: 45_000, maxBuffer: limit });
       // Provider output can contain authentication details. Never include it in errors.
       if (result.error || result.status !== 0 || result.signal !== null) {
         const status = /\bHTTP\s+([45]\d\d)\b/.exec(String(result.stderr))?.[1];

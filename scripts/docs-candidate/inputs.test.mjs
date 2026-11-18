@@ -278,6 +278,47 @@ test('GH receives only the existing job token and an empty isolated configuratio
   } finally { reader?.close(); mock.restoreAll(); syncBuiltinESMExports(); }
 }));
 
+test('GH device state stays in its owned temporary directory and is removed on close', () => withJobEnv(() => {
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'docs-gh-state-unit-')));
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
+  writeFileSync(join(workspace, 'preserve.txt'), 'not owned by the downloader');
+  process.chdir(workspace);
+  let captured;
+  let device;
+  let reader;
+  // Model gh's observed no-HOME/XDG fallback without executing gh or making a request.
+  mock.method(childProcess, 'spawnSync', (_command, _args, options) => {
+    captured = options;
+    const state = options.env.XDG_STATE_HOME || join(options.env.HOME || options.cwd || process.cwd(), '.local', 'state');
+    mkdirSync(join(state, 'gh'), { recursive: true });
+    device = join(state, 'gh', 'device-id');
+    writeFileSync(device, 'inert-device-id');
+    return { stdout: Buffer.from('{}'), stderr: Buffer.alloc(0), status: 0, signal: null };
+  });
+  syncBuiltinESMExports();
+  try {
+    reader = githubInputReader();
+    reader.get('repos/footprintjs/agentfootprint/actions/runs/11');
+    assert(existsSync(device));
+    reader.close();
+    assert.deepEqual(readdirSync(workspace), ['preserve.txt'], 'gh must not leave .local/state/gh/device-id in the source cwd');
+    assert(!existsSync(device), 'owned gh device state must be cleaned');
+    assert.equal(captured.cwd, captured.env.GH_CONFIG_DIR);
+    for (const [key, child] of [['XDG_STATE_HOME', 'state'], ['XDG_CACHE_HOME', 'cache'], ['XDG_DATA_HOME', 'data']]) {
+      assert.equal(captured.env[key], join(captured.cwd, child));
+    }
+    assert.equal(captured.env.HOME, undefined);
+    assert.equal(process.env.HOME, originalHome);
+  } finally {
+    reader?.close();
+    mock.restoreAll();
+    syncBuiltinESMExports();
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+}));
+
 test('the downloader refuses missing tokens and local invocation before spawning', () => withJobEnv(() => {
   delete process.env.GITHUB_TOKEN;
   assert.throws(() => githubInputReader(), /job-token-required/);
