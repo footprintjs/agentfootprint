@@ -7,7 +7,7 @@
  *          a resumed call declares its coverage exactly as an inline one; the
  *          raise site (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`)
  *          calls it on the `absence` a `requestInput` declared (9.114.0).
- * Role:    core/ layer, pure. Recognition and normalization only — the caller
+ * Role:    semantics/ layer (L1), pure. Recognition and normalization only — the caller
  *          owns the events, the scope write and the delivered status.
  * Emits:   N/A.
  *

@@ -39,6 +39,7 @@
  * is everybody's, so it is refused here, once.
  */
 
+import { privateFieldsOfCheckpoint } from '../redaction/privateCheckpoint.js';
 import { UnreadableEnvelopeError } from './errors.js';
 import { validateCheckpoint, type AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type {
@@ -318,7 +319,7 @@ function validatePausedRun(value: unknown): PausedRun {
     throw new TypeError('[hosting] paused run is not an object.');
   }
   const run = value as Partial<PausedRun>;
-  const cp = run.checkpoint as Record<string, unknown> | undefined;
+  const cp = run.checkpoint;
   if (!cp || typeof cp !== 'object') {
     throw new TypeError(
       `[hosting] paused run is missing required field: checkpoint. ` +
@@ -347,6 +348,7 @@ function validatePausedRun(value: unknown): PausedRun {
         `waiting on. A stored pause nobody can describe is a session that hangs.`,
     );
   }
+  privateFieldsOfCheckpoint(cp);
   validateCheckpoint(run.conversation);
   // A mark a reader cannot read is refused, never taken as "still waiting":
   // that would offer an answered request for an answer again.

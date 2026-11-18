@@ -33,6 +33,7 @@ import { describe, expect, it } from 'vitest';
 
 import { absent, coverage } from '../../../src/index.js';
 import { placedToolResult } from '../../../src/artifacts/placement.js';
+import { issuedTicketsOf } from '../../../src/core/agent/placedTickets.js';
 import {
   declaredByValue,
   readEmptiness,
@@ -340,8 +341,14 @@ describe('UNIT — rows that travel by reference (take 4 of the demo video)', ()
       900,
       100,
     );
+    const toolCallId = 'fixture-call';
+    const placement = { toolCallId, issued: issuedTicketsOf([{ toolCallId, ref: REF }]) };
     for (const context of [{}, { rowsAt: 'rows' }, BOUNDED]) {
-      expect(readEmptiness(placed, context), JSON.stringify(context)).toMatchObject({
+      expect(readEmptiness(placed, context).rowsUnread).not.toBe('uncounted-ticket');
+      expect(
+        readEmptiness(placed, { ...context, placement }),
+        JSON.stringify(context),
+      ).toMatchObject({
         emptiness: 'unknown',
         undeclaredShape: false,
         rowsUnread: 'uncounted-ticket',

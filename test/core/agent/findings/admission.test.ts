@@ -5,6 +5,7 @@ import {
   findingsReferenceRefusal,
   referenceObservation,
 } from '../../../../src/core/agent/findings/admission.js';
+import { issuedTicketsOf } from '../../../../src/core/agent/placedTickets.js';
 import type { LLMMessage, LLMRequest } from '../../../../src/provider-contract/types.js';
 const result = (id: string, content = 'body'): LLMMessage => ({
   role: 'tool',
@@ -75,6 +76,20 @@ describe('request-local findings identity', () => {
     expect(
       referenceObservation(captureFindingsRequest(request([ticket]), [source], 1), 1, 'c1'),
     ).toMatchObject({ identified: true, visibility: 'ticket' });
+  });
+  it('keeps a collapsed ref only when it names the committed receipt-backed placement', () => {
+    const ref = 'art_fixture';
+    const placed = result('c1', JSON.stringify({ placed: true, ref, reason: 'sample' }));
+    const sent = result(
+      'c1',
+      JSON.stringify({ collapsed: true, standing: 'noise', toolCallId: 'c1', ref }),
+    );
+    const capture = (source: LLMMessage, issued?: ReturnType<typeof issuedTicketsOf>) =>
+      referenceObservation(captureFindingsRequest(request([sent]), [source], 1, issued), 1, 'c1');
+    const issued = issuedTicketsOf([{ toolCallId: 'c1', ref }]);
+    expect(capture(placed, issued)).toMatchObject({ visibility: 'ticket', ref });
+    expect(capture(placed)).not.toHaveProperty('ref');
+    expect(capture(result('c1'), issued)).not.toHaveProperty('ref');
   });
   it('does not borrow an absent, previous-iteration or incomplete capture', () => {
     expect(referenceObservation(undefined, 1, 'x').reason).toBe('missing-request');

@@ -1,5 +1,12 @@
 import { eventDispositions } from './dispositions.js';
 import type { AgentfootprintEvent } from '../../../../events/registry.js';
+import { readNotDispatched, toolRanOf } from '../../../../semantics/toolRan.js';
+
+const TOOL_END_KEYS = {
+  ran: 'stream.tool_end',
+  'not-run': 'stream.tool_end.notExecuted',
+  'not-recorded': 'stream.tool_end.executionUnknown',
+} as const;
 
 /**
  * Pick the template key for an event. Branches encoded in the key
@@ -25,13 +32,15 @@ function routedCommentaryKey(event: AgentfootprintEvent): string | null | undefi
     // A bracket carrying `notDispatched` (9.113.0) is a call that never ran:
     // its start gets the settled key, its end is skipped (the start said it).
     case 'agentfootprint.stream.tool_start':
-      return event.payload.notDispatched !== undefined
+      return readNotDispatched(event.payload.notDispatched) === 'settled'
         ? 'stream.tool_start.notDispatched'
         : 'stream.tool_start';
     case 'agentfootprint.stream.tool_progress':
       return 'stream.tool_progress';
     case 'agentfootprint.stream.tool_end':
-      return event.payload.notDispatched !== undefined ? null : 'stream.tool_end';
+      return readNotDispatched(event.payload.notDispatched) === 'settled'
+        ? null
+        : TOOL_END_KEYS[toolRanOf(event.payload)];
 
     case 'agentfootprint.context.injected':
       switch (event.payload.source) {
@@ -126,6 +135,34 @@ function routedCommentaryKey(event: AgentfootprintEvent): string | null | undefi
 
     case 'agentfootprint.tools.result_refused':
       return 'tools.result_refused';
+
+    case 'agentfootprint.checkin.decision':
+      return event.payload.approved === true ? 'checkin.decision.approved' : undefined;
+
+    case 'agentfootprint.permission.check':
+      if (
+        event.payload.phase === 'resume' &&
+        (event.payload.result === 'deny' || event.payload.result === 'halt')
+      )
+        return 'permission.check.resume.refused';
+      return undefined;
+
+    case 'agentfootprint.middleware.decision':
+      if (event.payload.phase === 'resume') {
+        if (event.payload.outcome === 'refused') {
+          switch (event.payload.why) {
+            case 'second-question':
+              return 'middleware.decision.resume.secondQuestion';
+            case 'call-changed':
+              return 'middleware.decision.resume.callChanged';
+            default:
+              return 'middleware.decision.resume.libraryRefused';
+          }
+        }
+        if (event.payload.outcome === 'deny') return 'middleware.decision.resume.refused';
+      } else if (event.payload.outcome === 'allow' && event.payload.personApproved === true)
+        return 'checkin.decision.approved';
+      return event.payload.outcome === 'refused' ? 'middleware.decision.refused' : undefined;
 
     case 'agentfootprint.tools.repeated_call':
       // Same event, two truths it can tell (9.62.0): the default match

@@ -58,11 +58,14 @@ export interface AnswerToolCall {
   readonly callId: string;
   /**
    * `ok`: the tool ran and returned — including a call that paused for a
-   * person, whose answer on `resume()` is its result. `error`: it threw, declared `failure`,
-   * `denied` or `invalid`, or could not run as written (an unknown name,
-   * rejected arguments, a missing consent). `not-run`: it never ran (a
-   * permission policy, an `onToolCall` link or a person declined it, or a
-   * paused batch never dispatched it).
+   * person, whose answer on `resume()` is its result. `error`: the tool ran,
+   * and it threw or declared `failure`, `denied` or `invalid`. `not-run`: the
+   * tool never ran — a permission policy, an `onToolCall` link or a person
+   * declined it, a paused batch never dispatched it, or it could not run as
+   * written (an unknown name, rejected arguments, a missing consent or
+   * credential), read off `stream.tool_end.entered` by
+   * `semantics/toolRan.ts` · `toolRanOf`. Example: the model calls
+   * `reboot_host`, which no tool is named: `{ name: 'reboot_host', outcome: 'not-run' }`.
    */
   readonly outcome: 'ok' | 'error' | 'not-run';
 }
@@ -125,7 +128,8 @@ export interface AnswerValidationResult {
 /**
  * One of the agent's own answer checks, named for
  * {@link AnswerValidationOptions.agentChecks}: `'claims'` is the `.claims()`
- * contract, `'names-and-numbers'` is the `.namesAndNumbersFromEvidence()` gate.
+ * contract, `'names-and-numbers'` is the `.namesAndNumbersFromEvidence()` gate,
+ * `'negative-claims'` is the typed `.negativeClaims({ field, tools })` check.
  */
 export type AgentCheckName = 'claims' | 'names-and-numbers' | 'negative-claims';
 
@@ -203,6 +207,13 @@ export interface AnswerValidationOptions<T = unknown> {
    *   how many more were never looked up): `unreachable`.
    *   A clean pass is `not-applicable`: finding a value clears it, and never
    *   verifies the answer.
+   * - `'negative-claims'`: the typed `.negativeClaims({ field, tools })`
+   *   check's rows, ids starting `agent:negative-claims:` (for example
+   *   `agent:negative-claims:<field>#<n>`), built in
+   *   `core/agent/stages/answerValidation.ts`. You rarely list it: while typed
+   *   `.negativeClaims()` is armed the agent adds it for you, so its rows are
+   *   in the report either way. Listing it adds one thing, a `build()`
+   *   refusal when typed `.negativeClaims()` is not configured.
    *
    * No agent row is ever `checked-pass`: these checks can withhold an answer
    * and never verify one. `validate` stays required, and only your checks can

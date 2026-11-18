@@ -55,12 +55,12 @@ import {
   FACT_TEXT_CHARS,
   historyAt,
   historyOf,
-  isPersonEntry,
   readEmptiness,
   rowsAtOf,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
+import { isPersonEntry } from '../../lib/saidByPerson.js';
 
 /** One call answered before the pause, as the committed state keeps it. */
 export interface BeforePauseCall {
@@ -114,6 +114,7 @@ export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead
       readonly kind?: unknown;
     }[];
     const reading = readEmptiness(toolBytesOf({ content: m.content, toolChars: m.toolChars }), {
+      placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
       ...(rowsAt !== undefined && { rowsAt }),
       ...(mine.length > 0 && {
         door: {

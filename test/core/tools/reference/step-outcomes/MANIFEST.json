@@ -1,0 +1,15 @@
+{
+  "previousCohort": "v14-native-components",
+  "captures": [
+    {
+      "case": "agent-answer-layer",
+      "previousSha256": "f70c70fe8ef7b596afe41975b14c2d521785ed46a2ee7b97898a307f15d15c0d",
+      "currentSha256": "7801743131805e74ce87ad8280f861864ba5b440ed6ec4ac50092cd6188e6bec"
+    },
+    {
+      "case": "agent-stepped-skill",
+      "previousSha256": "419b423a5caaf9e3c7c4de46f5174e78e465fcf35470f4dba0d4ae55e17c58b6",
+      "currentSha256": "f0ec983f7d8c38d992a854f5d9a4cd8f57ebcbbadfbd0b696d81e4f69266b691"
+    }
+  ]
+}

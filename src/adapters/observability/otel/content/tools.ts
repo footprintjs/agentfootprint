@@ -39,8 +39,10 @@ export function createToolContent(maxContentChars: number, codeRunners: Readonly
    * `'REDACTED'`: withheld, never replaced by a value the event does not
    * carry — and what the model READ (`modelResult` when a rule changed it,
    * else `result`). A code runner's arguments are its generated program and
-   * are withheld. A call that failed or never ran exports no content. Shape
-   * and size by {@link toolContentAttrs}.
+   * are withheld. A call that failed or a rule refused exports no content;
+   * a call declined on resume carries neither `error` nor `notExecuted` and
+   * IS exported (`answer-account/README.md`, "Not covered yet"). Shape and
+   * size by {@link toolContentAttrs}.
    */
   function toolContent(t: TurnState, p: ToolEndLike, errored: boolean): Attrs {
     const proposal = p.toolCallId !== undefined ? t.proposedArgs.get(p.toolCallId) : undefined;

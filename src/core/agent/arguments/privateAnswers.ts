@@ -4,7 +4,7 @@ import {
   privateFieldsInForce,
 } from '../../../redaction/runRedaction.js';
 import type { PrivateFieldRoot, PrivateRecordFields } from '../../../redaction/privateFields.js';
-import { carriesArgumentView, changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
+import { carriesArgumentView, hiddenArgNames } from '../../toolShownArgs.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolArgs } from '../../../tools/runChain.js';
 import type { ArgumentAskState } from './ask.js';
@@ -28,10 +28,20 @@ type Calls = readonly Pick<BatchCall, 'id' | 'name' | 'args'>[];
 type SettledFills = ReadonlyMap<string, { readonly fills?: ArgumentResolution['fills'] }>;
 const whole = (root: PrivateFieldRoot): Selection[] => [{ root, path: '' }];
 
-class PrivateArgumentRecordError extends Error {
+/**
+ * THE refusal of the private-argument path, wherever it is raised: missing
+ * recording support at discovery (`requirePrivateQuestionSupport`) or a
+ * resumed question missing its saved declaration or view
+ * (`pendingPrivateAsk.ts`). One class for one code, so a caller tells the
+ * family apart by `instanceof` as well as by `code`; the message says which
+ * case it was. Two classes used to carry this one code.
+ */
+export class PrivateArgumentRecordError extends Error {
   readonly code = 'ERR_PRIVATE_ARGUMENT_RECORD';
-  constructor() {
-    super('A private argument question requires native private-field recording support.');
+  constructor(
+    message = 'A private argument question requires native private-field recording support.',
+  ) {
+    super(message);
     this.name = 'PrivateArgumentRecordError';
   }
 }
@@ -81,8 +91,9 @@ function keptFacts(prior: PrivateRecordFields | undefined, before: unknown) {
   return { hidden, unknown: false };
 }
 
+/** The view runs on a frozen copy: it is the tool author's code, and `args` may be what runs. */
 function hiddenKeys(tool: unknown, args: ToolArgs): ReadonlySet<string> {
-  return new Set(tool === undefined ? [] : changedArgKeys(args, shownArgsOf(tool, args)));
+  return new Set(hiddenArgNames(tool, args));
 }
 
 /** Resolve index selectors to this exact call/iteration, never by matching answer values. */
@@ -287,9 +298,10 @@ export function markPrivateResolutions(
   );
 }
 
-export function markPrivateCheckIn(scope: object, tool: Tool, args: ToolArgs): void {
+/** Reuse the names the check-in already bound rather than evaluating its view again. */
+export function markPrivateCheckIn(scope: object, hiddenArgs: readonly string[]): void {
   mark(
     scope,
-    [...hiddenKeys(tool, args)].map((path) => ({ root: 'pausedCheckInArgs', path })),
+    hiddenArgs.map((path) => ({ root: 'pausedCheckInArgs', path })),
   );
 }

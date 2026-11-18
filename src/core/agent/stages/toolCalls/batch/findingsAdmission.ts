@@ -82,6 +82,7 @@ export function buildFindingsAdmission(
             return declared?.previous !== undefined
               ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration, {
                   witness: scope.findingsRequest?.[0],
+                  placedTickets: scope.placedTickets,
                 })
               : [];
           }),

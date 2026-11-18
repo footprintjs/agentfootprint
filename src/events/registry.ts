@@ -6,6 +6,7 @@
 
 import type { AgentfootprintEventEnvelope } from './types.js';
 import type { ToolEventMap } from './registry/toolEvents.js';
+import type { SkillEventMap } from './registry/skillEvents.js';
 import type {
   AgentHandoffPayload,
   AgentIterationEndPayload,
@@ -74,17 +75,6 @@ import type {
   ReliabilityRecoveredPayload,
   ResilienceOutputFallbackTriggeredPayload,
   ResilienceOutputCannedUsedPayload,
-  SkillActivatedPayload,
-  SkillDeactivatedPayload,
-  SkillEscalatedPayload,
-  SkillGraphDeclaredPayload,
-  SkillRejectedPayload,
-  SkillRerouteSupersededPayload,
-  SkillRouteConflictPayload,
-  SkillStepAdvancedPayload,
-  SkillStepSkippedPayload,
-  SkillStepsUnfinishedPayload,
-  SkillTurnRoutedPayload,
   ToolEndPayload,
   ToolProgressPayload,
   ToolStartPayload,
@@ -119,7 +109,7 @@ import type {
 export { EVENT_NAMES } from './registry/names.js';
 
 // ─── Event type → payload: the key table typed `.on(type, ...)` reads ───
-export interface AgentfootprintEventMap extends ToolEventMap {
+export interface AgentfootprintEventMap extends ToolEventMap, SkillEventMap {
   // composition
   'agentfootprint.composition.enter': AgentfootprintEventEnvelope<
     'agentfootprint.composition.enter',
@@ -296,51 +286,6 @@ export interface AgentfootprintEventMap extends ToolEventMap {
   'agentfootprint.memory.written': AgentfootprintEventEnvelope<
     'agentfootprint.memory.written',
     MemoryWrittenPayload
-  >;
-  // skill
-  'agentfootprint.skill.activated': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.activated',
-    SkillActivatedPayload
-  >;
-  'agentfootprint.skill.graph_declared': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.graph_declared',
-    SkillGraphDeclaredPayload
-  >;
-  'agentfootprint.skill.deactivated': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.deactivated',
-    SkillDeactivatedPayload
-  >;
-  'agentfootprint.skill.rejected': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.rejected',
-    SkillRejectedPayload
-  >;
-  'agentfootprint.skill.reroute_superseded': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.reroute_superseded',
-    SkillRerouteSupersededPayload
-  >;
-  'agentfootprint.skill.route_conflict': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.route_conflict',
-    SkillRouteConflictPayload
-  >;
-  'agentfootprint.skill.turn_routed': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.turn_routed',
-    SkillTurnRoutedPayload
-  >;
-  'agentfootprint.skill.step_advanced': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.step_advanced',
-    SkillStepAdvancedPayload
-  >;
-  'agentfootprint.skill.step_skipped': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.step_skipped',
-    SkillStepSkippedPayload
-  >;
-  'agentfootprint.skill.steps_unfinished': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.steps_unfinished',
-    SkillStepsUnfinishedPayload
-  >;
-  'agentfootprint.skill.escalated': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.escalated',
-    SkillEscalatedPayload
   >;
   // validation
   'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
@@ -658,6 +603,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.skill.route_conflict',
   'agentfootprint.skill.turn_routed',
   'agentfootprint.skill.step_advanced',
+  'agentfootprint.skill.step_held',
   'agentfootprint.skill.step_skipped',
   'agentfootprint.skill.steps_unfinished',
   'agentfootprint.skill.escalated',

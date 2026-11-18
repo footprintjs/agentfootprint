@@ -4,7 +4,7 @@ title: DecisionLedger
 
 # Interface: DecisionLedger
 
-Defined in: [src/core/consentRequest.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L171)
+Defined in: [src/core/consentRequest.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L173)
 
 Where the consent requests that have been answered are recorded, so one
 decision runs one call — once per LEDGER.
@@ -23,7 +23,7 @@ store they all reach (`Agent.create({ decisionLedger })`).
 
 > `readonly` `optional` **storeId?**: `string`
 
-Defined in: [src/core/consentRequest.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L192)
+Defined in: [src/core/consentRequest.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L194)
 
 OPTIONAL — the identity of the store this ledger records into. A host that
 closes a pause no answer can reach asks the ledger the pause was minted
@@ -50,7 +50,7 @@ Spends in it are permanent too (no expiry) — see `spend`.
 
 > `optional` **isSpent**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L220)
+Defined in: [src/core/consentRequest.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L222)
 
 OPTIONAL advisory observation after a failed [DecisionLedger.spend](/docs/api/interfaces/DecisionLedger#spend).
 `false` must mean this exact request is absent; `true` must mean it is
@@ -79,7 +79,7 @@ promoted into that definitive capability.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L207)
+Defined in: [src/core/consentRequest.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L209)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two

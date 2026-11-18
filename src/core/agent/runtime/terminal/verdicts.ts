@@ -34,6 +34,7 @@ export function refusalVerdictOf(
     policyHaltReason?: string;
     policyHaltTellLLM?: string;
     policyHaltTarget?: string;
+    policyHaltInnerCallId?: string;
     policyHaltArgs?: Readonly<Record<string, unknown>>;
     policyHaltIteration?: number;
     policyHaltCheckerId?: string;
@@ -46,8 +47,15 @@ export function refusalVerdictOf(
     // proposed call (which DID land in history as the synthetic
     // tool_result for protocol compliance, but the policy denied
     // execution). Filter it out so callers see only dispatched
-    // calls, then append the proposed entry as a hint.
-    const sequenceWithoutProposed = extractSequence(history.slice(0, -1), iteration);
+    // calls, then append the proposed entry as a hint. An INNER call's
+    // halt landed no synthetic result: the last message is its outer
+    // call's own, which ran, so nothing is filtered and the proposed
+    // entry is marked `inner` (`innerCallOuter.ts`).
+    const inner = halt.policyHaltInnerCallId !== undefined;
+    const sequenceWithoutProposed = extractSequence(
+      inner ? history : history.slice(0, -1),
+      iteration,
+    );
     return {
       kind: 'policy-halt',
       halt: {
@@ -55,7 +63,12 @@ export function refusalVerdictOf(
         ...(halt.policyHaltTellLLM !== undefined && { tellLLM: halt.policyHaltTellLLM }),
         sequence: [
           ...sequenceWithoutProposed,
-          { name: halt.policyHaltTarget, args: halt.policyHaltArgs, iteration },
+          {
+            name: halt.policyHaltTarget,
+            args: halt.policyHaltArgs,
+            iteration,
+            ...(inner && { inner: true as const }),
+          },
         ],
         iteration,
         history,

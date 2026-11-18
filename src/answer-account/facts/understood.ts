@@ -35,7 +35,7 @@ import type {
   SentenceVar,
 } from '../types.js';
 import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
-import { PERMISSION_REFUSALS } from './calls.js';
+import { PERMISSION_REFUSALS } from './callOutcome.js';
 import { heldChip } from './checked.js';
 import {
   at,

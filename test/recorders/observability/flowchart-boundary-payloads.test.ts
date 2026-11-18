@@ -19,12 +19,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { CombinedRecorder } from 'footprintjs';
 import type {
+  CombinedRecorder,
   FlowDecisionEvent,
   FlowForkEvent,
   FlowSubflowEvent,
-} from 'footprintjs/dist/types/lib/engine/narrative/types.js';
+} from 'footprintjs';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import {
   attachFlowchart,

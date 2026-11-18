@@ -66,6 +66,7 @@ in the scoped rule's `Module contract` sections; this table is the starting poin
 | Area | Responsibility and entry to detail |
 | --- | --- |
 | `core/` | Public runners and native lifecycle — [README](src/core/README.md) |
+| `core/agent/stages/toolCalls/access/` | Permission and middleware for model and composed calls — [README](src/core/agent/stages/toolCalls/access/README.md) |
 | `core/agent/` | ReAct chart assembly and stages — [README](src/core/agent/README.md) |
 | `core/agent/aroundTurn/` | One invocation wrapper funnel — [README](src/core/agent/aroundTurn/README.md) |
 | `core/agent/evidence/` | Pure deterministic evidence gate — [README](src/core/agent/evidence/README.md) |

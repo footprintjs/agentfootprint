@@ -1,5 +1,6 @@
 import { sourceSchemasOnWire } from '../sourceContract.js';
 import { withoutEarlierScriptText } from '../scripts/rows.js';
+import { seedStagedRefs } from './stagedRefsNudge.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 /**
@@ -48,6 +49,7 @@ import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/type
 import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
 import { historyForTurn, turnNumberFor } from '../runtime/conversation/seedHistory.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
+import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
 
 export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
@@ -296,8 +298,8 @@ export interface SeedStageDeps {
    * threads nothing for the default `'none'`, so an armed agent on the
    * default hands this stage exactly the deps it did before the dial and
    * commits exactly the keys it did. Seeded for the `findingsServe` reason:
-   * the rebuild appends `FINDINGS_ANSWER_ASK` to the piece the way the wire
-   * did, reading the dial from the RECORD.
+   * replay of a record made before the DATA layout appends
+   * `FINDINGS_ANSWER_ASK` to the old piece, reading the dial from the RECORD.
    */
   readonly findingsAnswerAsk?: 'quote-facts';
   /**
@@ -508,16 +510,14 @@ function seedFrom(
   // `resumeOnError`, folded spans, the findings ledger, the skill cursor, the
   // evidence recovery) belongs to the agent's OWN next run, and a member must
   // neither read another caller's conversation nor take it from them. The run
-  // is looked up by its link in `memberRun.ts`'s private registry; a
-  // `parentRun` that is not a live link is refused there, by name.
+  // is resolved and checked by `memberRun.ts`.
   const parentRun = resolveParentRun(args, 'Agent (composition member)');
   const mounted = parentRun !== undefined || deps.isOwnRun?.(scope) === false;
 
   // If `run({ continueFrom })` or `resumeOnError(...)` set the side channel,
   // restore the stored conversation; this turn's user entry is `message` —
   // the input chain's verdict — on every path (`historyForTurn`). The
-  // accessor clears the field, so a later run without a continuation starts
-  // fresh.
+  // accessor clears the handoff for the next run.
   const resume = mounted ? undefined : deps.consumePendingResumeHistory();
   const correction = mounted ? undefined : deps.consumePendingSourceDeclarationCorrection?.();
   if (
@@ -529,6 +529,7 @@ function seedFrom(
     scope.sourceDeclarationCorrectionSpent = true;
   const history = historyForTurn(resume, message);
   scope.history = history;
+  restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means
   // "not observed" (a checkpoint from before) and the view fails closed.
@@ -794,12 +795,8 @@ function seedFrom(
       ...(tools !== undefined && { tools }),
     };
   }
-  // The `wants` declarations (9.88.0) — the third input to the staged-refs
-  // nudge, and the only one that was build-time-only. Value-conditional in the
-  // same way, and under the same condition request assembly uses.
-  if (deps.toolWantsByName !== undefined) {
-    scope.toolWantsByName = deps.toolWantsByName;
-  }
+  // The staged-refs nudge's record inputs: `wants` and the ticket receipt.
+  seedStagedRefs(scope, deps.toolWantsByName, resume?.placedTickets);
   // Messages-slot delivery ledger (7.21) — empty at the start of every run.
   // A resumed run rebuilds it from the markers in the restored window rather
   // than trusting this, so an empty ledger never means "deliver it again".

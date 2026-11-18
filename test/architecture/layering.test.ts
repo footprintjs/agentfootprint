@@ -485,6 +485,68 @@ describe('check-layering — what fails', () => {
   });
 });
 
+describe('check-layering — sealed script facades', () => {
+  const library = {
+    'src/low/value.ts': 'export const value = 1;',
+    'scripts/vault.mjs': "export { token } from './vault/private.mjs';",
+    'scripts/vault/private.mjs': 'export const token = 1;',
+  };
+
+  it.each([
+    "import { token } from './vault/private.mjs'; export const value = token;",
+    "export { token } from './vault/private.mjs';",
+    "export const load = () => import('./vault/private.mjs');",
+    "export const value = require('./vault/private.mjs').token;",
+    "import { token } from './vault/nested/../private.mjs'; export const value = token;",
+  ])('refuses a literal outside-to-private edge: %s', (source) => {
+    const result = run({ ...library, 'scripts/reader.mjs': source });
+    expect(result.ok).toBe(false);
+    expect(result.sealedScriptEscapes).toMatchObject([
+      { from: 'scripts/reader.mjs', to: 'scripts/vault/private.mjs', facade: 'scripts/vault.mjs' },
+    ]);
+    expect(format(result)).toContain('sealed-script facade');
+  });
+
+  it('derives a nested CJS owner rather than depending on a registered facade name', () => {
+    const result = run({
+      'src/low/value.ts': 'export const value = 1;',
+      'scripts/tasks/box.cjs': "module.exports = require('./box/private.cjs');",
+      'scripts/tasks/box/private.cjs': 'exports.token = 1;',
+      'scripts/reader.cjs': "exports.value = require('./tasks/box/private.cjs').token;",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.sealedScriptEscapes).toMatchObject([
+      {
+        from: 'scripts/reader.cjs',
+        to: 'scripts/tasks/box/private.cjs',
+        facade: 'scripts/tasks/box.cjs',
+      },
+    ]);
+  });
+
+  it('permits entry through the facade and imports within its owning folder', () => {
+    const result = run({
+      ...library,
+      'scripts/reader.mjs': "import { token } from './vault.mjs'; export const value = token;",
+      'scripts/vault/nested/worker.mjs': "export { token } from '../private.mjs';",
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('does not seal an unrelated directory or treat comments and strings as imports', () => {
+    const result = run({
+      ...library,
+      'scripts/vault-open/private.mjs': 'export const token = 1;',
+      'scripts/reader.mjs': [
+        "export { token } from './vault-open/private.mjs';",
+        "// import { token } from './vault/private.mjs';",
+        'export const text = "require(\'./vault/private.mjs\')";',
+      ].join('\n'),
+    });
+    expect(result.ok).toBe(true);
+  });
+});
+
 // ── boundary: THE NEGATIVE TEST, under the real table ────────────────────────
 
 describe('check-layering — a deliberately upward edge, placed by the REAL table', () => {

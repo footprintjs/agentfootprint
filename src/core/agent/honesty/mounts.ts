@@ -40,9 +40,11 @@ import { ownsReservedArgument, splitFindings } from '../findings/reserved.js';
  * Under the arm the mount also hands the layer the RAW pieces its checks read
  * (`sourceInputs`): the served history, the composed system prompt's records,
  * the ledger's standing rows and `answered` argument rows (never the whole
- * ledger), the previous batch's result ids and the run's `userMessageFrom`
- * constant — and two closures, both from `honesty/sourceCorpus.ts` (loaded on
- * the first armed batch): the calls' `from` entries through the ONE reader of
+ * ledger), the previous batch's result ids, the run's `userMessageFrom`
+ * constant and the receipt of the tickets the library placed (all read by
+ * `sourceInputs.ts` · `sourceInputsOf`) — and two closures, both from
+ * `honesty/sourceCorpus.ts` (loaded on the first armed batch): the calls'
+ * `from` entries through the ONE reader of
  * `_findings` (`sourceCorpus.ts` · `declaredSourcesOf`, over
  * `findings/reserved.ts` · `readDeclaration`), and the corpora
  * (`sourceCorpus.ts` · `sourceCorpusOf`).
@@ -69,6 +71,7 @@ import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 
 
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../lib/conventions.js';
 import { sourceInputsOf } from './sourceInputs.js';
+import { timeInputsOf } from './timeInputs.js';
 import type { SourceCorpus } from '../arguments/checks.js';
 import {
   isRefused,
@@ -80,18 +83,11 @@ import {
 import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
-import type {
-  InputsLayerDeps,
-  InputsLayerState,
-  SourceInputs,
-  TimeInputs,
-} from '../arguments/subflow.js';
+import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
 import {
-  answersOf,
   callRowOfCall,
   callWindowOfCall,
   clockOf,
-  readingsOf,
   type CallWindowRow,
 } from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
@@ -114,22 +110,6 @@ import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
 import type { InputsMountDeps } from './inputsMountContract.js';
 export type { InputsMountDeps } from './inputsMountContract.js';
-
-/**
- * This turn's clock and readings, off the parent's ledger — `undefined` when
- * the turn has no clock (a turn paused by a runtime without the layer).
- */
-function timeInputsOf(parent: Record<string, unknown>): TimeInputs | undefined {
-  const ledger = parent.findingsLedger as readonly unknown[] | undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  const turn = parent.turnNumber as number;
-  return {
-    clock,
-    readings: [...readingsOf(ledger, turn)],
-    answers: [...answersOf(ledger, turn)],
-  };
-}
 
 type StageModule = typeof import('../arguments/subflow.js');
 type CorpusModule = typeof import('./sourceCorpus.js');

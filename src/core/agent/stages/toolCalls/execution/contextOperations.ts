@@ -1,6 +1,7 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type { ToolExecutionContext } from '../../../../../tools/tools.js';
 import type {
   AgentfootprintEventType,
@@ -14,6 +15,9 @@ import {
   bindArtifacts,
 } from '../../../../../artifacts/capability.js';
 import { agentToolDispatch } from '../../../toolDispatch.js';
+import { recordInnerToolCall } from '../../../innerToolCalls.js';
+import { prepareInnerCallRecord } from '../../../innerCallPolicyArgs.js';
+import { buildInnerCallGates } from '../access/innerCallGates.js';
 import { policyInForce } from '../../../../../redaction/runRedaction.js';
 import { reportingCredentials } from '../decorators/reportingCredentials.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
@@ -25,6 +29,7 @@ import type { ToolResourcesOperations } from '../contracts/operations/resources.
 import type { ToolCredentialsOperations } from '../contracts/operations/credentials.js';
 import type { ToolProgressOperations } from '../contracts/operations/progress.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
+import type { OuterCallBinding } from '../../../innerCallOuter.js';
 import { recordSourceClock } from '../evidence/sourceClock.js';
 import { madeInRun } from '../evidence/madeInRun.js';
 import { createSourceEvidenceAccess } from '../../../sourceEvidence/access.js';
@@ -39,6 +44,8 @@ interface ToolContextOperationsLinks {
   readonly hasCredentials: boolean;
   readonly toolProgress: ToolProgressOperations['toolProgress'];
   readonly lookupTool: ToolCatalogOperations['lookupTool'];
+  /** Read only when an inner `read_skill` is put to the skill-read question. */
+  readonly parkedNow: ToolCatalogOperations['parkedNow'];
 }
 
 /** Compose the existing context callbacks once for this handler. */
@@ -52,6 +59,7 @@ export function buildToolContextOperations(
     | 'artifactStore'
     | 'sourceEvidenceConfig'
     | 'permissionChecker'
+    | 'toolMiddleware'
   >,
   links: ToolContextOperationsLinks,
 ): ToolContextOperations {
@@ -232,6 +240,12 @@ export function buildToolContextOperations(
    * mistaken for a call the model made. No `tool_start`/`tool_end` fires for
    * an inner call — it is the outer call's work; `ctx.progress` is its
    * visible channel and the composed envelope its record.
+   *
+   * Each inner call passes the model call's gates (`../access/innerCallGates.ts`)
+   * with the outer call's iteration and history, and leaves one row on
+   * `innerToolCalls` (`../../../innerToolCalls.ts`) — gate or no gate. The
+   * outer call's `binding` (`../../../innerCallOuter.ts`) ends the dispatch
+   * when the outer `execute` settles and carries a checker's halt back.
    */
   const toolDispatchCtx = (
     scope: TypedScope<AgentState>,
@@ -239,13 +253,26 @@ export function buildToolContextOperations(
       readonly toolName: string;
       readonly toolCallId: string;
       readonly iteration: number;
+      /** The history the outer call's own gates were handed. */
+      readonly history: () => LLMMessage[];
+      readonly binding: OuterCallBinding;
     },
     signal?: AbortSignal,
   ): Pick<ToolExecutionContext, 'tools'> => ({
     tools: agentToolDispatch({
+      outerToolCallId: call.toolCallId,
       lookup: (name) => links.registryByName.get(name),
-      innerContext: (name, seq) => {
-        const innerId = `${call.toolCallId}#inner-${seq}`;
+      gates: buildInnerCallGates(scope, deps, links.parkedNow, {
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+        history: call.history,
+        binding: call.binding,
+      }),
+      record: (facts) => recordInnerToolCall(scope, call, facts),
+      prepareRecord: (tool, args) => prepareInnerCallRecord(scope, tool, args),
+      outer: call.binding,
+      ...(signal !== undefined && { signal }),
+      innerContext: (name, innerId) => {
         // An inner call runs inside the same run, under the same policy.
         const redact = policyInForce(scope);
         const facts = deps.sourceEvidenceConfig !== undefined ? links.runFactsOf(scope) : undefined;

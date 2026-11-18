@@ -21,6 +21,13 @@ sides — `hash(servedAt(k)) === receiptAt(k).hash` — is documented in
 `time-travel/README.md` and pinned by
 `test/time-travel/receipt-conformance.test.ts`.
 
+## What the digest can establish
+
+The digest joins its fields with control-character separators. JSON encoding escapes
+control characters, while raw text fields keep their contents. A matching digest is
+evidence for comparing recorded request pieces within a run. Both the input encoding
+and the truncated digest can be ambiguous.
+
 ## Files
 - `receipt.ts` — the receipt's shape, the salted hash (`receiptHash`), the
   digest inputs (`messageDigestInput`, `toolDigestInput`), the chained

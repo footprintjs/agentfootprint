@@ -3,14 +3,21 @@
  *
  * Outcome, from typed fields only (never a `why` prose):
  *   - `not-dispatched` — `tool_end.notDispatched` (a batch settled on a pause);
- *   - `declined`       — a person was asked and declined: a before-tool deny on
- *                        the call a RESUMED leg answers (its start is in the
- *                        earlier leg), or a `checkin.decision` with
- *                        `approved: false`;
+ *   - `declined`       — a person was asked and declined: a check-in or a
+ *                        middleware answer. Legacy records identify a decline
+ *                        by an unphased before-tool denial on the paused call;
  *   - `refused`        — BEFORE-tool only: `tool_end.notExecuted`, a deny
  *                        `middleware.decision` with `moment: 'before-tool'`, or a
  *                        `permission.check` for this call that did not allow;
- *   - `failed`         — `tool_end.error`;
+ *   - `not-executed`   — the tool's function was never entered and no rule
+ *                        or person stopped it (`tool_end.entered: false`: an
+ *                        unknown tool name, rejected arguments, a blocked
+ *                        credential);
+ *   - `failed`         — `tool_end.error` on a call whose tool ran
+ *                        (`entered: true`);
+ *   - `ended-in-error` — `tool_end.error` on a record that does not say
+ *                        whether the tool ran (no `entered`: written before
+ *                        that field existed) — never told as "it ran";
  *   - `unknown`        — a start with no recorded end;
  *   - `ran`            — otherwise. An AFTER-tool deny keeps `ran` and sets
  *                        `withheldBy`: the tool ran and the model read the
@@ -26,7 +33,9 @@
  */
 
 import { strip } from '../../semantics/coverage/read.js';
+import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
+import { outcomeOf, type CallIndex } from './callOutcome.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
@@ -93,6 +102,8 @@ export interface CallRead {
   readonly end?: ViewEvent;
   /** The decision or permission row that refused / withheld it. */
   readonly ruleEvent?: ViewEvent;
+  /** The recorded human approval before a policy recheck refused the call. */
+  readonly approvalEvent?: ViewEvent;
   readonly coverage?: CoverageRead;
   /** The `tools.semantics_declared` row: the described envelope as the record keeps it. */
   readonly described?: ViewEvent;
@@ -134,8 +145,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 /** One pass per event type: toolCallId → its events, in recording order. */
-type CallIndex = (type: string, id: string) => readonly ViewEvent[];
-
 function indexByCall(ctx: ReadContext): CallIndex {
   const cache = new Map<string, Map<string, ViewEvent[]>>();
   return (type, id) => {
@@ -305,97 +314,13 @@ function toolNameFor(
   return { name: message.toolName as string, pointer: historyAt(index, '/toolName', id) };
 }
 
-/** The permission rows between this call's start and end that name its tool. */
-function permissionRows(
-  ctx: ReadContext,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): ViewEvent[] {
-  if (start === undefined) return [];
-  const upTo = end?.index ?? Number.POSITIVE_INFINITY;
-  return ctx.view
-    .ofType('permission.check')
-    .filter((e) => e.index > start.index && e.index < upTo && e.payload.target === toolName);
-}
-
-/** The permission verdicts that stop a call before it runs. */
-export const PERMISSION_REFUSALS: ReadonlySet<unknown> = new Set(['deny', 'halt']);
-
-interface Outcome {
-  readonly outcome: ToolCallFact['outcome'];
-  readonly refusedBy?: string;
-  readonly withheldBy?: string;
-  readonly ruleEvent?: ViewEvent;
-}
-
-/** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
-const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'error'] as const;
-
-function outcomeOf(
-  ctx: ReadContext,
-  byCall: CallIndex,
-  id: string,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): Outcome {
-  const decisions = byCall('middleware.decision', id);
-  const beforeDeny = decisions.find(
-    (e) => e.payload.moment === 'before-tool' && e.payload.outcome === 'deny',
-  );
-  const afterDeny = decisions.find(
-    (e) => e.payload.moment === 'after-tool' && e.payload.outcome === 'deny',
-  );
-  // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
-  // allow || gate_open), so it is never a refusal.
-  const permissionDeny = permissionRows(ctx, toolName, start, end).find((e) =>
-    PERMISSION_REFUSALS.has(e.payload.result),
-  );
-  const checkInDeclined = byCall('checkin.decision', id).find((e) => e.payload.approved === false);
-  const pausedId = str(ctx.view.state?.pausedToolCallId);
-  const isPausedCall =
-    ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
-
-  // The record keeps out a field that says how the call ended (a redaction
-  // policy's placeholder): how it ended cannot be told, so it is not guessed.
-  if (end !== undefined && OUTCOME_FIELDS.some((field) => keptOut(end, field)))
-    return { outcome: 'unknown' };
-  if (end?.payload.notDispatched !== undefined)
-    return { outcome: 'not-dispatched', ruleEvent: end };
-  if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
-  if (beforeDeny !== undefined && isPausedCall)
-    return { outcome: 'declined', ruleEvent: beforeDeny };
-  if (beforeDeny !== undefined) {
-    const by = str(beforeDeny.payload.middleware);
-    return {
-      outcome: 'refused',
-      ruleEvent: beforeDeny,
-      ...(by !== undefined && { refusedBy: by }),
-    };
-  }
-  if (permissionDeny !== undefined) {
-    const by = str(permissionDeny.payload.policyRuleId);
-    return {
-      outcome: 'refused',
-      ruleEvent: permissionDeny,
-      ...(by !== undefined && { refusedBy: by }),
-    };
-  }
-  if (end?.payload.notExecuted === true) return { outcome: 'refused', ruleEvent: end };
-  if (end?.payload.error === true) return { outcome: 'failed' };
-  if (end === undefined) return { outcome: 'unknown' };
-  const by = str(afterDeny?.payload.middleware);
-  return afterDeny !== undefined
-    ? { outcome: 'ran', ruleEvent: afterDeny, ...(by !== undefined && { withheldBy: by }) }
-    : { outcome: 'ran' };
-}
-
 /** The one leaf on `tool_end` that says how the call ended, as the account read it. */
 export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordPointer {
-  if (isRecord(end.payload.notDispatched)) {
+  if (readNotDispatched(end.payload.notDispatched) === 'settled') {
     return at(end, 'notDispatched', 'pausedCall', 'toolCallId');
   }
+  // A call whose tool never ran: the leaf that says so.
+  if (end.payload.notExecuted !== true && end.payload.entered === false) return at(end, 'entered');
   for (const key of ['notExecuted', 'error', 'status'] as const) {
     if (end.payload[key] !== undefined) return at(end, key);
   }
@@ -442,6 +367,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ? { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' }
     : judged
     ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
+        placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
         ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
           rowsAt: rowsAtOf(ctx.declarations, toolName),
         }),
@@ -500,6 +426,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ...(start !== undefined && { start }),
     ...(end !== undefined && { end }),
     ...(outcome.ruleEvent !== undefined && { ruleEvent: outcome.ruleEvent }),
+    ...(outcome.approvalEvent !== undefined && { approvalEvent: outcome.approvalEvent }),
     ...(coverage !== undefined && { coverage }),
     ...(described !== undefined && { described }),
     emptiness,

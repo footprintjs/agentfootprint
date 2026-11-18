@@ -403,7 +403,7 @@ describe('inspect_tool_call — the rung appears only when a record exists', () 
     ...(innerRuns !== undefined && { innerRuns }),
   });
 
-  it('without a record: the boundary marker stands, byte for byte', async () => {
+  it('without an inner record: the boundary marker stands', async () => {
     const out = await callTraceTool(traceToolpack(outerBag()), 'inspect_tool_call', {
       toolCallId: 'c1',
     });
@@ -411,14 +411,15 @@ describe('inspect_tool_call — the rung appears only when a record exists', () 
     expect(out).not.toContain('inside:');
   });
 
-  it('with a record: the wall becomes the call that opens it', async () => {
+  it('with an inner record: keeps the descent link even when entry is unrecorded', async () => {
     const store = innerRunStore();
     store.keep(recordFor('c1'));
     const out = await callTraceTool(traceToolpack(outerBag(store)), 'inspect_tool_call', {
       toolCallId: 'c1',
     });
-    expect(out).toContain('inside: this tool kept its own record of the run — 4 step(s), ok.');
+    expect(out).toContain('inside: a retained record for this call contains 4 step(s), ok.');
     expect(out).toContain("Descend with inspect_tool_run({ toolCallId: 'c1' })");
+    expect(out).toContain('This record does not say whether the tool ran.');
     expect(out).not.toContain('⚠ boundary: what happened INSIDE the tool is not traced');
   });
 });

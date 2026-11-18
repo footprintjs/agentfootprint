@@ -23,8 +23,8 @@
  *          shape, different source. Once tools land on the agent,
  *          the rest of the library doesn't know they came from MCP.
  *          Since 9.71.0 that is true of DECLARATIONS too: a server's
- *          `_meta` bag becomes `argumentsFrom` / `resultKind` / `owner`
- *          / `resultClass` / `resultCeiling` on the registered `Tool`,
+ *          `_meta` bag becomes the declarations in `McpToolExtras`
+ *          (`toolExtras.ts`) on the registered `Tool`,
  *          so the integrity checks, the placement mint and the identity
  *          joins arm for a remote tool exactly as for a local one. The
  *          reading NEVER throws — see `toolExtras.ts`.

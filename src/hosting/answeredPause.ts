@@ -230,10 +230,9 @@ export type FailedAnswerOutcome = 'marked' | 'closed' | 'kept';
  * spent — an approval, here or in another process, may have run the call —
  * is settled as unknown, like any other.
  *
- * Unused, and refused for a reason no decision can change (`error` is a
- * `'request-not-recorded'`, `'call-changed'`, `'chain-changed'` or
- * `'ledger-changed'` refusal):
- * the pause is CLOSED instead — it could only ever hold the session. Read
+ * Unused, and refused for a reason no decision can change (`error` is a refusal
+ * `unanswerableRefusalOf` names: no request recorded, a changed call, chain,
+ * ledger or argument view): the pause is CLOSED instead — it could only ever hold the session. Read
  * from the refusal's own code, which is safe only because THIS resume used
  * nothing. An earlier one may have — a resume that ran the call and then
  * could not mark the pause answered — so the calls it leaves open are
@@ -331,14 +330,15 @@ export async function afterFailedAnswer(input: {
 const UNREAD = Symbol('unread');
 
 /** The reason a refusal no decision can change names, read from its code and reason. */
-function unanswerableRefusalOf(error: unknown): UnanswerableReason | undefined {
+function unanswerableRefusalOf(error: unknown): ResumeDecisionError['reason'] | undefined {
   if (typeof error !== 'object' || error === null) return undefined;
   const { code, reason } = error as { code?: unknown; reason?: unknown };
   return code === 'ERR_RESUME_DECISION' &&
     (reason === 'request-not-recorded' ||
       reason === 'call-changed' ||
       reason === 'chain-changed' ||
-      reason === 'ledger-changed')
+      reason === 'ledger-changed' ||
+      reason === 'view-changed')
     ? reason
     : undefined;
 }

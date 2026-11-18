@@ -86,8 +86,10 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
     '/scripts/closedFence/{char,length}',
     '/scripts/withheldFromText',
   ),
-  'middleware.decision': list('/{middleware,moment,outcome,changed,toolName,toolCallId}'),
-  'permission.check': list('/{target,result,policyRuleId}'),
+  'middleware.decision': list(
+    '/{middleware,moment,outcome,changed,toolName,toolCallId,phase,personApproved}',
+  ),
+  'permission.check': list('/{target,result,policyRuleId,phase,toolCallId}'),
   'checkin.decision': list('/{approved,toolName,toolCallId}'),
   'skill.turn_routed': list(
     '/{by,from,to,scorer,decisive}',
@@ -118,7 +120,7 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
   ),
   'stream.tool_start': list('/{toolName,toolCallId}'),
   'stream.tool_end': list(
-    '/{toolCallId,status,error,notExecuted}',
+    '/{toolCallId,status,error,entered,notExecuted}',
     '/notDispatched/pausedCall/{toolCallId,toolName}',
     '#emptiness',
   ),

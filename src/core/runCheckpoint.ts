@@ -49,9 +49,9 @@
  *       retries the call on the next iteration.
  *
  * Pattern: Memento (GoF) — snapshot of an object's internal state
- *          for later restoration. Same shape as `FlowchartCheckpoint`
+ *          for later restoration. The same pattern as `FlowchartCheckpoint`
  *          but at the agent layer (one logical iteration vs. one
- *          DFS stage).
+ *          DFS stage). Each checkpoint has its own reader and resume contract.
  */
 
 import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
@@ -91,6 +91,14 @@ import {
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { ownConfigArray } from '../integrity/claim-binding/scope.js';
+import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
+import { admitStoredHistory } from './checkpointHistory.js';
+import {
+  admitFoldedInnerCallPolicy,
+  innerCallPolicyFor,
+  innerCallPolicyOf,
+  innerCallPolicyReferences,
+} from '../redaction/innerCallPolicyCarrier.js';
 import type { SourceEvidenceIndex } from '../artifacts/sourceEvidence/types.js';
 import {
   sourceDeclarationCorrectionOf,
@@ -146,6 +154,8 @@ export class RunCheckpointError extends Error {
     this.name = 'RunCheckpointError';
     this.cause = cause;
     this.checkpoint = checkpoint;
+    if (checkpoint.innerCallPolicyArgs !== undefined)
+      Object.defineProperty(this, 'checkpoint', { enumerable: false });
   }
 }
 
@@ -398,67 +408,38 @@ export function checkpointReplayHistory(
   return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
 }
 
-/**
- * Build a JSON-serializable checkpoint from a tracker + failure
- * info. Pure function — no side effects.
- *
- * @internal
- */
+/** Build a storage checkpoint from committed history and failure observations. @internal */
 export function buildCheckpoint(
   tracker: RunCheckpointTracker,
   failurePoint?: NonNullable<AgentRunCheckpoint['failurePoint']>,
-  /**
-   * Spans this run folded, read from committed state by the caller. Passed in
-   * rather than tracked, because the tracker follows `history` through events
-   * and a fold's span is committed state — and because the same reader then
-   * serves both checkpoint carriers, so neither can lose what the other keeps.
-   */
+  /** Compaction spans paired with the committed history. */
   folded?: readonly FoldedSpan[],
-  /**
-   * Who the run was for and which agent ran it — the two fields that make a
-   * stored conversation continuable rather than merely readable (9.2.0).
-   * Both are absent unless the caller chose them explicitly; see
-   * {@link AgentRunCheckpoint.identity} and {@link AgentRunCheckpoint.agent}.
-   */
+  /** The original owner and agent, when the caller named them. */
   owner?: { readonly identity?: MemoryIdentity; readonly agentId?: string },
-  /**
-   * The graph cursor at the last committed state (SG-C) — read from the same
-   * snapshot `folded` comes from, by the same one-reader-two-carriers rule:
-   * `Agent.continuityCursorOf` serves BOTH `checkpoint()` and this crash
-   * carrier, so a conversation cannot keep its place on one path and silently
-   * lose it on the other. Passed only when the graph declared
-   * `continuity: 'conversation'`.
-   */
   skillCursor?: string,
   evidenceRecovery?: EvidenceRecoveryCheckpoint,
-  /**
-   * The model's standings on its tool results (9.101.0), read from the same
-   * committed snapshot `folded` comes from, by the same one-reader-two-carriers
-   * rule — so a crash checkpoint cannot lose a ledger `checkpoint()` keeps.
-   * Absent unless the run's ledger is non-empty.
-   */
   findingsLedger?: FindingsLedger,
-  /**
-   * The turn the failing run was on (honesty layers), read from the same
-   * committed snapshot by the same one-reader-two-carriers rule — so a crash
-   * checkpoint cannot lose the turn `checkpoint()` keeps. Absent unless a
-   * layer is armed; see {@link AgentRunCheckpoint.turnNumber}.
-   */
   turnNumber?: number,
   /** Private evidence beside the same committed ledger; absent unless explicitly opted in. */
   claimVerification?: ClaimVerificationState,
   negativeClaims?: NegativeCheckpoint,
   sourceEvidence?: SourceEvidenceIndex,
   sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
+  placed?: unknown,
+  innerPolicyState?: unknown,
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
       ? undefined
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
+  const history = checkpointReplayHistory(tracker.history, tracker);
+  const placedTickets = ticketsStillServed(placed, history);
+  const innerCallPolicyArgs = innerCallPolicyFor(innerPolicyState, history);
   return {
     version: 1,
     runId: tracker.runId,
-    history: checkpointReplayHistory(tracker.history, tracker),
+    history,
+    ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     lastCompletedIteration: tracker.lastCompletedIteration,
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
@@ -477,6 +458,7 @@ export function buildCheckpoint(
         }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
     ...(turnNumber !== undefined && { turnNumber }),
+    ...(placedTickets !== undefined && { placedTickets }),
     ...(verification !== undefined && { claimVerification: verification }),
     ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
     ...(sourceEvidence === undefined
@@ -783,38 +765,20 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         `turn the stored history ends on, written while an honesty layer is armed.`,
     );
   }
-  // The conversation itself, message by message (8.18.0). `Array.isArray` was
-  // the whole check, one field away from `originalInput.message` — which HAS
-  // been string-checked since this function was written. A checkpoint that
-  // round-tripped through a store, a hand edit, or an older writer could carry
-  // a turn with no `content`, deserialize cleanly, and take the run down on
-  // its first composition with a TypeError naming neither the checkpoint nor
-  // the turn. A persisted artifact is checked at the door it comes in.
-  for (const [i, msg] of (c.history as readonly unknown[]).entries()) {
-    if (!msg || typeof msg !== 'object') {
-      throw new TypeError(
-        `[resumeOnError] checkpoint history[${i}] is not a message (got ${
-          msg === null ? 'null' : typeof msg
-        }). Each entry must be { role, content }.`,
-      );
-    }
-    const m = msg as { role?: unknown; content?: unknown };
-    if (typeof m.role !== 'string' || typeof m.content !== 'string') {
-      throw new TypeError(
-        `[resumeOnError] checkpoint history[${i}] is missing text: \`role\` is ${typeof m.role}, ` +
-          `\`content\` is ${
-            m.content === undefined ? 'missing' : typeof m.content
-          }. Every turn in a stored conversation must carry { role: string, content: string } — ` +
-          `a turn without content cannot be composed into the next request, and the failure ` +
-          `would otherwise surface deep inside the run rather than here.`,
-      );
-    }
-  }
+  admitStoredHistory(c.history, c.folded);
+  innerCallPolicyReferences(c.history);
+  admitFoldedInnerCallPolicy(c.folded);
+  const innerCallPolicyArgs = innerCallPolicyOf(c);
   negativeCheckpointOf(c);
+  if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
-  return sourceDeclarationCorrection === undefined
+  return sourceDeclarationCorrection === undefined && innerCallPolicyArgs === undefined
     ? checkpoint
-    : { ...checkpoint, sourceDeclarationCorrection };
+    : {
+        ...checkpoint,
+        ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
+        ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
+      };
 }
 
 /**

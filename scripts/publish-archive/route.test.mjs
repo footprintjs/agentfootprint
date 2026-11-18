@@ -26,7 +26,7 @@ for (const version of ['13.2.0', '14.0.0-rc.10'])
     assert.deepEqual(readdirSync(publish), ['package.tgz']);
     assert.deepEqual(readFileSync(publish + '/package.tgz'), bytes);
   });
-for (const name of ['.npmrc', 'binding.gyp', 'server.js', 'verify.cjs', 'archive.cjs'])
+for (const name of ['.npmrc', 'binding.gyp', 'server.js', 'verify.cjs', 'archive.cjs', 'archivePolicy.cjs', 'tarReader.cjs'])
   test('incoming sibling ' + name + ' cannot become publish config or executable helper', (t) => {
     const { r, args, publishedSha256, publish } = stagedPublish(
       t,

@@ -57,6 +57,9 @@ export function streamingShapes() {
       toolName: str,
       toolCallId: str,
       args: keysMarker,
+      // The tool's argument view of the same call: keys only, like `args`.
+      shownArgs: keysMarker,
+      hiddenArgs: listOf(str),
       parallelCount: num,
       protocol: oneOf('http', 'mcp', 'native', 'python-fn'),
       notDispatched: shapeOf<At<PayloadOf<'agentfootprint.stream.tool_start'>, 'notDispatched'>>({
@@ -74,6 +77,7 @@ export function streamingShapes() {
       result: typeMarker,
       error: bool,
       durationMs: num,
+      entered: bool,
       status: oneOf('absent', 'denied', 'failure', 'invalid', 'partial', 'pending', 'success'),
       notDispatched: shapeOf<At<PayloadOf<'agentfootprint.stream.tool_end'>, 'notDispatched'>>({
         pausedCall: shapeOf<

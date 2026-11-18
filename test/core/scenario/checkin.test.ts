@@ -296,21 +296,30 @@ describe('check-in — pause/resume round-trip', () => {
 // ── 4. Approve → executes / Decline → model-visible + recorded ──────────
 
 describe('check-in — decision', () => {
-  it('APPROVE executes the tool exactly once and finishes', async () => {
+  it('APPROVE rechecks policy on the next agent and executes the tool exactly once', async () => {
     const exec = vi.fn(({ amount }: { amount: number }) => `refunded ${amount}`);
-    const build = () =>
-      Agent.create({ provider: refundThenFinal('all set'), model: 'mock' })
+    const before = vi.fn((): PermissionDecision => ({ result: 'allow' }));
+    const after = vi.fn((): PermissionDecision => ({ result: 'allow' }));
+    const build = (check: PermissionChecker['check']) =>
+      Agent.create({
+        provider: refundThenFinal('all set'),
+        model: 'mock',
+        permissionChecker: { name: 'sample-policy', check },
+      })
         .system('refunds')
         .tool(refundTool('always', exec))
         .build();
 
-    const out = (await build().run({ message: 'refund' })) as RunnerPauseOutcome;
+    const out = (await build(before).run({ message: 'refund' })) as RunnerPauseOutcome;
+    expect(before).toHaveBeenCalledOnce();
     expect(exec).not.toHaveBeenCalled();
-    const final = await build().resume(
+    const final = await build(after).resume(
       out.checkpoint,
       checkInApproved({ request: pausedRequest(out), by: 'alice' }),
     );
     expect(final).toBe('all set');
+    expect(after).toHaveBeenCalledOnce();
+    expect(after).toHaveBeenCalledBefore(exec);
     expect(exec).toHaveBeenCalledTimes(1);
     expect(exec).toHaveBeenCalledWith({ amount: 500 }, expect.anything());
   });
@@ -659,9 +668,15 @@ describe('check-in — a mis-shaped resume REFUSES instead of inventing a declin
   });
 
   it('property — a plain askHuman pause is NOT a consent gate and takes any value', async () => {
+    const check = vi.fn((): PermissionDecision => ({ result: 'allow' }));
+    const execute = vi.fn(() => {
+      pauseHere({ question: 'how much?' });
+      return '';
+    });
     const agent = Agent.create({
       provider: refundThenFinal('done'),
       model: 'mock',
+      permissionChecker: { name: 'sample-policy', check },
     })
       .system('')
       .tool(
@@ -669,10 +684,7 @@ describe('check-in — a mis-shaped resume REFUSES instead of inventing a declin
           name: 'issue_refund',
           description: 'Issue a refund',
           inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
-          execute: () => {
-            pauseHere({ question: 'how much?' });
-            return '';
-          },
+          execute,
         }),
       )
       .build();
@@ -682,6 +694,8 @@ describe('check-in — a mis-shaped resume REFUSES instead of inventing a declin
     expect(pauseDemandsDecision(paused.pauseData)).toBeUndefined();
     // The human's answer IS the tool's result here — any value is accepted.
     await expect(agent.resume(paused.checkpoint, 'five hundred')).resolves.toBe('done');
+    expect(check).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it('unit — pauseDemandsDecision names the gate for each pause kind', () => {

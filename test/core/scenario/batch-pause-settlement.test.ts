@@ -1,4 +1,5 @@
 import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
+import { withTypedAnswerMark } from '../../helpers/typedAnswerMark.js';
 import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * THE BATCH SETTLEMENT (9.113.0) — a paused batch's un-dispatched siblings.
@@ -29,9 +30,9 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  * brackets on the leg that paused, which ends in a checkpoint and emits no
  * `iteration_end` — unchanged.
  *
- * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle, and its
- * record is pinned against a reference captured on the 9.112.2 tree BEFORE any
- * source edit of this release, by this file in update mode:
+ * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle. The
+ * 9.112.2 reference adds `entered: true` on each successful tool end for the
+ * new entry contract. It was originally captured by this file in update mode:
  *
  *   AF_BATCH_SETTLEMENT_REFERENCE=update npx vitest run test/core/scenario/batch-pause-settlement.test.ts
  */
@@ -604,7 +605,7 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
   return JSON.parse(requestId === undefined ? text : text.split(requestId).join('<requestId>'));
 }
 
-describe('batch settlement — a batch whose LAST call pauses is byte-identical to 9.112.2', () => {
+describe('batch settlement — the pinned record when the last call pauses', () => {
   it.each(KINDS)('%s', async (kind) => {
     const h = build(kind, 2);
     const { answer, requestId } = await pauseAndResume(h, kind);
@@ -623,7 +624,9 @@ describe('batch settlement — a batch whose LAST call pauses is byte-identical 
       all[kind],
       `no reference for '${kind}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(withNativeResourceObservation(all[kind] as { eventTypes: string[] }));
+    const legacy = withNativeResourceObservation(all[kind] as { eventTypes: string[] });
+    // A typed ask's landed answer now carries the library's mark; nothing else moved.
+    expect(record).toEqual(kind === 'input' ? withTypedAnswerMark(legacy) : legacy);
   });
 });
 
@@ -1211,7 +1214,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
     expect(checkIn.checkIn?.evidence.trail).toEqual({
       iteration: 2,
       toolCalls: [{ name: 'collect_input', ok: true }],
-      summary: '1 tool run over 2 iterations',
+      summary: '1 tool call over 2 iterations',
     });
     expect(ran).toEqual([]);
   });

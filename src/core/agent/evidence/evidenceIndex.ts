@@ -14,7 +14,7 @@
  * reads as grounded and the check quietly passes everything. So a tool result
  * that parses as JSON is WALKED — every key, every leaf — and each leaf is
  * indexed both whole and tokenized; so is the JSON a result OPENS with when a
- * framework note follows it (`readResult`, over `servedJson.ts`). A result
+ * framework note follows it (`readResult`, over `lib/servedJson.ts`). A result
  * that is not JSON is tokenized as text. Either way the comparison is
  * token-exact, never substring. Under `decimalRounding` a whole token of
  * text in scientific notation also files the exact decimal it states
@@ -51,8 +51,8 @@
  *
  * The EXEMPT index is built from a different corpus with the same machinery:
  * the user's own message, the conversation's user/system turns, the values
- * the person typed into a typed ask (`requestInput` — its `input_received`
- * result is a `role: 'tool'` message carrying THEIR words), and the
+ * the person typed into a typed ask the library landed (`requestInput` — its
+ * `input_received` result, marked `answersAsk`, carries THEIR words), and the
  * system-prompt content this turn was built from — each text with the other
  * spellings of the dates and clock times in it (`time/forms.ts` ·
  * `timeFormsOf`'s `said` list: `8 Am` is also `8:00`, `2026-10-09` also
@@ -78,15 +78,15 @@
  * stays whole and every indexed form carries the TURN it was last served in
  * — one number, stamped during the walk that was happening anyway.
  *
- * A TURN starts at each `role: 'user'` message the library did NOT author.
- * `isLibraryAuthoredTurn` (frames.ts) is a statement about AUTHORSHIP, not
- * about time — it exists to keep the exempt corpus from swallowing the gate's
- * own corrections — and it is reused here for a different reason that happens
- * to need the same predicate: a frame the library wrote is not a person asking
- * something new. Excluding them is load-bearing rather than tidy. The evidence
- * recheck appends a `role: 'user'` turn MID-RUN, so counting it as a boundary
- * would push this turn's own tool results into the "earlier" bucket and file a
- * notice against every revised answer.
+ * A TURN starts at each message a PERSON said: `lib/saidByPerson.ts` ·
+ * `isSaidByPerson`, the one authorship rule every reader of "where this turn
+ * begins" asks. Excluding EVERY library frame is load-bearing: the evidence
+ * recheck and the budget wrap-up append a `role: 'user'` line MID-RUN, and a
+ * compaction summary can land after a result this turn fetched; counting one
+ * as a boundary would file a notice against an answer read from this turn's
+ * own results. Example: request → tool result → `[budget exhausted …]` →
+ * answer is ONE turn. (`isLibraryAuthoredTurn`, frames.ts, is a narrower
+ * question: which user-role lines stay out of the EXEMPT corpus.)
  *
  * Turn 1 is the first user message still in the window; anything indexed
  * before one (a history with no user turn at all) is turn 0, which is also
@@ -106,20 +106,21 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { absenceEvidenceProjection } from '../../../semantics/coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
-import { isCompactedSummary } from '../../../lib/saidByPerson.js';
+import { isCompactedSummary, isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
+import { landedTypedAnswer } from '../../../tools/typedAnswer.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
 import { scientificDecimalOf } from './numberPrecision.js';
-import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
+import { jsonPrefixOf, leadingJsonValues } from '../../../lib/servedJson.js';
 import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
 
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
  * 5 MB tool result — because the cost of hitting it is not "slower", it is
  * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}). The
- * declared-sources check reads a haystack to the same ceiling and says
- * `uncheckable` past it (`evidence/resultCarries.ts` · `resultReader`).
+ * per-result source checks share the NUMBER, not the meter: read "ONE
+ * CEILING, TWO METERS" in `resultCarries.ts` before trusting "the same".
  */
 export const MAX_INDEX_TOKENS = 200_000;
 
@@ -250,9 +251,9 @@ function add(sink: Sink, raw: string): void {
   const norm = normalizeToken(raw);
   if (norm === '') return;
   for (const form of lookupForms(norm)) {
-    // Re-stamping a form the index already holds costs no entry, so it is
-    // done before the budget is consulted: a truncated index should still
-    // hold the freshest turn for everything it did manage to index.
+    // Re-stamping a held form costs no entry, so it runs before the budget check — but only for a
+    // token that reaches `add`: past the budget a later re-serve is never seen (earlier stamp kept,
+    // no carrier; `indexTruncated: true`). Readers that act on a stamp refuse a truncated index.
     if (sink.values.has(form)) {
       sink.values.set(form, sink.turn);
       carry(sink, form);
@@ -357,7 +358,7 @@ function asEvidence(value: unknown): unknown {
  * blocks) — reads as those leading values, walked, and the text after them as
  * `tail`; one cut short before it closes (a tool that truncated its own
  * output) reads as the leaves the grammar can read, and — cut inside a
- * string — that string's whole words as `tail` (`servedJson.ts` ·
+ * string — that string's whole words as `tail` (`lib/servedJson.ts` ·
  * `jsonPrefixOf`: never the word the cut may have split). Read whole as text,
  * `{"id":4417}` tokenises to `:4417`, and every number and boolean the tool
  * returned would read as absent. Text that opens with a brace and is not JSON
@@ -433,9 +434,9 @@ export function evidenceFromHistory(
   let toolResultsThisTurn = 0;
   for (const msg of history) {
     // A turn boundary — the person asked something new. The library's own
-    // corrections are `role: 'user'` too and are NOT boundaries; see the
-    // header for the bug that distinction prevents.
-    if (msg.role === 'user' && !isLibraryAuthoredTurn(msg.content)) {
+    // `role: 'user'` lines (corrections, the wrap-up, a drop notice, a summary,
+    // a delivered injection) are NOT boundaries; see the header for why.
+    if (isSaidByPerson(msg)) {
       sink.turn += 1;
       toolResultsThisTurn = 0;
       // The carriers are THIS turn's: an earlier turn's results keep their
@@ -486,16 +487,12 @@ function addExempt(sink: Sink, text: string): void {
  * ran on the answer before it landed, so a hidden field reads as its
  * placeholder and exempts nothing, exactly as a redacted person turn does.
  * A result with no `origins` exempts nothing: no field can be proven theirs.
+ * Only a message the library marked counts (`tools/typedAnswer.ts` ·
+ * `landedTypedAnswer`); the shape alone is any tool's to return.
  */
 function typedAskAnswerOf(msg: LLMMessage): readonly string[] | undefined {
-  if (msg.role !== 'tool' || typeof msg.content !== 'string') return undefined;
-  // Every other tool result is read by the evidence index already; this
-  // corpus parses only the ones that can be an answer.
-  if (!msg.content.includes('"input_received"')) return undefined;
-  const read = readResult(toolBytesOf(msg));
-  if (!('parsed' in read)) return undefined;
-  const landed = read.parsed;
-  if (!isRecord(landed) || landed.status !== 'input_received') return undefined;
+  const landed = landedTypedAnswer(msg);
+  if (landed === undefined) return undefined;
   const { values, origins } = landed;
   if (!isRecord(values) || !isRecord(origins)) return undefined;
   const given: string[] = [];
@@ -530,7 +527,7 @@ function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
     // The person's answer to a typed ask (`requestInput`) lands as a
     // `role: 'tool'` message, but it is their words, not an observation:
     // exempt like a value in their message — and, being read here, carried
-    // by a fold's lineage exactly as their message is.
+    // by a fold's lineage exactly as their message is. Only when marked.
     const answered = typedAskAnswerOf(msg);
     if (answered !== undefined) {
       for (const value of answered) {
@@ -567,11 +564,10 @@ function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
  * The exemption lineage of a span about to be folded: every lookup form the
  * exempt corpus holds for these messages, in first-seen order — the person's
  * and the app's turns by the corpus's own rule, a nested summary by the
- * lineage IT carried, and a typed-ask answer by the values the person typed
- * into it (its `input_received` result is their words). Every other tool
- * result contributes nothing here: a summarized tool value keeps its tool
- * source and is judged against the tool results still in the window, exactly
- * like a value whose result a drop removed.
+ * lineage IT carried, and a typed-ask answer the library landed (marked) by
+ * the values the person typed into it. Every other tool result contributes
+ * nothing here: a summarized tool value keeps its tool source and is judged
+ * against the tool results still in the window, like a value a drop removed.
  *
  * @example
  * ```ts

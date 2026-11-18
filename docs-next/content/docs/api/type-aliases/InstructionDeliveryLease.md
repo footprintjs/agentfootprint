@@ -6,6 +6,6 @@ title: InstructionDeliveryLease
 
 > **InstructionDeliveryLease** = `"next-call"` \| `"until-skill-exit"`
 
-Defined in: [src/semantics/toolEffects.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L81)
+Defined in: [src/semantics/toolEffects.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L84)
 
 How long a pushed instruction stays delivered.

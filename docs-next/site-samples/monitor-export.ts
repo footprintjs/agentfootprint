@@ -14,7 +14,6 @@ agent.on('agentfootprint.stream.tool_end', (event) => console.log(event.payload)
 // Any OTLP backend, through your own OpenTelemetry tracer.
 agent.enable.observability({
   strategy: otelObservability({ serviceName: 'refunds', tracer }),
-  // @ts-expect-error This repo holds two copies of footprintjs. A reader's project holds one.
   detach: { driver: setImmediateDriver, mode: 'forget' }, // off the agent's call path
 });
 

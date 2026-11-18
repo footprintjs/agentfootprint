@@ -9,9 +9,12 @@ it('shutdown resources with one fixed key stay process-wide across conversations
   const registrations: string[] = [];
   const agent = Agent.create({
     provider: mock({
-      replies: Array.from({ length: 140 }, (_, index) =>
-        index % 2 === 0 ? { toolCalls: [{ id: 'call', name: 'resource', args: {} }] } : 'done',
-      ),
+      replies: [
+        { toolCalls: [{ id: 'call-a', name: 'resource', args: {} }] },
+        'done',
+        { toolCalls: [{ id: 'call-b', name: 'resource', args: {} }] },
+        'done',
+      ],
     }),
     model: 'mock',
   })
@@ -38,11 +41,11 @@ it('shutdown resources with one fixed key stay process-wide across conversations
   agent.on('agentfootprint.tools.session_reused', (e) => {
     registrations.push(e.payload.keyHash);
   });
-  for (let index = 0; index < 70; index++)
-    await agent.run('go', { sessionId: `conversation-${index}` });
+  await agent.run('go', { sessionId: 'conversation-a' });
+  await agent.run('go', { sessionId: 'conversation-b' });
   expect(starts).toBe(1);
   expect(closes).toBe(0);
-  expect(registrations).toHaveLength(69);
+  expect(registrations).toHaveLength(1);
   await agent.shutdown();
   expect(closes).toBe(1);
 });

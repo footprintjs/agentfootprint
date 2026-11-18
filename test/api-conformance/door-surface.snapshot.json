@@ -831,6 +831,7 @@
       "Turn",
       "TurnChanges",
       "TurnEndScripts",
+      "TypedAnswerMark",
       "UnmatchedReason",
       "UnsettledByAbsenceRow",
       "UnsupportedValue",

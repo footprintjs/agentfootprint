@@ -47,7 +47,7 @@ export function stagedPublish(
     digest = path.join(root, 'digest');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const folder of [bin, incoming, publish, trusted]) mkdirSync(folder);
-  for (const name of ['archive.cjs', 'verify.cjs'])
+  for (const name of ['archive.cjs', 'verify.cjs', 'archivePolicy.cjs', 'tarReader.cjs'])
     copyFileSync(path.join(ROOT, 'scripts/publish-archive', name), path.join(trusted, name));
   const bytes =
     options.archiveBytes ??

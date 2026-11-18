@@ -86,7 +86,7 @@ export type OnSkipPolicy = 'advance' | 'hold';
 
 /**
  * WHERE a declared procedure stands. 1-based; `step === total + 1` means
- * the procedure completed. `skipped` holds the indexes the model skipped
+ * the procedure reached its end. `skipped` holds the indexes the model skipped
  * under the `'advance'` policy (a `'hold'` skip is recorded on the event
  * stream, not here — the pointer did not move).
  */
@@ -94,11 +94,13 @@ export interface StepPointer {
   /** The tenant this pointer belongs to — the stepped skill whose tenure
    *  is current. A cursor move away from it resets the pointer. */
   readonly skillId: string;
-  /** Current step, 1-based. `total + 1` = procedure complete. */
+  /** Current step, 1-based. `total + 1` = end of the procedure. */
   readonly step: number;
   readonly total: number;
   /** Step indexes skipped-with-reason that the pointer moved past. */
   readonly skipped: readonly number[];
+  /** Recorded advances by a tool. Earlier checkpoints may lack these counts. */
+  readonly advanceOutcomes?: { readonly succeeded: number; readonly notReported: number };
 }
 
 /**
@@ -280,6 +282,35 @@ export function rekeyStepPointer(args: {
   return [{ skillId: args.tenant, step: 1, total: plan.steps.length, skipped: [] }];
 }
 
+function recordedAdvanceOutcomes(ptr: StepPointer): NonNullable<StepPointer['advanceOutcomes']> {
+  const counts = ptr.advanceOutcomes;
+  const toolSteps = ptr.step - 1 - ptr.skipped.length;
+  return counts &&
+    Number.isSafeInteger(counts.succeeded) &&
+    counts.succeeded >= 0 &&
+    Number.isSafeInteger(counts.notReported) &&
+    counts.notReported >= 0 &&
+    counts.succeeded + counts.notReported <= toolSteps
+    ? counts
+    : { succeeded: 0, notReported: 0 };
+}
+
+/** Record only the tool outcome at the boundary where the pointer advances. */
+export function advanceStepPointer(
+  ptr: StepPointer,
+  outcome: 'succeeded' | 'not-reported',
+): StepPointer {
+  const { succeeded, notReported } = recordedAdvanceOutcomes(ptr);
+  return {
+    ...ptr,
+    step: ptr.step + 1,
+    advanceOutcomes: {
+      succeeded: succeeded + Number(outcome === 'succeeded'),
+      notReported: notReported + Number(outcome === 'not-reported'),
+    },
+  };
+}
+
 // ─── The skip_step integrity tool ─────────────────────────────────────
 
 /**
@@ -362,20 +393,96 @@ export function readSkillStepIntro(plan: StepPlan): string {
 }
 
 // LENS · tool-result · persistent-history
-// reads: the advanced pointer and the frozen plan, both handed in
+// reads: the advanced pointer and the frozen plan, both handed in, and how the call that ran the step settled
 // known gap: ' Now on step N of M' is present tense on a surface re-read all turn; listed as unrepaired
 // in this folder's README ledger.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
-/** Suffix for a completed step's tool result: done + what is next. */
-export function stepAdvanceSuffix(next: StepPointer, plan: StepPlan): string {
-  const done = next.step - 1;
-  if (next.step > next.total) {
-    return ` Step ${done} of ${next.total} done. All ${next.total} steps complete.`;
-  }
+/**
+ * Suffix for a step that advanced: how it ended + what is next.
+ *
+ * `'succeeded'` — its tool declared `success` or `absent` (it looked and
+ * found nothing; the look is finished): "Step 1 of 2 done.".
+ * `'not-reported'` — its tool declared no status, so the library cannot say
+ * the work was done, only that the step ran: "Step 1 of 2 ran; its tool
+ * declared no status." "Declared" is exact: a status counts only inside an
+ * effects envelope, so `{ content, status: 'failure' }` without its
+ * `effects` marker declared none. When the tool wrote a word the library
+ * does not know in an otherwise well-formed envelope, the word is named
+ * instead: "Step 1 of 2 ran; its tool reported "oops", a status this
+ * library does not know, so the step was not held." Never "done" for a
+ * call whose tool did not say so.
+ *
+ * Why "declared no status" and not "reported no outcome" (the first wording
+ * of this sentence): a tool that wrote `status: 'FAILURE'` before the word
+ * was read in any case, or `{ content, status: 'failure' }` without the
+ * marker, did report something; only "declared" is true of every value that
+ * reaches this branch.
+ */
+export function stepAdvanceSuffix(
+  next: StepPointer,
+  plan: StepPlan,
+  verdict:
+    | { readonly outcome: 'succeeded' }
+    | { readonly outcome: 'not-reported'; readonly unknownStatus?: string },
+): string {
+  const ran = next.step - 1;
+  const head =
+    verdict.outcome === 'succeeded'
+      ? ` Step ${ran} of ${next.total} done.`
+      : verdict.unknownStatus === undefined
+      ? ` Step ${ran} of ${next.total} ran; its tool declared no status.`
+      : ` Step ${ran} of ${next.total} ran; its tool reported ` +
+        `${JSON.stringify(verdict.unknownStatus)}, a status this library does not know, ` +
+        `so the step was not held.`;
+  if (next.step > next.total) return head + stepEndSentence(next);
   const coming = plan.steps[next.step - 1]!;
   return (
-    ` Step ${done} of ${next.total} done. Now on step ${next.step} of ${next.total}: ` +
+    `${head} Now on step ${next.step} of ${next.total}: ` +
     `${coming.note} (tool: \`${coming.tool}\`).`
+  );
+}
+
+/** Reaching the end proves completion only if each step succeeded. */
+function stepEndSentence(ptr: StepPointer): string {
+  const { succeeded, notReported } = recordedAdvanceOutcomes(ptr);
+  const skipped = ptr.skipped.length;
+  if (succeeded === ptr.total && skipped === 0) return ` All ${ptr.total} steps complete.`;
+  const parts = [' It was the last step.'];
+  if (notReported > 0)
+    parts.push(` ${notReported} of ${ptr.total} steps ran without a recognized declared status.`);
+  if (skipped > 0) parts.push(` The procedure skipped ${skipped} of ${ptr.total} steps.`);
+  const unrecorded = ptr.total - succeeded - notReported - skipped;
+  if (unrecorded > 0)
+    parts.push(` The record gives no outcome for ${unrecorded} of ${ptr.total} steps.`);
+  return parts.join('');
+}
+
+// LENS · tool-result · persistent-history
+// reads: the unmoved pointer, the frozen plan and the status the tool DECLARED on that call
+// law: may omit, never deny; every clause anchored to the call it was composed on (past tense).
+/**
+ * Suffix for a step that was HELD: its tool declared a failure (`'failed'`:
+ * `failure` / `denied` / `invalid`) or unfinished work (`'not-finished'`:
+ * `pending` / `partial`). Names the declared status and where the procedure
+ * stayed; never says "done".
+ *
+ * @example " Step 1 of 2 was not completed: its tool reported 'failure'. The procedure stayed on step 1 (tool: `lookup`)."
+ */
+export function stepHeldSuffix(
+  ptr: StepPointer,
+  plan: StepPlan,
+  outcome: 'failed' | 'not-finished',
+  status: string,
+): string {
+  const tool = plan.steps[ptr.step - 1]?.tool;
+  const reported =
+    outcome === 'not-finished'
+      ? `its tool reported '${status}', so its work was not finished`
+      : `its tool reported '${status}'`;
+  return (
+    ` Step ${ptr.step} of ${ptr.total} was not completed: ${reported}. ` +
+    `The procedure stayed on step ${ptr.step}` +
+    `${tool === undefined ? '' : ` (tool: \`${tool}\`)`}.`
   );
 }
 
@@ -391,12 +498,8 @@ export function skipAdvanceSentence(
   next: StepPointer,
   plan: StepPlan,
 ): string {
-  if (next.step > next.total) {
-    return (
-      `Step ${skippedIndex} skipped: ${reason}. That was the last step — the ` +
-      `'${next.skillId}' procedure is complete (${next.skipped.length} step(s) skipped).`
-    );
-  }
+  if (next.step > next.total)
+    return `Step ${skippedIndex} skipped: ${reason}.` + stepEndSentence(next);
   const coming = plan.steps[next.step - 1]!;
   return (
     `Step ${skippedIndex} skipped: ${reason}. Now on step ${next.step} of ${next.total}: ` +
@@ -477,9 +580,17 @@ export function nudgeTeachingMessage(ptr: StepPointer, plan: StepPlan): string {
   // nudge persists in `history` past the call it was written for, and a bare
   // `this call` resolves to whichever call re-reads it. The message is the
   // one thing that stays where it is.
+  //
+  // "had not been completed" rather than "had not run", and "completed"
+  // rather than "run" in the ask (since a step is done only when its tool
+  // says so): a step whose tool ran and declared a failure is HELD, so the
+  // step the nudge names may well have run. Both readings stay true — a step
+  // never called and a step held after its tool failed were each not
+  // completed. The opening (`STEP_NUDGE_FRAME_PREFIX`, '[steps unrun') is
+  // unchanged: it is the frame marker readers match on, not a claim.
   return (
-    `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
-    `above was given: ${list}. This message asked for them to be run, or for the reason ` +
-    `they were not run.]`
+    `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not been completed when ` +
+    `the answer above was given: ${list}. This message asked for them to be completed, or ` +
+    `for the reason they were not.]`
   );
 }

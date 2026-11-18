@@ -266,7 +266,7 @@ function itemsOf(list: unknown): CoverageItem[] {
  * The dispatch loop serves `safeStringify(value)` and joins any framework
  * note after it, so the value's extent is found by the JSON grammar alone —
  * strings and their escapes skipped, brackets counted — and that span is
- * parsed once, guarded (the `ledger.ts · placedRefOf` precedent). A string
+ * parsed once, guarded. A string
  * that does not open with `{` is never parsed at all.
  */
 function leadingObjectOf(served: unknown): unknown {
