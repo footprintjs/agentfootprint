@@ -5,9 +5,8 @@ It is no longer maintained, because keeping a third copy of the same chapters in
 repo-internal file is how documentation rots: nothing type-checked its snippets, nothing
 gated its links, and it drifted eleven minor releases behind the code it described.
 
-**The reader-facing documentation is on the docs site**, where every code block is
-type-checked against the shipped types at build time and every cross-reference is gated
-in CI.
+**The reader-facing documentation is on the docs site**, where every cross-reference is
+gated in CI. The site build type-checks the blocks marked `ts twoslash` against the shipped types. For complete programs, see the runnable examples.
 
 | What you came for | Where it lives now |
 |---|---|
