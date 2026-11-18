@@ -691,12 +691,6 @@ the PERFORMANCE block), and the resume adds no model call.
 - **Two calls of one batch that share a call id** (a malformed provider) share the layer's entry
   and rows, which are keyed by id — the record can contradict what ran. Keying by batch
   position is named, not built.
-- **A placed result that ran on a filled value.** Two readers parse a placement ticket off the
-  WHOLE message and do not read through the boundary: the staged-refs nudge
-  (`core/agent/stagedRefs.ts` · `findStagedRefs`) and a standing row's `ref`
-  (`findings/ledger.ts` · `placedRefOf`). After a note, the ticket no longer parses for them —
-  as after any other framework suffix — so the nudge and the `ref` are left out; neither is
-  ever wrong.
 - **A middleware rewrite on a resumed chain** (after a middleware `ask`) is not stamped with
   `changedKeys`; the batch loop stamps them.
 - **Nested or array arguments**, type unions and nullable types — not ruled in v1.

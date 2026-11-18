@@ -36,6 +36,7 @@
  */
 
 import { isPlacedToolResult, type PlacedToolResult } from '../../artifacts/placement.js';
+import { leadingJsonValue } from '../../lib/servedJson.js';
 
 /** One ticket the library minted: the call it stands for and the ref it named. */
 export interface PlacedTicket {
@@ -96,11 +97,30 @@ export function issuedTicketsOf(value: unknown): IssuedPairs {
 export function isIssuedTicket(
   toolCallId: string | undefined,
   parsed: unknown,
-  issued: IssuedTickets,
+  issued: IssuedTickets | undefined,
 ): parsed is PlacedToolResult {
   if (!isPlacedToolResult(parsed)) return false;
   if (issued === RECORDED_BEFORE_RECEIPT) return true;
-  return toolCallId !== undefined && issued.get(toolCallId)?.has(parsed.ref) === true;
+  return toolCallId !== undefined && issued?.get(toolCallId)?.has(parsed.ref) === true;
+}
+
+/**
+ * Read a served placement ticket before any framework note. The unissued
+ * shape is only a reason to leave visibility unknown, never a placement.
+ */
+export function readPlacement(
+  toolCallId: string | undefined,
+  value: unknown,
+  issued: IssuedPairs | undefined,
+):
+  | { readonly issued: true; readonly ticket: PlacedToolResult }
+  | { readonly issued: false }
+  | undefined {
+  const parsed = typeof value === 'string' ? leadingJsonValue(value) : value;
+  if (!isPlacedToolResult(parsed)) return undefined;
+  return isIssuedTicket(toolCallId, parsed, issued)
+    ? { issued: true, ticket: parsed }
+    : { issued: false };
 }
 
 /**

@@ -61,7 +61,7 @@ Defined in: [src/core/agent/findings/types.ts:191](https://github.com/footprintj
 
 Defined in: [src/core/agent/findings/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L187)
 
-The placement ticket's `art_` ref when the result was placed (`isPlacedToolResult`).
+The placement ticket's `art_` ref when the placement is backed by the library receipt.
 
 ***
 

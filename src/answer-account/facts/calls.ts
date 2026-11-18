@@ -477,6 +477,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ? { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' }
     : judged
     ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
+        placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
         ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
           rowsAt: rowsAtOf(ctx.declarations, toolName),
         }),
