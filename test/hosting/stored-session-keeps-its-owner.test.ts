@@ -17,7 +17,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, requestInput } from '../../src/index.js';
+import { Agent, defineTool, inMemoryArtifacts, requestInput } from '../../src/index.js';
+import { mock } from '../../src/llm-providers.js';
 import {
   checkEnvelope,
   envelopeOwner,
@@ -33,6 +34,7 @@ import type {
   SessionWireResult,
 } from '../../src/hosting/index.js';
 import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
+import { ALICE, boundOf, filingHost, verifier } from './turnArtifactsHarness.js';
 
 // ── A store whose bytes leave the process ───────────────────────────
 
@@ -179,6 +181,69 @@ async function door(
 // ── Contract 1: a save in the middle of a run carries the owner ─────
 
 describe('a save in the middle of a run keeps who the conversation belongs to (r3-45-hosting-1)', () => {
+  it('keeps the owner on a mid-run save of the same turn that hands over a recording receipt', async () => {
+    const sessions = jsonSessions(newDisk());
+    const store = inMemoryArtifacts();
+    let midRun: CheckpointEnvelope | undefined;
+    const checkProgress = defineTool({
+      name: 'check_progress',
+      description: 'Read the saved progress before the turn finishes.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => {
+        midRun = await sessions.hydrate('s1');
+        return 'checked';
+      },
+    });
+    const agent = Agent.create({
+      model: 'm',
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 't1', name: 'check_progress', args: {} }] },
+          { content: 'fine' },
+        ],
+      }),
+      artifacts: { store, recordings: true },
+    })
+      .tool(checkProgress)
+      .build();
+    const host = filingHost();
+    const handle = await standingAgent({
+      agent,
+      sessions,
+      host,
+      identity: verifier(),
+      durability: 'sync',
+    });
+    try {
+      const reply = await host.deliver({
+        input: 'check progress',
+        sessionId: 's1',
+        headers: ALICE,
+      });
+      expect(reply.output).toBe('fine');
+      const { artifacts } = await store.list({ conversationId: 's1', principal: 'alice' });
+      expect(artifacts).toHaveLength(1);
+      const [recording] = artifacts;
+      expect(recording).toMatchObject({
+        kind: 'recording/run',
+        origin: { runId: expect.any(String) },
+      });
+      expect(boundOf(reply).recording).toStrictEqual({
+        ref: recording!.ref,
+        bytes: recording!.bytes,
+      });
+      expect(midRun).toMatchObject({
+        format: 'conversation-v1',
+        data: {
+          runId: recording!.origin!.runId,
+          identity: { principal: 'alice', conversationId: 's1' },
+        },
+      });
+    } finally {
+      await handle.close();
+    }
+  });
+
   for (const durability of ['sync', 'async'] as const) {
     for (const verifier of [true, false]) {
       it(`${durability}, ${
