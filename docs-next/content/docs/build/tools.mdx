@@ -908,9 +908,9 @@ the list); a `describedResult()`'s provenance and grain never reach it.
   as it wrote it; the block is appended after the stream ends, so a streaming
   UI that shows only the tokens never shows it. Render the rest of
   `turn_end.finalContent` (what the tokens did not carry) when the turn ends,
-  or draw the limits yourself from `sharedState.coverageDeclared`. The AG-UI
-  adapter already writes that rest, and `toSSE({ format: 'text' })` does for
-  the outermost agent's turn.
+  or draw the limits yourself from `sharedState.coverageDeclared`. The
+  record-only AG-UI adapter writes that rest automatically. So does
+  `toSSE({ format: 'text' })` for a turn the stream saw open at the root.
 - **Not the same "limits" as `.answerValidation({ limits })`.** Those are
   resource bounds on answer validation — reads, bytes, checks, time. The limits
   here are the ground your tools declared they did and did not cover.

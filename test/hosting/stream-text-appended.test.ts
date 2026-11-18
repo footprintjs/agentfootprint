@@ -16,7 +16,15 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { absent, Agent, defineTool, Parallel, Sequence } from '../../src/index.js';
+import {
+  absent,
+  Agent,
+  defineTool,
+  isPaused,
+  Parallel,
+  pauseHere,
+  Sequence,
+} from '../../src/index.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
 import { toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
@@ -50,17 +58,23 @@ type Runnable = {
   on(type: '*', listener: (event: AgentfootprintEvent) => void): () => void;
 };
 
+async function readText(
+  agent: Pick<Runnable, 'on'>,
+  options: ToSSEOptions = {},
+): Promise<string[]> {
+  const chunks: string[] = [];
+  for await (const chunk of toSSE(agent, { format: 'text', ...options })) chunks.push(chunk);
+  return chunks;
+}
+
 /** Run once, reading the text reply; returns the reply and the run's answer. */
 async function textReply(
   agent: Runnable,
   options: ToSSEOptions = {},
 ): Promise<{ reply: string; chunks: string[]; answer: unknown }> {
-  const chunks: string[] = [];
-  const reading = (async () => {
-    for await (const chunk of toSSE(agent, { format: 'text', ...options })) chunks.push(chunk);
-  })();
+  const reading = readText(agent, options);
   const answer = await agent.run({ message: 'How many orders?' });
-  await reading;
+  const chunks = await reading;
   return { reply: chunks.join(''), chunks, answer };
 }
 
@@ -71,6 +85,9 @@ function completeOnly(...replies: MockReply[]): LLMProvider {
   const scripted = mock({ replies });
   return { name: scripted.name, complete: (request) => scripted.complete(request) };
 }
+
+const noTurnStarts = (event: AgentfootprintEvent) =>
+  event.type !== 'agentfootprint.agent.turn_start';
 
 describe('toSSE text — the appended text reaches the reader', () => {
   it('the standing line follows the streamed answer', async () => {
@@ -116,6 +133,25 @@ describe('toSSE text — the appended text reaches the reader', () => {
     expect(reply).toBe(answer);
     expect(chunks).toHaveLength(1);
   });
+
+  it('a filter that drops the root turn start still gets the whole answer', async () => {
+    const agent = Agent.create({ provider: completeOnly('Root answer.'), model: 'm' }).build();
+    const { reply } = await textReply(agent, { filter: noTurnStarts });
+    expect(reply).toBe('Root answer.');
+  });
+
+  it('a runner without event metadata is treated as the root', async () => {
+    const agent = Agent.create({ provider: completeOnly('Root answer.'), model: 'm' }).build();
+    const runner: Runnable = {
+      run: (input) => agent.run(input),
+      on: (_pattern, listener) =>
+        agent.on('agentfootprint.agent.turn_end', ({ type, payload }) => {
+          listener({ type, payload } as AgentfootprintEvent);
+        }),
+    };
+    const { reply } = await textReply(runner);
+    expect(reply).toBe('Root answer.');
+  });
 });
 
 describe('toSSE text — regression', () => {
@@ -131,7 +167,7 @@ describe('toSSE text — regression', () => {
     expect(reply).toBe('There are 12 open orders.');
   });
 
-  it('a filter that drops some tokens gets no guessed rest — what it was given is not the answer’s start', async () => {
+  it('a filter that leaves a gap in the answer gets no guessed rest', async () => {
     const agent = Agent.create({
       provider: mock({ chunkDelayMs: 0, replies: [call('lookup'), STREAMED] }),
       model: 'm',
@@ -147,6 +183,25 @@ describe('toSSE text — regression', () => {
     expect(reply.length).toBeGreaterThan(0);
     expect(reply.length).toBeLessThan(STREAMED.length);
     expect((answer as string).startsWith(reply)).toBe(false);
+  });
+
+  it('a filter that drops only the last token gets it back with the appended text', async () => {
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, replies: [call('lookup'), STREAMED] }),
+      model: 'm',
+    })
+      .tool(lookup)
+      .namesAndNumbersFromEvidence({ posture: 'assist' })
+      .answerLayer({ standingLine: true })
+      .build();
+    const { reply, chunks, answer } = await textReply(agent, {
+      filter: (event) =>
+        event.type !== 'agentfootprint.stream.token' || event.payload.content !== 'orders.',
+    });
+    expect((answer as string).length).toBeGreaterThan(STREAMED.length);
+    expect(reply).toBe(answer);
+    expect(chunks).not.toContain('orders.');
+    expect(chunks.at(-1)).toBe((answer as string).slice('There are 4242 open '.length));
   });
 
   it('a filter that drops every token gets the whole answer — nothing was written, as when nothing streamed', async () => {
@@ -182,12 +237,9 @@ describe('toSSE text — regression', () => {
     agent.on('agentfootprint.agent.turn_end', (event) => {
       ends.push(event.payload as { refused?: unknown; finalContent?: unknown });
     });
-    const chunks: string[] = [];
-    const reading = (async () => {
-      for await (const chunk of toSSE(agent, { format: 'text' })) chunks.push(chunk);
-    })();
+    const reading = readText(agent);
     await expect(agent.run({ message: 'Where is order 77?' })).rejects.toThrow();
-    await reading;
+    const chunks = await reading;
     expect(ends).toHaveLength(1);
     expect(ends[0]?.refused).toEqual({ by: 'evidence-rails' });
     // The control: the refused text does extend what streamed…
@@ -222,7 +274,10 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
   // than this rule; README "Not covered"). That inner turn's answer is not the
   // run's answer, so an inner turn_end writes nothing more: these runs read as
   // they did before the rest was written at all.
-  it('a Sequence whose providers do not stream writes nothing, not its first step', async () => {
+  it.each([
+    ['with all events', undefined],
+    ['with turn starts filtered out', noTurnStarts],
+  ] as const)('a non-streaming Sequence writes no text %s', async (_label, filter) => {
     const sequence = Sequence.create({ name: 'steps' })
       .step('a', Agent.create({ provider: completeOnly('First step answer.'), model: 'm' }).build())
       .step(
@@ -230,7 +285,7 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
         Agent.create({ provider: completeOnly('Second step answer.'), model: 'm' }).build(),
       )
       .build();
-    const { reply, answer } = await textReply(sequence);
+    const { reply, answer } = await textReply(sequence, filter === undefined ? {} : { filter });
     expect(answer).toBe('Second step answer.');
     expect(reply).toBe('');
   });
@@ -265,6 +320,53 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
     const { reply } = await textReply(sequence);
     expect(reply).toBe('First step answer.');
   });
+});
+
+describe('toSSE text — resume', () => {
+  it.each(['a two-agent Sequence', 'a lone agent'] as const)(
+    'resuming %s writes no answer when the stream missed its turn start',
+    async (shape) => {
+      const first = Agent.create({
+        provider: completeOnly(call('ask_approval'), 'Approved.'),
+        model: 'm',
+      })
+        .tool(
+          defineTool({
+            name: 'ask_approval',
+            description: 'Wait for approval.',
+            inputSchema: { type: 'object', properties: {} },
+            execute: () => pauseHere({ question: 'Approve?' }),
+          }),
+        )
+        .build();
+      const composed = shape === 'a two-agent Sequence';
+      const runner = composed
+        ? Sequence.create()
+            .step('approve', first)
+            .step(
+              'report',
+              Agent.create({ provider: completeOnly('Report complete.'), model: 'm' }).build(),
+            )
+            .build()
+        : first;
+      const paused = await runner.run({ message: 'Approve the report.' });
+      if (!isPaused(paused)) throw new Error('Expected the approval tool to pause the run');
+
+      const turnAnswers: string[] = [];
+      const off = runner.on('agentfootprint.agent.turn_end', (event) => {
+        turnAnswers.push(event.payload.finalContent);
+      });
+      try {
+        const reading = readText(runner);
+        const answer = await runner.resume(paused.checkpoint, { approved: true });
+        expect(answer).toBe(composed ? 'Report complete.' : 'Approved.');
+        expect(turnAnswers[0]).toBe('Approved.');
+        expect(await reading).toEqual([]);
+      } finally {
+        off();
+      }
+    },
+  );
 });
 
 describe('toSSE text — redaction', () => {

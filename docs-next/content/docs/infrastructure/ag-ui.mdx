@@ -321,6 +321,9 @@ stated on `RUN_STARTED`.
 
 ## What a run becomes
 
+The text mappings below describe record-only delivery. In host delivery, the
+host supplies the final answer after the run completes.
+
 | agentfootprint event | AG-UI events |
 |---|---|
 | `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |

@@ -39,10 +39,10 @@ standalone defaults and redaction property tests remain unchanged.
 - `agent.iteration_*` and `composition.enter/exit` are steps; the step's
   address rides `metadata.agentfootprint` (AG-UI 1.0 has no parent field on a
   step).
-- Text is the streamed reply (`stream.token`); an agent's answer that streamed
-  nothing is written whole from `turn_end`; an agent's `llm_end.content` is a
+- In record-only mode, the reply comes from `stream.token` events. An answer
+  that streamed nothing is written whole from `turn_end`. An agent's `llm_end.content` is a
   draft and is never written.
-- Text the library appends after the stream — the limits block
+- In the same mode, text the library appends after the stream — the limits block
   (`.limitsTravelWithTheAnswer()`), the standing line
   (`.answerLayer({ standingLine })`) — is only in `turn_end.finalContent`, so
   the rest of that answer beyond what streamed is written at `turn_end` as its

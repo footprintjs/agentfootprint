@@ -56,22 +56,21 @@ export interface ToSSEOptions {
    *     (the placeholder wherever the policy selected a value).
    *   - 'text' — the answer as plain text (no event/data prefix), for
    *     piping straight into a chat UI: each `agentfootprint.stream.token`'s
-   *     content, then, at the outermost run's `agent.turn_end`, what of
-   *     `turn_end.finalContent` the tokens did not carry — the limits block or
-   *     the standing line the library appends after the stream, or the whole
-   *     answer when nothing was written (`hosting/unstreamedText.ts`, the rule
-   *     the AG-UI adapter asks too). Nothing was written when nothing streamed
-   *     (a provider without `stream()`) and also when a `filter` dropped every
-   *     token: both get the whole answer. Nothing more is written for a
-   *     refused answer, when what was written since the last `llm_start` is not
-   *     the answer's start (a `filter` that dropped some of the tokens, a
-   *     rewrite), or at an inner agent's `turn_end` (a Sequence step, a
-   *     Parallel branch: its answer is not the run's). The stream ends at the
-   *     FIRST `agent.turn_end`, inner or not, so a composition's text stream
-   *     carries only the tokens streamed before its first agent's turn ended
-   *     (not covered: read a composition's reply from `run()`'s return). This
-   *     is the REPLY to the person who asked — the caller's own answer, like
-   *     `run()`'s return — so a redaction policy never masks it.
+   *     content, then the rest of `turn_end.finalContent` for a turn whose
+   *     root `turn_start` the stream observed. With no event metadata the
+   *     runner is treated as one root. For a turn that qualifies, a filter
+   *     that drops only trailing tokens gets them back with the rest, such
+   *     as the limits block or the standing line. When no tokens were
+   *     written (the provider did not stream or the filter dropped them all),
+   *     the whole answer is written. A gap that leaves the written text
+   *     different from the answer's prefix, a rewritten prefix, or a
+   *     refused answer produces no additional text. A fresh stream on
+   *     resume writes only tokens for a turn opened before it subscribed.
+   *     The stream ends at the first `agent.turn_end`, so a composition
+   *     carries only text streamed through its first agent's turn. That can
+   *     be the run's answer when the same agent answers last. Use the
+   *     returned outcome to read a composition's full reply. This is the
+   *     caller's own answer, so a redaction policy never masks it.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -217,30 +216,30 @@ export async function* toSSE<TIn, TOut>(
     return text;
   };
   /**
-   * The turn's answer as the text format may write it: real, never a refused
-   * one, and only the OUTERMOST run's. An inner agent's turn (a Sequence step,
-   * a Parallel branch) answers its step, not the run, so its end writes
-   * nothing more. Decided by scope, as the AG-UI serializer decides it: an
-   * agent's `turn_end` fires inside its own stages (`['final']` for a lone
-   * agent, `['step-a', 'final']` for a Sequence step), so a turn is inner when
-   * a `turn_start` opened at a mount that leads its path, never by path length.
+   * Use only the real, unrefused answer of a root turn this stream saw open.
+   * On resume, an inner turn can end without a new start. The lack of an inner
+   * mount does not show that the turn is root. A known inner mount still
+   * takes precedence over the root, because even the root's own `turn_end`
+   * can come from a stage such as `['final']`.
    */
   const answerFor = (event: AgentfootprintEvent): string | undefined => {
     const key = event.meta?.runtimeStageId ?? '';
     const answer = live === undefined ? finalContentOf(event) : answers.get(key);
     answers.delete(key);
-    const path = pathOf(event);
-    if (innerTurns.some((mount) => leads(mount, path))) return undefined;
+    if (event.meta !== undefined && !rootTurnOpen) return undefined;
+    if (innerTurns.some((mount) => leads(mount, pathOf(event)))) return undefined;
+    rootTurnOpen = false;
     const refused = (event.payload as { refused?: unknown } | undefined)?.refused !== undefined;
     return !refused && typeof answer === 'string' ? answer : undefined;
   };
-  /** The mounts at which an inner agent's turn opened (a `turn_start` inside a subflow). */
+  let rootTurnOpen = false;
   const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
-    // Noted before the filter, so a filtered-out turn_start still marks its turn inner.
+    // The filter governs output. Even a filtered-out start establishes the scope.
     if (format === 'text' && event.type === 'agentfootprint.agent.turn_start') {
       const path = pathOf(event);
-      if (path.length > 0) innerTurns.push(path);
+      if (path.length === 0) rootTurnOpen = true;
+      else innerTurns.push(path);
     }
     // Taken before the filter, so a filtered-out token still consumes its text.
     const reply =
