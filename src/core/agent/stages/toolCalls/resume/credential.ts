@@ -167,7 +167,11 @@ export function buildResumeCredential(
         error !== true &&
         dispatched.ceilingRefused !== true
       ) {
-        consentResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+        consentResultStr = links.applyStepReturn(
+          scope,
+          { toolName, toolCallId, iteration },
+          consentResultStr,
+        );
       }
       // Typed tool effects (9.19.0) — same judge as every other path.
       const consentEnvelope =

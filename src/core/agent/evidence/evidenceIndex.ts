@@ -112,7 +112,7 @@ import { landedTypedAnswer } from '../../../tools/typedAnswer.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
 import { scientificDecimalOf } from './numberPrecision.js';
-import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
+import { jsonPrefixOf, leadingJsonValues } from '../../../lib/servedJson.js';
 import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
 
 /**
@@ -491,11 +491,7 @@ function addExempt(sink: Sink, text: string): void {
  * `landedTypedAnswer`); the shape alone is any tool's to return.
  */
 function typedAskAnswerOf(msg: LLMMessage): readonly string[] | undefined {
-  // Only marked results, parsed through the tool-bytes cut with this index's reader.
-  const landed = landedTypedAnswer(msg, (marked) => {
-    const read = readResult(toolBytesOf(marked));
-    return 'parsed' in read ? read.parsed : undefined;
-  });
+  const landed = landedTypedAnswer(msg);
   if (landed === undefined) return undefined;
   const { values, origins } = landed;
   if (!isRecord(values) || !isRecord(origins)) return undefined;

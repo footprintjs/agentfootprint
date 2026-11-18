@@ -217,7 +217,11 @@ export function buildResumeCheckIn(
       // Step boundary (9.18.0) — an approved consequential step (a checkIn
       // tool CAN be a step's tool) advances on the resumed dispatch.
       if (deps.stepPlanFor && stepToolRan) {
-        decisionResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+        decisionResultStr = links.applyStepReturn(
+          scope,
+          { toolName, toolCallId, iteration },
+          decisionResultStr,
+        );
       }
       // Typed tool effects (9.19.0) — an approved consequential call may
       // carry them too; judged exactly as inline.

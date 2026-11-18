@@ -429,7 +429,11 @@ export function buildResumeAsk(
       // from the batch loop; the answered call advances the pointer before
       // the push, exactly as it would have inline.
       if (deps.stepPlanFor && stepToolRan) {
-        askResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+        askResultStr = links.applyStepReturn(
+          scope,
+          { toolName, toolCallId, iteration },
+          askResultStr,
+        );
       }
       // Typed tool effects (9.19.0) — a resumed call's envelope is judged
       // exactly as an inline one's (fresh single-call batch state).

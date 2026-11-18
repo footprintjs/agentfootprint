@@ -129,7 +129,7 @@ export function buildResumePlain(
     // inline. The pointer itself crossed the checkpoint for free (it is
     // committed shared state); this is the half that has to be wired.
     if (deps.stepPlanFor) {
-      resultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+      resultStr = links.applyStepReturn(scope, { toolName, toolCallId, iteration }, resultStr);
     }
     // The library's mark on a person's typed answer: stamped only when THIS
     // run's `Agent.resume` accepted the answer to the ask this run raised

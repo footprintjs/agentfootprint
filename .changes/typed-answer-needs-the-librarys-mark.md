@@ -6,6 +6,8 @@ bump: major
 
 In a live run, the library knows who wrote the mark from the path that landed the answer. `agent.followUp()` retains the mark. When loading a stored pause or conversation through `agent.resume()`, `run({ continueFrom })`, `resumeOnError()` or a hosted session store, the library validates a present mark's shape and trusts it as part of the checkpoint, the run's own state. The library cannot establish who wrote a stored field. Keep the session store as safe as the run.
 
+When the typed answer completes a procedure step, the evidence gate and a re-ask both read the answer before the appended step-completion note.
+
 A record written before the mark existed has no mark, so its tool results do not count as typed answers. Stored `foldedExempt` on a compaction summary still carries its recorded exemptions, including values carried forward under the earlier shape-based rule.
 
 - A tool result shaped like a typed answer is now that tool's result: under the evidence gate its values can be flagged, a summary no longer carries them, and a re-ask no longer quotes them back. To pass a person's words through, ask with `requestInput` and answer through `agent.resume()`.

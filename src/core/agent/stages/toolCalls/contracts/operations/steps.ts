@@ -18,6 +18,7 @@ export interface ToolStepsOperations {
   readonly applyStepReturn: (
     scope: TypedScope<AgentState>,
     call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    result: string,
   ) => string;
   readonly readSkillStepIntroFor: (pickedId: string) => string;
   readonly noteSkillRefusal: (scope: TypedScope<AgentState>, iteration: number) => void;

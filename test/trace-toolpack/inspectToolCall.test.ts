@@ -450,13 +450,8 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
     );
 
   it('a provider that reuses the settled id for a call that then RAN: that call decides — its step, outcome and duration', async () => {
-    // The join reads the LATEST result for an id; the marker follows the same
-    // rule on the stream and in history, so the call that ran is not reported
-    // as the one that was settled. The outcome and the duration are read off
-    // the LAST `tool_end` for the id (`traceToolpack/toolCallJournal.ts` ·
-    // `buildInspectToolCall`), and the step off the first bracket of a call
-    // that ran (`bracketsFor`) — never the settlement's, which comes first on
-    // the tail.
+    // The latest result, step, outcome and duration all refer to the reused
+    // call that ran. The earlier settlement remains a different occurrence.
     const artifacts = await settledBatch({ reused: 'ran' });
     const ends = bracketsOf(artifacts, 'tool_end');
     const starts = bracketsOf(artifacts, 'tool_start');

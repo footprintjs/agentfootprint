@@ -105,11 +105,11 @@ export function landCallResult(
       !frame.skillRoute.skillRejected &&
       !frame.execution.ceilingRefused
     ) {
-      frame.delivery.resultStr += frame.applyStepReturn(scope, {
-        toolName: frame.tc.name,
-        toolCallId: frame.tc.id,
-        iteration: frame.iteration,
-      });
+      frame.delivery.resultStr = frame.applyStepReturn(
+        scope,
+        { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+        frame.delivery.resultStr,
+      );
     }
   }
 
