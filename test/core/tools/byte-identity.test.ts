@@ -11,10 +11,9 @@
  *
  * TOOL OUTCOME MARKER: a committed tool message whose call did not complete
  * now carries `outcome` (`execution/callOutcome.ts` · `callOutcomeOf`), the
- * fact the check-in trail reads instead of the result's first words. Only
- * `agent-scoped-provider` has such a call (an unknown tool name, `'refused'`);
- * it was recaptured with AF_TOOLS_REFERENCE_CASES=agent-scoped-provider and
- * its diff is that one added line. Every other reference is unchanged.
+ * fact the check-in trail reads first. The `agent-scoped-provider` capture
+ * under reference/tool-outcome-marker/ adds one refused history entry field.
+ * The earlier capture and its manifest remain under v14-native-components/.
  *
  * FINDINGS REFERENCE CONTEXT: five separately qualified ledger-enabled records
  * live under reference/findings-reference-context/ for the current-request
@@ -1614,8 +1613,10 @@ const SOURCE_CONTRACT_REFERENCE_CASES = new Set([
   'agent-arguments-sources',
   'agent-arguments-sources-only',
 ]);
-const referencePath = (name: string): URL =>
-  new URL(
+const TOOL_OUTCOME_REFERENCE_DIR = new URL('./reference/tool-outcome-marker/', import.meta.url);
+const referencePath = (name: string): URL => {
+  if (name === 'agent-scoped-provider') return new URL(`${name}.json`, TOOL_OUTCOME_REFERENCE_DIR);
+  return new URL(
     `${name}.json`,
     SOURCE_CONTRACT_REFERENCE_CASES.has(name)
       ? SOURCE_CONTRACT_REFERENCE_DIR
@@ -1625,6 +1626,7 @@ const referencePath = (name: string): URL =>
       ? NATIVE_REFERENCE_DIR
       : REFERENCE_DIR,
   );
+};
 const UPDATE = process.env.AF_TOOLS_REFERENCE === 'update';
 const UPDATE_CASES = new Set(
   (process.env.AF_TOOLS_REFERENCE_CASES ?? '').split(',').filter(Boolean),

@@ -514,7 +514,7 @@ export async function invokeInitialTool(
 /**
  * Keys of `pauseData` the library reads to recognise a pause of its OWN: which
  * call paused (`toolCallId` / `toolName`), which consent gate or typed ask is
- * open (`pause.ts` · `pauseDemandsDecision` reads `checkIn` / `ask`;
+ * open (`src/core/pause.ts` · `pauseDemandsDecision` reads `checkIn` / `ask`;
  * `RunnerBase` reads `awaitingInput`), and credential consent
  * (`identity/consent.ts` · `CONSENT_PAUSE_KEY`, minted only by
  * `credentialAdmission.ts`, whose URL the caller is told to open). A tool's
