@@ -1,8 +1,10 @@
 import type { ArtifactScope } from '../../../../artifacts/types.js';
+import { isArtifactRef } from '../../../../artifacts/naming.js';
 import { recordingPutInput } from '../../../../artifacts/recordingArtifact.js';
 import { eventBelongsToRun } from '../../../../bridge/eventMeta.js';
 import { recordRunWhere, type RunRecorder } from '../../../../recorders/observability/recordRun.js';
 import { packRecording } from '../../../../recorders/observability/recordingPack.js';
+import type { TrustBoundaryRecorder } from '../../../../trust-boundaries/types.js';
 import { isPaused, type RunnerPauseOutcome } from '../../../pause.js';
 import type { Runner } from '../../../runner.js';
 import type { RunnerInvocation } from '../../../runnerExecution.js';
@@ -10,6 +12,26 @@ import type { AgentRunValues } from '../../runValues.js';
 import type { AgentOutput, AgentState } from '../../types.js';
 
 import type { AgentConfiguration } from '../configuration/types.js';
+
+let usedTrustRecorders: WeakSet<TrustBoundaryRecorder> | undefined;
+
+function openTrustRecorder(factory: () => TrustBoundaryRecorder): TrustBoundaryRecorder {
+  const recorder = factory();
+  if (
+    recorder === null ||
+    typeof recorder !== 'object' ||
+    typeof recorder.id !== 'string' ||
+    typeof recorder.subscribe !== 'function' ||
+    typeof recorder.toSnapshot !== 'function'
+  ) {
+    throw new TypeError('Agent artifacts.recordings.trustBoundaries must return a recorder.');
+  }
+  const used = (usedTrustRecorders ??= new WeakSet());
+  if (used.has(recorder) || recorder.counters?.observed !== 0)
+    throw new TypeError('Agent artifacts.recordings.trustBoundaries must return a fresh recorder.');
+  used.add(recorder);
+  return recorder;
+}
 
 /**
  * Start recording this run — or do nothing at all (9.26.0).
@@ -34,6 +56,7 @@ export function startRunRecording(
 ): { complete(outcome: AgentOutput | RunnerPauseOutcome): void } | undefined {
   if (config.artifactRecordings === undefined || config.artifactStore === undefined)
     return undefined;
+  const createTrust = config.artifactRecordings.trustBoundaries;
   // Only THIS run's events: on an instance serving several sessions, the
   // hosting door emits facts for other sessions while this run is in flight,
   // and a recording is redeemable by the person it was filed for.
@@ -41,6 +64,11 @@ export function startRunRecording(
     runner,
     (event) =>
       invocation.run.origin !== undefined && eventBelongsToRun(event.meta, invocation.context()),
+    {},
+    createTrust === undefined ? undefined : openTrustRecorder(createTrust),
+    // Unattributed consumer facts may remain on the timeline but do not prove
+    // a trust decision by this invocation.
+    (event) => event.meta.runId === invocation.run.origin?.runId,
   );
   let outcome: AgentOutput | RunnerPauseOutcome | undefined;
   // Registered before component setup. Native reverse finalization joins
@@ -115,7 +143,12 @@ async function fileRunRecording(
     return;
   }
   try {
-    const result = await store.put(runArtifactScope(invocation), input);
+    const scope = Object.freeze(runArtifactScope(invocation));
+    const result = await store.put(scope, input);
+    const { ref, bytes } = result.meta;
+    if (isArtifactRef(ref) && Number.isSafeInteger(bytes) && bytes >= 0) {
+      invocation.value.recording = { scope, receipt: Object.freeze({ ref, bytes }) };
+    }
     // Sweeps ride the put result, so retention that evicted an older
     // recording to make room says so on the record — the same law a tool's
     // own mint follows.

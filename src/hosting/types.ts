@@ -33,6 +33,7 @@ import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { AwaitingInput } from '../tools/inputRequest.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import type { ToolArtifacts } from '../artifacts/capability.js';
+import type { ArtifactMeta } from '../artifacts/types.js';
 import type { ArtifactWireRequest } from './artifactWire.js';
 import type { AnswerAccountsOptions } from './answerAccounts.js';
 import type { DoorIdentity } from './identityVerification.js';
@@ -218,7 +219,16 @@ export interface HostRequest {
  *  - `'no-store'` — the serving agent has no artifact store.
  */
 export type TurnArtifacts =
-  | { readonly bound: true; readonly artifacts: ToolArtifacts }
+  | {
+      readonly bound: true;
+      readonly artifacts: ToolArtifacts;
+      /**
+       * The completed invocation's successful native recording mint, when it
+       * was filed under this binding's scope. Available to the host hook only.
+       * Use this binding or an authorized artifact request to redeem the ref.
+       */
+      readonly recording?: Pick<ArtifactMeta, 'ref' | 'bytes'>;
+    }
   | { readonly bound: false; readonly reason: 'no-session' | 'no-store' };
 
 /**

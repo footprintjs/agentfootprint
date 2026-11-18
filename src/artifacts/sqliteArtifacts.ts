@@ -137,8 +137,7 @@ export class UnreadableArtifactStoreError extends Error {
 const SCHEMA_VERSION = 1;
 const ARTIFACTS_TABLE = 'af_artifacts';
 const META_TABLE = 'af_artifacts_meta';
-const ARTIFACT_COLUMNS = [
-  'scope_ns',
+const ARTIFACT_METADATA_COLUMNS = [
   'ref',
   'kind',
   'media_type',
@@ -150,17 +149,17 @@ const ARTIFACT_COLUMNS = [
   'parent_refs',
   'created_at',
   'last_accessed_at',
-  'payload_shape',
-  'payload',
   // ADDITIVE (declared time axis): created on a new file, added in place on an
   // older one by `ensureSchema` — never required of a file, so an older
   // runtime still opens a file this one wrote (it simply does not read it).
   'time_axis',
 ] as const;
+const ARTIFACT_PAYLOAD_COLUMNS = ['payload_shape', 'payload'] as const;
+const ARTIFACT_COLUMNS = ['scope_ns', ...ARTIFACT_METADATA_COLUMNS, ...ARTIFACT_PAYLOAD_COLUMNS];
 /** Columns added after schema version 1 shipped — added in place, never required. */
 const ADDED_COLUMNS: readonly string[] = ['time_axis'];
 
-interface ArtifactRow {
+interface ArtifactMetadataRow {
   readonly ref: string;
   readonly kind: string;
   readonly media_type: string;
@@ -172,9 +171,12 @@ interface ArtifactRow {
   readonly parent_refs: string | null;
   readonly created_at: number;
   readonly last_accessed_at: number;
+  readonly time_axis: string | null;
+}
+
+interface ArtifactRow extends ArtifactMetadataRow {
   readonly payload_shape: EncodedPayload['shape'];
   readonly payload: string;
-  readonly time_axis: string | null;
 }
 
 /**
@@ -228,8 +230,12 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
     `INSERT INTO ${ARTIFACTS_TABLE} (${ARTIFACT_COLUMNS.join(', ')}) ` +
       `VALUES (${ARTIFACT_COLUMNS.map(() => '?').join(', ')})`,
   );
-  const selectOne = db.prepare(
+  const selectWithPayload = db.prepare(
     `SELECT ${ARTIFACT_COLUMNS.slice(1).join(', ')} FROM ${ARTIFACTS_TABLE} ` +
+      `WHERE scope_ns = ? AND ref = ?`,
+  );
+  const selectMetadata = db.prepare(
+    `SELECT ${ARTIFACT_METADATA_COLUMNS.join(', ')} FROM ${ARTIFACTS_TABLE} ` +
       `WHERE scope_ns = ? AND ref = ?`,
   );
   const selectScope = db.prepare(
@@ -237,7 +243,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
       `WHERE scope_ns = ?`,
   );
   const selectPage = db.prepare(
-    `SELECT ${ARTIFACT_COLUMNS.slice(1).join(', ')} FROM ${ARTIFACTS_TABLE} ` +
+    `SELECT ${ARTIFACT_METADATA_COLUMNS.join(', ')} FROM ${ARTIFACTS_TABLE} ` +
       `WHERE scope_ns = ? ORDER BY created_at DESC, ref ASC LIMIT ? OFFSET ?`,
   );
   const touch = db.prepare(
@@ -256,13 +262,19 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
     }
   };
 
-  const rowFor = (ns: string, ref: ArtifactRef): ArtifactRow | undefined =>
-    selectOne.get(ns, ref) as ArtifactRow | undefined;
+  const readPayloadRow = (ns: string, ref: ArtifactRef): ArtifactRow | undefined =>
+    selectWithPayload.get(ns, ref) as ArtifactRow | undefined;
+  const readMetadataRow = (ns: string, ref: ArtifactRef): ArtifactMetadataRow | undefined =>
+    selectMetadata.get(ns, ref) as ArtifactMetadataRow | undefined;
 
   /** Resolve a live row; sweep it when the calendar says it is gone. */
-  const liveRow = (ns: string, ref: ArtifactRef): ArtifactRow | undefined => {
+  const liveRow = <Row extends ArtifactMetadataRow>(
+    ns: string,
+    ref: ArtifactRef,
+    read: (ns: string, ref: ArtifactRef) => Row | undefined,
+  ): Row | undefined => {
     if (!isArtifactRef(ref)) return undefined;
-    const row = rowFor(ns, ref);
+    const row = read(ns, ref);
     if (row === undefined) return undefined;
     if (row.expires_at !== null && row.expires_at <= now()) {
       remove.run(ns, ref);
@@ -271,7 +283,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
     return row;
   };
 
-  const metaOf = (row: ArtifactRow): ArtifactMeta => ({
+  const metaOf = (row: ArtifactMetadataRow): ArtifactMeta => ({
     ref: row.ref,
     kind: row.kind,
     mediaType: row.media_type,
@@ -298,7 +310,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
       const at = now();
       const { meta } = await prepareArtifact(
         input,
-        (parent) => liveRow(ns, parent) !== undefined,
+        (parent) => liveRow(ns, parent, readMetadataRow) !== undefined,
         retention,
         at,
       );
@@ -333,9 +345,9 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
         meta.parentRefs !== undefined ? JSON.stringify(meta.parentRefs) : null,
         meta.createdAt,
         at,
+        meta.timeAxis !== undefined ? JSON.stringify(meta.timeAxis) : null,
         payload.shape,
         payload.value,
-        meta.timeAxis !== undefined ? JSON.stringify(meta.timeAxis) : null,
       );
       return { meta, swept: plan.swept };
     },
@@ -344,7 +356,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
     async head(scope, ref): Promise<ArtifactMeta | null> {
       open('describe an artifact');
       const ns = identityNamespace(scope);
-      const row = liveRow(ns, ref);
+      const row = liveRow(ns, ref, readMetadataRow);
       if (row === undefined) return null;
       touch.run(now(), ns, ref);
       return metaOf(row);
@@ -353,7 +365,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
     async get(scope, ref): Promise<ArtifactRecord | null> {
       open('read an artifact');
       const ns = identityNamespace(scope);
-      const row = liveRow(ns, ref);
+      const row = liveRow(ns, ref, readPayloadRow);
       if (row === undefined) return null;
       touch.run(now(), ns, ref);
       const data = decodeArtifactData({ shape: row.payload_shape, value: row.payload });
@@ -382,7 +394,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
       // Expired rows are FILTERED here, not deleted — deleting mid-walk would
       // shift every later offset and silently skip rows; the actual sweep
       // happens where single rows are touched (put / head / get).
-      const rows = selectPage.all(ns, limit + 1, offset) as ArtifactRow[];
+      const rows = selectPage.all(ns, limit + 1, offset) as ArtifactMetadataRow[];
       const artifacts: ArtifactMeta[] = [];
       let consumed = 0;
       for (const row of rows) {
