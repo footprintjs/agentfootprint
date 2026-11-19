@@ -18,26 +18,10 @@ here.
 - `PermissionPolicy.ts` — the role allowlist, usable as an async checker and a
   sync gate predicate.
 - `PolicyHaltError.ts` — the typed halt.
-- `extractSequence.ts` — the in-flight sequence, from history: the calls that
-  really dispatched. A call denied at the gate is left out (by its synthetic
-  prefix), and so is a call a paused batch never dispatched (9.113.0, by its
-  `LLMMessage.notDispatched` marker) — a "verify before transfer" policy is
-  never met by a verify that did not run. The marker settles the ONE proposal
-  it answers, paired by POSITION (`settledProposals`), because an id alone
-  cannot say which: providers may reuse ids, and the library's own fallback
-  ids are minted per provider instance, so a restarted process mints the
-  settled call's id again for a call that really runs. Example: history
-  `[assistant: verify#k1] [tool k1: settled] [assistant: lookup#k1] [tool k1:
-  'ok']` gives the sequence `[lookup]` — the lookup ran, the verify did not.
-  The deny and in-flight checks still pair by id, as they always have, so a
-  history with no marker reads exactly as it did before — limits included: a
-  call denied at the gate still counts once a later call that runs reuses its
-  id, and a call that ran drops out once a later reuse of its id is denied.
-  The in-flight check has the same limit: a call never answered — a halt's
-  later siblings, a paused turn continued after `abandonPause()` — counts
-  once a later call that runs reuses its id. Settling those two doors with
-  the marker is the named follow-up (`src/core/README.md` · "Not covered
-  yet").
+- `extractSequence.ts` — the sequence given to a permission checker uses the
+  result paired by position with each recorded proposal. Unanswered proposals,
+  denials and explicit `LLMMessage.notDispatched` settlements stay out of the
+  sequence even when a provider reuses an ID.
   A call a tool made through `ctx.tools.call` whose function was entered
   rides its outer call's result message (`LLMMessage.calls`) and follows that
   call in the sequence, marked `inner: true`. Example: `[assistant: compose#c1]

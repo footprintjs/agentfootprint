@@ -18,37 +18,13 @@
  * precondition policy ("verify before transfer") be met by a call that never
  * ran.
  *
- * Detection of "did this call dispatch?" — the `tool` messages are read two
- * ways, each with the pairing its question needs:
- *
- *   • IN FLIGHT or DENIED — by id (`resultsById`, the rule this file always
- *     had): the latest RESULT for the id decides. None yet → the call is
- *     still in flight; the synthetic deny prefix → it was refused at the
- *     gate. A settled message is no result, so it answers neither question.
- *     Kept by id on purpose, limits included: a call denied at the gate still
- *     counts once a later call that runs reuses its id, and a call that ran
- *     drops out once a later reuse of its id is denied. The in-flight check
- *     has the same limit: a call never answered — a halt's later siblings, a
- *     paused turn continued after `abandonPause()` — counts once a later call
- *     that runs reuses its id, because the id then has a result. Pairing the
- *     deny and the in-flight checks by position too would change the
- *     sequence of runs that never met a settlement, which this release does
- *     not do; settling those two doors with the marker is the named follow-up
- *     (`src/core/README.md` · "Not covered yet").
- *   • SETTLED — by position (`settledProposals`, 9.113.0): a settled message
- *     carries `LLMMessage.notDispatched` — the marker, never its sentence —
- *     and it settles the ONE proposal it answers. An id alone cannot say
- *     which proposal that is: a provider may reuse an id across turns, and
- *     the library's own fallback ids are minted per provider INSTANCE
- *     (`adapters/llm/OllamaProvider.ts` · `nextToolCallId`, and its
- *     Foundry Local and Gemini twins), so a fresh process that resumes a
- *     stored checkpoint mints the settled call's id again for a call that
- *     really runs. Paired by id, that real call would bring the settled one
- *     back into the sequence — a "verify before transfer" policy met by a
- *     verify that never ran — and a settled reuse would drop a call that
- *     did run. Paired by position, each proposal is judged by its own answer.
- *
- * A history without a settled message pairs exactly as before 9.113.0.
+ * The proposal's recorded position owns its answer. A provider can repeat an
+ * id, including when a fresh instance resumes a stored checkpoint and restarts
+ * its id counter. The same pairing serves all three questions: an unanswered
+ * proposal is outside the sequence, a synthetic denial never dispatched, and a
+ * settled result carries `LLMMessage.notDispatched` regardless of its text.
+ * The reader adds no settlement to an unanswered call. The remaining settlement
+ * producers are described in `src/core/README.md`.
  *
  * INNER CALLS. A call a tool made through `ctx.tools.call` whose function was
  * entered rides the result message of the call the model made
@@ -56,8 +32,8 @@
  * follows that call in the sequence, in the order the tool made them, marked
  * `inner: true` — so a rule over "read a secret, then post it" sees a step a
  * composing tool took exactly where it took it. A refused inner call is not on
- * the message, as a denied model call is not in the sequence. Read with the
- * result the id pairs with, like the deny check above.
+ * the message, as a denied model call is not in the sequence. These entries
+ * come from the very same result used for the outer call.
  */
 
 import type { InnerCallRan } from '../provider-contract/innerCalls.js';
@@ -112,8 +88,7 @@ function deriveSequence(
   innerArgsOf: (call: InnerCallRan) => InnerCallRan['args'],
 ): ToolCallEntry[] {
   const sequence: ToolCallEntry[] = [];
-  const results = resultsById(history);
-  const { settled, innerCalls } = pairedResults(history);
+  const results = pairedResults(history);
 
   // Track iteration as we walk: each assistant turn with toolCalls
   // increments the iteration counter for the entries it produces. The
@@ -124,12 +99,10 @@ function deriveSequence(
   for (const [turnAt, msg] of history.entries()) {
     if (msg.role !== 'assistant' || !msg.toolCalls || msg.toolCalls.length === 0) continue;
     for (const [callAt, tc] of msg.toolCalls.entries()) {
-      if (!tc.id) continue;
-      const answer = results.get(tc.id);
-      if (answer === undefined) continue; // no tool_result yet → in-flight
+      const answer = results.get(proposalKey(turnAt, callAt));
+      if (answer === undefined || answer.notDispatched !== undefined) continue;
       const result = typeof answer.content === 'string' ? answer.content : '';
       if (result.startsWith(SYNTHETIC_DENY_PREFIX)) continue; // denied, never ran
-      if (settled.has(proposalKey(turnAt, callAt))) continue; // settled on resume, never dispatched
       const entry: ToolCallEntry = {
         name: tc.name,
         args: tc.args,
@@ -139,7 +112,7 @@ function deriveSequence(
         }),
       };
       sequence.push(entry);
-      for (const inner of innerCalls.get(proposalKey(turnAt, callAt)) ?? []) {
+      for (const inner of answer.calls ?? []) {
         sequence.push({
           name: inner.toolName,
           args: innerArgsOf(inner),
@@ -178,23 +151,7 @@ function proposalKey(turnAt: number, callAt: number): string {
 }
 
 /**
- * The latest RESULT for each call id — what the in-flight and deny checks
- * read, paired by id as they always were. A settled message
- * (`LLMMessage.notDispatched`) is left out: it is the library's sentence for a
- * call that never ran, not a result, so a settled id is not answered by it —
- * and a deny the id carried before a later settlement still reads as a deny.
- */
-function resultsById(history: readonly LLMMessage[]): Map<string, LLMMessage> {
-  const results = new Map<string, LLMMessage>();
-  for (const msg of history) {
-    if (msg.role !== 'tool' || !msg.toolCallId || msg.notDispatched !== undefined) continue;
-    results.set(msg.toolCallId, msg);
-  }
-  return results;
-}
-
-/**
- * The proposals the batch settlement answered (9.113.0), keyed by
+ * Recorded replies by proposal position, keyed by
  * {@link proposalKey}. Pairing is POSITIONAL — the rule the settlement itself
  * writes by (`core/agent/stages/toolCalls/batch/paused.ts` · `pausedBatchOf`: only an
  * answer AFTER the proposing turn counts): a `role: 'tool'` message answers
@@ -203,9 +160,8 @@ function resultsById(history: readonly LLMMessage[]): Map<string, LLMMessage> {
  * answers nothing, and a turn that proposes the id again opens a new
  * proposal — which is how a reused id keeps its two calls apart.
  */
-function pairedResults(history: readonly LLMMessage[]) {
-  const settled = new Set<string>();
-  const innerCalls = new Map<string, readonly InnerCallRan[]>();
+function pairedResults(history: readonly LLMMessage[]): Map<string, LLMMessage> {
+  const results = new Map<string, LLMMessage>();
   /** id → the still-unanswered proposals of it on the latest turn that proposed it, in call order. */
   const open = new Map<string, string[]>();
   for (const [turnAt, msg] of history.entries()) {
@@ -220,9 +176,7 @@ function pairedResults(history: readonly LLMMessage[]) {
     }
     if (msg.role !== 'tool' || !msg.toolCallId) continue;
     const answered = open.get(msg.toolCallId)?.shift();
-    if (answered === undefined) continue;
-    if (msg.notDispatched !== undefined) settled.add(answered);
-    else if (msg.calls !== undefined) innerCalls.set(answered, msg.calls);
+    if (answered !== undefined) results.set(answered, msg);
   }
-  return { settled, innerCalls };
+  return results;
 }
