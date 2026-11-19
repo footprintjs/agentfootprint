@@ -7,8 +7,8 @@ import { noteDecisionTakenUp, recordedRequestId } from '../../../../consentReque
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { findingsReferenceRefusal } from '../../../findings/admission.js';
 import type { ToolCallOperations } from '../compose.js';
-import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
-import { pausedOccurrenceKey } from './pausedOccurrence.js';
+import { callOccurrenceField, readCallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
+import { keyedPausedProposal } from './pausedOccurrence.js';
 
 /** Existing native resume admission and four door-specific continuations. */
 export function buildToolResume(
@@ -66,9 +66,14 @@ export function buildToolResume(
     const toolCallId = scope.pausedToolCallId as string;
     const toolName = scope.pausedToolName as string;
     const startMs = scope.pausedToolStartMs as number;
-    const callOccurrence = callOccurrenceField(
-      pausedOccurrenceKey([...(scope.history as readonly LLMMessage[])], toolCallId, toolName),
-    );
+    const history = [...(scope.history as readonly LLMMessage[])];
+    const keyedProposal = keyedPausedProposal(history, toolCallId, toolName);
+    if (keyedProposal === null) {
+      throw new TypeError(
+        'Cannot resume: the saved paused call occurrence is unavailable or ambiguous.',
+      );
+    }
+    const callOccurrence = callOccurrenceField(keyedProposal?.callOccurrenceKey);
     // A batch paused before anything stamped it — a checkpoint written by an
     // older build, or by an agent without the results layer — is stamped
     // here as it completes, so the loop head still judges it once (honesty
@@ -78,14 +83,19 @@ export function buildToolResume(
     }
 
     if (deps.findings === true) {
-      const proposed = [...(scope.history as readonly LLMMessage[])]
-        .reverse()
-        .find(
-          (message) =>
-            message.role === 'assistant' &&
-            message.toolCalls?.some((call) => call.id === toolCallId),
-        )
-        ?.toolCalls?.filter((call) => call.id === toolCallId);
+      const proposed =
+        keyedProposal === undefined
+          ? history
+              .reverse()
+              .find(
+                (message) =>
+                  message.role === 'assistant' &&
+                  message.toolCalls?.some((call) => call.id === toolCallId),
+              )
+              ?.toolCalls?.filter(
+                (call) => call.id === toolCallId && readCallOccurrenceKey(call) === undefined,
+              )
+          : [keyedProposal];
       const declaration = proposed?.length === 1 ? operations.peelCall(proposed[0]!) : undefined;
       const refusal =
         proposed?.length === 1

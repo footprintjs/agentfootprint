@@ -275,7 +275,7 @@ export function buildResumeCheckIn(
             ...reportedStatusField(decisionSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const decisionHistory = decisionSettlement.history;
       scope.history = decisionHistory;

@@ -89,7 +89,12 @@ export function buildResumePlain(
     const tool = links.lookupTool(toolName);
     // Peeled under the arm unless the tool owns the name — the same rule as
     // `peelCall` on the dispatch side, asked of the same tool.
-    const args = argsForPausedCall(scope, toolCallId, links.peelsReserved(tool));
+    const args = argsForPausedCall(
+      scope,
+      toolCallId,
+      links.peelsReserved(tool),
+      frame.callOccurrenceKey,
+    );
     // No `error` flag: a human's answer is not a tool failure.
     const rawPauseResult = await links.afterMoment(scope, {
       ...occurrence,
@@ -168,7 +173,7 @@ export function buildResumePlain(
           ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
       ],
-      { toolName, toolCallId },
+      { toolName, toolCallId, ...occurrence },
     );
     const newHistory = pauseSettlement.history;
     scope.history = newHistory;
@@ -195,7 +200,7 @@ export function buildResumePlain(
       iteration,
       carried: args,
       entered: true,
-      seen: {},
+      seen: occurrence,
     });
     links.emitToolEnd(
       scope,

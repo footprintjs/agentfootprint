@@ -196,6 +196,60 @@ afterEach(() => {
 describe('period-differs-from-asked — what was read against what was asked', () => {
   const THIRTY_DAYS = { from: iso(NOW_MS - 30 * DAY), to: NOW };
 
+  it.each([
+    ['one', 'two'],
+    ['same', 'same'],
+  ])(
+    'compares each dispatch to its own window when provider IDs are %s and %s',
+    async (firstId, secondId) => {
+      const ranges = [
+        { start_time: NOW_MS - 4 * DAY, end_time: NOW_MS - 3 * DAY },
+        { start_time: NOW_MS - 2 * DAY, end_time: NOW_MS - DAY },
+      ];
+      const seen: { args: Record<string, unknown>; asked: ToolExecutionContext['time'] }[] = [];
+      const declare: Declare = (args, ctx) => {
+        seen.push({ args, asked: ctx.time });
+        return {
+          queried: { from: iso(args.start_time as number), to: iso((args.end_time as number) - 1) },
+          held: 'unknown',
+        };
+      };
+      const { agent, periodEvents } = await build(
+        [
+          {
+            content: '',
+            toolCalls: [firstId, secondId].map((id, index) => ({
+              id,
+              name: 'client_activity',
+              args: ranges[index]!,
+            })),
+          },
+          answer('Activity reviewed.'),
+        ],
+        [epochTool({ declare })],
+        timeArm,
+      );
+      await agent.run({ message: 'activity', time: { now: NOW } });
+
+      const asked = ranges.map(({ start_time, end_time }) => ({
+        from: new Date(start_time).toISOString().replace('.000Z', 'Z'),
+        to: new Date(end_time).toISOString().replace('.000Z', 'Z'),
+      }));
+      expect(seen.map((call) => call.args)).toEqual(ranges);
+      expect(seen.map((call) => call.asked?.asked)).toEqual(
+        asked.map((window) => ({ ...window, edge: 'exclusive' })),
+      );
+      const windows = ofKind(agent, 'call-window');
+      expect(windows.map((row) => row.asked)).toEqual(asked);
+      const keys = windows.map(readCallOccurrenceKey);
+      expect(keys.map((key) => key?.split('.').at(-1))).toEqual(['0', '1']);
+      expect(ofKind(agent, 'call').map(readCallOccurrenceKey)).toEqual(keys);
+      expect(ofKind(agent, 'period').map(readCallOccurrenceKey)).toEqual(keys);
+      expect(ofKind(agent, 'period').map((row) => row.differs)).toEqual([undefined, undefined]);
+      expect(periodEvents.map(readCallOccurrenceKey)).toEqual(keys);
+    },
+  );
+
   it('a tool clamping 30 days to 7 → `missing` (the front 23 days), "not sure"', async () => {
     const clamp: Declare = () => ({
       queried: { from: iso(NOW_MS - 7 * DAY), to: iso(NOW_MS - 1) },
@@ -292,6 +346,34 @@ describe('period-differs-from-asked — what was read against what was asked', (
     });
     expect(await reasonsOf(agent)).toContain('period-differs-from-asked');
     expect(finalOf(out)).toContain('- client_activity read a shifted window — asked: ');
+  });
+
+  it('records drift only on the look-back call when two siblings share a provider ID', async () => {
+    const byMs = 30 * 60_000;
+    vi.setSystemTime(NOW_MS + byMs);
+    const { agent } = await build(
+      [
+        {
+          content: '',
+          toolCalls: [
+            { id: 'same', name: 'client_activity', args: { window: '1h' } },
+            {
+              id: 'same',
+              name: 'client_activity',
+              args: { start_time: NOW_MS - 2 * DAY, end_time: NOW_MS - DAY },
+            },
+          ],
+        },
+        answer('Activity reviewed.'),
+      ],
+      [epochTool({ lookback: true })],
+      timeArm,
+    );
+    await agent.run({ message: 'activity', time: { now: NOW } });
+
+    const calls = ofKind(agent, 'call');
+    expect(calls.map((row) => row.drift)).toEqual([{ byMs, outcome: 'shifted' }, undefined]);
+    expect(calls.map((row) => readCallOccurrenceKey(row)?.split('.').at(-1))).toEqual(['0', '1']);
   });
 
   it('an inclusive `queried.to == asked.to − 1 step` reads as covered; `== asked.to` one step wider', async () => {

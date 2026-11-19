@@ -324,7 +324,7 @@ export function buildResumeAsk(
             ...reportedStatusField(askSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const askHistory = askSettlement.history;
       scope.history = askHistory;

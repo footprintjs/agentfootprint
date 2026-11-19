@@ -25,7 +25,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
-import { callOccurrenceField } from '../../../lib/callOccurrence.js';
+import { callOccurrenceField, readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { completeClock } from '../../../time/clock.js';
 import { granularityMsOf } from '../../../time/convert.js';
 import { driftAtDispatch } from '../../../time/drift.js';
@@ -165,7 +165,13 @@ export function timeAtDispatch(
   const dispatchedAt = new Date(atMs).toISOString();
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
-  const window = callWindowOfCall(ledger, call.toolCallId, turn);
+  const key = readCallOccurrenceKey(call);
+  const window = callWindowOfCall(
+    ledger,
+    call.toolCallId,
+    turn,
+    (row) => key !== null && readCallOccurrenceKey(row) === key,
+  );
   const clock = clockOf(ledger);
   const rules = window !== undefined && clock !== undefined ? rulesOf(tool) : undefined;
   const drift =
@@ -195,7 +201,10 @@ export function timeAtDispatch(
           redrawnArgs(sent, tool, window?.form, drift.values)
       : (sent: Readonly<Record<string, unknown>>) => sent;
   return {
-    context: callTimeContext(scope, call.toolCallId, row.dispatchedAt),
+    context:
+      window !== undefined && clock !== undefined
+        ? structuredClone(timeContextOf(window, clock, row.dispatchedAt))
+        : undefined,
     args: redraw(args),
     redraw,
   };
@@ -214,27 +223,6 @@ function redrawnArgs(
   const next: Record<string, unknown> = { ...args };
   if (lookback !== undefined && lookback.kind === 'lookback') delete next[lookback.argument];
   return { ...next, ...values };
-}
-
-/**
- * `ctx.time` for one call (`time/wire.ts` · `TimeContext`, time design
- * § 7.5) — present only when the inputs layer filed a `call-window` row for
- * it this turn (its tool's period declares forms) and the turn has a clock:
- * the range the call asks for, the person's zone, the frozen `now` and the
- * dispatch moment just recorded. Read from the committed ledger, never
- * recomputed.
- */
-export function callTimeContext(
-  scope: TypedScope<AgentState>,
-  toolCallId: string,
-  dispatchedAt: string,
-): TimeContext | undefined {
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const window = callWindowOfCall(ledger, toolCallId, scope.turnNumber as number);
-  if (window === undefined) return undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  return structuredClone(timeContextOf(window, clock, dispatchedAt));
 }
 
 /**
