@@ -1,9 +1,10 @@
 import { MAX_OUTPUT_TOKENS, PROJECTED_LIMIT_UNITS, toDollars, unitsFor } from './budget.mjs';
-import { arms, maxRequestsFor, preflightTask, repeats, tasks } from './tasks.mjs';
+import { arms, maxRequestsPerRun, preflightTask, repeats, tasks } from './tasks.mjs';
 
 export const limits = Object.freeze({
   model: 'claude-haiku-5-5',
   maxTokens: MAX_OUTPUT_TOKENS,
+  maxRequests: maxRequestsPerRun,
   maxRetries: 0,
   caching: false,
   serverTools: false,
@@ -32,7 +33,7 @@ export function projectPreflight(preflightRows, remaining, chargedUnits) {
       peaks.output = Math.max(peaks.output, accounting.outputTokens);
     }
     const slots = remaining.filter(({ label, arm }) => label === row.label && arm === row.arm)
-      .reduce((n, { task }) => n + maxRequestsFor(task), 0);
+      .length * limits.maxRequests;
     return {
       cell: cellKey(row.label, row.arm),
       measuredRequests: requests.map(({ accounting }) => accounting),

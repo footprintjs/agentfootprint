@@ -8,7 +8,7 @@ import { createBudget, PROJECTED_LIMIT_UNITS, SPEND_LIMIT_UNITS } from './budget
 import { cohorts, loadCohort } from './cohorts.mjs';
 import { cellKey, limits, paidSchedule, projectPreflight } from './plan.mjs';
 import { summarize } from './score.mjs';
-import { arms, maxRequestsFor, tasks } from './tasks.mjs';
+import { arms, tasks } from './tasks.mjs';
 
 function rehearsalInputs() {
   const files = [
@@ -35,12 +35,13 @@ function recordedCohorts(installed) {
 
 async function rehearse(installed) {
   const rows = [];
+  const applyOutputSchema = installed.before.library.applyOutputSchema;
   for (const task of tasks) {
     for (const variant of task.control ? ['done'] : Object.keys(controls)) {
       for (const arm of arms) {
         for (const [label, { library }] of Object.entries(installed)) {
           const run = { label, arm, taskId: task.id, variant };
-          const result = await runOne(library, task, scripted(task, variant), { arm, limits, run });
+          const result = await runOne(library, task, scripted(task, variant), { arm, applyOutputSchema, limits, run });
           rows.push({ ...run, ...result });
         }
       }
@@ -58,6 +59,7 @@ async function coordinatorRun(installed, inputs) {
   const receipt = openSync(new URL('./paid-attempts.jsonl', import.meta.url), 'wx', 0o600);
   const append = (value) => { writeSync(receipt, `${JSON.stringify(value)}\n`); };
   const budget = createBudget(append);
+  const applyOutputSchema = installed.before.library.applyOutputSchema;
   const { preflight, remaining } = paidSchedule(Object.keys(installed));
   const rows = [];
   let projection;
@@ -66,10 +68,9 @@ async function coordinatorRun(installed, inputs) {
   const execute = async (item, phase) => {
     const { task, label, arm, repeat } = item;
     const run = { phase, label, arm, repeat, taskId: task.id };
-    const config = Object.freeze({ ...limits, maxRequests: maxRequestsFor(task) });
-    const provider = await createProvider(config);
+    const provider = await createProvider(limits);
     const row = { ...run, ...await runOne(installed[label].library, task, provider, {
-      limits, arm, append, budget, run,
+      limits, arm, applyOutputSchema, append, budget, run,
     }) };
     rows.push(row);
     append({ type: 'row', row });

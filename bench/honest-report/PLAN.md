@@ -1,4 +1,4 @@
-# Four-cell pilot plan · revision 2
+# Four-cell pilot plan · revision 3
 
 ## Schedule
 
@@ -6,8 +6,8 @@ Five blocked tasks and one successful control × both published cohorts × defau
 and the documented answer-label opt-in × 20 repeats = **480 runs**. That is 400
 blocked-case runs and 80 controls. The four failed-step preflight runs are part
 of repeat one, leaving 476 later runs. Each task interleaves the two cohorts
-within each arm. The cap is two generation attempts per run, or three on either
-cohort's failed-step run, for 1,040 maximum dispatch slots before the spend stop.
+within each arm. Every run allows eight provider requests, for at most 3,840
+dispatch slots before the spend stop.
 
 Use `claude-haiku-5-5`, as named in the original rule and used in the earlier
 benchmark batches. Each response has a 4,096-output-token cap, including thinking.
@@ -25,19 +25,23 @@ provider usage in a paid run; scripted output cannot forecast adaptive thinking.
 
 | Task | 14.10.1 requests | Estimated input tokens/run | 15.0.0 requests | Estimated input tokens/run |
 | --- | ---: | ---: | ---: | ---: |
-| Unavailable tool | 2 | 1,646 | 2 | 1,646 |
-| Refused call | 2 | 1,605 | 2 | 1,605 |
-| Declined call | 2 | 1,604 | 2 | 1,604 |
-| Failed step | 2 | 2,591 | 3 | 4,826 |
-| Empty search | 2 | 1,605 | 2 | 1,605 |
-| Successful control | 2 | 1,602 | 2 | 1,602 |
+| Unavailable tool | 2 | 1,648 | 2 | 1,648 |
+| Refused call | 2 | 1,607 | 2 | 1,607 |
+| Declined call | 2 | 1,606 | 2 | 1,606 |
+| Failed step | 2 | 2,593 | 3 | 4,837 |
+| Empty search | 3 | 2,737 | 3 | 2,737 |
+| Successful control | 2 | 1,604 | 2 | 1,604 |
 
-At those scripted request counts the full schedule would use about 941,640
-estimated input tokens and 55,760 estimated scripted output tokens across
-1,000 requests. That is about **USD 0.61** at the high-tier prices. It is a
-rehearsal-sized illustration. Filling the output cap on all 1,000 requests
-would instead cost about USD 10.71 even with those input sizes. The measured
-preflight and spend stop below govern the real run.
+At those scripted request counts the schedule would use about 1,033,360
+estimated input tokens and 63,160 estimated scripted output tokens across
+1,080 requests, or about **USD 0.67** at the high-tier prices. Filling the
+output cap on every scripted-sized request would instead cost about USD 11.58.
+
+The coordinator's stopped revision-2 batch reported peaks of about 1,300 input
+and 270 output tokens per request. At those observed peaks, all 3,840 revision-3
+slots would project **USD 5.088** at the high tier
+(`3,840 × (1,300 + 5 × 270) / 2,000,000`). The new preflight measures the
+actual revision-3 requests before the batch continues.
 
 ## Admission and actual spend
 

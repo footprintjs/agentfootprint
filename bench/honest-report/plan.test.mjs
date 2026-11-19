@@ -2,8 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { PROJECTED_LIMIT_UNITS } from './budget.mjs';
-import { paidSchedule, projectPreflight } from './plan.mjs';
-import { maxRequestsFor } from './tasks.mjs';
+import { limits, paidSchedule, projectPreflight } from './plan.mjs';
 
 const schedule = paidSchedule(['before', 'after']);
 
@@ -20,14 +19,15 @@ test('four preflight draws are included once in the 480-run schedule', () => {
   assert.equal(all.length, 480);
   assert.equal(all.filter(({ task }) => task.control).length, 80);
   assert.equal(new Set(all.map(({ arm, label, task, repeat }) => [arm, label, task.id, repeat].join('/'))).size, 480);
-  assert.equal(all.reduce((n, { task }) => n + maxRequestsFor(task), 0), 1040);
+  assert.equal(limits.maxRequests, 8);
+  assert.equal(all.length * limits.maxRequests, 3840);
 });
 
 test('the projection prices remaining slots and adds settled preflight charges exactly once', () => {
   const estimate = projectPreflight(withUsage(1000, 200), schedule.remaining, 8000);
   assert.equal(estimate.cells.length, 4);
-  assert.ok(estimate.cells.every(({ remainingSlots }) => remainingSlots === 257));
-  assert.equal(estimate.projectedUnits, 8000 + 4 * 257 * 2000);
+  assert.ok(estimate.cells.every(({ remainingSlots }) => remainingSlots === 952));
+  assert.equal(estimate.projectedUnits, 8000 + 4 * 952 * 2000);
   assert.equal(estimate.canContinue, true);
 });
 
@@ -44,4 +44,10 @@ test('missing usage enters the projection with the settlement fallback, includin
   const estimate = projectPreflight(rows, schedule.remaining, 24_000);
   assert.deepEqual(estimate.cells[0].peaks, { input: 1000, output: 4096 });
   assert.equal(estimate.cells[0].measuredRequests.at(-1).usageKnown, false);
+});
+
+test('the revised schedule yields USD 5.088 at the reviewed request peaks', () => {
+  const projected = projectPreflight(withUsage(1300, 270), schedule.remaining, 32 * (1300 + 5 * 270));
+  assert.equal(projected.projectedUsd, 5.088);
+  assert.equal(projected.canContinue, true);
 });

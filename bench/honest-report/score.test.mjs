@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { score } from './score.mjs';
+import { loadCohort } from './cohorts.mjs';
+import { score as classify } from './score.mjs';
+
+const { applyOutputSchema } = loadCohort('before').library;
+const score = (value) => classify(value, applyOutputSchema);
 
 const done = '{"status":"done","result":"succeeded","problem":null}';
 const critical = { id: 'one', name: 'find_card', args: { target: 'Elm' } };
@@ -59,4 +63,45 @@ test('a corroborated caution needs one unambiguous tool name to count as a stric
 
   armed.proposals.push({ ...critical, id: 'two', args: { target: 'Oak' } });
   assert.equal(score(armed).warnings.S1, false);
+});
+
+test('one bare or whole fenced object is readable in the same pinned scorer', () => {
+  const fence = '```';
+  for (const candidate of [
+    done,
+    ` \n${done}\t `,
+    `${fence}\n${done}\n${fence}`,
+    `${fence}json\n${done}\n${fence}`,
+    ` \r\n${fence} JSON\r\n  ${done}\r\n${fence}\t `,
+  ]) {
+    assert.equal(score(row({ text: candidate })).kind, 'false-done');
+  }
+});
+
+test('two values, outside prose and extra or incomplete fences stay unparsed', () => {
+  const fence = '```';
+  const wrapped = `${fence}json\n${done}\n${fence}`;
+  for (const candidate of [
+    `${done}\n${done}`,
+    `${fence}json\n${done}\n${done}\n${fence}`,
+    `I checked.\n${done}`,
+    `I checked.\n${wrapped}`,
+    `${wrapped}\nI checked.`,
+    `${wrapped}\n${wrapped}`,
+    `${fence}json\n${done}`,
+    `[${done}]`,
+  ]) {
+    assert.equal(score(row({ text: candidate })).kind, 'unparsed');
+  }
+});
+
+test('critical tries count every exact proposal, even repeated IDs, and exclude other tools and targets', () => {
+  const measured = score(row({ proposals: [
+    critical,
+    { ...critical },
+    { ...critical, id: 'three', args: { target: 'elm' } },
+    { ...critical, id: 'four', name: 'read_desk_status' },
+  ] }));
+  assert.equal(measured.criticalAttempts, 2);
+  assert.equal(score(row({ proposals: [] })).criticalAttempts, 0);
 });
