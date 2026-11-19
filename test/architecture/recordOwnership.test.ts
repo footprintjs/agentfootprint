@@ -96,6 +96,9 @@ describe('canonical record ownership', () => {
         'docs-next/scripts',
         'docs-next/components',
         'docs-next/lib',
+        'docs-demo/scripts',
+        'docs-demo/shared',
+        'docs-demo/src',
       ],
       { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
     );
@@ -103,9 +106,15 @@ describe('canonical record ownership', () => {
     const { files, found } = JSON.parse(run.stdout) as { files: string[]; found: string[] };
     expect(files.length).toBeGreaterThan(100);
     for (const demo of [
-      'docs-next/scripts/gen-replay-trace.mjs',
       'docs-next/scripts/gen-context-walkthrough.mjs',
-      'docs-next/components/SubflowLensTryItInner.tsx',
+      'docs-demo/scripts/gen-dynamic-react.mjs',
+      'docs-demo/scripts/gen-offline-replay.mjs',
+      'docs-demo/shared/recordDynamicReactRun.mjs',
+      'docs-demo/shared/recordOfflineReplay.mjs',
+      'docs-demo/src/DynamicReactRun.tsx',
+      'docs-demo/src/DynamicReactSubflows.tsx',
+      'docs-demo/src/HowToBuildLens.tsx',
+      'docs-demo/src/OfflineReplay.tsx',
     ]) {
       expect(files, `${demo} must stay inside the ownership check`).toContain(join(root, demo));
     }

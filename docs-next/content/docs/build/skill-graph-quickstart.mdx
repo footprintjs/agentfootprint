@@ -39,34 +39,31 @@ The walker moves by exactly three movers:
 Three `defineSkill` calls and one `skillGraph({ ... })`. Start rules are tried top
 to bottom; the first that matches the user's message wins.
 
-<SkillGraphTryIt demo="quickstart">
-  <CodeFile path="docs-next/components/demos/skillGraphQuickstartDemo.ts" region="demo" title="components/demos/skillGraphQuickstartDemo.ts (region: demo)" />
-</SkillGraphTryIt>
+<CodeFile path="docs-next/components/demos/skillGraphQuickstartDemo.ts" region="demo" title="components/demos/skillGraphQuickstartDemo.ts (region: demo)" />
 
 Feed the same object to an agent and the rules above ARE its runtime routing:
 
 ```ts
+import { Agent, defineTool } from 'agentfootprint';
+import { defineSkill, skillGraph } from 'agentfootprint/context';
+
 const agent = Agent.create({ provider, model })
-  .skillGraph(buildQuickstartSkillGraph())
+  .skillGraph(buildQuickstartSkillGraph({ defineTool, defineSkill, skillGraph }))
   .build();
 ```
 
 ## You can SEE it
 
-`graph.toMermaid()` draws the graph you just declared. This block is its verbatim
-output from a real run — note the entry edges **caption themselves with your
-matchers**, because the rules are data, not opaque code:
+<SkillGraphFigure view="quickstart" />
 
-```mermaid
-flowchart TD
-  __start__([▶ start])
-  n_refunds["refunds"]
-  n_billing["billing"]
-  n_triage["triage"]
-  __start__ -->|/refund#124;money back/i| n_refunds
-  __start__ -->|charge, invoice| n_billing
-  __start__ --> n_triage
-```
+Open the interactive graph to select a skill and see its playbook and tools.
+The edges from START show the start rules. The first rule that matches wins.
+
+`graph.toMermaid()` draws the graph you just declared. The docs build produces
+this block directly from the current library. The entry edges **caption themselves
+with your matchers** because the rules are data.
+
+<QuickstartSkillGraphMermaid />
 
 Paste it into a PR description, a README, or [mermaid.live](https://mermaid.live)
 — the routing review IS a picture review. (`#124;` is mermaid's escape for a `|`

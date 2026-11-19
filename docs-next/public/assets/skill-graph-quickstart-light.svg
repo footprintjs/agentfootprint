@@ -1,0 +1,52 @@
+<svg width="349pt" height="153pt"
+ viewBox="0.00 0.00 349.00 153.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<metadata>AgentFootprint source commit d966fbcd880bba639ac587f8fd59164772403a0e; published cohort agentfootprint@15.0.0, agentfootprint-lens@0.84.0, footprint-explainable-ui@2.0.0, footprintjs@14.0.0, foottrace@2.1.0</metadata>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 138.89)">
+<title>Skills</title>
+<polygon fill="#faf9f6" stroke="none" points="-14.4,14.4 -14.4,-138.89 335.06,-138.89 335.06,14.4 -14.4,14.4"/>
+<!-- start -->
+<g id="node1" class="node">
+<title>start</title>
+<ellipse fill="#f0ede5" stroke="#777162" cx="185.75" cy="-103.44" rx="52.81" ry="21.04"/>
+<text xml:space="preserve" text-anchor="middle" x="185.75" y="-99.24" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#27241d">START</text>
+</g>
+<!-- n0 -->
+<g id="node2" class="node">
+<title>n0</title>
+<path fill="#ffffff" stroke="#777162" d="M63.5,-36C63.5,-36 12,-36 12,-36 6,-36 0,-30 0,-24 0,-24 0,-12 0,-12 0,-6 6,0 12,0 12,0 63.5,0 63.5,0 69.5,0 75.5,-6 75.5,-12 75.5,-12 75.5,-24 75.5,-24 75.5,-30 69.5,-36 63.5,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="37.75" y="-13.8" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#27241d">refunds</text>
+</g>
+<!-- start&#45;&gt;n0 -->
+<g id="edge1" class="edge">
+<title>start&#45;&gt;n0</title>
+<path fill="none" stroke="#777162" d="M135.21,-96.61C111.42,-91.74 83.87,-82.8 63.57,-66.4 57.03,-61.12 51.9,-53.72 48,-46.33"/>
+<polygon fill="#777162" stroke="#777162" points="51.29,-45.1 43.92,-37.49 44.94,-48.04 51.29,-45.1"/>
+<text xml:space="preserve" text-anchor="middle" x="119.16" y="-55.6" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#27241d">/refund|money back/i</text>
+</g>
+<!-- n1 -->
+<g id="node3" class="node">
+<title>n1</title>
+<path fill="#ffffff" stroke="#777162" d="M206.05,-36C206.05,-36 165.45,-36 165.45,-36 159.45,-36 153.45,-30 153.45,-24 153.45,-24 153.45,-12 153.45,-12 153.45,-6 159.45,0 165.45,0 165.45,0 206.05,0 206.05,0 212.05,0 218.05,-6 218.05,-12 218.05,-12 218.05,-24 218.05,-24 218.05,-30 212.05,-36 206.05,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="185.75" y="-13.8" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#27241d">billing</text>
+</g>
+<!-- start&#45;&gt;n1 -->
+<g id="edge2" class="edge">
+<title>start&#45;&gt;n1</title>
+<path fill="none" stroke="#777162" d="M183.79,-82.32C183.12,-73.09 182.63,-61.99 183.04,-52 183.09,-50.58 183.17,-49.12 183.25,-47.65"/>
+<polygon fill="#777162" stroke="#777162" points="186.72,-48.18 183.94,-37.96 179.74,-47.69 186.72,-48.18"/>
+<text xml:space="preserve" text-anchor="middle" x="223.39" y="-55.6" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#27241d">charge, invoice</text>
+</g>
+<!-- n2 -->
+<g id="node4" class="node">
+<title>n2</title>
+<path fill="#ffffff" stroke="#777162" d="M308.66,-36C308.66,-36 268.84,-36 268.84,-36 262.84,-36 256.84,-30 256.84,-24 256.84,-24 256.84,-12 256.84,-12 256.84,-6 262.84,0 268.84,0 268.84,0 308.66,0 308.66,0 314.66,0 320.66,-6 320.66,-12 320.66,-12 320.66,-24 320.66,-24 320.66,-30 314.66,-36 308.66,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="288.75" y="-13.8" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#27241d">triage</text>
+</g>
+<!-- start&#45;&gt;n2 -->
+<g id="edge3" class="edge">
+<title>start&#45;&gt;n2</title>
+<path fill="none" stroke="#777162" d="M228.14,-90.67C242.11,-85.12 256.85,-77.27 267.75,-66.4 273.19,-60.98 277.33,-53.91 280.44,-46.89"/>
+<polygon fill="#777162" stroke="#777162" points="283.71,-48.15 283.98,-37.56 277.16,-45.67 283.71,-48.15"/>
+</g>
+</g>
+</svg>

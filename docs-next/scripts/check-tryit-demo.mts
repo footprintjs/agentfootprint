@@ -1,87 +1,42 @@
 /**
  * check:tryit — runs the REAL "Try it live" demo end-to-end.
  *
- * `buildDynamicReactAgent` here is the SAME function the Dynamic ReAct embed shows
- * (via <CodeFile region="demo">) AND executes when a reader hits Run. This check
- * runs it in Node and asserts what the run DID — each tool's own result, read off
- * the `stream.tool_start` / `stream.tool_end` events — so a broken demo fails the
- * docs build, not the reader's browser.
- *
- * Why not the final answer alone: the demo's mock LLM SCRIPTS that text, so it
- * comes back word for word even when the skill never loaded, redaction returned
- * the raw email, or the refund threw. Only the tool results can tell.
+ * The Dynamic ReAct guide shows the same builder the published app runs. This
+ * check injects the current library and verifies tool and context evidence in Node.
  *
  *   Run:  npm run check:tryit   (from docs-next/; needs the library dist built)
  */
 import { deepStrictEqual, ok } from 'node:assert/strict';
-import { Agent } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint';
+import { defineFact, defineInstruction, defineSkill, defineSteering, skillGraph } from 'agentfootprint/context';
+import { redactContent, routeRecorder } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
-import type { StructureRecorder } from 'footprintjs';
-import {
-  buildWeatherAgent,
-  weatherAnswer,
-  weatherInput,
-} from '../../docs-demo/scripts/quick-start-weather.mjs';
-import { buildDynamicReactAgent } from '../components/demos/dynamicReactDemo';
+import { stringifySnapshot, type StructureRecorder } from 'footprintjs';
+import { buildWeatherAgent } from '../../docs-demo/scripts/quick-start-weather.mjs';
+import { buildDynamicReactAgent } from '../../docs-demo/shared/dynamicReactDemo';
+import { recordDynamicReactRun } from '../../docs-demo/shared/recordDynamicReactRun.mjs';
+import { recordOfflineReplay } from '../../docs-demo/shared/recordOfflineReplay.mjs';
 import { buildSupportSkillGraph } from '../components/demos/skillGraphDemo';
-
-const MESSAGE = 'My account is alice@example.com — please refund $42';
-const EXPECTED = 'Done. Refund of $42 issued for [EMAIL]. You should see it in 3-5 business days.';
+import { buildQuickstartSkillGraph } from '../components/demos/skillGraphQuickstartDemo';
+import { recordSkillGraphRuns } from '../components/demos/skillGraphRuns.mjs';
 
 function fail(msg: string): never {
   console.error(`[check:tryit] FAIL — ${msg}`);
   process.exit(1);
 }
 
-const agent = buildDynamicReactAgent();
-
-// What each tool call actually returned, in the order the calls ended.
-const toolNames = new Map<string, string>();
-const ended: { name: string; result: unknown; error: boolean }[] = [];
-agent.on('agentfootprint.stream.tool_start', (e) => {
-  toolNames.set(e.payload.toolCallId, e.payload.toolName);
-});
-agent.on('agentfootprint.stream.tool_end', (e) => {
-  ended.push({
-    name: toolNames.get(e.payload.toolCallId) ?? '(unknown call)',
-    result: e.payload.result,
-    error: e.payload.error === true,
-  });
-});
-
-const result = await agent.run({ message: MESSAGE });
-
-if (typeof result !== 'string') fail('agent paused unexpectedly (expected a final answer)');
-
-// The final response is scripted. Check the results independently, in call order.
-const expectedCalls = [
-  ['read_skill', "Skill 'billing' activated for the next iteration."],
-  ['redact_pii', '[EMAIL] refund $42'],
-  ['process_refund', 'Refund of $42 issued.'],
-] as const;
-if (ended.length !== expectedCalls.length) {
-  fail(`expected ${expectedCalls.length} tool results, received ${ended.length}`);
-}
-for (const [index, [name, expected]] of expectedCalls.entries()) {
-  const call = ended[index];
-  if (call.name !== name || call.error || call.result !== expected) {
-    fail(`tool call ${index + 1} (${name}) did not return its expected result`);
-  }
-}
-
-// The final answer only proves the run COMPLETED (no throw, no pause, a 4th LLM
-// call): its text is scripted by the mock, so it says nothing about the tools.
-if (result !== EXPECTED) {
-  fail(`final answer drifted.\n  expected: ${EXPECTED}\n  got:      ${result}`);
-}
-
-console.log('[check:tryit] OK — read_skill, redact_pii and process_refund each returned what the flow needs, in order, and the run finished');
+const dynamicReact = buildDynamicReactAgent(
+  { Agent, defineTool, defineFact, defineInstruction, defineSkill, defineSteering, mock },
+  { thinkingMs: 0 },
+);
+const { result } = await recordDynamicReactRun(dynamicReact);
+console.log('[check:tryit] OK — Dynamic ReAct ran the three tools in order and put post-pii in the system prompt on iteration 3');
 console.log(`[check:tryit] answer: ${result}`);
 
-// ── Skill-graph demo: the builder draws the routing graph the embed shows. It is
-//    static (no run), so the guardrail asserts the compiled graph SHAPE matches
-//    the declared start/steps wiring — declared === drawn.
-const graph = buildSupportSkillGraph();
+// The guide and the demo use the same declarations. Keep these structural
+// assertions against the current library alongside the mock runtime checks.
+const graphApi = { defineTool, defineSkill, skillGraph };
+const graph = buildSupportSkillGraph(graphApi);
 const skillIds = graph.nodes
   .filter((n) => n.kind === 'skill')
   .map((n) => n.id)
@@ -103,8 +58,7 @@ console.log('[check:tryit] OK — the skill graph compiled triage → {billing, 
 //    Asserts what the page claims: the matchers route real messages, every wired
 //    skill is tool-scoped, and the entry edges carry the serializable match data
 //    the page's mermaid block captions with.
-const { buildQuickstartSkillGraph } = await import('../components/demos/skillGraphQuickstartDemo');
-const qs = buildQuickstartSkillGraph();
+const qs = buildQuickstartSkillGraph(graphApi);
 const qsCtx = (userMessage: string) => ({
   iteration: 1,
   userMessage,
@@ -136,6 +90,9 @@ if (!qs.toMermaid().includes('charge, invoice')) {
 
 console.log('[check:tryit] OK — the quickstart graph routes by data, scopes tools, and captions its edges');
 
+await recordSkillGraphRuns({ Agent, defineTool, mock, routeRecorder }, { quickstart: qs, support: graph });
+console.log('[check:tryit] OK — real mock runs recorded three start rules and both declared triage routes');
+
 // The guide and published demo share the weather fixture. Exercise it against
 // the current library and its native structure events, with no Explainable UI.
 const mounted = new Set<string>();
@@ -151,7 +108,7 @@ const weatherTools: Array<[string, unknown, boolean]> = [];
 weather.on('agentfootprint.stream.tool_end', ({ payload }) => {
   weatherTools.push([payload.toolCallId, payload.result, payload.error === true]);
 });
-deepStrictEqual(await weather.run({ message: weatherInput }), weatherAnswer);
+await recordOfflineReplay(weather, { redactContent, stringifySnapshot });
 deepStrictEqual(weatherTools, [['call-weather-1', 'San Francisco: sunny, 72°F', false]]);
 ok(weather.getLastSnapshot()?.executionTree, 'the weather run keeps its execution tree');
 ok(weather.getLastNarrativeEntries().length, 'the weather run keeps narrative entries');
@@ -160,3 +117,4 @@ for (const mount of ['sf-llm-call', 'sf-system-prompt', 'sf-messages', 'sf-tools
 }
 ok(loops.some(([from, to]) => from === 'tool-calls' && to === 'sf-llm-call'));
 console.log('[check:tryit] OK — the weather agent ran its tool and exposed the grouped LLM flow');
+console.log('[check:tryit] OK — its redacted Trace survives serialization with the chart, tool and run boundaries');

@@ -113,14 +113,3 @@ test('server compiler keeps Node library resolution and existing aliases unchang
   }
   assert.equal(aliases.existing, '/keep/me.js');
 });
-
-
-test('only the skill graph client entry gets a separate Lens compilation', () => {
-  const loader = resolve(docsRoot, 'scripts/skill-graph-view-loader.cjs');
-  const viewRules = (isServer) => webpackConfig(isServer).module.rules.filter((rule) => rule.use === loader);
-  const rules = viewRules(false);
-  assert.equal(rules.length, 1);
-  assert.equal(rules[0].test(resolve(docsRoot, 'components/demos/skillGraphView.ts')), true);
-  assert.equal(rules[0].test(resolve(docsRoot, 'components/DynamicReactTryItInner.tsx')), false);
-  assert.equal(viewRules(true).length, 0);
-});

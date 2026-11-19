@@ -4,6 +4,9 @@ import {
   quickStartDemoPath,
   quickStartFlowchartPath,
 } from '@/components/AgentFlowchart';
+import { dynamicReactViews } from '@/components/DynamicReactFigure';
+import { skillGraphViews } from '@/components/SkillGraphFigure';
+import { replayDemoViews } from '@/lib/replay-demo';
 import { abs, asset } from '@/lib/site';
 
 export const metadata: Metadata = {
@@ -26,6 +29,20 @@ export default function QuickStartWeatherFallback() {
         recorded mock run, including the LLM context slots and the weather-tool loop.
       </p>
       <WeatherRunDiagram />
+      {Object.values(skillGraphViews).map(({ id, title, guide }) => (
+        <section key={id} id={id} className="mt-8 scroll-mt-24">
+          <h2 className="text-2xl font-semibold">{title}</h2>
+          <p className="mt-3">The interactive viewer is unavailable on this deployment.</p>
+          <p className="mt-2"><a className="underline" href={asset(guide)}>See the recorded skill graph in the guide</a></p>
+        </section>
+      ))}
+      {[...Object.values(dynamicReactViews), ...Object.values(replayDemoViews)].map(({ id, title, guide, fallback }) => (
+        <section key={id} id={id} className="mt-8 scroll-mt-24">
+          <h2 className="text-2xl font-semibold">{title}</h2>
+          <p className="mt-3">The interactive viewer is unavailable on this deployment.</p>
+          <p className="mt-2"><a className="underline" href={asset(guide)}>{fallback}</a></p>
+        </section>
+      ))}
     </main>
   );
 }
