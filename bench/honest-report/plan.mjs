@@ -35,7 +35,10 @@ export function paidSchedule() {
   return { preflight, remaining };
 }
 
-export function projectPreflight(preflightRows, remaining, chargedUnits) {
+export function projectPreflight(preflightRows, remaining, chargedUnits, {
+  expectedCells = cells, keyOf = ({ label, arm }) => cellKey(label, arm),
+  maxRequests = limits.maxRequests, projectedLimitUnits = PROJECTED_LIMIT_UNITS,
+} = {}) {
   const cellProjections = preflightRows.map((row) => {
     const peaks = { input: 0, output: 0 };
     const requests = row.requests.filter(({ accounting }) => accounting !== undefined);
@@ -43,10 +46,9 @@ export function projectPreflight(preflightRows, remaining, chargedUnits) {
       peaks.input = Math.max(peaks.input, accounting.inputTokens);
       peaks.output = Math.max(peaks.output, accounting.outputTokens);
     }
-    const slots = remaining.filter(({ label, arm }) => label === row.label && arm === row.arm)
-      .length * limits.maxRequests;
+    const slots = remaining.filter((item) => keyOf(item) === keyOf(row)).length * maxRequests;
     return {
-      cell: cellKey(row.label, row.arm),
+      cell: keyOf(row),
       measuredRequests: requests.map(({ accounting }) => accounting),
       peaks,
       remainingSlots: slots,
@@ -56,11 +58,11 @@ export function projectPreflight(preflightRows, remaining, chargedUnits) {
   const projectedUnits = chargedUnits + cellProjections.reduce((n, { remainingUnits }) => n + remainingUnits, 0);
   const measurableKeys = new Set(cellProjections.filter(({ measuredRequests }) => measuredRequests.length > 0)
     .map(({ cell }) => cell));
-  const measurable = preflightRows.length === cells.length &&
-    cells.every(({ label, arm }) => measurableKeys.has(cellKey(label, arm)));
+  const measurable = preflightRows.length === expectedCells.length &&
+    expectedCells.every((cell) => measurableKeys.has(keyOf(cell)));
   return {
     cells: cellProjections, chargedUnits, projectedUnits,
     projectedUsd: toDollars(projectedUnits),
-    canContinue: measurable && projectedUnits <= PROJECTED_LIMIT_UNITS,
+    canContinue: measurable && projectedUnits <= projectedLimitUnits,
   };
 }

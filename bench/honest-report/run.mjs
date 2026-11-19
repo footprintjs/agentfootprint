@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { closeSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { assertRehearsal, controls, HiddenReplyExposureError, runOne, scripted } from './benchmark.mjs';
 import { createBudget, PROJECTED_LIMIT_UNITS, SPEND_LIMIT_UNITS } from './budget.mjs';
 import { loadCohort } from './cohorts.mjs';
 import { hiddenScripted, hiddenTasks } from './hiddenTasks.mjs';
+import { openAttemptLedger } from './ledger.mjs';
 import { cells, cellKey, limits, paidSchedule, projectPreflight } from './plan.mjs';
 import { repeatedHiddenScripted } from './repeatPlay.mjs';
 import { summarize } from './score.mjs';
@@ -15,7 +16,7 @@ import { tasks } from './tasks.mjs';
 function rehearsalInputs() {
   const files = [
     'RULE.md', 'PLAN.md', 'PREDICTIONS.md', 'tasks.mjs', 'hiddenTasks.mjs', 'benchmark.mjs',
-    'budget.mjs', 'candidate.mjs', 'cohorts.mjs', 'plan.mjs', 'run.mjs', 'score.mjs',
+    'budget.mjs', 'candidate.mjs', 'cohorts.mjs', 'ledger.mjs', 'plan.mjs', 'run.mjs', 'score.mjs',
     'terminalAnswer.mjs', 'repeatPlay.mjs', 'replyBoundary.mjs', 'cohorts/after/package-lock.json',
   ];
   return Object.fromEntries(files.map((name) => [
@@ -70,8 +71,7 @@ async function coordinatorRun(installed, inputs) {
   assert.equal(receiptData.scriptedRows, taskPlays.length * cells.length, 'The three-cell rehearsal must be complete');
   assert.match(receiptData.transcriptSha256, /^[a-f0-9]{64}$/, 'Rehearsal transcript digest required');
   const createProvider = await createPaidFactory();
-  const receipt = openSync(new URL('./paid-attempts.jsonl', import.meta.url), 'wx', 0o600);
-  const append = (value) => { writeSync(receipt, `${JSON.stringify(value)}\n`); };
+  const { append, close } = openAttemptLedger(new URL('./paid-attempts.jsonl', import.meta.url));
   const budget = createBudget(append);
   const applyOutputSchema = installed.published.library.applyOutputSchema;
   const { preflight, remaining } = paidSchedule();
@@ -121,7 +121,7 @@ async function coordinatorRun(installed, inputs) {
     }
     if (stop) append({ type: 'stop', reason: stop, completedRows: rows.length });
   } finally {
-    closeSync(receipt);
+    close();
   }
   if (stop) process.exitCode = 2;
   return { rows, projection, stop, budget: budget.snapshot() };

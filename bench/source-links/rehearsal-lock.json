@@ -1,0 +1,38 @@
+{
+  "inputs": {
+    "RULE.md": "bca3ef3f6ea61aa9bbf5baeb4a0e58dc3804ca0753b003f3bf87b2f7d1f51abc",
+    "PREDICTIONS.md": "302f9a56754d2b1c61d1aaa35470c7648a1cb7308e62de65660902df236f28c9",
+    "tasks.mjs": "e601a542655a8d60a5330b897af568d00672d54a421f1f8b81277c524efd29c9",
+    "desk.mjs": "e4be050dd3bb05d27239c93531a517d307b4549380fa0353a8503a1e319950e0",
+    "benchmark.mjs": "642ba4393ca3d2f276d2d5ae32d1446811f2ce70078970ad15aecdf9247ade67",
+    "metrics.mjs": "d37c43cb7ddb531493c998819c6cc6ac837f22c50030be5036fc923ea092ce1e",
+    "scorer.mjs": "47cacd28b9be90f01079d214698317953facd17b9a02ba3b62baf7db1940230f",
+    "plan.mjs": "fcd9ab32ca69543aefa8397c83edcd304039b78537add2ca48a63bb472185737",
+    "rehearsal.mjs": "9a212bbffc65984c173c00263322cf061d71484230064dc21a4dc20979db62b6",
+    "run.mjs": "edc310a239f2fc999cc8ad63519c0eb6249e252058200b71a541276f0e8b062c",
+    "../honest-report/tasks.mjs": "8f18b513cedae37a63307be5658baa0c8f40c8c4f9803929c988285d6989923f",
+    "../honest-report/plan.mjs": "aa72fb16e61f65f2b504bf2b00ef76be3e5b50d89ce2aefb25b6708fbb7ec78b",
+    "../honest-report/hiddenTasks.mjs": "337983ad02ad2ecc24f5fd28ad5f97d9aae67658b17e0384d380060f09a2b7b3",
+    "../honest-report/budget.mjs": "b5e315e0c1416cb97455650b9dc6ee117d90d1672f23f5ac8c0164d86bb01bd3",
+    "../honest-report/ledger.mjs": "30708eaee219d10db00e532b8787b57cfbbe897b3dc6edb346f0edcddd17b492",
+    "../honest-report/cohorts.mjs": "2fb8b87527498d180d983acb49518005f7a3835ff28628bac211d7851659a1e5",
+    "../honest-report/candidate.mjs": "69471d6f0be1fc1c6106614d6ead720dd53f904dab85a4031bf43e529a1419f9",
+    "../honest-report/cohorts/after/package-lock.json": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
+  },
+  "cohort": {
+    "agentfootprint": "15.0.0",
+    "footprintjs": "14.0.0",
+    "foottrace": "2.1.0",
+    "contextfootprint": "0.1.1",
+    "lockDigest": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea",
+    "packages": {
+      "agentfootprint": "f4440ef28abe3918d3f662ad296efd10a17d53996c24f01b3aa0e7a0a4515e8b",
+      "footprintjs": "8b780efe204f79a86867ed6e2e4678a1dc8f7a2865e3009a00742c8c51e59faf",
+      "foottrace": "15811d6482d4cef7e7d46b420660151c935138d570e24faa083e2c45ec871421",
+      "contextfootprint": "db26ddab0b3291aa39b166529f563a62ee8c2f4e103528d0e2ed198e02ebb25e"
+    },
+    "tokenModuleSha256": "dadf88fee78f62a35afae7e33d065b481c14a0cbcf9b0b866bd601ef3ab4f05b"
+  },
+  "scriptedRows": 18,
+  "transcriptSha256": "ebf33a0a2703f5f9e0f50845bb2efdf6f7835637571a3a0aeee15f287da20c2d"
+}

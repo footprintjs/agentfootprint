@@ -31,7 +31,10 @@ function isTokenCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-export function createBudget(append) {
+export function createBudget(append, { spendLimitUnits = SPEND_LIMIT_UNITS } = {}) {
+  if (!isTokenCount(spendLimitUnits) || spendLimitUnits < FULL_EXPOSURE_UNITS || spendLimitUnits > SPEND_LIMIT_UNITS) {
+    throw new RangeError('Expected a spend limit between one full reservation and the default limit');
+  }
   let chargedUnits = 0;
   let exposureUnits = 0;
   let dispatches = 0;
@@ -69,12 +72,12 @@ export function createBudget(append) {
 
     const estimatedInputTokens = estimateInputTokens(inputBytes);
     const boundUnits = unitsFor(estimatedInputTokens, maxTokens);
-    if (boundUnits > SPEND_LIMIT_UNITS - chargedUnits) {
+    if (boundUnits > spendLimitUnits - chargedUnits) {
       stop('byte reservation exceeds the spend limit', { metadata, boundUnits });
     }
     // Serialized bytes only estimate tokens. Full exposure is held for the one in-flight
     // request and any requests without final usage, then released as usage becomes known.
-    if (FULL_EXPOSURE_UNITS > SPEND_LIMIT_UNITS - Math.max(chargedUnits, exposureUnits)) {
+    if (FULL_EXPOSURE_UNITS > spendLimitUnits - Math.max(chargedUnits, exposureUnits)) {
       stop('full exposure exceeds the spend limit', { metadata, boundUnits });
     }
 
