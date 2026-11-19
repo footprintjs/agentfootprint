@@ -22,14 +22,74 @@ const bindings = [official, decoy];
 const visible = bindings.map((binding, index) => ({ ...binding, messageIndex: 3 + index }));
 const score = (answer, overrides = {}) => scoreAnswer({ task, answer, bindings, visible, ...overrides }, tokens);
 
-test('correct values can share a marker and use the pinned canonical spellings', () => {
+test('a shared marker can validate both a correct value and a different printed spelling', () => {
   const measured = score('Region: Blue Valley, Count: 41,200 [r1].');
   assert.deepEqual(measured.fields, [
     { name: 'Region', state: 'correct', value: 'Blue Valley', marker: '[r1]', citation: 'valid' },
-    { name: 'Count', state: 'correct', value: '41,200', marker: '[r1]', citation: 'valid' },
+    { name: 'Count', state: 'wrong', value: '41,200', marker: '[r1]', citation: 'valid' },
   ]);
-  assert.equal(measured.markers.length, 2);
+  assert.deepEqual(measured.markers, [
+    { name: 'Region', value: 'Blue Valley', marker: '[r1]', citation: 'valid', exactValuePresent: true },
+    { name: 'Count', value: '41,200', marker: '[r1]', citation: 'valid', exactValuePresent: true },
+  ]);
   assert.equal(measured.instructedSourceCited, true);
+});
+
+const changedValues = [
+  ['Capacity', '29', '29%', 'valid'],
+  ['Capacity', '29', '29 units', 'wrong-value'],
+  ['Capacity', '29', '-29', 'wrong-value'],
+  ['Capacity', '29', '29.0', 'valid'],
+  ['Code', 'QX41', 'QX-41', 'wrong-value'],
+  ['Shelf', 'Teal', 'teal', 'valid'],
+];
+
+for (const [name, expected, value, citation] of changedValues) {
+  test(`${name}: ${value} is wrong for ${expected} with citation outcome ${citation}`, () => {
+    const fieldTask = { fields: [{ name, value: expected, source: 'official' }] };
+    const measured = score(`${name}: ${value} [r1]`, {
+      task: fieldTask,
+      visible: [{ ...visible[0], content: `${name}: ${expected}` }],
+    });
+    assert.deepEqual(measured.fields, [{ name, state: 'wrong', value, marker: '[r1]', citation }]);
+    assert.deepEqual(measured.markers, [{
+      name, value, marker: '[r1]', citation,
+      ...(citation === 'valid' ? { exactValuePresent: false } : {}),
+    }]);
+  });
+}
+
+test('surrounding whitespace and one trailing comma or semicolon are trimmed', () => {
+  for (const suffix of ['', ',', ';']) {
+    const measured = score(`  Region: \tBlue Valley${suffix} \t [r1]`);
+    assert.deepEqual(measured.fields[0], {
+      name: 'Region', state: 'correct', value: 'Blue Valley', marker: '[r1]', citation: 'valid',
+    }, suffix);
+    assert.equal(measured.markers[0].exactValuePresent, true, suffix);
+  }
+});
+
+test('one trailing full stop is trimmed for correctness and ends marker scope', () => {
+  const measured = score('  Region: \tBlue Valley. \t [r1]');
+  assert.deepEqual(measured.fields[0], {
+    name: 'Region', state: 'correct', value: 'Blue Valley', citation: 'missing-marker',
+  });
+  assert.deepEqual(measured.markers, [{ marker: '[r1]', citation: 'orphan-marker' }]);
+});
+
+test('repeated and unsupported trailing punctuation make a value wrong', () => {
+  for (const suffix of [',,', ';;', ',;']) {
+    const measured = score(`Region: Blue Valley${suffix} [r1]`);
+    assert.equal(measured.fields[0].state, 'wrong', suffix);
+    assert.equal(measured.fields[0].citation, 'valid', suffix);
+    assert.equal(measured.markers[0].exactValuePresent, false, suffix);
+  }
+  for (const suffix of ['..', '!', '?']) {
+    const measured = score(`Region: Blue Valley${suffix} [r1]`);
+    assert.equal(measured.fields[0].state, 'wrong', suffix);
+    assert.equal(measured.fields[0].citation, 'missing-marker', suffix);
+    assert.deepEqual(measured.markers, [{ marker: '[r1]', citation: 'orphan-marker' }], suffix);
+  }
 });
 
 test('a token in the decoy can be cited validly while answering the task incorrectly', () => {
@@ -46,10 +106,21 @@ test('a source choice and value membership are independent', () => {
   assert.equal(measured.instructedSourceCited, true);
 });
 
-test('membership may come from a different field of the result', () => {
-  const measured = score('Region: 41200 [r1]');
-  assert.equal(measured.fields[0].state, 'wrong');
-  assert.equal(measured.fields[0].citation, 'valid');
+test('whole values in other result fields count as exact text', () => {
+  for (const [value, exactValuePresent] of [['node-4417', true], ['41200', false]]) {
+    const measured = score(`Region: ${value} [r1]`);
+    assert.equal(measured.fields[0].state, 'wrong');
+    assert.deepEqual(measured.markers, [
+      { name: 'Region', value, marker: '[r1]', citation: 'valid', exactValuePresent },
+    ]);
+  }
+});
+
+test('membership can pass for part of a result field while exact text requires the whole value', () => {
+  const measured = score('Region: Blue [r1]');
+  assert.deepEqual(measured.markers, [
+    { name: 'Region', value: 'Blue', marker: '[r1]', citation: 'valid', exactValuePresent: false },
+  ]);
 });
 
 test('only a local allocated handle resolves, and invalid marker syntax still pairs', () => {

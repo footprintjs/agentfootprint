@@ -26,7 +26,7 @@ const families = [
 function makeTask([family, order, fields, selection], side) {
   const reverse = side === 'b';
   const handles = Object.fromEntries(order.map((source, index) =>
-    [source, `r${reverse ? 2 - index : 1 + index}`]));
+    [source, `r${reverse && order.length === 1 ? 2 : 1 + index}`]));
   const lookups = reverse ? [...order].reverse() : [...order];
   return Object.freeze({
     family, side,

@@ -70,3 +70,14 @@ test('each paid desk can serve its pair in only the frozen order', () => {
     }
   }
 });
+
+test('two-source pairs reverse position while each source keeps its handle', () => {
+  for (const family of ['two-sources', 'decoy']) {
+    const [sideA, sideB] = tasks.filter((task) => task.family === family);
+    assert.deepEqual(sideB.lookups, sideA.lookups.toReversed());
+    assert.deepEqual(sideB.results, sideA.results);
+    assert.deepEqual([sideA, sideB].map((task) => task.results[task.lookups[0]].handle), ['r1', 'r2']);
+  }
+  const oneSource = tasks.filter(({ family }) => family === 'one-source');
+  assert.deepEqual(oneSource.map((task) => task.results[task.lookups[0]].handle), ['r1', 'r2']);
+});

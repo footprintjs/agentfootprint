@@ -138,6 +138,7 @@ export function summarize(rows) {
   const requiredValues = { ordinary: newRequiredCounts(), citation: newRequiredCounts(), delta: null };
   const rowsByPair = new Map();
   const runs = [];
+  let notExactInResult = 0;
   for (const key of slots.keys()) {
     const row = rowsBySlot.get(key);
     if (!row) continue;
@@ -165,7 +166,10 @@ export function summarize(rows) {
       validity.pairs += 1;
       validity.outcomes[pair.citation] += 1;
       if (pair.duplicate) validity.duplicatePairs += 1;
-      if (pair.citation === 'valid' && !pair.duplicate) validity.valid += 1;
+      if (pair.citation === 'valid' && !pair.duplicate) {
+        validity.valid += 1;
+        if (pair.exactValuePresent === false) notExactInResult += 1;
+      }
     }
     if (family === 'decoy') {
       decoy.observedRuns += 1;
@@ -175,6 +179,11 @@ export function summarize(rows) {
 
   coverage.rate = rate(coverage.marked, coverage.eligible);
   validity.rate = rate(validity.valid, validity.pairs);
+  const citationTextGap = {
+    membershipPasses: validity.valid,
+    notExactInResult,
+    rate: rate(notExactInResult, validity.valid),
+  };
   decoy.rate = rate(decoy.instructedSourceCited, decoy.scheduledRuns);
   for (const arm of arms) {
     const counts = requiredValues[arm];
@@ -197,7 +206,7 @@ export function summarize(rows) {
   pass.all = verdict(Object.values(pass).every((result) => result === 'pass'));
 
   return {
-    sample, coverage, validity, decoy, requiredValues, pass,
+    sample, coverage, validity, citationTextGap, decoy, requiredValues, pass,
     costs: {
       pairedFinalOutput: pairedOutputSummary(scheduledByArm.ordinary, rowsByPair),
       wholeRun: {

@@ -1,18 +1,20 @@
-# Source-links pilot rule
+# Source-links pilot rule · revision 2
 
 A verified citation means the named result held the value as a whole canonical token sequence and its occurrence was present in the request that produced the answer. A correct field assignment and the instructed source are separate measurements. The measurement says nothing about the source’s truth or what influenced the model.
 
 ## Tasks and arms
 
-Use the six inventory cells in `tasks.mjs`. Each family keeps the same facts in both sides, reversing the order of two lookups and swapping their handles. The one-source pair reverses its result fields and changes its handle from r1 to r2. The ordinary and citation arms differ only in the citation instruction and the attached result handle. Each family, side, and arm gets 20 runs on claude-haiku-5-5, with zero retries and caching off.
+Use the six inventory cells in `tasks.mjs`. Each family keeps the same facts in both sides. With two lookups, source A keeps r1 and source B keeps r2. Side a presents A then B, where a first-position guess and a fixed-r1 guess agree. Side b presents B then A, where those guesses differ. The one-source pair reverses its result fields and changes its handle from r1 to r2. The ordinary and citation arms differ only in the citation instruction and the attached result handle. Each family, side, and arm gets 20 runs on claude-haiku-5-5, with zero retries and caching off.
 
-Both arms ask for one named field and verbatim value per line. This keeps each required field identifiable during offline scoring. The check reads labeled fragments and counts a marker over the checkable values back to the previous marker or sentence start. A newline also starts a new fragment. One marker can cover multiple identifiable values in that scope. Required fields with no identifiable value are missing. A conflicting or repeated field counts wrong and cannot contribute a valid pair. Value correctness compares the whole canonical sequence with the inventory answer. The decoy value counts wrong for the task even when its citation passes membership.
+Both arms ask for one named field and verbatim value per line. This keeps each required field identifiable during offline scoring. The check reads labeled fragments and counts a marker over the checkable values back to the previous marker or sentence start. A newline also starts a new fragment. One marker can cover multiple identifiable values in that scope. Required fields with no identifiable value are missing. A conflicting or repeated field counts wrong and cannot contribute a valid pair. Required-value correctness compares the parsed unit-bearing text exactly with the inventory answer. Parsing trims surrounding whitespace and at most one trailing comma, semicolon, or full stop. Signs, units, case, digit formatting, and extra words are part of the value. The decoy value counts wrong for the task even when its citation passes membership.
 
 ## Receipt and citation scoring
 
 A run mints only its own handles in the read-only tool callback. Bind each issued handle to that native call ID and full result text. For each actual provider request, retain the entire message list and join a unique matching tool message slot to its local occurrence. The final receipt is the request of the terminal answer. Omit ambiguous slots and preserve the concrete issue where the harness cannot establish a unique join. The trusted synthetic result body is the observed text after removing the one exact harness header, when present. Bracket text in results never creates a binding. Only names in this run’s binding set can resolve.
 
 Score missing marker, bad handle, wrong value and out-of-window result separately. Whole-token membership uses the installed 15.0.0 build’s own `canonicalTokens` and `occursIn`. Marker/value pairs from duplicate field claims stay in the denominator and cannot improve validity. Orphan markers are reported apart because there is no value to test in that pair. The scorer checks source choice on the one decoy field independently of membership and answer correctness. A known local handle with no unique occurrence in the final request does not count.
+
+Report how many creditable membership matches lack the exact parsed literal among the cited result’s shown values, together with their denominator. In this synthetic desk a shown value is the whole text after the field label on a result line. This count can distinguish a token match on 29% from the shown count 29, and it has no pass threshold. The shown value may belong to any field, so this diagnostic does not establish field alignment.
 
 ## Pass line and usage
 

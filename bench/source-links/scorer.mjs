@@ -1,4 +1,4 @@
-const answerMarkers = /(?<marker>\[+[^\r\n\[\]]*\]+|\[+[^\s\[\]]*|(?<![\p{L}\p{N}_\]])[rR]\d+\]+|\]+)|\r\n?|\n|[.!?]+(?=[\s\[]|$)/gu;
+const answerMarkers = /(?<marker>\[+[^\r\n\[\]]*\]+|\[+[^\s\[\]]*|(?<![\p{L}\p{N}_\]])[rR]\d+\]+|\]+)|\r\n?|\n|(?<sentenceEnd>[.!?]+)(?=[\s\[]|$)/gu;
 const labelPrefix = /^[ \t]*(?:[,;][ \t]*)?(?:[-*+][ \t]+)?$/u;
 const handleMarker = /^\[(r[1-9]\d*)\]$/u;
 
@@ -13,7 +13,7 @@ function claimsIn(span, labels, canonicalTokens) {
   return starts.flatMap(([label, name], index) => {
     const start = starts[index].index + label.length;
     const end = starts[index + 1]?.index ?? span.length;
-    const value = span.slice(start, end).trim().replace(/[,;]+$/u, '').trimEnd();
+    const value = span.slice(start, end).trim().replace(/[.,;]$/u, '').trimEnd();
     const tokens = canonicalTokens(value);
     return tokens.length === 0 ? [] : [{ name: name.toLowerCase(), value, tokens }];
   });
@@ -31,6 +31,11 @@ function resolveMarker(marker, bindings, visible) {
   if (slots.length === 0) return { citation: 'out-of-window' };
   if (slots.length !== 1) return { citation: 'bad-handle' };
   return { source, content: slots[0].content };
+}
+
+// These synthetic tool results present one whole literal per labeled line.
+function hasExactShownValue(content, value) {
+  return content.split(/\r?\n/u).some((line) => line.slice(line.indexOf(':') + 1).trim() === value);
 }
 
 /** Score the final answer's labeled values against the observed slots of its request. */
@@ -54,7 +59,10 @@ export function scoreAnswer({ task, answer, bindings, visible }, { canonicalToke
       let pair;
       if (marker !== undefined) {
         const citation = resolved.citation ?? (occursIn(claim.tokens, resultTokens) ? 'valid' : 'wrong-value');
-        pair = { name: names.get(claim.name), value: claim.value, marker, citation };
+        pair = {
+          name: names.get(claim.name), value: claim.value, marker, citation,
+          ...(citation === 'valid' && { exactValuePresent: hasExactShownValue(resolved.content, claim.value) }),
+        };
         markers.push(pair);
       }
       fieldClaims.get(claim.name).push({ ...claim, pair, citedSource: resolved.source });
@@ -64,7 +72,8 @@ export function scoreAnswer({ task, answer, bindings, visible }, { canonicalToke
   // A marker closes the preceding span. A new line or sentence closes it without a marker.
   let from = 0;
   for (const boundary of text.matchAll(answerMarkers)) {
-    recordSpan(text.slice(from, boundary.index), boundary.groups.marker);
+    const sentenceEnd = boundary.groups.sentenceEnd?.length ?? 0;
+    recordSpan(text.slice(from, boundary.index + sentenceEnd), boundary.groups.marker);
     from = boundary.index + boundary[0].length;
   }
   recordSpan(text.slice(from));
@@ -80,8 +89,7 @@ export function scoreAnswer({ task, answer, bindings, visible }, { canonicalToke
     }
 
     const [claim] = claims;
-    const expected = canonicalTokens(String(value));
-    const correct = expected.length === claim.tokens.length && occursIn(expected, claim.tokens);
+    const correct = claim.value === value;
     if (claim.citedSource !== undefined && claim.citedSource === source) instructedSourceCited = true;
     return {
       name, state: correct ? 'correct' : 'wrong', value: claim.value,

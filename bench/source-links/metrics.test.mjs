@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import tokens from '../honest-report/cohorts/after/node_modules/agentfootprint/dist/core/agent/evidence/resultCarries.js';
 import { summarize } from './metrics.mjs';
 import { paidSchedule } from './plan.mjs';
+import { scoreAnswer } from './scorer.mjs';
 
 const { preflight, remaining } = paidSchedule();
 const allSlots = [...preflight, ...remaining];
@@ -21,7 +23,7 @@ function gradedRows(slots) {
       score: {
         fields,
         markers: arm === 'citation' ? fields.map(({ name, value, marker, citation }) => ({
-          name, value, marker, citation,
+          name, value, marker, citation, exactValuePresent: true,
         })) : [],
         instructedSourceCited: family === 'decoy' && arm === 'citation',
       },
@@ -49,7 +51,10 @@ test('tests all four fixed pass lines on the complete scheduled matrix', () => {
   for (const { score } of citationRows) {
     score.markers = score.markers.filter((pair, index) => {
       marked += 1;
-      if (marked <= 15) pair.citation = 'wrong-value';
+      if (marked <= 15) {
+        pair.citation = 'wrong-value';
+        delete pair.exactValuePresent;
+      }
       if (marked <= 300) return true;
       delete score.fields[index].marker;
       score.fields[index].citation = 'missing-marker';
@@ -65,6 +70,7 @@ test('tests all four fixed pass lines on the complete scheduled matrix', () => {
   });
   assert.deepEqual(stats.coverage, { marked: 300, eligible: 320, rate: 300 / 320 });
   assert.equal(stats.validity.rate, 0.95);
+  assert.deepEqual(stats.citationTextGap, { membershipPasses: 285, notExactInResult: 0, rate: 0 });
   assert.equal(stats.decoy.rate, 0.9);
   assert.equal(stats.requiredValues.delta, 0.05);
   assert.deepEqual(stats.pass, {
@@ -105,13 +111,14 @@ test('uses separate denominators for eligible values, pairs and scheduled decoys
   twoSources.score.markers = [
     { marker: 'r9', name: first.name, value: first.value, citation: 'bad-handle' },
     { marker: 'r2', name: second.name, value: second.value, citation: 'wrong-value' },
-    { marker: 'r1', name: third.name, value: third.value, citation: 'valid', duplicate: true },
+    { marker: 'r1', name: third.name, value: third.value, citation: 'valid', duplicate: true, exactValuePresent: false },
     { marker: 'r2', name: third.name, value: 'other', citation: 'out-of-window', duplicate: true },
     { marker: 'r2', citation: 'orphan-marker' },
   ];
   const decoy = rows.find(({ family, arm }) => family === 'decoy' && arm === 'citation');
   decoy.score.instructedSourceCited = false;
   decoy.score.fields[0].state = 'wrong';
+  decoy.score.markers[0].exactValuePresent = false;
 
   const stats = summarize(rows);
   assert.equal(stats.sample.observedRuns, 12);
@@ -128,6 +135,7 @@ test('uses separate denominators for eligible values, pairs and scheduled decoys
       valid: baseline.validity.outcomes.valid - 3, 'bad-handle': 1, 'wrong-value': 1, 'out-of-window': 1,
     },
   });
+  assert.deepEqual(stats.citationTextGap, { membershipPasses: 12, notExactInResult: 1, rate: 1 / 12 });
   assert.deepEqual(stats.decoy, {
     instructedSourceCited: 1, observedRuns: 2, scheduledRuns: 40, rate: 1 / 40,
   });
@@ -148,8 +156,45 @@ test('a complete matrix of empty citation answers cannot pass on undefined rates
   const stats = summarize(rows);
   assert.deepEqual(stats.coverage, { eligible: 0, marked: 0, rate: null });
   assert.equal(stats.validity.rate, null);
+  assert.deepEqual(stats.citationTextGap, { membershipPasses: 0, notExactInResult: 0, rate: null });
   assert.equal(stats.requiredValues.citation.rate, 1);
   assert.ok(Object.values(stats.pass).every((result) => result === 'fail'));
+});
+
+test('a unit change on every cited decoy passes membership but fails the required-value line', () => {
+  const rows = allSlots.map(({ task, arm, repeat }) => {
+    const { family, side } = task;
+    const bindings = task.lookups.map((source, index) => ({
+      source, toolCallId: `lookup-${index + 1}`, ...task.results[source],
+    }));
+    const visible = bindings.map((binding, index) => ({ ...binding, messageIndex: index + 3 }));
+    const answer = task.fields.map(({ name, value, source }) => {
+      if (arm === 'ordinary') return `${name}: ${value}`;
+      const citedValue = family === 'decoy' ? '29%' : value;
+      return `${name}: ${citedValue} [${task.results[source].handle}]`;
+    }).join('\n');
+    return {
+      family, side, arm, repeat,
+      score: scoreAnswer({ task, answer, bindings, visible }, tokens),
+      requests: [],
+      answerRequestIndex: null,
+    };
+  });
+
+  const stats = summarize(rows);
+  assert.equal(stats.sample.complete, true);
+  assert.equal(stats.sample.observedRuns, 240);
+  assert.deepEqual(stats.requiredValues, {
+    ordinary: { required: 320, missing: 0, wrong: 0, wrongOrMissing: 0, rate: 0 },
+    citation: { required: 320, missing: 0, wrong: 40, wrongOrMissing: 40, rate: 40 / 320 },
+    delta: 40 / 320,
+  });
+  assert.equal(stats.validity.valid, 320);
+  assert.equal(stats.decoy.instructedSourceCited, 40);
+  assert.deepEqual(stats.citationTextGap, { membershipPasses: 320, notExactInResult: 40, rate: 40 / 320 });
+  assert.deepEqual(stats.pass, {
+    coverage: 'pass', validity: 'pass', decoy: 'pass', requiredValues: 'fail', all: 'fail',
+  });
 });
 
 test('rejects duplicate slots and rows outside the frozen schedule', () => {

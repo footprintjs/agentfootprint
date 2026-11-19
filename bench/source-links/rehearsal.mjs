@@ -26,7 +26,7 @@ function lines(task, arm) {
   }).join('\n');
 }
 
-export const scriptedRows = 17;
+export const scriptedRows = 18;
 
 export async function rehearse(library, tokens) {
   const rows = [];
@@ -48,6 +48,7 @@ export async function rehearse(library, tokens) {
         assert.equal(final.request.messages[slot.messageIndex].content, slot.wireContent);
         assert.equal(final.request.messages[slot.messageIndex].toolCallId, slot.toolCallId);
       }
+      assert.ok(row.score.markers.every(({ exactValuePresent }) => exactValuePresent === true));
       assert.ok(row.score.fields.every(({ citation }) => citation === (arm === 'citation' ? 'valid' : 'missing-marker')));
       if (task.family === 'decoy' && arm === 'citation') assert.ok(row.score.instructedSourceCited);
     }
@@ -65,13 +66,16 @@ export async function rehearse(library, tokens) {
         ...request, messages: request.messages.filter((message) =>
           message.role !== 'tool' || message.toolCallId !== 'lookup-2'),
       }) },
+    { name: 'unit-mismatch', answer: `Capacity: 29% [${register}]`, state: 'wrong', citation: 'valid',
+      source: true, exactValuePresent: false },
     { name: 'empty-answer', answer: '', state: 'missing' },
   ];
-  for (const { name, answer, state, citation, source, prepareRequest } of examples) {
+  for (const { name, answer, state, citation, source, exactValuePresent, prepareRequest } of examples) {
     const row = await play(decoy, 'citation', name, answer, prepareRequest);
     assert.equal(row.score.fields[0].state, state, name);
     assert.equal(row.score.fields[0].citation, citation, name);
     assert.equal(row.score.instructedSourceCited, source ?? false, name);
+    if (exactValuePresent !== undefined) assert.equal(row.score.markers[0].exactValuePresent, exactValuePresent, name);
   }
   assert.equal(rows.length, scriptedRows);
   return rows;
