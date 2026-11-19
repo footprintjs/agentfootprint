@@ -36,6 +36,26 @@ export function waitingArgumentIteration(
     : undefined;
 }
 
+function* argumentRowsOfTurn(state: Readonly<Record<string, unknown>>) {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  for (let index = 0; index < ledger.length; index++) {
+    const row: unknown = Object.getOwnPropertyDescriptor(ledger, String(index))?.value;
+    if (isRecord(row) && row.kind === 'argument' && (turn === undefined || row.turn === turn)) {
+      yield [index, row] as const;
+    }
+  }
+}
+
+export function resolveArgumentHistory(
+  state: Readonly<Record<string, unknown>>,
+  calls: readonly HistoryCall[],
+  history: readonly unknown[],
+  turnBegins: number,
+) {
+  return argumentHistoryCallResolver(calls, history, turnBegins, argumentRowsOfTurn(state));
+}
+
 /**
  * This turn's CURRENT argument rows (honesty layer 2): the ledger's `argument`
  * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
@@ -44,8 +64,8 @@ export function waitingArgumentIteration(
  * history position. A row marked pre-dispatch or with no compatible history
  * result belongs to the proposal identified by turn, tool name and call ID,
  * so re-proposing it in a later iteration replaces the earlier observation.
- * When proposals outnumber a single compatible result, or several results
- * could own the row, every ambiguous row remains evidence.
+ * The occurrence owner decides whether a result address can be proved.
+ * Every unplaced row remains evidence with its own pointer.
  * A record with no `turnNumber` reads every row.
  */
 export function argumentRows(
@@ -54,15 +74,10 @@ export function argumentRows(
   history: readonly unknown[],
   turnBegins: number,
 ): readonly ArgumentRowRead[] {
-  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
-  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   const waiting = waitingArgumentIteration(state);
   const groups = new Map<number | string | symbol, Map<string, ArgumentRowRead>>();
-  let resolve: ReturnType<typeof argumentHistoryCallResolver> | undefined;
-  for (let index = 0; index < ledger.length; index++) {
-    const row: unknown = Object.getOwnPropertyDescriptor(ledger, String(index))?.value;
-    if (!isRecord(row) || row.kind !== 'argument') continue;
-    if (turn !== undefined && row.turn !== turn) continue;
+  let resolve: ReturnType<typeof resolveArgumentHistory> | undefined;
+  for (const [index, row] of argumentRowsOfTurn(state)) {
     const toolCallId = str(row.toolCallId);
     const toolName = str(row.toolName);
     const argument = str(row.argument);
@@ -70,7 +85,7 @@ export function argumentRows(
     const source = str(row.source);
     const withheld = row.correction !== undefined || row.withheld !== undefined;
     const pending = withheld || (waiting !== undefined && row.iteration === waiting);
-    const resolved = (resolve ??= argumentHistoryCallResolver(currentCalls, history, turnBegins))(
+    const resolved = (resolve ??= resolveArgumentHistory(state, currentCalls, history, turnBegins))(
       toolCallId,
       toolName,
     );

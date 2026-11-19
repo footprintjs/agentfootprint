@@ -65,14 +65,13 @@
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
 import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
 import {
-  argumentHistoryCallResolver,
   historyCallResolver,
   readHistoryCalls,
   uniqueHistoryProposal,
   unlandedCallKey,
   type HistoryCall,
 } from '../recordedCalls.js';
-import { waitingArgumentIteration } from './argumentRows.js';
+import { resolveArgumentHistory, waitingArgumentIteration } from './argumentRows.js';
 import { unfinishedCallStatus } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
@@ -282,11 +281,11 @@ export function reasonSourceOf(
     (byIndex ??= new Map(occurrences.map((call) => [call.index, call]))).get(index);
   let whole: ReturnType<typeof historyCallResolver> | undefined;
   let current: ReturnType<typeof historyCallResolver> | undefined;
-  let argument: ReturnType<typeof argumentHistoryCallResolver> | undefined;
+  let argument: ReturnType<typeof resolveArgumentHistory> | undefined;
   const currentCalls = () => occurrences.filter((call) => call.index > begins);
   const resolve = (id: string, ref: CallRef) => {
     if (ref.argumentRow) {
-      return (argument ??= argumentHistoryCallResolver(currentCalls(), history, begins))(
+      return (argument ??= resolveArgumentHistory(read.state, currentCalls(), history, begins))(
         id,
         ref.name,
       );

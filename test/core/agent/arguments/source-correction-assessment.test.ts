@@ -31,33 +31,150 @@ describe('argument witnesses when a later proposal reuses a landed call ID', () 
     content: 'fixture result',
   };
   const witness = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
+  const traced = { ...base, iteration: 2, source: 'said', claimed: 'user' };
+  const withheld = { ...corrected, correction: undefined, withheld: 'batch-preempted' };
 
   it.each([
-    { later: [], label: 'one landed call', placed: true, rowCount: 1 },
-    { later: [proposal], label: 'a second proposal without a result', placed: false, rowCount: 2 },
-    { later: [proposal, result], label: 'two landed calls', placed: false, rowCount: 2 },
-  ])('preserves the first failure with $label', ({ later, placed, rowCount }) => {
-    const traced = { ...base, iteration: 2, source: 'said', claimed: 'user' };
-    const assessment = assessAnswer({
-      snapshot: {
-        sharedState: {
-          turnNumber: 1,
-          history: [{ role: 'user', content: 'Look up the fixture.' }, proposal, result, ...later],
-          findingsLedger: rowCount === 1 ? [failed] : [failed, traced],
+    {
+      label: 'one landed call',
+      history: [proposal, result],
+      ledger: [failed],
+      placement: 'placed',
+      checked: [0],
+    },
+    {
+      label: 'a second proposal without a result',
+      history: [proposal, result, proposal],
+      ledger: [failed, traced],
+      placement: 'unplaced',
+      checked: [0, 1],
+      paused: true,
+    },
+    {
+      label: 'two landed calls',
+      history: [proposal, result, proposal, result],
+      ledger: [failed, traced],
+      placement: 'unplaced',
+      checked: [0, 1],
+    },
+    {
+      label: 'a landed failure before a withheld correction',
+      history: [proposal, result, proposal],
+      ledger: [failed, corrected],
+      placement: 'unplaced',
+      checked: [0],
+    },
+    {
+      label: 'a failed proposal corrected before either landed',
+      history: [proposal, proposal],
+      ledger: [failed, corrected],
+      placement: 'no-failure',
+      checked: [],
+    },
+    {
+      label: 'a withheld proposal before a clean result',
+      history: [proposal, proposal, result],
+      ledger: [{ ...withheld, iteration: 1 }, traced],
+      placement: 'no-failure',
+      checked: [1],
+    },
+    {
+      label: 'a failed proposal without a result before a clean result',
+      history: [proposal, proposal, result],
+      ledger: [failed, traced],
+      placement: 'unplaced',
+      checked: [0, 1],
+    },
+    {
+      label: 'two observations of the same landed iteration',
+      history: [proposal, result],
+      ledger: [failed, { ...traced, iteration: 1 }],
+      placement: 'no-failure',
+      checked: [1],
+    },
+    {
+      label: 'the window removed the first landed call',
+      history: [proposal, result],
+      ledger: [failed, traced],
+      placement: 'unplaced',
+      checked: [0, 1],
+    },
+    {
+      label: 'an unstamped legacy argument',
+      history: [proposal, result],
+      ledger: [{ ...failed, iteration: undefined }],
+      placement: 'unplaced',
+      checked: [0],
+    },
+    {
+      label: 'a pending proposal of a different tool reusing the ID',
+      history: [
+        proposal,
+        result,
+        { ...proposal, toolCalls: [{ ...proposal.toolCalls[0]!, name: 'another_tool' }] },
+      ],
+      ledger: [failed, { ...traced, toolName: 'another_tool' }],
+      placement: 'placed',
+      checked: [0, 1],
+    },
+    {
+      label: 'a competing proposal beyond the read bound',
+      history: [
+        {
+          ...proposal,
+          toolCalls: [
+            ...proposal.toolCalls,
+            ...Array.from({ length: 999 }, (_, index) => ({
+              ...proposal.toolCalls[0]!,
+              id: `other-${index}`,
+            })),
+            ...proposal.toolCalls,
+          ],
         },
-      },
-    });
-    expect(assessment.reasons.find((row) => row.reason === 'argument-unverified')).toMatchObject({
-      witness: [witness],
-      source: placed
-        ? { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] }
-        : { kind: 'calls', calls: [], unplaced: [witness] },
-    });
-    expect(assessment.checked.find((row) => row.check === 'argument-sources')).toMatchObject({
-      ran: rowCount,
-      of: rowCount,
-    });
-  });
+        result,
+      ],
+      ledger: [failed],
+      placement: 'unplaced',
+      checked: [0],
+    },
+  ])(
+    'reads the argument witness with $label',
+    ({ history, ledger, placement, checked, paused }) => {
+      const assessment = assessAnswer({
+        snapshot: {
+          sharedState: {
+            turnNumber: 1,
+            history: [{ role: 'user', content: 'Look up the fixture.' }, ...history],
+            findingsLedger: ledger,
+            ...(paused && { pausedToolCallId: base.toolCallId }),
+          },
+        },
+      });
+      const reason = assessment.reasons.find((row) => row.reason === 'argument-unverified');
+      if (placement === 'no-failure') expect(reason).toBeUndefined();
+      else {
+        expect(reason?.witness).toEqual([witness]);
+        expect(reason?.source).toEqual(
+          placement === 'placed'
+            ? { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] }
+            : { kind: 'calls', calls: [], unplaced: [witness] },
+        );
+      }
+      const sources = assessment.checked.find((row) => row.check === 'argument-sources');
+      if (checked.length === 0) expect(sources).toBeUndefined();
+      else {
+        expect(sources).toMatchObject({
+          ran: checked.length,
+          of: checked.length,
+          witness: checked.map((index) => ({
+            kind: 'state',
+            key: 'findingsLedger',
+            path: `/${index}/claimed`,
+          })),
+        });
+      }
+    },
+  );
 });
 
 describe('withheld proposals retain the current pointer without earning execution credit', () => {
