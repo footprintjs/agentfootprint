@@ -124,18 +124,18 @@ const { said, derived } = timeFormsOf({ window: confirmedFieldWindow });
 said.includes('08:40') && derived.includes('08:41') && derived.includes('PDT'); // true
 ```
 
-**The clock law: a declared, recorded input, never a hidden read.** `.time()` arms it. The zone is
-per run (`run({ time: { zone } })`), the builder's `.time({ zone })` a fallback, and with neither
-the zone is UNKNOWN — never the server's zone, never a guess (G15; the unknown-zone law below).
-`now` is the app's, else the turn's start, recorded
-`nowSource: 'default'`. Seed files one `clock` row per turn, after the turn number is final; it is
-never written again that turn. A resume that passes a different `time` keeps the frozen clock and
-files `clock-on-resume { passed, kept }`. A turn `run()` did not start (the agent's chart mounted
-in a composition, which passes no `time`) stamps the builder's fallback as a default, or an unknown
-zone without one — the draft a `run()` read ends with that `run()`. The layer reads the wall clock at exactly two points, both
-recorded: a default `now`, and each call's `dispatchedAt`. A zone is recorded as the app wrote it —
-`Intl`'s canonical form can be an older link (`Asia/Kolkata` → `Asia/Calcutta`). The rows fire no
-event (the record is the reader's).
+**The clock law.** `.time()` declares a recorded input. Use the run's zone, the builder fallback,
+or an unknown zone (G15). Seed records the app's `now` or the turn's start (`nowSource: 'default'`)
+and files one `clock` row after the turn number is final. A resume passing a different `time` keeps
+the frozen clock and files `clock-on-resume { passed, kept }`. A composed turn uses the builder
+fallback or an unknown zone. The wall clock supplies default `now` and each call's `dispatchedAt`.
+The zone stays as written (`Intl` may choose an older alias such as `Asia/Calcutta`). Rows emit no events.
+
+The [dispatch test](../../test/time/clock-run.test.ts) measures 43 ledger row visits per call at 20
+calls and 403 at 200, averaged over each run. `stages/timeLayer.ts` looks up the window before and
+after filing the call and looks up the clock, using backward scans owned by `time/rows.ts`.
+`findings/ledger.ts` spreads the existing rows on each append. The known cost grows linearly with
+the existing rows per call. A follow-up card tracks making it constant.
 
 **The unknown-zone law (G15): a zone nobody named is asked, never guessed.** An app deployed
 without its zone setting can still arm `.time()`: with no run zone and no fallback the `clock` row
