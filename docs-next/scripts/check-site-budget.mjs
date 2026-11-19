@@ -688,12 +688,20 @@ function analyzeReplayArtifacts(guide) {
       fail(`Offline replay: ${file} needs alt text and recorded dimensions`);
     }
   }
-  const captions = [...guide.matchAll(/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/gi)];
-  if (!captions.some(([caption]) => {
-    const text = caption.replace(/<[^>]+>/g, '');
-    return caption.includes(`/commit/${commit}`) &&
-      cohort.every((member) => text.includes(member)) &&
-      text.includes(`${meta.events} events and ${meta.redaction} redaction`);
+  const captions = [...guide.matchAll(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi)];
+  if (!captions.some(([, caption]) => {
+    // React may insert empty comments between adjacent text nodes.
+    const recording = caption.match(
+      /^Rebuilt from a saved Trace with (?:<!-- -->)?(\d+)(?:<!-- -->)? events and <code>([^<]+)<\/code> redaction\. /,
+    );
+    if (!recording || recording[1] !== String(meta.events) || recording[2] !== meta.redaction) {
+      return false;
+    }
+    const source = caption.slice(recording[0].length).match(
+      /^The mock run used (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.$/,
+    );
+    return source && source[1] === cohort.join(', ') && source[3] === commit.slice(0, 12) &&
+      attribute(source[2], 'href')?.endsWith(`/commit/${commit}`);
   })) {
     fail('Offline replay: missing the figure caption with saved event count, redaction, commit and cohort');
   }
