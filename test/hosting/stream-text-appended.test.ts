@@ -15,7 +15,7 @@
  */
 
 import { flowChart } from 'footprintjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   absent,
@@ -37,7 +37,8 @@ import {
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
 import { encodeSSE, toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
-import type { AgentfootprintEvent, AgentfootprintEventMap } from '../../src/events/registry.js';
+import { runnerLive } from '../../src/core/runnerLive.js';
+import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { MockReply } from '../../src/adapters/llm/MockProvider.js';
 
@@ -81,6 +82,7 @@ const DRAFT = 'The draft is ready.';
 const WARNING = '\n\n---\n\nNot sure — a tool reported unfinished work.';
 const REPORT_CHUNKS = ['The ', 'report ', 'is ', 'ready.', WARNING];
 const DRAFT_CHUNKS = ['The ', 'draft ', 'is ', 'ready.'];
+const TURN_END = 'agentfootprint.agent.turn_end';
 
 function reportBuilder(
   answer: string,
@@ -420,7 +422,7 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
     expect(reply).toBe('');
   });
 
-  it('a Sequence whose providers stream writes the first step’s tokens and nothing more', async () => {
+  it('a streaming Sequence closes both formats at its first step end', async () => {
     const sequence = Sequence.create({ name: 'steps' })
       .step(
         'a',
@@ -437,21 +439,29 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
         }).build(),
       )
       .build();
-    const marked: string[] = [];
-    const off = sequence.on('*', (event) => {
-      if (event.meta.mountedTurn !== undefined) marked.push(event.type);
-    });
+    const events: AgentfootprintEvent[] = [];
+    const off = sequence.on('*', (event) => events.push(event));
     const readAfterDrain = readWithHeartbeat(sequence, { format: 'text' });
+    const readFullAfterDrain = readWithHeartbeat(sequence, { format: 'full' });
     try {
       expect(await sequence.run({ message: 'Run both steps.' })).toBe('Second step answer.');
-      expect(marked).toEqual([]);
+      expect(events.filter((event) => event.meta.mountedTurn !== undefined)).toEqual([]);
       expect(await readAfterDrain()).toEqual({
         closed: true,
         chunks: ['First ', 'step ', 'answer.'],
       });
+      const firstEnd = events.findIndex((event) => event.type === TURN_END);
+      expect(events[firstEnd]).toMatchObject({
+        type: TURN_END,
+        payload: { finalContent: 'First step answer.' },
+      });
+      expect(await readFullAfterDrain()).toEqual({
+        closed: true,
+        chunks: events.slice(0, firstEnd + 1).map((event) => encodeSSE(event.type, event)),
+      });
     } finally {
       off();
-      await readAfterDrain();
+      await Promise.all([readAfterDrain(), readFullAfterDrain()]);
       await sequence.shutdown();
     }
   });
@@ -471,33 +481,6 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
       }
     },
   );
-
-  it('full format still frames the mounted Agent tokens', async () => {
-    const { agent, child } = nestedReport(false);
-    const tokens: AgentfootprintEventMap['agentfootprint.stream.token'][] = [];
-    const off = agent.on('agentfootprint.stream.token', (event) => tokens.push(event));
-    const readAfterDrain = readWithHeartbeat(agent, {
-      format: 'full',
-      filter: (event) => event.type === 'agentfootprint.stream.token',
-    });
-    try {
-      expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
-      await agent.drainObservers();
-      expect(tokens.map((event) => event.payload.content)).toEqual([
-        ...DRAFT_CHUNKS,
-        ...REPORT_CHUNKS.slice(0, -1),
-      ]);
-      // Full format still closes at the first end and writes each admitted event as a frame.
-      expect(await readAfterDrain()).toEqual({
-        closed: true,
-        chunks: tokens.slice(0, DRAFT_CHUNKS.length).map((event) => encodeSSE(event.type, event)),
-      });
-    } finally {
-      off();
-      await readAfterDrain();
-      await Promise.all([agent.shutdown(), child.shutdown()]);
-    }
-  });
 
   it('text format keeps the owning Agent tokens from its dynamic LLM subflow', async () => {
     const agent = reportBuilder(REPORT, false, { reactMode: 'dynamic-grouped' }).build();
@@ -559,6 +542,77 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
       await Promise.all([agent.shutdown(), child.shutdown()]);
     }
   });
+});
+
+describe('toSSE full — mounted Agents', () => {
+  it.each([
+    ['fresh', false],
+    ['opened on resume', false],
+    ['retained across a pause', false],
+    ['fresh', true],
+  ] as const)(
+    'carries both Agents through the owning end (%s, token-only filter: %s)',
+    async (when, tokensOnly) => {
+      const { agent, child } = nestedReport(when !== 'fresh');
+      const events: AgentfootprintEvent[] = [];
+      const off = agent.on('*', (event) => events.push(event));
+      const realTap = vi.spyOn(runnerLive(agent)!, 'onRealEvent');
+      const startReading = () =>
+        readWithHeartbeat(agent, {
+          format: 'full',
+          filter: (event) => !tokensOnly || event.type === 'agentfootprint.stream.token',
+        });
+      let readAfterDrain = when === 'opened on resume' ? undefined : startReading();
+      try {
+        const outcome = await agent.run({ message: 'Is the report ready?' });
+        if (when === 'fresh') {
+          expect(outcome).toBe(REPORT + WARNING);
+        } else {
+          if (!isPaused(outcome)) throw new Error('Expected the specialist to pause the run');
+          await agent.drainObservers();
+          if (when === 'opened on resume') {
+            events.length = 0;
+            readAfterDrain = startReading();
+          }
+          expect(await agent.resume(outcome.checkpoint, { approved: true })).toBe(REPORT + WARNING);
+        }
+        await agent.drainObservers();
+        expect(realTap).not.toHaveBeenCalled();
+        if (!readAfterDrain) throw new Error('The full stream was not opened');
+        const { closed, chunks } = await readAfterDrain();
+        expect(closed).toBe(true);
+
+        const ends = events.filter((event) => event.type === TURN_END);
+        expect(ends.map((event) => [event.meta.rootTurn, event.payload.finalContent])).toEqual([
+          [undefined, DRAFT + WARNING],
+          [true, REPORT + WARNING],
+        ]);
+        const rootEnd = ends[1]!;
+        const expectedEvents = events.slice(0, events.indexOf(rootEnd) + 1);
+        const tokens = expectedEvents.filter(
+          (event) => event.type === 'agentfootprint.stream.token',
+        );
+        expect(tokens.map((event) => event.payload.content)).toEqual([
+          ...DRAFT_CHUNKS,
+          ...REPORT_CHUNKS.slice(0, -1),
+        ]);
+        if (!tokensOnly) {
+          expect(chunks.at(-1)).toBe(encodeSSE(TURN_END, rootEnd));
+          expect(chunks.filter((chunk) => chunk.startsWith(`event: ${TURN_END}\n`))).toEqual(
+            ends.map((event) => encodeSSE(event.type, event)),
+          );
+        }
+        expect(chunks).toEqual(
+          (tokensOnly ? tokens : expectedEvents).map((event) => encodeSSE(event.type, event)),
+        );
+      } finally {
+        realTap.mockRestore();
+        off();
+        await readAfterDrain?.();
+        await Promise.all([agent.shutdown(), child.shutdown()]);
+      }
+    },
+  );
 });
 
 describe('toSSE text — resume', () => {

@@ -1,7 +1,7 @@
 ---
 type: fixed
 ---
-**Finish the root reply in text SSE when an Agent mounts another Agent.** A
-fresh `toSSE({ format: 'text' })` stream now delivers the owning Agent's
-answer and closes at its marked turn end. The same rule applies to a text
-stream that stays open across a pause.
+**Finish SSE streams at the owning Agent's turn end.** Both `toSSE()` formats
+now continue past a mounted Agent's turn end and deliver the owning Agent's
+response through its marked turn end. This applies to fresh streams, streams
+retained across a pause, and streams opened to resume a turn.

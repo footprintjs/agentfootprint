@@ -22,8 +22,7 @@ import { unstreamedText } from './unstreamedText.js';
 
 /**
  * Hand the runner this iterable's caller before calling `runner.run()`.
- * Yields SSE-formatted strings until the run finishes (success, error,
- * or pause). Each event becomes:
+ * Yields chunks until the stream closes. Each full-format event becomes:
  *
  *   event: <event name>
  *   data: <JSON payload>
@@ -58,20 +57,21 @@ export interface ToSSEOptions {
    *     piping straight into a chat UI: token content from the owning Agent,
    *     then the rest of its `turn_end.finalContent`. Tokens marked
    *     `meta.mountedTurn: true` stay in the record and out of the text.
-   *     A live Agent's stream ends at a fatal error or an `agent.turn_end`
-   *     marked `meta.rootTurn: true`. Older records need an observed root
-   *     start to append the rest. Events with no metadata are treated as
-   *     one root. A filter that drops only trailing tokens gets them back
-   *     with the rest, such as the limits block or the standing line. The
-   *     stream writes the whole answer when the provider emits no tokens or
-   *     the filter drops them all. A gap that leaves the written text
-   *     different from the answer's prefix, a rewritten prefix, or a
-   *     refused answer produces no additional text. A newly opened text
-   *     stream on a resumed Agent also closes at the next pause. A stream
-   *     opened before the turn starts stays open across pauses. Older
-   *     records and compositions close at the first `agent.turn_end` or
-   *     fatal error. Use the returned outcome for a composition's full reply.
-   *     The caller's own answer stays unredacted.
+   *     Older records need an observed root start to append the rest.
+   *     Events with no metadata are treated as one root. A filter that
+   *     drops only trailing tokens gets them back with the rest, such as
+   *     the limits block or the standing line. When the provider emits no
+   *     tokens or the filter drops them all, the stream writes the whole
+   *     answer. A gap that leaves the written text different from the
+   *     answer's prefix, a rewritten prefix, or a refused answer produces
+   *     no additional text. The caller's own answer stays unredacted.
+   *
+   * Both formats close a live Agent's stream at a fatal error or an
+   * `agent.turn_end` marked `meta.rootTurn: true`. A stream opened on
+   * resume also closes at the next pause. A stream opened before the turn
+   * starts stays open across pauses. Older records and compositions close
+   * at the first `agent.turn_end` or fatal error. Use the returned outcome
+   * for a composition's full reply.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -166,7 +166,9 @@ export async function* toSSE<TIn, TOut>(
   const heartbeatMs = options.heartbeatMs ?? 0;
   const framing = framingOf(options);
 
-  // The public event port is sufficient; native private state stays encapsulated.
+  // Both formats use native turn ownership. Only text reads real event values.
+  const native = runnerLive(runner);
+  const ownsTurn = native?.turn !== undefined;
 
   // Bounded queue: events drained as the consumer iterates.
   const queue: AgentfootprintEvent[] = [];
@@ -193,9 +195,7 @@ export async function* toSSE<TIn, TOut>(
   // same `turn_end` event, paired by the stage that ended the turn. A runner
   // that is not a RunnerBase has no redaction and no live taps: its events
   // are the record and the reply at once.
-  const live = format === 'text' ? runnerLive(runner) : undefined;
-  // Only a live Agent owns the turn and produces a marked root end.
-  const ownsTurn = live?.turn !== undefined;
+  const live = format === 'text' ? native : undefined;
   const replies = new Map<string, string[]>();
   const answers = new Map<string, string | undefined>();
   const offReplies = live?.onRealEvent((event) => {
@@ -248,7 +248,11 @@ export async function* toSSE<TIn, TOut>(
   const listener = (event: AgentfootprintEvent): void => {
     const mounted = ownsTurn && event.meta?.mountedTurn === true;
     // These boundaries establish scope even when the output filter drops them.
-    if (format === 'text' && !mounted && event.type === 'agentfootprint.agent.turn_start') {
+    if (
+      (ownsTurn || format === 'text') &&
+      !mounted &&
+      event.type === 'agentfootprint.agent.turn_start'
+    ) {
       const path = pathOf(event);
       if (path.length === 0) rootTurnOpen = true;
       else if (!ownsTurn) innerTurns.push(path);
@@ -277,7 +281,7 @@ export async function* toSSE<TIn, TOut>(
     const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd, mounted) : undefined;
     if (filter && !filter(event)) return;
     // Mounted call boundaries leave the root answer's streamed prefix intact.
-    if (mounted) return;
+    if (format === 'text' && mounted) return;
     queue.push(
       reply !== undefined
         ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)

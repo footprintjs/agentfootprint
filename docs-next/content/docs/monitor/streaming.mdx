@@ -123,7 +123,7 @@ Listeners are also never awaited. An `async` listener runs in the background, an
 
 ## SSE for browser clients
 
-The built-in `toSSE()` helper from `agentfootprint/observe` yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`). Start consuming it **before** starting the run, so the subscriber is already listening. This example uses an Agent with no mounted Agents.
+The built-in `toSSE()` helper from `agentfootprint/observe` yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`) in its default `'full'` format. Start consuming it **before** starting the run, so the subscriber is already listening.
 
 ```ts
 import { toSSE } from 'agentfootprint/observe';
@@ -138,13 +138,13 @@ await Promise.all([agent.run({ message: userInput }), draining]);
 
 `toSSE(runner, options?)` accepts `filter` (skip events), `format: 'full' | 'text'`, `eventName` (rename events), and `heartbeatMs` (keep-alive `: ping` comments for proxies). The class form `new SSEFormatter(agent).stream()` is identical. `encodeSSE(name, payload)` formats a one-off frame for app-level events outside the typed registry.
 
-In `'text'` format, a live Agent stream writes the owning Agent's tokens. Events marked `meta.mountedTurn: true` stay out of the text on both fresh and resumed streams. The caller's `filter` still sees those served events. To read mounted text, use `'full'` format for event frames or [record-only AG-UI for scoped subagent messages](doc:ag-ui#what-a-run-becomes). Standalone compositions and older records without the field keep their existing token output.
+In `'text'` format, a live Agent stream writes the owning Agent's tokens. Events marked `meta.mountedTurn: true` stay out of the text on both fresh and resumed streams. The caller's `filter` still sees those served events. The `'full'` format emits mounted Agent frames, including token and turn-end events. [Record-only AG-UI](doc:ag-ui#what-a-run-becomes) groups mounted messages by subagent. Standalone compositions and older records without the field keep their existing token output.
 
-The helper adds the rest of the owning Agent's `turn_end.finalContent` at the end marked `meta.rootTurn: true`. That final chunk can include the limits block or standing line. For older records without the root marker, the helper adds the rest if it saw the root turn open or if the events carry no metadata. Filtering out `turn_start` still lets the helper see the opening. A filter that drops only trailing tokens gets them back with the rest. If a filter leaves a gap so the written text no longer matches the answer's prefix, nothing is added. If the provider streams nothing or the filter drops every token, the helper writes the whole answer. A refused answer adds nothing.
+For text output, the helper adds the rest of the owning Agent's `turn_end.finalContent` at the end marked `meta.rootTurn: true`. That final chunk can include the limits block or standing line. For older records without the root marker, the helper adds the rest if it saw the root turn open or if the events carry no metadata. Filtering out `turn_start` still lets the helper see the opening. A filter that drops only trailing tokens gets them back with the rest. If a filter leaves a gap so the written text no longer matches the answer's prefix, nothing is added. If the provider streams nothing or the filter drops every token, the helper writes the whole answer. A refused answer adds nothing.
 
-A live Agent's text stream closes at its marked root end or `agentfootprint.error.fatal`. A mounted Agent's turn end can arrive earlier while the stream stays open for the root answer. A text stream opened before the original run stays open across a pause. A new text stream opened for `resume()` also closes if that resumed run requests another pause.
+A live Agent stream in either format closes at the owning turn's `agentfootprint.agent.turn_end` marked `meta.rootTurn: true` or at `agentfootprint.error.fatal`. The stream stays open through mounted Agent turn ends. A stream opened before `run()` stays open across a pause and continues when the Agent resumes. A new stream opened for `resume()` also closes if the resumed run requests another pause.
 
-Full event streams, streams over older records without the marker, and streams over standalone compositions such as Sequence and Parallel close at the first `agentfootprint.agent.turn_end` or `agentfootprint.error.fatal`. Read the composition's full answer from the returned outcome. Stream completion is independent of the output filter. If the filter drops a terminal event, the helper closes without writing a frame or the remaining answer for that event.
+Standalone compositions such as Sequence and Parallel and event sources that only expose an `on()` port, including older records, close at the first `agentfootprint.agent.turn_end` or `agentfootprint.error.fatal`. Read the composition's full answer from the returned outcome. Stream completion is independent of the output filter. If the filter drops a terminal event, the helper closes without writing a frame or the remaining answer for that event.
 
 A request-owned subscription can also close when the run pauses or rejects before emitting a terminal event. Unsubscribe when the request ends. This example listens for the live Agent's marked root end.
 
