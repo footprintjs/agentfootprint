@@ -179,10 +179,9 @@ const DECLARED = 'declared by the model';
 // ─── The piece ─────────────────────────────────────────────────────────
 
 /**
- * Compose the findings piece for one request, or `undefined` when no result
- * has a standing. Shared by the live request assembly and the served-view
- * rebuild. The bytes are a function of the three arguments and nothing else
- * — no call number, no clock — so two calls that serve the same ledger over
+ * Rebuild the legacy findings system piece for one recorded request, or return
+ * `undefined` when no result has a standing. The bytes depend only on the three
+ * arguments, so two calls that serve the same ledger over
  * the same tool ids serve the same piece (see "The cache" above). The third
  * argument is the run's `answerAsk` dial: under `'quote-facts'` the piece's
  * last section is `FINDINGS_ANSWER_ASK`, after a blank line like every other
