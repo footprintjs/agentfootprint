@@ -14,7 +14,9 @@
  *   Run:  npm run check:tryit   (from docs-next/; needs the library dist built)
  */
 import { deepStrictEqual, ok } from 'node:assert/strict';
-import { Agent } from 'agentfootprint';
+import { Agent, defineTool } from 'agentfootprint';
+import { defineSkill, skillGraph } from 'agentfootprint/context';
+import { routeRecorder } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
 import type { StructureRecorder } from 'footprintjs';
 import {
@@ -24,6 +26,8 @@ import {
 } from '../../docs-demo/scripts/quick-start-weather.mjs';
 import { buildDynamicReactAgent } from '../components/demos/dynamicReactDemo';
 import { buildSupportSkillGraph } from '../components/demos/skillGraphDemo';
+import { buildQuickstartSkillGraph } from '../components/demos/skillGraphQuickstartDemo';
+import { recordSkillGraphRuns } from '../components/demos/skillGraphRuns.mjs';
 
 const MESSAGE = 'My account is alice@example.com — please refund $42';
 const EXPECTED = 'Done. Refund of $42 issued for [EMAIL]. You should see it in 3-5 business days.';
@@ -78,10 +82,10 @@ if (result !== EXPECTED) {
 console.log('[check:tryit] OK — read_skill, redact_pii and process_refund each returned what the flow needs, in order, and the run finished');
 console.log(`[check:tryit] answer: ${result}`);
 
-// ── Skill-graph demo: the builder draws the routing graph the embed shows. It is
-//    static (no run), so the guardrail asserts the compiled graph SHAPE matches
-//    the declared start/steps wiring — declared === drawn.
-const graph = buildSupportSkillGraph();
+// The guide and the demo use the same declarations. Keep these structural
+// assertions against the current library alongside the mock runtime checks.
+const graphApi = { defineTool, defineSkill, skillGraph };
+const graph = buildSupportSkillGraph(graphApi);
 const skillIds = graph.nodes
   .filter((n) => n.kind === 'skill')
   .map((n) => n.id)
@@ -103,8 +107,7 @@ console.log('[check:tryit] OK — the skill graph compiled triage → {billing, 
 //    Asserts what the page claims: the matchers route real messages, every wired
 //    skill is tool-scoped, and the entry edges carry the serializable match data
 //    the page's mermaid block captions with.
-const { buildQuickstartSkillGraph } = await import('../components/demos/skillGraphQuickstartDemo');
-const qs = buildQuickstartSkillGraph();
+const qs = buildQuickstartSkillGraph(graphApi);
 const qsCtx = (userMessage: string) => ({
   iteration: 1,
   userMessage,
@@ -135,6 +138,9 @@ if (!qs.toMermaid().includes('charge, invoice')) {
 }
 
 console.log('[check:tryit] OK — the quickstart graph routes by data, scopes tools, and captions its edges');
+
+await recordSkillGraphRuns({ Agent, defineTool, mock, routeRecorder }, { quickstart: qs, support: graph });
+console.log('[check:tryit] OK — real mock runs recorded three start rules and both declared triage routes');
 
 // The guide and published demo share the weather fixture. Exercise it against
 // the current library and its native structure events, with no Explainable UI.
