@@ -18,6 +18,11 @@ const weatherAssetLimit = 200_000;
 // Historical measurements for the former Next deferred-demo budget:
 // https://github.com/footprintjs/agentfootprint/blob/5a0e6720b062ea989f6a6b14ce76995957df77ed/docs-next/scripts/check-site-budget.mjs#L347-L595
 const deferredSkillAssetLimit = 492_000;
+// The live view loads the published AgentFootprint and Lens runtime on demand.
+// A complete run measured 869,863 B gzip, leaving 30,137 B of headroom.
+const dynamicReactLiveAssetLimit = 900_000;
+// The raw view measured 188,836 B gzip after drilling, leaving 11,164 B of headroom.
+const dynamicReactSubflowsAssetLimit = 200_000;
 const skillViews = [
   {
     slug: 'skill-graph-quickstart',
@@ -53,6 +58,7 @@ const dynamicReactViews = [
     chunk: 'DynamicReactRun',
     launchLink: 'Run the interactive Dynamic ReAct demo',
     staticLink: 'See the recorded Dynamic ReAct run in the guide',
+    assetLimit: dynamicReactLiveAssetLimit,
     inspect: inspectDynamicReactRun,
   },
   {
@@ -63,6 +69,7 @@ const dynamicReactViews = [
     chunk: 'DynamicReactSubflows',
     launchLink: 'Explore the raw LLM-call subflows',
     staticLink: 'See the context slot diagram in the guide',
+    assetLimit: dynamicReactSubflowsAssetLimit,
     inspect: inspectDynamicReactSubflows,
   },
 ];
@@ -471,7 +478,7 @@ test(
       deepStrictEqual([...new Set(assets.values())], [200], 'the dynamic assets resolve');
       deepStrictEqual(errors, []);
       ok(requests.every((url) => new URL(url).origin === origin), 'the demo makes no external requests');
-      await measureAssetBytes(`${view.heading} requested assets`, [...assets.keys()]);
+      await measureAssetBytes(`${view.heading} requested assets`, [...assets.keys()], view.assetLimit);
       for (const file of assets.keys()) dynamicAssets.add(file);
       await page.close();
     }
