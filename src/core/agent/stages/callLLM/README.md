@@ -13,4 +13,9 @@ the inputs layer can write findings. One random batch namespace plus the proposa
 position identifies calls even when a provider repeats an ID. The proposal already
 lives in native state and the assistant history, so resumes carry the same address.
 
+`providerRequest.ts` detaches the assembled payload at each provider dispatch.
+The receipt uses the stable internal projections. Streaming and completion,
+including completion after a stream with no response, each get their own
+editable copy. The live cancellation signal crosses unchanged.
+
 The oversized runtime stage still needs its step 2/3 extraction.

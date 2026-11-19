@@ -60,6 +60,7 @@ import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
+import { copyProviderRequest } from './callLLM/providerRequest.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
 import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
@@ -237,8 +238,7 @@ export function buildCallLLMStage(
     // `committed` keeps both markers for the readers below that must see them.
     const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
     const projected = stripFrameworkFields(committed, true);
-    // The unmarked fast path can return the scope's live array. An adapter
-    // that retains its request must never see later writes to history through it.
+    // Receipt assembly keeps a stable list even when stripping returns a live array.
     const history = projected === committed ? [...projected] : projected;
 
     // ── the findings ledger, served (9.101.0, step 3) ──────────────────
@@ -706,7 +706,7 @@ export function buildCallLLMStage(
       let lastTokenIndex = -1;
       if (selectedProvider.stream) {
         for await (const chunk of abortableIterable(
-          selectedProvider.stream(attempts.request, attemptHooks),
+          selectedProvider.stream(copyProviderRequest(attempts.request), attemptHooks),
           runSignal,
         )) {
           if (chunk.done) {
@@ -772,7 +772,7 @@ export function buildCallLLMStage(
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
         if (deps.findings === true) candidate = capture(attempts.request);
         resp = await untilAborted(
-          selectedProvider.complete(attempts.request, attemptHooks),
+          selectedProvider.complete(copyProviderRequest(attempts.request), attemptHooks),
           runSignal,
         );
       }
