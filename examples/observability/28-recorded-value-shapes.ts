@@ -1,6 +1,6 @@
 import { Agent } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
-import { recordRun } from '../../src/observe.js';
+import { contextShapeAt, recordRun } from '../../src/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -19,14 +19,10 @@ export async function run() {
   const recorder = recordRun(agent);
   try {
     await agent.run({ message: 'Describe the sample.' });
-    const index = agent.getLastSnapshot()?.contextShapes;
-    for (const [commit, entries] of index?.changes ?? []) {
-      for (const [path, type, length] of entries) {
-        if (path.length === 1 && path[0] === 'history' && type === 'array') {
-          console.log(`Message count at commit ${commit}: ${length}`);
-        }
-      }
-    }
+    const snapshot = agent.getLastSnapshot();
+    const commit = (snapshot?.commitLog?.length ?? 0) - 1;
+    const history = contextShapeAt(snapshot?.contextShapes, commit, ['history']);
+    if (history[0] === 'array') console.log(`Message count at commit ${commit}: ${history[1]}`);
     return recorder.toRecording();
   } finally {
     recorder.stop();

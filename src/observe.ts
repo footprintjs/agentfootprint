@@ -95,6 +95,15 @@ export {
   type RecordRunOptions,
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
+export {
+  contextShapeAt,
+  type RecordedContextShape,
+} from './recorders/observability/contextShapes/read.js';
+export type {
+  ContextShapeIndex,
+  ContextShapeOptions,
+  ShapeEntry,
+} from './recorders/observability/contextShapes.js';
 
 export {
   recordContextRun,

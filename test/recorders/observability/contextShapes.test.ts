@@ -4,6 +4,7 @@ import {
   markNativeShapeSource,
   type ContextShapeOptions,
 } from '../../../src/recorders/observability/contextShapes.js';
+import { contextShapeAt } from '../../../src/recorders/observability/contextShapes/read.js';
 import { recordRun } from '../../../src/recorders/observability/recordRun.js';
 
 const row = (
@@ -25,21 +26,6 @@ const source = (initialState: object, commitLog: readonly unknown[] = []) => ({
 const shapes = (base: object, log: readonly unknown[], opts?: ContextShapeOptions) =>
   createContextShapeCapture(opts)(source(base, log)).contextShapes!;
 const inventory = 'inventory';
-function factAt(index: ReturnType<typeof shapes>, commit: number, path: readonly string[]) {
-  let result: readonly [string, number?] | undefined;
-  const apply = (entries: typeof index.initial) => {
-    for (const entry of entries) {
-      if (entry[0].length !== path.length || !entry[0].every((part, i) => part === path[i]))
-        continue;
-      const [, type, length] = entry;
-      if (type === 'unknown' || type === 'deleted') result = undefined;
-      else result = type === 'array' ? [type, length] : [type];
-    }
-  };
-  apply(index.initial);
-  for (const [at, entries] of index.changes) if (at <= commit) apply(entries);
-  return result;
-}
 const wrapped = (snapshot: unknown, options?: Parameters<typeof recordRun>[1]) => {
   const runner = {
     on: () => () => {},
@@ -157,13 +143,13 @@ describe('recorded context shapes', () => {
     for (const options of [{ scan: 'full' } as const, { paths: [secret, leaf, safe] }]) {
       const index = shapes({ a: { secret: 'old', safe: 'old' } }, log, options);
       for (const commit of [0, 1, 2]) {
-        expect(factAt(index, commit, secret)).toBeUndefined();
-        expect(factAt(index, commit, leaf)).toBeUndefined();
+        expect(contextShapeAt(index, commit, secret)).toEqual(['unknown']);
+        expect(contextShapeAt(index, commit, leaf)).toEqual(['unknown']);
       }
-      expect(factAt(index, 0, safe)).toEqual(['number']);
-      expect(factAt(index, 3, secret)).toEqual(['array', 1]);
-      expect(factAt(index, 3, leaf)).toEqual(['number']);
-      expect(factAt(index, -1, secret)).toEqual(['string']);
+      expect(contextShapeAt(index, 0, safe)).toEqual(['number']);
+      expect(contextShapeAt(index, 3, secret)).toEqual(['array', 1]);
+      expect(contextShapeAt(index, 3, leaf)).toEqual(['number']);
+      expect(contextShapeAt(index, -1, secret)).toEqual(['string']);
     }
   });
 
@@ -177,7 +163,8 @@ describe('recorded context shapes', () => {
     ];
     for (const options of [{ scan: 'full' } as const, { paths: [path] }]) {
       const index = shapes({}, log, options);
-      for (const commit of [0, 1, 2]) expect(factAt(index, commit, path)).toBeUndefined();
+      for (const commit of [0, 1, 2])
+        expect(contextShapeAt(index, commit, path)).toEqual(['unknown']);
     }
   });
 
@@ -193,14 +180,14 @@ describe('recorded context shapes', () => {
     ];
     for (const options of [{ scan: 'full' } as const, { paths: [secret, leaf, ['a', '0']] }]) {
       const index = shapes({ a: [1, 2] }, log, options);
-      expect(factAt(index, -1, ['a', '0'])).toEqual(['number']);
+      expect(contextShapeAt(index, -1, ['a', '0'])).toEqual(['number']);
       for (const commit of [0, 1, 2]) {
-        expect(factAt(index, commit, secret)).toBeUndefined();
-        expect(factAt(index, commit, leaf)).toBeUndefined();
-        expect(factAt(index, commit, ['a', '0'])).toBeUndefined();
-        expect(factAt(index, commit, arr)).toEqual(['array', commit === 2 ? 4 : 3]);
+        expect(contextShapeAt(index, commit, secret)).toEqual(['unknown']);
+        expect(contextShapeAt(index, commit, leaf)).toEqual(['unknown']);
+        expect(contextShapeAt(index, commit, ['a', '0'])).toEqual(['unknown']);
+        expect(contextShapeAt(index, commit, arr)).toEqual(['array', commit === 2 ? 4 : 3]);
       }
-      expect(factAt(index, 3, secret)).toEqual(['array', 0]);
+      expect(contextShapeAt(index, 3, secret)).toEqual(['array', 0]);
     }
   });
 
@@ -214,10 +201,10 @@ describe('recorded context shapes', () => {
     ];
     for (const options of [{ scan: 'full' } as const, { paths: [secret, sibling] }]) {
       const index = shapes({ a: [] }, log, options);
-      expect(factAt(index, 0, sibling)).toEqual(['number']);
+      expect(contextShapeAt(index, 0, sibling)).toEqual(['number']);
       for (const commit of [1, 2]) {
-        expect(factAt(index, commit, secret)).toBeUndefined();
-        expect(factAt(index, commit, sibling)).toBeUndefined();
+        expect(contextShapeAt(index, commit, secret)).toEqual(['unknown']);
+        expect(contextShapeAt(index, commit, sibling)).toEqual(['unknown']);
       }
     }
   });
@@ -236,9 +223,9 @@ describe('recorded context shapes', () => {
     ]) {
       const index = shapes({ a: decorated }, log, options);
       for (const commit of [-1, 0, 1, 2])
-        for (const path of extras) expect(factAt(index, commit, path)).toBeUndefined();
-      expect(factAt(index, 1, ['a'])).toEqual(['array', 2]);
-      expect(factAt(index, 1, ['a', '1'])).toEqual(['number']);
+        for (const path of extras) expect(contextShapeAt(index, commit, path)).toEqual(['unknown']);
+      expect(contextShapeAt(index, 1, ['a'])).toEqual(['array', 2]);
+      expect(contextShapeAt(index, 1, ['a', '1'])).toEqual(['number']);
     }
   });
 
