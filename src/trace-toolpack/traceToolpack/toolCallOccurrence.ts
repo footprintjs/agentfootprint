@@ -25,7 +25,7 @@ type Decision = Extract<
 export type ToolBracketEvent = Start | ToolEndEvent;
 
 /** One committed middleware decision. */
-export interface LedgerRow {
+export interface ToolMiddlewareDecisionRow {
   readonly middleware?: string;
   readonly moment?: string;
   readonly toolCallId?: string;
@@ -237,14 +237,14 @@ export function latestCallOccurrence(events: readonly AgentfootprintEvent[], too
 /** A resume refusal names the actor. A recorded approval must precede it. */
 export function resumeRefusalOf(
   evidence: readonly Decision[],
-  ledger: readonly LedgerRow[],
+  ledger: readonly ToolMiddlewareDecisionRow[],
 ): string | undefined {
   let approved = false;
   const refusal = (who: string) =>
     approved
       ? `a person approved the call. ${who} then refused the call after the wait.`
       : `${who} refused the call after the wait.`;
-  const middlewareRefusal = (row: LedgerRow) => {
+  const middlewareRefusal = (row: ToolMiddlewareDecisionRow) => {
     if (row.phase !== 'resume') {
       if (row.outcome === 'allow' && row.personApproved === true) approved = true;
       if (row.outcome === 'deny' && row.personApproved === false) approved = false;

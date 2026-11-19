@@ -19,7 +19,7 @@ import {
   latestKeyedToolCall,
   resumeRefusalOf,
   type HistoryTurn,
-  type LedgerRow,
+  type ToolMiddlewareDecisionRow,
   type ToolBracketEvent,
   type ToolEndEvent,
 } from './toolCallOccurrence.js';
@@ -49,7 +49,7 @@ interface ToolCallFacts {
   readonly resultStatus?: 'missing' | 'ambiguous';
   readonly runtimeStageId?: string;
   readonly end?: ToolEndEvent;
-  readonly rows: readonly LedgerRow[];
+  readonly rows: readonly ToolMiddlewareDecisionRow[];
   readonly unboundRows: boolean;
   readonly declined: boolean;
   readonly checkIn: boolean;
@@ -95,11 +95,11 @@ function buildToolCallReader(
     return historyMemo;
   };
 
-  let ledgerMemo: readonly LedgerRow[] | undefined;
-  const ledger = (): readonly LedgerRow[] => {
+  let ledgerMemo: readonly ToolMiddlewareDecisionRow[] | undefined;
+  const ledger = (): readonly ToolMiddlewareDecisionRow[] => {
     if (ledgerMemo === undefined) {
       const value = committedFinal(index, 'middlewareDecisions');
-      ledgerMemo = Array.isArray(value) ? (value as readonly LedgerRow[]) : [];
+      ledgerMemo = Array.isArray(value) ? (value as readonly ToolMiddlewareDecisionRow[]) : [];
     }
     return ledgerMemo;
   };

@@ -48,6 +48,9 @@
   exactly like a correction of one proposal that never ran. The earlier
   argument failure may be replaced in an older recording without call
   addresses. New recordings distinguish the two by their call addresses.
+- **Incomplete rewrite addresses.** A masked address or an address missing on
+  one side prevents matching the rewrite, so the overwritten argument may
+  still be reported as assumed.
 - **Model-declared findings with repeated IDs.** The findings layer treats two
   calls that share a provider ID in one batch as one call because the model
   names its subject by that ID.
