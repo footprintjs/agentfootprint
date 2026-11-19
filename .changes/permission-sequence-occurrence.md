@@ -2,7 +2,10 @@
 type: fixed
 bump: patch
 ---
-**Corrected result attribution in permission-checker call sequences.** A proposal’s
-recorded result stays with that call when a provider reuses a tool-call ID. This helps
-custom checkers that read the sequence. The built-in role allowlist uses role,
-capability, and target instead of call history.
+**Corrected result attribution in permission-checker call sequences.** When a
+tool-call ID repeated, the sequence could list a refused or unanswered call as
+dispatched, or omit a call that ran. IDs can repeat when a fresh process resumes a
+saved run with an adapter that generates IDs locally. Custom checkers that
+use the order or count of calls in `sequence` could make a decision from the
+wrong sequence. The built-in role allowlist bases its decisions on role,
+capability, and target, so its decisions were unaffected.

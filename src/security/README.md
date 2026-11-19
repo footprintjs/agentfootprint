@@ -22,6 +22,14 @@ here.
   result paired by position with each recorded proposal. Unanswered proposals,
   denials and explicit `LLMMessage.notDispatched` settlements stay out of the
   sequence even when a provider reuses an ID.
+
+  - `[assistant: read_palette#k1] [tool k1: settled] [assistant: lookup_swatch#k1] [tool k1: 'ok']` gives `[lookup_swatch]`.
+  - `[assistant: read_palette#k1] [tool k1: refused] [assistant: lookup_swatch#k1] [tool k1: 'ok']` gives `[lookup_swatch]`.
+
+  Here `settled` and `refused` stand for the recorded settlement and gate denial.
+  The sequence describes recorded dispatch history. Completion and the source
+  history's trustworthiness require separate evidence.
+
   A call a tool made through `ctx.tools.call` whose function was entered
   rides its outer call's result message (`LLMMessage.calls`) and follows that
   call in the sequence, marked `inner: true`. Example: `[assistant: compose#c1]
