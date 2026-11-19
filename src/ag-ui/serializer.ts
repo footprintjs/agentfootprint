@@ -62,7 +62,8 @@
  * not written at all, because the client holds the result it sent.
  *
  * TEXT in record-only mode comes from `stream.token`, then from the rest of
- * `turn_end.finalContent` as its own message (the whole answer if no tokens streamed).
+ * `turn_end.finalContent` as its own message. A marked root `turn_end` can
+ * deliver the answer even when this reader joined after the turn started.
  * `unstreamedText` uses the same prefix rule as `toSSE({ format: 'text' })`.
  * Refused final content and an agent's draft `llm_end.content` stay off the wire.
  */
@@ -73,7 +74,7 @@ import type { RunTranslation } from '../hosting/protocolAdapter.js';
 import { unstreamedText } from '../hosting/unstreamedText.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
-import { newScope, type Scope, type OpenText, type AgUiOpenCall } from './translationScope.js';
+import { newScope, takeCall, type Scope, type OpenText } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
 import { failedCallWords } from './toolResultWords.js';
 import { argsShownOf, checkInHiddenNamesOf } from './shownArgs.js';
@@ -249,6 +250,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
   /** The record's own words for a failure — the last served `error.fatal`. */
   let fatal: string | undefined;
   let pause: { readonly event: AgentfootprintEvent; readonly scope: Scope } | undefined;
+  /** Text already shown from the root's last complete-only call before its turn was known. */
+  let rootCallText: string | undefined;
   /** The root agent's answer as the record serves it — `RUN_FINISHED.result`. */
   let rootResult: string | undefined;
   /** What a continuation needs — set when the run settles paused. */
@@ -436,10 +439,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         return;
       }
       case 'agentfootprint.agent.turn_end': {
-        const scope = scopeOf(path);
-        if (!scope.isAgent) {
-          // A turn this translation never saw open (it subscribed late): its
-          // answer has no scope to end, and the root's must not be guessed.
+        const rootEnd = !hostDelivery && event.meta.rootTurn === true;
+        const scope = rootEnd ? root : scopeOf(path);
+        if (!scope.isAgent && !rootEnd) {
+          // This reader missed the open, and the record doesn't name it as root.
           pushCustom(event, scope, out);
           return;
         }
@@ -448,7 +451,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const refused = payload.refused !== undefined;
         const answer = refused ? undefined : text(payload.finalContent);
         if (!hostDelivery && answer !== undefined) {
-          const rest = unstreamedText(scope.streamedText, answer);
+          const written = scope.streamedText ?? (rootEnd ? rootCallText : undefined);
+          const rest = unstreamedText(written, answer);
           if (rest !== undefined) wholeText(scope, rest, event, out);
         }
         if (scope === root) {
@@ -484,6 +488,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const scope = scopeOf(path);
         closeText(scope, out);
         closeReasoning(scope, out);
+        if (scope === root) rootCallText = undefined;
         scope.streamedText = undefined;
         scope.callMessageId = undefined;
         scope.llmAddress = address;
@@ -526,11 +531,14 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const scope = scopeOf(path);
         if (hostDelivery) return;
         closeText(scope, out);
-        // In an agent's turn the answer comes at turn_end. A standalone call
-        // or an LLM merge writes llm_end content whole if it streamed nothing.
+        // A scope that did not see an agent turn open can already have written
+        // the text of a complete-only call by the time its root end arrives.
         const content = text(payload.content);
         const quiet = scope.streamedText === undefined && payload.contentWithheld !== true;
-        if (!scope.isAgent && quiet && content) wholeText(scope, content, event, out);
+        if (!scope.isAgent && quiet && content) {
+          wholeText(scope, content, event, out);
+          if (scope === root) rootCallText = content;
+        }
         return;
       }
       case 'agentfootprint.stream.thinking_delta': {
@@ -690,29 +698,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         pushCustom(event, scopeOf(path), out);
     }
   };
-
-  /**
-   * The open call a `tool_end` closes. One agent runs its calls one at a time,
-   * so the open call at the result's stage execution is the one it answers;
-   * where the record still names the call (no redaction policy), the id
-   * decides among several.
-   */
-  function takeCall(scope: Scope, address: string, servedId: unknown): AgUiOpenCall | undefined {
-    let at = -1;
-    for (let i = scope.calls.length - 1; i >= 0; i--) {
-      const call = scope.calls[i] as AgUiOpenCall;
-      if (call.address !== address) continue;
-      if (at < 0) at = i;
-      if (typeof servedId === 'string' && call.servedId === servedId) {
-        at = i;
-        break;
-      }
-    }
-    // The call a paused run left open is answered by the first result in its
-    // scope: the continuation's stage executions are new, so no address matches.
-    if (at < 0) at = scope.calls.findIndex((call) => call.resumed === true);
-    return at < 0 ? undefined : scope.calls.splice(at, 1)[0];
-  }
 
   /**
    * Re-open what the paused run left open — the scopes (same `subagentRunId`),

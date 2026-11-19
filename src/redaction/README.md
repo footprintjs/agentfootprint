@@ -457,7 +457,7 @@ bytes, for any recording — an agent's or a chart's.)
   (`core/runnerLive.ts`), so a runner built by one copy of agentfootprint (CJS
   and ESM loaded side by side, two installed versions) is not read live by the
   other. `standingAgent` refuses it. `toSSE({ format: 'text' })` writes served
-  tokens and the rest of an observed root turn. The context ledger counts the served record.
+  tokens and the rest of the root turn's answer. The context ledger counts the served record.
 - **A recording without its snapshot.** The marker rides the snapshot's
   `recorders`; an events-only recording carries none, so a reader quotes a
   placeholder there as it stands.

@@ -29,6 +29,7 @@ export interface EmitBridgeOptions {
    */
   readonly prefix: string | readonly string[];
   readonly getRunContext: () => RunContext;
+  readonly rootTurnAt?: (type: AgentfootprintEventType, runtimeStageId: string) => true | undefined;
 }
 
 export class EmitBridge implements CombinedRecorder {
@@ -36,12 +37,14 @@ export class EmitBridge implements CombinedRecorder {
   private readonly dispatcher: EventDispatcher;
   private readonly prefixes: readonly string[];
   private readonly getRunContext: () => RunContext;
+  private readonly rootTurnAt: EmitBridgeOptions['rootTurnAt'];
 
   constructor(options: EmitBridgeOptions) {
     this.dispatcher = options.dispatcher;
     this.id = options.id;
     this.prefixes = typeof options.prefix === 'string' ? [options.prefix] : options.prefix;
     this.getRunContext = options.getRunContext;
+    this.rootTurnAt = options.rootTurnAt;
   }
 
   onEmit(event: EmitEvent): void {
@@ -58,6 +61,7 @@ export class EmitBridge implements CombinedRecorder {
         subflowPath: event.subflowPath,
         timestamp: event.timestamp,
         sourcePosition: projectEventSourcePosition(event),
+        rootTurn: this.rootTurnAt?.(type, event.runtimeStageId),
       },
       this.getRunContext(),
     );

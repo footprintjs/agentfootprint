@@ -21,5 +21,6 @@ export function agentRecorder(options: AgentRecorderOptions): EmitBridge {
     prefix: 'agentfootprint.agent.',
     dispatcher: options.dispatcher,
     getRunContext: options.getRunContext,
+    rootTurnAt: options.rootTurnAt,
   });
 }

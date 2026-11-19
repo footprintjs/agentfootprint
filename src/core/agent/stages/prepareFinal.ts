@@ -26,7 +26,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { emitTurnEnd, typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AnswerAssessmentData } from '../assessment/compose.js';
 import {
   composeAnswerWithCoverage,
@@ -171,7 +171,7 @@ const captureTurnPayload = (
   // that finished normally emits the exact payload it always did.
   const cut = scope.stoppedEarly;
   const attached = SCRIPTS.get(scope);
-  typedEmit(scope, 'agentfootprint.agent.turn_end', {
+  emitTurnEnd(scope, {
     turnIndex: 0,
     finalContent: scope.finalContent,
     totalInputTokens: scope.totalInputTokens,

@@ -36,6 +36,8 @@ export interface StageOrigin {
   readonly timestamp?: number;
   /** Already validated wire coordinates; never read from live executor state. */
   readonly sourcePosition?: EventSourcePosition;
+  /** The owning Agent marked this turn end at its emitting scope. */
+  readonly rootTurn?: true;
 }
 
 export interface RunContext {
@@ -102,6 +104,7 @@ export function buildEventMeta(
     ...(run.traceId !== undefined && { traceId: run.traceId }),
     ...(run.correlationId !== undefined && { correlationId: run.correlationId }),
     ...(run.turnIndex !== undefined && { turnIndex: run.turnIndex }),
+    ...(stageOrigin?.rootTurn === true && { rootTurn: true as const }),
     ...(run.iterIndex !== undefined && { iterIndex: run.iterIndex }),
     // Present only when the run really is session-bound. An absent key and an
     // empty string are different facts, and only one of them is honest.

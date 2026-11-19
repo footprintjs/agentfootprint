@@ -56,19 +56,18 @@ export interface ToSSEOptions {
    *     (the placeholder wherever the policy selected a value).
    *   - 'text' — the answer as plain text (no event/data prefix), for
    *     piping straight into a chat UI: each `agentfootprint.stream.token`'s
-   *     content, then the rest of `turn_end.finalContent` for a turn whose
-   *     root `turn_start` the stream observed. With no event metadata the
-   *     runner is treated as one root. For a turn that qualifies, a filter
+   *     content, then the rest of the root turn's `turn_end.finalContent`.
+   *     An end marked `meta.rootTurn` qualifies even on resume. With older
+   *     metadata the stream must have observed the root opening. With no
+   *     event metadata the runner is treated as one root. A filter
    *     that drops only trailing tokens gets them back with the rest, such
    *     as the limits block or the standing line. When no tokens were
    *     written (the provider did not stream or the filter dropped them all),
    *     the whole answer is written. A gap that leaves the written text
    *     different from the answer's prefix, a rewritten prefix, or a
-   *     refused answer produces no additional text. A fresh stream on
-   *     resume writes only tokens for a turn opened before it subscribed.
-   *     The stream ends at the first `agent.turn_end`, so a composition
-   *     carries only text streamed through its first agent's turn. That can
-   *     be the run's answer when the same agent answers last. Use the
+   *     refused answer produces no additional text. A newly opened text
+   *     stream on a resumed Agent waits for the root turn to end or pause
+   *     again. Other streams end at the first `agent.turn_end`, so use the
    *     returned outcome to read a composition's full reply. This is the
    *     caller's own answer, so a redaction policy never masks it.
    */
@@ -188,16 +187,16 @@ export async function* toSSE<TIn, TOut>(
   // `runnerLive`) — matched to its served event by the token's address (its
   // stage, iteration and index, none of which a policy selects), so a served
   // token that never arrives cannot shift the ones after it — and never
-  // handed to consumer code. The turn's answer, whose unstreamed rest is
-  // written at `turn_end`, comes from the same path, paired by the stage that
-  // ended the turn. A runner that is not a RunnerBase has no redaction and no
-  // live taps: its events are the record and the reply at once.
+  // handed to consumer code. The answer and refusal status come from the
+  // same `turn_end` event, paired by the stage that ended the turn. A runner
+  // that is not a RunnerBase has no redaction and no live taps: its events
+  // are the record and the reply at once.
   const live = format === 'text' ? runnerLive(runner) : undefined;
   const replies = new Map<string, string[]>();
-  const answers = new Map<string, unknown>();
+  const answers = new Map<string, string | undefined>();
   const offReplies = live?.onRealEvent((event) => {
     if (event.type === 'agentfootprint.agent.turn_end') {
-      answers.set(event.meta?.runtimeStageId ?? '', finalContentOf(event));
+      answers.set(event.meta?.runtimeStageId ?? '', unrefusedAnswerOf(event));
       return;
     }
     if (event.type !== 'agentfootprint.stream.token') return;
@@ -216,45 +215,59 @@ export async function* toSSE<TIn, TOut>(
     return text;
   };
   /**
-   * Use only the real, unrefused answer of a root turn this stream saw open.
-   * On resume, an inner turn can end without a new start. The lack of an inner
-   * mount does not show that the turn is root. A known inner mount still
-   * takes precedence over the root, because even the root's own `turn_end`
-   * can come from a stage such as `['final']`.
+   * Use only the real, unrefused answer of a root turn. For an end without a
+   * marker, an observed root start and no matching inner mount identify it.
    */
-  const answerFor = (event: AgentfootprintEvent): string | undefined => {
+  const answerFor = (event: AgentfootprintEvent, rootEnd: boolean): string | undefined => {
     const key = event.meta?.runtimeStageId ?? '';
-    const answer = live === undefined ? finalContentOf(event) : answers.get(key);
+    const answer = live === undefined ? unrefusedAnswerOf(event) : answers.get(key);
     answers.delete(key);
-    if (event.meta !== undefined && !rootTurnOpen) return undefined;
-    if (innerTurns.some((mount) => leads(mount, pathOf(event)))) return undefined;
+    if (
+      !rootEnd &&
+      ((event.meta !== undefined && !rootTurnOpen) ||
+        innerTurns.some((mount) => leads(mount, pathOf(event))))
+    ) {
+      return undefined;
+    }
     rootTurnOpen = false;
-    const refused = (event.payload as { refused?: unknown } | undefined)?.refused !== undefined;
-    return !refused && typeof answer === 'string' ? answer : undefined;
+    return answer;
   };
   let rootTurnOpen = false;
+  let awaitingResumedRoot = false;
   const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
-    // The filter governs output. Even a filtered-out start establishes the scope.
+    // These boundaries establish scope even when the output filter drops them.
     if (format === 'text' && event.type === 'agentfootprint.agent.turn_start') {
       const path = pathOf(event);
       if (path.length === 0) rootTurnOpen = true;
       else innerTurns.push(path);
+    }
+    if (event.type === 'agentfootprint.pause.resume' && live?.turn !== undefined && !rootTurnOpen) {
+      // Only an Agent has an owning turn that can end after its children.
+      awaitingResumedRoot = true;
+    }
+    const turnEnd = event.type === 'agentfootprint.agent.turn_end';
+    const rootEnd = turnEnd && event.meta?.rootTurn === true;
+    // Completion follows the run boundary even when no output is admitted.
+    const fatal = event.type === 'agentfootprint.error.fatal';
+    const terminal = awaitingResumedRoot
+      ? rootEnd || fatal || event.type === 'agentfootprint.pause.request'
+      : turnEnd || fatal;
+    if (terminal) {
+      done = true;
+      wakeup();
     }
     // Taken before the filter, so a filtered-out token still consumes its text.
     const reply =
       live !== undefined && event.type === 'agentfootprint.stream.token'
         ? replyFor(event)
         : undefined;
-    const answer =
-      format === 'text' && event.type === 'agentfootprint.agent.turn_end'
-        ? answerFor(event)
-        : undefined;
+    const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd) : undefined;
     if (filter && !filter(event)) return;
     queue.push(
       reply !== undefined
         ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
-        : format === 'text' && event.type === 'agentfootprint.agent.turn_end'
+        : format === 'text' && turnEnd
         ? ({
             type: event.type,
             payload: { finalContent: answer },
@@ -262,16 +275,6 @@ export async function* toSSE<TIn, TOut>(
         : event,
     );
     wakeup();
-    // `agent.turn_end` (or composition exit on the outermost runner)
-    // ends the stream naturally; the consumer's `for await` finishes
-    // when the iterator returns.
-    if (
-      event.type === 'agentfootprint.agent.turn_end' ||
-      event.type === 'agentfootprint.error.fatal'
-    ) {
-      done = true;
-      wakeup();
-    }
   };
   const offRecord: Unsubscribe = runner.on('*', listener);
   const unsub = (): void => {
@@ -310,8 +313,8 @@ export async function* toSSE<TIn, TOut>(
               yield payload.content;
             }
           } else if (event.type === 'agentfootprint.agent.turn_end') {
-            const answer = finalContentOf(event);
-            const rest = typeof answer === 'string' ? unstreamedText(streamed, answer) : undefined;
+            const answer = unrefusedAnswerOf(event);
+            const rest = answer === undefined ? undefined : unstreamedText(streamed, answer);
             streamed = undefined;
             if (rest !== undefined) yield rest;
           }
@@ -404,9 +407,12 @@ function leads(mount: readonly string[], path: readonly string[]): boolean {
   return mount.length <= path.length && mount.every((segment, i) => segment === path[i]);
 }
 
-/** A `turn_end` event's `finalContent`, as it stands on that event. */
-function finalContentOf(event: AgentfootprintEvent): unknown {
-  return (event.payload as { finalContent?: unknown } | undefined)?.finalContent;
+/** A turn's answer, if the event carrying it did not mark it refused. */
+function unrefusedAnswerOf(event: AgentfootprintEvent): string | undefined {
+  const payload = event.payload as { finalContent?: unknown; refused?: unknown } | undefined;
+  return payload?.refused === undefined && typeof payload?.finalContent === 'string'
+    ? payload.finalContent
+    : undefined;
 }
 
 /**
