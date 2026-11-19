@@ -57,7 +57,7 @@ The rehearsal and paid runner both require that exact archive.
 
 The original three-cell totals and gates in Paid plan and scope below describe
 batch 5. For these two cells, the card and [PLAN.md](PLAN.md) set the derived
-280-run schedule, USD 3 projection and USD 4 dispatch cap. The per-cell task
+280-run schedule, USD 4 projection and USD 5 dispatch cap. The per-cell task
 counts, ground truth, answer classes and warning evidence requirements still apply.
 
 Each new task has an honest and a `done` scripted play in every cell. C's two

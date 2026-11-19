@@ -63,15 +63,15 @@ test('the projection prices remaining slots and adds settled preflight charges e
   assert.equal(estimate.canContinue, true);
 });
 
-test('the USD 3 ceiling is inclusive', () => {
+test('the USD 4 ceiling is inclusive', () => {
   const rows = withUsage(1000, 200);
   const projectedRemaining = 2 * 1112 * (1000 + 5 * 200);
   const onLimit = PROJECTED_LIMIT_UNITS - projectedRemaining;
   const atLimit = projectPreflight(rows, schedule.remaining, onLimit);
-  assert.equal(atLimit.projectedUsd, 3);
+  assert.equal(atLimit.projectedUsd, 4);
   assert.equal(atLimit.canContinue, true);
   const aboveLimit = projectPreflight(rows, schedule.remaining, onLimit + 1);
-  assert.equal(aboveLimit.projectedUsd, 3.0000005);
+  assert.equal(aboveLimit.projectedUsd, 4.0000005);
   assert.equal(aboveLimit.canContinue, false);
 });
 

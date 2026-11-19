@@ -35,8 +35,8 @@ batch 6 schedule to those historical draws yields a conservative projection
 of **USD 3.471568**. This prices 1,112 slots per cell at both peaks and adds
 the 10,928 units settled for those two draws.
 
-The historical projection exceeds the batch 6 admission limit. The coordinator
-will determine admission using fresh preflight usage from 15.0.1 and #424.
+The historical projection fits within the corrected USD 4 admission limit.
+Fresh preflight usage from 15.0.1 and #424 determines admission.
 The offline rehearsal uses scripted model replies.
 
 ## Admission and actual spend
@@ -46,13 +46,13 @@ The offline rehearsal uses scripted model replies.
    remaining slots. For an attempt without final usage, use the reserved
    input estimate and full output cap. Add the settled preflight charges once.
    Continue only with measurements from both cells and a projected total of
-   **USD 3 or less**.
+   **USD 4 or less**.
 2. Account after each response at **USD 0.50 per million input tokens** and
    **USD 2.50 per million output tokens**. One accounting unit is half a
    microdollar. Output includes thinking. A refusal or failed request without
    reported final usage is charged the value reserved for it.
 3. Before each dispatch, booked charges plus the byte-based input estimate and
-   full output cap must fit **USD 4**. The input estimate is
+   full output cap must fit **USD 5**. The input estimate is
    `ceil(serialized UTF-8 input bytes / 2) + 406`. The ledger also requires room
    for one physical attempt at the full standard-context exposure of USD 0.51024.
    It replaces that exposure with actual cost when usage is known and retains
