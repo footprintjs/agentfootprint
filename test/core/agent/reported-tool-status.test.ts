@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
 
 import { absent, Agent, checkInApproved, defineTool, isCheckInPause } from '../../../src/index.js';
 import { mock } from '../../../src/doors/providers.js';
@@ -8,6 +10,10 @@ const call = { id: 'lookup-1', name: 'lookup', args: {} };
 
 function toolMessage(content: string) {
   return { role: 'tool', content, toolCallId: call.id, toolName: call.name };
+}
+
+function recordedToolMessage(content: string) {
+  return { ...toolMessage(content), callOccurrenceKey: [0, 0, 0, 1, 0] };
 }
 
 async function dispatch(
@@ -53,6 +59,11 @@ async function dispatch(
   expect(committed).toHaveLength(1);
   expect(wire).toHaveLength(1);
   expect(ends).toHaveLength(1);
+  const proposal = history.find((message) => message.role === 'assistant')?.toolCalls?.[0];
+  const occurrence = readCallOccurrenceKey(proposal ?? {});
+  expect(occurrence).toMatch(/\.0$/);
+  expect(readCallOccurrenceKey(committed[0]!)).toBe(occurrence);
+  expect(readCallOccurrenceKey(ends[0]!)).toBe(occurrence);
   return { message: committed[0]!, wire: wire[0]!, end: ends[0]! };
 }
 
@@ -70,8 +81,8 @@ describe('reported status on committed tool messages', () => {
     async (status, reportedStatus, outcome) => {
       const content = 'Lookup returned.';
       const recorded = await dispatch({ content, effects: [], status });
-      expect(recorded.message).toStrictEqual({
-        ...toolMessage(content),
+      expect(normalizeCallOccurrences(recorded.message)).toStrictEqual({
+        ...recordedToolMessage(content),
         ...(outcome !== undefined && { outcome }),
         ...(reportedStatus !== undefined && { reportedStatus }),
       });
@@ -82,14 +93,17 @@ describe('reported status on committed tool messages', () => {
   it('uses only the admitted envelope, even if the result text says pending', async () => {
     const content = 'Lookup is pending.';
     const recorded = await dispatch(content);
-    expect(recorded.message).toStrictEqual(toolMessage(content));
+    expect(normalizeCallOccurrences(recorded.message)).toStrictEqual(recordedToolMessage(content));
     expect(recorded.wire).toBe(JSON.stringify(toolMessage(content)));
   });
 
   it('records the status after a check-in-approved dispatch', async () => {
     const content = 'Lookup returned.';
     const recorded = await dispatch({ content, effects: [], status: 'pending' }, { pause: true });
-    expect(recorded.message).toStrictEqual({ ...toolMessage(content), reportedStatus: 'pending' });
+    expect(normalizeCallOccurrences(recorded.message)).toStrictEqual({
+      ...recordedToolMessage(content),
+      reportedStatus: 'pending',
+    });
     expect(recorded.wire).toBe(JSON.stringify(toolMessage(content)));
   });
 
@@ -102,11 +116,13 @@ describe('reported status on committed tool messages', () => {
     const inline = await dispatch(refusal);
     const resumed = await dispatch(refusal, { pause: true });
     expect(inline.message.content).toContain('declares no `search`');
-    expect(inline.message).toStrictEqual({
-      ...toolMessage(inline.message.content),
+    expect(normalizeCallOccurrences(inline.message)).toStrictEqual({
+      ...recordedToolMessage(inline.message.content),
       outcome: 'failed',
     });
-    expect(resumed.message).toStrictEqual(inline.message);
+    expect(normalizeCallOccurrences(resumed.message)).toStrictEqual(
+      normalizeCallOccurrences(inline.message),
+    );
     expect(inline.wire).toBe(JSON.stringify(toolMessage(inline.message.content)));
     expect(resumed.wire).toBe(inline.wire);
     for (const end of [inline.end, resumed.end]) {
@@ -120,8 +136,8 @@ describe('reported status on committed tool messages', () => {
       resultCeiling: { maxChars: 30 },
     });
     expect(recorded.message.content).toContain('No data was returned.');
-    expect(recorded.message).toStrictEqual({
-      ...toolMessage(recorded.message.content),
+    expect(normalizeCallOccurrences(recorded.message)).toStrictEqual({
+      ...recordedToolMessage(recorded.message.content),
       outcome: 'failed',
       reportedStatus: 'invalid',
     });

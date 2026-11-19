@@ -33,6 +33,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
+import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 import { disableDevMode, enableDevMode } from 'footprintjs';
 
 import {
@@ -203,8 +205,14 @@ describe('a result that declares its period — one verdict per call', () => {
       expect(absentEvent.payload.provenance).toEqual(SOURCE);
 
       // ONE period row, the verdict, no instants.
-      expect(periodRows(agent)).toEqual([
+      const occurrence = readCallOccurrenceKey(absentEvent.payload);
+      expect(occurrence).toMatch(/\.0$/);
+      expect(readCallOccurrenceKey(coverageRows[0]!)).toBe(occurrence);
+      const rows = periodRows(agent);
+      expect(readCallOccurrenceKey(rows[0]!)).toBe(occurrence);
+      expect(normalizeCallOccurrences(rows)).toEqual([
         {
+          callOccurrenceKey: [0, 0, 0, 1, 0],
           kind: 'period',
           turn: 1,
           toolCallId: 'c1',
@@ -214,8 +222,16 @@ describe('a result that declares its period — one verdict per call', () => {
         },
       ]);
       const verdictEvents = seen.filter((e) => e.type === 'agentfootprint.findings.period');
-      expect(verdictEvents.map((e) => e.payload)).toEqual([
-        { toolCallId: 'c1', toolName: 'backup_runs', iteration: 1, turn: 1, verdict: 'not-held' },
+      expect(verdictEvents.map((e) => readCallOccurrenceKey(e.payload))).toEqual([occurrence]);
+      expect(normalizeCallOccurrences(verdictEvents.map((e) => e.payload))).toEqual([
+        {
+          callOccurrenceKey: [0, 0, 0, 1, 0],
+          toolCallId: 'c1',
+          toolName: 'backup_runs',
+          iteration: 1,
+          turn: 1,
+          verdict: 'not-held',
+        },
       ]);
 
       // The standing: not sure — nothing matched, AND the store does not hold the hour asked about.
@@ -357,8 +373,9 @@ describe('a tool that declares a period argument (ToolPeriod) — silence is rec
     await agent.run({ message: 'any errors on checkout?' });
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     expect(state.honestyLayers).toEqual({ inputs: true, results: true });
-    expect(periodRows(agent)).toEqual([
+    expect(normalizeCallOccurrences(periodRows(agent))).toEqual([
       {
+        callOccurrenceKey: [0, 0, 0, 1, 0],
         kind: 'period',
         turn: 1,
         toolCallId: 'c1',

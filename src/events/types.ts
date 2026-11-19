@@ -6,8 +6,6 @@
  * Emits:   (types only — no runtime behavior here).
  */
 
-import type { CallOccurrenceKey } from '../lib/callOccurrence.js';
-
 export type ContextSlot = 'system-prompt' | 'messages' | 'tools';
 
 /**
@@ -73,6 +71,10 @@ export type LLMProviderName =
   | (string & {});
 
 export type ToolProtocol = 'native' | 'mcp' | 'http' | 'python-fn';
+
+// Structural mirror of the recorded address in lib/callOccurrence.ts.
+// The skill graph reads this vocabulary without importing recording code.
+type CallOccurrenceKey = readonly [number, number, number, number, number];
 
 /**
  * The tool call an event was produced for. The library's occurrence key

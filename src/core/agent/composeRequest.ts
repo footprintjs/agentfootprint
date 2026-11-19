@@ -154,6 +154,8 @@ export function stripFrameworkFields(
 // tool message would otherwise mint a fresh port object on every iteration,
 // defeat the receipt's by-object memo and hash the whole conversation again.
 // Weak keys tie each projection to that history entry's own lifetime.
+// Adapters must treat requests, including nested fields, as immutable because
+// unmarked messages already reach them as committed values.
 interface MessageProjection {
   readonly input: readonly (readonly [string, unknown])[];
   readonly output: readonly (readonly [string, unknown])[];

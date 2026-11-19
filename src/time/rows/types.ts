@@ -8,7 +8,6 @@ import type { MentionRefusal, TimeParts } from '../reader.js';
 import type { CallWindow, WindowSource } from '../bind.js';
 import type { TimeRefusal } from '../periodForm.js';
 import type { ReadingChoice, TimeCandidate } from '../resolveRecord.js';
-import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 
 /** A window set in a UI, as the clock row records it. */
 export interface ControlWindow extends TimeRange {
@@ -43,6 +42,10 @@ export interface TimeCallIdentity {
   readonly toolName: string;
   readonly callOccurrenceKey?: CallOccurrenceKey;
 }
+
+// Structural mirror of the recorded address in lib/callOccurrence.ts.
+// Time rows carry it as opaque data and the agent compares it.
+type CallOccurrenceKey = readonly [number, number, number, number, number];
 
 /** One dispatched call's wall-clock moment (time design § 4, § 7.4). */
 export interface CallRow extends TimeCallIdentity {
