@@ -41,10 +41,14 @@
  * record.
  */
 
+import {
+  historyStartsWith,
+  readHistoryCalls,
+  rowsForHistoryCall,
+} from '../../core/agent/recordedCalls.js';
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
 import type { SentenceVar } from '../types.js';
-import { isRecord, str } from '../view.js';
 import {
   COVERAGE_STATE_KEY,
   readStateCoverage,
@@ -94,25 +98,35 @@ const NOT_RESUMED: PausedLegRead = { stateHeld: false, calls: [] };
 export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead {
   const pausedWith = ctx.view.pausedWith;
   if (!ctx.resumedLeg || pausedWith === undefined) return NOT_RESUMED;
-  const before = pausedHistory(pausedWith.history as readonly unknown[]);
+  const before = pausedWith.history as readonly unknown[];
   const history = historyOf(ctx.view);
+  if (!historyStartsWith(history, before)) return { stateHeld: true, calls: [] };
   const coverageRows = ctx.view.state?.[COVERAGE_STATE_KEY];
   const rows: readonly unknown[] = Array.isArray(coverageRows) ? coverageRows : [];
+  const all = readHistoryCalls(history);
+  let current = -1;
+  for (let index = before.length - 1; index >= 0; index--) {
+    if (isPersonEntry(before[index])) {
+      current = index;
+      break;
+    }
+  }
   const out: BeforePauseCall[] = [];
-  for (const id of before) {
-    if (calls.ids.has(id)) continue;
-    const i = history.findIndex((m) => isRecord(m) && m.role === 'tool' && m.toolCallId === id);
-    const m = history[i];
-    if (!isRecord(m)) continue;
-    const name = str(m.toolName);
-    if (name === undefined) continue;
-    const coverage = readStateCoverage(rows, id, ctx.view.servedUnderPolicy);
+  for (const occurrence of all) {
+    const { providerId: id, toolName: name, index: i, message: m } = occurrence;
+    if (
+      i <= current ||
+      i >= before.length ||
+      calls.historyIndices.has(i) ||
+      id === undefined ||
+      name === undefined
+    )
+      continue;
+    const attributed = rowsForHistoryCall(rows, all, occurrence);
+    const coverage = readStateCoverage(attributed, ctx.view.servedUnderPolicy);
     const rowsAt = rowsAtOf(ctx.declarations, name);
-    // The door this record holds for the call is its committed declaration — the same rows the
-    // standing fold reads (`assessment/assess.ts`), so the two cannot disagree about it.
-    const mine = rows.filter((r) => isRecord(r) && r.toolCallId === id) as readonly {
-      readonly kind?: unknown;
-    }[];
+    // The declaration and emptiness both use these same occurrence rows.
+    const mine = attributed.map(({ row }) => row);
     const reading = readEmptiness(toolBytesOf({ content: m.content, toolChars: m.toolChars }), {
       placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
       ...(rowsAt !== undefined && { rowsAt }),
@@ -133,19 +147,4 @@ export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead
     });
   }
   return { stateHeld: true, calls: out };
-}
-
-/** The call ids of the tool messages after the last person entry of the paused state's history. */
-function pausedHistory(history: readonly unknown[]): readonly string[] {
-  let current = -1;
-  history.forEach((m, i) => {
-    if (isPersonEntry(m)) current = i;
-  });
-  const ids: string[] = [];
-  history.forEach((m, i) => {
-    if (i <= current || !isRecord(m) || m.role !== 'tool') return;
-    const id = str(m.toolCallId);
-    if (id !== undefined && !ids.includes(id)) ids.push(id);
-  });
-  return ids;
 }

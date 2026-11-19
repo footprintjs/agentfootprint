@@ -1,3 +1,4 @@
+import { historyCallAt } from '../../core/agent/recordedCalls.js';
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
 import { foldState } from '../../core/agent/assessment/assess.js';
@@ -12,7 +13,7 @@ import { recordedCallOutcome } from '../../semantics/toolOutcome.js';
 import { chip, n } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, RecordPointer, Sentence } from '../types.js';
-import { isKeptOut, isRecord, keptOut, type RecordingView, type ViewEvent } from '../view.js';
+import { isKeptOut, keptOut, type RecordingView, type ViewEvent } from '../view.js';
 import { MAX_CALLS } from './calls.js';
 import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.js';
 
@@ -177,8 +178,8 @@ function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][numbe
     unknown: [],
   };
   for (const w of r.witness) {
-    const row = w.kind === 'history' ? history[w.index] : undefined;
-    const outcome = isRecord(row) && row.role === 'tool' ? recordedCallOutcome(row) : undefined;
+    const row = w.kind === 'history' ? historyCallAt(history, w.index)?.message : undefined;
+    const outcome = row === undefined ? undefined : recordedCallOutcome(row);
     groups[outcome ?? 'unknown'].push(w);
   }
   return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {

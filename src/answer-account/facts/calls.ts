@@ -33,11 +33,16 @@
  * (`tools.semantics_declared`).
  */
 
+import {
+  readCallOccurrences,
+  type CallOccurrence,
+  type HistoryCall,
+} from '../../core/agent/recordedCalls.js';
 import { strip } from '../../semantics/coverage/read.js';
 import { reportedStatusOf } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
-import { outcomeOf, type CallIndex } from './callOutcome.js';
+import { outcomeOf } from './callOutcome.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
@@ -100,6 +105,8 @@ export interface CoverageRead {
 /** One call, as the row readers need it (the fact plus the events behind it). */
 export interface CallRead {
   readonly fact: ToolCallFact;
+  readonly historyIndex?: number;
+  readonly presented?: true;
   readonly start?: ViewEvent;
   readonly end?: ViewEvent;
   /** The decision or permission row that refused / withheld it. */
@@ -128,8 +135,8 @@ export interface CallsRead {
   readonly calls: readonly CallRead[];
   /** Calls past `MAX_CALLS`, counted, not listed. */
   readonly omitted: number;
-  /** Ids of every call of this run (listed or not) — the in-view reader skips them. */
-  readonly ids: ReadonlySet<string>;
+  /** Committed result positions of the calls linked to this run. */
+  readonly historyIndices: ReadonlySet<number>;
 }
 
 const SECTIONS: readonly CoverageSectionKey[] = ['checked', 'notChecked', 'cannotCover'];
@@ -144,26 +151,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return ka.every((k) =>
     deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
   );
-}
-
-/** One pass per event type: toolCallId → its events, in recording order. */
-function indexByCall(ctx: ReadContext): CallIndex {
-  const cache = new Map<string, Map<string, ViewEvent[]>>();
-  return (type, id) => {
-    let byId = cache.get(type);
-    if (byId === undefined) {
-      byId = new Map();
-      for (const e of ctx.view.ofType(type)) {
-        const key = str(e.payload.toolCallId);
-        if (key === undefined) continue;
-        const list = byId.get(key) ?? [];
-        list.push(e);
-        byId.set(key, list);
-      }
-      cache.set(type, byId);
-    }
-    return byId.get(id) ?? [];
-  };
 }
 
 /** One declaration as a reader meets it: its fields, and where each leaf of it is on the record. */
@@ -276,14 +263,12 @@ export const COVERAGE_STATE_KEY = 'coverageDeclared';
  * earlier leg, its rows are in this record's state.
  */
 export function readStateCoverage(
-  rows: readonly unknown[],
-  toolCallId: string,
+  rows: readonly { readonly row: Readonly<Record<string, unknown>>; readonly index: number }[],
   served: boolean,
 ): CoverageRead | undefined {
   const sources: DeclarationSource[] = [];
   const wordsKeptOut = (value: unknown): boolean => served && isKeptOut(value);
-  rows.forEach((row, index) => {
-    if (!isRecord(row) || row.toolCallId !== toolCallId) return;
+  for (const { row, index } of rows) {
     sources.push({
       fields: row,
       base: (...keys: readonly (string | number)[]) => stateAt(COVERAGE_STATE_KEY, index, ...keys),
@@ -291,15 +276,15 @@ export function readStateCoverage(
       isKeptOut: wordsKeptOut,
       keptOutField: (field: string) => wordsKeptOut(row[field]),
     });
-  });
+  }
   return readDeclarations(sources, []);
 }
 
 function toolNameFor(
-  ctx: ReadContext,
   id: string,
-  start?: ViewEvent,
-  coverage?: CoverageRead,
+  start: ViewEvent | undefined,
+  coverage: CoverageRead | undefined,
+  history: HistoryCall | undefined,
 ): { readonly name: string; readonly pointer: RecordPointer } | undefined {
   const fromStart = str(start?.payload.toolName);
   if (start !== undefined && fromStart !== undefined)
@@ -307,13 +292,10 @@ function toolNameFor(
   const declared = coverage?.events.find((e) => str(e.payload.toolName) !== undefined);
   if (declared !== undefined)
     return { name: str(declared.payload.toolName) as string, pointer: at(declared, 'toolName') };
-  const history = historyOf(ctx.view);
-  const index = history.findIndex(
-    (m) => isRecord(m) && m.toolCallId === id && typeof m.toolName === 'string',
-  );
-  if (index < 0) return undefined;
-  const message = history[index] as Record<string, unknown>;
-  return { name: message.toolName as string, pointer: historyAt(index, '/toolName', id) };
+  const name = history?.toolName;
+  return history !== undefined && name !== undefined
+    ? { name, pointer: historyAt(history.index, '/toolName', id) }
+    : undefined;
 }
 
 /** The one leaf on `tool_end` that says how the call ended, as the account read it. */
@@ -346,18 +328,16 @@ function viewOf(end: ViewEvent): ToolCallFact['view'] {
     : 'model-result';
 }
 
-function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
-  const start = byCall('stream.tool_start', id)[0];
-  const ends = byCall('stream.tool_end', id);
-  const end = ends[ends.length - 1];
-  const coverageEvents = [...byCall('tools.absent', id), ...byCall('tools.coverage_declared', id)];
+function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallRead {
+  const { providerId: id, start, end, eventsOf, history } = occurrence;
+  const coverageEvents = [...eventsOf('tools.absent'), ...eventsOf('tools.coverage_declared')];
   const coverage = readCoverage(coverageEvents, ctx.view.servedUnderPolicy);
-  const described = byCall('tools.semantics_declared', id)[0];
-  const named = toolNameFor(ctx, id, start, coverage);
+  const described = eventsOf('tools.semantics_declared')[0];
+  const named = toolNameFor(id, start, coverage, history);
   // A call no event names is still a call: counted as unread, judged, and said to be unnamed.
   if (named === undefined) ctx.noteUnread();
   const toolName = named?.name ?? '';
-  const outcome = outcomeOf(ctx, byCall, id, toolName, start, end);
+  const outcome = outcomeOf(ctx, occurrence, toolName);
   const status = outcome.outcome === 'ran' ? reportedStatusOf(end?.payload.status) : undefined;
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   // The door THIS record holds for the call — its events — decides what was declared; a marker
@@ -383,7 +363,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
         },
       })
     : { emptiness: 'unknown', undeclaredShape: false };
-  const findings = byCall('findings.declared', id)[0];
+  const findings = eventsOf('findings.declared')[0];
   const basis = str(findings?.payload.basis);
   const expect = str(findings?.payload.expect);
   const idPointer = start ? at(start, 'toolCallId') : end ? at(end, 'toolCallId') : undefined;
@@ -427,6 +407,8 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   };
   return {
     fact,
+    ...(history !== undefined && { historyIndex: history.index }),
+    ...(eventsOf('artifacts.presented').length > 0 && { presented: true as const }),
     ...(start !== undefined && { start }),
     ...(end !== undefined && { end }),
     ...(outcome.ruleEvent !== undefined && { ruleEvent: outcome.ruleEvent }),
@@ -446,21 +428,15 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
 
 /** Every call of this run, first-seen order (a resumed leg's paused call has only an end). */
 export function readCalls(ctx: ReadContext): CallsRead {
-  const firstSeen = new Map<string, number>();
-  for (const type of ['stream.tool_start', 'stream.tool_end']) {
-    for (const e of ctx.view.ofType(type)) {
-      const id = str(e.payload.toolCallId);
-      if (id !== undefined && !firstSeen.has(id)) firstSeen.set(id, e.index);
-    }
-  }
-  const ids = [...firstSeen.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
-  const byCall = indexByCall(ctx);
-  const calls = ids.map((id) => readOne(ctx, byCall, id));
+  const occurrences = readCallOccurrences(ctx.view.events, historyOf(ctx.view));
+  const calls = occurrences.map((occurrence) => readOne(ctx, occurrence));
   return {
     all: calls,
     calls: calls.slice(0, MAX_CALLS),
     omitted: Math.max(0, calls.length - MAX_CALLS),
-    ids: new Set(ids),
+    historyIndices: new Set(
+      calls.flatMap((call) => (call.historyIndex === undefined ? [] : [call.historyIndex])),
+    ),
   };
 }
 

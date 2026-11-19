@@ -203,18 +203,12 @@ export function runChecks(
   // own `present`) returned a receipt for the screen, not data the answer was built on: whether
   // it was empty is not a question it can be asked, so it is left out of the check — never read
   // as a shape nobody declared (take 3: the receipt alone made the check unreachable).
-  const presented = new Set(
-    ctx.view
-      .ofType('artifacts.presented')
-      .map((e) => e.payload.toolCallId)
-      .filter((id): id is string => typeof id === 'string'),
-  );
   const judged = calls.all.filter(
     (c) =>
       c.fact.outcome === 'ran' &&
       c.fact.withheldBy === undefined &&
       c.end !== undefined &&
-      !presented.has(c.fact.toolCallId),
+      c.presented !== true,
   );
   if (
     judged.length > 0 ||

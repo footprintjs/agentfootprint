@@ -608,7 +608,7 @@ export function buildAccount(
   const asked = readAsked(ctx);
   const understood = readUnderstood(ctx);
   const calls = readCalls(ctx);
-  const inView = readInView(ctx, calls.ids);
+  const inView = readInView(ctx, calls.historyIndices);
   const pausedLeg = readPausedLeg(ctx, calls);
   const beforePause = pausedLeg.calls;
   const checkedRows = readCheckedRows(ctx, calls, pausedLeg);

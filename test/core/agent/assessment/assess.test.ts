@@ -380,13 +380,11 @@ describe('UNIT — a conflict row stamped with its turn counts in that turn only
     expect(run({ turnNumber: 2, history, findingsLedger: [conflict(1)] }).reasons).toEqual([]);
   });
 
-  it('stamped with this turn: fires; unstamped: the call-id rule (it may over-report)', () => {
+  it('keeps a current stamp and leaves an unstamped repeated reference unresolved', () => {
     expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict(2)] }))).toEqual([
       'sources-conflict',
     ]);
-    expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict()] }))).toEqual([
-      'sources-conflict',
-    ]);
+    expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict()] }))).toEqual([]);
   });
 });
 

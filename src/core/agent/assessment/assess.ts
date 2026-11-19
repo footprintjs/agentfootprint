@@ -58,12 +58,13 @@ import {
   type ValueDeclaration,
 } from '../emptiness.js';
 import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
-import { argumentRewritesOf } from '../middleware/rewrites.js';
+import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { statePointer } from './pointer.js';
 import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
+import { rewritesByOccurrence } from './rewrittenArguments.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -134,49 +135,38 @@ function keptOutGuard(state: Readonly<Record<string, unknown>>): {
   return { state: guarded, asked };
 }
 
-/**
- * The calls the record places in an EARLIER turn: each call id `history` holds
- * before this turn began (`begins`) — a tool result's, or an id an assistant
- * message asked for (`toolCalls`, through the one row-list reader). Only a
- * placement the record shows: an id it does not hold anywhere is not in it.
- */
-function earlierCalls(history: readonly unknown[], begins: number): ReadonlySet<string> {
-  const ids = new Set<string>();
-  const add = (id: unknown): void => {
-    if (typeof id === 'string' && id.length > 0) ids.add(id);
-  };
-  for (let i = 0; i < begins; i++) {
-    const m = history[i];
-    if (!isRecord(m)) continue;
-    if (m.role === 'tool') add(m.toolCallId);
-    for (const call of rowList(m.toolCalls)?.entries ?? []) {
-      if (isRecord(call)) add(call.id);
-    }
-  }
-  return ids;
+type ResolveCall = ReturnType<typeof historyCallResolver>;
+
+function callIndexOf(row: Readonly<Record<string, unknown>>, resolve: ResolveCall) {
+  const id = str(row.toolCallId);
+  const resolved = id === undefined ? undefined : resolve(id, str(row.toolName));
+  return resolved?.kind === 'matched' ? resolved.call.index : undefined;
 }
 
 /** One coverage row the run committed, as the fold reads it. */
 interface CoverageRow {
   readonly index: number;
   readonly kind: 'absence' | 'ledger';
-  readonly toolCallId?: string;
+  readonly historyIndex?: number;
   readonly gap: boolean;
 }
 
 const listed = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
 
-function coverageRows(state: Readonly<Record<string, unknown>>): readonly CoverageRow[] {
+function coverageRows(
+  state: Readonly<Record<string, unknown>>,
+  resolve: ResolveCall,
+): readonly CoverageRow[] {
   const rows = state.coverageDeclared;
   if (!Array.isArray(rows)) return [];
   const out: CoverageRow[] = [];
   rows.forEach((row: unknown, index) => {
     if (!isRecord(row) || (row.kind !== 'absence' && row.kind !== 'ledger')) return;
-    const toolCallId = str(row.toolCallId);
+    const historyIndex = callIndexOf(row, resolve);
     out.push({
       index,
       kind: row.kind,
-      ...(toolCallId !== undefined && { toolCallId }),
+      ...(historyIndex !== undefined && { historyIndex }),
       gap: listed(row.notChecked) || listed(row.cannotCover),
     });
   });
@@ -250,18 +240,22 @@ function readPause(state: Readonly<Record<string, unknown>>, g: Gathered): void 
 function readArgumentVerdicts(
   state: Readonly<Record<string, unknown>>,
   rows: readonly ArgumentRowRead[],
+  resolve: ResolveCall,
   g: Gathered,
 ): void {
   rows = rows.filter((row) => !row.withheld);
   if (rows.length === 0) return;
   // The before-tool rewrites (`middlewareDecisions` · `changedKeys`) — the ONE reading the
   // answer's "Assumed" block takes too (`middleware/rewrites.ts` · `argumentRewritesOf`).
-  const rewrites = argumentRewritesOf(state.middlewareDecisions);
+  const rewrites = rewritesByOccurrence(state.middlewareDecisions, resolve);
   const witness: AssessmentPointer[] = [];
   for (const row of rows) {
     const at = statePointer('findingsLedger', row.index, 'argument');
     witness.push(at);
-    const rewrite = rewrites.get(row.toolCallId)?.get(row.argument);
+    const rewrite =
+      row.historyIndex === undefined
+        ? undefined
+        : rewrites.get(row.historyIndex)?.get(row.argument);
     if (rewrite !== undefined) {
       if (rewrite.origin !== 'person' && rewrite.origin !== 'app') {
         fire(
@@ -300,42 +294,42 @@ function readArgumentVerdicts(
   }
 }
 
-/** The call ids one ledger row names — its own, where it was declared, its carriers, its witnesses. */
-function callsNamedBy(row: Readonly<Record<string, unknown>>): string[] {
-  const named: string[] = [];
-  const id = str(row.toolCallId);
-  if (id !== undefined) named.push(id);
-  const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
-  if (on !== undefined) named.push(on);
-  // Read through the one row-list reader (`sources.ts` · `rowList`): by index, never the list's code.
-  for (const list of [row.carriers, row.witnesses]) {
-    for (const entry of rowList(list)?.entries ?? []) {
-      const at = isRecord(entry) ? str(entry.toolCallId) : undefined;
-      if (at !== undefined) named.push(at);
-    }
+interface CallPlaces {
+  readonly history: readonly unknown[];
+  readonly resolve: ResolveCall;
+  readonly begins: number;
+}
+
+function callPlacement(ref: unknown, { history, resolve, begins }: CallPlaces) {
+  if (!isRecord(ref)) return undefined;
+  const id = str(ref.toolCallId);
+  if (id === undefined) return undefined;
+  const resolved = resolve(id, str(ref.toolName));
+  if (resolved.kind === 'matched') return resolved.call.index < begins ? 'earlier' : 'current';
+  if (resolved.kind === 'missing') {
+    const proposal = uniqueHistoryProposal(history, id);
+    if (proposal !== undefined && proposal.index < begins) return 'earlier';
   }
-  return named;
+  return undefined;
 }
 
 /**
  * Where THIS turn's rows begin on the ledger, as far as the ledger itself can
  * show it: the first row stamped with this turn, or — unstamped — the first
- * that names a call of this turn. A row cannot name a call before the call
+ * that resolves to a call of this turn. A row cannot name a call before the call
  * exists, and the one writer appends in order, so every row from there on was
- * filed this turn. `-1` when no row shows it — nothing on the ledger is shown
- * to be this turn's. A provider that reuses call ids across turns breaks the
- * first premise: an earlier turn's row naming the reused id is found first,
- * and the fold over-reports from there (named in the README, "Not covered").
+ * filed this turn. `-1` when no row establishes the turn.
  */
-function firstRowOfTurn(
-  ledger: readonly unknown[],
-  calls: ReadonlySet<string>,
-  turn: number,
-): number {
+function firstRowOfTurn(ledger: readonly unknown[], places: CallPlaces, turn: number): number {
   return ledger.findIndex((row) => {
     if (!isRecord(row)) return false;
     if (typeof row.turn === 'number') return row.turn === turn;
-    return callsNamedBy(row).some((id) => calls.has(id));
+    const current = (ref: unknown) => callPlacement(ref, places) === 'current';
+    return (
+      current(row) ||
+      current(row.declaredOn) ||
+      [row.carriers, row.witnesses].some((list) => rowList(list)?.entries.some(current))
+    );
   });
 }
 
@@ -355,19 +349,18 @@ function firstRowOfTurn(
  */
 function readContingentRows(
   state: Readonly<Record<string, unknown>>,
-  calls: ReadonlySet<string>,
+  places: CallPlaces,
   g: Gathered,
 ): void {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  const since = turn !== undefined && turn > 1 ? firstRowOfTurn(ledger, calls, turn) : 0;
+  const since = turn !== undefined && turn > 1 ? firstRowOfTurn(ledger, places, turn) : 0;
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.kind !== 'contingent') return;
     if (typeof row.turn === 'number' && turn !== undefined) {
       if (row.turn !== turn) return;
     } else if (row.declaredOn !== 'answer') {
-      const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
-      if (on === undefined || !calls.has(on)) return;
+      if (callPlacement(row.declaredOn, places) !== 'current') return;
     } else if (since < 0 || index < since) {
       return;
     }
@@ -401,7 +394,7 @@ function readArgumentAsk(
 /** One `period` row of this turn — one judged call. */
 interface PeriodRowRead {
   readonly index: number;
-  readonly toolCallId: string;
+  readonly historyIndex?: number;
   readonly verdict: string;
   /** The argument the tool's `ToolPeriod` names — the join key to the call's argument row. */
   readonly argument?: string;
@@ -423,20 +416,23 @@ interface PeriodRowRead {
  * may reuse an id across batches. "The last per call" would let a later
  * `covered` hide an earlier `not-held` the answer can still rest on.
  */
-function periodRows(state: Readonly<Record<string, unknown>>): readonly PeriodRowRead[] {
+function periodRows(
+  state: Readonly<Record<string, unknown>>,
+  resolve: ResolveCall,
+): readonly PeriodRowRead[] {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   const rows: PeriodRowRead[] = [];
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.kind !== 'period') return;
     if (turn !== undefined && row.turn !== turn) return;
-    const toolCallId = str(row.toolCallId);
     const verdict = str(row.verdict);
-    if (toolCallId === undefined || verdict === undefined) return;
+    if (str(row.toolCallId) === undefined || verdict === undefined) return;
     const argument = str(row.argument);
+    const historyIndex = callIndexOf(row, resolve);
     rows.push({
       index,
-      toolCallId,
+      ...(historyIndex !== undefined && { historyIndex }),
       verdict,
       ...(argument !== undefined && { argument }),
       differs: isRecord(row.differs),
@@ -465,11 +461,11 @@ const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
  *
  * THE JOIN (results.md § 3.7): the inputs layer owns WHO chose the period
  * (the call's `argument` row for the argument its `ToolPeriod` names), this
- * layer owns WHAT the read covered. A period reason's witnesses are both rows
- * — joined by the call id and the argument name, and neither parses the
- * other's words — so a reader can say "the hour you asked about" or "the 2
- * hours the tool's rule assumed". Files the `result-period` check when the
- * layer filed any verdict this turn.
+ * layer owns WHAT the read covered. A period reason can witness both rows
+ * when the occurrence and the argument name match. Neither parses the other's
+ * words, so a reader can say "the hour you asked about" or "the 2 hours the
+ * tool's rule assumed". Files the `result-period` check when the layer filed
+ * any verdict this turn.
  */
 function readPeriodVerdicts(
   rows: readonly PeriodRowRead[],
@@ -481,12 +477,15 @@ function readPeriodVerdicts(
   for (const row of rows) {
     const at = statePointer('findingsLedger', row.index, 'verdict');
     witness.push(at);
-    const chosenBy = argumentVerdicts.find(
-      (a) => a.toolCallId === row.toolCallId && a.argument === row.argument,
-    );
+    const chosenBy =
+      row.historyIndex === undefined || row.argument === undefined
+        ? undefined
+        : argumentVerdicts.find(
+            (a) => a.historyIndex === row.historyIndex && a.argument === row.argument,
+          );
     const fireJoined = (reason: AssessmentReason, pointer: AssessmentPointer): void => {
       fire(g, reason, pointer);
-      if (row.argument !== undefined && chosenBy !== undefined) {
+      if (chosenBy !== undefined) {
         fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
       }
     };
@@ -540,13 +539,15 @@ function readResults(
   results: readonly TurnResult[],
   coverage: readonly CoverageRow[],
 ): readonly ResultRead[] {
-  const rowsByCall = new Map<string, CoverageRow[]>();
+  const rowsByCall = new Map<number, CoverageRow[]>();
   for (const row of coverage) {
-    if (row.toolCallId === undefined) continue;
-    rowsByCall.set(row.toolCallId, [...(rowsByCall.get(row.toolCallId) ?? []), row]);
+    if (row.historyIndex === undefined) continue;
+    const rows = rowsByCall.get(row.historyIndex) ?? [];
+    rows.push(row);
+    rowsByCall.set(row.historyIndex, rows);
   }
   return results.map((result) => {
-    const rows = result.toolCallId !== undefined ? rowsByCall.get(result.toolCallId) ?? [] : [];
+    const rows = rowsByCall.get(result.index) ?? [];
     const own = rows.length === 0 ? declaredByValue(result.content) : undefined;
     return { result, at: historyPointer(result), rows, ...(own !== undefined && { own }) };
   });
@@ -606,50 +607,31 @@ function readTurnResults(
 }
 
 /**
- * The calls of this turn: every result's call and every coverage row's call.
- * A row or a result that names no call is counted on its own — never merged
- * into another call. A call DECLARED what it covered when the record holds a
- * coverage row for it, or — with no row — its result's own envelope. Files the
- * `tool-coverage` check and returns the ids.
+ * A call declared coverage when its rows or its own envelope say so.
+ * Coverage rows that cannot be attributed to a result count on their own.
  */
 function readTurnCalls(
   reads: readonly ResultRead[],
   coverage: readonly CoverageRow[],
   g: Gathered,
-): ReadonlySet<string> {
-  const calls = new Set<string>();
-  for (const { result } of reads) if (result.toolCallId !== undefined) calls.add(result.toolCallId);
-  for (const c of coverage) if (c.toolCallId !== undefined) calls.add(c.toolCallId);
-  const declared = new Set(coverage.flatMap((c) => (c.toolCallId ? [c.toolCallId] : [])));
+): void {
   const witness = coverage.map((c) => statePointer('coverageDeclared', c.index, 'kind'));
-  let unnamedDeclared = 0;
-  for (const { result, at, own } of reads) {
-    if (own === undefined) continue;
-    witness.push(at);
-    if (result.toolCallId !== undefined) declared.add(result.toolCallId);
-    else unnamedDeclared += 1;
+  let declared = 0;
+  for (const { at, rows, own } of reads) {
+    if (rows.length > 0 || own !== undefined) declared += 1;
+    if (own !== undefined) witness.push(at);
   }
-  const unjoinedRows = coverage.filter((c) => c.toolCallId === undefined).length;
-  const unnamedResults = reads.filter((r) => r.result.toolCallId === undefined).length;
-  const of = calls.size + unjoinedRows + unnamedResults;
+  const unjoined = coverage.filter((c) => c.historyIndex === undefined).length;
+  const of = reads.length + unjoined;
   if (of > 0) {
     g.checked.push({
       layer: 3,
       check: 'tool-coverage',
-      ran: declared.size + unjoinedRows + unnamedDeclared,
+      ran: declared + unjoined,
       of,
       witness,
     });
   }
-  return calls;
-}
-
-/** Which turn the record places a call in, from this turn's view of it. */
-interface CallPlaces {
-  /** This turn's calls (`readTurnCalls`). */
-  readonly current: ReadonlySet<string>;
-  /** The calls `history` places before this turn began (`earlierCalls`). */
-  readonly earlier: ReadonlySet<string>;
 }
 
 /**
@@ -679,11 +661,11 @@ function readConflicts(
  * reading (`witnesses`) is placed by the call it names, as the record shows
  * it: CURRENT (a call of this turn), EARLIER (a call `history` places before
  * this turn began — its result, or the request that asked for it) or
- * UNRESOLVED (no call id, or one the record does not place: a hole, a getter's
- * entry, an id whose result the kept history no longer holds).
+ * UNRESOLVED (no identifiable call: a hole, a getter's entry, a missing
+ * result, or multiple results that could be the witness).
  *
  * - a row stamped with ANOTHER turn is never this turn's;
- * - a CURRENT reading places the row here, stamped or not (the call-id rule);
+ * - a CURRENT reading places the row here, stamped or not;
  * - a row stamped with THIS turn stays this turn's unless EVERY reading is
  *   EARLIER — a contrary placement the record establishes. An unresolved
  *   reading establishes none: the stamp keeps its doubt, and the source
@@ -703,12 +685,11 @@ function conflictOfThisTurn(
   const stamped = typeof row.turn === 'number' && turn !== undefined;
   if (stamped && row.turn !== turn) return false;
   const witnesses = rowList(row.witnesses);
-  const ids = (witnesses?.entries ?? []).map((w) => (isRecord(w) ? w.toolCallId : undefined));
-  if (ids.some((id) => typeof id === 'string' && places.current.has(id))) return true;
+  const placement = (witnesses?.entries ?? []).map((w) => callPlacement(w, places));
+  if (placement.includes('current')) return true;
   if (!stamped) return false;
-  const placedEarlier = (id: unknown): boolean => typeof id === 'string' && places.earlier.has(id);
   const readWhole = witnesses !== undefined && witnesses.unread === 0;
-  return !(readWhole && ids.length > 0 && ids.every(placedEarlier));
+  return !(readWhole && placement.length > 0 && placement.every((at) => at === 'earlier'));
 }
 
 /**
@@ -959,18 +940,21 @@ export function foldState(
     : { state: recorded, asked: new Set<string>() };
   const g: Gathered = { fired: new Map(), checked: [] };
   const history = Array.isArray(state.history) ? (state.history as readonly unknown[]) : [];
-  const { results, from, begins } = turnResults(history);
-  const coverage = coverageRows(state);
-
+  const historyCalls = readHistoryCalls(history);
+  const { results, from, begins } = turnResults(history, historyCalls);
+  const current = historyCalls.filter((call) => call.index > begins);
+  const resolveCurrent = historyCallResolver(current);
+  const places = { history, resolve: historyCallResolver(historyCalls), begins };
+  const coverage = coverageRows(state, resolveCurrent);
   const reads = readResults(results, coverage);
 
   readPause(state, g);
-  const argumentVerdicts = argumentRows(state);
+  const argumentVerdicts = argumentRows(state, current);
   readArgumentAsk(state, argumentVerdicts, g);
-  readArgumentVerdicts(state, argumentVerdicts, g);
+  readArgumentVerdicts(state, argumentVerdicts, resolveCurrent, g);
   readCoverageRows(coverage, g);
-  const calls = readTurnCalls(reads, coverage, g);
-  readContingentRows(state, calls, g);
+  readTurnCalls(reads, coverage, g);
+  readContingentRows(state, places, g);
   readTurnResults(
     reads,
     recoveredCallOutcomes(results, history, begins, retainedHistory),
@@ -978,8 +962,8 @@ export function foldState(
     issuedTicketsOf(recorded.placedTickets),
     g,
   );
-  readPeriodVerdicts(periodRows(state), argumentVerdicts, g);
-  readConflicts(state, { current: calls, earlier: earlierCalls(history, begins) }, g);
+  readPeriodVerdicts(periodRows(state, resolveCurrent), argumentVerdicts, g);
+  readConflicts(state, places, g);
   readAnswerRows(state, g);
   const integrity = readIntegrityRows(state);
   for (const { reason, at } of integrity.fired) fire(g, reason, at);
@@ -994,7 +978,12 @@ export function foldState(
       keptOut: [...asked].sort(),
     };
   }
-  const { assessment, reasons } = valueOf(g, { state, turnResults: results });
+  const { assessment, reasons } = valueOf(g, {
+    state,
+    turnResults: results,
+    historyCalls,
+    turnBegins: begins,
+  });
   return {
     assessment,
     standing: standingOf(assessment, reasons),

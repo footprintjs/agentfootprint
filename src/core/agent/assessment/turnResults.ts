@@ -4,8 +4,8 @@ import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { isPlaceholder } from '../../../redaction/marker.js';
 import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
-import { isRecord, str, unfinishedCallStatus } from './recordValues.js';
-import { rowList } from './sources.js';
+import { readHistoryCalls, type HistoryCall } from '../recordedCalls.js';
+import { isRecord, unfinishedCallStatus } from './recordValues.js';
 import type { AnswerAssessment } from './types.js';
 
 /** One tool result of this turn, where it sits in `history`. */
@@ -31,7 +31,10 @@ export interface TurnResult {
  * when none is — each read as the tool's own bytes; and where that message
  * sits (`begins`, `-1` when there is none).
  */
-export function turnResults(history: readonly unknown[]): {
+export function turnResults(
+  history: readonly unknown[],
+  occurrences: readonly HistoryCall[] = readHistoryCalls(history),
+): {
   readonly results: readonly TurnResult[];
   readonly from: AnswerAssessment['turnFrom'];
   readonly begins: number;
@@ -41,17 +44,15 @@ export function turnResults(history: readonly unknown[]): {
     // The WHOLE entry goes to the rule (`lib/saidByPerson.ts` · `isPersonEntry`),
     // the answer account's reader too: a copy of three fields dropped
     // `ephemeral`, and the two disagreed on where this turn begins.
-    if (isPersonEntry(history[i])) {
+    if (isPersonEntry(Object.getOwnPropertyDescriptor(history, String(i))?.value)) {
       start = i;
       break;
     }
   }
   const results: TurnResult[] = [];
-  for (let i = start + 1; i < history.length; i++) {
-    const m = history[i];
-    if (!isRecord(m) || m.role !== 'tool') continue;
-    const toolCallId = str(m.toolCallId);
-    const toolName = str(m.toolName);
+  for (const occurrence of occurrences) {
+    const { index: i, message: m, providerId: toolCallId, toolName } = occurrence;
+    if (i <= start) continue;
     const outcome = recordedCallOutcome(m);
     const reportedStatus = unfinishedCallStatus(m);
     results.push({
@@ -92,30 +93,18 @@ function resultArguments(
   history: readonly unknown[],
   begins: number,
 ): ReadonlyMap<number, RecordedArguments> {
-  const proposals = new Map<string, { call: Readonly<Record<string, unknown>>; index: number }>();
   const argsByResult = new Map<number, RecordedArguments>();
-  for (let index = begins + 1; index < history.length; index++) {
-    const message = history[index];
-    if (!isRecord(message)) continue;
-    if (message.role === 'assistant') {
-      for (const call of rowList(message.toolCalls)?.entries ?? []) {
-        if (isRecord(call) && typeof call.id === 'string') proposals.set(call.id, { call, index });
-      }
-      continue;
-    }
-    if (message.role !== 'tool' || typeof message.toolCallId !== 'string') continue;
-    const proposal = proposals.get(message.toolCallId);
-    proposals.delete(message.toolCallId);
+  for (const { index, toolName, proposal } of readHistoryCalls(history)) {
     if (
       proposal === undefined ||
-      proposal.call.name !== message.toolName ||
+      proposal.index <= begins ||
       proposal.call.argumentsFailure !== undefined
     )
       continue;
     const args = argsKey(proposal.call.args);
     if (args !== undefined) {
       argsByResult.set(index, {
-        signature: JSON.stringify([message.toolName, args]),
+        signature: JSON.stringify([toolName, args]),
         proposedAt: proposal.index,
       });
     }
