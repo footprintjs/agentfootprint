@@ -4,7 +4,7 @@ import { CodeFile } from '@/components/CodeFile';
 import { Aside, Card, CardGrid, Tabs, TabItem } from '@/components/starlight-shims';
 import { Diagram } from '@/components/Diagram';
 import { AgentFlowchart } from '@/components/AgentFlowchart';
-import { ReplayEmbed } from '@/components/ReplayEmbed';
+import { OfflineReplayFigure } from '@/components/OfflineReplayFigure';
 import { DynamicReactRecording, DynamicReactSubflowsFigure } from '@/components/DynamicReactFigure';
 import { SkillGraphFigure, QuickstartSkillGraphMermaid } from '@/components/SkillGraphFigure';
 import type { MDXComponents } from 'mdx/types';
@@ -22,7 +22,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     TabItem,
     Diagram,
     AgentFlowchart,
-    ReplayEmbed,
+    OfflineReplayFigure,
     DynamicReactRecording,
     DynamicReactSubflowsFigure,
     SkillGraphFigure,

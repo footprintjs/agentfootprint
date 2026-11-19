@@ -1,19 +1,22 @@
 import { deepStrictEqual, equal, notEqual, ok } from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import { resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { test } from 'node:test';
-import { gzipSync } from 'node:zlib';
-import { chromium } from 'playwright-core';
+import {
+  appVersion,
+  demoPath,
+  demoRoot,
+  measureAssetBytes,
+  openBrowser,
+  openPage,
+  recordDemoAssets,
+  serve,
+  versionedDemoPath,
+} from './browser-test-helpers.mjs';
 
-const demoPath = '/demo/quick-start/';
 const guidePath = '/docs/getting-started/quick-start/';
 const guideAnchor = '#the-run-as-a-flowchart';
 const dynamicReactGuide = '/docs/build/dynamic-react/';
-const demoRoot = fileURLToPath(new URL('../dist', import.meta.url));
-const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-const appVersion = manifest.dependencies.agentfootprint;
 const weatherAssetLimit = 200_000;
 // Historical measurements for the former Next deferred-demo budget:
 // https://github.com/footprintjs/agentfootprint/blob/5a0e6720b062ea989f6a6b14ce76995957df77ed/docs-next/scripts/check-site-budget.mjs#L347-L595
@@ -74,97 +77,12 @@ const dynamicReactViews = [
   },
 ];
 const dynamicReactAnswer = 'Done. Refund of $42 issued for [EMAIL]. You should see it in 3-5 business days.';
-const assetTypes = {
-  html: 'text/html',
-  js: 'text/javascript',
-  css: 'text/css',
-  svg: 'image/svg+xml',
-};
-
-async function serve(t, root, mount, demoOverlay = false) {
-  const server = createServer(async (req, res) => {
-    const pathname = new URL(req.url, 'http://localhost').pathname;
-    const name = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
-    const overlay = demoOverlay && pathname.startsWith(demoPath);
-    const servedRoot = overlay ? demoRoot : root;
-    const relativeName = name.slice(overlay ? demoPath.length : mount.length);
-    const file = resolve(servedRoot, relativeName);
-    if (!pathname.startsWith(mount) || !file.startsWith(`${servedRoot}${sep}`)) {
-      res.writeHead(404).end();
-      return;
-    }
-    try {
-      const bytes = await readFile(file);
-      res.setHeader(
-        'Content-Type',
-        assetTypes[file.split('.').at(-1)] ?? 'application/octet-stream',
-      );
-      res.end(bytes);
-    } catch {
-      res.writeHead(404).end();
-    }
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(
-    () =>
-      new Promise((resolve) => {
-        server.close(resolve);
-        server.closeAllConnections();
-      }),
-  );
-  return `http://127.0.0.1:${server.address().port}`;
-}
-
-async function openBrowser(t) {
-  const browser = await chromium.launch({
-    executablePath: process.env.DOCS_DEMO_CHROMIUM_EXECUTABLE,
-  });
-  t.after(() => browser.close());
-  return browser;
-}
-
-async function openPage(browser, options) {
-  const page = await browser.newPage({
-    colorScheme: 'light',
-    reducedMotion: 'reduce',
-    viewport: { width: 1280, height: 960 },
-    ...options,
-  });
-  page.setDefaultTimeout(8_000);
-  return page;
-}
-
-function versionedDemoPath({ slug }) {
-  return `${demoPath}?view=${slug}&agentfootprint=${appVersion}#${slug}`;
-}
-
 function dynamicReactGuidePath({ anchor }) {
   return `${dynamicReactGuide}#${anchor}`;
 }
 
 function skillGuidePath({ slug, anchor }) {
   return `/docs/build/${slug}/#${anchor}`;
-}
-
-function recordDemoAssets(page, demoUrl) {
-  const assets = new Map();
-  page.on('response', (response) => {
-    const url = response.url();
-    if (url.startsWith(`${demoUrl}assets/`)) {
-      assets.set(url.slice(demoUrl.length), response.status());
-    }
-  });
-  return assets;
-}
-
-async function measureAssetBytes(label, files, limit) {
-  ok(files.length > 0, `${label} emits assets`);
-  const contents = await Promise.all(files.map((file) => readFile(resolve(demoRoot, file))));
-  const bytes = contents.reduce((sum, bytes) => sum + gzipSync(bytes, { level: 9 }).byteLength, 0);
-  console.log(`${label}: ${bytes} B gzip across ${files.length} assets`);
-  if (limit !== undefined) {
-    ok(bytes <= limit, `${label}: ${bytes} B gzip exceeds its ${limit} B budget`);
-  }
 }
 
 async function inspectDynamicReactRun(page, view) {
@@ -203,14 +121,16 @@ async function inspectDynamicReactSubflows(page, view) {
       .locator('.react-flow__edge-path[d^="M"]')
       .waitFor({ state: 'attached' });
   }
-  const systemPrompt = node('sf-llm-call/sf-system-prompt');
+  const systemPrompt = node('sf-llm-call/sf-system-prompt').and(chart.locator('[tabindex="0"]'));
   const compose = node('sf-llm-call/sf-system-prompt/compose');
-  await systemPrompt.press('Enter');
+  await systemPrompt.focus();
+  await page.keyboard.press('Enter');
   await compose.waitFor();
   ok(await chart.evaluate((element) => document.activeElement === element));
   await chart.getByRole('button', { name: 'LLM', exact: true }).press('Enter');
   await systemPrompt.waitFor();
-  await systemPrompt.press('Space');
+  await systemPrompt.focus();
+  await page.keyboard.press('Space');
   await compose.waitFor();
   await chart.getByRole('button', { name: 'Chart', exact: true }).click();
   const call = node('sf-llm-call');

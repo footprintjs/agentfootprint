@@ -8,6 +8,7 @@ import { StandNode } from '@/components/home/stand/StandNode';
 import { StandStageBar, StandStages } from '@/components/home/stand/StandStages';
 import { ReadingRow } from '@/components/site/ReadingRow';
 import { SampleCode } from '@/components/site/SampleCode';
+import { replayDemoHref, replayDemoVersion } from '@/lib/replay-demo';
 import { LENSES } from './lenses';
 
 /** The libraries around this one, each with what it does for you. Published on npm, all of them. */
@@ -206,7 +207,7 @@ export function HowToBuild() {
           }}
           aside={
             <SampleCode
-              file="site-samples/debug-lens.tsx"
+              file="../docs-demo/src/samples/debug-lens.tsx"
               marks={['lensRecorder()', '<Lens ', 'recorder.observe']}
             />
           }
@@ -222,6 +223,7 @@ export function HowToBuild() {
               </li>
             ))}
           </ul>
+          <p><a href={replayDemoHref('lens')}>Run the Lens example</a> (AgentFootprint {replayDemoVersion})</p>
         </ReadingRow>
 
         <ReadingRow

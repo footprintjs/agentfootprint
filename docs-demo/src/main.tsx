@@ -3,8 +3,12 @@ import '@xyflow/react/dist/style.css';
 import { TracedFlow, type TraceGraph } from 'footprint-explainable-ui/flowchart';
 import { useState, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DemoFrame, RecordingCohort, type DemoFrameContent } from './DemoFrame';
-import type { DynamicReactViewProps } from './DynamicReactRun';
+import {
+  DemoFrame,
+  RecordingCohort,
+  type DemoFrameContent,
+  type PublishedDemoViewProps,
+} from './DemoFrame';
 import type { SkillGraphDemo, SkillGraphViewProps } from './SkillGraphTryItInner';
 import weatherRun from './generated/weather-run.json';
 import './style.css';
@@ -77,18 +81,34 @@ const skillViews = {
   { demo: SkillGraphDemo; title: string; guideTitle: string; guideHref: string }
 >;
 
-const dynamicReactViews = {
+const lazyViews = {
   'dynamic-react': {
     title: 'Dynamic ReAct live demo',
-    anchor: 'try-it-live',
+    guideTitle: 'Dynamic ReAct',
+    guideHref: '../../docs/build/dynamic-react/#try-it-live',
     fallback: 'The guide has the recorded run.',
     load: () => import('./DynamicReactRun'),
   },
   'dynamic-react-subflows': {
     title: 'Dynamic ReAct subflows',
-    anchor: 'how-every-iteration-actually-works',
+    guideTitle: 'Dynamic ReAct',
+    guideHref: '../../docs/build/dynamic-react/#how-every-iteration-actually-works',
     fallback: 'The guide has the recorded diagram.',
     load: () => import('./DynamicReactSubflows'),
+  },
+  'offline-replay': {
+    title: 'Offline replay',
+    guideTitle: 'Replay a saved run',
+    guideHref: '../../docs/debug/offline-replay/#replay-trace--the-chart-only-subset',
+    fallback: 'The guide has the recorded diagram and the saved Trace.',
+    load: () => import('./OfflineReplay'),
+  },
+  'how-to-build-lens': {
+    title: 'See it in Lens',
+    guideTitle: 'How to Build',
+    guideHref: '../../how-to-build/#debug',
+    fallback: 'How to Build has the sample code.',
+    load: () => import('./HowToBuildLens'),
   },
 };
 
@@ -98,6 +118,8 @@ const view = params.get('view');
 const version = params.get('agentfootprint');
 const skillView =
   view === 'skill-graph-quickstart' || view === 'skills-explained' ? skillViews[view] : undefined;
+const lazyView =
+  view && Object.hasOwn(lazyViews, view) ? lazyViews[view as keyof typeof lazyViews] : undefined;
 
 if (skillView) {
   document.title = `${skillView.title} · AgentFootprint`;
@@ -126,18 +148,18 @@ if (skillView) {
     ({ default: View }) => renderSkillView(View),
     () => renderSkillView(),
   );
-} else if (view === 'dynamic-react' || view === 'dynamic-react-subflows') {
-  const { anchor, fallback, load, title } = dynamicReactViews[view];
+} else if (view && lazyView) {
+  const { guideHref, guideTitle, fallback, load, title } = lazyView;
   // All generated views and the live SDK use the same locked app cohort.
   const { provenance } = weatherRun;
   document.title = `${title} · AgentFootprint`;
 
-  const renderDynamicReactView = (View?: ComponentType<DynamicReactViewProps>, error?: string) => {
+  const renderLazyView = (View?: ComponentType<PublishedDemoViewProps>, error?: string) => {
     root.render(
       <DemoFrame>
         {(frame) => (
           <>
-            <a href={`../../docs/build/dynamic-react/#${anchor}`}>← Back to Dynamic ReAct</a>
+            <a href={guideHref}>← Back to {guideTitle}</a>
             <header id={view}>
               <h1>{title}</h1>
             </header>
@@ -153,12 +175,12 @@ if (skillView) {
   };
 
   if (version !== null && !provenance.cohort.includes(`agentfootprint@${version}`)) {
-    renderDynamicReactView(undefined, 'The interactive viewer is unavailable for this version.');
+    renderLazyView(undefined, 'The interactive viewer is unavailable for this version.');
   } else {
-    renderDynamicReactView();
+    renderLazyView();
     load().then(
-      ({ default: View }) => renderDynamicReactView(View),
-      () => renderDynamicReactView(undefined, 'The interactive viewer is unavailable.'),
+      ({ default: View }) => renderLazyView(View),
+      () => renderLazyView(undefined, 'The interactive viewer is unavailable.'),
     );
   }
 } else {
