@@ -18,26 +18,24 @@ here.
 - `PermissionPolicy.ts` — the role allowlist, usable as an async checker and a
   sync gate predicate.
 - `PolicyHaltError.ts` — the typed halt.
-- `extractSequence.ts` — the in-flight sequence, from history: the calls that
-  really dispatched. A call denied at the gate is left out (by its synthetic
-  prefix), and so is a call a paused batch never dispatched (9.113.0, by its
-  `LLMMessage.notDispatched` marker) — a "verify before transfer" policy is
-  never met by a verify that did not run. The marker settles the ONE proposal
-  it answers, paired by POSITION (`settledProposals`), because an id alone
-  cannot say which: providers may reuse ids, and the library's own fallback
-  ids are minted per provider instance, so a restarted process mints the
-  settled call's id again for a call that really runs. Example: history
-  `[assistant: verify#k1] [tool k1: settled] [assistant: lookup#k1] [tool k1:
-  'ok']` gives the sequence `[lookup]` — the lookup ran, the verify did not.
-  The deny and in-flight checks still pair by id, as they always have, so a
-  history with no marker reads exactly as it did before — limits included: a
-  call denied at the gate still counts once a later call that runs reuses its
-  id, and a call that ran drops out once a later reuse of its id is denied.
-  The in-flight check has the same limit: a call never answered — a halt's
-  later siblings, a paused turn continued after `abandonPause()` — counts
-  once a later call that runs reuses its id. Settling those two doors with
-  the marker is the named follow-up (`src/core/README.md` · "Not covered
-  yet").
+- `extractSequence.ts` — the sequence given to a permission checker uses the
+  result paired by position with each recorded proposal. Unanswered proposals,
+  explicit `LLMMessage.notDispatched` settlements, and results whose
+  `toolResultOrigin` says `not-entered` or `input-cancelled` stay out of the
+  sequence. A result marked `outcome-unknown` stays in as a possible dispatch
+  because the record leaves entry uncertain.
+
+  - `[assistant: read_palette#k1] [tool k1: settled] [assistant: lookup_swatch#k1] [tool k1: 'ok']` gives `[lookup_swatch]`.
+  - `[assistant: read_palette#k1] [tool k1: refused] [assistant: lookup_swatch#k1] [tool k1: 'ok']` gives `[lookup_swatch]`.
+
+  Here `settled` is a recorded settlement and `refused` is a recorded non-entry.
+  The regular and resumed dispatch paths write non-entry with findings enabled.
+  Without a result origin, the reader uses the legacy synthetic denial prefix.
+  A custom refusal without that prefix or an origin can still appear in the
+  sequence. A hosting input cancellation without its origin also stays in.
+  The sequence describes recorded dispatch history. Completion and the source
+  history's trustworthiness require separate evidence.
+
   A call a tool made through `ctx.tools.call` whose function was entered
   rides its outer call's result message (`LLMMessage.calls`) and follows that
   call in the sequence, marked `inner: true`. Example: `[assistant: compose#c1]
@@ -45,6 +43,9 @@ here.
   (inner)]`. Until the outer call's result lands, the next inner call's
   checker gets the same entries from the run's `innerToolCalls` rows
   (`core/agent/stages/toolCalls/access/innerCallGates.ts`).
+  The writer groups the inner rows by the outer call's ID and iteration.
+  When two outer calls share one ID within a batch, their own inner rows
+  cannot be distinguished from that grouping.
 - `skillTarget.ts` — one spelling, one owner.
 - `thinkingRedaction.ts` — the deliberate two-view split: unredacted to the
   provider for signature round-trip, redacted into `scope.history`.
