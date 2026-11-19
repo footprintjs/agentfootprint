@@ -39,8 +39,8 @@ different physical copies. Webpack applies these aliases only to the client,
 leaving its server resolution unchanged. Turbopack's existing global alias policy
 also covers Foottrace, using relative paths to the same files. `check:browser-demos`
 checks every public door and Webpack's unchanged server resolution. With
-`DOCS_WEBPACK_STATS=1`, the build also writes client module statistics for checking
-physical bundle ownership.
+`DOCS_WEBPACK_STATS=1`, the build also writes module statistics for inspecting
+bundle contents.
 
 ## Visual context walkthrough
 
@@ -123,11 +123,10 @@ npm run check:api    # CI guard: regenerate + `git diff --exit-code` (fails if s
 Wire `npm run check:api` into CI so a PR that changes the public API but forgets to
 regenerate docs fails the build — the no-stale-docs guarantee.
 
-### Skill graph browser bundle
+### Skill graph figures
 
-The skill graph and the full inspector share the public Lens entry point. The documentation
-site compiles the skill graph’s one named import separately so opening that diagram does
-not also download the inspector. The [entry](components/demos/skillGraphView.ts) keeps
-the installed Lens component and its types. The [client loader](scripts/skill-graph-view-loader.cjs)
-leaves React, ReactFlow, styles and layout dependencies to the site’s normal bundler.
-The existing site budget measures all assets the diagram needs.
+The two skill graph guides show the declared maps recorded from mock runs in the
+[separately locked demo](../docs-demo/README.md). Run `npm run gen:skill-graphs`
+in `docs-demo` to refresh the checked-in figures. This site renders the Quickstart
+example's Mermaid source with the current library and verifies both graphs with
+`npm run check:tryit`. The static export also includes the demo's fallback sections.

@@ -5,26 +5,7 @@ import { mock } from 'agentfootprint/providers';
 import { createTraceStructureRecorder } from 'footprint-explainable-ui/flowchart';
 import { buildWeatherAgent, weatherAnswer, weatherInput } from './quick-start-weather.mjs';
 import { renderWeatherDiagram } from './render-weather-diagram.mjs';
-
-const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
-const packages = [
-  'agentfootprint',
-  'agentfootprint-lens',
-  'footprint-explainable-ui',
-  'footprintjs',
-  'foottrace',
-];
-// Record the immutable published source commit alongside a reviewed version bump.
-const agentFootprintVersion = lock.packages['node_modules/agentfootprint'].version;
-const releaseCommits = { '15.0.0': 'd966fbcd880bba639ac587f8fd59164772403a0e' };
-ok(
-  releaseCommits[agentFootprintVersion],
-  `Record the release commit for AgentFootprint ${agentFootprintVersion}.`,
-);
-const provenance = {
-  commit: releaseCommits[agentFootprintVersion],
-  cohort: packages.map((name) => `${name}@${lock.packages[`node_modules/${name}`].version}`),
-};
+import { provenance } from './published-cohort.mjs';
 
 const trace = createTraceStructureRecorder();
 const agent = buildWeatherAgent({ Agent, mock }, [trace.recorder]);

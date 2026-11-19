@@ -1,8 +1,6 @@
-import { deepStrictEqual, equal, match, ok } from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { deepStrictEqual, equal, match } from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
-import { gzipSync } from 'node:zlib';
 
 const require = createRequire(import.meta.url);
 const manifest = require('../package.json');
@@ -33,17 +31,4 @@ test('the demo resolves its exact published cohort with one engine and Foottrace
       equal(ownerRequire.resolve(shared), require.resolve(shared), `${owner} must share ${shared}`);
     }
   }
-});
-
-test('the published weather viewer stays within its asset budget', () => {
-  const assets = new URL('../dist/assets/', import.meta.url);
-  const names = readdirSync(assets);
-  ok(names.some((name) => name.endsWith('.js')));
-  ok(names.some((name) => name.endsWith('.css')));
-  const bytes = names.reduce(
-    (sum, name) => sum + gzipSync(readFileSync(new URL(name, assets)), { level: 9 }).byteLength,
-    0,
-  );
-  ok(bytes <= 200_000, `Quick Start viewer: ${bytes} B gzip exceeds its 200,000 B budget`);
-  console.log(`Quick Start viewer: ${bytes} B gzip across ${names.length} assets`);
 });

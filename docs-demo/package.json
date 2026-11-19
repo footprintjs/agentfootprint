@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/gen-agent-flowchart.mjs && tsc --noEmit && vite build --base=./",
-    "check": "npm run build && node scripts/gen-agent-flowchart.mjs --check && node --test scripts/check-*.test.mjs",
-    "gen:flowchart": "node scripts/gen-agent-flowchart.mjs --write"
+    "build": "node scripts/gen-agent-flowchart.mjs && node scripts/gen-skill-graphs.mjs && tsc --noEmit && vite build --base=./",
+    "check": "npm run build && node scripts/gen-agent-flowchart.mjs --check && node scripts/gen-skill-graphs.mjs --check && node --test scripts/check-*.test.mjs",
+    "gen:flowchart": "node scripts/gen-agent-flowchart.mjs --write",
+    "gen:skill-graphs": "node scripts/gen-skill-graphs.mjs --write"
   },
   "dependencies": {
     "@xyflow/react": "12.11.0",
