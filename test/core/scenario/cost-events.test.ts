@@ -20,7 +20,6 @@ import type {
   LLMResponse,
   PricingTable,
 } from '../../../src/provider-contract/types.js';
-import { expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...r: LLMResponse[]): LLMProvider {
   let i = 0;
@@ -385,41 +384,68 @@ describe('cost — security', () => {
   });
 });
 
-// ── 6. Performance — negligible overhead ────────────────────────────
+// ── 6. Work per completed model call ───────────────────────────────
 
-describe('cost — performance', () => {
-  it(
-    'adding a pricingTable adds negligible overhead to a single run',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      const baseLlm = LLMCall.create({
-        provider: new MockProvider({ reply: 'ok' }),
-        model: 'mock',
-      })
-        .system('')
-        .build();
-
-      const pricedLlm = LLMCall.create({
-        provider: new MockProvider({ reply: 'ok' }),
-        model: 'mock',
-        pricingTable: flatPricing(0.00001, 0.00003),
-      })
-        .system('')
-        .build();
-      // Purely comparative, and sampled alternately: the same thirty runs with
-      // and without pricing, interleaved on this machine. Cost accounting is
-      // constant-time per call, so 3× is generous headroom — and a busy runner
-      // slows both halves equally.
-      await expectWithinTimes({
-        baseline: async () => {
-          for (let i = 0; i < 8; i++) await baseLlm.run({ message: 'x' });
-        },
-        subject: async () => {
-          for (let i = 0; i < 8; i++) await pricedLlm.run({ message: 'x' });
-        },
-        times: 3,
-        why: 'a pricing table must not multiply run cost',
+describe('cost — work per model call', () => {
+  it.each([
+    { tableSize: 1, turns: 1 },
+    { tableSize: 128, turns: 1 },
+    { tableSize: 1, turns: 4 },
+    { tableSize: 128, turns: 4 },
+  ])(
+    'looks up two rates and emits one tick per call ($tableSize models, $turns turns)',
+    async ({ tableSize, turns }) => {
+      const models = new Map<string, { input: number; output: number }>();
+      for (let i = 0; i < tableSize; i++) {
+        models.set(`model-${i}`, { input: 0.00001, output: 0.00003 });
+      }
+      const model = `model-${tableSize - 1}`;
+      const pricePerToken = vi.fn<PricingTable['pricePerToken']>((id, kind) => {
+        const rates = models.get(id);
+        return kind === 'input' || kind === 'output' ? rates?.[kind] ?? 0 : 0;
       });
+      const replies = Array.from({ length: turns - 1 }, (_, i) =>
+        resp('', [{ id: `take-${i}`, name: 'step', args: { step: i } }]),
+      );
+      const recordTick = vi.fn();
+      const workByTurn: { lookups: number; ticks: number }[] = [];
+      const provider = scripted(...replies, resp('done'));
+      const complete = vi.fn<LLMProvider['complete']>(async (request) => {
+        workByTurn.push({
+          lookups: pricePerToken.mock.calls.length,
+          ticks: recordTick.mock.calls.length,
+        });
+        return provider.complete(request);
+      });
+      const agent = Agent.create({
+        provider: { name: provider.name, complete },
+        model,
+        pricingTable: { name: 'test-model-rates', pricePerToken },
+      })
+        .system('')
+        .tool({
+          schema: { name: 'step', description: '', inputSchema: { type: 'object' } },
+          execute: () => 'ok',
+        })
+        .build();
+
+      agent.on('agentfootprint.cost.tick', recordTick);
+      expect(await agent.run({ message: 'go' })).toBe('done');
+
+      expect(complete).toHaveBeenCalledTimes(turns);
+      expect(pricePerToken).toHaveBeenCalledTimes(2 * turns);
+      expect(recordTick).toHaveBeenCalledTimes(turns);
+      expect(workByTurn).toEqual(
+        Array.from({ length: turns }, (_, turn) => ({ lookups: 2 * turn, ticks: turn })),
+      );
+      for (let turn = 0; turn < turns; turn++) {
+        expect(pricePerToken.mock.calls.slice(2 * turn, 2 * turn + 2)).toEqual(
+          expect.arrayContaining([
+            [model, 'input'],
+            [model, 'output'],
+          ]),
+        );
+      }
     },
   );
 });

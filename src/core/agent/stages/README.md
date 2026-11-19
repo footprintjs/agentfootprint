@@ -7,7 +7,7 @@ and coverage). `toolCalls/` owns dispatch and has its own module map.
 Lens (model-facing text): `callLLM.ts` assembles the request. `toolCalls/helpers/`
 composes dispatch and skill refusals. `toolCalls/batch/settle.ts` composes
 settlement results. `stepNudge.ts`, `evidenceRecheck.ts`, `wrapUp.ts`, and
-`outputRetry.ts` compose corrections while choosing the next branch.
+`outputRetry.ts` compose corrections after Route chooses the branch.
 Map: `finalStageContract.ts` describes the arms that mount the final stage.
 Trace: `routeIntegrity.ts` files the integrity evidence prepared by the checks.
 This folder holds the library's densest set of model-facing composers, which is
@@ -37,7 +37,7 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 | route.ts | Routes to one of seven branches. `willDispatch` admits tool calls within the current iteration and policy limits. Pending calls at the iteration cap can trigger the mounted wrap-up branch. A candidate answer can go to output retry, step nudge, evidence recheck, or the typed negative-claim recheck. Findings admission and host output policy can refuse the answer. Final captures accepted output and persists memory. Armed checks can file committed witness rows with the turn stamp. |
 | toolCalls/ | `index.ts` composes the pausable handler. `execution/dispatchCall.ts` dispatches a fresh batch call and `execution/initialInvocation.ts` owns its invocation. `execution/resumedInvocation.ts` and `access/resumedAdmission.ts` share policy rechecks for check-in, ask, and credential resumes that wait for entry. Plain input resumes land the answer for a call that already entered. |
 | toolCalls/routing/readSkillRoute.ts | Gates `read_skill`, including re-engagement, self-call and activation. |
-| toolCalls/routing/stepsOperations.ts | Advances, holds or skips the current step via `stepOutcomeOf`. `noteSkillRefusal` feeds escalation from skill refusals. |
+| toolCalls/routing/stepsOperations.ts | `applyStepReturn` advances or holds the current step using `stepOutcomeOf`. `applySkipStep` records an explicit skip and follows the plan's `onSkip` policy. `noteSkillRefusal` feeds escalation from skill refusals. |
 | toolCalls/routing/effectsOperations.ts | Judges declared transition proposals and instruction leases. The injection engine owns lease tenure. |
 | toolCalls/evidence/coverageOperations.ts | Recognizes coverage and absence on unwrapped content before the result ceiling, files their evidence and derives the delivered status. |
 | outputRetry.ts | `.outputSchema()` re-ask branch |

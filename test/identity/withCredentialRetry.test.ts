@@ -16,7 +16,7 @@
  *   • `authorization-required` (3LO consent) is NEVER retried
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import {
@@ -24,9 +24,10 @@ import {
   staticTokens,
   bearer,
   type CredentialProvider,
+  type CredentialRequest,
   type CredentialResult,
 } from '../../src/identity.js';
-import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
+import * as retryWait from '../../src/lib/sleep.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -362,29 +363,44 @@ describe('withCredentialRetry — Security', () => {
 });
 
 // ─── Performance ─────────────────────────────────────────────────────
-describe('withCredentialRetry — Performance', () => {
-  it(
-    'zero-retry happy path adds negligible overhead — measured against the bare provider',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // "Negligible" needs something to be negligible NEXT TO. The bare
-      // provider, timed on this machine moments earlier, is that something.
-      // When nothing retries, the wrapper is one try/catch, so 3× is generous
-      // headroom and a busy runner cannot manufacture a failure.
-      const bare = staticTokens({ s: 'tok' });
-      const wrapped = withCredentialRetry(staticTokens({ s: 'tok' }));
-      const fetch = async (
-        provider: { getCredential: (r: { service: string }) => Promise<unknown> },
-        times: number,
-      ): Promise<void> => {
-        for (let i = 0; i < times; i++) await provider.getCredential({ service: 's' });
-      };
-      await expectWithinTimes({
-        baseline: () => fetch(bare, 2000),
-        subject: () => fetch(wrapped, 2000),
-        times: 3,
-        why: 'the retry wrapper must be free when nothing retries',
-      });
+describe('withCredentialRetry — success path', () => {
+  it.each([
+    { requests: 1, maxAttempts: 1 },
+    { requests: 1, maxAttempts: 20 },
+    { requests: 10, maxAttempts: 1 },
+    { requests: 10, maxAttempts: 20 },
+  ])(
+    'reads once per request across $requests requests with up to $maxAttempts attempts',
+    async ({ requests, maxAttempts }) => {
+      const cached = issued();
+      const refresh = vi.fn(() => issued('refreshed'));
+      // Model a cache hit unless the request explicitly asks to reauthorize.
+      const getCredential = vi.fn(async (req: CredentialRequest) =>
+        req.forceReauth ? refresh() : cached,
+      );
+      const shouldRetry = vi.fn(() => true);
+      const onRetry = vi.fn();
+      const sleep = vi.spyOn(retryWait, 'sleep').mockResolvedValue(undefined);
+      try {
+        const wrapped = withCredentialRetry(
+          { id: 'cached', getCredential },
+          { maxAttempts, shouldRetry, onRetry },
+        );
+
+        for (let i = 0; i < requests; i++) {
+          const request = { service: `service-${i}` };
+          expect(await wrapped.getCredential(request)).toBe(cached);
+          expect(getCredential).toHaveBeenCalledTimes(i + 1);
+          expect(getCredential).toHaveBeenLastCalledWith(request);
+        }
+
+        expect(refresh).not.toHaveBeenCalled();
+        expect(shouldRetry).not.toHaveBeenCalled();
+        expect(onRetry).not.toHaveBeenCalled();
+        expect(sleep).not.toHaveBeenCalled();
+      } finally {
+        sleep.mockRestore();
+      }
     },
   );
 });

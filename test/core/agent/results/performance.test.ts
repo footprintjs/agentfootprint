@@ -7,21 +7,23 @@
  * Test types (Convention 3):
  *   - PERFORMANCE — commit-log bytes over a 50-iteration run with a tool whose
  *                   results declare a period, armed against the same run
- *                   unarmed; the per-iteration cost of the mount (a ratio
- *                   against the unarmed twin); the verdict over 1,000 periods
+ *                   unarmed; mounted stages and rows visited per batch against
+ *                   the unarmed twin; the verdict over 1,000 periods
  *                   against 100 scales linearly;
  *   - LOAD        — ONE ledger write per batch across the 50 iterations and
  *                   one verdict per call — never a rescan of earlier batches —
  *                   and a 200-call batch filed in one merge.
  */
 
-import { describe, expect, it } from 'vitest';
-import { vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Agent, absent, defineTool, type Tool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
+import type { LLMProvider } from '../../../../src/provider-contract/types.js';
+import * as ledger from '../../../../src/core/agent/findings/ledger.js';
 import { periodVerdict, type DeclaredPeriod } from '../../../../src/semantics/coverage/period.js';
-import { expectScalesLinearly, expectWithinTimes } from '../../../helpers/perf.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../../../../src/lib/conventions.js';
+import { countMountedStageRuns, observeMountRowReads } from '../../../helpers/mountWork.js';
+import { expectScalesLinearly } from '../../../helpers/perf.js';
 
 const PERIOD: DeclaredPeriod = {
   queried: { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' },
@@ -39,11 +41,11 @@ function backupRuns(): Tool {
 }
 
 /** `calls` iterations of `width` calls each, then an answer. */
-function provider(calls: number, width = 1) {
+function provider(calls: number, width = 1): LLMProvider {
   let i = 0;
   return {
     name: 'perf-mock',
-    complete: async (_req: LLMRequest): Promise<LLMResponse> => {
+    complete: async () => {
       i += 1;
       return i <= calls
         ? {
@@ -54,15 +56,21 @@ function provider(calls: number, width = 1) {
               args: { host: `h${k}` },
             })),
             usage: { input: 0, output: 0 },
+            stopReason: 'tool_use',
           }
-        : { content: 'done', toolCalls: [], usage: { input: 0, output: 0 } };
+        : {
+            content: 'done',
+            toolCalls: [],
+            usage: { input: 0, output: 0 },
+            stopReason: 'end_turn',
+          };
     },
   };
 }
 
 async function run(armed: boolean, calls: number, width = 1) {
   let builder = Agent.create({
-    provider: provider(calls, width) as never,
+    provider: provider(calls, width),
     model: 'm',
     maxIterations: calls + 5,
   }).tool(backupRuns());
@@ -115,22 +123,44 @@ describe('performance — the results layer, measured', () => {
     expect((armed.sharedState.findingsLedger as unknown[]).length).toBe(200);
   });
 
-  it(
-    'the per-iteration cost of the mount stays within 3× of the unarmed twin',
-    { timeout: 120_000, retry: 2 },
-    async () => {
+  it.each([1, 4, 8])(
+    'adds four stages per iteration and bounds committed-row reads per %i-call batch',
+    async (width) => {
+      const stages = [
+        STAGE_IDS.DECLARE_RESULTS,
+        STAGE_IDS.VERIFY_RESULTS,
+        STAGE_IDS.RECORD_RESULTS,
+        STAGE_IDS.RESOLVE_RESULTS,
+      ];
+      const batches = 5;
+      const earlierRows = (width * batches * (batches - 1)) / 2;
+      const coverageRows = earlierRows + width * batches;
+      const merge = vi.spyOn(ledger, 'appendRows');
+      const work = observeMountRowReads(SUBFLOW_IDS.RESULTS);
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       try {
-        await expectWithinTimes({
-          subject: () => run(true, 5),
-          baseline: () => run(false, 5),
-          times: 3,
-          why:
-            'the armed run adds one subflow of four small stages per iteration and one ledger ' +
-            'merge per batch; 3× bounds it well above that and still trips on a per-call rescan',
+        const unarmed = await run(false, batches, width);
+        expect(merge).not.toHaveBeenCalled();
+        for (const stage of stages)
+          expect(countMountedStageRuns(unarmed, SUBFLOW_IDS.RESULTS, stage)).toBe(0);
+        expect(work.reads()).toEqual({ findingsLedger: 0, coverageDeclared: 0 });
+
+        const armed = await run(true, batches, width);
+        expect(merge).toHaveBeenCalledTimes(batches);
+        // Each stage runs once at the initial loop head and once after each dispatch.
+        // The coverage scan includes the current batch. The previous findings ledger
+        // is read once to look for a clock row and once to merge the new verdicts.
+        // Each pass is per batch, so its reads grow linearly with the width.
+        for (const stage of stages)
+          expect(countMountedStageRuns(armed, SUBFLOW_IDS.RESULTS, stage)).toBe(batches + 1);
+        expect(work.reads()).toEqual({
+          findingsLedger: 2 * earlierRows,
+          coverageDeclared: coverageRows,
         });
       } finally {
         warn.mockRestore();
+        work.restore();
+        merge.mockRestore();
       }
     },
   );

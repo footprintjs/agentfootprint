@@ -25,7 +25,9 @@ npm run dev      # http://localhost:3000 → /docs
 npm run build    # static/server build
 ```
 
-The site always builds against the AgentFootprint source beside it, so the docs override Lens's AgentFootprint peer to that link and check compatibility through the build, Try-it and type checking.
+The site builds against the AgentFootprint source beside it. The published Lens
+declares a peer range that accepts that source. The docs build, Try-it and type
+checks verify the locked packages together.
 The docs use npm's `install-links` setting to pack the built `file:..` dependency into
 the docs install, where the site and AgentFootprint share one FootPrint and
 Foottrace package. Run `npm ci` again in the docs after rebuilding the root source.
