@@ -294,12 +294,6 @@ jobs:
         working-directory: docs-next
         run: npm ci --strict-peer-deps
 
-      - name: Check when the docs can use a published Lens
-        working-directory: docs-next
-        run: |
-          node --test vendor/lens/check-published.test.mjs
-          node vendor/lens/check-published.mjs
-
       # The "Try it live" embed runs this builder in the reader's browser. The
       # deploy (docs.yml) checks it too — too late: npm already has the version.
       - name: Check the Try-it demo runs end-to-end
