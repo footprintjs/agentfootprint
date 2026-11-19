@@ -6,8 +6,9 @@ skill views show the routing graphs from the two skill guides. Dynamic ReAct
 records a live run with a scripted model and opens the native Lens viewer.
 Its separate subflow view shows the recorded structure of the model-call
 loop. Offline replay draws the chart from the Trace linked in the guide.
-The How to Build example records a fresh mock greeting in Lens. The docs
-run the recording fixtures against the current library in `check:tryit`.
+The How to Build example records a fresh mock greeting in Lens. The Context
+walkthrough opens the recorded state at the selected milestone in Lens. The
+docs run the recording fixtures against the current library in `check:tryit`.
 
 ```sh
 npm ci --strict-peer-deps
@@ -32,6 +33,8 @@ graph and uses Explainable UI's native `TracedFlow`. Use
 `npm run gen:dynamic-react` for changes to the Dynamic ReAct fixture.
 Use `npm run gen:offline-replay` to recapture the redacted Trace and update
 its figures and provenance together.
+Use `npm run gen:context-walkthrough` to refresh the Context lesson excerpts
+from the same pinned recording used by the inspector.
 
 The build emits `dist/` with relative asset URLs for `/demo/quick-start/`.
 The guide links use the `view` query parameter to open the matching view and a

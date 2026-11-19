@@ -7,7 +7,7 @@ import { SITE } from '@/lib/site';
 
 const title = 'Context engineering, step by step — AgentFootprint';
 const description =
-  'See how a question becomes a scoped, checked answer. Follow the context, data references and validation through two visual walkthroughs.';
+  'See how a question becomes a scoped, checked answer. Read two illustrated lessons and inspect context from a saved mock run.';
 export const metadata: Metadata = {
   title: { absolute: title },
   description,
@@ -132,11 +132,11 @@ export default function ContextEngineeringPage() {
             </p>
           </details>
           <details>
-            <summary>Is this a real model run?</summary>
+            <summary>Where do the context examples come from?</summary>
             <p>
-              No. The data and model proposals are invented to make the mechanism visible. The
-              conflicting values reproduce the shape checked by the local comparator example. The
-              walkthrough does not measure tokens, accuracy or causal diagnosis.
+              The answer excerpts come from a saved run on a deterministic mock provider. Both
+              lessons use synthetic data. The conflict illustrations show how a host could handle
+              disagreeing values.
             </p>
           </details>
         </div>

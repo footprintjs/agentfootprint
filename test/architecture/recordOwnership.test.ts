@@ -106,11 +106,13 @@ describe('canonical record ownership', () => {
     const { files, found } = JSON.parse(run.stdout) as { files: string[]; found: string[] };
     expect(files.length).toBeGreaterThan(100);
     for (const demo of [
-      'docs-next/scripts/gen-context-walkthrough.mjs',
+      'docs-demo/scripts/gen-context-walkthrough.mjs',
       'docs-demo/scripts/gen-dynamic-react.mjs',
       'docs-demo/scripts/gen-offline-replay.mjs',
       'docs-demo/shared/recordDynamicReactRun.mjs',
       'docs-demo/shared/recordOfflineReplay.mjs',
+      'docs-demo/shared/recordContextWalkthrough.mjs',
+      'docs-demo/src/ContextWalkthrough.tsx',
       'docs-demo/src/DynamicReactRun.tsx',
       'docs-demo/src/DynamicReactSubflows.tsx',
       'docs-demo/src/HowToBuildLens.tsx',

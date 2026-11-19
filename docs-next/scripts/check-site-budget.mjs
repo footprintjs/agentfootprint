@@ -787,6 +787,75 @@ function analyzeReplayDemos() {
   }
 }
 
+function analyzeContextWalkthrough() {
+  const guidePath = 'context-engineering/';
+  const fallbackPath = 'demo/quick-start/';
+  const view = 'context-walkthrough';
+  const guideFile = requiredOutputAsset(`${guidePath}index.html`, 'Context Engineering');
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Context walkthrough fallback');
+  if (!guideFile || !fallbackFile) return;
+  const guide = readFileSync(guideFile, 'utf8');
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const recorded = JSON.parse(
+    readFileSync(new URL('../lib/context-walkthrough-figure.json', import.meta.url)),
+  );
+  const stories = {
+    answer: ['question', 'selection', 'reference', 'prepare', 'model', 'finding', 'answer'],
+    conflict: ['same-claim', 'conflict', 'pause', 'repair', 'check-output', 'checked-answer'],
+  };
+  const version = manifest.dependencies.agentfootprint;
+  if (recorded.agentFootprintVersion !== version ||
+    Object.keys(recorded.steps).length !== stories.answer.length) {
+    fail('Context Engineering: outdated cohort version or incomplete recorded steps');
+  }
+  for (const anchor of ['cx-layers-title', 'cx-boundary-title', 'context-answer-story', 'context-conflict-story']) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Context Engineering: missing #${anchor}`);
+  }
+  const source = /<p class="cx-source">Recorded with (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.<\/p>/i.exec(guide);
+  if (!source || source[1] !== recorded.cohort.join(', ') ||
+    source[3] !== recorded.commit.slice(0, 12) ||
+    !attribute(source[2], 'href')?.endsWith(`/commit/${recorded.commit}`)) {
+    fail('Context Engineering: missing visible recorded cohort or commit link');
+  }
+  const listItems = new Map([...guide.matchAll(/(<li\b[^>]*>)([\s\S]*?)<\/li>/gi)]
+    .map(([, tag, body]) => [attribute(tag, 'id'), body]));
+  const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' };
+  for (const [story, ids] of Object.entries(stories)) {
+    for (const step of ids) {
+      const anchor = `context-${story}-${step}`;
+      const item = listItems.get(anchor);
+      const summary = story === 'answer' ? 'Recorded context excerpt' : 'Illustrative context JSON';
+      const code = item?.match(/<pre\b[^>]*><code>([\s\S]*?)<\/code><\/pre>/i)?.[1];
+      if (!item?.includes('class="cx-visual"') || !item.includes('cx-scene') ||
+        !item.includes(`<summary>${summary}</summary>`) || !code ||
+        !guide.includes(`href="#${anchor}"`)) {
+        fail(`Context Engineering: #${anchor} needs navigation, an illustration and its context`);
+        continue;
+      }
+      if (story === 'answer') {
+        const excerpt = recorded.steps[step];
+        const query = new URLSearchParams({ view, agentfootprint: version, step });
+        const expected = excerpt && JSON.stringify(excerpt.values, null, 2)
+          .replace(/[&<>"']/g, (character) => entities[character]);
+        if (!hasLocalLink(item, `${fallbackPath}?${query}#${view}`) || !expected || code !== expected) {
+          fail(`Context Engineering: #${anchor} needs the recorded values and versioned inspector link`);
+        }
+      }
+    }
+  }
+  const section = staticFallbackSection(fallback, view);
+  if (!section?.includes('The interactive viewer is unavailable') ||
+    !hasLocalLink(section, `${guidePath}#context-answer-story`)) {
+    fail('Context Engineering: missing static fallback text or return link');
+  }
+  if (hasEagerDemoAssets(guide, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+    fail('Context Engineering: lesson or fallback eagerly references the separate viewer assets');
+  }
+}
+
 function countSearchRecords(index) {
   if (Array.isArray(index)) return index.length;
   if (Array.isArray(index?.internalDocumentIDStore?.internalIdToId)) {
@@ -884,6 +953,7 @@ analyzeQuickStartFlowchart();
 analyzeSkillGraphFigures();
 analyzeDynamicReact();
 analyzeReplayDemos();
+analyzeContextWalkthrough();
 analyzeSearch();
 analyzeOutput();
 

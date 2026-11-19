@@ -24,9 +24,6 @@ const { aliases: browserLibraryAliases } = resolveBrowserLibraries(import.meta.d
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  // The live "Try it" demos run the REAL agent in the browser with a mock provider.
-  // The lens is a sibling package imported client-side, so Turbopack must bundle it.
-  transpilePackages: ['agentfootprint-lens', 'storydeck'],
   turbopack: {
     // Use the parent repository as the root for the docs site and its source.
     root: resolve(import.meta.dirname, '..'),
