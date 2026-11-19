@@ -33,7 +33,16 @@ executes the same keyed search twice without retrieving an answer. Each row
 reports the count of exact critical proposals, including retries. Provider
 text is preserved when the scorer reads bare JSON or a whole JSON code fence.
 Both cohorts' final answers use the same published 14.10.1 parser for that
-scoring step. The paid entry point verifies the harness and rule
+scoring step. The strict whole-reply score is the headline. A separate
+`supplementalScore` per row and `supplementalTotals` per cell allow a complete
+terminal JSON object after preceding text. The preceding text does not
+contribute to that score. An object followed by prose or an invalid terminal
+candidate stays unparsed.
+
+The Moss fallback rehearsal records the read-only desk status calls, including
+a call on Moss itself, without treating those reads as completion or keyed
+tool entry. The independent desk guard still stops a completed blocked task or
+an exact keyed entry on refusal or decline. The paid entry point verifies the harness and rule
 against the input hashes from the complete rehearsal before loading the adapter.
 
 The initial adapter setup rejected a declaration of `effects: 'write'`. Both releases use

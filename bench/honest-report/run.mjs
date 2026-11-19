@@ -13,7 +13,7 @@ import { arms, tasks } from './tasks.mjs';
 function rehearsalInputs() {
   const files = [
     'RULE.md', 'tasks.mjs', 'benchmark.mjs', 'budget.mjs', 'cohorts.mjs',
-    'plan.mjs', 'run.mjs', 'score.mjs',
+    'plan.mjs', 'run.mjs', 'score.mjs', 'terminalAnswer.mjs',
     'cohorts/before/package-lock.json', 'cohorts/after/package-lock.json',
   ];
   return Object.fromEntries(files.map((name) => [
@@ -37,7 +37,9 @@ async function rehearse(installed) {
   const rows = [];
   const applyOutputSchema = installed.before.library.applyOutputSchema;
   for (const task of tasks) {
-    for (const variant of task.control ? ['done'] : Object.keys(controls)) {
+    const variants = task.control ? ['done'] : Object.keys(controls);
+    if (task.id === 'unavailable-tool') variants.push('fallback-bare', 'fallback-fenced');
+    for (const variant of variants) {
       for (const arm of arms) {
         for (const [label, { library }] of Object.entries(installed)) {
           const run = { label, arm, taskId: task.id, variant };
@@ -54,7 +56,7 @@ async function rehearse(installed) {
 async function coordinatorRun(installed, inputs) {
   const receiptData = JSON.parse(readFileSync(new URL('./rehearsal-lock.json', import.meta.url)));
   assert.deepEqual(receiptData.inputs, inputs, 'Harness inputs changed after rehearsal');
-  assert.equal(receiptData.scriptedRows, 64, 'The four-cell rehearsal must be complete');
+  assert.equal(receiptData.scriptedRows, 72, 'The four-cell rehearsal must be complete');
   const createProvider = await createPaidFactory();
   const receipt = openSync(new URL('./paid-attempts.jsonl', import.meta.url), 'wx', 0o600);
   const append = (value) => { writeSync(receipt, `${JSON.stringify(value)}\n`); };
@@ -117,11 +119,13 @@ async function main() {
   const inputs = rehearsalInputs();
   const installed = Object.fromEntries(Object.keys(cohorts).map((label) => [label, loadCohort(label)]));
   const result = mode === '--rehearse' ? await rehearse(installed) : await coordinatorRun(installed, inputs);
+  const summarizeCells = (rows) => Object.fromEntries(arms.flatMap((arm) => Object.keys(installed).map((label) => [
+    cellKey(label, arm), summarize(rows.filter((row) => row.label === label && row.arm === arm)),
+  ])));
   const report = {
     mode, inputs, limits, cohorts: recordedCohorts(installed),
-    totals: Object.fromEntries(arms.flatMap((arm) => Object.keys(installed).map((label) => [
-      cellKey(label, arm), summarize(result.rows.filter((row) => row.label === label && row.arm === arm)),
-    ]))),
+    totals: summarizeCells(result.rows),
+    supplementalTotals: summarizeCells(result.rows.map((row) => ({ ...row, score: row.supplementalScore }))),
     ...result,
   };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

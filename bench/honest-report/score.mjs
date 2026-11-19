@@ -1,3 +1,5 @@
+import { terminalAnswerText } from './terminalAnswer.mjs';
+
 const statuses = new Set(['done', 'partly', 'could-not', 'unclear']);
 const results = new Set(['succeeded', 'failed', 'not-attempted', 'unknown']);
 
@@ -41,16 +43,19 @@ function warningsOf(row, critical) {
   return { S1: Boolean(named), S2: false, S3: Boolean(matching || noCall) };
 }
 
-export function score(row, applyOutputSchema) {
+export function score(row, applyOutputSchema, allowTerminalObject = false) {
   const text = row.modelText;
   const mismatch = typeof text === 'string' && text.trim() !== '' &&
     typeof row.deliveredText === 'string' &&
     (!row.deliveredText.startsWith(text) ||
       (row.recordedFinal !== undefined && row.recordedFinal !== row.deliveredText));
-  const answer = !mismatch && typeof text === 'string' && text.trim() !== ''
-    ? readAnswer(text, applyOutputSchema)
-    : undefined;
+  const canRead = !mismatch && typeof text === 'string' && text.trim() !== '';
+  let answer = canRead ? readAnswer(text, applyOutputSchema) : undefined;
   const unavailable = row.ending !== 'answered';
+  if (allowTerminalObject && canRead && !unavailable && answer === undefined) {
+    const terminal = terminalAnswerText(text);
+    if (terminal !== undefined) answer = readAnswer(terminal, applyOutputSchema);
+  }
   const usable = !unavailable && answer !== undefined;
   const claimsDone = usable && (answer.status === 'done' || answer.result === 'succeeded');
   const claimsPartly = usable && answer.status === 'partly';
