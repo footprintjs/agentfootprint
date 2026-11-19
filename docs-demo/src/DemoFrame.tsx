@@ -6,6 +6,15 @@ export interface DemoFrameContent {
   themeToggle: ReactNode;
 }
 
+interface DemoProvenance {
+  commit: string;
+  cohort: readonly string[];
+}
+
+export interface PublishedDemoViewProps extends DemoFrameContent {
+  provenance: DemoProvenance;
+}
+
 export function DemoFrame({ children }: { children: (frame: DemoFrameContent) => ReactNode }) {
   const [theme, setTheme] = useState<ThemeMode>(() =>
     matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
@@ -27,11 +36,7 @@ export function DemoFrame({ children }: { children: (frame: DemoFrameContent) =>
   );
 }
 
-export function RecordingCohort({
-  provenance,
-}: {
-  provenance: { commit: string; cohort: readonly string[] };
-}) {
+export function RecordingCohort({ provenance }: { provenance: DemoProvenance }) {
   return (
     <p className="cohort">
       Recorded from commit{' '}

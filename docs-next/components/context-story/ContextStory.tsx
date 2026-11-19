@@ -1,13 +1,22 @@
-'use client';
-
-import { useState, type ReactNode } from 'react';
-import { LiveSlideDeck } from 'storydeck/react';
-import { ContextWalkthrough } from './ContextWalkthrough';
+import type { ReactNode } from 'react';
+import { contextWalkthroughHref } from '@/lib/context-walkthrough-demo';
+import evidence from '@/lib/context-walkthrough-figure.json';
+import { SITE } from '@/lib/site';
 import { answerSteps, conflictSteps, type StoryStep } from './story';
 import './context-story.css';
 
 type Story = 'answer' | 'conflict';
-type ViewMode = 'visual' | 'json';
+
+const stories = [
+  { id: 'answer', title: 'Build an answer', steps: answerSteps },
+  { id: 'conflict', title: 'Catch a conflict', steps: conflictSteps },
+] as const;
+
+const recordedSteps: Readonly<Record<string, {
+  label: string;
+  index: number;
+  values: Record<string, unknown>;
+}>> = evidence.steps;
 
 function Card({
   label,
@@ -90,10 +99,19 @@ function Packet({ step }: { step: number }) {
   );
 }
 
+function AnswerIllustration({ children }: { children: ReactNode }) {
+  return (
+    <figure className="cx-scene">
+      <figcaption className="cx-caption">Illustrative production design</figcaption>
+      {children}
+    </figure>
+  );
+}
+
 function AnswerVisual({ index }: { index: number }) {
   if (index <= 3)
     return (
-      <div className="cx-scene">
+      <AnswerIllustration>
         <Card
           label={
             index === 0
@@ -127,17 +145,17 @@ function AnswerVisual({ index }: { index: number }) {
             [
               'Begin with an empty context',
               'Attach the saved scope',
-              'Attach a reference, not the rows',
+              'Attach a scoped data reference',
               'Prepare the first model call',
             ][index]
           }
         />
         <Packet step={index} />
-      </div>
+      </AnswerIllustration>
     );
   if (index === 4)
     return (
-      <div className="cx-scene">
+      <AnswerIllustration>
         <Packet step={3} />
         <Arrow label="First model call" />
         <Card label="Model’s next action" tone="cx-accent">
@@ -147,12 +165,11 @@ function AnswerVisual({ index }: { index: number }) {
         <p className="cx-scene-note">
           The tool resolves the reference within the authorized scope.
         </p>
-      </div>
+      </AnswerIllustration>
     );
   if (index === 5)
     return (
-      <div className="cx-scene">
-        <div className="cx-caption">Backend result · two matching records</div>
+      <AnswerIllustration>
         <div className="cx-metrics">
           <Card label="Node 11" tone="cx-accent">
             <strong className="cx-number">
@@ -169,19 +186,19 @@ function AnswerVisual({ index }: { index: number }) {
           </Card>
         </div>
         <div className="cx-excluded">
-          <span>Node 12 · below filter</span>
+          <span>Node 12 · lower reported P95</span>
           <span>Node 14 · unknown P95</span>
         </div>
         <Arrow label="Next model call gets the finding" />
         <Card label="Finding + source + coverage">
-          <strong>Highest P95: a tie</strong>
+          <strong>Two nodes share the highest P95</strong>
           <p>finding:highest-p95@3 → nodes@v1</p>
           <p>Comparison supported · causal explanation unavailable</p>
         </Card>
-      </div>
+      </AnswerIllustration>
     );
   return (
-    <div className="cx-scene">
+    <AnswerIllustration>
       <div className="cx-check-icon" aria-hidden="true">
         ✓
       </div>
@@ -199,7 +216,7 @@ function AnswerVisual({ index }: { index: number }) {
       <p className="cx-scene-note">
         The model selects the finding. The renderer supplies its factual value.
       </p>
-    </div>
+    </AnswerIllustration>
   );
 }
 
@@ -326,167 +343,127 @@ function ConflictVisual({ index }: { index: number }) {
   );
 }
 
-function Slide({
-  step,
-  index,
-  story,
-  view,
-}: {
-  step: StoryStep;
-  index: number;
-  story: Story;
-  view: ViewMode;
+function ContextJson({ summary, label, description, values }: {
+  summary: string;
+  label: string;
+  description: string;
+  values: Record<string, unknown>;
 }) {
   return (
-    <div className="cx-slide">
-      <div className="cx-narrative">
-        <p className="cx-eyebrow">
-          {String(index + 1).padStart(2, '0')} / {step.label}
-        </p>
-        <h2>{step.title}</h2>
-        <p className="cx-description">{step.description}</p>
-        <div className="cx-owner">
-          <span>Who handles this</span>
-          <strong>{step.owner}</strong>
-        </div>
-        <div className="cx-takeaway">
-          <span aria-hidden="true">↳</span>
-          <p>{step.takeaway}</p>
-        </div>
-      </div>
-      <div className="cx-visual">
-        {view === 'json' && story === 'answer' ? (
-          <ContextWalkthrough stepId={step.id} label={step.label} />
-        ) : view === 'json' ? (
-          <div className="cx-json-panel">
-            <div className="cx-caption">Context at this step · {step.label}</div>
-            <pre tabIndex={0} aria-label={`JSON context: ${step.label}`}>
-              <code>{JSON.stringify(step.context, null, 2)}</code>
-            </pre>
-            <p>
-              Illustrative context projection. Not a provider message or runnable API configuration.
-            </p>
+    <details className="cx-json-panel">
+      <summary>{summary}</summary>
+      <p>{description}</p>
+      <pre tabIndex={0} aria-label={label}><code>{JSON.stringify(values, null, 2)}</code></pre>
+    </details>
+  );
+}
+
+function RecordedContext({ step }: { step: StoryStep }) {
+  const excerpt = recordedSteps[step.id];
+  if (!excerpt) throw new Error(`Missing recorded context for ${step.id}`);
+
+  return (
+    <>
+      <ContextJson
+        summary="Recorded context excerpt"
+        label={`Recorded context: ${step.label}`}
+        description={`Stop ${excerpt.index + 1} · ${excerpt.label}`}
+        values={excerpt.values}
+      />
+      <a
+        className="cx-inspect-link"
+        href={contextWalkthroughHref(step.id)}
+        aria-label={`Inspect this step in the demo — ${step.label}`}
+      >
+        Inspect this step in the demo
+      </a>
+    </>
+  );
+}
+
+function LessonStep({ step, index, story }: { step: StoryStep; index: number; story: Story }) {
+  const id = `context-${story}-${step.id}`;
+  return (
+    <li id={id} tabIndex={-1}>
+      <article className="cx-lesson-step" aria-labelledby={`${id}-title`}>
+        <div className="cx-slide">
+          <div className="cx-narrative">
+            <p className="cx-eyebrow">{String(index + 1).padStart(2, '0')} / {step.label}</p>
+            <h3 id={`${id}-title`}>{step.title}</h3>
+            <p className="cx-description">{step.description}</p>
+            <div className="cx-owner">
+              <span>Who handles this</span>
+              <strong>{step.owner}</strong>
+            </div>
+            <div className="cx-takeaway">
+              <span aria-hidden="true">↳</span>
+              <p>{step.takeaway}</p>
+            </div>
           </div>
-        ) : story === 'answer' ? (
-          <AnswerVisual index={index} />
-        ) : (
-          <ConflictVisual index={index} />
-        )}
-      </div>
-    </div>
+          <div className="cx-visual">
+            {story === 'answer' ? <AnswerVisual index={index} /> : <ConflictVisual index={index} />}
+          </div>
+        </div>
+        <div className="cx-step-evidence">
+          {story === 'answer' ? (
+            <RecordedContext step={step} />
+          ) : (
+            <ContextJson
+              summary="Illustrative context JSON"
+              label={`Illustrative context: ${step.label}`}
+              description="This teaching example shows how a host might represent the conflict."
+              values={step.context}
+            />
+          )}
+        </div>
+      </article>
+    </li>
   );
 }
 
 export function ContextStory() {
-  const [story, setStory] = useState<Story>('answer');
-  const [index, setIndex] = useState(0);
-  const [view, setView] = useState<ViewMode>('visual');
-  const steps = story === 'answer' ? answerSteps : conflictSteps;
-  const step = steps[index];
-  const go = (next: number) => setIndex(Math.max(0, Math.min(steps.length - 1, next)));
   return (
-    <section className="cx-walkthrough" aria-label="Interactive context walkthrough">
-      <div className="cx-story-bar">
-        <div className="cx-stories" role="group" aria-label="Choose an example">
-          <button
-            type="button"
-            aria-pressed={story === 'answer'}
-            onClick={() => {
-              setStory('answer');
-              setIndex(0);
-            }}
-          >
-            01 <span>Build an answer</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={story === 'conflict'}
-            onClick={() => {
-              setStory('conflict');
-              setIndex(0);
-            }}
-          >
-            02 <span>Catch a conflict</span>
-          </button>
-        </div>
-        <span className="cx-simulation">Illustrated example · no live model</span>
-      </div>
-      <nav className="cx-step-nav" aria-label="Walkthrough steps">
-        {steps.map((s, i) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => go(i)}
-            aria-current={i === index ? 'step' : undefined}
-          >
-            <span>{i < index ? '✓' : i + 1}</span>
-            {s.label}
-          </button>
-        ))}
+    <section className="cx-walkthrough" aria-label="Context engineering lessons">
+      <nav className="cx-story-links" aria-label="Choose a lesson">
+        {stories.map(({ id, title }) => <a key={id} href={`#context-${id}-story`}>{title}</a>)}
       </nav>
-      <div className="cx-view-bar">
-        <span>One step. Two views.</span>
-        <div role="group" aria-label="Context representation">
-          <button type="button" aria-pressed={view === 'visual'} onClick={() => setView('visual')}>
-            Visual
-          </button>
-          <button type="button" aria-pressed={view === 'json'} onClick={() => setView('json')}>
-            JSON
-          </button>
-        </div>
-      </div>
-      <LiveSlideDeck
-        slides={steps}
-        index={index}
-        onIndexChange={setIndex}
-        onNavigate={(intent) =>
-          go(
-            intent.action === 'next'
-              ? index + 1
-              : intent.action === 'previous'
-              ? index - 1
-              : intent.index,
-          )
-        }
-        className="cx-stage"
-        renderSlide={({ slide, index: slideIndex }) => (
-          <Slide step={slide} index={slideIndex} story={story} view={view} />
-        )}
-      />
-      <noscript>
-        <p className="cx-noscript">
-          Enable JavaScript for the slide walkthrough. The layer guide below explains the same
-          design without interactive controls.
-        </p>
-      </noscript>
-      <div className="cx-navigation">
-        <button type="button" disabled={index === 0} onClick={() => go(index - 1)}>
-          ← Previous
-        </button>
-        <p aria-live="polite" aria-atomic="true">
-          {index + 1} of {steps.length} <span>· {step.label}</span>
-        </p>
-        <button
-          type="button"
-          className="cx-next"
-          onClick={() => {
-            if (index === steps.length - 1) {
-              setStory(story === 'answer' ? 'conflict' : 'answer');
-              setIndex(0);
-            } else go(index + 1);
-          }}
+      {stories.map(({ id, title, steps }) => (
+        <section
+          key={id}
+          id={`context-${id}-story`}
+          className="cx-story"
+          aria-labelledby={`context-${id}-story-title`}
         >
-          {index === steps.length - 1
-            ? story === 'answer'
-              ? 'See a conflict'
-              : 'Build an answer'
-            : 'Next step'}{' '}
-          →
-        </button>
-      </div>
-      <div className="cx-deck-credit">
-        Slide navigation powered by StoryDeck. Focus the slide, then use ← / →.
-      </div>
+          <header className="cx-section-heading">
+            <h2 id={`context-${id}-story-title`}>{title}</h2>
+            {id === 'answer' ? (
+              <>
+                <p>
+                  The diagrams show a production design in which a backend ranks the rows and a host
+                  renders the answer. In the saved mock run, the tool returns all four rows and the
+                  mock model supplies the two-node finding.
+                </p>
+                <p className="cx-source">
+                  Recorded with {evidence.cohort.join(', ')} from AgentFootprint commit{' '}
+                  <a href={`${SITE.repo}/commit/${evidence.commit}`}><code>{evidence.commit.slice(0, 12)}</code></a>.
+                </p>
+              </>
+            ) : (
+              <p>The illustrations and JSON show example host decisions for a pair of conflicting values.</p>
+            )}
+          </header>
+          <nav className="cx-step-nav" aria-label={`${title} steps`}>
+            <ol role="list">
+              {steps.map((step) => (
+                <li key={step.id}><a href={`#context-${id}-${step.id}`}>{step.label}</a></li>
+              ))}
+            </ol>
+          </nav>
+          <ol className="cx-lesson-steps" role="list">
+            {steps.map((step, index) => <LessonStep key={step.id} step={step} index={index} story={id} />)}
+          </ol>
+        </section>
+      ))}
     </section>
   );
 }

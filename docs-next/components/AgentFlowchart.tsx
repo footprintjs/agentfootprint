@@ -1,8 +1,8 @@
 import { Diagram } from './Diagram';
 import provenance from '@/lib/quick-start-flowchart.json';
-import { SITE, asset } from '@/lib/site';
+import { SITE, asset, quickStartDemoPath } from '@/lib/site';
 
-export const quickStartDemoPath = '/demo/quick-start/';
+export { quickStartDemoPath } from '@/lib/site';
 export const quickStartFlowchartPath = '/docs/getting-started/quick-start/#the-run-as-a-flowchart';
 
 export function WeatherRunDiagram() {

@@ -9,16 +9,14 @@
 import { deepStrictEqual, ok } from 'node:assert/strict';
 import { Agent, defineTool } from 'agentfootprint';
 import { defineFact, defineInstruction, defineSkill, defineSteering, skillGraph } from 'agentfootprint/context';
-import { routeRecorder } from 'agentfootprint/observe';
+import { recordRun, redactContent, routeRecorder } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
-import type { StructureRecorder } from 'footprintjs';
-import {
-  buildWeatherAgent,
-  weatherAnswer,
-  weatherInput,
-} from '../../docs-demo/scripts/quick-start-weather.mjs';
+import { stringifySnapshot, type StructureRecorder } from 'footprintjs';
+import { buildWeatherAgent } from '../../docs-demo/scripts/quick-start-weather.mjs';
 import { buildDynamicReactAgent } from '../../docs-demo/shared/dynamicReactDemo';
 import { recordDynamicReactRun } from '../../docs-demo/shared/recordDynamicReactRun.mjs';
+import { recordOfflineReplay } from '../../docs-demo/shared/recordOfflineReplay.mjs';
+import { recordContextWalkthrough } from '../../docs-demo/shared/recordContextWalkthrough.mjs';
 import { buildSupportSkillGraph } from '../components/demos/skillGraphDemo';
 import { buildQuickstartSkillGraph } from '../components/demos/skillGraphQuickstartDemo';
 import { recordSkillGraphRuns } from '../components/demos/skillGraphRuns.mjs';
@@ -111,7 +109,7 @@ const weatherTools: Array<[string, unknown, boolean]> = [];
 weather.on('agentfootprint.stream.tool_end', ({ payload }) => {
   weatherTools.push([payload.toolCallId, payload.result, payload.error === true]);
 });
-deepStrictEqual(await weather.run({ message: weatherInput }), weatherAnswer);
+await recordOfflineReplay(weather, { redactContent, stringifySnapshot });
 deepStrictEqual(weatherTools, [['call-weather-1', 'San Francisco: sunny, 72°F', false]]);
 ok(weather.getLastSnapshot()?.executionTree, 'the weather run keeps its execution tree');
 ok(weather.getLastNarrativeEntries().length, 'the weather run keeps narrative entries');
@@ -120,3 +118,7 @@ for (const mount of ['sf-llm-call', 'sf-system-prompt', 'sf-messages', 'sf-tools
 }
 ok(loops.some(([from, to]) => from === 'tool-calls' && to === 'sf-llm-call'));
 console.log('[check:tryit] OK — the weather agent ran its tool and exposed the grouped LLM flow');
+console.log('[check:tryit] OK — its redacted Trace survives serialization with the chart, tool and run boundaries');
+
+await recordContextWalkthrough({ Agent, mock, recordRun, stringifySnapshot });
+console.log('[check:tryit] OK — the Context example records its real tool result and passed answer check');

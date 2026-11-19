@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -406,6 +407,12 @@ function hasEagerDemoAssets(html, demoPath) {
     );
 }
 
+function staticFallbackSection(html, id) {
+  return [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/gi)]
+    .map(([section]) => section)
+    .find((section) => attribute(section.slice(0, section.indexOf('>') + 1), 'id') === id);
+}
+
 function analyzeRoute(route) {
   const htmlFile = path.join(outputRoot, route.file);
   if (!existsSync(htmlFile)) {
@@ -620,9 +627,7 @@ function analyzeDynamicReact() {
     ) {
       fail(`Dynamic ReAct: missing #${anchor} or its versioned ${view} launch link`);
     }
-    const section = [...fallback.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/gi)]
-      .map(([html]) => html)
-      .find((html) => attribute(html.slice(0, html.indexOf('>') + 1), 'id') === view);
+    const section = staticFallbackSection(fallback, view);
     if (
       !section?.includes('The interactive viewer is unavailable') ||
       !hasLocalLink(section, `${guidePath}#${anchor}`)
@@ -658,6 +663,237 @@ function analyzeDynamicReact() {
   }
   const bytes = uniqueAssetBytes(figures, 'Dynamic ReAct diagram');
   console.log(`Dynamic ReAct diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+}
+
+function analyzeReplayArtifacts(guide) {
+  for (const anchor of [
+    'step-2a--render-it-in-why-lens-the-agent-view',
+    'step-2b--render-it-in-flow-lens-the-pipeline-view',
+  ]) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Offline replay: missing the #${anchor} anchor`);
+  }
+  const figureRecord = JSON.parse(
+    readFileSync(new URL('../lib/offline-replay-figure.json', import.meta.url)),
+  );
+  const { figure, meta, commit, cohort, traceSha256 } = figureRecord;
+  const figures = ['light', 'dark'].map((theme) => `/assets/${figure.asset}-${theme}.svg`);
+  const images = [...guide.matchAll(/<img\b[^>]*>/gi)].map(([tag]) => tag);
+  for (const file of figures) {
+    const image = images.find((tag) => attribute(tag, 'src')?.endsWith(file));
+    if (
+      !image || !attribute(image, 'alt') ||
+      attribute(image, 'width') !== String(figure.width) ||
+      attribute(image, 'height') !== String(figure.height)
+    ) {
+      fail(`Offline replay: ${file} needs alt text and recorded dimensions`);
+    }
+  }
+  const captions = [...guide.matchAll(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi)];
+  if (!captions.some(([, caption]) => {
+    // React may insert empty comments between adjacent text nodes.
+    const recording = caption.match(
+      /^Rebuilt from a saved Trace with (?:<!-- -->)?(\d+)(?:<!-- -->)? events and <code>([^<]+)<\/code> redaction\. /,
+    );
+    if (!recording || recording[1] !== String(meta.events) || recording[2] !== meta.redaction) {
+      return false;
+    }
+    const source = caption.slice(recording[0].length).match(
+      /^The mock run used (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.$/,
+    );
+    return source && source[1] === cohort.join(', ') && source[3] === commit.slice(0, 12) &&
+      attribute(source[2], 'href')?.endsWith(`/commit/${commit}`);
+  })) {
+    fail('Offline replay: missing the figure caption with saved event count, redaction, commit and cohort');
+  }
+
+  const traceUrl = '/assets/offline-replay-trace.json';
+  const downloadLink = [...guide.matchAll(/<a\b[^>]*>/gi)].some(([tag]) => {
+    const href = attribute(tag, 'href');
+    return /\sdownload(?=[\s=>])/i.test(tag) &&
+      href?.startsWith('/') && !href.startsWith('//') && href.endsWith(traceUrl);
+  });
+  if (!downloadLink) {
+    fail('Offline replay: missing the local Trace download');
+  }
+  const traceFile = requiredOutputAsset(traceUrl, 'Offline replay Trace');
+  if (traceFile) {
+    const bytes = readFileSync(traceFile);
+    if (createHash('sha256').update(bytes).digest('hex') !== traceSha256) {
+      fail('Offline replay: the exported Trace differs from the recorded artifact');
+    }
+    const trace = JSON.parse(bytes.toString('utf8'));
+    if (trace.redaction !== 'pii' || trace.events?.length !== meta.events || !trace.structure) {
+      fail('Offline replay: Trace is missing the redacted events or chart structure');
+    }
+    console.log(`Offline replay Trace ${formatBytes(gzipFile(traceFile))} gzip`);
+  }
+  const bytes = uniqueAssetBytes(figures, 'Offline replay diagram');
+  console.log(`Offline replay diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+
+  const rawFile = requiredOutputAsset('llms.mdx/docs/debug/offline-replay', 'Offline replay Markdown');
+  if (rawFile) {
+    const raw = readFileSync(rawFile, 'utf8');
+    const snippets = [...raw.matchAll(/^```tsx[^\S\r\n]*\r?\n([\s\S]*?)^```[^\S\r\n]*$/gm)];
+    for (const markers of [
+      ['observeRecording(recording)', '<Lens '],
+      ['<ExplainableShell', 'structureGraphFromSpec(recording.structure)', 'overlayFromSnapshot(recording.snapshot)'],
+      ['<Replay trace={trace}', 'ReplayProps'],
+    ]) {
+      if (!snippets.some(([, code]) => markers.every((marker) => code.includes(marker)))) {
+        fail(`Offline replay: machine-readable guide is missing the ${markers[0]} code sample`);
+      }
+    }
+  }
+}
+
+function analyzeReplayDemos() {
+  const fallbackPath = 'demo/quick-start/';
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Replay demo fallback');
+  if (!fallbackFile) return;
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const views = [
+    {
+      view: 'offline-replay',
+      guide: 'docs/debug/offline-replay/',
+      anchor: 'replay-trace--the-chart-only-subset',
+    },
+    { view: 'how-to-build-lens', guide: 'how-to-build/', anchor: 'debug' },
+  ];
+  for (const { view, guide, anchor } of views) {
+    const guideFile = requiredOutputAsset(`${guide}index.html`, view);
+    if (!guideFile) continue;
+    const html = readFileSync(guideFile, 'utf8');
+    const query = new URLSearchParams({ view, agentfootprint: manifest.dependencies.agentfootprint });
+    if (!html.includes(`id="${anchor}"`) || !hasLocalLink(html, `${fallbackPath}?${query}#${view}`)) {
+      fail(`${view}: missing the #${anchor} anchor or its versioned launch link`);
+    }
+    const section = staticFallbackSection(fallback, view);
+    if (!section?.includes('The interactive viewer is unavailable') || !hasLocalLink(section, `${guide}#${anchor}`)) {
+      fail(`${view}: missing static fallback text or return link`);
+    }
+    if (hasEagerDemoAssets(html, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+      fail(`${view}: guide or fallback HTML eagerly references the separate viewer assets`);
+    }
+    if (view === 'offline-replay') {
+      analyzeReplayArtifacts(html);
+    } else if (![...html.matchAll(/<pre\b[^>]*>[\s\S]*?<\/pre>/gi)].some(([code]) =>
+      code.includes('lensRecorder()') && code.includes('Hello!') && code.includes('Hi!'),
+    )) {
+      fail('How to Build: missing the Hello Lens code sample');
+    }
+  }
+}
+
+function analyzeContextWalkthrough() {
+  const guidePath = 'context-engineering/';
+  const fallbackPath = 'demo/quick-start/';
+  const view = 'context-walkthrough';
+  const guideFile = requiredOutputAsset(`${guidePath}index.html`, 'Context Engineering');
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Context walkthrough fallback');
+  if (!guideFile || !fallbackFile) return;
+  const guide = readFileSync(guideFile, 'utf8');
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const recorded = JSON.parse(
+    readFileSync(new URL('../lib/context-walkthrough-figure.json', import.meta.url)),
+  );
+  // Bind each exported claim to its stop independently of the generated excerpts.
+  const answerSteps = {
+    question: ['Run start', 'Start with the question.', [], ['is empty']],
+    selection: ['Route 1', 'The model requests scoped summaries.',
+      ['userMessage', 'llmLatestToolCalls'], ['mock model requests node_summaries']],
+    reference: ['Tool call 1', 'The tool returns the source and rows.',
+      ['lastToolResult'], ['nodes@v1 source metadata', 'all four rows']],
+    prepare: ['Iteration 2', 'The next iteration carries the tool result.',
+      ['iteration', 'lastToolResult'], ['carries forward', 'all four rows']],
+    model: ['Route 2', 'The mock model proposes a finding.',
+      ['llmLatestContent'], ['mock provider supplies a structured finding']],
+    finding: ['Answer 1', 'The proposed finding passes three checks.',
+      ['answerValidation'],
+      ['source reference matches', 'maximum appears in a retained row', 'selection revision matches']],
+    answer: ['Run end', 'The run ends with the checked finding.',
+      ['finalContent'], ['structured finding proposed at Route 2']],
+  };
+  const stories = {
+    answer: Object.keys(answerSteps),
+    conflict: ['same-claim', 'conflict', 'pause', 'repair', 'check-output', 'checked-answer'],
+  };
+  const version = manifest.dependencies.agentfootprint;
+  if (recorded.agentFootprintVersion !== version ||
+    Object.keys(recorded.steps).length !== stories.answer.length) {
+    fail('Context Engineering: outdated cohort version or incomplete recorded steps');
+  }
+  for (const anchor of ['cx-layers-title', 'cx-boundary-title', 'context-answer-story', 'context-conflict-story']) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Context Engineering: missing #${anchor}`);
+  }
+  const answerHeader = guide.match(/<h2 id="context-answer-story-title">Build an answer<\/h2>([\s\S]*?)<\/header>/i)?.[1] ?? '';
+  if (!answerHeader.includes('production design in which a backend ranks the rows and a host renders the answer') ||
+    !answerHeader.includes('In the saved mock run, the tool returns all four rows and the mock model supplies the two-node finding')) {
+    fail('Context Engineering: the answer story must identify the production design and the saved mock run');
+  }
+  const source = /<p class="cx-source">Recorded with (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.<\/p>/i.exec(answerHeader);
+  if (!source || source[1] !== recorded.cohort.join(', ') ||
+    source[3] !== recorded.commit.slice(0, 12) ||
+    !attribute(source[2], 'href')?.endsWith(`/commit/${recorded.commit}`)) {
+    fail('Context Engineering: missing visible recorded cohort or commit link');
+  }
+  const listItems = new Map([...guide.matchAll(/(<li\b[^>]*>)([\s\S]*?)<\/li>/gi)]
+    .map(([, tag, body]) => [attribute(tag, 'id'), body]));
+  const answerAnchors = [...listItems.keys()].filter((id) => id?.startsWith('context-answer-'));
+  if (answerAnchors.join(' ') !== stories.answer.map((id) => `context-answer-${id}`).join(' ')) {
+    fail('Context Engineering: the answer steps must appear in recorded order');
+  }
+  const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' };
+  let previousStop = -1;
+  for (const [story, ids] of Object.entries(stories)) {
+    for (const step of ids) {
+      const anchor = `context-${story}-${step}`;
+      const item = listItems.get(anchor);
+      const summary = story === 'answer' ? 'Recorded context excerpt' : 'Illustrative context JSON';
+      const code = item?.match(/<pre\b[^>]*><code>([\s\S]*?)<\/code><\/pre>/i)?.[1];
+      if (!item?.includes('class="cx-visual"') || !item.includes('cx-scene') ||
+        !item.includes(`<summary>${summary}</summary>`) || !code ||
+        !guide.includes(`href="#${anchor}"`)) {
+        fail(`Context Engineering: #${anchor} needs navigation, an illustration and its context`);
+        continue;
+      }
+      if (story === 'answer') {
+        const excerpt = recorded.steps[step];
+        const [label, title, keys, claims] = answerSteps[step];
+        const description = item.match(/<p class="cx-description">([\s\S]*?)<\/p>/i)?.[1];
+        if (!item.includes(`<h3 id="${anchor}-title">${title}</h3>`) ||
+          !claims.every((claim) => description?.includes(claim)) ||
+          !item.includes('<figcaption class="cx-caption">Illustrative production design</figcaption>')) {
+          fail(`Context Engineering: #${anchor} needs the ${label} claim and an illustration marked as production design`);
+        }
+        if (excerpt?.label !== label || !Number.isInteger(excerpt.index) || excerpt.index <= previousStop ||
+          JSON.stringify(Object.keys(excerpt.values ?? {}).sort()) !== JSON.stringify([...keys].sort()) ||
+          !item.includes(`<p>Stop ${excerpt.index + 1} · ${label}</p>`)) {
+          fail(`Context Engineering: #${anchor} needs the chronological ${label} stop and its recorded fields`);
+        }
+        previousStop = excerpt?.index ?? previousStop;
+        const query = new URLSearchParams({ view, agentfootprint: version, step });
+        const expected = excerpt && JSON.stringify(excerpt.values, null, 2)
+          .replace(/[&<>"']/g, (character) => entities[character]);
+        if (!hasLocalLink(item, `${fallbackPath}?${query}#${view}`) || !expected || code !== expected) {
+          fail(`Context Engineering: #${anchor} needs the recorded values and versioned inspector link`);
+        }
+      }
+    }
+  }
+  const section = staticFallbackSection(fallback, view);
+  if (!section?.includes('The interactive viewer is unavailable') ||
+    !hasLocalLink(section, `${guidePath}#context-answer-story`)) {
+    fail('Context Engineering: missing static fallback text or return link');
+  }
+  if (hasEagerDemoAssets(guide, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+    fail('Context Engineering: lesson or fallback eagerly references the separate viewer assets');
+  }
 }
 
 function countSearchRecords(index) {
@@ -756,6 +992,8 @@ for (const route of ROUTES) analyzeRoute(route);
 analyzeQuickStartFlowchart();
 analyzeSkillGraphFigures();
 analyzeDynamicReact();
+analyzeReplayDemos();
+analyzeContextWalkthrough();
 analyzeSearch();
 analyzeOutput();
 

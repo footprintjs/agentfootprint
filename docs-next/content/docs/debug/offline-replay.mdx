@@ -158,20 +158,10 @@ const recording = {
 
 ## Step 2a — Render it in Why Lens (the agent view)
 
-```tsx
-import { observeRecording, Lens } from 'agentfootprint-lens';
+Parse your saved `run.json` and pass it as `recording` to the component. These examples are
+checked against AgentFootprint Lens 0.84.0 and Footprint Explainable UI 2.0.0.
 
-const { recorder, runner, boundaryRanges } = observeRecording(
-  JSON.parse(await fs.readFile('run.json', 'utf8')),
-);
-
-return (
-  <>
-    {boundaryRanges === 0 && <p>This recording has no step boundaries.</p>}
-    <Lens recorder={recorder} runner={runner} theme={{ mode: 'light' }} />
-  </>
-);
-```
+<CodeFile path="docs-demo/src/samples/replay-why.tsx" region="code" />
 
 Nothing re-runs, no model is called, no network is touched. `boundaryRanges === 0`
 means the run was recorded without a commit-tracking boundary recorder — the step
@@ -179,21 +169,7 @@ strip stays quiet rather than inventing stops.
 
 ## Step 2b — Render it in Flow Lens (the pipeline view)
 
-```tsx
-import { ExplainableShell, overlayFromSnapshot } from 'footprint-explainable-ui';
-import { structureGraphFromSpec } from 'agentfootprint-lens/core';
-
-const rec = JSON.parse(await fs.readFile('run.json', 'utf8'));
-
-return (
-  <ExplainableShell
-    runtimeSnapshot={rec.snapshot}
-    traceGraph={structureGraphFromSpec(rec.structure)}
-    runtimeOverlay={overlayFromSnapshot(rec.snapshot)}
-    traceTheme={{ mode: 'light' }}
-  />
-);
-```
+<CodeFile path="docs-demo/src/samples/replay-flow.tsx" region="code" />
 
 You do not pass narrative entries: the story is read out of the snapshot's own
 recorder data. `traceTheme={{ mode }}` re-themes the whole shell — for a light
@@ -205,35 +181,27 @@ reach into it on your behalf.
 
 ## `<Replay trace>` — the chart-only subset
 
-`localObservability()` freezes a different, smaller artifact: a `Trace`, which
-is the domain-event log plus the chart. `<Replay>` renders it.
+`localObservability()` freezes a smaller artifact called a `Trace`. It carries the boundary
+event log and the chart. Parse your saved Trace and pass it to `<Replay>`.
 
-```tsx
-import { Replay } from 'agentfootprint-lens';
+<CodeFile path="docs-demo/src/samples/replay-trace.tsx" region="code" />
 
-const trace = JSON.parse(fs.readFileSync('run.trace.json', 'utf8'));
-return <Replay trace={trace} />;   // draws trace.structure
-```
+The figure and interactive chart show the chart structure from the same saved mock weather
+run. The downloadable Trace opens in `<Replay>` without running the agent again.
 
-The flowchart below is that component rendering a `Trace` captured from a real
-run (`scripts/gen-replay-trace.mjs`) — offline, with no runner.
+<OfflineReplayFigure />
 
-<ReplayEmbed />
-
-Be clear about what this is: **`<Replay>` draws the chart's shape and stops
-there.** It does not read `trace.events` — time-travel over them is a planned
-refinement — so an offline `<Replay>` is a strictly smaller view than the live
-`<Lens>`, not a match for it. And a `Trace` carries no footprintjs snapshot
-unless you ask for one, so on its own it cannot drive ExplainableShell,
-WhereFrom, or the commit axis:
+In AgentFootprint Lens 0.84.0, `<Replay>` reads the chart structure and uses the boundary
+events for its step strip. Those events carry no typed commentary or message history. Include
+a footprintjs snapshot if you need the commit axis, provenance, or the snapshot-backed views
+in ExplainableShell:
 
 ```ts
 const dev = agent.enable.localObservability({ includeSnapshot: true });
 const trace = dev.getTrace();   // now carries state + commit log too
 ```
 
-Reach for `<Replay>` when a static picture of the run's shape is what you want.
-When you want the run, record it and use step 2a.
+Use the recording in step 2a when you need the typed events as well as the chart and snapshot.
 
 ## Redaction travels with the Trace
 

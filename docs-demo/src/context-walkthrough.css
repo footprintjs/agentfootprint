@@ -1,0 +1,35 @@
+.context-walkthrough-controls {
+  align-items: center;
+}
+
+.context-walkthrough-controls select {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--fg);
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+}
+
+.context-walkthrough-panel {
+  --lens-bg-primary: var(--surface);
+  --lens-bg-secondary: var(--bg);
+  --lens-bg-tertiary: var(--bg);
+  --lens-bg-elevated: var(--surface);
+  --lens-text-primary: var(--fg);
+  --lens-text-secondary: var(--muted);
+  --lens-text-muted: var(--muted);
+  --lens-border: var(--border);
+  --lens-color-primary: var(--link);
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.context-walkthrough-panel h2 {
+  margin: 0.75rem 0.75rem 0;
+  font-size: 1.25rem;
+}

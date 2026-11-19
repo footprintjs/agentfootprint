@@ -6,6 +6,8 @@ import {
 } from '@/components/AgentFlowchart';
 import { dynamicReactViews } from '@/components/DynamicReactFigure';
 import { skillGraphViews } from '@/components/SkillGraphFigure';
+import { contextWalkthroughDemo } from '@/lib/context-walkthrough-demo';
+import { replayDemoViews } from '@/lib/replay-demo';
 import { abs, asset } from '@/lib/site';
 
 export const metadata: Metadata = {
@@ -35,7 +37,11 @@ export default function QuickStartWeatherFallback() {
           <p className="mt-2"><a className="underline" href={asset(guide)}>See the recorded skill graph in the guide</a></p>
         </section>
       ))}
-      {Object.values(dynamicReactViews).map(({ id, title, guide, fallback }) => (
+      {[
+        ...Object.values(dynamicReactViews),
+        ...Object.values(replayDemoViews),
+        contextWalkthroughDemo,
+      ].map(({ id, title, guide, fallback }) => (
         <section key={id} id={id} className="mt-8 scroll-mt-24">
           <h2 className="text-2xl font-semibold">{title}</h2>
           <p className="mt-3">The interactive viewer is unavailable on this deployment.</p>
