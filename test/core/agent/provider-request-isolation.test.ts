@@ -7,6 +7,7 @@ import {
   type LLMRequest,
   type LLMResponse,
 } from '../../../src/index.js';
+import { notApplicable, type CacheStrategy } from '../../../src/cache/index.js';
 
 const firstCallId = 'count-first';
 const firstResult = 'Counted 1.';
@@ -52,13 +53,36 @@ function editRequest(messages: readonly LLMMessage[]): void {
   (userMessage(messages)! as { content: string }).content = 'Edited user message.';
 }
 
-it.each(['complete', 'stream', 'stream fallback'] as const)(
-  'adapter edits through %s stay within that request',
+it.each(['complete', 'stream', 'stream fallback', 'reliability retry'] as const)(
+  'adapter edits through %s stay within that model call',
   async (transport) => {
+    const sameCallHandoff = transport === 'stream fallback' || transport === 'reliability retry';
     const seen: ReturnType<typeof firstExchange>[] = [];
-    function respond({ messages }: LLMRequest): LLMResponse {
-      seen.push(firstExchange(messages));
-      if (seen.length === 2) editRequest(messages);
+    const answeredRequests: LLMRequest[] = [];
+    const prepared: LLMRequest[] = [];
+    let firstAttempt: LLMRequest | undefined;
+    const cacheStrategy: CacheStrategy = {
+      name: 'passthrough-fixture',
+      async prepareRequest(request) {
+        prepared.push(request);
+        return { request, markersApplied: [] };
+      },
+      extractMetrics: () => notApplicable('fixture'),
+    };
+
+    function editFirstAttempt(request: LLMRequest): void {
+      firstAttempt = request;
+      editRequest(request.messages);
+    }
+
+    function respond(request: LLMRequest): LLMResponse {
+      if (transport === 'reliability retry' && seen.length === 1 && firstAttempt === undefined) {
+        editFirstAttempt(request);
+        throw Object.assign(new Error('Service unavailable'), { status: 503 });
+      }
+      answeredRequests.push(request);
+      seen.push(firstExchange(request.messages));
+      if (seen.length === 2 && !sameCallHandoff) editRequest(request.messages);
       const toolCalls =
         seen.length <= 2
           ? [
@@ -80,10 +104,10 @@ it.each(['complete', 'stream', 'stream fallback'] as const)(
     const provider: LLMProvider = {
       name: 'editing-adapter',
       complete: async (request) => respond(request),
-      ...(transport !== 'complete' && {
+      ...((transport === 'stream' || transport === 'stream fallback') && {
         async *stream(request: LLMRequest) {
           if (transport === 'stream fallback') {
-            if (seen.length === 1) editRequest(request.messages);
+            if (seen.length === 1) editFirstAttempt(request);
             yield { tokenIndex: 0, content: '', done: true };
             return;
           }
@@ -91,12 +115,41 @@ it.each(['complete', 'stream', 'stream fallback'] as const)(
         },
       }),
     };
-    const agent = Agent.create({ provider, model: 'mock' }).tool(tool).build();
+    const builder = Agent.create({
+      provider,
+      model: 'mock',
+      ...(sameCallHandoff && { cacheStrategy }),
+    }).tool(tool);
+    if (transport === 'reliability retry') {
+      builder.reliability({
+        postDecide: [
+          {
+            when: (s) => s.errorKind === '5xx-transient' && s.attempt < 2,
+            then: 'retry',
+            kind: 'transient-retry',
+          },
+        ],
+      });
+    }
+    const agent = builder.build();
     try {
       expect(await agent.run({ message: input })).toBe('Done.');
       expect(seen).toHaveLength(3);
       const untouched = { arguments: 1, result: firstResult, user: input };
-      expect(seen[1], 'second provider request before its edit').toEqual(untouched);
+      if (sameCallHandoff) {
+        expect(prepared).toHaveLength(3);
+        expect.soft(firstAttempt, 'first dispatch of the second model call').toBe(prepared[1]);
+        expect
+          .soft(answeredRequests[1], 'second dispatch of the same model call')
+          .toBe(firstAttempt);
+        expect.soft(seen[1], 'edits visible to the second dispatch').toEqual({
+          arguments: 999,
+          result: 'Edited tool result.',
+          user: 'Edited user message.',
+        });
+      } else {
+        expect(seen[1], 'second provider request before its edit').toEqual(untouched);
+      }
       expect.soft(seen[2], 'third provider request').toEqual(untouched);
       const { history } = agent.getLastSnapshot()?.sharedState as {
         history: readonly LLMMessage[];

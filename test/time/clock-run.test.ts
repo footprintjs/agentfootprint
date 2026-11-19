@@ -491,12 +491,17 @@ describe('the model is served nothing new but the run clock (G16)', () => {
   });
 
   it('no row carries the message', async () => {
-    const secret = 'my card is 4111 1111 1111 1111';
+    const cardText = '4111 1111 1111 1111';
+    const messageMarker = 'private-clock-message-sentinel';
+    const secret = `my card is ${cardText} (${messageMarker})`;
     const { agent } = agentWith([call('c1', 'backup_runs'), answer('done')], (b) =>
       b.tool(backupRuns()).time({ zone: LA }),
     );
     await agent.run({ message: secret, time: { now: NOW } });
-    expect(JSON.stringify(agent.findings())).not.toContain('4111');
+    // A random occurrence address can contain the first four digits by chance.
+    const findings = JSON.stringify(agent.findings());
+    expect(findings).not.toContain(cardText);
+    expect(findings).not.toContain(messageMarker);
   });
 });
 

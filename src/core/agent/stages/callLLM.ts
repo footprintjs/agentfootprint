@@ -32,20 +32,10 @@ import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
   LLMCallHooks,
-  LLMProvider,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
 } from '../../../provider-contract/types.js';
-import {
-  forcedToolChoiceFor,
-  UnsupportedToolChoiceError,
-} from '../../../provider-contract/forcedToolChoice.js';
-import {
-  autoNativeOutputSchemaFor,
-  nativeOutputSchemaFor,
-  UnsupportedNativeOutputError,
-} from '../../../provider-contract/nativeOutputSchema.js';
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -60,19 +50,20 @@ import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
-import { copyProviderRequest } from './callLLM/providerRequest.js';
+import {
+  assertForcedRequestSupported,
+  detachProviderInput,
+  providerDispatchFor,
+  receiptProviderRequest,
+  selectOutputFormat,
+} from './callLLM/providerRequest.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
 import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
-import {
-  abortableIterable,
-  throwIfAborted,
-  untilAborted,
-  withRequestSignal,
-} from '../../../lib/abort.js';
+import { abortableIterable, throwIfAborted, untilAborted } from '../../../lib/abort.js';
 import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
@@ -100,18 +91,6 @@ import type { AgentState } from '../types.js';
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
-
-/** One capability rule at both request boundaries, before cache or model I/O. */
-function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
-  if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {
-    throw new UnsupportedToolChoiceError({ provider: provider.name, model: request.model });
-  }
-  // The structured-output twin (`strategy: 'native'`), judged on the same
-  // effective model — a configured or per-skill model included.
-  if (request.outputFormat !== undefined && !nativeOutputSchemaFor(provider, request.model)) {
-    throw new UnsupportedNativeOutputError({ provider: provider.name, model: request.model });
-  }
-}
 
 /**
  * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
@@ -442,15 +421,6 @@ export function buildCallLLMStage(
     const startMs = Date.now();
     // Auto follows the actual provider/model, including cache-selected models
     // and each reliability fallback. Explicit strategies retain their refusals.
-    const selectOutputFormat = (request: LLMRequest, selected: LLMProvider): LLMRequest => {
-      if (deps.nativeOutputAuto !== true || deps.outputFormat === undefined) return request;
-      if (autoNativeOutputSchemaFor(selected, request.model)) {
-        return { ...request, outputFormat: deps.outputFormat };
-      }
-      const { outputFormat: _unused, ...ordinary } = request;
-      void _unused;
-      return ordinary;
-    };
     const baseRequest = selectOutputFormat(
       {
         ...(systemPrompt.length > 0 && { systemPrompt }),
@@ -468,6 +438,8 @@ export function buildCallLLMStage(
         ...(deps.outputFormat !== undefined && { outputFormat: deps.outputFormat }),
       },
       provider,
+      deps.nativeOutputAuto === true,
+      deps.outputFormat,
     );
     // v2.6+ — call cache strategy to attach provider-specific cache
     // hints. CacheGate has already routed (apply-markers / no-markers)
@@ -477,13 +449,19 @@ export function buildCallLLMStage(
     // unsupported effective request before even that preparation does I/O.
     assertForcedRequestSupported(provider, baseRequest);
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
-    const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
+    const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const cachePrepared = await cacheStrategy.prepareRequest(detached.request, detached.markers, {
       iteration,
       iterationsRemaining: iterationsRemainingOf(deps.maxIterations, iteration),
       recentHitRate: scope.recentHitRate,
       cachingDisabled: scope.cachingDisabled ?? false,
     });
-    const llmRequest = selectOutputFormat(cachePrepared.request, provider);
+    const llmRequest = selectOutputFormat(
+      cachePrepared.request,
+      provider,
+      deps.nativeOutputAuto === true,
+      detached.outputFormat,
+    );
     // Judge the final request on the effective brain/configured model, not
     // the agent's build-time default. This is before provider I/O and outside
     // the reliability loop: retrying cannot repair an unsupported contract.
@@ -512,6 +490,8 @@ export function buildCallLLMStage(
     // nothing.
     if (deps.recordReceipt !== false) {
       const evictedForAttention = deps.evictedTurns?.read(iteration) ?? [];
+      const hostStrategy =
+        deps.cacheStrategyIsOverride === true && cacheStrategy === deps.cacheStrategy;
       scope[RECEIPT_KEY] = buildReceipt(
         {
           runId: deps.getRunId?.() ?? '',
@@ -527,7 +507,12 @@ export function buildCallLLMStage(
           // Read as it always was; the revision's rule rides `withheld`.
           withheld: scope.wrapUpAsked === true ? 'wrap-up' : withheld,
           baseRequest,
-          preparedRequest: llmRequest,
+          preparedRequest: receiptProviderRequest(
+            llmRequest,
+            detached.request,
+            baseRequest,
+            hostStrategy,
+          ),
           // The breakpoints the strategy really APPLIED, not the candidates it
           // was offered. `scope.cacheMarkers` already records the offer; which of
           // them survived the provider's clamp is the half that decides the bill,
@@ -543,7 +528,8 @@ export function buildCallLLMStage(
           strategy: typeof cacheStrategy.name === 'string' ? cacheStrategy.name : '',
           ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
         },
-        deps.receiptDigests,
+        // Host strategies can reissue their own objects with nested edits.
+        hostStrategy ? undefined : deps.receiptDigests,
       );
     }
 
@@ -664,15 +650,17 @@ export function buildCallLLMStage(
     // answer that lands after it is refused before anything records or bills
     // it (`lib/abort.ts`, law 4).
     const runSignal = scope.$getEnv?.()?.signal;
+    const dispatchFor = providerDispatchFor(
+      runSignal,
+      deps.nativeOutputAuto === true,
+      detached.outputFormat,
+    );
     const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
       const selectedProvider = hooks.provider ?? provider;
-      req = selectOutputFormat(req, selectedProvider);
+      req = dispatchFor(req, selectedProvider);
       assertForcedRequestSupported(selectedProvider, req);
       throwIfAborted(runSignal);
-      const attempts = replayAttempts(
-        withRequestSignal(req, runSignal),
-        hooks.providerHooks ?? providerHooks,
-      );
+      const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let candidate = deps.findings === true ? capture(req) : undefined;
       const attemptHooks =
         deps.findings === true
@@ -706,7 +694,7 @@ export function buildCallLLMStage(
       let lastTokenIndex = -1;
       if (selectedProvider.stream) {
         for await (const chunk of abortableIterable(
-          selectedProvider.stream(copyProviderRequest(attempts.request), attemptHooks),
+          selectedProvider.stream(attempts.request, attemptHooks),
           runSignal,
         )) {
           if (chunk.done) {
@@ -772,7 +760,7 @@ export function buildCallLLMStage(
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
         if (deps.findings === true) candidate = capture(attempts.request);
         resp = await untilAborted(
-          selectedProvider.complete(copyProviderRequest(attempts.request), attemptHooks),
+          selectedProvider.complete(attempts.request, attemptHooks),
           runSignal,
         );
       }

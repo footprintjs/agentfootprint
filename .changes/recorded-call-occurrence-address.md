@@ -10,3 +10,5 @@ The address holds random words. Two runs of the same script record different
 addresses, so a test that compares the events or records of two runs must
 leave `callOccurrenceKey` out of the comparison. Nothing sent to a provider
 changes.
+Use a complete text marker when checking records for leaked text, since a short
+run of digits can also occur inside an address.

@@ -154,8 +154,8 @@ export function stripFrameworkFields(
 // tool message would otherwise mint a fresh port object on every iteration,
 // defeat the receipt's by-object memo and hash the whole conversation again.
 // Weak keys tie each projection to that history entry's own lifetime.
-// The memo is for request assembly and receipts. Dispatch hands the adapter
-// its own mutable copy.
+// The memo is for request assembly and receipts. Cache preparation receives
+// its own editable copy of the assembled request.
 interface MessageProjection {
   readonly input: readonly (readonly [string, unknown])[];
   readonly output: readonly (readonly [string, unknown])[];

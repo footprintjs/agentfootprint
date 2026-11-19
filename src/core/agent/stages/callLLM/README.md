@@ -13,9 +13,11 @@ the inputs layer can write findings. One random batch namespace plus the proposa
 position identifies calls even when a provider repeats an ID. The proposal already
 lives in native state and the assistant history, so resumes carry the same address.
 
-`providerRequest.ts` detaches the assembled payload at each provider dispatch.
-The receipt uses the stable internal projections. Streaming and completion,
-including completion after a stream with no response, each get their own
-editable copy. The live cancellation signal crosses unchanged.
+`providerRequest.ts` detaches library-owned request data before cache preparation.
+The prepared request belongs to that model call. Edits to it survive a retry or
+stream fallthrough of the same payload. Each new model call starts with a fresh
+copy of library data. The receipt reuses internal message digests for built-in
+strategies, which only add cache markers, and reads host rewrites directly.
+The live cancellation signal is composed at dispatch.
 
 The oversized runtime stage still needs its step 2/3 extraction.
