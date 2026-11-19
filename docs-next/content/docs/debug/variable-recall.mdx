@@ -31,7 +31,14 @@ life.ablations; // one counterfactual hook per classifiable writer
 life.notes; // footprintjs's honesty notes, verbatim
 ```
 
-A `moments` entry is an `AgentKeyMoment`: footprintjs's `KeyMoment` fields (`kind`, `commitIdx`, `runtimeStageId`, `verb`, `fromWriteIdx`) **unchanged**, plus the two the agent cares about — `loopIndex` (absent when the step is run setup rather than a loop) and, for writes the classifier recognizes, `suspectKind` / `suspectId`. The whole result (`AgentVariableSlice`) is flat and JSON-safe, so the human board and an LLM tool read the same artifact.
+A `moments` entry is an `AgentKeyMoment`. Reads carry Foottrace's
+`fromWriteIdx` for the writer before the read window and `orWriteIdxs` for
+writes inside it. When `orWriteIdxs` is present, each named commit is only a
+possible source. An absent `fromWriteIdx` in that case means a value from
+before the run is also possible. The agent adds `loopIndex` and, for writes
+the classifier recognizes, `suspectKind` and `suspectId`. The returned
+`AgentVariableSlice` is flat and JSON-safe, so a board and an LLM tool can
+read the same artifact.
 
 From the tested example, printed off a real run:
 
@@ -105,6 +112,7 @@ The rules, stated so you can rely on them:
 - **The proxy picks WHO; dataflow picks WHERE.** The beam still narrows the suspect; only the descent target changes.
 - **A conservative edge never becomes an exact hop.** Dial off, stage-level edges, a key with no dataflow, or a scope-isolated (grouped-chart) frame — each falls back to the beam, stamped `'text-similarity'`.
 - **Recorded beats inferred.** An exact edge outranks the inferred proximate-tool hop, because the tool edge is a heuristic (`call-llm` reads `history`, not the tool key) and the exact edge is a commit-log fact.
+- **Ambiguous reads end the walk.** The hop reports `ambiguous-read-source` and gives no writer or earlier loop, even when the key has exact per-write coverage.
 - **Omit `variables` and nothing changes** — same hops, same order, same verdicts.
 - **`narrowedBy` is not a verdict.** A dataflow hop is exact about *where the value came from*, never about what caused the answer. Only ablation convicts.
 
@@ -113,6 +121,9 @@ It is deliberately stricter than the single hop needs: the read→value attribut
 ## On the board
 
 `variableToBacktrackTrace` puts a variable's life on the same `BacktrackTrace` board the localizer report uses — one card per write, newest first, custody hops for the rewind player. `VariableToBacktrackTraceOptions` takes the same `answer` / `claim` / `maxSuspects` shape as its siblings.
+
+An overlapping read appears once on the timeline with all its possible sources.
+It appears on each candidate writer's card as a possible read of that write.
 
 Honestly weakest chips of the three boards: `mode` is **always** `'correlational'` (nothing here was ablated — the join measures nothing), every card is an upper bound, and the claims strip says plainly that these rows are **structural facts — recorded reads and writes, not similarity guesses**, so nobody mistakes it for an influence ranking. footprintjs's notes ride along verbatim, and a variable with no recorded writer renders an empty board that says why.
 

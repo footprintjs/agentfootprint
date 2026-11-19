@@ -99,7 +99,7 @@ export interface AgUiOptions {
   readonly translation?: AgUiTranslationStrategy;
   /** The CUSTOM allow-list — see {@link AgUiSerializerOptions.custom}. */
   readonly custom?: AgUiSerializerOptions['custom'];
-  /** Project served tool arguments without replacing native lifecycle/ids. */
+  /** Project served tool arguments on calls without a protected argument view. */
   readonly toolArguments?: AgUiSerializerOptions['toolArguments'];
   /** Project served tool results; default failed-tool withholding stays authoritative. */
   readonly toolResults?: AgUiSerializerOptions['toolResults'];
@@ -153,7 +153,7 @@ export function agUi(options: AgUiOptions = {}): ProtocolAdapter<AgUiRunInput, A
     readRequest: ({ body, headers }) => readAgUiRequest(reader, { body, headers }),
     conversation: (input) => input.threadId,
     plan: (input, held, facts) => planAgUiTurn(input, held, facts, rules),
-    awaitsCaller: isFrontendToolPause,
+    awaitsCaller: (pauseData) => isFrontendToolPause(pauseData, frontendTools),
     open: (input, resumed, opening) => {
       const resume = resumed === undefined ? undefined : readAgUiSuspension(resumed);
       return translate({

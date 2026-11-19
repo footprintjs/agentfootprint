@@ -61,6 +61,11 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence | Sentence[] {
   switch (call.fact.outcome) {
     case 'failed':
       return ctx.say('found.failed', { vars: { tool }, pointers: endPointers });
+    // Never "returned an error": the tool was not reached, so it returned nothing.
+    case 'not-executed':
+      return ctx.say('found.notExecuted', { vars: { tool }, pointers: endPointers });
+    case 'ended-in-error':
+      return ctx.say('found.endedInError', { vars: { tool }, pointers: endPointers });
     case 'refused':
       return ctx.say('found.refused', { vars: { tool }, pointers: endPointers });
     case 'declined':
@@ -78,8 +83,9 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence | Sentence[] {
       break;
   }
   if (call.fact.withheldBy !== undefined && call.ruleEvent !== undefined) {
+    const who = call.ruleEvent.payload.outcome === 'refused' ? 'outcome' : 'middleware';
     return ctx.say('found.withheld', {
-      vars: { tool, by: v(call.fact.withheldBy, 'library', at(call.ruleEvent, 'middleware')) },
+      vars: { tool, by: v(call.fact.withheldBy, 'library', at(call.ruleEvent, who)) },
       pointers: [at(call.ruleEvent, 'moment'), at(call.ruleEvent, 'outcome')],
     });
   }

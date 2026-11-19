@@ -87,9 +87,10 @@ turn on the strictest wire — so **a `role: 'user'` injection will typically ne
 deliver inside an agent loop.** Use `'assistant'`, use `'system'` on a provider that
 carries it, or return the words from the tool.
 
-When a message cannot be placed, it is **deferred**, not dropped: it waits for the next
-iteration boundary, nothing is reordered to make room, and nothing is ever inserted
-between a tool call and its result. The reason is committed to
+A message that cannot be placed waits for the next eligible iteration while its
+injection remains active. The check covers the whole window. Any unanswered tool call
+defers every `messages` delivery, regardless of role, until it has a result or leaves the
+window. This can include an unanswered sibling left when a fresh batch halted. The reason is committed to
 `snapshot.sharedState.messagesDelivery.deferred` as a sentence — that record is the
 answer to "why is my declaration not on the wire?".
 

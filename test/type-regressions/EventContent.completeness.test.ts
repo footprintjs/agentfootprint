@@ -184,6 +184,8 @@ export const EVENT_CONTENT = {
   'agentfootprint.skill.route_conflict': 'structure',
   // the step note the app declared
   'agentfootprint.skill.step_advanced': 'structure',
+  // the step note the app declared, and the status word its tool declared
+  'agentfootprint.skill.step_held': 'structure',
   'agentfootprint.skill.step_skipped': 'shape',
   // the step notes the app declared
   'agentfootprint.skill.steps_unfinished': 'structure',
@@ -403,6 +405,7 @@ const CANARY_PAYLOAD: {
     approved: true,
     by: 'approver-7',
     note: leaf(c, 'note'),
+    hiddenArgs: ['account'],
     componentId: 'approve-card',
   }),
   'agentfootprint.checkin.request': (c) => ({
@@ -563,6 +566,7 @@ const CANARY_PAYLOAD: {
     moment: 'before-tool',
     at: 'tool',
     phase: 'input',
+    personApproved: false,
     toolName: 'refund_order',
     toolCallId: 'call-2',
     iteration: 1,
@@ -580,6 +584,7 @@ const CANARY_PAYLOAD: {
     actor: 'agent',
     target: 'refund_order',
     result: 'deny',
+    phase: 'resume',
     policyEngine: 'custom',
     policyRuleId: 'refund-limit',
     rationale: leaf(c, 'rationale'),

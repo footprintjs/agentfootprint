@@ -97,8 +97,10 @@ export interface AgentKeyMoment {
   readonly stageName: string;
   /** `'write'` moments only: the trace verb. */
   readonly verb?: KeyMoment['verb'];
-  /** `'read'` moments only: the commitIdx of the write whose value it saw. */
+  /** `'read'` moments only. The last write before the reader began, absent for a pre-run source. */
   readonly fromWriteIdx?: number;
+  /** Other writes the reader could have seen. When present, none of the sources is certain. */
+  readonly orWriteIdxs?: readonly number[];
   /**
    * The ReAct loop this moment happened in. ABSENT when the step is not in any
    * frame (run prelude, root-seeded setup) — absence is information, not a gap.
@@ -349,6 +351,7 @@ export function joinVariableSlice(
         stageId: m.stageId,
         stageName: m.stageName,
         ...(m.fromWriteIdx !== undefined && { fromWriteIdx: m.fromWriteIdx }),
+        ...(m.orWriteIdxs !== undefined && { orWriteIdxs: m.orWriteIdxs }),
         ...(loopIndex !== undefined && { loopIndex }),
       };
     }

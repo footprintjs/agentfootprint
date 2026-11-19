@@ -315,6 +315,13 @@ export function buildToolArtifactsOperations(
       return values;
     }
     const substitute = placedToolResult(call.toolName, meta, text.length, placement.maxInlineChars);
+    // The library's own receipt for this ticket (`placedTickets.ts`): every
+    // reader that speaks of a ticket as the library's asks it, so a tool
+    // returning ticket-shaped JSON is never taken for a placement.
+    scope.placedTickets = [
+      ...(scope.placedTickets ?? []),
+      { toolCallId: call.toolCallId, ref: meta.ref },
+    ];
     return {
       // One ticket when the two channels carry one value — the capResults
       // law. A value that differs from what the model reads ONLY by the

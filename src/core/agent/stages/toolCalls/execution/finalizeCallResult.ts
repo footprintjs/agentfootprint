@@ -46,9 +46,10 @@ export async function finalizeCallResult(
         ...(batch.env.signal && { signal: batch.env.signal }),
       })
     : outcome.result;
-  if (frame.sourceEvidenceArmed && sourceEvidenceHaltOf(scope) !== undefined) {
+  const sourceHalt = frame.sourceEvidenceArmed ? sourceEvidenceHaltOf(scope) : undefined;
+  if (sourceHalt !== undefined) {
     execution.denied = true;
-    execution.haltContext = sourceEvidenceHaltOf(scope)!;
+    execution.haltContext ??= sourceHalt;
   }
   // Placement next (9.22.0) — the operator's ref-ing, judged on what
   // the chain let through (a rule that already summarized a huge

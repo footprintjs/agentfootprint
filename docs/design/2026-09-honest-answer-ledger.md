@@ -43,9 +43,9 @@ its two copied fields. § 15 lists all fifteen with what changed and what the de
 do. Nothing on this page is implemented. Facts found while building change this page, not a
 chat.
 
-**Where this sits.** [Declared control — what ships first](./2026-09-declared-control.md)
-keeps the chart-free items (run facts, `solo`, five small items). [The no-model hop]
-(./2026-09-no-model-hop.md) holds the chart-changing items and is marked not ready. This page
+**Where this sits.** "Declared control — what ships first" (not yet written; no such page is
+in this repository) keeps the chart-free items (run facts, `solo`, five small items). "The
+no-model hop" (not yet written either) holds the chart-changing items and is marked not ready. This page
 is the owner's proposed alternative to building more doors: make what the library already
 knows about an answer TYPED, compare it against the record, and let the verdict act through
 the doors that exist. It takes nothing away from the ship-first page (run facts is REQUIRED
@@ -2165,7 +2165,7 @@ reader, one tier, two sentences with a typed slot, one event and the batch settl
   `src/lib/semantics/types.ts` · `SemanticClarify`, `src/core/agent/findings/{types,ledger,
   contingent,serve}.ts` and README, `src/core/agent/types.ts` · `ExternalGroundsProvider` /
   `ExternalGround`, `src/core/agent/coverage/{types,absent}.ts`, a `grep` of `src/` for any
-  placement type (none), `docs/design/2026-09-declared-control.md` (`AgentRunOptions.given?:
+  placement type (none), `docs/design/2026-09-declared-control.md` (not in this repository; `AgentRunOptions.given?:
   unknown`); and the AgentSpec HTML full text (https://arxiv.org/html/2503.18666, the Event
   and Enforce productions of Figure 3).
 - **Review round 3** (2026-09-23): the four lenses' fifteen findings, each re-verified before
@@ -2180,7 +2180,7 @@ reader, one tier, two sentences with a typed slot, one event and the batch settl
   `src/lib/claim/claim.ts`, `src/lib/semantics/types.ts`, `src/core/agent/types.ts`,
   `src/core/agent/findings/{types,ledger,reserved}.ts`, `src/events/payloads.ts`,
   `src/integrity/README.md`, `test/modelFacingSurfaces.test.ts`,
-  `docs/design/map-walker-trace-fold-lens.md`, `docs/design/2026-09-declared-control.md`;
+  `docs/design/map-walker-trace-fold-lens.md`, `docs/design/2026-09-declared-control.md` (not in this repository);
   the host's `node_modules/contextfootprint/dist/esm/{assertion,conflicts}.d.ts`,
   `py-tools/server.py` (the five case lookups; the `af_absent()` helper and a count of its
   callers), `tools-catalog.json` (`_meta.agentfootprint` on all 90 entries: `resultKind` 82,

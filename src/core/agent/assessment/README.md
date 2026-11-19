@@ -375,7 +375,10 @@ text; // 'One draft run: run-1.\n\n---\n\nNot sure — loading the attached data
 ```
 
 The named clauses (`compose.ts` · `NAMED_REASON_WORDS`; `{who}` = the declared
-names, then "and N other call(s)") — `STANDING_LINE_VERSION` 2:
+names, then "and N other call(s)"). They came in with `STANDING_LINE_VERSION` 2
+and the three integrity rows at 4; the version the code says today is
+`compose.ts` · `STANDING_LINE_VERSION`, which is bumped whenever a word in either
+column changes, so this table can lag it but the code cannot:
 
 | Reason | Without a declared name (unchanged) | Named |
 |---|---|---|
@@ -393,6 +396,9 @@ names, then "and N other call(s)") — `STANDING_LINE_VERSION` 2:
 | `argument-read` | a value a call ran with was read into your words: … | {who} ran with a value read into your words: … |
 | `value-contingent` | a value a call ran with was taken from a result the model itself had set aside | a value came from {who}, whose results the model itself had set aside |
 | `declaration-overclaimed` | a tool declaration overstates what was checked | {who} declared more than was checked |
+| `unsupported-argument` | a value a call ran with appears nowhere the run served the model | {who} ran with a value the run never served the model |
+| `column-type-mismatch` | a tool's rows hold a different type than the tool declares | {who} returned rows with a different type than declared |
+| `missing-column` | a column a tool declares is in none of its rows | {who} returned rows without a declared column |
 | `argument-assumed` | window = "2h" was assumed by search_logs's rule, not given by you | window = "2h" was assumed by the rule of {name}, not given by you |
 
 ## How the turn ended

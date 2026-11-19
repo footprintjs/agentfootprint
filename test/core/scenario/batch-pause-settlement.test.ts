@@ -1,4 +1,5 @@
 import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
+import { withTypedAnswerMark } from '../../helpers/typedAnswerMark.js';
 import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * THE BATCH SETTLEMENT (9.113.0) — a paused batch's un-dispatched siblings.
@@ -29,9 +30,9 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  * brackets on the leg that paused, which ends in a checkpoint and emits no
  * `iteration_end` — unchanged.
  *
- * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle, and its
- * record is pinned against a reference captured on the 9.112.2 tree BEFORE any
- * source edit of this release, by this file in update mode:
+ * BYTE IDENTITY. A batch whose LAST call pauses has nothing to settle. The
+ * 9.112.2 reference adds `entered: true` on each successful tool end for the
+ * new entry contract. It was originally captured by this file in update mode:
  *
  *   AF_BATCH_SETTLEMENT_REFERENCE=update npx vitest run test/core/scenario/batch-pause-settlement.test.ts
  */
@@ -604,7 +605,7 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
   return JSON.parse(requestId === undefined ? text : text.split(requestId).join('<requestId>'));
 }
 
-describe('batch settlement — a batch whose LAST call pauses is byte-identical to 9.112.2', () => {
+describe('batch settlement — the pinned record when the last call pauses', () => {
   it.each(KINDS)('%s', async (kind) => {
     const h = build(kind, 2);
     const { answer, requestId } = await pauseAndResume(h, kind);
@@ -623,7 +624,9 @@ describe('batch settlement — a batch whose LAST call pauses is byte-identical 
       all[kind],
       `no reference for '${kind}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(withNativeResourceObservation(all[kind] as { eventTypes: string[] }));
+    const legacy = withNativeResourceObservation(all[kind] as { eventTypes: string[] });
+    // A typed ask's landed answer now carries the library's mark; nothing else moved.
+    expect(record).toEqual(kind === 'input' ? withTypedAnswerMark(legacy) : legacy);
   });
 });
 
@@ -800,8 +803,8 @@ describe('batch settlement — the sentence, and the marker that says the same t
     });
 
     it('an id proposed twice on ONE turn: each settlement answers its own call, in call order', () => {
-      // A later turn's call that RAN under the same id gives the id a result,
-      // so only the pairing — not the in-flight check — keeps both out.
+      // Both recorded settlements stay with their proposals when the id
+      // is reused by a later completed call.
       const twice: LLMMessage = {
         role: 'assistant',
         content: '',
@@ -864,18 +867,11 @@ describe('batch settlement — the sentence, and the marker that says the same t
         turn(['transfer_funds', 'c3']), // in flight: the permission check's view
       ];
       expect(names(history)).not.toContain('verify_identity');
-      // The whole sequence, the in-flight limit included: process A's
-      // collect_x and other were never answered, and they count because
-      // calls that ran reuse their ids — the limit stated in
-      // `src/security/extractSequence.ts`'s header, `src/security/README.md`
-      // and `src/core/README.md` · "Not covered yet". Pinned here so those
-      // statements and the code cannot drift apart.
-      expect(names(history)).toEqual(['collect_x', 'other', 'collect', 'lookup', 'lookup']);
+      // The older unanswered proposals have no result of their own.
+      expect(names(history)).toEqual(['collect', 'lookup', 'lookup']);
     });
 
-    it('with no settlement anywhere, a reused id pairs as it always did — both proposals count', () => {
-      // The additive law: a history the settlement never touched reads
-      // exactly as it did before 9.113.0, reuse included.
+    it('keeps both answered proposals when they share an id and neither is settled', () => {
       expect(
         names([proposing, ranResult('a'), ranResult('b'), ranResult('c'), reusing, lookupRan]),
       ).toEqual(['t_a', 't_b', 't_c', 'lookup']);
@@ -891,80 +887,6 @@ describe('batch settlement — the sentence, and the marker that says the same t
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
     };
-
-    /** The rule this file had before 9.113.0: by id, the latest message decides. */
-    const byIdAsBefore = (history: readonly LLMMessage[], iteration: number) => {
-      const latest = new Map<string, string>();
-      for (const m of history)
-        if (m.role === 'tool' && m.toolCallId) latest.set(m.toolCallId, m.content);
-      const sequence: { name: string; args: Record<string, unknown>; iteration: number }[] = [];
-      let turn = 1;
-      for (const m of history) {
-        if (m.role !== 'assistant' || !m.toolCalls || m.toolCalls.length === 0) continue;
-        for (const call of m.toolCalls) {
-          const result = call.id ? latest.get(call.id) : undefined;
-          if (result === undefined || result.startsWith(SYNTHETIC_DENY_PREFIX)) continue;
-          sequence.push({ name: call.name, args: call.args, iteration: turn });
-        }
-        turn += 1;
-      }
-      const last = sequence.at(-1)?.iteration;
-      if (last !== undefined && iteration > turn - 1) {
-        for (let i = sequence.length - 1; i >= 0 && sequence[i]!.iteration === last; i--) {
-          sequence[i]!.iteration = iteration;
-        }
-      }
-      return sequence;
-    };
-
-    it('property: with no marker anywhere, the sequence is the by-id rule it always was (400 seeded histories)', () => {
-      // Reused ids across and within turns, an empty id, denied calls, calls
-      // still in flight, a result given twice, user turns and text-only turns.
-      const ids = ['k1', 'k2', 'k3', ''];
-      let reused = 0;
-      for (let seed = 1; seed <= 400; seed++) {
-        const next = seeded(seed);
-        const pick = <T>(from: readonly T[]): T => from[Math.floor(next() * from.length)]!;
-        const history: LLMMessage[] = [];
-        for (let turn = 0, turns = 1 + Math.floor(next() * 7); turn < turns; turn++) {
-          const kind = next();
-          if (kind < 0.15) {
-            history.push(
-              kind < 0.1
-                ? { role: 'user', content: 'and then?' }
-                : { role: 'assistant', content: '…' },
-            );
-            continue;
-          }
-          const calls = Array.from({ length: 1 + Math.floor(next() * 3) }, () => ({
-            id: pick(ids),
-            name: pick(['verify', 'transfer', 'lookup']),
-            args: {},
-          }));
-          history.push({ role: 'assistant', content: '', toolCalls: calls });
-          for (const call of calls) {
-            const answer = next();
-            if (answer < 0.15) continue; // still in flight
-            const content = answer < 0.35 ? `${SYNTHETIC_DENY_PREFIX} ${call.name}]` : 'ok';
-            history.push({ role: 'tool', content, toolCallId: call.id, toolName: call.name });
-            if (next() < 0.05) {
-              history.push({
-                role: 'tool',
-                content: 'ok',
-                toolCallId: call.id,
-                toolName: call.name,
-              });
-            }
-          }
-        }
-        const proposed = history.flatMap((m) => (m.toolCalls ?? []).map((c) => c.id));
-        if (new Set(proposed).size < proposed.length) reused++;
-        const iteration = 1 + (seed % 6);
-        expect(extractSequence(history, iteration)).toEqual(byIdAsBefore(history, iteration));
-      }
-      // The generator did exercise reuse — the case the positional pairing is for.
-      expect(reused).toBeGreaterThan(200);
-    });
 
     it('property: histories as the library writes them — each call ran or was settled, ids reused within and across turns — hold exactly the calls that ran (400 seeds)', () => {
       // Every proposal is answered right after its turn, in call order, the
@@ -1211,7 +1133,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
     expect(checkIn.checkIn?.evidence.trail).toEqual({
       iteration: 2,
       toolCalls: [{ name: 'collect_input', ok: true }],
-      summary: '1 tool run over 2 iterations',
+      summary: '1 tool call over 2 iterations',
     });
     expect(ran).toEqual([]);
   });

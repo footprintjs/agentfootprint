@@ -10,6 +10,7 @@ export const PRIVATE_FIELD_ROOTS = Object.freeze([
   'argumentAnswersKept',
   'argumentResolutions',
   'pausedCheckInArgs',
+  'innerCallPolicyArgs',
 ] as const);
 export type PrivateFieldRoot = (typeof PRIVATE_FIELD_ROOTS)[number];
 

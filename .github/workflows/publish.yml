@@ -457,9 +457,7 @@ jobs:
         run: npm run docs:truth
       - name: Doc links
         if: needs.verdict.outputs.tested != 'true'
-        run: |
-          npm install --no-save github-slugger
-          node scripts/check-doc-links.mjs --strict
+        run: node scripts/check-doc-links.mjs --strict
 
       # Packaging correctness — ALWAYS, whatever `verdict` said: these check
       # the package this job is about to stage, as built here. The registry
@@ -648,7 +646,7 @@ jobs:
       - name: Capture trusted archive verifier
         env:
           VERIFY_DIR: ${{ runner.temp }}/af-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: cp scripts/publish-archive/archive.cjs scripts/publish-archive/verify.cjs "$VERIFY_DIR/"
+        run: cp scripts/publish-archive/archive.cjs scripts/publish-archive/verify.cjs scripts/publish-archive/archivePolicy.cjs scripts/publish-archive/tarReader.cjs "$VERIFY_DIR/"
 
       - name: Read the pinned source manifest
         id: source

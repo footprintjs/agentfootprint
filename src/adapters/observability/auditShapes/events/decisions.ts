@@ -151,6 +151,9 @@ export function decisionsShapes() {
       approved: bool,
       by: str,
       note: charsMarker,
+      // Argument NAMES the tool's view hid from the person — never values —
+      // or the fixed word for a pause stored before the list existed.
+      hiddenArgs: either(listOf(str), oneOf('not-recorded')),
       componentId: str,
     }),
 
@@ -158,11 +161,12 @@ export function decisionsShapes() {
       middleware: str,
       moment: oneOf('after-tool', 'before-tool', 'input', 'output', 'window'),
       at: oneOf('message', 'tool'),
-      phase: oneOf('input', 'output'),
+      phase: oneOf('input', 'output', 'resume'),
       toolName: str,
       toolCallId: str,
       iteration: num,
-      outcome: oneOf('allow', 'ask', 'deny'),
+      outcome: oneOf('allow', 'ask', 'deny', 'refused'),
+      personApproved: bool,
       changed: bool,
       why: charsMarker,
       componentId: str,
@@ -421,6 +425,7 @@ export function decisionsShapes() {
       actor: str,
       target: str,
       result: oneOf('allow', 'deny', 'gate_open', 'halt'),
+      phase: oneOf('resume'),
       policyEngine: oneOf('cerbos', 'custom', 'opa'),
       policyRuleId: str,
       rationale: charsMarker,

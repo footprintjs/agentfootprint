@@ -42,6 +42,7 @@
  * An unredacted recording is read through no guard at all.
  */
 
+import { issuedTicketsOf, type IssuedPairs } from '../core/agent/placedTickets.js';
 import { eventBelongsToRun } from '../bridge/eventMeta.js';
 import { isPlaceholder, servedUnderPolicy } from '../redaction/marker.js';
 
@@ -131,6 +132,8 @@ export interface RecordingView {
   readonly state?: Readonly<Record<string, unknown>>;
   /** The state keys the record keeps out (they hold the redaction placeholder). */
   readonly stateKeptOut: readonly string[];
+  /** The placement pairs this snapshot lets the account read. */
+  readonly issuedPlacements: IssuedPairs;
   /** Whether the record keeps state `key` out — asking handles it (the view's guard). */
   isStateKeptOut(key: string): boolean;
   /**
@@ -316,6 +319,7 @@ export function recordingView(
     servedUnderPolicy: served,
     ...(state !== undefined && { state }),
     stateKeptOut,
+    issuedPlacements: issuedTicketsOf(stripped?.placedTickets),
     isStateKeptOut: (key) => {
       noteName(ASKED, stateOwner, key);
       return stateKeptOut.includes(key);

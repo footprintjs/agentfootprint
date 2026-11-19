@@ -88,6 +88,7 @@ export const EVENT_NAMES = {
     routeConflict: 'agentfootprint.skill.route_conflict',
     turnRouted: 'agentfootprint.skill.turn_routed',
     stepAdvanced: 'agentfootprint.skill.step_advanced',
+    stepHeld: 'agentfootprint.skill.step_held',
     stepSkipped: 'agentfootprint.skill.step_skipped',
     stepsUnfinished: 'agentfootprint.skill.steps_unfinished',
     escalated: 'agentfootprint.skill.escalated',

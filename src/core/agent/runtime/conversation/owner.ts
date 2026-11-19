@@ -6,6 +6,7 @@ import {
   sourceEvidenceOf,
   sourceDeclarationCorrectionOf,
 } from './checkpointParts.js';
+import { ticketsStillServed } from '../../placedTickets.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation, type RunnerSelection } from '../../../runnerExecution.js';
@@ -23,6 +24,11 @@ import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
 import { type ClockDraft, type ReadRunTime } from '../../../../time/clock.js';
 import type { AgentOutput, AgentState } from '../../types.js';
+import {
+  INNER_CALL_POLICY_KEY,
+  innerCallPolicyFor,
+} from '../../../../redaction/innerCallPolicyCarrier.js';
+import { addPrivateRecordFields } from '../../../../redaction/privateFields.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
 import {
   draftAgentClock,
@@ -113,10 +119,16 @@ export function checkpointFor(
   );
   const findingsLedger = findingsLedgerOf(state);
   const turnNumber = this.turnNumberOf(state);
+  const stored = structuredClone(
+    checkpointReplayHistory(history, selected!.value.checkpointTracker),
+  );
+  const placedTickets = ticketsStillServed(state?.placedTickets, stored);
+  const innerCallPolicyArgs = innerCallPolicyFor(state, stored);
   return {
     version: 1,
     runId: selected!.context.runId,
-    history: structuredClone(checkpointReplayHistory(history, selected!.value.checkpointTracker)),
+    history: stored,
+    ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
     originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
     checkpointedAt: Date.now(),
@@ -139,6 +151,8 @@ export function checkpointFor(
     // The turn this history ends on (honesty layers) — absent unless a
     // layer is armed, so every other checkpoint keeps its byte shape.
     ...(turnNumber !== undefined && { turnNumber }),
+    // The tickets the library placed whose messages the history still holds.
+    ...(placedTickets !== undefined && { placedTickets }),
     ...(this.configuration.negativeClaimsConfig === undefined || state === undefined
       ? {}
       : negativeCheckpointOf(state)),
@@ -264,11 +278,10 @@ export function conversationOwner(
  * restores history + folded spans, and adopts the conversation's identity so
  * the continued turn writes its memory where the earlier turns are.
  *
- * `appendsUserTurn` is the difference between the two callers, and it is the
- * whole difference. Continuing a conversation ADDS this turn's user message
- * to the stored history; resuming after an error does NOT, because there the
- * message is already the last user turn in that history and appending it
- * would ask the same question twice.
+ * `appendsUserTurn` is the difference between the two callers. Continuing a
+ * conversation ADDS this turn's user message to the stored history; resuming
+ * after an error does NOT, because there the message is already the last user
+ * turn in that history and appending it would ask the same question twice.
  *
  * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
  * by `runtime/conversation/seedHistory.ts · historyForTurn` from the message the `'input'` middleware
@@ -310,12 +323,25 @@ export function applyContinuation(
     throw new TypeError(
       'Continuation requires the negative-claims setting used by the recording agent.',
     );
+  const history = cp.history.some((message) => message.calls !== undefined)
+    ? structuredClone(cp.history)
+    : cp.history;
+  const innerCallPolicyArgs = innerCallPolicyFor(cp, history);
+  if (innerCallPolicyArgs !== undefined) {
+    values.privateFields = addPrivateRecordFields(values.privateFields, [
+      { root: INNER_CALL_POLICY_KEY, path: '' },
+    ]);
+  }
   values.pendingResumeHistory = {
-    history: cp.history as readonly LLMMessage[],
+    history,
+    ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     appendsUserTurn,
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
     ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
+    // The tickets the library placed in earlier turns (`placedTickets.ts`):
+    // still the library's, so the staged-refs nudge still names them.
+    ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),
     ...(this.configuration.negativeClaimsConfig === undefined
       ? {}
       : { negatives: negativeCheckpointOf(cp) }),

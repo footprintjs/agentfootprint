@@ -26,10 +26,12 @@ const permissionResults = Object.keys({
   halt: true,
   gate_open: true,
 } satisfies Record<PermissionCheckPayload['result'], true>);
-const middlewareOutcomes = Object.keys({ allow: true, deny: true, ask: true } satisfies Record<
-  MiddlewareDecisionPayload['outcome'],
-  true
->);
+const middlewareOutcomes = Object.keys({
+  allow: true,
+  deny: true,
+  ask: true,
+  refused: true,
+} satisfies Record<MiddlewareDecisionPayload['outcome'], true>);
 const credentialModes = Object.keys({ machine: true, user: true } satisfies Record<
   NonNullable<CredentialRequestedPayload['mode']>,
   true
@@ -139,6 +141,18 @@ export function projectTrustBoundary(
         fact.middleware = text(field(payload, 'middleware'));
         fact.moment = choice(field(payload, 'moment'), LOOP_MOMENTS);
         fact.outcome = choice(field(payload, 'outcome'), middlewareOutcomes);
+        if (field(payload, 'phase') === 'resume') fact.phase = 'resume';
+        else {
+          const personApproved = field(payload, 'personApproved');
+          if (personApproved !== undefined) {
+            if (
+              typeof personApproved !== 'boolean' ||
+              fact.outcome !== (personApproved ? 'allow' : 'deny')
+            )
+              throw invalid;
+            fact.personApproved = personApproved;
+          }
+        }
         const changed = field(payload, 'changed');
         if (typeof changed !== 'boolean') throw invalid;
         fact.changed = changed;
@@ -148,6 +162,7 @@ export function projectTrustBoundary(
       case 'agentfootprint.permission.check':
         fact.capability = choice(field(payload, 'capability'), capabilities);
         fact.result = choice(field(payload, 'result'), permissionResults);
+        if (field(payload, 'phase') === 'resume') fact.phase = 'resume';
         optionalText('target');
         optionalText('policyRuleId');
         break;

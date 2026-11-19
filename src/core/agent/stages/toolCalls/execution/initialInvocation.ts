@@ -34,8 +34,13 @@ import {
 import {
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
+  unknownStatusOf,
+  unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { isPauseRequest } from '../../../../pause.js';
+import { throwIfAborted } from '../../../../../lib/abort.js';
+import { bindOuterCall } from '../../../innerCallOuter.js';
+import { toolPauseData } from './toolPauseData.js';
 import {
   validateInputDeclaration,
   stampInputRequest,
@@ -66,6 +71,7 @@ interface InvokeInitialToolFrame {
   readonly toolProgress: ReturnType<typeof buildToolProgressOperations>['toolProgress'];
   readonly sessionContext: ReturnType<typeof buildToolResourcesOperations>['sessionContext'];
   readonly toolDispatchCtx: ReturnType<typeof buildToolContextOperations>['toolDispatchCtx'];
+  readonly historyForCallbacks: CallStartFacts['historyForCallbacks'];
   readonly searchFunnel: ReturnType<typeof buildSearchCoverage>;
   readonly execution: CallExecution;
   readonly runFactsOf: ReturnType<typeof buildToolResourcesOperations>['runFactsOf'];
@@ -136,13 +142,23 @@ export async function invokeInitialTool(
           )
         : undefined;
     const callTime = dispatched?.context;
-    if (dispatched !== undefined) frame.callArguments.callArgs = dispatched.args as ToolArgs;
+    if (dispatched !== undefined) {
+      frame.callArguments.callArgs = dispatched.args as ToolArgs;
+      // The record's copy gets the same redraw, so `tool_end.changedArgKeys`
+      // names the keys the tool ran with (`dispatchCall.ts` re-judges it). A
+      // fresh object when redrawn, which the tool is never handed.
+      frame.callArguments.chainedArgs = dispatched.redraw(
+        frame.callArguments.chainedArgs,
+      ) as ToolArgs;
+    }
     // Set BEFORE the await: a tool that throws has still run, and a
     // tool that does not exist has not. This flag is the entire
     // precondition of the after-tool moment below.
     // This dispatch's own slot for the runner's facts — see the
     // resume path's twin in `resolveCredentialAndExecute`.
     const codeRunSlot: CodeRunSlot = {};
+    // The outer call's hold on the inner calls its tool makes (`innerCallOuter.ts`).
+    const binding = bindOuterCall();
     const executionContext = {
       [CODE_RUN_SLOT]: codeRunSlot,
       toolCallId: frame.tc.id,
@@ -179,7 +195,13 @@ export async function invokeInitialTool(
       ...frame.sessionContext(scope, frame.tc.name, frame.tc.id),
       ...frame.toolDispatchCtx(
         scope,
-        { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+        {
+          toolName: frame.tc.name,
+          toolCallId: frame.tc.id,
+          iteration: frame.iteration,
+          history: frame.historyForCallbacks,
+          binding,
+        },
         frame.env.signal,
       ),
     };
@@ -206,7 +228,17 @@ export async function invokeInitialTool(
       frame.tool,
       frame.callArguments.callArgs,
     );
-    frame.outcome.result = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
+    try {
+      frame.outcome.result = await frame.tool.execute(
+        frame.callArguments.callArgs,
+        executionContext,
+      );
+    } finally {
+      // Keep the verdict of an admission already in flight before landing a result or pause.
+      await binding.close(frame.env.signal);
+      if (binding.halt !== undefined) frame.execution.haltContext ??= { ...binding.halt };
+    }
+    throwIfAborted(frame.env.signal);
     frame.execution.resultFinalizer?.returned();
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
@@ -246,6 +278,11 @@ export async function invokeInitialTool(
       // dropped marker in dev mode.
       const nearMiss = explainStatusOnlyNearMiss(frame.outcome.result);
       if (nearMiss !== undefined) frame.warnEffect(frame.tc.name, nearMiss);
+      // An envelope in every way but an unknown status word is data too;
+      // the word is kept for the procedure step, which tells it.
+      frame.outcome.unknownStatus = unknownStatusOf(frame.outcome.result);
+      if (frame.outcome.unknownStatus !== undefined)
+        frame.warnEffect(frame.tc.name, unknownStatusWarning(frame.outcome.unknownStatus));
     }
     // Coverage (this release), on the UNWRAPPED content and before
     // the ceiling — the boundary a tool declared is not the channel
@@ -336,13 +373,19 @@ export async function invokeInitialTool(
     await frame.endCall(scope);
   } catch (err) {
     frame.execution.resultFinalizer?.withheld();
+    if (frame.env.signal?.aborted) {
+      await frame.endCall(scope).catch(() => undefined);
+      throwIfAborted(frame.env.signal);
+    }
     // Set when a raise declared a miss the door could not file:
     // the call then errors with this text and does not pause.
     let raisedMissError: string | undefined;
+    const halt = frame.execution.haltContext;
+    const innerHalt = halt?.call === undefined ? undefined : halt;
     // In a batch whose one human question was the inputs layer's ask
     // (`oneQuestionAsked`), the tool's own pause cannot be given: the
     // call settles as an error below, with the refusal sentence.
-    if (isPauseRequest(err) && !frame.oneQuestionAsked) {
+    if (innerHalt === undefined && isPauseRequest(err) && !frame.oneQuestionAsked) {
       // The typed half of the question (9.24.0): a tool that raised
       // `askHuman({ question, component })` nominated a screen
       // component, and the nomination is judged HERE — the raise
@@ -473,15 +516,14 @@ export async function invokeInitialTool(
               );
         // Returning a defined value triggers footprintjs pause —
         // the returned object becomes the checkpoint's pauseData.
-        return {
-          toolCallId: frame.tc.id,
-          toolName: frame.tc.name,
-          ...(awaitingInput !== undefined
-            ? { question: awaitingInput.question, awaitingInput }
-            : typeof err.data === 'object' && err.data !== null
-            ? (err.data as Record<string, unknown>)
-            : { data: err.data }),
-        };
+        return awaitingInput !== undefined
+          ? {
+              toolCallId: frame.tc.id,
+              toolName: frame.tc.name,
+              question: awaitingInput.question,
+              awaitingInput,
+            }
+          : toolPauseData(frame.tc, err.data);
       }
     }
     // A tool that threw still RAN, and may have opened the thing it
@@ -491,6 +533,7 @@ export async function invokeInitialTool(
     frame.outcome.error = true;
     frame.execution.executeThrew = frame.execution.executed;
     frame.outcome.result =
+      (innerHalt !== undefined && isPauseRequest(err) ? innerHalt.tellLLM : undefined) ??
       raisedMissError ??
       (frame.askedLayer !== undefined && isPauseRequest(err)
         ? // Reached only in the batch that asked (a pause anywhere

@@ -26,10 +26,11 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type {
-  StructureRecorder,
-  StructureStageAddedEvent,
-  StructureSubflowMountedEvent,
+import {
+  flowChart,
+  type StructureRecorder,
+  type StructureStageAddedEvent,
+  type StructureSubflowMountedEvent,
 } from 'footprintjs';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { Sequence } from '../../../src/core-flow/Sequence.js';
@@ -37,7 +38,6 @@ import { Parallel } from '../../../src/core-flow/Parallel.js';
 import { Loop } from '../../../src/core-flow/Loop.js';
 import { Conditional } from '../../../src/core-flow/Conditional.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
-import { expectWithinTimes, measure } from '../../helpers/perf.js';
 
 interface RecordedEvents {
   readonly stageIds: string[];
@@ -273,49 +273,103 @@ describe('L1a — recorder error isolation', () => {
   });
 });
 
-// ── 6. Performance — recorder adds negligible cost ─────────────────
+// ── 6. Performance — recorder does not replay mounted topology ────
 
 describe('L1a — performance', () => {
-  it(
-    'a no-op recorder is called once per stage, and does not change the build’s order of cost',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // The load-proof claim first, because it is the sharper one: the recorder
-      // hears each stage EXACTLY ONCE. That is what "the build emits, it does
-      // not re-walk" means, and a count says it on any machine under any load.
-      let calls = 0;
-      const recorder: StructureRecorder = { id: 'noop', onStageAdded: () => calls++ };
-      const build = (recorders?: StructureRecorder[]): void => {
-        Parallel.create(recorders ? { structureRecorders: recorders } : {})
-          .branch('a', okLLMCall('A'))
-          .branch('b', okLLMCall('B'))
-          .mergeWithFn((r) => Object.values(r).join('|'))
-          .build();
-      };
-      build([recorder]);
-      const perBuild = calls;
-      expect(perBuild).toBeGreaterThan(0);
-      build([recorder]);
-      expect(calls).toBe(perBuild * 2); // stable per build — nothing accumulates
+  it.each([4, 16])('does no additional topology traversal at branch depth %i', (depth) => {
+    const onStageAdded = vi.fn();
+    const onEdgeAdded = vi.fn();
+    const onSubflowMounted = vi.fn();
+    const recorder: StructureRecorder = {
+      id: 'count',
+      onStageAdded,
+      onEdgeAdded,
+      onSubflowMounted,
+    };
 
-      // And the timed claim, comparative and honest about its size: an attached
-      // recorder DOES cost more — a call and its bookkeeping per stage, on a
-      // build whose own work is microseconds — so it measures around 3-4× here.
-      // The ceiling is 10×, which is not "negligible" but is the true claim: the
-      // recorder path must stay the same ORDER as the build it observes. Both
-      // halves are timed here, moments apart, so machine load cancels.
-      await expectWithinTimes({
-        baseline: () => {
-          for (let i = 0; i < 20; i++) build();
-        },
-        subject: () => {
-          for (let i = 0; i < 20; i++) build([recorder]);
-        },
-        times: 10,
-        why: 'a no-op structure recorder must not change the order of build cost',
+    function build(recorders?: StructureRecorder[]) {
+      const childBuilder = flowChart('Start', () => undefined, 'start', {
+        structureRecorders: recorders,
       });
-    },
-  );
+      for (let step = 1; step < depth; step++) {
+        childBuilder.addFunction(`Step ${step}`, () => undefined, `step-${step}`);
+      }
+      const chart = childBuilder.build();
+      const reads = { nodeNames: 0, nextEdges: 0, serializedIds: 0, serializedEdges: 0 };
+
+      // The native builder prefixes the runtime topology of each mounted
+      // child. Its static topology is attached by reference. Observe both
+      // inputs before mounting, where an extra traversal would read them.
+      for (let node: typeof chart.root | undefined = chart.root; node !== undefined; ) {
+        const { name } = node;
+        const next: typeof chart.root | undefined = node.next;
+        Object.defineProperty(node, 'name', {
+          get: () => {
+            reads.nodeNames++;
+            return name;
+          },
+        });
+        if (next !== undefined) {
+          Object.defineProperty(node, 'next', {
+            get: () => {
+              reads.nextEdges++;
+              return next;
+            },
+          });
+        }
+        node = next;
+      }
+      type SerializedNode = typeof chart.buildTimeStructure;
+      for (let node: SerializedNode | undefined = chart.buildTimeStructure; node !== undefined; ) {
+        const { id } = node;
+        const next: SerializedNode | undefined = node.next;
+        Object.defineProperty(node, 'id', {
+          get: () => {
+            reads.serializedIds++;
+            return id;
+          },
+        });
+        if (next !== undefined) {
+          Object.defineProperty(node, 'next', {
+            get: () => {
+              reads.serializedEdges++;
+              return next;
+            },
+          });
+        }
+        node = next;
+      }
+
+      const child = okLLMCall('child');
+      vi.spyOn(child, 'getSpec').mockReturnValue(chart);
+      Parallel.create({ structureRecorders: recorders })
+        .branch('a', child)
+        .branch('b', child)
+        .mergeWithFn((results) => Object.values(results).join('|'))
+        .build();
+      return reads;
+    }
+
+    // Hold the outer fork at two branches. Changing their depth grows the
+    // mounted topology. Only the child's own builder emits its callbacks.
+    const unrecorded = build();
+    expect(unrecorded.nodeNames).toBeGreaterThanOrEqual(2 * depth);
+    expect(unrecorded.nextEdges).toBe(2 * (depth - 1));
+    expect(unrecorded.serializedIds).toBe(0);
+    expect(unrecorded.serializedEdges).toBe(0);
+    expect(build([recorder])).toEqual(unrecorded);
+
+    expect(onStageAdded.mock.calls.map(([event]) => event.stageId)).toEqual([
+      'start',
+      ...Array.from({ length: depth - 1 }, (_, index) => `step-${index + 1}`),
+      'seed',
+      'a',
+      'b',
+      'merge',
+    ]);
+    expect(onEdgeAdded).toHaveBeenCalledTimes(depth - 1 + 4);
+    expect(onSubflowMounted).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ── 7. ROI — same recorder reused, events stable ───────────────────

@@ -1,19 +1,17 @@
 /**
  * provider-contract/types — the Ports of the hexagonal architecture.
  *
- * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
- *          (Cockburn, 2005).
+ * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters (Cockburn, 2005).
  * Role:    Contracts for every external dependency the library reaches for:
  *          LLM providers, memory stores, permission checkers, pricing tables.
  * Emits:   N/A (interfaces only).
- *
- * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy,
- * ...) implement these contracts. `core/` and `core-flow/` depend only on
- * these interfaces — never on concrete adapters.
+ * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy, ...) implement
+ * these contracts. `core/` and `core-flow/` depend only on them, never on an adapter.
  */
 
 import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+export type { TypedAnswerMark } from './typedAnswerMark.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
@@ -42,6 +40,12 @@ export interface LLMMessage {
    * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
    */
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
+  /**
+   * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
+   * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
+   * Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
+   */
+  readonly outcome?: 'refused' | 'failed';
   /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -161,13 +165,13 @@ export interface LLMMessage {
    * last-tool-result pin, the drop notice, the dangling-reference check); and
    * the trace toolpack's `inspect_tool_call`
    * (`trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`); and, under
-   * `.findings()`, the offer, the identity source, the piece's `undeclared:`
-   * line, the collapse, the window's `droppedStandings` and a turn's standing
-   * (`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,
-   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` ·
-   * `turnStandingOf` — the `'ledger-fact'` pin and
-   * `WindowStrategyInput.standingOf`) — a settled message is not a result to
-   * judge. None of them parses the sentence.
+   * `.findings()`, the offer, the identity source, the findings DATA's `undeclaredResultIds`
+   * (and the replay-only piece's `undeclared:` line), the collapse, the window's
+   * `droppedStandings` and a turn's standing (`core/agent/findings/offer.ts`,
+   * `findings/context.ts` · `findingsContext`, `findings/serve.ts` · `collapseJudged`,
+   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` · `turnStandingOf` — the
+   * `'ledger-fact'` pin and `WindowStrategyInput.standingOf`) — a settled message is not a
+   * result to judge. None of them parses the sentence.
    *
    * **One definition, two carriers.** The settled call's two brackets on the
    * event stream carry the same fact under the same name, typed off THIS field
@@ -237,6 +241,10 @@ export interface LLMMessage {
    * `stripFrameworkFields` removes it with the other framework fields.
    */
   readonly foldedExempt?: readonly string[];
+  /** The library's mark on a person's typed answer: see {@link TypedAnswerMark}. */
+  readonly answersAsk?: import('./typedAnswerMark.js').TypedAnswerMark;
+  /** On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent. */
+  readonly calls?: readonly import('./innerCalls.js').InnerCallRan[];
 }
 
 /**
@@ -782,7 +790,8 @@ export interface LLMProvider {
  * One entry in the in-flight tool-call sequence delivered to
  * `PermissionChecker.check()` since v2.12. Lets sequence-aware
  * policies (exfil chain detection, idempotency limits, cost guards)
- * inspect what the agent has already dispatched this run.
+ * inspect what has already been dispatched: the model's calls, and each
+ * call a tool made through `ctx.tools.call` right after its outer call.
  *
  * Derived from `scope.history` at check time — single source of truth,
  * survives `agent.resumeOnError(checkpoint)` correctly.
@@ -790,17 +799,14 @@ export interface LLMProvider {
 export interface ToolCallEntry {
   /** Tool name dispatched. */
   readonly name: string;
-  /** Tool args passed to `tool.execute(args, ctx)`. */
+  /** Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view. */
   readonly args: Readonly<Record<string, unknown>> | undefined;
   /** ReAct iteration the call was dispatched on. */
   readonly iteration: number;
-  /**
-   * Optional source identifier — `'local'` for tools registered via
-   * `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for
-   * tools resolved through a `discoveryProvider`. Lets cross-hub
-   * exfil rules match on origin, not just name.
-   */
+  /** `'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin. */
   readonly providerId?: string;
+  /** `true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own. */
+  readonly inner?: true;
 }
 
 /**
@@ -926,10 +932,10 @@ export interface PermissionDecision {
    */
   readonly reason?: string;
   /**
-   * v2.12 — content delivered to the LLM as the synthetic `tool_result`
-   * on `'deny'` and `'halt'`. When omitted, defaults to a deliberately
-   * generic `"Tool '${name}' is not available in this context."` —
-   * NEVER falls back to `reason` (which is telemetry, not user-facing).
+   * v2.12 — content for the synthetic `tool_result` on an explicit deny or halt.
+   * A deny defaults to `"[permission denied: ${rationale ?? 'policy'}]"`. The
+   * rationale can reach the model. A halt defaults to `"Tool '${name}' is not
+   * available in this context."` Both defaults leave `reason` in telemetry.
    */
   readonly tellLLM?: ToolResultContent;
 }
@@ -971,21 +977,15 @@ export interface PermissionChecker {
 }
 
 /**
- * Does this checker ask to be consulted about `capability`? (9.11.0)
- *
- * `'tool_call'` is always true — it has been enforced since v2.4 and needs no
- * declaration. Everything else is true only when the checker named it.
- * Absence is NO.
+ * Is this checker asked about `capability`? (9.11.0) `'tool_call'`: always, enforced since v2.4, no declaration needed. Anything else: only when the checker named it in `governs`; absence is NO.
  */
 export function checkerGoverns(
   checker: PermissionChecker | undefined,
   capability: PermissionCapability,
 ): boolean {
   if (!checker) return false;
-  if (capability === 'tool_call') return true;
-  return checker.governs?.includes(capability) === true;
+  return capability === 'tool_call' || checker.governs?.includes(capability) === true;
 }
-
 // ─── Pricing Table ──────────────────────────────────────────────────
 
 export type TokenKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite';

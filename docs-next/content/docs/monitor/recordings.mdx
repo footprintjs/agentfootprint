@@ -341,6 +341,17 @@ values as `AnswerAccountShownLeaf`s, keyed by `answerAccountPointerKey(pointer)`
 an allow-listed leaf of the record, a derived row count (never the rows), or
 the reason it is withheld.
 
+The account says a tool ran only when the record shows it ran. A call that
+ended in an error before its tool was reached — a tool name that does not
+exist, arguments the schema rejected, a blocked credential — reads "It asked
+to run reboot_host; the call was not executed.", read from
+`stream.tool_end.entered`. A tool that ran and threw reads "It ran crash, and
+the tool reported an error.". A recording made before `entered` existed does
+not say which, so an error there reads "It asked to run crash; the call ended
+in an error.". The "Anything wrong" count says such a call as "not executed",
+never "failed": "1 tool call did not run cleanly: 0 failed, 1 not executed, 0
+refused by a rule, 0 declined by a person, 0 not run.".
+
 ## How far an answer stands
 
 The account's "How sure" row — and anything else that needs one word for an
@@ -494,7 +505,11 @@ Gotchas:
   continued conversation never folds an earlier turn's rows as its own, even when
   a window strategy trims the stored history.
 - **The line is not streamed.** Like the limits block, it is appended to the
-  answer the run returns; `stream.token` carries the model's text.
+  answer the run returns; `stream.token` carries the model's text. A UI that
+  shows only tokens must render the rest of `turn_end.finalContent` (what the
+  tokens did not carry) when the turn ends. Record-only AG-UI writes that rest
+  as its own message. `toSSE({ format: 'text' })` writes it as one more chunk
+  for a turn the stream saw open at the root.
 - **A mode changes the line, nothing else.** The standing travels as data in every
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With

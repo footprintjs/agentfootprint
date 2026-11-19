@@ -22,6 +22,15 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'skill.rejected': 'The requested skill was refused.',
   ...dispositionTemplates,
   'event.unknown': 'An additional event was recorded.',
+  'middleware.decision.refused': 'The library refused an unrecognised middleware answer.',
+  'checkin.decision.approved': 'A person approved the call.',
+  'permission.check.resume.refused': 'The permission policy refused the call after the wait.',
+  'middleware.decision.resume.libraryRefused': 'The library refused the call after the wait.',
+  'middleware.decision.resume.secondQuestion':
+    'The policy required a second human answer, so the library refused the call after the wait.',
+  'middleware.decision.resume.callChanged':
+    'The tool arguments changed after the wait, so the library refused the call.',
+  'middleware.decision.resume.refused': 'A middleware rule refused the call after the wait.',
   'agent.turn_start': 'User asked {{appName}}: "{{userPrompt}}".',
 
   // `{{agentName}}` resolves to the active agent's display name when
@@ -62,6 +71,8 @@ export const defaultCommentaryTemplates: CommentaryTemplates = {
   'stream.tool_progress': 'The `{{toolName}}` tool reported progress while it was still running.',
 
   'stream.tool_end': 'The tool returned its result. {{agentName}} will share it with the LLM next.',
+  'stream.tool_end.notExecuted': 'The tool call was not executed.',
+  'stream.tool_end.executionUnknown': 'The record does not say whether the tool ran.',
 
   // A call the paused batch never dispatched (9.113.0) — its `tool_start`
   // carries `notDispatched`. A NEW key, not a split of `stream.tool_start`:

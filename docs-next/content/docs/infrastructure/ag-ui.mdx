@@ -233,8 +233,13 @@ A call pauses the run: the segment completes with the call in
 `pendingToolCallIds`, the page runs it and sends the result as a `tool` message in
 its next request, and the SAME run continues with it. The tool holds no server
 privilege (no credential, no artifacts), and a name a server tool already has is
-refused when the agent is built. Frontend tools need a host that keeps the paused
-run: `threads` and `sessions`.
+refused when the agent is built. Only a call named like one of these tools waits
+on the page: a server tool whose name is not a declared frontend tool and that
+writes `agUiFrontendTool` into its own pause data still waits on a person,
+because the adapter reads the paused call's real tool name. Not covered: a server
+tool you named like a declared frontend tool that the page did not enable on this
+request; the name is all the adapter sees, so give server tools names of their own.
+Frontend tools need a host that keeps the paused run: `threads` and `sessions`.
 
 ## Interrupts
 
@@ -321,10 +326,14 @@ stated on `RUN_STARTED`.
 
 ## What a run becomes
 
+The text mappings below describe record-only delivery. In host delivery, the
+host supplies the final answer after the run completes.
+
 | agentfootprint event | AG-UI events |
 |---|---|
 | `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |
-| `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message |
+| `agent.turn_end` | the answer as one text message when nothing streamed; after a streamed answer, the text the library appended to it — the limits block, the standing line — as its own message |
+| `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message. For a tool whose argument view hides values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`), `TOOL_CALL_ARGS` carries the view's output, never the real values, and `TOOL_CALL_START` and a check-in's interrupt carry the hidden names as `metadata.agentfootprint.hiddenArgs` |
 | `stream.tool_end` | `TOOL_CALL_RESULT` |
 | `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` — only with `reasoning: true` |
 | `agent.iteration_start` / `_end` | `STEP_STARTED` / `STEP_FINISHED`, named `iteration <n>` |
@@ -363,10 +372,13 @@ request's `threadId` and `runId`, and three decisions that are yours:
   ```
 
   `custom: {}` sends no `CUSTOM` events at all.
-- **`toolErrors`** — what a FAILED tool call's result says. By default the fixed
-  words "The tool failed." (`'withheld'`): the record's result for a failed call is
-  the thrown text, which may hold a connection string, a path or a provider's
-  response. `'served'` sends the record's own result.
+- **`toolErrors`** — what a FAILED tool call's result says. By default fixed
+  words (`'withheld'`): "The tool failed.", or "The call was not executed." for a
+  call that never reached its tool (a tool name that does not exist, arguments
+  the schema rejected, a blocked credential: `stream.tool_end.entered: false`).
+  The record's result for a failed call is the thrown text, which may hold a
+  connection string, a path or a provider's response. `'served'` sends the
+  record's own result.
 - **`reasoning`** — the model's chain of thought (`REASONING_*`), from the served
   thinking events. Off unless you set `reasoning: true`; whether a person may read
   it is a product decision.

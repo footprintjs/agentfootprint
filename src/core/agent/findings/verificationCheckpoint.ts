@@ -102,7 +102,7 @@ export function verificationCheckpointOf(container: unknown): ClaimVerificationS
   return readVerificationCheckpoint(descriptor.value, ledger);
 }
 
-/** Never silently discard a previously opted-in verifier on newest-version resume. */
+/** Refuses a saved verification carrier when the resume door cannot keep its evidence. */
 export function requireVerificationOnResume(
   container: unknown,
   enabled: boolean,
@@ -122,8 +122,8 @@ export function requireVerificationOnResume(
   }
   if (state !== undefined && !enabled)
     throw new TypeError(
-      'This saved run carries findings verification evidence. Continue it with findings ' +
-        'verification enabled; disabling it would silently discard saved checks.',
+      'This saved run carries findings verification evidence, so this version cannot resume or ' +
+        'continue it. Start a new run with agent.run({ message }).',
     );
   return state;
 }

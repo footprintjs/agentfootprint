@@ -5,6 +5,7 @@ import { composeToolCallOperations } from './compose.js';
 import { buildCallDispatch } from './execution/dispatchCall.js';
 import { buildToolBatchExecution } from './batch/execute.js';
 import { buildToolResume } from './resume/handler.js';
+import { stopStoredPolicyHalt } from './routing/policyHalt.js';
 
 export { atMountedCursor } from './helpers/mountedCursor.js';
 export { notServedResult, unknownToolResult } from './helpers/dispatchRefusals.js';
@@ -22,8 +23,10 @@ export function buildToolCallsHandler(
 ): PausableHandler<TypedScope<AgentState>> {
   const operations = composeToolCallOperations(deps);
   const dispatchCall = buildCallDispatch(deps, operations);
+  const execute = buildToolBatchExecution(deps, operations, dispatchCall);
+  const resume = buildToolResume(deps, operations);
   return {
-    execute: buildToolBatchExecution(deps, operations, dispatchCall),
-    resume: buildToolResume(deps, operations),
+    execute: (scope) => (stopStoredPolicyHalt(scope) ? undefined : execute(scope)),
+    resume: (scope, input) => (stopStoredPolicyHalt(scope) ? undefined : resume(scope, input)),
   };
 }

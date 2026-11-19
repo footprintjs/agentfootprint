@@ -1,6 +1,7 @@
 **Mixed** — one decidable claim over recorded context, and the sentences that
 claim is served as.
-Fold: `check.ts` · `invariantViolationsOf` and `wire.ts` · `wireViolationsOf` —
+Fold: `check.ts` · `invariantViolationsOf` (and its compose-seam backstop
+`composeViolationsOf`) and `wire.ts` · `wireViolationsOf` —
 two recorded facts about one subject that cannot both be true. They derive from
 the record, state their own evidence, and file a disposition even when they find
 nothing.
@@ -35,6 +36,12 @@ backstop, one comparison per parked map against the final merged wire list, and 
 guilty write: the park that minted `parkedToolNames` this very iteration. One finding per defect
 per run (identity dedup threaded across passes), however many calls would have re-detected it.
 
+The backstop itself is `check.ts` · `composeViolationsOf`: it returns the findings already at seam
+`'compose'`, and the tools slot files them on the one rail (`core/agent/integrityFindings.ts` ·
+`fileIntegrityFindings`). That matters for the dedup: the slot once kept its own copy of the loop
+and took the identity from the write-seam finding before relabelling it, so it stored
+`invariant-violation @write […]` beside an event that said `compose`.
+
 **What it caught on day one — a live defect, not just regression insurance.** The park hold-out
 filters the registry and skill lists, but PROVIDER schemas merge unfiltered: a `.toolProvider()`
 tool sharing a parked member's name stays on the wire (the shadowing seam — provider wins the wire,
@@ -43,8 +50,10 @@ skill wins dispatch). The integration test pins exactly that leak firing one typ
 **What it will not do.** It never blocks the write. Recorders in this stack cannot veto — hook throws
 are swallowed and the error path commits regardless — and blocking a park because tools were still
 registered would invert causality: the park is the correct fact, the stale serving is the defect. Dev
-posture throws _after_ the finding is appended, in the writer's own caller. It also never picks a
-winner between the two channels; it names the pair.
+posture (`integrityPosture: 'dev'`) does not throw on a finding either — a run that files one finishes
+with its answer. Dev posture throws `CheckerDeadError` only when a registered check is dead: it filed
+no disposition in a run where work existed, or it missed its own canary (`disposition/ledger.ts` ·
+`assertAlive`). It also never picks a winner between the two channels; it names the pair.
 
 **How it decides.** It builds the two assertions (`availability(map) = suspended` from the write,
 `availability(map) = available` entailed by each owned tool still on the wire) and hands them to the

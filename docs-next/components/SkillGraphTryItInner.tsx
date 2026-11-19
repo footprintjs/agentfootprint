@@ -2,7 +2,7 @@
 
 import '@xyflow/react/dist/style.css';
 import { useMemo, type ReactNode } from 'react';
-import { SkillGraphFlow } from 'agentfootprint-lens';
+import { SkillGraphFlow } from './demos/skillGraphView';
 import type { SkillGraphDemoData } from './SkillGraphTryItData';
 import { LIGHT_THEME, DARK_THEME, surfaceColors, useIsDark } from './demos/embedTheme';
 

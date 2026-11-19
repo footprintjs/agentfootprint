@@ -277,6 +277,9 @@ describe('one saved epoch, in the order the request was assembled', () => {
     }
   });
 
+  // This record has `wants` and no ticket receipt: the shape of every recording
+  // made before the receipt existed, whose run named any ticket-shaped result.
+  // The rebuild gives back the line that run really sent.
   it('appends staged refs, time, conclusion and late findings in that order', () => {
     let record = withValue(saved, 'history', [
       {
@@ -307,6 +310,42 @@ describe('one saved epoch, in the order the request was assembled', () => {
     ]);
     expect(view.system.pieces.at(-1)?.text).toBe('saved recovery');
     expect(view.messages.requestOnly[2]?.text).toBe('saved conclusion');
+  });
+
+  it('a record that keeps the receipt names only the tickets it lists', () => {
+    const ticket = { placed: true, ref: 'art_saved', kind: 'dataset/rows', reason: 'saved' };
+    let record = withValue(saved, 'history', [
+      { role: 'tool', toolCallId: 'saved-tool', content: JSON.stringify(ticket) },
+    ]);
+    record = withValue(record, 'toolWantsByName', { ping: ['dataset/rows'] });
+    const staged = (receipt: unknown) =>
+      rebuild(withValue(record, 'placedTickets', receipt)).messages.requestOnly.filter(
+        (line) => line.reason === 'staged-refs-nudge',
+      );
+    // Kept and empty: the tool wrote that ticket itself, so no line went out.
+    expect(staged([])).toEqual([]);
+    // Listed for another ref, or for another call: not this ticket.
+    expect(staged([{ toolCallId: 'saved-tool', ref: 'art_other' }])).toEqual([]);
+    expect(staged([{ toolCallId: 'other-call', ref: 'art_saved' }])).toEqual([]);
+    // Kept out by a redaction policy: a placeholder issues nothing.
+    expect(staged('REDACTED')).toEqual([]);
+    const named = staged([{ toolCallId: 'saved-tool', ref: 'art_saved' }]);
+    expect(named).toHaveLength(1);
+    expect(named[0]?.text).toContain("'art_saved' (dataset/rows)");
+  });
+
+  it('rebuilds the old whole-message rule and the current leading-value rule', () => {
+    const toolCallId = 'saved-tool';
+    const ref = 'art_saved';
+    const ticket = JSON.stringify({ placed: true, ref, kind: 'dataset/rows', reason: 'saved' });
+    let record = withValue(saved, 'toolWantsByName', { ping: ['dataset/rows'] });
+    record = withValue(record, 'history', [
+      { role: 'tool', toolCallId, content: ticket + ' Step 1 of 1 done. All 1 steps complete.' },
+    ]);
+    const staged = (snapshot: Snapshot) =>
+      rebuild(snapshot).messages.requestOnly.find((line) => line.reason === 'staged-refs-nudge');
+    expect(staged(record)).toBeUndefined();
+    expect(staged(withValue(record, 'placedTickets', [{ toolCallId, ref }]))?.text).toContain(ref);
   });
 
   it('keeps the late raw ledger read distinct from placeholder-aware reads', () => {

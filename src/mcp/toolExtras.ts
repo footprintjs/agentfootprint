@@ -6,7 +6,7 @@
  * other half is DECLARATION — flat, inert facts about the tool that no code
  * runs and every consumer-side rail READS: where its arguments come from, what
  * kind of artifact its result is, who owns it, what class of answer it gives,
- * how big a result is too big.
+ * result rowset bindings, and the ceiling on result size.
  *
  * Over MCP only the execution half used to cross. A tool served by `mcpServe`
  * arrived at a client as a name, a description and an input schema, so every
@@ -93,7 +93,7 @@ export const MCP_TOOL_EXTRAS_KEY = 'agentfootprint';
  *
  * Every field is optional and ABSENT MEANS ABSENT: a tool that declares
  * nothing sends no bag at all, and a tool that declares two sends two keys,
- * never five with three empty placeholders. "Said nothing" and "said empty"
+ * with absent fields omitted. "Said nothing" and "said empty"
  * are different statements everywhere else in this library, and they are
  * different here.
  *
@@ -110,7 +110,7 @@ export interface McpToolExtras {
    * What this tool's ROWS contain (9.78.0) — see {@link Tool.resultColumns}.
    * Arms the write seam's `column-type-mismatch` and `missing-column` checks.
    *
-   * It clears the bar this file states, and by the widest margin of the eight.
+   * It clears the bar this file states, and by the widest margin.
    * It is a flat, inert fact about the RESULT that a consumer-side check
    * reads; it governs nothing about how the tool runs, and the tool runs on
    * the server. It is also the field case for carrying declarations at all: a

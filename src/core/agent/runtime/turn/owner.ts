@@ -305,6 +305,9 @@ export async function runLeg(
           this.native.liveSnapshot()?.sharedState as Partial<AgentState>,
           'sourceDeclarationCorrectionSpent',
         ),
+        // …and the receipt of the tickets the library placed, as `checkpoint()` keeps it.
+        (this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)?.placedTickets,
+        this.native.liveSnapshot()?.sharedState,
       );
       throw new RunCheckpointError(cause, checkpoint);
     }

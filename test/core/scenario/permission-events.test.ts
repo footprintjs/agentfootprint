@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
+import type { PermissionCheckPayload } from '../../../src/events/payloads/access.js';
 import type {
   LLMProvider,
   LLMResponse,
@@ -20,7 +21,6 @@ import type {
   PermissionDecision,
   PermissionRequest,
 } from '../../../src/provider-contract/types.js';
-import { expectWithinTimes, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...r: LLMResponse[]): LLMProvider {
   let i = 0;
@@ -296,40 +296,75 @@ describe('permission — security', () => {
   });
 });
 
-// ── 6. Performance — happy path negligible overhead ─────────────────
+// ── 6. Work per proposed tool call ─────────────────────────────────
 
-describe('permission — performance', () => {
-  it(
-    'adding permissionChecker adds negligible overhead to a single run',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // "Negligible" is a comparison, so the test now makes one: the same ten
-      // runs WITHOUT a checker, timed on this machine moments earlier. Load
-      // slows both and cancels; only a real per-call cost moves the ratio.
-      const plain = Agent.create({
-        provider: scripted(resp('done')),
+describe('permission — work per tool call', () => {
+  it.each([
+    { width: 1, batches: 1 },
+    { width: 5, batches: 1 },
+    { width: 1, batches: 3 },
+    { width: 5, batches: 3 },
+  ])(
+    'checks and records each proposal once ($width calls per batch, $batches batches)',
+    async ({ width, batches }) => {
+      const proposals = Array.from({ length: batches }, (_, turn) =>
+        Array.from({ length: width }, (_, call) => {
+          const id = `turn-${turn + 1}-call-${call + 1}`;
+          return { id, name: 'noop', args: { id } };
+        }),
+      );
+      const provider = scripted(...proposals.map((calls) => resp('', calls)), resp('done'));
+      const complete = vi.fn(provider.complete);
+      const check = vi.fn(allowAll().check);
+      const execute = vi.fn(() => 'ok');
+      const decisions: PermissionCheckPayload[] = [];
+      const agent = Agent.create({
+        provider: { name: provider.name, complete },
         model: 'mock',
+        permissionChecker: { name: 'allow-all', check },
       })
         .system('')
+        .tool({
+          schema: { name: 'noop', description: '', inputSchema: { type: 'object' } },
+          execute,
+        })
         .build();
 
-      const guarded = Agent.create({
-        provider: scripted(resp('done')),
-        model: 'mock',
-        permissionChecker: allowAll(),
-      })
-        .system('')
-        .build();
-      await expectWithinTimes({
-        baseline: async () => {
-          for (let i = 0; i < 4; i++) await plain.run({ message: `r${i}` });
-        },
-        subject: async () => {
-          for (let i = 0; i < 4; i++) await guarded.run({ message: `r${i}` });
-        },
-        times: 3,
-        why: 'an allow-all checker must not multiply run cost',
-      });
+      agent.on('agentfootprint.permission.check', (event) => decisions.push(event.payload));
+      expect(await agent.run({ message: 'go' })).toBe('done');
+
+      expect(complete).toHaveBeenCalledTimes(batches + 1);
+      expect(execute).toHaveBeenCalledTimes(width * batches);
+      expect(check).toHaveBeenCalledTimes(width * batches);
+      expect(decisions).toHaveLength(width * batches);
+      const expected = proposals.flatMap((calls, turn) =>
+        calls.map((call) => ({ ...call, iteration: turn + 1 })),
+      );
+      expect(check.mock.calls.map(([request]) => request)).toEqual(
+        expect.arrayContaining(
+          expected.map(({ args, name, iteration }) =>
+            expect.objectContaining({
+              capability: 'tool_call',
+              target: name,
+              context: args,
+              iteration,
+            }),
+          ),
+        ),
+      );
+      expect(decisions).toEqual(
+        expect.arrayContaining(
+          expected.map(({ id, name, iteration }) =>
+            expect.objectContaining({
+              capability: 'tool_call',
+              target: name,
+              toolCallId: id,
+              iteration,
+              result: 'allow',
+            }),
+          ),
+        ),
+      );
     },
   );
 });

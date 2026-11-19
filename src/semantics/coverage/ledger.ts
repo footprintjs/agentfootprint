@@ -3,7 +3,7 @@
  *
  * Pattern: a wrapper the framework recognizes, minted by a helper (the
  *          `absent()` shape one level up: same vocabulary, different claim).
- * Role:    core/ layer, pure. `coverage()` is what a tool author writes;
+ * Role:    semantics/ layer (L1), pure. `coverage()` is what a tool author writes;
  *          `readCoverageLedger` is what the dispatch loop calls.
  * Emits:   N/A (the caller emits `agentfootprint.tools.coverage_declared`).
  *

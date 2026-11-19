@@ -3,6 +3,7 @@ import type { ResolvedEvidenceGate } from '../../../evidence/types.js';
 import type { ToolResultRowset } from '../../../../../tools/resultRowsets.js';
 import type { Tool } from '../../../../../tools/tools.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
+import type { InputsRouteArm } from '../../route.js';
 import type { ToolResultColumns } from '../../../../../integrity/column-types/types.js';
 import type { ColumnCheckMode } from '../../../../../integrity/column-types/check.js';
 import type { ReadRunTime } from '../../../../../time/clock.js';
@@ -144,6 +145,15 @@ export interface ToolEvidencePort {
    * one line runs.
    */
   readonly evidenceGate?: ResolvedEvidenceGate;
+  /**
+   * What the dispatch moment exempts beside the evidence gate — the SAME arm
+   * the route decider judges the answer with (`runtime/routing/exemptArm.ts`),
+   * so a value the person gave the batch ask, a declared default this turn
+   * assumed, or a time the person said is exempt at both moments
+   * (`turnExempt.ts` · `exemptForTurn`). Present only beside `evidenceGate` with
+   * the inputs layer armed.
+   */
+  readonly evidenceExempt?: InputsRouteArm;
   /**
    * THE WRITE SEAM (9.77.0, `empty-lookup`) — the declared argument-ground
    * edges (`Tool.argumentsFrom`) by tool name, present ONLY when the operator

@@ -3,6 +3,11 @@ import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseKnownSpentAnswer, refuseMissingPlainAnswer } from '../../resumeAnswer.js';
 import { throughAroundTurn } from '../../aroundTurn/index.js';
 import { resumeStateOf, resumeSessionOf } from '../../resumeCheckpoint.js';
+import {
+  admitFoldedInnerCallPolicy,
+  innerCallPolicyReferences,
+} from '../../../../redaction/innerCallPolicyCarrier.js';
+import { admitPauseTypedAnswers } from '../../../checkpointHistory.js';
 import { preservePendingQuestion } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { finishLeg, type RunnerInvocation } from '../../../runnerExecution.js';
@@ -100,7 +105,7 @@ export async function resumeLeg(
   // decision passes through the one spend a door watching this pause sees
   // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
   // without reaching it, refused or aborted, used nothing.
-  resumeStateOf(checkpoint);
+  const state = resumeStateOf(checkpoint);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
     checkpoint.sharedState,
     'sourceDeclarationCorrectionSpent',
@@ -190,6 +195,9 @@ export async function resumeLeg(
   const sessionId = resumeSessionOf(checkpoint);
   if (options?.sessionId !== undefined && options.sessionId !== sessionId)
     throw new ResumeIdentityConflictError('session');
+  admitPauseTypedAnswers(state);
+  innerCallPolicyReferences(state.history);
+  admitFoldedInnerCallPolicy(state.foldedSpans);
   // …and the decision must be for THIS request and this exact call
   // (`core/consentRequest.ts`): refused here, before anything moves, when it
   // names no request, another request, a call the checkpoint no longer

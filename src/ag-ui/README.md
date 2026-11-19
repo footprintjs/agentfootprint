@@ -17,7 +17,9 @@ In the default projection every value comes from a served event, from the record
 address (`runtimeStageId`, `subflowPath` — never selected by a policy), or from
 the AG-UI request's own ids. The record's own `runId` is never written (it
 counts every run the process made); a failed tool call's result is the fixed
-words unless the app chose `toolErrors: 'served'`; a tool's progress `payload`
+words unless the app chose `toolErrors: 'served'` ("The tool failed.", or "The
+call was not executed." for a call that never reached its tool, read by the one
+reader `semantics/toolRan.ts` · `toolRanOf` — `toolResultWords.ts`); a tool's progress `payload`
 goes out only when the app lists it. Every id is minted
 by `ids.ts` from that address under the request's `runId`: injective, unique
 across a thread, and the same with or without a policy.
@@ -32,6 +34,11 @@ private values. Ordinary event translation still consumes served values only;
 standalone defaults and redaction property tests remain unchanged.
 
 ## How a run maps
+- `TOOL_CALL_ARGS` uses the tool's protected argument view when an event
+  carries one. Unsupported view data shows placeholders for the argument names
+  present on the event. A proposal that can change before approval is masked
+  early. Its check-in interrupt reports the view of the bound call. The
+  custom `toolArguments` projector applies to calls without a protected view.
 - An agent turn mounted inside a composition is an AG-UI sub-agent: its
   `turn_start` opens a scope at its subflow path, and every event under that
   path carries the scope's `subagentRunId` — parallel branches have different
@@ -39,9 +46,17 @@ standalone defaults and redaction property tests remain unchanged.
 - `agent.iteration_*` and `composition.enter/exit` are steps; the step's
   address rides `metadata.agentfootprint` (AG-UI 1.0 has no parent field on a
   step).
-- Text is the streamed reply (`stream.token`); an agent's answer that streamed
-  nothing is written whole from `turn_end`; an agent's `llm_end.content` is a
+- In record-only mode, the reply comes from `stream.token` events. An answer
+  that streamed nothing is written whole from `turn_end`. An agent's `llm_end.content` is a
   draft and is never written.
+- In the same mode, text the library appends after the stream — the limits block
+  (`.limitsTravelWithTheAnswer()`), the standing line
+  (`.answerLayer({ standingLine })`) — is only in `turn_end.finalContent`, so
+  the rest of that answer beyond what streamed is written at `turn_end` as its
+  own message (`hosting/unstreamedText.ts`, the rule `toSSE({ format: 'text' })`
+  asks too). Streamed `There are 12.` and delivered
+  `There are 12.` + the line: the second message is the line. An answer that
+  does not begin with the streamed text writes nothing more — nothing is guessed.
 - A paused run ends with `RUN_FINISHED { outcome: interrupt }` (the question's
   text — from whichever home its kind keeps it in — nothing else of the pause's
   payload); a run paused on a tool the client runs (`awaiting: 'caller'`) ends
@@ -117,10 +132,20 @@ agUi({
   structural (no `@ag-ui/*` import).
 - `ids.ts` — the one id grammar.
 - `serializer.ts` — `agUiSerializer`, the per-run translation.
+- `shownArgs.ts` — a tool call's arguments as the page may see them: for a tool
+  whose argument view hides values, the view's output (`stream.tool_start.shownArgs`)
+  as `TOOL_CALL_ARGS`, and the hidden names on `metadata.agentfootprint.hiddenArgs`
+  of `TOOL_CALL_START` and of a check-in's interrupt.
 - `framing.ts` — `agUiSse`, the framing strategy.
 - `request.ts` — the reader port (`AgUiRequestReader`), the core's read
   (`readAgUiRequest` → `readAgUiRunInput`) and the turn a request may ask for.
 - `frontendTools.ts` — the app's allow-listed frontend tools, as tools that pause
-  for the page.
+  for the page. A pause waits on the page only when the name of the call that
+  raised it is one of those tools (`isFrontendToolPause` reads the real call's
+  `toolName`, which the library writes): a server tool whose name is not a
+  declared frontend tool and that puts `agUiFrontendTool` in its own pause data
+  still waits on a person, and the page cannot answer it. Not covered: a server
+  tool named like a declared frontend tool that the page did not enable on this
+  request; the name is all the check sees, so its pause waits on the page.
 - `adapter.ts` — `agUi()`, the `ProtocolAdapter` the host takes: the three
   strategies, composed.

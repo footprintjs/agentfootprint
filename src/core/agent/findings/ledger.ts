@@ -51,7 +51,7 @@
  */
 
 import { referenceObservation, type FindingsRequest } from './admission.js';
-import { isPlacedToolResult } from '../../../artifacts/placement.js';
+import { issuedTicketsOf } from '../placedTickets.js';
 import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflicts.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -453,21 +453,6 @@ function emitNegativeProseRow(scope: FindingsScope, row: NegativeProseFinding): 
 // ─── Row builders ──────────────────────────────────────────────────────
 
 /**
- * The ref a placed result lives at, or nothing. A guarded parse of a string
- * the library itself minted (`artifacts/placement.ts · placedToolResult`),
- * judged by `isPlacedToolResult` — a predicate, not inference.
- */
-function placedRefOf(result: string): string | undefined {
-  if (typeof result !== 'string' || result.trimStart()[0] !== '{') return undefined;
-  try {
-    const parsed: unknown = JSON.parse(result);
-    return isPlacedToolResult(parsed) ? parsed.ref : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * One standing row per `previous[]` entry of a declaration. Identity comes
  * from `known` by `toolCallId` — the results the run can identify, which the
  * two call sites (the dispatch loop, the route decider) build with
@@ -477,17 +462,18 @@ function placedRefOf(result: string): string | undefined {
  * `unknownId: true` and no `toolName` — never resolved by position or by
  * name. Assertions follow the stratum rule: `fact` → asserted,
  * `open` / `ruled-out` → quoted, `noise` → none; the provenance is
- * `tool:<toolCallId>`, or `artifact:<ref>` when the result was placed;
- * `epoch` is never set.
+ * `tool:<toolCallId>`, or `artifact:<ref>` when the accepted request and
+ * the native placement receipt agree. `epoch` is never set.
  */
 export function standingRowsFrom(
   known: readonly PreviousResult[],
   declaration: FindingsDeclaration,
   declaredOn: DeclaredOn,
   iteration: number,
-  request?: { readonly witness: FindingsRequest | undefined },
+  request?: { readonly witness: FindingsRequest | undefined; readonly placedTickets?: unknown },
 ): StandingRow[] {
   const on: DeclaredOn = declaredOn === 'answer' ? 'answer' : { toolCallId: declaredOn.toolCallId };
+  const issued = issuedTicketsOf(request?.placedTickets);
   return (declaration.previous ?? []).map((entry) => {
     const knownResult =
       request === undefined ? known.find((r) => r.toolCallId === entry.toolCallId) : undefined;
@@ -500,12 +486,13 @@ export function standingRowsFrom(
         ? knownResult !== undefined
         : reference.identified && reference.execution === 'result';
     const toolName = identified ? reference?.toolName ?? knownResult?.toolName : undefined;
+    const namedRef = reference?.ref;
     const ref =
-      reference === undefined
-        ? knownResult === undefined
-          ? undefined
-          : placedRefOf(knownResult.result)
-        : reference.ref;
+      reference?.visibility === 'ticket' &&
+      namedRef !== undefined &&
+      issued.get(entry.toolCallId)?.has(namedRef) === true
+        ? namedRef
+        : undefined;
     const provenance = ref !== undefined ? `artifact:${ref}` : `tool:${entry.toolCallId}`;
     const stratum = entry.standing === 'fact' ? 'asserted' : 'quoted';
     const assertions: Assertion[] =

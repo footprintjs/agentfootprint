@@ -1,0 +1,25 @@
+{
+  "captures": [
+    {
+      "case": "agent-answer-layer",
+      "previousCohort": "step-completion-evidence",
+      "beganAtLines": 6,
+      "previousSha256": "c6939431c053968e60bf10b9f53c2d120278d1ae4f187c5f97ef3233c35425e0",
+      "currentSha256": "ed75326204157b14c0455d56a92e7f4ad9b8c8065386cd20e4d935b3125316d8"
+    },
+    {
+      "case": "agent-scoped-provider",
+      "previousCohort": "tool-outcome-marker",
+      "beganAtLines": 8,
+      "previousSha256": "96b5e3ea17371dc7da1b7a7495bafa4acb0d73e443c07c41f1ef8ccfd96b3d80",
+      "currentSha256": "f4d5398464090ae6cf0f1845c2ae3afd68846d8db9a4491d027da7e7eceb84b5"
+    },
+    {
+      "case": "agent-stepped-skill",
+      "previousCohort": "step-completion-evidence",
+      "beganAtLines": 6,
+      "previousSha256": "b959bd5139a64133fa7b3b9263ddb5aaeb7423f4e75312ee5a8073299d8612a4",
+      "currentSha256": "71bf98c7a7efc3dd4aeb0fa8777b1d2ba7f66a4cd740cb4098fd96699bf77bff"
+    }
+  ]
+}

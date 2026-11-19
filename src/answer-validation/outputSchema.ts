@@ -28,7 +28,8 @@
  *          duck-typing (Zod / Valibot / ArkType / hand-written —
  *          anything with a `parse(unknown): T` method satisfies it).
  *
- * Role:    Layer-6 (Agent) — terminal contract on the run output.
+ * Role:    answer-validation/ layer (L4 in `scripts/layering.config.cjs`) —
+ *          terminal contract on the run output.
  *          NOT a context-engineering Injection per se, but composes
  *          with the InjectionEngine (auto-injects an Instruction).
  *

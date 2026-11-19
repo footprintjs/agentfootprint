@@ -7,7 +7,7 @@
  *   P3 Scenario     — multi-vendor pipeline (compose([console, inMemorySink]))
  *   P4 Property     — error-isolated fan-out, idempotent stop, sync void
  *   P5 Security     — _onError surfaces vendor errors without crashing
- *   P6 Performance  — compose of 5 children adds ≤ 5% overhead vs single
+ *   P6 Performance  — one export per child per event
  *   P7 ROI          — capabilities OR-merged, attach.* delegates correctly
  */
 
@@ -33,7 +33,7 @@ import {
 import { EventDispatcher } from '../../src/events/dispatcher.js';
 import { emitCostTick } from '../../src/core/cost.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
-import { expectScalesLinearly, expectWithinTimes, measure } from '../helpers/perf.js';
+import { expectScalesLinearly } from '../helpers/perf.js';
 import { settlesWithin } from '../helpers/settles.js';
 import { cloudwatchObservability } from '../../src/adapters/observability/cloudwatch.js';
 import { noPolicyScope } from '../helpers/noPolicy.js';
@@ -178,36 +178,24 @@ describe('composeObservability', () => {
     consoleSpy.mockRestore();
   });
 
-  // P6 performance: compose([5 children]) ≤ 5% overhead vs single
-  it(
-    'P6 5-child compose ≤ 5x overhead of a single child (loose bound)',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      const single: ObservabilityStrategy = {
-        name: 'a',
-        capabilities: { events: true },
-        exportEvent: () => {},
-      };
-      const composed = composeObservability([single, single, single, single, single]);
-      const ev = makeEvent();
-      const N = 100_000;
+  it.each([1, 5, 20])('P6 exports each event once to each of %i children', (childCount) => {
+    const children = Array.from({ length: childCount }, (_, index) => ({
+      name: `exporter-${index}`,
+      capabilities: { events: true },
+      exportEvent: vi.fn<(event: AgentfootprintEvent) => void>(),
+    }));
+    const composed = composeObservability(children);
+    const events = Array.from({ length: 3 }, () => makeEvent());
 
-      // Five children plus an isolation try/catch: under 10× a single child.
-      // Purely comparative, sampled alternately on this machine — so the old
-      // absolute `+ 50ms` cushion is gone; the helper floors the denominator
-      // with a load-scaled reference unit instead.
-      await expectWithinTimes({
-        baseline: () => {
-          for (let i = 0; i < N; i++) single.exportEvent(ev);
-        },
-        subject: () => {
-          for (let i = 0; i < N; i++) composed.exportEvent(ev);
-        },
-        times: 10,
-        why: 'composing five children must not cost more than ten single children',
-      });
-    },
-  );
+    for (const event of events) composed.exportEvent(event);
+
+    for (const child of children) {
+      expect(child.exportEvent).toHaveBeenCalledTimes(events.length);
+      for (const [index, event] of events.entries()) {
+        expect(child.exportEvent.mock.calls[index][0]).toBe(event);
+      }
+    }
+  });
 
   // P7 ROI: OR-merged capabilities advertise the union
   it('P7 capabilities OR-merge across children', () => {

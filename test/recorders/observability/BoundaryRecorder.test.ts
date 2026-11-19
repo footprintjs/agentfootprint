@@ -27,9 +27,9 @@ import type {
   FlowDecisionEvent,
   FlowForkEvent,
   FlowLoopEvent,
+  FlowRunEvent,
   FlowSubflowEvent,
 } from 'footprintjs';
-import type { FlowRunEvent } from 'footprintjs/dist/types/lib/engine/narrative/types.js';
 import { EventDispatcher } from '../../../src/events/dispatcher.js';
 import {
   BoundaryRecorder,

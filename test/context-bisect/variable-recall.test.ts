@@ -315,6 +315,36 @@ describe('property — coverage gates the hop; hops never go forward', () => {
     expect(exact.hops[0].cameFrom).toBe(0);
   });
 
+  it.each(['exact', 'conservative'] as const)(
+    'stops at an ambiguous read even with %s aggregate coverage',
+    async (coverage) => {
+      const key = 'systemPromptInjections';
+      const overlap = { ...read(10, 'call-llm#1', 0), orWriteIdxs: [1] };
+      const trajectory = traj([
+        frames[0],
+        frame(1, 'A', ['ie#1'], [injSource(key, 'plant', 'PLANT', 'ie#0')]),
+      ]);
+      const joined = joinVariableSlice(
+        timeline(key, [write(0, 'ie#0'), write(1, 'ie#1'), overlap]),
+        trajectory,
+      );
+      const path = await walkTrajectory(trajectory, {
+        embedder,
+        variables: [{ ...joined, coverage }],
+      });
+      expect(path.hops).toEqual([
+        {
+          loopIndex: 1,
+          kind: 'injection',
+          suspectId: 'plant',
+          narrowedBy: 'text-similarity',
+          note: 'ambiguous-read-source',
+        },
+      ]);
+      expect(path.root).toBeUndefined();
+    },
+  );
+
   it('a write in the SAME or a LATER loop is never taken as a hop', async () => {
     // the only write lives in the CURRENT (last) frame → nothing to descend to
     const sameLoop: AgentVariableSlice = {
@@ -487,6 +517,26 @@ describe('back-compat — omitting `variables` is byte-identical', () => {
     // the pre-existing proximate-tool descent still fires untouched
     expect(before.hops[0].suspectId).toBe('lookup');
     expect(before.hops[0].cameFrom).toBe(0);
+  });
+
+  it('does not fall through to an inferred tool writer when its recorded read overlaps', async () => {
+    const key = 'lastToolResult';
+    const overlap = { ...read(10, 'call-llm#1', 0), orWriteIdxs: [1] };
+    const trajectory = traj(frames);
+    const life = joinVariableSlice(
+      timeline(key, [write(0, 'tc#0'), write(1, 'tc#1'), overlap]),
+      trajectory,
+    );
+    const path = await walkTrajectory(trajectory, { embedder, variables: [life] });
+    expect(path.hops).toEqual([
+      {
+        loopIndex: 1,
+        kind: 'tool',
+        suspectId: 'lookup',
+        narrowedBy: 'text-similarity',
+        note: 'ambiguous-read-source',
+      },
+    ]);
   });
 
   it('L3 narrowing is untouched by the walk-only stateKey enrichment', async () => {

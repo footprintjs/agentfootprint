@@ -4,7 +4,7 @@ title: NoConversationError
 
 # Class: NoConversationError
 
-Defined in: [src/core/conversation.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L194)
+Defined in: [src/core/conversation.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L201)
 
 Thrown by `followUp()` when there is no conversation to follow up on.
 
@@ -23,7 +23,7 @@ first turn would be the very confusion the door exists to remove.
 
 > **new NoConversationError**(`door`, `reason`): `NoConversationError`
 
-Defined in: [src/core/conversation.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L198)
+Defined in: [src/core/conversation.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L205)
 
 #### Parameters
 
@@ -61,7 +61,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_NO_CONVERSATION"`
 
-Defined in: [src/core/conversation.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L195)
+Defined in: [src/core/conversation.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L202)
 
 ***
 
@@ -93,7 +93,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
 
-Defined in: [src/core/conversation.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L196)
+Defined in: [src/core/conversation.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L203)
 
 ***
 

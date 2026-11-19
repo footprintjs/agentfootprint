@@ -37,8 +37,8 @@ export interface Scope {
   text: OpenText | undefined;
   /** The text message of the scope's current LLM call — the parent of its tool calls. */
   callMessageId: string | undefined;
-  /** A token streamed since the scope's last `llm_start`. */
-  streamed: boolean;
+  /** The text streamed since the scope's last `llm_start`; `undefined` = no token. */
+  streamedText: string | undefined;
   reasoning: OpenReasoning | undefined;
   /** Open step names, in the order they opened. */
   readonly steps: string[];
@@ -60,7 +60,7 @@ export const newScope = (
   isAgent: false,
   text: undefined,
   callMessageId: undefined,
-  streamed: false,
+  streamedText: undefined,
   reasoning: undefined,
   steps: [],
   calls: [],
