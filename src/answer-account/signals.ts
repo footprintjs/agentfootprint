@@ -383,6 +383,7 @@ export function wrongLines(
   const lines: Sentence[] = checks.signals.map((s) => s.sentence);
   // Every call, not only the listed ones: a count is a judgement.
   const all = calls.all;
+  const reported = all.filter((call) => call.fact.reportedStatus !== undefined);
   // The same tally as `facts.errors` (`facts/errorCounts.ts` · `errorCounts`): a call that
   // never reached its tool is "not executed", never "failed" (set 16).
   const { failed, notExecuted, refused, declined, notDispatched } = errorCounts(all);
@@ -407,13 +408,23 @@ export function wrongLines(
     );
   } else if (
     all.length > 0 &&
-    all.every(
+    reported.every(
       ({ fact }) =>
         callOutcomeOf({ ran: true, clean: true, status: fact.reportedStatus }) === undefined,
     )
   ) {
     lines.push(
       ctx.say('wrong.noErrors', { pointers: all.flatMap((c) => c.fact.pointers.slice(-1)) }),
+    );
+  }
+  if (reported.length > 0) {
+    lines.push(
+      ctx.say('wrong.reportedStatus', {
+        vars: { n: n(reported.length) },
+        pointers: reported.flatMap(({ end }) =>
+          end ? [at(end, 'entered'), at(end, 'status')] : [],
+        ),
+      }),
     );
   }
   const withheld = all.filter((c) => c.fact.withheldBy !== undefined && c.ruleEvent !== undefined);

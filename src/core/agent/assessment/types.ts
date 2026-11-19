@@ -63,6 +63,8 @@ export type AssessmentPointer =
  *   searched: silence recorded as silence;
  * - `call-not-completed` — a tool call of this turn recorded as refused or
  *   failed, with no later completion of the same call by recorded arguments;
+ * - `work-not-finished` — an admitted tool result of this turn recorded partial or
+ *   pending work, with no later completion of the same call by recorded arguments;
  * - `sources-conflict` — two readings the model stood on disagree (a
  *   `ConflictRow` naming a call of this turn, or stamped with this turn while
  *   the record does not place every reading in an earlier turn — a reading it
@@ -72,6 +74,7 @@ export type AssessmentPointer =
  * - `value-survived-revision` — the same, after the one revision the gate
  *   asked for;
  * - `stopped-early` — a limit cut the turn short (`stoppedEarly`);
+ * - `step-skipped` — a committed witness shows the procedure advanced past a declared step;
  * - `answer-check-failed` — the app's answer checks (`.answerValidation()`)
  *   failed this answer;
  * - `check-unreachable` — an armed check could not reach a verdict (the
@@ -157,6 +160,7 @@ export type AssessmentReason =
   | 'coverage-gap'
   | 'empty-undeclared'
   | 'call-not-completed'
+  | 'work-not-finished'
   | 'period-not-held'
   | 'period-partly-held'
   | 'period-unknown'
@@ -170,6 +174,7 @@ export type AssessmentReason =
   | 'script-unmatched'
   | 'stopped-early'
   | 'steps-unfinished'
+  | 'step-skipped'
   | 'negative-prose-unverified'
   | 'invariant-violation'
   | 'unsupported-argument'
@@ -257,6 +262,8 @@ export type AssessmentReasonSource =
         readonly toolName: string;
         /** The recorded outcome for a call behind `call-not-completed`. */
         readonly outcome?: 'refused' | 'failed';
+        /** The committed unfinished status behind work-not-finished. */
+        readonly reportedStatus?: 'partial' | 'pending';
       }[];
       readonly unnamed?: number;
     }

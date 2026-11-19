@@ -61,6 +61,7 @@ import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { statePointer } from './pointer.js';
+import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import type {
@@ -569,6 +570,8 @@ function readTurnResults(
   for (const { result, at, rows, own } of reads) {
     if (result.outcome !== undefined && !recovered.has(result.index)) {
       fire(g, 'call-not-completed', { ...at, path: '/outcome' });
+    } else if (result.reportedStatus !== undefined && !recovered.has(result.index)) {
+      fire(g, 'work-not-finished', { ...at, path: '/reportedStatus' });
     }
     const absenceRow = rows.some((c) => c.kind === 'absence');
     const door =
@@ -708,39 +711,6 @@ function conflictOfThisTurn(
   return !(readWhole && ids.length > 0 && ids.every(placedEarlier));
 }
 
-/** One answer-layer witness row of this turn, where it sits on the ledger. */
-interface WitnessRead {
-  readonly index: number;
-  readonly kind: 'grounded' | 'steps-unfinished';
-  /** On a `grounded` row: how many values the gate looked up in the tools' results. */
-  readonly lookedUp?: number;
-}
-
-/**
- * This turn's witness rows (honesty layer 4, `assessment/witness.ts`): the
- * ledger's `grounded` and `steps-unfinished` rows whose `turn` is the run's
- * `turnNumber` — the ledger crosses turns on a continued conversation, and an
- * earlier turn's verdict is about an answer this fold is not reading. A record
- * with no `turnNumber` reads every witness row (it may over-report; it never
- * hides). Filed only while the answer layer is armed, so an unarmed record
- * holds none and this reads nothing.
- */
-function witnessRows(state: Readonly<Record<string, unknown>>): readonly WitnessRead[] {
-  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
-  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  const out: WitnessRead[] = [];
-  ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || (row.kind !== 'grounded' && row.kind !== 'steps-unfinished')) return;
-    if (turn !== undefined && row.turn !== turn) return;
-    out.push({
-      index,
-      kind: row.kind,
-      ...(typeof row.lookedUp === 'number' && { lookedUp: row.lookedUp }),
-    });
-  });
-  return out;
-}
-
 /**
  * Layer 4, the answer's own rows: the evidence gate's verdict (a flag —
  * `unsupportedValues` — or, while the answer layer is armed, its clean pass,
@@ -781,9 +751,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
     fire(g, 'stopped-early', statePointer('stoppedEarly', 'iteration'));
   }
   for (const w of witnesses) {
-    if (w.kind === 'steps-unfinished') {
-      fire(g, 'steps-unfinished', statePointer('findingsLedger', w.index, 'kind'));
-    }
+    if (w.kind !== 'grounded') fire(g, w.kind, statePointer('findingsLedger', w.index, 'kind'));
   }
   readTimeDerived(state, g);
   readScriptsShown(state, g);

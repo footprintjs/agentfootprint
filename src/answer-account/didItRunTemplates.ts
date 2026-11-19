@@ -42,6 +42,9 @@ export const DID_IT_RUN_TEMPLATES = {
   'found.endedInError': t('The call to {{tool:code}} ended in an error, not a result.'),
   'found.reportedStatus': t('{{tool:code}} ran. The tool reported a status of {{status}}.', 'tool'),
   'found.invalidStatus': t('{{tool:code}} ran. The result was recorded as invalid.'),
+  'wrong.reportedStatus': t(
+    "{{count:n,'call ran and had','calls ran and had'}} a reported result status other than success.",
+  ),
   // Version 2: a call that never reached its tool has its own count ("not executed"),
   // never "failed" (`facts/errorCounts.ts` · `errorCounts`). Version 1 counted it as failed.
   'wrong.errors': t(

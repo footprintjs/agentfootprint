@@ -281,6 +281,7 @@ export const words1 = {
   stay: true,
   steering: true,
   'step-nudge': true,
+  'step-skipped': true,
   'steps-unfinished': true,
   stop: true,
   'stopped-early': true,
@@ -299,5 +300,4 @@ export const words1 = {
   'system-prompt': true,
   terminated: true,
   text: true,
-  thinking: true,
 } as const;

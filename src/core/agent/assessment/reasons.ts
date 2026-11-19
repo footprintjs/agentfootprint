@@ -128,6 +128,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "history: a tool message of this turn with outcome 'refused' or 'failed', without a later completed call of the same tool with equal recorded arguments",
   },
   {
+    reason: 'work-not-finished',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads:
+      "history: a tool message of this turn with reportedStatus 'partial' or 'pending', no outcome and no later completed call with equal recorded arguments",
+  },
+  {
     reason: 'coverage-gap',
     layer: 3,
     class: 'not-sure',
@@ -260,6 +268,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     source: 'run',
     reads:
       "findingsLedger: a steps-unfinished witness row of this turn (the answer came before the active skill's declared steps finished — filed while the answer layer is armed)",
+  },
+  {
+    reason: 'step-skipped',
+    layer: 4,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'findingsLedger: a step-skipped witness of this turn, filed when the procedure advanced past a declared step',
   },
   {
     reason: 'negative-prose-unverified',

@@ -132,7 +132,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'redaction/marker.ts', // servedUnderPolicy / isPlaceholder — the ONE sign a record was served under a policy, a leaf
       'semantics/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings
       'semantics/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
-      'semantics/toolOutcome.ts', // readToolResultStatus and callOutcomeOf share the zero-import settlement vocabulary
+      'semantics/toolOutcome.ts', // reportedStatusOf and callOutcomeOf share the zero-import settlement vocabulary
       'semantics/toolRan.ts', // toolRanOf — the ONE reader of "did this call's tool run"
     ]);
   });

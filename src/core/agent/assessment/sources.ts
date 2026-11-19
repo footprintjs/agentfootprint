@@ -60,7 +60,7 @@
  */
 
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
-import { recordedCallOutcome } from './recordValues.js';
+import { recordedCallOutcome, unfinishedCallStatus } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -92,6 +92,7 @@ interface CallRef {
   readonly name?: string;
   readonly count?: number;
   readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;
+  readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
 }
 
 /** The entries of a list past the bound, as one counted anonymous reference — or none. */
@@ -180,6 +181,10 @@ function callsOfWitness(
       reason === 'call-not-completed' && isRecord(message)
         ? recordedCallOutcome(message)
         : undefined;
+    const reportedStatus =
+      reason === 'work-not-finished' && isRecord(message)
+        ? unfinishedCallStatus(message)
+        : undefined;
     return w.toolCallId === undefined && name === undefined
       ? []
       : [
@@ -187,6 +192,7 @@ function callsOfWitness(
             ...(w.toolCallId !== undefined && { id: w.toolCallId }),
             ...(name !== undefined && { name }),
             ...(outcome !== undefined && { outcome }),
+            ...(reportedStatus !== undefined && { reportedStatus }),
           },
         ];
   }
@@ -247,7 +253,7 @@ export function reasonSourceOf(
   if (kind !== 'calls') return { kind };
   let names: ReadonlyMap<string, string> | undefined;
   const nameOf = (id: string): string | undefined => (names ??= toolNamesOf(read.state)).get(id);
-  const calls: { toolCallId: string; toolName: string; outcome?: CallRef['outcome'] }[] = [];
+  const calls: Extract<AssessmentReasonSource, { kind: 'calls' }>['calls'][number][] = [];
   const listed = new Set<string>();
   // A call the record names by id but not by tool — counted once per id.
   const nameless = new Set<string>();
@@ -274,6 +280,7 @@ export function reasonSourceOf(
         toolCallId: ref.id,
         toolName,
         ...(ref.outcome !== undefined && { outcome: ref.outcome }),
+        ...(ref.reportedStatus !== undefined && { reportedStatus: ref.reportedStatus }),
       });
     }
   }

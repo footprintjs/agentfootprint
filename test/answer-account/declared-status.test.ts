@@ -8,9 +8,13 @@ import { assertP1, assertP7 } from './helpers.js';
 
 const call = { id: 'c1', name: 'submit_request', args: {} };
 
-async function recordedResult(result: unknown, maxChars?: number): Promise<Recording> {
+async function recordedResult(
+  result: unknown,
+  maxChars?: number,
+  toolCalls = [call],
+): Promise<Recording> {
   const agent = Agent.create({
-    provider: mock({ replies: [{ toolCalls: [call] }, { content: 'Done.' }] }),
+    provider: mock({ replies: [{ toolCalls }, { content: 'Done.' }] }),
     model: 'mock',
   })
     .tool(
@@ -59,6 +63,18 @@ describe('a tool result with a declared status', () => {
       const lines = account.rows.find((row) => row.id === 'anything-wrong')?.lines;
       expect(lines?.map((line) => line.template.id)).not.toContain('wrong.noErrors');
     }
+    const reported = account.rows
+      .find((row) => row.id === 'anything-wrong')
+      ?.lines.filter((line) => line.template.id === 'wrong.reportedStatus');
+    expect(reported).toMatchObject([
+      {
+        text: '1 call ran and had a reported result status other than success.',
+        pointers: [
+          { kind: 'event', index: endIndex, path: '/entered' },
+          { kind: 'event', index: endIndex, path: '/status' },
+        ],
+      },
+    ]);
     assertP1(account, recording, {});
     assertP7(account, recording, {});
   });
@@ -78,6 +94,25 @@ describe('a tool result with a declared status', () => {
     assertP7(account, recording, {});
   });
 
+  it('counts statuses beyond the calls listed in the rows', async () => {
+    const toolCalls = Array.from({ length: 6 }, (_, i) => ({ ...call, id: `c${i}` }));
+    const recording = await recordedResult(
+      { content: 'Request received.', effects: [], status: 'partial' },
+      undefined,
+      toolCalls,
+    );
+    const account = accountForAnswer(recording);
+    const found = account.rows.find((row) => row.id === 'found')?.lines;
+    expect(found?.filter((line) => line.template.id === 'found.reportedStatus')).toHaveLength(5);
+    const reported = account.rows
+      .find((row) => row.id === 'anything-wrong')
+      ?.lines.filter((line) => line.template.id === 'wrong.reportedStatus');
+    expect(reported?.map((line) => line.text)).toEqual([
+      '6 calls ran and had a reported result status other than success.',
+    ]);
+    assertP1(account, recording, {});
+  });
+
   it.each([
     ['plain result words', 'Request failed.'],
     ['success', { content: 'Request received.', effects: [], status: 'success' }],
@@ -90,5 +125,10 @@ describe('a tool result with a declared status', () => {
     expect(account.rows.find((row) => row.id === 'found')?.lines[0]?.template.id).not.toBe(
       'found.reportedStatus',
     );
+    expect(
+      account.rows
+        .find((row) => row.id === 'anything-wrong')
+        ?.lines.map((line) => line.template.id),
+    ).not.toContain('wrong.reportedStatus');
   });
 });

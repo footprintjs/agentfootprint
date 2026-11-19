@@ -13,7 +13,7 @@
  * only, own run only).
  */
 
-import type { ToolResultStatus } from '../semantics/toolOutcome.js';
+import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 
 /**
  * Who vouches for a fact or a sentence. Ranked for the weakest-input rule,
@@ -253,7 +253,7 @@ export interface ToolCallFact {
    * An `invalid` result can be recorded by the library when it refuses delivery.
    * Success, declared absence (which has its own coverage fields), and silence omit this field.
    */
-  readonly reportedStatus?: Exclude<ToolResultStatus, 'success' | 'absent'>;
+  readonly reportedStatus?: ReportedToolStatus;
   /** The rule that refused a `refused` call (a middleware, a permission rule id). */
   readonly refusedBy?: string;
   /** An AFTER-tool deny: the tool ran, the model read the rule's refusal. */

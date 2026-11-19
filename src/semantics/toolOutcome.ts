@@ -84,13 +84,22 @@ export function readToolResultStatus(value: unknown): ToolResultStatus | undefin
     : undefined;
 }
 
+/** The status retained for entered calls in history and the answer account. */
+export type ReportedToolStatus = Exclude<ToolResultStatus, 'success' | 'absent'>;
+
+/** Read the retained subset of an admitted status, including a library `invalid` result. */
+export function reportedStatusOf(value: unknown): ReportedToolStatus | undefined {
+  const status = readToolResultStatus(value);
+  return status === 'success' || status === 'absent' ? undefined : status;
+}
+
 /** What every door knows about a call when it commits the call's message. */
 export interface DispatchSettlement {
   /** `execute` was entered and no gate refused the call. */
   readonly ran: boolean;
   /** It ran without throwing and its result was not withheld. */
   readonly clean: boolean;
-  /** The tool's DECLARED status (an effects envelope), when it gave one. */
+  /** The admitted status, including an `invalid` result set by the library. */
   readonly status?: ToolResultStatus;
   /**
    * The word a tool wrote as `status` in a value that is an envelope but for

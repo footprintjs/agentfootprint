@@ -38,6 +38,7 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import { callNotCompletedClause, unfinishedWorkClause } from './callStandingWords.js';
 import type {
   AnswerAssessment,
   AssessmentCheck,
@@ -52,9 +53,9 @@ import type {
  * 3: the `script-unmatched` clause and the `script-match` check's word; every
  * version-2 line is unchanged. 4: the integrity findings' and the unsettled
  * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
- * of calls that did not complete.
+ * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
  */
-export const STANDING_LINE_VERSION = 5;
+export const STANDING_LINE_VERSION = 6;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -291,6 +292,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'value-contingent':
     'a value a call ran with was taken from a result the model itself had set aside',
   'call-not-completed': 'a call did not complete',
+  'work-not-finished': 'a tool reported unfinished work',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
   'empty-undeclared': 'a lookup came back empty without saying what it searched',
@@ -310,6 +312,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
     'a script shown in the answer matches no submission of this turn on the record',
   'stopped-early': 'the run stopped before the model finished',
   'steps-unfinished': "the answer came before the skill's declared steps finished",
+  'step-skipped': 'a declared step was skipped',
   'negative-prose-unverified': 'model prose was not verified for negative claims',
   'invariant-violation': "the tools offered to the model contradict the run's own record of them",
   'unsupported-argument': 'a value a call ran with appears nowhere the run served the model',
@@ -370,6 +373,7 @@ const NAMED_REASON_WORDS: Readonly<
 export interface StandingNames {
   readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
   readonly displayNames: ReadonlyMap<string, string>;
+  readonly skippedSteps?: number;
 }
 
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
@@ -397,6 +401,19 @@ export function sourcesByReason(
   a: AnswerAssessment,
 ): ReadonlyMap<AssessmentReason, AssessmentReasonSource> {
   return new Map(a.reasons.map((r) => [r.reason, r.source] as const));
+}
+
+/** The committed facts the live and rebuilt line share. */
+export function standingFactsOf(
+  assessment: AnswerAssessment,
+  displayNames: ReadonlyMap<string, string>,
+): StandingNames {
+  const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
+  return {
+    sources: sourcesByReason(assessment),
+    displayNames,
+    ...(skippedSteps !== undefined && { skippedSteps }),
+  };
 }
 
 // FOLD · the one choice of which display names the standing line may use
@@ -454,23 +471,6 @@ function assumedClauses(
   return out;
 }
 
-/** Group calls by the outcome the fold recorded. Registered names stay private. */
-function callNotCompletedClause(source: AssessmentReasonSource, names: StandingNames): string {
-  const fallback = REASON_WORDS['call-not-completed'];
-  if (source.kind !== 'calls') return fallback;
-  const clauses = (['refused', 'failed'] as const).flatMap((outcome) => {
-    const calls = source.calls.filter((call) => call.outcome === outcome);
-    if (calls.length === 0) return [];
-    const who = namedCalls(calls, 0, (tool) => names.displayNames.get(tool));
-    if (who !== undefined) return [`${who} did not complete (${outcome})`];
-    if (outcome === 'failed') return [calls.length === 1 ? 'a call failed' : 'calls failed'];
-    return [calls.length === 1 ? 'a call was refused' : 'calls were refused'];
-  });
-  if (clauses.length === 0) return fallback;
-  if (source.unnamed !== undefined) clauses.push('other calls did not complete');
-  return clauses.join(' and ');
-}
-
 /** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
 function reasonClause(
   reason: Exclude<AssessmentReason, 'argument-assumed'>,
@@ -478,8 +478,16 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
-  if (reason === 'call-not-completed' && names !== undefined && source !== undefined) {
-    return callNotCompletedClause(source, names);
+  if (names !== undefined && source !== undefined) {
+    if (reason === 'call-not-completed') {
+      return callNotCompletedClause(source, names.displayNames, REASON_WORDS[reason]);
+    }
+    if (reason === 'work-not-finished') {
+      return unfinishedWorkClause(source, names.displayNames, REASON_WORDS[reason]);
+    }
+  }
+  if (reason === 'step-skipped' && names?.skippedSteps !== undefined && names.skippedSteps > 1) {
+    return `${names.skippedSteps} declared steps were skipped`;
   }
   if (named === undefined || names === undefined || source?.kind !== 'calls') {
     return REASON_WORDS[reason];

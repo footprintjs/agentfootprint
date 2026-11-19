@@ -54,7 +54,7 @@ import {
   assessmentDataOf,
   assumedValuesSourceOf,
   rewrittenBehind,
-  sourcesByReason,
+  standingFactsOf,
   standingDisplayNames,
   standingLineOf,
   standingLineSaid,
@@ -164,8 +164,14 @@ export async function assessAnswerStage(
     data,
     assumed,
     rewrittenBehind(assessed),
-    displayNames.size > 0 || data.reasons.includes('call-not-completed')
-      ? { sources: sourcesByReason(assessed), displayNames }
+    displayNames.size > 0 ||
+      data.reasons.some(
+        (reason) =>
+          reason === 'call-not-completed' ||
+          reason === 'work-not-finished' ||
+          reason === 'step-skipped',
+      )
+      ? standingFactsOf(assessed, displayNames)
       : undefined,
   );
   // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a

@@ -1801,6 +1801,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.workNotFinished@1": {
+  "text": "2 calls reported unfinished work.",
+  "parts": [
+   {
+    "text": "2 calls reported unfinished work."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.periodNotHeld@1": {
   "text": "2 calls asked about periods their stores do not hold.",
   "parts": [
@@ -1914,6 +1923,15 @@
   "parts": [
    {
     "text": "The answer came before the active skill's declared steps finished."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.stepSkipped@1": {
+  "text": "2 declared steps were skipped.",
+  "parts": [
+   {
+    "text": "2 declared steps were skipped."
    }
   ],
   "source": "library"
@@ -2178,6 +2196,15 @@
    },
    {
     "text": " ran. The result was recorded as invalid."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.reportedStatus@1": {
+  "text": "2 calls ran and had a reported result status other than success.",
+  "parts": [
+   {
+    "text": "2 calls ran and had a reported result status other than success."
    }
   ],
   "source": "library"

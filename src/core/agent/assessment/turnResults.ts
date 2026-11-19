@@ -3,7 +3,7 @@ import { canonicalJson } from '../../../lib/canonicalJson.js';
 import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { isPlaceholder } from '../../../redaction/marker.js';
-import { isRecord, recordedCallOutcome, str } from './recordValues.js';
+import { isRecord, recordedCallOutcome, str, unfinishedCallStatus } from './recordValues.js';
 import { rowList } from './sources.js';
 import type { AnswerAssessment } from './types.js';
 
@@ -13,6 +13,7 @@ export interface TurnResult {
   readonly toolCallId?: string;
   readonly toolName?: string;
   readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;
+  readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
   /**
    * The TOOL's own bytes — `content` cut at the tool-bytes boundary
    * (`lib/toolBytes.ts` · `toolBytesOf`). The inputs layer appends a note
@@ -51,11 +52,13 @@ export function turnResults(history: readonly unknown[]): {
     const toolCallId = str(m.toolCallId);
     const toolName = str(m.toolName);
     const outcome = recordedCallOutcome(m);
+    const reportedStatus = unfinishedCallStatus(m);
     results.push({
       index: i,
       ...(toolCallId !== undefined && { toolCallId }),
       ...(toolName !== undefined && { toolName }),
       ...(outcome !== undefined && { outcome }),
+      ...(reportedStatus !== undefined && { reportedStatus }),
       content: toolBytesOf({ content: m.content, toolChars: m.toolChars }),
     });
   }
@@ -120,7 +123,7 @@ function resultArguments(
 }
 
 /**
- * A completion excuses a failed or refused call only when it was proposed
+ * A completion excuses a failed, refused or unfinished call only when it was proposed
  * after that result. A call already in flight was not tried again. A framework
  * notice or an undispatched sibling never stands in for a completed result.
  */
@@ -131,7 +134,9 @@ export function recoveredCallOutcomes(
   retainedHistory?: (history: readonly unknown[]) => unknown,
 ): ReadonlySet<number> {
   const recovered = new Set<number>();
-  if (!results.some((result) => result.outcome !== undefined)) return recovered;
+  const needsRetry = (result: TurnResult): boolean =>
+    result.outcome !== undefined || result.reportedStatus !== undefined;
+  if (!results.some(needsRetry)) return recovered;
   const recordedHistory = retainedHistory === undefined ? history : retainedHistory(history);
   if (!Array.isArray(recordedHistory)) return recovered;
   const argsByResult = resultArguments(recordedHistory, begins);
@@ -140,7 +145,7 @@ export function recoveredCallOutcomes(
     const args = argsByResult.get(result.index);
     if (args === undefined) continue;
     const latestRetry = completed.get(args.signature) ?? -1;
-    if (result.outcome !== undefined) {
+    if (needsRetry(result)) {
       if (latestRetry > result.index) recovered.add(result.index);
       continue;
     }
@@ -148,6 +153,7 @@ export function recoveredCallOutcomes(
     if (
       isRecord(recorded) &&
       recorded.outcome === undefined &&
+      recorded.reportedStatus === undefined &&
       recorded.notDispatched === undefined &&
       recorded.toolResultOrigin === undefined
     ) {

@@ -371,6 +371,10 @@ recorded arguments clears it for the earlier call. If the recording lacks the
 arguments for comparison, the reason stays. The standing line names the tool
 when it has a `displayName` and reports whether the call was refused or failed.
 
+An admitted tool result that reports `partial` or `pending` adds `work-not-finished` when the call has no recorded failure or refusal. The same retry rule clears this warning when a later call completes with the same recorded tool and arguments. A tool's plain result text supplies no status for this check.
+
+With the answer layer armed, `step-skipped` counts declared steps the procedure advanced past after a skip. Under the hold policy the request stays on the record and the step stays required.
+
 Other reasons include a tool declaring ground it did not check (`coverage-gap`)
 or declaring that nothing matched (`declared-absent`,
 which includes an empty rowset inside a `coverage()` boundary); an empty rowset

@@ -767,7 +767,7 @@ or its pure half (below). The docs call it "the honesty ledger".
 
 **Why this key.** An empty write writes nothing (`recordFindings` returns on an empty list). The
 resume door already carries it (`core/runCheckpoint.ts`), and refuses malformed rows
-(`runCheckpoint.ts` · `ledgerRowIsWellFormed`). Readers select by kind (`findings/ledger.ts` ·
+(`checkpointLedger.ts` · `ledgerRowIsWellFormed`). Readers select by kind (`findings/ledger.ts` ·
 `foldLedger`; the lens's findings band and proof map skip other kinds). The model is served it only
 under `.findings()` (`stages/callLLM.ts`, `deps.hasFindingsLedger`). One writer means one event law
 and one redaction surface.

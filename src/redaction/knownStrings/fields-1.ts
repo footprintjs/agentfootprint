@@ -165,6 +165,7 @@ export const fields1 = {
   replace: true,
   replaceAll: true,
   replay: true,
+  reportedStatus: true,
   request: true,
   requestId: true,
   requested: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   thinkingBlocks: true,
   thinkingRetired: true,
   threshold: true,
-  timeAxis: true,
 } as const;

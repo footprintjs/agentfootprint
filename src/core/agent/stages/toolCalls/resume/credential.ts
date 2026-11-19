@@ -12,7 +12,7 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField } from '../execution/outcomeField.js';
+import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -213,6 +213,7 @@ export function buildResumeCredential(
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A blocked credential ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(consentSettled),
+            ...reportedStatusField(consentSettled),
           },
         ],
         { toolName, toolCallId },

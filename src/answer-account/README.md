@@ -309,7 +309,12 @@ the normalized `stream.tool_end.status`. The "It found" line names both facts.
 A library refusal can also record `invalid`, so the line reports the recorded
 status without attributing that word to the tool. Declared absence keeps its
 coverage wording. The "Anything wrong" row consults the same completion rule
-as committed history before saying no call failed or was refused.
+as committed history before saying no call failed or was refused. It also
+counts every call with a reported result status, including calls omitted from
+the displayed list. "How sure" points to the committed `reportedStatus` of
+unfinished work and to the finding filed when the procedure advances past a
+declared step. Rebuilding the appended line requires the recorded witnesses
+and the complete display names it used.
 
 When a saved bracket has a non-boolean `error`, `entered` or `notExecuted`,
 `toolRanOf` returns `not-recorded` even beside a valid entry stamp. With a

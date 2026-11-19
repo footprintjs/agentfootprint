@@ -37,6 +37,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.callNotCompleted': t("{{count:n,'call','calls'}} did not complete."),
   'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
   'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
+  'howSure.reason.workNotFinished': t(
+    "{{count:n,'call reported','calls reported'}} unfinished work.",
+  ),
   // The results layer's period verdicts (honesty layer 3, step 7b) — set 6.
   'howSure.reason.periodNotHeld': t(
     "{{count:n,'call asked about a period its store does not hold','calls asked about periods their stores do not hold'}}.",
@@ -76,6 +79,7 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.stepsUnfinished': t(
     "The answer came before the active skill's declared steps finished.",
   ),
+  'howSure.reason.stepSkipped': t("{{count:n,'declared step was','declared steps were'}} skipped."),
   'howSure.reason.negativeProseUnverified': t('Model prose was not verified for negative claims.'),
   // Integrity findings and unsettled claims on the record — set 15.
   'howSure.reason.invariantViolation': t(

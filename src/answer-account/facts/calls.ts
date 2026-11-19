@@ -34,7 +34,7 @@
  */
 
 import { strip } from '../../semantics/coverage/read.js';
-import { readToolResultStatus } from '../../semantics/toolOutcome.js';
+import { reportedStatusOf } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
 import { outcomeOf, type CallIndex } from './callOutcome.js';
@@ -358,7 +358,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   if (named === undefined) ctx.noteUnread();
   const toolName = named?.name ?? '';
   const outcome = outcomeOf(ctx, byCall, id, toolName, start, end);
-  const status = outcome.outcome === 'ran' ? readToolResultStatus(end?.payload.status) : undefined;
+  const status = outcome.outcome === 'ran' ? reportedStatusOf(end?.payload.status) : undefined;
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   // The door THIS record holds for the call — its events — decides what was declared; a marker
   // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
@@ -397,11 +397,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     toolName: toolName.slice(0, FACT_TEXT_CHARS),
     ...(named === undefined && { unnamed: true as const }),
     outcome: outcome.outcome,
-    ...(status !== undefined &&
-      status !== 'success' &&
-      status !== 'absent' && {
-        reportedStatus: status,
-      }),
+    ...(status !== undefined && { reportedStatus: status }),
     ...(outcome.refusedBy !== undefined && { refusedBy: outcome.refusedBy }),
     ...(outcome.withheldBy !== undefined && { withheldBy: outcome.withheldBy }),
     emptiness: emptiness.emptiness,

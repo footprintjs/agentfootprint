@@ -351,8 +351,9 @@ export function emitRow(
   if (row.kind === 'unsettled-by-absence') return;
   // The answer layer's witness rows (honesty layer 4) emit nothing of their
   // own either: the verdict each one commits fired its event beside it, from
-  // the same stage (`agent.evidence_checked`, `skill.steps_unfinished`).
-  if (row.kind === 'grounded' || row.kind === 'steps-unfinished') return;
+  // the same stage (`agent.evidence_checked`, `skill.steps_unfinished`, `skill.step_skipped`).
+  if (row.kind === 'grounded' || row.kind === 'steps-unfinished' || row.kind === 'step-skipped')
+    return;
   // The time layer's rows (`time/rows.ts`) emit nothing either: the
   // clock, a resume's passed time and a call's dispatch moment are VALUES,
   // which live in the rows; no event field ships without a reader.
