@@ -24,7 +24,7 @@ export const system = [
   'For problem use null or a short sentence explaining the limitation.',
 ].join('\n');
 
-export function createDesk(library, task) {
+export function createDesk(library, task, { readTarget } = {}) {
   const { defineTool, defineSkill, skillGraph, allow, deny, ask } = library;
   const enteredCalls = [];
   const hasTargetList = task.targets !== undefined;
@@ -34,8 +34,8 @@ export function createDesk(library, task) {
   const toolName = task.id === 'unavailable-tool' ? 'read_desk_status' : task.tool;
   const tool = defineTool({
     name: toolName,
-    ...(hasTargetList ? { displayName: 'File catalog card' } : {}),
-    description: task.id === 'empty-search'
+    ...(hasTargetList && !readTarget ? { displayName: 'File catalog card' } : {}),
+    description: readTarget ? 'Read the catalog fields for the named source.' : task.id === 'empty-search'
       ? 'Find a catalog card by title and return its code.'
       : task.id === 'unavailable-tool'
         ? 'Read whether the catalog desk is open.'
@@ -46,10 +46,11 @@ export function createDesk(library, task) {
       required: ['target'],
       additionalProperties: false,
     },
-    ...(task.id === 'empty-search' || task.id === 'unavailable-tool' ? { effects: 'read' } : {}),
-    execute({ target }) {
+    ...(readTarget || task.id === 'empty-search' || task.id === 'unavailable-tool' ? { effects: 'read' } : {}),
+    execute({ target }, context) {
       enteredCalls.push({ toolName, target });
       if (!targets.includes(target)) return { content: 'Unknown target.', effects: [], status: 'failure' };
+      if (readTarget) return readTarget(target, context);
       if (task.id === 'empty-search') return [];
       if (task.id === 'failed-step') {
         return { content: 'No matching label stock.', effects: [], status: 'failure' };
