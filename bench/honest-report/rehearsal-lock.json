@@ -1,19 +1,21 @@
 {
-  "scriptedRows": 78,
+  "scriptedRows": 87,
   "inputs": {
-    "RULE.md": "8c89a702f01901613dcdf3c97c222ab09e74e891d5b8c88e87e0936aaf2d4be1",
+    "RULE.md": "d42ed765c1e2b34cdbc842c89408b2035889f16dc8c2f1e259a776f9519b62b0",
     "PLAN.md": "2e08bc115dcfeb481e23509f7c5cce588e6172ebb185b46ca4397a65e05099e0",
     "PREDICTIONS.md": "d21dfd3b7c9cd37e81af8752ecbf7f39a34719772a572063937565c3dc63d02e",
     "tasks.mjs": "4c5a780aacf6b583637a33d467963865c631cac4cfb2f16dd2bc9efbc6e16175",
     "hiddenTasks.mjs": "337983ad02ad2ecc24f5fd28ad5f97d9aae67658b17e0384d380060f09a2b7b3",
-    "benchmark.mjs": "6b2b91668cd4106fe7f53226d26a43275e06884b8c333c02d4423f6914dc4f2e",
+    "benchmark.mjs": "79649f7368022cd9bea8086ad6fc67a233c99d05a7b0ddb18c6180514fbfb968",
     "budget.mjs": "2737ea23214458c63d337f3878ba7cfc3a8bd70507b9c17a53119f91f1d55a30",
     "candidate.mjs": "69471d6f0be1fc1c6106614d6ead720dd53f904dab85a4031bf43e529a1419f9",
     "cohorts.mjs": "2fb8b87527498d180d983acb49518005f7a3835ff28628bac211d7851659a1e5",
     "plan.mjs": "ffa4dc067886153e1db7b4579603abaedbd4e84a5d64d13e0804cf3412d2d449",
-    "run.mjs": "5c03a507329a05249a971f043b04f51e99bd6ff5cd7633e4e67ab7a7ae2cb240",
+    "run.mjs": "af3c478076c79721ca5cbbbe905f06d5f73ad0fa2f46e9f9b80fb10d2cd4bbfb",
     "score.mjs": "8f296ea5311f7764605d94e19ca604c5cb1d3bd76dd2916a936b482ab101bb79",
     "terminalAnswer.mjs": "5ff6289360eb6f5b9204e443e2b152d3f9bf451df9c378ba8ec6e2f147efdc11",
+    "repeatPlay.mjs": "3f9c0fb7347466e3e0b617b658f27e7a0e14c0f9857c8f9d9097a995565c2efc",
+    "replyBoundary.mjs": "25f0288ff6f2f4e6888e907d267dff25398f75aeb86e97143e50ad11dba59fbb",
     "cohorts/after/package-lock.json": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
   },
   "cohorts": {
@@ -38,5 +40,5 @@
       "packageSha256": "757eea4ad1bfc91960ef3f8133c77849d19017521c9c2cc4ce45c309ce82ced7"
     }
   },
-  "transcriptSha256": "c36db63e1cbd3e09c0aa189ef69f990473d2d6da11e3b9869384cca7ba1f6b08"
+  "transcriptSha256": "8a002b695f6641c0e05306033cbce4ad34138c7b328705cac66ab5d338bf9fca"
 }

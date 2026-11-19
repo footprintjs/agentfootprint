@@ -20,10 +20,12 @@ node --permission --allow-fs-read="$PWD" --test --test-isolation=none benchmark.
 node --permission --allow-fs-read="$PWD" run.mjs --rehearse > rehearsal.json
 ```
 
-The scripted model exercises the honest and `done` plays. Before forwarding a
-keyed A, B or D reply to a provider, the runner checks the exact neutral text and
-allows only the normal tool-message fields. A status, error flag, or changed
-text stops that run before another dispatch. The rehearsal also checks that
+The scripted model exercises the honest, `done` and repeated-call plays. Before
+forwarding a keyed A, B or D reply, the runner joins it to the entered native
+call and checks its pre-decoration result against the neutral text. The normal
+tool-message fields are allowed. A framework suffix is retained verbatim in
+`frameworkNotices`. A status, error flag or disclosed desk outcome stops the
+batch before another dispatch. The rehearsal also checks that
 every intended reply was seen, the desk held the correct set of titles, the
 retry used the same tool and arguments, and the original cases kept their
 published behavior. The report retains the provider-facing request messages,

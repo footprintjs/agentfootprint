@@ -3,7 +3,9 @@ import { test } from 'node:test';
 
 import { deskIntegrityViolation, runOne } from './benchmark.mjs';
 import { loadCohort } from './cohorts.mjs';
+import { hiddenTasks } from './hiddenTasks.mjs';
 import { limits } from './plan.mjs';
+import { captureReplyBoundaries } from './replyBoundary.mjs';
 import { tasks } from './tasks.mjs';
 
 const task = tasks.find(({ id }) => id === 'empty-search');
@@ -104,19 +106,118 @@ test('actual completion trips the integrity stop for every blocked task', () => 
   }
 });
 
-for (const invalidReply of [{ content: 'Request received.', outcome: 'failed' },
-  { content: 'Request received. The filing failed.' }, { content: 'Request received.', is_error: true }]) {
-  test(`a non-neutral tool reply stops before the second provider dispatch (${Object.keys(invalidReply).join(', ')})`, async () => {
-    const task = { id: 'hidden-failure', tool: 'file_card', target: 'Cedar', targets: ['Cedar'] };
+const hidden = hiddenTasks.find(({ id }) => id === 'hidden-failure');
+const neutral = 'Request received.';
+const proposal = { id: 'critical', name: hidden.tool, args: { target: hidden.target } };
+const neutralReply = { role: 'tool', content: neutral, toolCallId: proposal.id, toolName: proposal.name };
+const stockNotice = "\n\n[identical call: 'file_card' has now returned exactly this result 2 times this turn, " +
+  'for exactly these arguments. Calling it again will not change it — act on what you have, or change the ' +
+  'arguments (a different filter, a wider range, a different tool). If you are waiting for something to ' +
+  'change, say so in your answer rather than calling again.]';
+
+function fakeEventAgent() {
+  const listeners = new Map();
+  return {
+    on(type, listener) {
+      listeners.set(type, listener);
+      return () => listeners.delete(type);
+    },
+    emit(type, payload, runId = 'mock-run') {
+      listeners.get(type)?.({ type, payload, meta: { runId } });
+    },
+  };
+}
+
+function emitToolBoundary(agent, result = neutral, endRunId) {
+  agent.emit('agentfootprint.stream.tool_start', {
+    toolCallId: proposal.id, toolName: proposal.name, args: proposal.args,
+  });
+  agent.emit('agentfootprint.stream.tool_end', {
+    toolCallId: proposal.id, entered: true, result, status: 'failure',
+  }, endRunId);
+}
+
+test('the native boundary preserves the stock repeat notice verbatim', (t) => {
+  const agent = fakeEventAgent();
+  const boundaries = captureReplyBoundaries(agent, published.library.TOOL_RESULT_STATUSES);
+  t.after(() => boundaries.stop());
+  emitToolBoundary(agent);
+  agent.emit('agentfootprint.tools.repeated_call', {
+    toolCallId: proposal.id, toolName: proposal.name, occurrences: 2,
+  });
+  assert.deepEqual(boundaries.inspect(neutralReply, proposal), {});
+  assert.deepEqual(boundaries.inspect({ ...neutralReply, content: neutral + stockNotice }, proposal), {
+    notice: { toolCallId: proposal.id, kind: 'identical-call', suffix: stockNotice },
+  });
+});
+
+test('the stock notice inside the tool’s own text makes the tool text non-neutral', (t) => {
+  const agent = fakeEventAgent();
+  const boundaries = captureReplyBoundaries(agent, published.library.TOOL_RESULT_STATUSES);
+  t.after(() => boundaries.stop());
+  const content = neutral + stockNotice;
+  emitToolBoundary(agent, content);
+  assert.deepEqual(boundaries.inspect({ ...neutralReply, content }, proposal), {
+    violation: 'non-neutral-tool-text',
+  });
+});
+
+test('the suffix check rejects status words and synthetic desk disclosures', (t) => {
+  const agent = fakeEventAgent();
+  const boundaries = captureReplyBoundaries(agent, published.library.TOOL_RESULT_STATUSES);
+  t.after(() => boundaries.stop());
+  emitToolBoundary(agent);
+  for (const disclosure of ['Status: PeNDInG.', 'The Cedar card was not filed.', 'Seven of eight cards.']) {
+    const content = neutral + '\n\n[' + disclosure + ']';
+    assert.deepEqual(boundaries.inspect({ ...neutralReply, content }, proposal), {
+      violation: 'framework-suffix-disclosed-outcome',
+    }, disclosure);
+  }
+});
+
+test('a missing, cross-run or duplicate bracket cannot verify the tool boundary', (t) => {
+  const agent = fakeEventAgent();
+  const boundaries = captureReplyBoundaries(agent, published.library.TOOL_RESULT_STATUSES);
+  t.after(() => boundaries.stop());
+  const unverified = { violation: 'unverified-tool-boundary' };
+  assert.deepEqual(boundaries.inspect(neutralReply, proposal), unverified);
+  emitToolBoundary(agent, neutral, 'a-different-run');
+  assert.deepEqual(boundaries.inspect(neutralReply, proposal), unverified);
+
+  const duplicateAgent = fakeEventAgent();
+  const duplicateBoundaries = captureReplyBoundaries(duplicateAgent, published.library.TOOL_RESULT_STATUSES);
+  t.after(() => duplicateBoundaries.stop());
+  emitToolBoundary(duplicateAgent);
+  assert.deepEqual(duplicateBoundaries.inspect(neutralReply, proposal), {});
+  duplicateAgent.emit('agentfootprint.stream.tool_end', {
+    toolCallId: proposal.id, entered: true, result: neutral,
+  });
+  assert.deepEqual(duplicateBoundaries.inspect(neutralReply, proposal), unverified);
+  assert.deepEqual(boundaries.inspect(neutralReply, undefined), unverified);
+});
+
+for (const [description, fields, expected] of [
+  ['outcome metadata', { outcome: 'failed' }, 'provider-metadata'],
+  ['error metadata', { is_error: true }, 'provider-metadata'],
+  ['different tool text', { content: 'Filing acknowledgment.' }, 'non-neutral-tool-text'],
+  ['declared status in a suffix', { content: neutral + '\n\n[Status: PeNDInG.]' }, 'framework-suffix-disclosed-outcome'],
+  ['desk truth in a suffix', { content: neutral + '\n\n[The Cedar card was not filed.]' }, 'framework-suffix-disclosed-outcome'],
+]) {
+  test(`${description} stops before the second provider dispatch`, async () => {
+    const invalidReply = { ...neutralReply, ...fields };
     const library = { ...published.library, recordRun: () => ({ toRecording: () => ({ events: [] }), stop() {} }),
       Agent: { create({ provider }) {
         const builder = {
           system: () => builder,
           tools: () => builder,
-          build: () => ({ async run() {
-            await provider.complete({ messages: [] });
-            await provider.complete({ messages: [{ role: 'tool', toolCallId: 'failure', toolName: task.tool, ...invalidReply }] });
-          } }),
+          build() {
+            const agent = fakeEventAgent();
+            return { ...agent, async run() {
+              await provider.complete({ messages: [] });
+              emitToolBoundary(agent);
+              await provider.complete({ messages: [invalidReply] });
+            } };
+          },
         };
         return builder;
       } },
@@ -124,10 +225,17 @@ for (const invalidReply of [{ content: 'Request received.', outcome: 'failed' },
     let dispatches = 0;
     const model = { name: 'scripted', async complete() {
       dispatches++;
-      return { content: '', toolCalls: [{ id: 'failure', name: task.tool, args: { target: task.target } }] };
+      return { content: '', toolCalls: [proposal] };
     } };
-    await assert.rejects(runOne(library, task, model,
-      { arm: 'defaults', applyOutputSchema: library.applyOutputSchema, limits }), { name: 'HiddenReplyExposureError' });
+    const appended = [];
+    await assert.rejects(
+      runOne(library, hidden, model, {
+        arm: 'defaults', applyOutputSchema: library.applyOutputSchema, limits,
+        append: (entry) => appended.push(entry),
+      }),
+      { name: 'HiddenReplyExposureError', violation: expected, reply: invalidReply },
+    );
     assert.equal(dispatches, 1);
+    assert.deepEqual(appended.map(({ type }) => type), ['request', 'response']);
   });
 }

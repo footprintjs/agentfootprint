@@ -8,6 +8,7 @@ import { createBudget, PROJECTED_LIMIT_UNITS, SPEND_LIMIT_UNITS } from './budget
 import { loadCohort } from './cohorts.mjs';
 import { hiddenScripted, hiddenTasks } from './hiddenTasks.mjs';
 import { cells, cellKey, limits, paidSchedule, projectPreflight } from './plan.mjs';
+import { repeatedHiddenScripted } from './repeatPlay.mjs';
 import { summarize } from './score.mjs';
 import { tasks } from './tasks.mjs';
 
@@ -15,7 +16,7 @@ function rehearsalInputs() {
   const files = [
     'RULE.md', 'PLAN.md', 'PREDICTIONS.md', 'tasks.mjs', 'hiddenTasks.mjs', 'benchmark.mjs',
     'budget.mjs', 'candidate.mjs', 'cohorts.mjs', 'plan.mjs', 'run.mjs', 'score.mjs',
-    'terminalAnswer.mjs', 'cohorts/after/package-lock.json',
+    'terminalAnswer.mjs', 'repeatPlay.mjs', 'replyBoundary.mjs', 'cohorts/after/package-lock.json',
   ];
   return Object.fromEntries(files.map((name) => [
     name, createHash('sha256').update(readFileSync(new URL(name, import.meta.url))).digest('hex'),
@@ -41,6 +42,9 @@ const taskPlays = [
     return variants.map((variant) => ({ task, variant, play: scripted }));
   }),
   ...hiddenTasks.flatMap((task) => ['honest', 'done'].map((variant) => ({ task, variant, play: hiddenScripted }))),
+  ...hiddenTasks.filter(({ control }) => !control).map((task) => ({
+    task, variant: 'repeat-done', play: repeatedHiddenScripted,
+  })),
 ];
 
 async function rehearse(installed, inputs) {
@@ -84,8 +88,8 @@ async function coordinatorRun(installed, inputs) {
       result = await runOne(installed[label].library, task, provider, { limits, arm, applyOutputSchema, append, budget, run });
     } catch (error) {
       if (!(error instanceof HiddenReplyExposureError)) throw error;
-      append({ type: 'exposure', ...run, observed: error.reply });
-      stop = 'critical-status-exposed';
+      append({ type: 'exposure', ...run, violation: error.violation, observed: error.reply });
+      stop = error.violation === 'unverified-tool-boundary' ? 'critical-reply-unverified' : 'critical-status-exposed';
       return;
     }
     const row = { ...run, ...result };
