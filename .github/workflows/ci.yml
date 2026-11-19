@@ -284,7 +284,7 @@ jobs:
             docs-next/package-lock.json
 
       - name: Install root deps
-        run: npm ci
+        run: npm ci --no-audit
 
       # docs-next's prebuild generators import the built library through file:...
       - name: Build library (dist for the docs generators)
@@ -292,7 +292,7 @@ jobs:
 
       - name: Install docs-next deps
         working-directory: docs-next
-        run: npm ci --strict-peer-deps
+        run: npm ci --strict-peer-deps --no-audit
 
       # The "Try it live" embed runs this builder in the reader's browser. The
       # deploy (docs.yml) checks it too — too late: npm already has the version.
@@ -379,7 +379,7 @@ jobs:
   # lib/remark-doc-links.mjs); this re-derives the id->route index from the
   # filesystem and fails on any dead id or stale #anchor. A page moved between
   # taxonomy folders, or a reworded heading, can therefore never ship a broken
-  # link. Self-contained: github-slugger is the script's only external dep.
+  # link. github-slugger is already pinned by the root lockfile.
   docs-links:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -389,8 +389,9 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          cache: npm
 
-      - run: npm install --no-save github-slugger
+      - run: npm ci --ignore-scripts --no-audit
       - run: node scripts/check-doc-links.mjs --strict
 
   # Docs-truth RATCHET — asks "do the docs describe what the code actually does?"
