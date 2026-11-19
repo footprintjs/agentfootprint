@@ -475,7 +475,7 @@ transcription of the study's registered RQ3 algorithm (standing per turn from
 recorded EVENTS) over the same recorded runs: ASKED ↔ `ask`, NOT-COVERED ↔
 `coverage-gap`, DECLARED-ABSENT ↔ `declared-absent`, FOUND ↔ `unrefuted` (never
 `known`), UNKNOWN ↔ "the record cannot vouch" (`not-applicable`, or only
-`empty-undeclared`). Three differences are named and pinned, all in one
+`empty-undeclared` or `call-not-completed` reasons). Three differences are named and pinned, all in one
 direction — the fold says more, never less: RQ3 scopes to the entity the
 question names and the fold reads every call of the turn (`entity-scope`); RQ3's
 DECLARED-ABSENT reads only the last lookup and the fold reads every one

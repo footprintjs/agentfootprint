@@ -3,7 +3,7 @@ import { canonicalJson } from '../../../lib/canonicalJson.js';
 import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { isPlaceholder } from '../../../redaction/marker.js';
-import { isRecord, recordedCallOutcome, str, type CallOutcome } from './recordValues.js';
+import { isRecord, recordedCallOutcome, str } from './recordValues.js';
 import { rowList } from './sources.js';
 import type { AnswerAssessment } from './types.js';
 
@@ -12,7 +12,7 @@ export interface TurnResult {
   readonly index: number;
   readonly toolCallId?: string;
   readonly toolName?: string;
-  readonly outcome?: CallOutcome;
+  readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;
   /**
    * The TOOL's own bytes — `content` cut at the tool-bytes boundary
    * (`lib/toolBytes.ts` · `toolBytesOf`). The inputs layer appends a note

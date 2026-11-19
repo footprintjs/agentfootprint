@@ -60,7 +60,7 @@
  */
 
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
-import { recordedCallOutcome, type CallOutcome } from './recordValues.js';
+import { recordedCallOutcome } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -91,7 +91,7 @@ interface CallRef {
   readonly id?: string;
   readonly name?: string;
   readonly count?: number;
-  readonly outcome?: CallOutcome;
+  readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;
 }
 
 /** The entries of a list past the bound, as one counted anonymous reference — or none. */
