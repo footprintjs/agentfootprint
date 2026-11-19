@@ -26,13 +26,14 @@
  * resolve (P1) and print no refused leaf (P7).
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { Agent, coverage, defineTool } from '../../src/index.js';
+import { Agent, allow, coverage, defineTool, deny } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, recordRun } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { assertP1, assertP7 } from './helpers.js';
 
@@ -256,6 +257,91 @@ describe('EDGE — what is never split', () => {
 });
 
 describe('INTEGRATION — the standing line is found by its exact words, rebuilt from the record', () => {
+  it.each([
+    ['Inventory lookup', 'Inventory lookup did not complete (failed)'],
+    [undefined, 'a call failed'],
+  ])(
+    'keeps both outcomes when two batches reuse an id (stock display name %s)',
+    async (displayName, failure) => {
+      const reply = 'I looked into your request.';
+      const id = 'lookup';
+      const stock = vi.fn(() => {
+        throw new Error('Fixture inventory unavailable.');
+      });
+      const price = vi.fn(() => 'Fixture price');
+      const agent = Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id, name: 'read_stock', args: {} }] },
+            { toolCalls: [{ id, name: 'read_price', args: {} }] },
+            { content: reply },
+          ],
+        }),
+        model: 'mock',
+      })
+        .tools([
+          defineTool({
+            name: 'read_stock',
+            ...(displayName !== undefined && { displayName }),
+            description: 'Read fixture inventory.',
+            inputSchema: { type: 'object' },
+            execute: stock,
+          }),
+          defineTool({
+            name: 'read_price',
+            displayName: 'Price lookup',
+            description: 'Read the fixture price.',
+            inputSchema: { type: 'object' },
+            execute: price,
+          }),
+        ])
+        .toolMiddleware({
+          name: 'fixture-scope',
+          onToolCall: ({ toolName }) =>
+            toolName === 'read_price' ? deny('Fixture policy') : allow(),
+        })
+        .answerLayer({ standingLine: true })
+        .build();
+      const recorder = recordRun(agent);
+      try {
+        const result = await agent.run({ message: 'Look up stock and price.' });
+        const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+        expect(stock).toHaveBeenCalledTimes(1);
+        expect(price).not.toHaveBeenCalled();
+        const history = recording.snapshot.sharedState.history as LLMMessage[];
+        expect(history.filter((message) => message.role === 'tool')).toMatchObject([
+          { toolCallId: id, toolName: 'read_stock', outcome: 'failed' },
+          { toolCallId: id, toolName: 'read_price', outcome: 'refused' },
+        ]);
+
+        const line = `Not sure — Price lookup did not complete (refused) and ${failure}.`;
+        expect.soft(result).toBe(`${reply}\n\n---\n\n${line}`);
+        const account = accountForAnswer(recording);
+        expect.soft(account.answer.value).toBe(reply);
+        expect.soft(account.facts.limitsBlock.value).toBe(line);
+        const outcomeLines = account.rows
+          .find((row) => row.id === 'how-sure')
+          ?.lines.filter((sentence) => sentence.template.id.startsWith('howSure.reason.call'));
+        const outcomePointer = (toolName: string) => ({
+          kind: 'history',
+          index: history.findIndex(
+            (message) => message.role === 'tool' && message.toolName === toolName,
+          ),
+          path: '/outcome',
+          toolCallId: id,
+        });
+        expect(outcomeLines).toMatchObject([
+          { text: '1 call was refused.', pointers: [outcomePointer('read_price')] },
+          { text: '1 call failed.', pointers: [outcomePointer('read_stock')] },
+        ]);
+        assertP1(account, recording);
+      } finally {
+        recorder.stop();
+      }
+    },
+  );
+
   it.each([
     [undefined, 'Not sure — a call failed.'],
     ['Inventory lookup', 'Not sure — Inventory lookup did not complete (failed).'],

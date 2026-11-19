@@ -3,7 +3,8 @@ import { canonicalJson } from '../../../lib/canonicalJson.js';
 import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { isPlaceholder } from '../../../redaction/marker.js';
-import { isRecord, recordedCallOutcome, str } from './recordValues.js';
+import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
+import { isRecord, str } from './recordValues.js';
 import { rowList } from './sources.js';
 import type { AnswerAssessment } from './types.js';
 

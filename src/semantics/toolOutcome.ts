@@ -145,3 +145,11 @@ export function callOutcomeOf(call: DispatchSettlement): 'refused' | 'failed' | 
   if (call.status === 'failure' || call.status === 'invalid') return 'failed';
   return undefined;
 }
+
+/** Read the recorded dispatch verdict without inferring one from the result. */
+export function recordedCallOutcome(
+  message: Readonly<Record<string, unknown>>,
+): ReturnType<typeof callOutcomeOf> {
+  const outcome = message.outcome;
+  return outcome === 'refused' || outcome === 'failed' ? outcome : undefined;
+}

@@ -1,6 +1,5 @@
 /**
- * Row "How sure" — what the record holds about how sure the answer is, side by
- * side:
+ * Row "How sure" — what the record holds about how sure the answer is, side by side:
  *   - the whole-answer standing, FIRST: the one fold
  *     (`core/agent/assessment/assess.ts` · `assessAnswer`) over the run's
  *     committed state — known · consistent with the record · not sure (with the
@@ -21,6 +20,7 @@
  */
 
 import { foldState } from '../../core/agent/assessment/assess.js';
+import { recordedCallOutcome } from '../../semantics/toolOutcome.js';
 import type {
   AnswerAssessment,
   AssessmentCheck,
@@ -36,6 +36,7 @@ import {
   at,
   boundedPointer,
   emptinessSource,
+  historyOf,
   stateAt,
   takeItem,
   type ReadContext,
@@ -322,17 +323,17 @@ const CALL_OUTCOME_LINES = {
   unknown: REASON_LINES['call-not-completed'],
 } as const;
 
-/** Each line points to the recorded outcomes it counts. */
+/** Each line counts and points to the outcomes at the witnesses' own history positions. */
 function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][number]): Sentence[] {
-  const calls = r.source.kind === 'calls' ? r.source.calls : [];
-  const outcomeFor = new Map(calls.map((call) => [call.toolCallId, call.outcome]));
+  const history = historyOf(ctx.view);
   const groups: Record<keyof typeof CALL_OUTCOME_LINES, AssessmentPointer[]> = {
     refused: [],
     failed: [],
     unknown: [],
   };
   for (const w of r.witness) {
-    const outcome = w.kind === 'history' ? outcomeFor.get(w.toolCallId ?? '') : undefined;
+    const row = w.kind === 'history' ? history[w.index] : undefined;
+    const outcome = isRecord(row) && row.role === 'tool' ? recordedCallOutcome(row) : undefined;
     groups[outcome ?? 'unknown'].push(w);
   }
   return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {

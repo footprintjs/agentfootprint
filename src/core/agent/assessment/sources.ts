@@ -42,8 +42,9 @@
  * A row that names no call, a call whose tool's name the record does not
  * hold, and every entry of a list (a conflict's readings, a contingent value's
  * carriers, an answer check's tools) that names no call — beside the entries
- * that do — is COUNTED in `unnamed`, never dropped and never guessed. Only a
- * known call id is said once.
+ * that do — is COUNTED in `unnamed`, never dropped and never guessed. A
+ * recorded outcome belongs to its result's place in history, even when a
+ * call id recurs. Other references may be joined and deduplicated by id.
  *
  * ## A list is read by index, never through its own code
  *
@@ -60,7 +61,7 @@
  */
 
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
-import { recordedCallOutcome } from './recordValues.js';
+import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -263,6 +264,13 @@ export function reasonSourceOf(
         anonymous += ref.count ?? 1;
         continue;
       }
+      if (ref.outcome !== undefined) {
+        // The witness names a committed result. A reused id cannot lend it
+        // another occurrence's name or cause the result to be discarded.
+        if (ref.name === undefined) anonymous += 1;
+        else calls.push({ toolCallId: ref.id, toolName: ref.name, outcome: ref.outcome });
+        continue;
+      }
       if (listed.has(ref.id) || nameless.has(ref.id)) continue;
       const toolName = ref.name ?? nameOf(ref.id);
       if (toolName === undefined) {
@@ -270,11 +278,7 @@ export function reasonSourceOf(
         continue;
       }
       listed.add(ref.id);
-      calls.push({
-        toolCallId: ref.id,
-        toolName,
-        ...(ref.outcome !== undefined && { outcome: ref.outcome }),
-      });
+      calls.push({ toolCallId: ref.id, toolName });
     }
   }
   const unnamed = nameless.size + anonymous;

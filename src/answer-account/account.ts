@@ -154,9 +154,9 @@ const BLOCK_HEADINGS: readonly string[] = [
  * assumed, of the rows `assumedValuesSourceOf` reads and the fold's rewrite
  * witness. The account claims only the exact line in its appended position.
  *
- * The fold's `source` gives the outcome of each call that did not complete.
- * Names used in the line come from `turn_end.standingLineNames`. Rebuilding
- * the line needs both inputs whenever the original line used them.
+ * The fold supplies the witnesses and `turn_end.standingLineNames` supplies names.
+ * The account leaves the line unclaimed when required committed state or the
+ * complete recorded display names are unavailable.
  */
 function appendedStandingLine(end: ViewEvent, view: RecordingView): string | undefined {
   const data = assessmentDataFrom(end.payload.answerAssessment);
