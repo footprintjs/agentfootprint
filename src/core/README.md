@@ -234,10 +234,12 @@ window's LAW 2 refusal (`'unresolved-tool-call'`) keeps the unanswered turn from
 folding. The permission policy's `sequence` reads each proposal's own result,
 so those calls stay outside the sequence when a later call reuses the ID.
 The hosting door's input cancel (`hosting/standingAgent/turn/run.ts`, the
-`'cancel' in response` branch) still writes unmarked cancellation messages. That
-legacy shape still counts as an answer for the sequence. Recording the
-unsettled calls explicitly at all three doors is a separate follow-up. A halt
-needs its own anchor because it does not produce a pause.
+`'cancel' in response` branch) supplies an `input-cancelled` origin when the
+pause checkpoint carries findings admission state. The sequence excludes
+those records and still counts cancellations with no origin. A recorded
+`outcome-unknown` remains a possible dispatch. Recording the unsettled calls
+explicitly at all three doors is a separate follow-up. A halt needs its own
+anchor because it does not produce a pause.
 
 ### One owner of 'never dispatched' — in history and on the stream
 

@@ -36,6 +36,44 @@ function entry(call: typeof first, iteration: number): ToolCallEntry {
 const denied = `${SYNTHETIC_DENY_PREFIX} fixture]`;
 
 describe('sequence projection from recorded tool results', () => {
+  it('omits a custom refusal when the record says the tool was never entered', () => {
+    const refused: LLMMessage = {
+      ...result(first, 'The sample is unavailable.'),
+      toolResultOrigin: 'not-entered',
+      outcome: 'refused',
+    };
+    expect(extractSequence([proposals(first), refused], 1)).toEqual([]);
+  });
+
+  it('retains a refusal outcome without an origin or the legacy marker as a known limit', () => {
+    const unmarked: LLMMessage = {
+      ...result(first, 'The sample is unavailable.'),
+      outcome: 'refused',
+    };
+    expect(extractSequence([proposals(first), unmarked], 1)).toEqual([entry(first, 1)]);
+  });
+
+  it('omits a cancellation with a recorded input-cancelled origin', () => {
+    const cancelled: LLMMessage = {
+      ...result(first, 'Sample input cancelled.'),
+      toolResultOrigin: 'input-cancelled',
+    };
+    expect(extractSequence([proposals(first), cancelled], 1)).toEqual([]);
+  });
+
+  it('retains an unmarked cancellation under the existing fallback', () => {
+    const unmarked = result(first, 'Sample input cancelled.');
+    expect(extractSequence([proposals(first), unmarked], 1)).toEqual([entry(first, 1)]);
+  });
+
+  it('retains a possible dispatch when its recorded origin is outcome-unknown', () => {
+    const unknown: LLMMessage = {
+      ...result(first, denied),
+      toolResultOrigin: 'outcome-unknown',
+    };
+    expect(extractSequence([proposals(first), unknown], 1)).toEqual([entry(first, 1)]);
+  });
+
   it.each([
     ['an earlier refusal', [proposals(first), result(first, denied)]],
     ['an earlier open proposal', [proposals(first)]],

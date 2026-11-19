@@ -20,13 +20,19 @@ here.
 - `PolicyHaltError.ts` — the typed halt.
 - `extractSequence.ts` — the sequence given to a permission checker uses the
   result paired by position with each recorded proposal. Unanswered proposals,
-  denials and explicit `LLMMessage.notDispatched` settlements stay out of the
-  sequence even when a provider reuses an ID.
+  explicit `LLMMessage.notDispatched` settlements, and results whose
+  `toolResultOrigin` says `not-entered` or `input-cancelled` stay out of the
+  sequence. A result marked `outcome-unknown` stays in as a possible dispatch
+  because the record leaves entry uncertain.
 
   - `[assistant: read_palette#k1] [tool k1: settled] [assistant: lookup_swatch#k1] [tool k1: 'ok']` gives `[lookup_swatch]`.
   - `[assistant: read_palette#k1] [tool k1: refused] [assistant: lookup_swatch#k1] [tool k1: 'ok']` gives `[lookup_swatch]`.
 
-  Here `settled` and `refused` stand for the recorded settlement and gate denial.
+  Here `settled` is a recorded settlement and `refused` is a recorded non-entry.
+  The regular and resumed dispatch paths write non-entry with findings enabled.
+  Without a result origin, the reader uses the legacy synthetic denial prefix.
+  A custom refusal without that prefix or an origin can still appear in the
+  sequence. A hosting input cancellation without its origin also stays in.
   The sequence describes recorded dispatch history. Completion and the source
   history's trustworthiness require separate evidence.
 
@@ -37,6 +43,9 @@ here.
   (inner)]`. Until the outer call's result lands, the next inner call's
   checker gets the same entries from the run's `innerToolCalls` rows
   (`core/agent/stages/toolCalls/access/innerCallGates.ts`).
+  The writer groups the inner rows by the outer call's ID and iteration.
+  When two outer calls share one ID within a batch, their own inner rows
+  cannot be distinguished from that grouping.
 - `skillTarget.ts` — one spelling, one owner.
 - `thinkingRedaction.ts` — the deliberate two-view split: unredacted to the
   provider for signature round-trip, redacted into `scope.history`.

@@ -9,3 +9,5 @@ saved run with an adapter that generates IDs locally. Custom checkers that
 use the order or count of calls in `sequence` could make a decision from the
 wrong sequence. The built-in role allowlist bases its decisions on role,
 capability, and target, so its decisions were unaffected.
+Recorded non-entry and input cancellation now keep those calls out of the
+permission sequence, regardless of their display text.

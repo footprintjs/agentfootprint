@@ -22,7 +22,7 @@ function generatedHistory(seed: number) {
       };
     });
     const paused = pauseAt === undefined ? undefined : calls[pauseAt];
-    const proposal: LLMMessage = { role: 'assistant', content: '', toolCalls: calls };
+    const proposal = { role: 'assistant', content: '', toolCalls: calls } satisfies LLMMessage;
     const answers: LLMMessage[] = [];
     const entries: ToolCallEntry[][] = calls.map(() => []);
     for (const [i, call] of calls.entries()) {
@@ -76,13 +76,14 @@ function generatedHistory(seed: number) {
   }
 
   const first = batch(1, ['ran', 'denied', ...Array.from({ length: draw(3) }, completed)]);
-  const pauseAt = draw(4);
+  const pausedBatchSize = 2 + draw(6);
+  const pauseAt = draw(pausedBatchSize);
   const paused = batch(
     2,
     [
       ...Array.from({ length: pauseAt }, completed),
       'ran',
-      ...Array.from({ length: 1 + draw(3) }, (): Outcome => 'settled'),
+      ...Array.from({ length: pausedBatchSize - pauseAt - 1 }, (): Outcome => 'settled'),
     ],
     pauseAt,
   );
@@ -123,12 +124,22 @@ function generatedHistory(seed: number) {
   const expected = resumedExpected.map((entry) =>
     iteration > lastBatch && entry.iteration === lastContributing ? { ...entry, iteration } : entry,
   );
-  return { restored, pausedExpected, resumed, expected, iteration };
+  return {
+    restored,
+    pausedExpected,
+    resumed,
+    expected,
+    iteration,
+    pauseAt,
+    pausedCallCount: paused.proposal.toolCalls.length,
+  };
 }
 
 it('preserves main’s sequence for generated histories with unique call IDs', () => {
+  const pausePositions = new Set<string>();
   for (let seed = 1; seed <= 400; seed++) {
-    const { restored, pausedExpected, resumed, expected, iteration } = generatedHistory(seed);
+    const { restored, pausedExpected, resumed, expected, iteration, pauseAt, pausedCallCount } =
+      generatedHistory(seed);
     const ids = resumed.flatMap(({ toolCalls }) => (toolCalls ?? []).map(({ id }) => id));
     expect(new Set(ids).size, `unique proposals for seed ${seed}`).toBe(ids.length);
     expect(extractSequence(restored, 2), `paused history for seed ${seed}`).toStrictEqual(
@@ -137,5 +148,11 @@ it('preserves main’s sequence for generated histories with unique call IDs', (
     expect(extractSequence(resumed, iteration), `resumed history for seed ${seed}`).toStrictEqual(
       expected,
     );
+    if (pauseAt === 0) pausePositions.add('first');
+    else if (pauseAt === pausedCallCount - 1) pausePositions.add('final');
+    else pausePositions.add('middle');
   }
+  expect(pausePositions, 'pause positions across the generated batches').toEqual(
+    new Set(['first', 'middle', 'final']),
+  );
 });

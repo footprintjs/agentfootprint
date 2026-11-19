@@ -20,11 +20,12 @@
  *
  * The proposal's recorded position owns its answer. A provider can repeat an
  * id, including when a fresh instance resumes a stored checkpoint and restarts
- * its id counter. The same pairing serves all three questions: an unanswered
- * proposal is outside the sequence, a synthetic denial never dispatched, and a
- * settled result carries `LLMMessage.notDispatched` regardless of its text.
- * The reader adds no settlement to an unanswered call. The remaining settlement
- * producers are described in `src/core/README.md`.
+ * its id counter. An unanswered proposal is outside the sequence. A paired
+ * settlement (`notDispatched`), non-entry or input cancellation proves the call
+ * did not dispatch. A result marked `outcome-unknown` stays as a possible dispatch.
+ * For records without a result origin, the existing synthetic deny prefix
+ * still excludes a refusal. The reader adds no settlement to an unanswered
+ * call. The remaining settlement producers are described in `src/core/README.md`.
  *
  * INNER CALLS. A call a tool made through `ctx.tools.call` whose function was
  * entered rides the result message of the call the model made
@@ -54,15 +55,15 @@ export interface ExtractSequenceOptions {
 }
 
 /**
- * Walk `history` in order, collect each dispatched tool call into the
- * sequence. Only calls that produced a non-denied tool_result are
- * included.
+ * Walk `history` in order and collect tool calls with a paired answer that
+ * could represent a dispatch. A paired answer alone does not prove entry
+ * or completion.
  *
  * @param history Conversation history at check time.
  * @param iteration Current ReAct iteration (used to tag the proposed
  *                  call's iteration if you append it).
  * @param options Optional resolver for `providerId`.
- * @returns The dispatched-call sequence, in chronological order.
+ * @returns The recorded call sequence, in chronological order.
  */
 export function extractSequence(
   history: readonly LLMMessage[],
@@ -101,8 +102,15 @@ function deriveSequence(
     for (const [callAt, tc] of msg.toolCalls.entries()) {
       const answer = results.get(proposalKey(turnAt, callAt));
       if (answer === undefined || answer.notDispatched !== undefined) continue;
-      const result = typeof answer.content === 'string' ? answer.content : '';
-      if (result.startsWith(SYNTHETIC_DENY_PREFIX)) continue; // denied, never ran
+      const origin = answer.toolResultOrigin;
+      if (origin === 'not-entered' || origin === 'input-cancelled') continue;
+      if (
+        origin === undefined &&
+        typeof answer.content === 'string' &&
+        answer.content.startsWith(SYNTHETIC_DENY_PREFIX)
+      ) {
+        continue;
+      }
       const entry: ToolCallEntry = {
         name: tc.name,
         args: tc.args,
