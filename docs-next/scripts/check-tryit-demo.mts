@@ -1,21 +1,14 @@
 /**
  * check:tryit — runs the REAL "Try it live" demo end-to-end.
  *
- * `buildDynamicReactAgent` here is the SAME function the Dynamic ReAct embed shows
- * (via <CodeFile region="demo">) AND executes when a reader hits Run. This check
- * runs it in Node and asserts what the run DID — each tool's own result, read off
- * the `stream.tool_start` / `stream.tool_end` events — so a broken demo fails the
- * docs build, not the reader's browser.
- *
- * Why not the final answer alone: the demo's mock LLM SCRIPTS that text, so it
- * comes back word for word even when the skill never loaded, redaction returned
- * the raw email, or the refund threw. Only the tool results can tell.
+ * The Dynamic ReAct guide shows the same builder the published app runs. This
+ * check injects the current library and verifies tool and context evidence in Node.
  *
  *   Run:  npm run check:tryit   (from docs-next/; needs the library dist built)
  */
 import { deepStrictEqual, ok } from 'node:assert/strict';
 import { Agent, defineTool } from 'agentfootprint';
-import { defineSkill, skillGraph } from 'agentfootprint/context';
+import { defineFact, defineInstruction, defineSkill, defineSteering, skillGraph } from 'agentfootprint/context';
 import { routeRecorder } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
 import type { StructureRecorder } from 'footprintjs';
@@ -24,62 +17,23 @@ import {
   weatherAnswer,
   weatherInput,
 } from '../../docs-demo/scripts/quick-start-weather.mjs';
-import { buildDynamicReactAgent } from '../components/demos/dynamicReactDemo';
+import { buildDynamicReactAgent } from '../../docs-demo/shared/dynamicReactDemo';
+import { recordDynamicReactRun } from '../../docs-demo/shared/recordDynamicReactRun.mjs';
 import { buildSupportSkillGraph } from '../components/demos/skillGraphDemo';
 import { buildQuickstartSkillGraph } from '../components/demos/skillGraphQuickstartDemo';
 import { recordSkillGraphRuns } from '../components/demos/skillGraphRuns.mjs';
-
-const MESSAGE = 'My account is alice@example.com — please refund $42';
-const EXPECTED = 'Done. Refund of $42 issued for [EMAIL]. You should see it in 3-5 business days.';
 
 function fail(msg: string): never {
   console.error(`[check:tryit] FAIL — ${msg}`);
   process.exit(1);
 }
 
-const agent = buildDynamicReactAgent();
-
-// What each tool call actually returned, in the order the calls ended.
-const toolNames = new Map<string, string>();
-const ended: { name: string; result: unknown; error: boolean }[] = [];
-agent.on('agentfootprint.stream.tool_start', (e) => {
-  toolNames.set(e.payload.toolCallId, e.payload.toolName);
-});
-agent.on('agentfootprint.stream.tool_end', (e) => {
-  ended.push({
-    name: toolNames.get(e.payload.toolCallId) ?? '(unknown call)',
-    result: e.payload.result,
-    error: e.payload.error === true,
-  });
-});
-
-const result = await agent.run({ message: MESSAGE });
-
-if (typeof result !== 'string') fail('agent paused unexpectedly (expected a final answer)');
-
-// The final response is scripted. Check the results independently, in call order.
-const expectedCalls = [
-  ['read_skill', "Skill 'billing' activated for the next iteration."],
-  ['redact_pii', '[EMAIL] refund $42'],
-  ['process_refund', 'Refund of $42 issued.'],
-] as const;
-if (ended.length !== expectedCalls.length) {
-  fail(`expected ${expectedCalls.length} tool results, received ${ended.length}`);
-}
-for (const [index, [name, expected]] of expectedCalls.entries()) {
-  const call = ended[index];
-  if (call.name !== name || call.error || call.result !== expected) {
-    fail(`tool call ${index + 1} (${name}) did not return its expected result`);
-  }
-}
-
-// The final answer only proves the run COMPLETED (no throw, no pause, a 4th LLM
-// call): its text is scripted by the mock, so it says nothing about the tools.
-if (result !== EXPECTED) {
-  fail(`final answer drifted.\n  expected: ${EXPECTED}\n  got:      ${result}`);
-}
-
-console.log('[check:tryit] OK — read_skill, redact_pii and process_refund each returned what the flow needs, in order, and the run finished');
+const dynamicReact = buildDynamicReactAgent(
+  { Agent, defineTool, defineFact, defineInstruction, defineSkill, defineSteering, mock },
+  { thinkingMs: 0 },
+);
+const { result } = await recordDynamicReactRun(dynamicReact);
+console.log('[check:tryit] OK — Dynamic ReAct ran the three tools in order and put post-pii in the system prompt on iteration 3');
 console.log(`[check:tryit] answer: ${result}`);
 
 // The guide and the demo use the same declarations. Keep these structural

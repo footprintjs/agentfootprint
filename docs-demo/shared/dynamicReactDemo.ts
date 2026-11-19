@@ -1,26 +1,26 @@
-/**
- * dynamicReactDemo — the SINGLE SOURCE for the "Try it live" embed on the
- * Dynamic ReAct docs page.
- *
- * The `demo` region below is BOTH:
- *   • what the reader SEES  — rendered verbatim via <CodeFile region="demo"> at
- *     build time (the docs build FAILS if this file or region goes missing), and
- *   • what actually RUNS    — `buildDynamicReactAgent()` is imported by the embed
- *     and traced live in the browser.
- *
- * One function, zero drift: the bytes on screen are provably the bytes that run.
- * It imports the `agentfootprint` PACKAGE (the same copy the lens observes) — never
- * the source tree — so there is exactly one library instance and the lens lights
- * the executed path with no translation.
- */
+export const dynamicReactInput = 'My account is alice@example.com — please refund $42';
 
 // #region demo
-import { Agent, defineTool } from 'agentfootprint'
-import { mock } from 'agentfootprint/providers'
-import { defineSteering, defineInstruction, defineSkill, defineFact } from 'agentfootprint/context';
+type DynamicReactApi = {
+  Agent: typeof import('agentfootprint').Agent;
+  defineTool: typeof import('agentfootprint').defineTool;
+  mock: typeof import('agentfootprint/providers').mock;
+  defineSteering: typeof import('agentfootprint/context').defineSteering;
+  defineInstruction: typeof import('agentfootprint/context').defineInstruction;
+  defineSkill: typeof import('agentfootprint/context').defineSkill;
+  defineFact: typeof import('agentfootprint/context').defineFact;
+};
 
-/** Builds the Dynamic ReAct agent the docs trace live (mock LLM — no network). */
-export function buildDynamicReactAgent() {
+type DynamicReactOptions = {
+  thinkingMs?: number;
+  structureRecorders?: Parameters<DynamicReactApi['Agent']['create']>[0]['structureRecorders'];
+};
+
+/** The current-library check and the published demo each supply their own SDK. */
+export function buildDynamicReactAgent(
+  { Agent, defineTool, mock, defineSteering, defineInstruction, defineSkill, defineFact }: DynamicReactApi,
+  { thinkingMs = 420, structureRecorders }: DynamicReactOptions = {},
+) {
   // A tool that redacts PII before any refund goes out.
   const redactPii = defineTool({
     name: 'redact_pii',
@@ -45,12 +45,13 @@ export function buildDynamicReactAgent() {
     prompt: 'Use the redacted text in your reply. Do not paraphrase the original.',
   });
 
-  // A skill the LLM loads on demand via read_skill('billing'). Reading it unlocks
-  // process_refund AND injects the billing playbook for the next iteration.
+  // Reading this skill makes process_refund available and injects the billing
+  // playbook for the next iteration.
   const billing = defineSkill({
     id: 'billing',
     description: 'Read for refunds / charges. Unlocks process_refund.',
     body: 'When refunding: redact PII first using redact_pii, THEN call process_refund.',
+    autoActivate: 'currentSkill',
     tools: [
       defineTool({
         name: 'process_refund',
@@ -71,13 +72,12 @@ export function buildDynamicReactAgent() {
   // A plain always-present fact.
   const userProfile = defineFact({ id: 'user-profile', data: 'User: Alice Chen. Plan: Pro.' });
 
-  // Scripted mock LLM — stands in for a real provider so this runs offline in your
-  // browser. `thinkingMs` adds a little latency so each iteration is visible as the
-  // run traces. Swap `mock(...)` for `anthropic(...)` / `openai(...)` for a real run.
+  // The mock passes your message to the redactor. The refund amount and the
+  // final answer are scripted. thinkingMs makes the browser trace easier to follow.
   let iter = 0;
   const provider = mock({
-    thinkingMs: 420,
-    respond: () => {
+    thinkingMs,
+    respond: ({ messages }) => {
       iter += 1;
       switch (iter) {
         case 1:
@@ -86,12 +86,14 @@ export function buildDynamicReactAgent() {
             toolCalls: [{ id: 'c1', name: 'read_skill', args: { id: 'billing' } }],
             usage: { input: 30, output: 8 },
           };
-        case 2:
+        case 2: {
+          const text = messages.find(({ role }) => role === 'user')?.content ?? '';
           return {
             content: 'Redacting PII first.',
-            toolCalls: [{ id: 'c2', name: 'redact_pii', args: { text: 'alice@example.com refund $42' } }],
+            toolCalls: [{ id: 'c2', name: 'redact_pii', args: { text } }],
             usage: { input: 60, output: 8 },
           };
+        }
         case 3:
           return {
             content: 'Issuing refund.',
@@ -108,7 +110,7 @@ export function buildDynamicReactAgent() {
     },
   });
 
-  return Agent.create({ provider, model: 'mock', maxIterations: 6 })
+  return Agent.create({ provider, model: 'mock', maxIterations: 6, reactMode: 'dynamic-grouped', structureRecorders })
     .system('You are a customer support assistant.')
     .tool(redactPii)
     .steering(safety)
