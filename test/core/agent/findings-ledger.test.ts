@@ -64,6 +64,7 @@ import { staticTools } from '../../../src/tool-providers/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
 import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
+import { normalizeFindingOccurrences } from '../../helpers/findingsOccurrences.js';
 
 type Row = { type: string; payload: Record<string, unknown> };
 type Shot = {
@@ -123,6 +124,12 @@ async function runCollecting(agent: Agent, message = 'which port is down?'): Pro
 
 const ledgerOf = (agent: Agent): readonly FindingsRow[] | undefined =>
   (agent.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)?.findingsLedger;
+
+const occurrenceOf = (agent: Agent, id: string) =>
+  agent
+    .checkpoint()
+    ?.history.find((message) => message.role === 'tool' && message.toolCallId === id)
+    ?.callOccurrenceKey;
 
 const keysOf = (agent: Agent): string[] =>
   Object.keys(agent.getLastSnapshot()?.sharedState ?? {}).sort();
@@ -244,9 +251,27 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     const declared = rows
       .filter((r) => r.type === 'agentfootprint.findings.declared')
       .map((r) => r.payload);
+    const first = occurrenceOf(agent, 'c1');
+    const second = occurrenceOf(agent, 'c2');
+    expect(first).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+    expect(second).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+    expect(first).not.toEqual(second);
     expect(declared).toEqual([
-      { toolName: 'look', toolCallId: 'c1', iteration: 1, basis: 'direct', expect: 'high' },
-      { toolName: 'look', toolCallId: 'c2', iteration: 2, basis: 'exploratory' },
+      {
+        toolName: 'look',
+        toolCallId: 'c1',
+        callOccurrenceKey: first,
+        iteration: 1,
+        basis: 'direct',
+        expect: 'high',
+      },
+      {
+        toolName: 'look',
+        toolCallId: 'c2',
+        callOccurrenceKey: second,
+        iteration: 2,
+        basis: 'exploratory',
+      },
     ]);
     const standing = rows
       .filter((r) => r.type === 'agentfootprint.findings.standing')
@@ -254,6 +279,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     expect(standing).toEqual([
       {
         toolCallId: 'c1',
+        callOccurrenceKey: first,
         toolName: 'look',
         iteration: 2,
         standing: 'fact',
@@ -267,6 +293,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     expect(ledger[0]).toEqual({
       kind: 'basis',
       toolCallId: 'c1',
+      callOccurrenceKey: first,
       toolName: 'look',
       iteration: 1,
       basis: 'direct',
@@ -275,11 +302,12 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     expect(ledger[1]).toEqual({
       kind: 'standing',
       toolCallId: 'c1',
+      callOccurrenceKey: first,
       toolName: 'look',
       standing: 'fact',
       sought: true,
       assertions: [{ ...FACT_ASSERTION, stratum: 'asserted', provenance: 'tool:c1' }],
-      declaredOn: { toolCallId: 'c2' },
+      declaredOn: { toolCallId: 'c2', callOccurrenceKey: second },
       iteration: 2,
     });
     expect(ledger[2]).toMatchObject({
@@ -480,9 +508,11 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
     expect(rows.filter((r) => r.type === 'agentfootprint.agent.output_schema_retry')).toEqual([]);
     const ledger = ledgerOf(agent)!;
     expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
+    const callOccurrenceKey = occurrenceOf(agent, 'c1');
     expect(ledger[1]).toEqual({
       kind: 'standing',
       toolCallId: 'c1',
+      callOccurrenceKey,
       toolName: 'look',
       standing: 'ruled-out',
       line: 'p2 was up',
@@ -492,6 +522,7 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
     });
     expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toEqual({
       toolCallId: 'c1',
+      callOccurrenceKey,
       toolName: 'look',
       iteration: 2,
       standing: 'ruled-out',
@@ -582,9 +613,11 @@ describe(".findings() without an output schema — every decider peels the answe
       expect(answer).toBe(PEELED);
       const ledger = ledgerOf(agent)!;
       expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
-      expect(ledger[1]).toEqual(STANDING);
+      const callOccurrenceKey = occurrenceOf(agent, 'c1');
+      expect(ledger[1]).toEqual({ ...STANDING, callOccurrenceKey });
       expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toEqual({
         toolCallId: 'c1',
+        callOccurrenceKey,
         toolName: 'look',
         iteration: 2,
         standing: 'ruled-out',
@@ -618,7 +651,10 @@ describe(".findings() without an output schema — every decider peels the answe
       })}\n\`\`\`\n`;
       const agent = build(fenced);
       expect(await agent.run({ message: 'which port is down?' })).toBe('p1 is down.');
-      expect(ledgerOf(agent)![1]).toEqual(STANDING);
+      expect(ledgerOf(agent)![1]).toEqual({
+        ...STANDING,
+        callOccurrenceKey: occurrenceOf(agent, 'c1'),
+      });
     });
 
     it('a JSON answer without the key is untouched, byte for byte', async () => {
@@ -769,7 +805,10 @@ describe(".findings() without an output schema — every decider peels the answe
           .messageMiddleware(annotate as never),
       ).build();
       expect(await agent.run({ message: 'which port is down?' })).toBe(PEELED);
-      expect(ledgerOf(agent)![1]).toEqual(STANDING);
+      expect(ledgerOf(agent)![1]).toEqual({
+        ...STANDING,
+        callOccurrenceKey: occurrenceOf(agent, 'c1'),
+      });
     }
   });
 });
@@ -1242,7 +1281,9 @@ describe('.findings() — the same record under both chart shapes', () => {
   }
 
   it('the two shapes wrote the same ledger', () => {
-    expect(ledgers['dynamic-grouped']).toEqual(ledgers.dynamic);
+    expect(normalizeFindingOccurrences(ledgers['dynamic-grouped'])).toEqual(
+      normalizeFindingOccurrences(ledgers.dynamic),
+    );
   });
 });
 
@@ -1557,7 +1598,14 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
     ).toEqual([{ q: 'a', _findings: 'mine' }, { q: 'b' }]);
     // The record: one basis row, the plain call's; nothing for the owner's.
     expect(ledgerOf(agent)).toEqual([
-      { kind: 'basis', toolCallId: 'p1', toolName: 'plain', iteration: 1, basis: 'direct' },
+      {
+        kind: 'basis',
+        toolCallId: 'p1',
+        callOccurrenceKey: occurrenceOf(agent, 'p1'),
+        toolName: 'plain',
+        iteration: 1,
+        basis: 'direct',
+      },
     ]);
     expect(
       rows

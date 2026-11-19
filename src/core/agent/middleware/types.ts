@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 /**
  * middleware/types — PUBLIC. The shape of a governance chain.
  *
@@ -323,6 +324,7 @@ export interface MessageMiddleware {
  * those are different facts about a run.
  */
 export interface MiddlewareDecision {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /** The middleware's `name`. */
   readonly middleware: string;
   /**

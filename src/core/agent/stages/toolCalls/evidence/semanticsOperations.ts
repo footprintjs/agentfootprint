@@ -1,6 +1,5 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import { type TypedScope, isDevMode } from 'footprintjs';
-import type { AgentState } from '../../../types.js';
+import { isDevMode } from 'footprintjs';
 import {
   readSemantics,
   explainSemantics,
@@ -11,6 +10,7 @@ import type { ToolSemantics } from '../../../../../semantics/types.js';
 import { claimRowsOf } from '../../../../../integrity/unsupported-claim/ledger.js';
 import type { ClaimLedgerRow } from '../../../../../integrity/unsupported-claim/check.js';
 import type { ToolSemanticsOperations } from '../contracts/operations/semantics.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 
 /** Compose the existing semantics callbacks once for this handler. */
 export function buildToolSemanticsOperations(
@@ -38,11 +38,7 @@ export function buildToolSemanticsOperations(
    * here naming its first fault; `check:semantics` names them all at build
    * time.
    */
-  const declareSemantics = (
-    scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
-    value: unknown,
-  ): unknown | undefined => {
+  const declareSemantics: ToolSemanticsOperations['declareSemantics'] = (scope, call, value) => {
     const sem = readSemantics(value);
     if (sem === undefined) {
       const faults = explainSemantics(value);
@@ -79,6 +75,7 @@ export function buildToolSemanticsOperations(
       toolName: call.toolName,
       toolCallId: call.toolCallId,
       iteration: call.iteration,
+      ...callOccurrenceField(call.callOccurrenceKey),
       semantics: detached as ToolSemantics,
     });
     // THE CLAIM LEDGER (9.61.0). The envelope's typed readings are absorbed

@@ -89,6 +89,7 @@ export interface InvocationState {
   llmLatestContent: string;
   llmLatestToolCalls: readonly {
     readonly id: string;
+    readonly callOccurrenceKey?: import('../../../../lib/callOccurrence.js').CallOccurrenceKey;
     readonly name: string;
     readonly args: Readonly<Record<string, unknown>>;
     readonly argumentsFailure?: import('../../../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];

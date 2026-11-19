@@ -35,6 +35,7 @@
 
 import type { PlacedTicket } from '../placedTickets.js';
 import type { TypedScope } from 'footprintjs';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 
 import { turnWindowsOf } from '../../../time/bind.js';
 import type { CallWindowRow, ClockRow, TimeAnswerRow, TimeReadingRow } from '../../../time/rows.js';
@@ -255,6 +256,7 @@ function callsOf(scope: TypedScope<InputsLayerState>): readonly BatchCall[] {
   return [...((scope.calls as readonly BatchCall[] | undefined) ?? [])].map((c) => ({
     id: c.id,
     name: c.name,
+    ...callOccurrenceField(c.callOccurrenceKey),
     args: { ...(c.args ?? {}) },
     ...(c.argumentsFailure !== undefined && { argumentsFailure: { ...c.argumentsFailure } }),
   }));

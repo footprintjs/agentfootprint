@@ -73,8 +73,7 @@ import {
   type PeriodFacts,
 } from '../../../time/convert.js';
 import type { InstantText } from '../../../time/instant.js';
-import type { CallWindowRow } from '../../../time/rows.js';
-import { callWindowRow } from '../../../time/rowsBuild.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import type { ZoneName } from '../../../time/zone.js';
 import { composeResolutionRows } from './resolutionRows.js';
 import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
@@ -99,10 +98,13 @@ import type { ArgumentRow } from './rows.js';
 import { timeRefusal, unreadableRulesRefusal } from './serve.js';
 import type { CallSources, DeclaredSource } from './sources.js';
 
+export { callWindowRowsOf } from './resolutionRows.js';
+
 /** One call of the batch, as the model emitted it (its raw arguments). */
 export interface BatchCall {
   readonly id: string;
   readonly name: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly args: Readonly<Record<string, unknown>>;
   readonly argumentsFailure?: import('../../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
 }
@@ -531,20 +533,6 @@ export function timeDecisionsOf(
     );
   }
   return decisions;
-}
-
-/** The `call-window` rows for this batch's decisions, in batch order (`time/rows.ts`). */
-export function callWindowRowsOf(
-  decisions: ReadonlyMap<string, CallWindow>,
-  calls: readonly BatchCall[],
-  stamp: { readonly turn: number; readonly iteration: number },
-): CallWindowRow[] {
-  return calls.flatMap((c) => {
-    const decision = decisions.get(c.id);
-    return decision === undefined
-      ? []
-      : [callWindowRow({ toolCallId: c.id, toolName: c.name }, decision, stamp)];
-  });
 }
 
 /** The arguments a decision FILLS — the chosen form's, by name — or none. */

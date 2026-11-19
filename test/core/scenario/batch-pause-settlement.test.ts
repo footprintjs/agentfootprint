@@ -73,6 +73,7 @@ import {
 import { stripFrameworkFields } from '../../../src/core/agent/composeRequest.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../../src/security/extractSequence.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
@@ -175,20 +176,30 @@ function build(
 async function pauseAndResume(
   h: Harness,
   kind: PauseKind,
-): Promise<{ answer: unknown; resumedFrom: number; requestId?: string }> {
+): Promise<{
+  answer: unknown;
+  resumedFrom: number;
+  checkpointHistory: readonly LLMMessage[];
+  requestId?: string;
+}> {
   const paused = await h.agent.run({ message: 'go' });
   expect(isPaused(paused)).toBe(true);
   if (!isPaused(paused)) throw new Error('expected a pause');
   const resumedFrom = h.events.length;
+  const checkpointHistory = paused.checkpoint.sharedState.history as readonly LLMMessage[];
   if (kind === 'input') {
     if (!isInputPause(paused)) throw new Error('expected an input pause');
     const requestId = paused.awaitingInput.requestId;
     const answer = await h.agent.resume(paused.checkpoint, { requestId, values: { year: 2026 } });
-    return { answer, resumedFrom, requestId };
+    return { answer, resumedFrom, checkpointHistory, requestId };
   }
   if (kind === 'consent') {
     h.vault.granted = true; // the person consented, out of band
-    return { answer: await h.agent.resume(paused.checkpoint, undefined), resumedFrom };
+    return {
+      answer: await h.agent.resume(paused.checkpoint, undefined),
+      resumedFrom,
+      checkpointHistory,
+    };
   }
   return {
     answer: await h.agent.resume(
@@ -196,6 +207,7 @@ async function pauseAndResume(
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     ),
     resumedFrom,
+    checkpointHistory,
   };
 }
 
@@ -224,6 +236,46 @@ const sharedState = (h: Harness) =>
     lastToolResult?: { toolName: string };
   };
 
+function expectRecordedBatch(h: Harness, checkpointHistory: readonly LLMMessage[]) {
+  const proposed = checkpointHistory.flatMap((message) => message.toolCalls ?? []);
+  const keys = proposed.map(readCallOccurrenceKey);
+  expect(proposed.map((call) => call.id)).toEqual(IDS);
+  expect(keys).toEqual(IDS.map(() => expect.any(String)));
+  expect(new Set(keys).size).toBe(IDS.length);
+  const byId = new Map(proposed.map((call, index) => [call.id, keys[index]]));
+  const state = sharedState(h);
+  const history = state.history ?? [];
+  expect(history.flatMap((message) => message.toolCalls ?? []).map(readCallOccurrenceKey)).toEqual(
+    keys,
+  );
+  expect(history.filter((message) => message.role === 'tool').map(readCallOccurrenceKey)).toEqual(
+    keys,
+  );
+  for (const result of state.toolResults ?? []) {
+    expect(readCallOccurrenceKey(result)).toBe(byId.get(result.toolCallId));
+  }
+  for (const event of h.events) {
+    if (
+      event.type === 'agentfootprint.stream.tool_start' ||
+      event.type === 'agentfootprint.stream.tool_end'
+    ) {
+      expect(readCallOccurrenceKey(event.payload)).toBe(byId.get(String(event.payload.toolCallId)));
+    } else if (
+      event.type === 'agentfootprint.agent.iteration_end' &&
+      Array.isArray(event.payload.history)
+    ) {
+      const projection = event.payload.history as readonly LLMMessage[];
+      expect(
+        projection.flatMap((message) => message.toolCalls ?? []).map(readCallOccurrenceKey),
+      ).toEqual(keys);
+      expect(
+        projection.filter((message) => message.role === 'tool').map(readCallOccurrenceKey),
+      ).toEqual(keys);
+    }
+  }
+  return proposed;
+}
+
 // ─── 1. SCENARIO — every door settles the siblings after the paused call ──
 
 describe('batch settlement — a paused batch settles its un-dispatched siblings on every door', () => {
@@ -231,8 +283,10 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
     '%s: a three-call batch paused on its MIDDLE call settles the third on resume',
     async (kind) => {
       const h = build(kind, 1);
-      const { answer, resumedFrom } = await pauseAndResume(h, kind);
+      const { answer, resumedFrom, checkpointHistory } = await pauseAndResume(h, kind);
       expect(answer).toBe('done');
+      const proposed = expectRecordedBatch(h, checkpointHistory);
+      const callOccurrenceKey = proposed[2]?.callOccurrenceKey;
 
       // Nothing is dispatched on resume: the third tool never ran.
       expect(h.ran).not.toContain('third');
@@ -265,10 +319,23 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
       const start = forCall(h, 'agentfootprint.stream.tool_start', 'c3');
       const end = forCall(h, 'agentfootprint.stream.tool_end', 'c3');
       expect(start.map((e) => e.payload)).toEqual([
-        { toolName: 'third', toolCallId: 'c3', args: {}, parallelCount: 3, notDispatched: MARKER },
+        {
+          toolName: 'third',
+          toolCallId: 'c3',
+          callOccurrenceKey,
+          args: {},
+          parallelCount: 3,
+          notDispatched: MARKER,
+        },
       ]);
       expect(end.map((e) => e.payload)).toEqual([
-        { toolCallId: 'c3', result: sentence, durationMs: 0, notDispatched: MARKER },
+        {
+          toolCallId: 'c3',
+          callOccurrenceKey,
+          result: sentence,
+          durationMs: 0,
+          notDispatched: MARKER,
+        },
       ]);
       expect('error' in end[0]!.payload).toBe(false);
       // Absent on every other bracket of the run, both legs: the field is
@@ -321,7 +388,8 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
       // it (`composeRequest.ts` · `stripFrameworkFields`).
       expect((state.history ?? []).filter((m) => m.role === 'tool').length).toBe(3);
       const stored = (state.history ?? []).find((m) => m.role === 'tool' && m.toolCallId === 'c3');
-      expect(stored).toEqual({ ...settled, notDispatched: MARKER });
+      expect(stored).toEqual({ ...settled, callOccurrenceKey, notDispatched: MARKER });
+      expect(stripFrameworkFields([stored!])[0]).toEqual(settled);
       // ONE fact, one shape: the history message and both brackets agree.
       expect(stored?.notDispatched).toEqual(start[0]!.payload.notDispatched);
       expect(stored?.notDispatched).toEqual(end[0]!.payload.notDispatched);
@@ -405,6 +473,7 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
         );
       }
       expect(answer).toBe('done');
+      expectRecordedBatch(restored, checkpoint.sharedState.history as readonly LLMMessage[]);
       expect(restored.ran).not.toContain('third');
       const { uses, results } = usesAndResults(restored.requests[0]!);
       expect(uses).toEqual(['c1', 'c2', 'c3']);
@@ -581,8 +650,24 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
 
 const REFERENCE = resolve(__dirname, 'reference/batch-pause-last-call.json');
 
-/** Everything a consumer can see of one pause-and-resume, timing removed and
- *  the run-minted request id replaced by a placeholder. */
+function withoutOccurrence<T extends object>(record: T) {
+  const { callOccurrenceKey: _key, ...rest } = record as T & {
+    readonly callOccurrenceKey?: unknown;
+  };
+  return rest;
+}
+
+function legacyHistory(history: readonly LLMMessage[]) {
+  return history.map((message) => {
+    if (message.role === 'tool') return withoutOccurrence(message);
+    return message.role === 'assistant' && message.toolCalls !== undefined
+      ? { ...message, toolCalls: message.toolCalls.map(withoutOccurrence) }
+      : message;
+  });
+}
+
+/** Historical projection of one pause and resume, with timing removed,
+ *  the request ID replaced and library occurrence addresses projected out. */
 function recordOf(h: Harness, requestId: string | undefined): unknown {
   const record = {
     requests: h.requests.map((r) => r.messages),
@@ -596,10 +681,16 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
       )
       .map((e) => {
         const { durationMs: _timing, ...rest } = e.payload;
-        return { type: e.type, payload: rest };
+        const payload =
+          e.type !== 'agentfootprint.agent.iteration_end'
+            ? withoutOccurrence(rest)
+            : Array.isArray(rest.history)
+            ? { ...rest, history: legacyHistory(rest.history as readonly LLMMessage[]) }
+            : rest;
+        return { type: e.type, payload };
       }),
-    history: sharedState(h).history ?? [],
-    toolResults: sharedState(h).toolResults ?? [],
+    history: legacyHistory(sharedState(h).history ?? []),
+    toolResults: (sharedState(h).toolResults ?? []).map(withoutOccurrence),
   };
   const text = JSON.stringify(record);
   return JSON.parse(requestId === undefined ? text : text.split(requestId).join('<requestId>'));
@@ -608,8 +699,9 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
 describe('batch settlement — the pinned record when the last call pauses', () => {
   it.each(KINDS)('%s', async (kind) => {
     const h = build(kind, 2);
-    const { answer, requestId } = await pauseAndResume(h, kind);
+    const { answer, requestId, checkpointHistory } = await pauseAndResume(h, kind);
     expect(answer).toBe('done');
+    expectRecordedBatch(h, checkpointHistory);
     const record = recordOf(h, requestId);
     const all = existsSync(REFERENCE)
       ? (JSON.parse(readFileSync(REFERENCE, 'utf8')) as Record<string, unknown>)

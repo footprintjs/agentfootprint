@@ -81,6 +81,7 @@ export const fields0 = {
   cache: true,
   cacheRead: true,
   cacheWrite: true,
+  callOccurrenceKey: true,
   called: true,
   caller: true,
   calls: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   length: true,
   limit: true,
   lines: true,
-  link: true,
 } as const;

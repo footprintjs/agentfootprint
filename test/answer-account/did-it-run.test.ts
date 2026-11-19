@@ -475,17 +475,24 @@ describe('a malformed settlement marker in a saved account', () => {
 });
 
 describe('successful brackets carry the entry stamp', () => {
-  it('a success adds only `entered`', async () => {
+  it('records an entered tool with the same occurrence key on each bracket', async () => {
     const { entered, recording, account } = await runAndRead([
       { id: 'ok1', name: 'lookup', args: { id: 'r1' } },
     ]);
     expect(entered.lookup).toBe(1);
-    expect(Object.keys(ends(recording)[0]!).sort()).toEqual([
+    const end = ends(recording)[0]!;
+    expect(Object.keys(end).sort()).toEqual([
+      'callOccurrenceKey',
       'durationMs',
       'entered',
       'result',
       'toolCallId',
     ]);
+    const start = recording.events.find(
+      (event) => event.type === 'agentfootprint.stream.tool_start',
+    );
+    expect(end.callOccurrenceKey).toHaveLength(5);
+    expect(end.callOccurrenceKey).toEqual(start?.payload.callOccurrenceKey);
     expect(account.facts.calls[0]).toMatchObject({ outcome: 'ran' });
   });
 

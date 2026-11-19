@@ -119,7 +119,9 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * `foldedExempt`, a compaction summary's exemption lineage (the exempt corpus
  * reads it; the model reads the summary's text), `answersAsk` for a typed
  * answer, `calls` for the inner permission sequence, and `outcome` and
- * `reportedStatus` for the recorded settlement.
+ * `reportedStatus` for the recorded settlement. The `callOccurrenceKey` on a
+ * result or proposed tool call is also record-only. The provider's call ID,
+ * arguments and metadata still travel with the proposed call.
  * Messages without any pass through BY REFERENCE, so an agent that delivers,
  * settles and annotates nothing allocates nothing — and the array's length and
  * order are untouched either way, which is what keeps
@@ -151,6 +153,7 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
       calls: _inner,
       outcome: _settledAs,
       reportedStatus: _reportedStatus,
+      callOccurrenceKey: _occurrenceKey,
       ...composed
     } = m;
     void _delivered;
@@ -162,7 +165,17 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
     void _inner;
     void _settledAs;
     void _reportedStatus;
-    return composed;
+    void _occurrenceKey;
+    if (!carriesToolCallKeys(composed.toolCalls)) return composed;
+    return {
+      ...composed,
+      toolCalls: composed.toolCalls.map((call) => {
+        if (!hasOccurrenceKey(call)) return call;
+        const { callOccurrenceKey: _key, ...providerCall } = call;
+        void _key;
+        return providerCall;
+      }),
+    };
   });
 }
 
@@ -177,8 +190,20 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.answersAsk !== undefined ||
     message.calls !== undefined ||
     message.outcome !== undefined ||
-    message.reportedStatus !== undefined
+    message.reportedStatus !== undefined ||
+    hasOccurrenceKey(message) ||
+    carriesToolCallKeys(message.toolCalls)
   );
+}
+
+function hasOccurrenceKey(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && 'callOccurrenceKey' in value;
+}
+
+function carriesToolCallKeys(
+  calls: LLMMessage['toolCalls'],
+): calls is NonNullable<LLMMessage['toolCalls']> {
+  return Array.isArray(calls) && calls.some(hasOccurrenceKey);
 }
 
 /** What the messages-slot join needs from an injection record. */

@@ -242,6 +242,23 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
         [undefined, 'answered'],
         [undefined, 'answered'],
       ]);
+      const [first, second] = starts.map((event) => event.payload.callOccurrenceKey);
+      expect(first).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+      expect(second).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+      expect(first).not.toEqual(second);
+      expect(argumentRows(agent).map((row) => row.callOccurrenceKey)).toEqual([
+        first,
+        second,
+        first,
+        second,
+      ]);
+      expect(rowEvents.map((event) => event.payload.callOccurrenceKey)).toEqual([
+        first,
+        second,
+        first,
+        second,
+      ]);
+      expect(toolMessages.every((message) => !('callOccurrenceKey' in message))).toBe(true);
       // After the answer, nothing is waiting: no ask reason.
       expect((await agent.assessment())?.reasons.map((r) => r.reason) ?? []).not.toContain(
         'argument-asked',

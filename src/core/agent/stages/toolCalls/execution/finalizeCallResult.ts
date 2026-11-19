@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { Tool } from '../../../../../tools/tools.js';
@@ -26,12 +27,14 @@ export async function finalizeCallResult(
   frame: FinalizeCallFrame,
 ) {
   const { tool, tc, batch, callArguments, execution, outcome } = frame;
+  const occurrence = callOccurrenceField(tc.callOccurrenceKey);
   // ── The after-tool moment ────────────────────────────────────────
   // Last thing before the result becomes history, and only for a call
   // that ran. `modelResult` is what the model reads; `result` stays the
   // truth about the tool and is what `stream.tool_end` reports.
   const rawModelResult = execution.executed
     ? await operations.afterMoment(scope, {
+        ...occurrence,
         ...(tool && { tool }),
         toolName: tc.name,
         toolCallId: tc.id,
@@ -61,7 +64,7 @@ export async function finalizeCallResult(
   // never claim an error is the tool's result.
   const placedValues = await operations.placeResults(
     scope,
-    { toolName: tc.name, toolCallId: tc.id, iteration: batch.iteration },
+    { toolName: tc.name, toolCallId: tc.id, iteration: batch.iteration, ...occurrence },
     { result: outcome.result, modelResult: rawModelResult },
     execution.executed && !outcome.error && !execution.denied && !execution.ceilingRefused,
   );

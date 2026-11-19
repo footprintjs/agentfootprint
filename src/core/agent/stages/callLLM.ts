@@ -1,7 +1,7 @@
 import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
-import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
+import { groundedTextOf } from './callLLM/groundedText.js';
 import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
@@ -59,7 +59,7 @@ import {
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
-import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
 import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
@@ -131,39 +131,6 @@ function readExternalGrounds(
   } catch {
     return [];
   }
-}
-
-/**
- * The frame's non-assistant messages as GROUNDS for the unsupported-argument
- * seam — each tool result read as the TOOL's own bytes (`lib/toolBytes.ts` ·
- * `toolBytesOf`), so a value only the inputs layer's note carries ("the call
- * ran with "production", the value the tool's rule assumes") grounds nothing:
- * library-authored text is never evidence for a value (honesty law 4).
- *
- * The frame is the wire copy, which has lost the boundary field
- * (`composeRequest.ts` · `stripFrameworkFields` removes it and keeps every
- * message, in order), so the cut is read off the COMMITTED twin at the same
- * index — and applied only while the frame still holds that twin's text byte
- * for byte. A result the findings collapse turned into a ticket, or a cache
- * strategy rewrote, is read as it was sent; the staged-refs nudge after the
- * last committed message has no twin and is read as sent.
- */
-function groundedTextOf(frame: readonly LLMMessage[], committed: readonly LLMMessage[]): string[] {
-  const grounds: string[] = [];
-  frame.forEach((message, i) => {
-    if (
-      message.role === 'assistant' ||
-      (message.role === 'user' && message.content.startsWith(FINDINGS_DATA_FRAME_PREFIX))
-    )
-      return;
-    const twin = committed[i];
-    grounds.push(
-      twin !== undefined && twin.role === 'tool' && twin.content === message.content
-        ? toolBytesOf(twin)
-        : message.content,
-    );
-  });
-  return grounds;
 }
 
 // LENS · system-text + tool-list · request-ephemeral
@@ -269,7 +236,10 @@ export function buildCallLLMStage(
     // so `messages[i]` is still the message the cache marker's index names.
     // `committed` keeps both markers for the readers below that must see them.
     const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
-    const history = stripFrameworkFields(committed);
+    const projected = stripFrameworkFields(committed);
+    // The unmarked fast path can return the scope's live array. An adapter
+    // that retains its request must never see later writes to history through it.
+    const history = projected === committed ? [...projected] : projected;
 
     // ── the findings ledger, served (9.101.0, step 3) ──────────────────
     // ONE gated read of the committed key, used twice. The COLLAPSE rewrites,
@@ -972,7 +942,7 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
-    scope.llmLatestToolCalls = response.toolCalls;
+    scope.llmLatestToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     // Native candidates only, every call (so it is never stale): the stop reason the
     // Route decider judges a constrained answer by — a 'refusal' or
     // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·

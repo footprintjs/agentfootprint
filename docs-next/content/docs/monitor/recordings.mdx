@@ -535,6 +535,14 @@ recording envelope. Import the readers from `agentfootprint/observe`.
 `TurnEvidenceSource` is the served snapshot and event list from `recordRun`.
 The readers accept the recording directly, in memory or after loading it.
 
+New recordings use `callOccurrenceKey` to connect a tool's results, events and
+evidence rows when a provider repeats a call ID. Treat the key as opaque. Where
+the key's result is out of the retained history, the reader can still identify
+the call if its proposal remains. Older recordings use the evidence they kept.
+The key contains no argument values or caller identity. It links records about
+the same call, so apply your recording's redaction policy to the relevant
+fields or containers if that link should be hidden.
+
 <CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="completed-turn" title="Keep the finished turn's record" />
 
 ### Coverage declarations per call

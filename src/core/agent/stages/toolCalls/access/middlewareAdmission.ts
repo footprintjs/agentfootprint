@@ -121,6 +121,7 @@ export async function admitMiddlewareCall(
   recordDecisions(
     scope,
     frame.inputs !== undefined ? frame.inputs.decisionsToRecord(frame.tool, chainRows) : chainRows,
+    frame.tc.callOccurrenceKey,
   );
   frame.callArguments.callArgs = chain.args;
   frame.callArguments.chainedArgs = chain.args;

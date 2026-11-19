@@ -13,6 +13,8 @@ import {
 import { recordRun } from '../../../../src/observe.js';
 import { conversationRedaction } from '../../../../src/doors/security.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
+import { stripFrameworkFields } from '../../../../src/core/agent/composeRequest.js';
+import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
 import {
   mockAnthropicRaw,
   mockThinkingHandler,
@@ -109,6 +111,10 @@ function proposal(history: readonly LLMMessage[] | undefined) {
   );
 }
 
+function proposalKeys(message: LLMMessage | undefined) {
+  return message?.toolCalls?.map(readCallOccurrenceKey);
+}
+
 describe.each(['dynamic', 'dynamic-grouped'] as const)(
   'raw and served correction history in %s',
   (mode) => {
@@ -168,7 +174,13 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         });
         expect(raw?.thinkingBlocks).toEqual([block]);
         expect(raw?.replay).toEqual(replay);
-        expect(proposal(f.requests[1]?.messages)).toEqual(raw);
+        if (raw === undefined) throw new Error('Expected a checkpoint proposal');
+        const keys = proposalKeys(raw);
+        expect(keys).toEqual([expect.any(String), expect.any(String)]);
+        expect(new Set(keys).size).toBe(2);
+        expect(proposalKeys(shown)).toEqual(keys);
+        expect(proposal(f.requests[1]?.messages)).toEqual(stripFrameworkFields([raw])[0]);
+        expect(proposalKeys(proposal(f.requests[1]?.messages))).toEqual([undefined, undefined]);
         expect(shown?.replay).toEqual(replay);
       } finally {
         f.recorder.stop();
@@ -188,8 +200,12 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         expect(raw?.toolCalls?.[0]?.args.vm).toBe(VM);
         expect(raw?.thinkingBlocks).toEqual([block]);
         expect(raw?.replay).toEqual(replay);
+        if (raw === undefined) throw new Error('Expected a crash checkpoint proposal');
+        expect(proposalKeys(raw)).toEqual([expect.any(String), expect.any(String)]);
+        const wire = stripFrameworkFields([raw])[0];
         expect(proposal(f.agent.checkpoint()?.history)).toEqual(raw);
-        expect(proposal(f.requests[1]?.messages)).toEqual(raw);
+        expect(proposal(f.requests[1]?.messages)).toEqual(wire);
+        expect(proposalKeys(proposal(f.requests[1]?.messages))).toEqual([undefined, undefined]);
         for (const publicValue of [
           f.events,
           f.agent.getSnapshot(),
@@ -200,7 +216,8 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         }
         restored = fixture(mode, [response('Resumed.')], true);
         expect(await restored.agent.resumeOnError(jsonCopy(checkpoint))).toBe('Resumed.');
-        expect(proposal(restored.requests[0]?.messages)).toEqual(raw);
+        expect(proposal(restored.requests[0]?.messages)).toEqual(wire);
+        expect(proposal(restored.agent.checkpoint()?.history)).toEqual(raw);
         expect(restored.agent.checkpoint()?.sourceDeclarationCorrection).toEqual({ spent: true });
         expect(restored.executions()).toBe(0);
       } finally {

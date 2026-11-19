@@ -295,9 +295,12 @@ describe('unsettled by absence × typed suggestion — the row carries `try_inst
 
       // The row: the envelope's words the rule carries, and nothing else.
       const { next } = standingAndNext(r.ledger, 'c1');
+      const result = r.history.find((m) => m.role === 'tool' && m.toolCallId === 'c1');
+      expect(result?.callOccurrenceKey).toHaveLength(5);
       expect(next).toEqual({
         kind: 'unsettled-by-absence',
         toolCallId: 'c1',
+        callOccurrenceKey: result?.callOccurrenceKey,
         notChecked: [
           {
             what: 'whether nas-cluster-06 is a hypervisor host at all',

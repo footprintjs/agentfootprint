@@ -25,11 +25,18 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { completeClock } from '../../../time/clock.js';
 import { granularityMsOf } from '../../../time/convert.js';
 import { driftAtDispatch } from '../../../time/drift.js';
 import { checkReading, type TimeReading } from '../../../time/reader.js';
-import { answeredZoneOf, callWindowOfCall, clockOf, readingsOf } from '../../../time/rows.js';
+import {
+  answeredZoneOf,
+  callWindowOfCall,
+  clockOf,
+  readingsOf,
+  type TimeCallIdentity,
+} from '../../../time/rows.js';
 import { callRow, clockOnResumeRow, clockRow, timeReadingRows } from '../../../time/rowsBuild.js';
 import { timeContextOf, type TimeContext } from '../../../time/wire.js';
 import { tzdataVersion, type ZoneName } from '../../../time/zone.js';
@@ -144,7 +151,7 @@ export function readTimeWords(
  */
 export function timeAtDispatch(
   scope: TypedScope<AgentState>,
-  call: { readonly toolCallId: string; readonly toolName: string },
+  call: TimeCallIdentity,
   iteration: number,
   tool: RuledToolLike | undefined,
   args: Readonly<Record<string, unknown>>,
@@ -181,7 +188,7 @@ export function timeAtDispatch(
       ? { byMs: drift.byMs, outcome: 'redrawn', form: drift.form }
       : { byMs: drift.byMs, outcome: 'shifted' },
   );
-  recordFindings(scope, [row]);
+  recordFindings(scope, [{ ...row, ...callOccurrenceField(call.callOccurrenceKey) }]);
   const redraw =
     drift?.outcome === 'redrawn'
       ? (sent: Readonly<Record<string, unknown>>) =>

@@ -34,7 +34,7 @@ it.each([
     gap: true,
     covered: 2,
   },
-  { label: 'two identical absences', batches: [[1, 1]], absentRows: 2, gap: false, covered: 1 },
+  { label: 'two identical absences', batches: [[1, 1]], absentRows: 2, gap: false, covered: 2 },
   { label: 'one result then absence', batches: [[3, 1]], absentRows: 1, gap: false, covered: 1 },
 ])('counts only placed call evidence for $label', async ({ batches, absentRows, gap, covered }) => {
   const agent = Agent.create({
@@ -59,12 +59,7 @@ it.each([
     const source = assessment.reasons.find((r) => r.reason === 'declared-absent')?.source;
     expect.soft(source).toEqual({
       kind: 'calls',
-      calls: [{ toolCallId: 'dup', toolName: 'lookup' }],
-      unplaced: Array.from({ length: absentRows }, (_, index) => ({
-        kind: 'state',
-        key: 'coverageDeclared',
-        path: `/${index}/kind`,
-      })),
+      calls: Array.from({ length: absentRows }, () => ({ toolCallId: 'dup', toolName: 'lookup' })),
     });
     expect
       .soft(assessment.checked.find((c) => c.check === 'tool-coverage'))
@@ -80,25 +75,42 @@ it.each([
       expect.soft(assessment.reasons.find((r) => r.reason === 'coverage-gap')?.source).toEqual({
         kind: 'calls',
         calls: [{ toolCallId: 'dup', toolName: 'lookup' }],
-        unplaced: [{ kind: 'state', key: 'coverageDeclared', path: '/1/kind' }],
       });
       expect.soft(lines).toContain('1 call declared ground it did not check or can never cover.');
     }
-    const missingDeclarations = accountForAnswer({
+    const withoutDeclarationEvents: Recording = {
       ...recording,
       events: recording.events.filter((event) => event.type !== 'agentfootprint.tools.absent'),
-    });
+    };
+    const unmatched = `${absentRows} evidence ${
+      absentRows === 1 ? 'row' : 'rows'
+    } could not be matched to a call.`;
+    const standingLines = (record: Recording) =>
+      accountForAnswer(record)
+        .rows.find((row) => row.id === 'how-sure')
+        ?.lines.map((line) => line.text);
+
+    expect.soft(standingLines(withoutDeclarationEvents)).not.toContain(unmatched);
+
+    // Exercise the historical shape by removing only the library field from
+    // this closed fixture. With no declaration event it still has no address.
+    const legacy = JSON.parse(
+      JSON.stringify(withoutDeclarationEvents, (key, value: unknown) =>
+        key === 'callOccurrenceKey' ? undefined : value,
+      ),
+    ) as Recording;
     expect
-      .soft(
-        missingDeclarations.rows
-          .find((row) => row.id === 'how-sure')
-          ?.lines.map((line) => line.text),
-      )
-      .toContain(
-        `${absentRows} evidence ${
-          absentRows === 1 ? 'row' : 'rows'
-        } could not be matched to a call.`,
-      );
+      .soft(assessAnswer(legacy).reasons.find((r) => r.reason === 'declared-absent')?.source)
+      .toEqual({
+        kind: 'calls',
+        calls: [{ toolCallId: 'dup', toolName: 'lookup' }],
+        unplaced: Array.from({ length: absentRows }, (_, index) => ({
+          kind: 'state',
+          key: 'coverageDeclared',
+          path: `/${index}/kind`,
+        })),
+      });
+    expect.soft(standingLines(legacy)).toContain(unmatched);
   } finally {
     recorder.stop();
   }

@@ -1,4 +1,6 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
+import type { ToolCallEventIdentity } from '../../../../../events/types.js';
 import { type TypedScope, isDevMode } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { Tool } from '../../../../../tools/tools.js';
@@ -193,10 +195,8 @@ export function buildToolArtifactsOperations(
   // law: may omit, never deny; every clause anchored to the call it was composed on.
   const applyPresent = async (
     scope: TypedScope<AgentState>,
-    call: {
+    call: ToolCallEventIdentity & {
       readonly args: Readonly<Record<string, unknown>>;
-      readonly toolCallId: string;
-      readonly iteration: number;
     },
   ): Promise<{ readonly ok: boolean; readonly text: string }> => {
     const store = deps.artifactStore;
@@ -233,6 +233,7 @@ export function buildToolArtifactsOperations(
       snapshot: { ...snapshot },
       toolCallId: call.toolCallId,
       iteration: call.iteration,
+      ...callOccurrenceField(call.callOccurrenceKey),
     });
     // The snapshot lives INSIDE the tool result — the one thing provider
     // history keeps typed and durable — so a reloaded conversation can
@@ -269,7 +270,7 @@ export function buildToolArtifactsOperations(
 
   const placeResults = async (
     scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    call: ToolCallEventIdentity & { readonly toolName: string },
     values: { readonly result: unknown; readonly modelResult: unknown },
     eligible: boolean,
   ): Promise<{ readonly result: unknown; readonly modelResult: unknown }> => {
@@ -320,7 +321,11 @@ export function buildToolArtifactsOperations(
     // returning ticket-shaped JSON is never taken for a placement.
     scope.placedTickets = [
       ...(scope.placedTickets ?? []),
-      { toolCallId: call.toolCallId, ref: meta.ref },
+      {
+        toolCallId: call.toolCallId,
+        ref: meta.ref,
+        ...callOccurrenceField(call.callOccurrenceKey),
+      },
     ];
     return {
       // One ticket when the two channels carry one value — the capResults

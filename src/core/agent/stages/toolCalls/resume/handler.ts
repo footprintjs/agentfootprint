@@ -7,6 +7,8 @@ import { noteDecisionTakenUp, recordedRequestId } from '../../../../consentReque
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { findingsReferenceRefusal } from '../../../findings/admission.js';
 import type { ToolCallOperations } from '../compose.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
+import { pausedOccurrenceKey } from './pausedOccurrence.js';
 
 /** Existing native resume admission and four door-specific continuations. */
 export function buildToolResume(
@@ -64,6 +66,9 @@ export function buildToolResume(
     const toolCallId = scope.pausedToolCallId as string;
     const toolName = scope.pausedToolName as string;
     const startMs = scope.pausedToolStartMs as number;
+    const callOccurrence = callOccurrenceField(
+      pausedOccurrenceKey([...(scope.history as readonly LLMMessage[])], toolCallId, toolName),
+    );
     // A batch paused before anything stamped it — a checkpoint written by an
     // older build, or by an agent without the results layer — is stamped
     // here as it completes, so the loop head still judges it once (honesty
@@ -121,6 +126,7 @@ export function buildToolResume(
         toolName,
         toolCallId,
         startMs,
+        ...callOccurrence,
       });
     }
 
@@ -138,6 +144,7 @@ export function buildToolResume(
         toolName,
         toolCallId,
         startMs,
+        ...callOccurrence,
       });
     }
 
@@ -155,9 +162,20 @@ export function buildToolResume(
     // URL-free refusal with `error: true` and reports the outstanding
     // consent; the loop carries on and a further attempt can pause afresh.
     if (scope.pausedCredential === true) {
-      return operations.resumeCredential(scope, { toolName, toolCallId, startMs });
+      return operations.resumeCredential(scope, {
+        toolName,
+        toolCallId,
+        startMs,
+        ...callOccurrence,
+      });
     }
-    return operations.resumePlain(scope, { input, toolName, toolCallId, startMs });
+    return operations.resumePlain(scope, {
+      input,
+      toolName,
+      toolCallId,
+      startMs,
+      ...callOccurrence,
+    });
   };
   return async (scope, input) => {
     try {

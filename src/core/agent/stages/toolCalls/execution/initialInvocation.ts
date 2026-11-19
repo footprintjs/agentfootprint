@@ -113,6 +113,12 @@ export async function invokeInitialTool(
   >,
   frame: InvokeInitialToolFrame,
 ) {
+  const declarationCall = {
+    toolName: frame.tc.name,
+    toolCallId: frame.tc.id,
+    iteration: frame.iteration,
+    callOccurrenceKey: frame.tc.callOccurrenceKey,
+  };
   try {
     // The two refusals share one door: a name nothing holds, and a
     // name whose offered party cannot answer (9.92.0). Both land as
@@ -134,7 +140,7 @@ export async function invokeInitialTool(
       deps.time !== undefined
         ? (await import('../../timeLayer.js')).timeAtDispatch(
             scope,
-            { toolCallId: frame.tc.id, toolName: frame.tc.name },
+            declarationCall,
             frame.iteration,
             frame.tool,
             frame.callArguments.callArgs,
@@ -179,6 +185,7 @@ export async function invokeInitialTool(
         frame.tc.name,
         frame.tc.id,
         frame.execution.resultFinalizer?.needsPublications,
+        frame.tc.callOccurrenceKey,
       ),
       ...(frame.wanted.wantedMeta !== undefined && { wanted: frame.wanted.wantedMeta }),
       ...frame.toolProgress(scope, {
@@ -310,7 +317,7 @@ export async function invokeInitialTool(
     if (searched !== undefined) frame.outcome.result = searched.value;
     const coverageStatus = frame.declareCoverage(
       scope,
-      { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+      declarationCall,
       frame.outcome.result,
       searched?.reading,
     );
@@ -323,11 +330,7 @@ export async function invokeInitialTool(
     // the time it fires). Everything downstream — governance, the
     // cap, history, `tool_end` — sees the compact projection; the
     // full envelope rides `tools.semantics_declared`.
-    const semanticView = frame.declareSemantics(
-      scope,
-      { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
-      frame.outcome.result,
-    );
+    const semanticView = frame.declareSemantics(scope, declarationCall, frame.outcome.result);
     if (semanticView !== undefined) frame.outcome.result = semanticView;
     // The tool's own refusing ceiling (9.20.0) — at the execute
     // boundary, BEFORE the gates and the after-tool chain, so
@@ -459,7 +462,7 @@ export async function invokeInitialTool(
           ? undefined
           : frame.declareRaisedAbsence(
               scope,
-              { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+              declarationCall,
               frame.callArguments.callArgs,
               declared.absence,
               frame.newHistory,

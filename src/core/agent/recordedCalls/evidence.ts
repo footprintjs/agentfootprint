@@ -23,8 +23,9 @@ export function groupOccurrenceEvidence<Row>(
   }
   return { byOccurrence, unplaced };
 }
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { isPlaceholder } from '../../../redaction/marker.js';
-import type { CallOccurrence, RecordedEvent } from './events.js';
+import { recordedEventOccurrenceKey, type CallOccurrence, type RecordedEvent } from './events.js';
 import { isRecord } from './record.js';
 
 const DECLARATION_EVENT = {
@@ -54,11 +55,10 @@ function append<Key, Row>(groups: Map<Key, Row[]>, key: Key, row: Row): void {
 }
 
 /**
- * Address a committed declaration only through its recorded declaration event.
- * Dispatch commits and emits declarations of each key in the same order.
- * An incomplete group cannot establish which row went with which event, and
- * only events already attached to a call by its execution and bracket can
- * confer an address. Counts and content always come from the declaration row.
+ * A declaration's own key addresses an occurrence even when the declaration
+ * event is missing. For an old row, only the corresponding legacy event
+ * confers an address, and only when the whole group is recorded in order.
+ * Counts and content always come from the declaration row.
  */
 export function declarationOccurrences<Event extends RecordedEvent>(
   rows: readonly unknown[],
@@ -66,26 +66,38 @@ export function declarationOccurrences<Event extends RecordedEvent>(
   occurrences: readonly CallOccurrence<Event>[],
   served: boolean,
 ): ReadonlyMap<number, CallOccurrence<Event>> {
-  const rowsByKey = new Map<string, number[]>();
-  for (const [index, row] of rows.entries()) {
-    if (!isRecord(row)) continue;
-    const key = declarationKey(row, row.kind, served);
-    if (key !== undefined) append(rowsByKey, key, index);
-  }
+  const result = new Map<number, CallOccurrence<Event>>();
+  const keyed = new Map<string, CallOccurrence<Event> | null>();
   const eventOwner = new Map<number, CallOccurrence<Event>>();
   for (const occurrence of occurrences) {
+    const key = occurrence.occurrenceKey;
+    if (typeof key === 'string') keyed.set(key, keyed.has(key) ? null : occurrence);
+    if (key !== undefined) continue;
     for (const type of Object.keys(DECLARATION_EVENT)) {
       for (const event of occurrence.eventsOf(type)) eventOwner.set(event.index, occurrence);
     }
   }
+  const rowsByKey = new Map<string, number[]>();
+  for (const [index, row] of rows.entries()) {
+    if (!isRecord(row) || (row.kind !== 'absence' && row.kind !== 'ledger')) continue;
+    const occurrenceKey = readCallOccurrenceKey(row);
+    if (occurrenceKey !== undefined) {
+      const occurrence = occurrenceKey === null ? undefined : keyed.get(occurrenceKey);
+      if (occurrence != null) result.set(index, occurrence);
+      continue;
+    }
+    const key = declarationKey(row, row.kind, served);
+    if (key !== undefined) append(rowsByKey, key, index);
+  }
+  if (rowsByKey.size === 0) return result;
   const eventsByKey = new Map<string, Event[]>();
   for (const event of events) {
     const type = event.type.replace(/^agentfootprint\./, '');
     if (type !== 'tools.absent' && type !== 'tools.coverage_declared') continue;
+    if (recordedEventOccurrenceKey(event) !== undefined) continue;
     const key = declarationKey(event.payload, DECLARATION_EVENT[type], served);
     if (key !== undefined) append(eventsByKey, key, event);
   }
-  const result = new Map<number, CallOccurrence<Event>>();
   for (const [key, indices] of rowsByKey) {
     const witnesses = eventsByKey.get(key);
     if (witnesses?.length !== indices.length) continue;

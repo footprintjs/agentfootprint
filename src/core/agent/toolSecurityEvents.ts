@@ -5,6 +5,7 @@
  */
 import type { AgentfootprintEventMap } from '../../events/registry.js';
 import type { ToolCallEventIdentity } from '../../events/types.js';
+import { callOccurrenceField } from '../../lib/callOccurrence.js';
 import { typedEmit, type EmitableScope } from '../../recorders/core/typedEmit.js';
 
 type ToolSecurityEvent =
@@ -22,8 +23,8 @@ export type ToolSecurityEmitter = <K extends ToolSecurityEvent>(
 ) => void;
 
 /**
- * Bind at dispatch, including resumed and nested dispatch. Copy the two
- * primitives now: a provider may finish later, after another call started.
+ * Bind the call's identity at dispatch, including resumed and nested
+ * dispatch. A provider may finish later, after another call started.
  * Never read "current call" from mutable state at delivery time.
  */
 export function bindToolSecurityEvents(
@@ -32,13 +33,15 @@ export function bindToolSecurityEvents(
   phase?: 'resume',
 ): ToolSecurityEmitter {
   const { toolCallId, iteration } = call;
+  const occurrence = callOccurrenceField(call.callOccurrenceKey);
   return (type, payload): void => {
-    // The mapped payload omits exactly the two keys restored here. TS cannot
+    // The mapped payload omits the identity fields restored here. TS cannot
     // prove that generic Omit + reconstruction equals the indexed payload.
     typedEmit(scope, type, {
       ...payload,
       toolCallId,
       iteration,
+      ...occurrence,
       ...(type === 'agentfootprint.permission.check' && phase !== undefined && { phase }),
     } as AgentfootprintEventMap[typeof type]['payload']);
   };

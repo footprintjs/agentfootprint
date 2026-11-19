@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { buildCallStart } from '../execution/callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type { buildToolSettlementOperations } from '../batch/settlementOperations.js';
@@ -183,6 +184,7 @@ export async function admitCheckInCall(
       ...(gateComponent !== undefined && { component: gateComponent }),
     };
     typedEmit(scope, 'agentfootprint.checkin.request', {
+      ...callOccurrenceField(frame.tc.callOccurrenceKey),
       toolName: frame.tc.name,
       toolCallId: frame.tc.id,
       iteration: frame.iteration,
