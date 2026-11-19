@@ -278,7 +278,7 @@ or a value.
 
 | Rests on | Reasons |
 |---|---|
-| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
+| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
 | `answer` | `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
 | `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
 
@@ -385,6 +385,7 @@ column changes, so this table can lag it but the code cannot:
 | `declared-absent` | a tool said nothing matched | {who} reported no matching results |
 | `coverage-gap` | a tool said there is ground it did not check or cannot cover | {who} declared ground that was not checked or cannot be covered |
 | `empty-undeclared` | a lookup came back empty without saying what it searched | {who} came back empty without saying what was searched |
+| `call-not-completed` | a call was refused / a call failed | {who} did not complete (refused) / {who} did not complete (failed) |
 | `period-not-held` | a tool's data does not reach the time the question asked about | {who} read data that does not reach the time the question asked about |
 | `period-partly-held` | a tool's data covers only part of the time the question asked about | {who} read data that covers only part of the time the question asked about |
 | `period-unknown` | a tool could not say what time its data covers | {who} could not say what time the data covers |

@@ -220,7 +220,6 @@ function evidenceLines(ctx: ReadContext, e: ViewEvent, fact: EvidenceFact): Sent
 /** The account's standing fact: the owner's word, or "not recorded" when no committed state is. */
 type StandingFact = AnswerFacts['standing'];
 
-/** Witness rows as the account's pointers — the fold's witnesses are all in the recording. */
 /**
  * The fold's witnesses as the account's pointers — each identity cut as the
  * account's own builders cut theirs (`common.ts` · `boundedPointer`).
@@ -239,6 +238,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'coverage-gap': 'howSure.reason.coverageGap',
   'declared-absent': 'howSure.reason.declaredAbsent',
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
+  'call-not-completed': 'howSure.reason.callNotCompleted',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
   'period-unknown': 'howSure.reason.periodUnknown',
@@ -314,6 +314,36 @@ function callsBehind(r: AnswerAssessment['reasons'][number]): number {
   return r.source.kind === 'calls'
     ? r.source.calls.length + (r.source.unnamed ?? 0)
     : r.witness.length;
+}
+
+const CALL_OUTCOME_LINES = {
+  refused: 'howSure.reason.callRefused',
+  failed: 'howSure.reason.callFailed',
+  unknown: REASON_LINES['call-not-completed'],
+} as const;
+
+/** Each line points to the recorded outcomes it counts. */
+function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][number]): Sentence[] {
+  const calls = r.source.kind === 'calls' ? r.source.calls : [];
+  const outcomeFor = new Map(calls.map((call) => [call.toolCallId, call.outcome]));
+  const groups: Record<keyof typeof CALL_OUTCOME_LINES, AssessmentPointer[]> = {
+    refused: [],
+    failed: [],
+    unknown: [],
+  };
+  for (const w of r.witness) {
+    const outcome = w.kind === 'history' ? outcomeFor.get(w.toolCallId ?? '') : undefined;
+    groups[outcome ?? 'unknown'].push(w);
+  }
+  return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {
+    const witnesses = groups[outcome];
+    if (witnesses.length === 0) return [];
+    return ctx.say(CALL_OUTCOME_LINES[outcome], {
+      vars: { n: n(witnesses.length) },
+      ...recordedAt(pointersOf(witnesses)),
+      item: true,
+    });
+  });
 }
 
 const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
@@ -405,8 +435,9 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
           ...(a.standing === 'not-sure' && { vars: { n: n(a.reasons.length) } }),
           ...recordedAt(reasonPointers),
         }),
-        ...a.reasons.map((r) =>
-          ctx.say(REASON_LINES[r.reason], {
+        ...a.reasons.flatMap((r) => {
+          if (r.reason === 'call-not-completed') return callOutcomeLines(ctx, r);
+          return ctx.say(REASON_LINES[r.reason], {
             ...(COUNTED.has(r.reason) && {
               vars: {
                 n: n(COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length),
@@ -414,8 +445,8 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
             }),
             ...recordedAt(pointersOf(r.witness)),
             item: true,
-          }),
-        ),
+          });
+        }),
       );
       break;
     case 'not-assessed':

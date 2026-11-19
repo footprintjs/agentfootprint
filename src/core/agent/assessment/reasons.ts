@@ -120,6 +120,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "findingsLedger: an integrity-finding row of this turn — a call chose an argument value that nothing served it; the row's tools name the tool",
   },
   {
+    reason: 'call-not-completed',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads:
+      "history: a tool message of this turn with outcome 'refused' or 'failed', without a later completed call of the same tool with equal recorded arguments",
+  },
+  {
     reason: 'coverage-gap',
     layer: 3,
     class: 'not-sure',

@@ -1774,6 +1774,33 @@
   ],
   "source": "library"
  },
+ "howSure.reason.callNotCompleted@1": {
+  "text": "2 calls did not complete.",
+  "parts": [
+   {
+    "text": "2 calls did not complete."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callRefused@1": {
+  "text": "2 calls were refused.",
+  "parts": [
+   {
+    "text": "2 calls were refused."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callFailed@1": {
+  "text": "2 calls failed.",
+  "parts": [
+   {
+    "text": "2 calls failed."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.periodNotHeld@1": {
   "text": "2 calls asked about periods their stores do not hold.",
   "parts": [

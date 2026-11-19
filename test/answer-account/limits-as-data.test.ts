@@ -256,6 +256,35 @@ describe('EDGE — what is never split', () => {
 });
 
 describe('INTEGRATION — the standing line is found by its exact words, rebuilt from the record', () => {
+  it.each([
+    [undefined, 'Not sure — a call failed.'],
+    ['Inventory lookup', 'Not sure — Inventory lookup did not complete (failed).'],
+  ])('rebuilds the failed-call line with display name %s', async (displayName, line) => {
+    const reply = 'The inventory details are unavailable.';
+    const agent = Agent.create({ provider: callThen('list_items', {}, reply), model: 'mock' })
+      .tool(
+        defineTool({
+          name: 'list_items',
+          ...(displayName !== undefined && { displayName }),
+          description: 'List inventory items.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => ({ content: 'Request received.', effects: [], status: 'failure' }),
+        }),
+      )
+      .answerLayer({ standingLine: true })
+      .build();
+    const recording = await recorded(agent, 'List inventory items.');
+    const account = accountForAnswer(recording);
+    expect(account.answer.value).toBe(reply);
+    expect(account.facts.limitsBlock.value).toBe(line);
+    const reason = account.rows
+      .find((row) => row.id === 'how-sure')
+      ?.lines.find((sentence) => sentence.template.id === 'howSure.reason.callFailed');
+    expect(reason?.text).toBe('1 call failed.');
+    expect(reason?.pointers).toMatchObject([{ kind: 'history', path: '/outcome' }]);
+    assertP1(account, recording);
+  });
+
   it('the line alone on an answer with no words of its own: all of it is the library’s', async () => {
     // No tool at all; the model asks for one at the limit and says nothing, so
     // the composer appends the line with no separator (the answer is empty).

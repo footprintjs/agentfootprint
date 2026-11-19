@@ -60,6 +60,7 @@
  */
 
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
+import { recordedCallOutcome, type CallOutcome } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -90,6 +91,7 @@ interface CallRef {
   readonly id?: string;
   readonly name?: string;
   readonly count?: number;
+  readonly outcome?: CallOutcome;
 }
 
 /** The entries of a list past the bound, as one counted anonymous reference — or none. */
@@ -174,12 +176,17 @@ function callsOfWitness(
   if (w.kind === 'history') {
     const message = Array.isArray(read.state.history) ? read.state.history[w.index] : undefined;
     const name = isRecord(message) ? str(message.toolName) : undefined;
+    const outcome =
+      reason === 'call-not-completed' && isRecord(message)
+        ? recordedCallOutcome(message)
+        : undefined;
     return w.toolCallId === undefined && name === undefined
       ? []
       : [
           {
             ...(w.toolCallId !== undefined && { id: w.toolCallId }),
             ...(name !== undefined && { name }),
+            ...(outcome !== undefined && { outcome }),
           },
         ];
   }
@@ -240,7 +247,7 @@ export function reasonSourceOf(
   if (kind !== 'calls') return { kind };
   let names: ReadonlyMap<string, string> | undefined;
   const nameOf = (id: string): string | undefined => (names ??= toolNamesOf(read.state)).get(id);
-  const calls: { toolCallId: string; toolName: string }[] = [];
+  const calls: { toolCallId: string; toolName: string; outcome?: CallRef['outcome'] }[] = [];
   const listed = new Set<string>();
   // A call the record names by id but not by tool — counted once per id.
   const nameless = new Set<string>();
@@ -263,7 +270,11 @@ export function reasonSourceOf(
         continue;
       }
       listed.add(ref.id);
-      calls.push({ toolCallId: ref.id, toolName });
+      calls.push({
+        toolCallId: ref.id,
+        toolName,
+        ...(ref.outcome !== undefined && { outcome: ref.outcome }),
+      });
     }
   }
   const unnamed = nameless.size + anonymous;

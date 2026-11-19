@@ -51,9 +51,10 @@ import type {
  * call whose tool declares a `displayName`; every version-1 line is unchanged.
  * 3: the `script-unmatched` clause and the `script-match` check's word; every
  * version-2 line is unchanged. 4: the integrity findings' and the unsettled
- * claim's clauses; every version-3 line is unchanged.
+ * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
+ * of calls that did not complete.
  */
-export const STANDING_LINE_VERSION = 4;
+export const STANDING_LINE_VERSION = 5;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -289,6 +290,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
     'a value a call ran with was read into your words: the quoted words are on the record, the value is not in them',
   'value-contingent':
     'a value a call ran with was taken from a result the model itself had set aside',
+  'call-not-completed': 'a call did not complete',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
   'empty-undeclared': 'a lookup came back empty without saying what it searched',
@@ -362,11 +364,8 @@ const NAMED_REASON_WORDS: Readonly<
 };
 
 /**
- * What the line may NAME — given only when a tool the reasons rest on
- * declares a `displayName`: each reason's source (`AnswerAssessment` ·
- * `reasons[].source`, the fold's own projection) and the app's words for each
- * tool (registered name → display name). Without it the line is the bytes it
- * always was.
+ * The fold's sources and any display names the app declared. For calls that
+ * did not complete, the source carries the outcome even without a display name.
  */
 export interface StandingNames {
   readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
@@ -455,6 +454,23 @@ function assumedClauses(
   return out;
 }
 
+/** Group calls by the outcome the fold recorded. Registered names stay private. */
+function callNotCompletedClause(source: AssessmentReasonSource, names: StandingNames): string {
+  const fallback = REASON_WORDS['call-not-completed'];
+  if (source.kind !== 'calls') return fallback;
+  const clauses = (['refused', 'failed'] as const).flatMap((outcome) => {
+    const calls = source.calls.filter((call) => call.outcome === outcome);
+    if (calls.length === 0) return [];
+    const who = namedCalls(calls, 0, (tool) => names.displayNames.get(tool));
+    if (who !== undefined) return [`${who} did not complete (${outcome})`];
+    if (outcome === 'failed') return [calls.length === 1 ? 'a call failed' : 'calls failed'];
+    return [calls.length === 1 ? 'a call was refused' : 'calls were refused'];
+  });
+  if (clauses.length === 0) return fallback;
+  if (source.unnamed !== undefined) clauses.push('other calls did not complete');
+  return clauses.join(' and ');
+}
+
 /** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
 function reasonClause(
   reason: Exclude<AssessmentReason, 'argument-assumed'>,
@@ -462,6 +478,9 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  if (reason === 'call-not-completed' && names !== undefined && source !== undefined) {
+    return callNotCompletedClause(source, names);
+  }
   if (named === undefined || names === undefined || source?.kind !== 'calls') {
     return REASON_WORDS[reason];
   }
@@ -515,8 +534,8 @@ function reasonClauses(
  * argument without declaring where the value came from (the fold's other
  * `argument-assumed` witness). `names` lets a `not-sure` line name the calls a
  * reason rests on in the app's words — only calls whose tool declares a
- * `displayName`, the rest counted; never the registered name. Without it, or
- * when no such call is behind a reason, the clause is today's, word for word.
+ * `displayName`, the rest counted; never the registered name. The fold's source
+ * also gives the distinction between a refused and a failed call.
  * Naming never changes the standing: the opening is read from `data` alone.
  *
  * @example

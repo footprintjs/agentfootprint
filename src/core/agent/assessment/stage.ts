@@ -48,7 +48,8 @@ import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
-import { assessAnswer } from './assess.js';
+import { retainedStateValue } from '../../../redaction/runRedaction.js';
+import { assessLive } from './assess.js';
 import {
   assessmentDataOf,
   assumedValuesSourceOf,
@@ -136,7 +137,9 @@ export async function assessAnswerStage(
   ) {
     return;
   }
-  const assessed = assessAnswer({ snapshot: { sharedState: record } });
+  const assessed = assessLive({ sharedState: record }, undefined, (history) =>
+    retainedStateValue(scope, 'history', history),
+  );
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);
   // The event carries its own fresh copy — detached plain data, never the
@@ -161,7 +164,9 @@ export async function assessAnswerStage(
     data,
     assumed,
     rewrittenBehind(assessed),
-    displayNames.size > 0 ? { sources: sourcesByReason(assessed), displayNames } : undefined,
+    displayNames.size > 0 || data.reasons.includes('call-not-completed')
+      ? { sources: sourcesByReason(assessed), displayNames }
+      : undefined,
   );
   // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a
   // reader rebuilds the very line (`answer-account/account.ts` · `appendedStandingLine`).

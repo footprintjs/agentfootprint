@@ -61,6 +61,8 @@ export type AssessmentPointer =
  *   record holds no row for the call, in the result's own envelope;
  * - `empty-undeclared` — an empty rowset that said nothing about what it
  *   searched: silence recorded as silence;
+ * - `call-not-completed` — a tool call of this turn recorded as refused or
+ *   failed, with no later completion of the same call by recorded arguments;
  * - `sources-conflict` — two readings the model stood on disagree (a
  *   `ConflictRow` naming a call of this turn, or stamped with this turn while
  *   the record does not place every reading in an earlier turn — a reading it
@@ -154,6 +156,7 @@ export type AssessmentReason =
   | 'declared-absent'
   | 'coverage-gap'
   | 'empty-undeclared'
+  | 'call-not-completed'
   | 'period-not-held'
   | 'period-partly-held'
   | 'period-unknown'
@@ -249,7 +252,12 @@ export type HonestyLayer = 1 | 2 | 3 | 4;
 export type AssessmentReasonSource =
   | {
       readonly kind: 'calls';
-      readonly calls: readonly { readonly toolCallId: string; readonly toolName: string }[];
+      readonly calls: readonly {
+        readonly toolCallId: string;
+        readonly toolName: string;
+        /** The recorded outcome for a call behind `call-not-completed`. */
+        readonly outcome?: 'refused' | 'failed';
+      }[];
       readonly unnamed?: number;
     }
   | { readonly kind: 'answer' }

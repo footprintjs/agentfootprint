@@ -34,6 +34,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),
+  'howSure.reason.callNotCompleted': t("{{count:n,'call','calls'}} did not complete."),
+  'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
+  'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
   // The results layer's period verdicts (honesty layer 3, step 7b) — set 6.
   'howSure.reason.periodNotHeld': t(
     "{{count:n,'call asked about a period its store does not hold','calls asked about periods their stores do not hold'}}.",

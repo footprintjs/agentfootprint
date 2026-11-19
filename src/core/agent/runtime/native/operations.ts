@@ -97,7 +97,11 @@ export async function assessment(
   // Loaded on first use, off the default graph (the findings/peel.ts precedent).
   // The live state, read as values — never as a served record (`assess.ts` · `assessLive`).
   const { assessLive } = await import('../../assessment/assess.js');
-  return assessLive(snapshot, declarations);
+  return assessLive(
+    snapshot,
+    declarations,
+    () => selected?.view.snapshot({ redact: true })?.sharedState.history,
+  );
 }
 
 export async function abandonPause(

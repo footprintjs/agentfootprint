@@ -209,6 +209,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'argument-assumed',
         'argument-read',
         'argument-unverified',
+        'call-not-completed',
         'column-type-mismatch',
         'coverage-gap',
         'declaration-overclaimed',

@@ -360,8 +360,14 @@ committed rows, so the two agree:
 
 <CodeFile path="examples/features/73-answer-standing.ts" region="answer-standing" title="examples/features/73-answer-standing.ts (region: answer-standing)" />
 
-The reasons, each read from one committed row: a tool declared ground it did not
-check (`coverage-gap`); a tool declared that nothing matched (`declared-absent`,
+Each reason points to a committed row. A tool call recorded as refused or failed
+adds `call-not-completed`. A later completed call of the same tool with equal
+recorded arguments clears it for the earlier call. If the recording lacks the
+arguments for comparison, the reason stays. The standing line names the tool
+when it has a `displayName` and reports whether the call was refused or failed.
+
+Other reasons include a tool declaring ground it did not check (`coverage-gap`)
+or declaring that nothing matched (`declared-absent`,
 which includes an empty rowset inside a `coverage()` boundary); an empty rowset
 that said nothing about what it searched (`empty-undeclared` — silence recorded
 as silence); a result's store does not hold the period its read asked about

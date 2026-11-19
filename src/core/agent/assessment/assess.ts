@@ -49,9 +49,8 @@
  */
 
 import { isRecord, str } from './recordValues.js';
+import { recoveredCallOutcomes, turnResults, type TurnResult } from './turnResults.js';
 import { argumentRows, type ArgumentRowRead } from './argumentRows.js';
-import { isPersonEntry } from '../../../lib/saidByPerson.js';
-import { toolBytesOf } from '../../../lib/toolBytes.js';
 import {
   declaredByValue,
   readEmptiness,
@@ -132,58 +131,6 @@ function keptOutGuard(state: Readonly<Record<string, unknown>>): {
     has: (target, key) => (note(key), Reflect.has(target, key)),
   });
   return { state: guarded, asked };
-}
-
-/** One tool result of this turn, where it sits in `history`. */
-interface TurnResult {
-  readonly index: number;
-  readonly toolCallId?: string;
-  readonly toolName?: string;
-  /**
-   * The TOOL's own bytes — `content` cut at the tool-bytes boundary
-   * (`lib/toolBytes.ts` · `toolBytesOf`). The inputs layer appends a note
-   * after a filled call's result; read whole, the note breaks the parse and
-   * the one emptiness reader returns `unknown`, which would hide
-   * `empty-undeclared`, `declared-absent` and a listed gap on exactly the
-   * calls that ran on a default nobody chose.
-   */
-  readonly content: unknown;
-}
-
-/**
- * The results after the last message a person said — or all of them, said so,
- * when none is — each read as the tool's own bytes; and where that message
- * sits (`begins`, `-1` when there is none).
- */
-function turnResults(history: readonly unknown[]): {
-  readonly results: readonly TurnResult[];
-  readonly from: AnswerAssessment['turnFrom'];
-  readonly begins: number;
-} {
-  let start = -1;
-  for (let i = history.length - 1; i >= 0; i--) {
-    // The WHOLE entry goes to the rule (`lib/saidByPerson.ts` · `isPersonEntry`),
-    // the answer account's reader too: a copy of three fields dropped
-    // `ephemeral`, and the two disagreed on where this turn begins.
-    if (isPersonEntry(history[i])) {
-      start = i;
-      break;
-    }
-  }
-  const results: TurnResult[] = [];
-  for (let i = start + 1; i < history.length; i++) {
-    const m = history[i];
-    if (!isRecord(m) || m.role !== 'tool') continue;
-    const toolCallId = str(m.toolCallId);
-    const toolName = str(m.toolName);
-    results.push({
-      index: i,
-      ...(toolCallId !== undefined && { toolCallId }),
-      ...(toolName !== undefined && { toolName }),
-      content: toolBytesOf({ content: m.content, toolChars: m.toolChars }),
-    });
-  }
-  return { results, from: start >= 0 ? 'person' : 'whole-history', begins: start };
 }
 
 /**
@@ -613,12 +560,16 @@ function readResults(
  */
 function readTurnResults(
   reads: readonly ResultRead[],
+  recovered: ReadonlySet<number>,
   declarations: AssessmentDeclarations | undefined,
   issued: IssuedPairs,
   g: Gathered,
 ): void {
   const readable: AssessmentPointer[] = [];
   for (const { result, at, rows, own } of reads) {
+    if (result.outcome !== undefined && !recovered.has(result.index)) {
+      fire(g, 'call-not-completed', { ...at, path: '/outcome' });
+    }
     const absenceRow = rows.some((c) => c.kind === 'absence');
     const door =
       rows.length > 0
@@ -1015,9 +966,10 @@ export function assessAnswer(
 export function assessLive(
   snapshot: unknown,
   declarations?: AssessmentDeclarations,
+  retainedHistory?: (history: readonly unknown[]) => unknown,
 ): AnswerAssessment {
   checkInputs({ snapshot }, declarations);
-  return foldState(stateOf({ snapshot }), declarations, false);
+  return foldState(stateOf({ snapshot }), declarations, false, retainedHistory);
 }
 
 /**
@@ -1032,6 +984,7 @@ export function foldState(
   recorded: Readonly<Record<string, unknown>>,
   declarations: AssessmentDeclarations | undefined,
   served: boolean,
+  retainedHistory?: (history: readonly unknown[]) => unknown,
 ): AnswerAssessment {
   const { state, asked } = served
     ? keptOutGuard(recorded)
@@ -1050,7 +1003,13 @@ export function foldState(
   readCoverageRows(coverage, g);
   const calls = readTurnCalls(reads, coverage, g);
   readContingentRows(state, calls, g);
-  readTurnResults(reads, declarations, issuedTicketsOf(recorded.placedTickets), g);
+  readTurnResults(
+    reads,
+    recoveredCallOutcomes(results, history, begins, retainedHistory),
+    declarations,
+    issuedTicketsOf(recorded.placedTickets),
+    g,
+  );
   readPeriodVerdicts(periodRows(state), argumentVerdicts, g);
   readConflicts(state, { current: calls, earlier: earlierCalls(history, begins) }, g);
   readAnswerRows(state, g);
