@@ -426,46 +426,76 @@ describe('toSSE text — resume', () => {
     },
   );
 
-  it('continues through a resumed child end and appends the root warning once', async () => {
-    const child = reportBuilder('The draft is ready.', true).build();
-    const read = flowChart('Seed', () => undefined, 'seed')
-      .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
-        inputMapper: () => ({
-          message: 'Check the draft.',
-          identity: { conversationId: 'specialist' },
-        }),
-        outputMapper: () => ({ formatted: 'The specialist finished.' }),
-      })
-      .build();
-    const memory = defineMemory({
-      id: 'nested',
-      type: MEMORY_TYPES.EPISODIC,
-      strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
-      store: new InMemoryStore(),
-      readOnly: true,
-    });
-    const agent = reportBuilder(REPORT, false)
-      .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
-      .build();
-    const paused = await agent.run({ message: 'Is the report ready?' });
-    if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
+  it.each([
+    { observerDelivery: 'inline', dropRoot: false },
+    { observerDelivery: 'inline', dropRoot: true },
+    { observerDelivery: 'deferred', dropRoot: true },
+  ] as const)(
+    'closes a nested resume at the root end ($observerDelivery, filter root: $dropRoot)',
+    async ({ observerDelivery, dropRoot }) => {
+      const child = reportBuilder('The draft is ready.', true).build();
+      const read = flowChart('Seed', () => undefined, 'seed')
+        .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
+          inputMapper: () => ({
+            message: 'Check the draft.',
+            identity: { conversationId: 'specialist' },
+          }),
+          outputMapper: () => ({ formatted: 'The specialist finished.' }),
+        })
+        .build();
+      const memory = defineMemory({
+        id: 'nested',
+        type: MEMORY_TYPES.EPISODIC,
+        strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
+        store: new InMemoryStore(),
+        readOnly: true,
+      });
+      const agent = reportBuilder(REPORT, false, { observerDelivery })
+        .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
+        .build();
+      const paused = await agent.run({ message: 'Is the report ready?' });
+      if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
 
-    const ends: unknown[] = [];
-    const off = agent.on('agentfootprint.agent.turn_end', ({ meta, payload }) => {
-      ends.push({ root: meta.rootTurn, answer: payload.finalContent });
-    });
-    try {
-      const reading = readText(agent);
-      expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
-      expect(ends).toEqual([
-        { root: undefined, answer: 'The draft is ready.' + WARNING },
-        { root: true, answer: REPORT + WARNING },
-      ]);
-      expect(await reading).toEqual(['The ', 'draft ', 'is ', 'ready.', ...REPORT_CHUNKS]);
-    } finally {
-      off();
-    }
-  });
+      const ends: unknown[] = [];
+      let resumed = false;
+      const reading = (async () => {
+        const chunks: string[] = [];
+        for await (const chunk of toSSE(agent, {
+          format: 'text',
+          heartbeatMs: 50,
+          filter: (event) => {
+            if (event.type !== 'agentfootprint.agent.turn_end') return true;
+            ends.push({ root: event.meta.rootTurn, answer: event.payload.finalContent });
+            return !(dropRoot && event.meta.rootTurn === true);
+          },
+        })) {
+          if (chunk !== ': ping\n\n') chunks.push(chunk);
+          // Once observers drain, an extra heartbeat means the stream stayed
+          // open. Returning from the loop releases the iterator in that case.
+          else if (resumed) return { closed: false, chunks };
+        }
+        return { closed: true, chunks };
+      })();
+      try {
+        expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
+        await agent.drainObservers();
+        resumed = true;
+        expect(ends).toEqual([
+          { root: undefined, answer: 'The draft is ready.' + WARNING },
+          { root: true, answer: REPORT + WARNING },
+        ]);
+        const rootChunks = dropRoot ? REPORT_CHUNKS.slice(0, -1) : REPORT_CHUNKS;
+        expect(await reading).toEqual({
+          closed: true,
+          chunks: ['The ', 'draft ', 'is ', 'ready.', ...rootChunks],
+        });
+      } finally {
+        resumed = true;
+        await reading;
+        await Promise.all([agent.shutdown(), child.shutdown()]);
+      }
+    },
+  );
 
   it('does not append a refused answer after the question', async () => {
     const draft = 'Order 77 is 4242.';

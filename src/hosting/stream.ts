@@ -254,28 +254,27 @@ export async function* toSSE<TIn, TOut>(
         ? replyFor(event)
         : undefined;
     const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd) : undefined;
-    if (filter && !filter(event)) return;
-    queue.push(
-      reply !== undefined
-        ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
-        : format === 'text' && turnEnd
-        ? ({
-            type: event.type,
-            payload: { finalContent: answer },
-          } as unknown as AgentfootprintEvent)
-        : event,
-    );
-    wakeup();
-    // Keep the old completion boundary for fresh streams and compositions.
-    // A resumed Agent may still owe an answer after its child ends.
-    if (
-      (turnEnd && (!awaitingResumedRoot || rootEnd)) ||
-      event.type === 'agentfootprint.error.fatal' ||
-      (awaitingResumedRoot && event.type === 'agentfootprint.pause.request')
-    ) {
-      done = true;
-      wakeup();
+    const admitted = filter === undefined || filter(event);
+    if (admitted) {
+      queue.push(
+        reply !== undefined
+          ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+          : format === 'text' && turnEnd
+          ? ({
+              type: event.type,
+              payload: { finalContent: answer },
+            } as unknown as AgentfootprintEvent)
+          : event,
+      );
     }
+    // A resumed Agent's completion is independent of output selection.
+    // Fresh streams and compositions still close on an admitted end.
+    const fatal = event.type === 'agentfootprint.error.fatal';
+    const terminal = awaitingResumedRoot
+      ? rootEnd || fatal || event.type === 'agentfootprint.pause.request'
+      : admitted && (turnEnd || fatal);
+    if (terminal) done = true;
+    if (admitted || terminal) wakeup();
   };
   const offRecord: Unsubscribe = runner.on('*', listener);
   const unsub = (): void => {
