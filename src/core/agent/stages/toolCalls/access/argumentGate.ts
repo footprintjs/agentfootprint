@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { buildCallStart } from '../execution/callStart.js';
 import type {
   CallExecution,
@@ -41,6 +42,7 @@ export function prepareArgumentGate(
   if (!execution.denied && tc.argumentsFailure !== undefined) {
     const issues = streamedToolArgIssues(tc.argumentsFailure);
     typedEmit(scope, 'agentfootprint.validation.args_invalid', {
+      ...callOccurrenceField(tc.callOccurrenceKey),
       toolName: tc.name,
       toolCallId: tc.id,
       iteration,

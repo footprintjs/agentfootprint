@@ -1,5 +1,7 @@
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { str } from './record.js';
 import {
+  historyCallResolver,
   historyStartsWith,
   readHistoryCalls,
   uniqueHistoryCall,
@@ -11,10 +13,20 @@ export interface RecordedEvent {
   readonly type: string;
   readonly payload: Readonly<Record<string, unknown>>;
   readonly meta: Readonly<Record<string, unknown>>;
+  /** A served view may omit placeholders from its payload and keep these names. */
+  readonly redacted?: readonly string[] | 'whole';
+}
+
+export function recordedEventOccurrenceKey(event: RecordedEvent): string | null | undefined {
+  const { redacted } = event;
+  return redacted === 'whole' || redacted?.includes('callOccurrenceKey') === true
+    ? null
+    : readCallOccurrenceKey(event.payload);
 }
 
 export interface CallOccurrence<E extends RecordedEvent> {
   readonly providerId: string;
+  readonly occurrenceKey?: string | null;
   readonly runtimeStageId?: string;
   readonly order: number;
   readonly start?: E;
@@ -23,8 +35,9 @@ export interface CallOccurrence<E extends RecordedEvent> {
   eventsOf(type: string): readonly E[];
 }
 
-interface Bracket<E> {
+interface Bracket<E extends RecordedEvent> {
   readonly providerId: string;
+  readonly occurrenceKey?: string | null;
   readonly execution?: string;
   readonly runtimeStageId?: string;
   readonly start?: E;
@@ -42,8 +55,10 @@ const RELATED = new Set([
   'tools.semantics_declared',
   'findings.declared',
   'middleware.decision',
+  'checkin.request',
   'checkin.decision',
   'permission.check',
+  'validation.args_invalid',
 ]);
 
 function stageOf(event: RecordedEvent): string | undefined {
@@ -59,56 +74,93 @@ function executionOf(event: RecordedEvent): string | undefined {
 const firstIndex = (bracket: Bracket<RecordedEvent>): number =>
   Math.min(bracket.start?.index ?? Infinity, bracket.end?.index ?? Infinity);
 
+interface BracketParts<E extends RecordedEvent> {
+  readonly starts: E[];
+  readonly ends: E[];
+}
+
+function collectBracketPart<E extends RecordedEvent>(
+  groups: Map<string, BracketParts<E>>,
+  key: string,
+  event: E,
+  end: boolean,
+): void {
+  const group = groups.get(key) ?? { starts: [], ends: [] };
+  (end ? group.ends : group.starts).push(event);
+  groups.set(key, group);
+}
+
+function appendBracket<E extends RecordedEvent>(
+  brackets: Bracket<E>[],
+  start: E | undefined,
+  end: E | undefined,
+  occurrenceKey?: string | null,
+): void {
+  const event = start ?? end;
+  const providerId = str(start?.payload.toolCallId) ?? str(end?.payload.toolCallId);
+  if (event === undefined || providerId === undefined) return;
+  const execution = executionOf(event);
+  const stage = stageOf(event);
+  brackets.push({
+    providerId,
+    ...(occurrenceKey !== undefined && { occurrenceKey }),
+    ...(execution !== undefined && { execution }),
+    ...(stage !== undefined && { runtimeStageId: stage }),
+    ...(start !== undefined && { start }),
+    ...(end !== undefined && { end }),
+  });
+}
+
 function bracketsOf<E extends RecordedEvent>(events: readonly E[]): readonly Bracket<E>[] {
-  const groups = new Map<
-    string,
-    { readonly key: string; readonly stage: string; readonly id: string; starts: E[]; ends: E[] }
-  >();
+  const legacy = new Map<string, BracketParts<E>>();
+  const keyed = new Map<string, BracketParts<E>>();
+  const mixed = new Set<string>();
   const brackets: Bracket<E>[] = [];
   for (const event of events) {
     const role = kind(event.type);
     if (role !== CALL_START && role !== CALL_END) continue;
     const id = str(event.payload.toolCallId);
-    if (id === undefined) continue;
     const end = role === CALL_END;
-    const stage = stageOf(event);
     const execution = executionOf(event);
-    if (stage === undefined || execution === undefined) {
-      brackets.push({ providerId: id, ...(end ? { end: event } : { start: event }) });
+    const legacyKey =
+      id !== undefined && execution !== undefined ? JSON.stringify([execution, id]) : undefined;
+    const key = recordedEventOccurrenceKey(event);
+    if (key !== undefined && legacyKey !== undefined) mixed.add(legacyKey);
+    if (typeof key === 'string') {
+      collectBracketPart(keyed, key, event, end);
+    } else if (key === null || legacyKey === undefined) {
+      appendBracket(brackets, end ? undefined : event, end ? event : undefined, key);
+    } else {
+      collectBracketPart(legacy, legacyKey, event, end);
+    }
+  }
+  for (const [key, { starts, ends }] of keyed) {
+    const [start] = starts;
+    const [end] = ends;
+    if (
+      starts.length <= 1 &&
+      ends.length <= 1 &&
+      (start === undefined || end === undefined || start.index < end.index)
+    ) {
+      appendBracket(brackets, start, end, key);
       continue;
     }
-    const key = JSON.stringify([execution, id]);
-    const group = groups.get(key) ?? {
-      key: execution,
-      stage,
-      id,
-      starts: [],
-      ends: [],
-    };
-    (end ? group.ends : group.starts).push(event);
-    groups.set(key, group);
+    // A duplicate or reversed pair cannot establish ownership. Keep the
+    // recorded observations distinct and out of the legacy fallback.
+    for (const part of starts) appendBracket(brackets, part, undefined, null);
+    for (const part of ends) appendBracket(brackets, undefined, part, null);
   }
-  for (const group of groups.values()) {
+  for (const [key, { starts, ends }] of legacy) {
+    const allowPairing = !mixed.has(key);
     let nextStart = 0;
-    for (const end of group.ends) {
-      const pending = group.starts[nextStart];
+    for (const end of ends) {
+      const pending = allowPairing ? starts[nextStart] : undefined;
       const start = pending !== undefined && pending.index < end.index ? pending : undefined;
       if (start !== undefined) nextStart++;
-      brackets.push({
-        providerId: group.id,
-        execution: group.key,
-        runtimeStageId: group.stage,
-        ...(start !== undefined && { start }),
-        end,
-      });
+      appendBracket(brackets, start, end);
     }
-    for (const start of group.starts.slice(nextStart)) {
-      brackets.push({
-        providerId: group.id,
-        execution: group.key,
-        runtimeStageId: group.stage,
-        start,
-      });
+    for (const start of starts.slice(nextStart)) {
+      appendBracket(brackets, start, undefined);
     }
   }
   return brackets.sort((a, b) => firstIndex(a) - firstIndex(b));
@@ -141,10 +193,15 @@ function historyLinks<E extends RecordedEvent>(
   history: readonly unknown[],
 ): ReadonlyMap<Bracket<E>, HistoryCall> {
   const calls = readHistoryCalls(history);
-  const ranges = historyRanges(events, history);
+  const resolve = historyCallResolver(calls);
   const links = new Map<Bracket<E>, HistoryCall>();
   const byId = new Map<string, Bracket<E>[]>();
+  let ranges: ReturnType<typeof historyRanges> | undefined;
   for (const bracket of brackets) {
+    if (typeof bracket.occurrenceKey === 'string') {
+      const result = resolve(undefined, undefined, bracket.occurrenceKey);
+      if (result.kind === 'matched') links.set(bracket, result.call);
+    }
     const group = byId.get(bracket.providerId) ?? [];
     group.push(bracket);
     byId.set(bracket.providerId, group);
@@ -155,8 +212,11 @@ function historyLinks<E extends RecordedEvent>(
   };
   for (const [id, occurrences] of byId) {
     for (const bracket of occurrences) {
-      if (bracket.end === undefined) continue;
-      const range = bracket.execution === undefined ? undefined : ranges.get(bracket.execution);
+      if (bracket.occurrenceKey !== undefined || bracket.end === undefined) continue;
+      const range =
+        bracket.execution === undefined
+          ? undefined
+          : (ranges ??= historyRanges(events, history)).get(bracket.execution);
       if (range !== undefined) {
         const ends = occurrences.filter((b) => b.end && b.execution === bracket.execution);
         const candidates = calls.filter(
@@ -168,7 +228,12 @@ function historyLinks<E extends RecordedEvent>(
           ends.length === candidates.length &&
           ends.every((b, i) => {
             const paired = candidates[i];
-            return paired !== undefined && matchName(b, paired);
+            return (
+              paired !== undefined &&
+              b.occurrenceKey === paired.occurrenceKey &&
+              b.occurrenceKey !== null &&
+              matchName(b, paired)
+            );
           })
         ) {
           links.set(bracket, candidate);
@@ -187,7 +252,9 @@ function associatedEvents<E extends RecordedEvent>(
   events: readonly E[],
 ): ReadonlyMap<Bracket<E>, ReadonlyMap<string, readonly E[]>> {
   const byId = new Map<string, Bracket<E>[]>();
+  const byKey = new Map<string, Bracket<E>>();
   for (const bracket of brackets) {
+    if (typeof bracket.occurrenceKey === 'string') byKey.set(bracket.occurrenceKey, bracket);
     const group = byId.get(bracket.providerId) ?? [];
     group.push(bracket);
     byId.set(bracket.providerId, group);
@@ -196,34 +263,13 @@ function associatedEvents<E extends RecordedEvent>(
   for (const event of events) {
     const type = kind(event.type);
     if (!RELATED.has(type)) continue;
-    const execution = executionOf(event);
-    const id = str(event.payload.toolCallId);
-    if (id === undefined && type !== 'permission.check') continue;
-    const candidates = id === undefined ? brackets : byId.get(id) ?? [];
-    const inExecution = candidates.filter((b) => b.execution === execution);
-    const inBracket = inExecution.filter(
-      (b) =>
-        event.index > (b.start?.index ?? -Infinity) && event.index < (b.end?.index ?? Infinity),
-    );
-    const matching =
-      id === undefined
-        ? inBracket.filter((b) => b.start?.payload.toolName === event.payload.target)
-        : inBracket;
-    let bracket = matching.length === 1 ? matching[0] : undefined;
-    if (bracket === undefined && id !== undefined && type !== 'artifacts.presented') {
-      if (inExecution.length === 1) bracket = inExecution[0];
-      else if (type === 'findings.declared' && inExecution.length > 1 && matching.length === 0) {
-        bracket = inExecution.find((b) => (b.start?.index ?? -Infinity) > event.index);
-      } else if (
-        candidates.length === 1 &&
-        inExecution.length === 0 &&
-        (execution === undefined || candidates[0]?.execution === undefined)
-      ) {
-        // Legacy auxiliary events can have their own emitter; only an otherwise
-        // unique call can read one without an execution-local address.
-        bracket = candidates[0];
-      }
-    }
+    const key = recordedEventOccurrenceKey(event);
+    const bracket =
+      key === null
+        ? undefined
+        : key === undefined
+        ? legacyEventBracket(brackets, byId, event, type)
+        : byKey.get(key);
     if (bracket === undefined) continue;
     const families = linked.get(bracket) ?? new Map<string, E[]>();
     const rows = families.get(type) ?? [];
@@ -234,7 +280,43 @@ function associatedEvents<E extends RecordedEvent>(
   return linked;
 }
 
-/** Pair the k-th start with the k-th end for one ID and execution. */
+function legacyEventBracket<E extends RecordedEvent>(
+  brackets: readonly Bracket<E>[],
+  byId: ReadonlyMap<string, Bracket<E>[]>,
+  event: E,
+  type: string,
+): Bracket<E> | undefined {
+  const execution = executionOf(event);
+  const id = str(event.payload.toolCallId);
+  if (id === undefined && type !== 'permission.check') return undefined;
+  const candidates = id === undefined ? brackets : byId.get(id) ?? [];
+  const inExecution = candidates.filter((b) => b.execution === execution);
+  const inBracket = inExecution.filter(
+    (b) => event.index > (b.start?.index ?? -Infinity) && event.index < (b.end?.index ?? Infinity),
+  );
+  const matching =
+    id === undefined
+      ? inBracket.filter((b) => b.start?.payload.toolName === event.payload.target)
+      : inBracket;
+  let bracket = matching.length === 1 ? matching[0] : undefined;
+  if (bracket === undefined && id !== undefined && type !== 'artifacts.presented') {
+    if (inExecution.length === 1) bracket = inExecution[0];
+    else if (type === 'findings.declared' && inExecution.length > 1 && matching.length === 0) {
+      bracket = inExecution.find((b) => (b.start?.index ?? -Infinity) > event.index);
+    } else if (
+      candidates.length === 1 &&
+      inExecution.length === 0 &&
+      (execution === undefined || candidates[0]?.execution === undefined)
+    ) {
+      // Legacy auxiliary events can have their own emitter; only an otherwise
+      // unique call can read one without an execution-local address.
+      bracket = candidates[0];
+    }
+  }
+  return bracket?.occurrenceKey === undefined ? bracket : undefined;
+}
+
+/** Join keyed observations exactly. Pair legacy brackets within one execution. */
 export function readCallOccurrences<E extends RecordedEvent>(
   events: readonly E[],
   history: readonly unknown[],
@@ -250,6 +332,7 @@ export function readCallOccurrences<E extends RecordedEvent>(
     const committed = links.get(bracket);
     return {
       providerId: bracket.providerId,
+      ...(bracket.occurrenceKey !== undefined && { occurrenceKey: bracket.occurrenceKey }),
       order,
       ...(bracket.runtimeStageId !== undefined && { runtimeStageId: bracket.runtimeStageId }),
       ...(bracket.start !== undefined && { start: bracket.start }),

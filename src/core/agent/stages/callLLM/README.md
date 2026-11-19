@@ -8,5 +8,9 @@ runtime stage. This is a type-only boundary, not another provider implementation
 
 The context feature captures the already assembled system pieces, schemas and
 request-only context immediately before model I/O. It does not edit a request.
-The existing oversized runtime stage still needs its own step 2/3 extraction;
-this change does not claim that file's cleanup complete or raise its baseline.
+The recording assigns each accepted proposal an opaque occurrence address before
+the inputs layer can write findings. One random batch namespace plus the proposal's
+position identifies calls even when a provider repeats an ID. The proposal already
+lives in native state and the assistant history, so resumes carry the same address.
+
+The oversized runtime stage still needs its step 2/3 extraction.

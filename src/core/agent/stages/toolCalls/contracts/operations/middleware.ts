@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { Tool } from '../../../../../../tools/tools.js';
@@ -12,6 +13,7 @@ export interface ToolMiddlewareOperations {
       readonly tool?: Tool;
       readonly toolName: string;
       readonly toolCallId: string;
+      readonly callOccurrenceKey?: CallOccurrenceKey;
       readonly iteration: number;
       readonly args: ToolArgs;
       readonly result: unknown;

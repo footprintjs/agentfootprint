@@ -278,6 +278,7 @@
   },
   "agentfootprint.artifacts.presented": {
     "as": "kept",
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "ref": "kept",
     "snapshot.bytes": "kept",
@@ -303,6 +304,7 @@
   "agentfootprint.checkin.decision": {
     "approved": "kept",
     "by": "kept",
+    "callOccurrenceKey[]": "kept",
     "componentId": "kept",
     "hiddenArgs[]": "kept",
     "iteration": "kept",
@@ -312,6 +314,7 @@
     "toolName": "kept"
   },
   "agentfootprint.checkin.request": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "request": "keys",
     "toolCallId": "kept",
@@ -433,6 +436,7 @@
     "asRole": "kept",
     "budgetSpent.fractionOfCap": "kept",
     "budgetSpent.tokens": "kept",
+    "callOccurrenceKey[]": "kept",
     "contentHash": "kept",
     "contentSummary": "chars",
     "expiresAfter": "kept",
@@ -514,6 +518,7 @@
     "tokensOutput": "kept"
   },
   "agentfootprint.credential.acquired": {
+    "callOccurrenceKey[]": "kept",
     "expiresAt": "kept",
     "iteration": "kept",
     "kind": "kept",
@@ -521,12 +526,14 @@
     "toolCallId": "kept"
   },
   "agentfootprint.credential.authorization_required": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "service": "kept",
     "sessionId": "kept",
     "toolCallId": "kept"
   },
   "agentfootprint.credential.failed": {
+    "callOccurrenceKey[]": "kept",
     "errorClass": "kept",
     "iteration": "kept",
     "reason": "chars",
@@ -535,6 +542,7 @@
     "toolCallId": "kept"
   },
   "agentfootprint.credential.requested": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "mode": "kept",
     "service": "kept",
@@ -599,6 +607,7 @@
     "argument": "kept",
     "argumentsFrom": "kept",
     "asked": "kept",
+    "callOccurrenceKey[]": "kept",
     "claimed": "kept",
     "coincides": "kept",
     "correction": "kept",
@@ -620,6 +629,7 @@
     "withheld": "kept"
   },
   "agentfootprint.findings.contingent": {
+    "callOccurrenceKey[]": "kept",
     "carriers": "kept",
     "declaredOn": "kept",
     "iteration": "kept",
@@ -629,6 +639,7 @@
   },
   "agentfootprint.findings.declared": {
     "basis": "kept",
+    "callOccurrenceKey[]": "kept",
     "expect": "kept",
     "hasProposition": "kept",
     "iteration": "kept",
@@ -637,6 +648,7 @@
     "toolName": "kept"
   },
   "agentfootprint.findings.judge_failed": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "latencyMs": "kept",
     "status": "kept",
@@ -645,6 +657,7 @@
   },
   "agentfootprint.findings.judged": {
     "against": "kept",
+    "callOccurrenceKey[]": "kept",
     "confidence": "kept",
     "inputTokens": "kept",
     "iteration": "kept",
@@ -670,6 +683,7 @@
     "turn": "kept"
   },
   "agentfootprint.findings.period": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "timeChecks[]": "kept",
     "toolCallId": "kept",
@@ -680,6 +694,7 @@
   "agentfootprint.findings.standing": {
     "agrees": "kept",
     "assertionCount": "kept",
+    "callOccurrenceKey[]": "kept",
     "conflictKeys[]": "kept",
     "declaredOn": "kept",
     "iteration": "kept",
@@ -803,6 +818,7 @@
   },
   "agentfootprint.middleware.decision": {
     "at": "kept",
+    "callOccurrenceKey[]": "kept",
     "changed": "kept",
     "componentId": "kept",
     "iteration": "kept",
@@ -835,6 +851,7 @@
   },
   "agentfootprint.permission.check": {
     "actor": "kept",
+    "callOccurrenceKey[]": "kept",
     "capability": "kept",
     "iteration": "kept",
     "phase": "kept",
@@ -856,6 +873,7 @@
     "openedBy": "kept"
   },
   "agentfootprint.permission.halt": {
+    "callOccurrenceKey[]": "kept",
     "checkerId": "kept",
     "iteration": "kept",
     "reason": "kept",
@@ -1075,6 +1093,7 @@
     "tokenIndex": "kept"
   },
   "agentfootprint.stream.tool_end": {
+    "callOccurrenceKey[]": "kept",
     "changedArgKeys[]": "kept",
     "durationMs": "kept",
     "entered": "kept",
@@ -1088,6 +1107,7 @@
     "toolCallId": "kept"
   },
   "agentfootprint.stream.tool_progress": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "payload": "keys",
     "toolCallId": "kept",
@@ -1095,6 +1115,7 @@
   },
   "agentfootprint.stream.tool_start": {
     "args": "keys",
+    "callOccurrenceKey[]": "kept",
     "hiddenArgs[]": "kept",
     "notDispatched.pausedCall.toolCallId": "kept",
     "notDispatched.pausedCall.toolName": "kept",
@@ -1128,6 +1149,7 @@
     "served": "kept"
   },
   "agentfootprint.tools.absent": {
+    "callOccurrenceKey[]": "kept",
     "cannotCover[].kind": "kept",
     "cannotCover[].short": "chars",
     "cannotCover[].what": "chars",
@@ -1206,6 +1228,7 @@
     "truncated": "kept"
   },
   "agentfootprint.tools.coverage_declared": {
+    "callOccurrenceKey[]": "kept",
     "cannotCover[].kind": "kept",
     "cannotCover[].short": "chars",
     "cannotCover[].what": "chars",
@@ -1372,6 +1395,7 @@
     "toolName": "kept"
   },
   "agentfootprint.tools.semantics_declared": {
+    "callOccurrenceKey[]": "kept",
     "iteration": "kept",
     "semantics.af_semantics": "kept",
     "semantics.clarify.candidates[]": "type",
@@ -1470,6 +1494,7 @@
     "toolName": "kept"
   },
   "agentfootprint.validation.args_invalid": {
+    "callOccurrenceKey[]": "kept",
     "enforced": "kept",
     "issues[].expected": "kept",
     "issues[].got": "kept",

@@ -88,6 +88,7 @@ import {
 } from '../arguments/partialWindow.js';
 import { declaredSourcesOf } from '../honesty/sourceCorpus.js';
 import { periodFactsOf, rulesOf, isRefused } from '../../../tools/declare.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { timeRefusal, unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
@@ -210,6 +211,7 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
   return [...((scope.llmLatestToolCalls as readonly BatchCall[] | undefined) ?? [])].map((c) => ({
     id: c.id,
     name: c.name,
+    ...callOccurrenceField(c.callOccurrenceKey),
     args: { ...(c.args ?? {}) },
     ...(c.argumentsFailure !== undefined && { argumentsFailure: c.argumentsFailure }),
   }));

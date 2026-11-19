@@ -62,6 +62,7 @@ import {
   type InputValue,
 } from '../../../tools/inputRequest.js';
 import { callWindowRow } from '../../../time/rowsBuild.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { timeAnswerRow } from '../../../time/rows.js';
 import { isArgumentAskContext } from './askMarker.js';
 import type { ArgumentFill, ArgumentResolution, BatchCall, ToolOf } from './resolve.js';
@@ -312,7 +313,14 @@ export function bindAnswer(
       ),
     );
   }
-  return { state: settled, rows: rowParts.flatMap((part) => part()) };
+  const rows = rowParts.flatMap((part) =>
+    part().map((row) =>
+      'toolCallId' in row
+        ? { ...row, ...callOccurrenceField(byId.get(row.toolCallId)?.callOccurrenceKey) }
+        : row,
+    ),
+  );
+  return { state: settled, rows };
 }
 
 // ─── The settled ask ────────────────────────────────────────────────────

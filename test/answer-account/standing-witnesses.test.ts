@@ -195,22 +195,34 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         const argumentReason = assessment.reasons.find(
           (row) => row.reason === 'argument-unverified',
         );
-        expect(argumentReason).toMatchObject({
-          witness: [pointer],
-          ...(!bothEvicted && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
-        });
-        if (bothEvicted) {
-          expect(argumentReason?.source).toEqual({
-            kind: 'calls',
-            calls: [{ toolCallId: 'reused', toolName: name }],
-          });
-        }
+        const named = { kind: 'calls', calls: [{ toolCallId: 'reused', toolName: name }] };
+        const unplaced = { kind: 'calls', calls: [], unplaced: [pointer] };
+        expect(argumentReason?.witness).toEqual([pointer]);
+        expect(argumentReason?.source).toEqual(windowed ? unplaced : named);
         const account = accountForAnswer(recording);
-        const reason = account.rows
-          .find((row) => row.id === 'how-sure')
-          ?.lines.find((line) => line.template.id === 'howSure.reason.argumentUnverified');
+        const standing = account.rows.find((row) => row.id === 'how-sure')?.lines;
+        const reason = standing?.find(
+          (line) => line.template.id === 'howSure.reason.argumentUnverified',
+        );
         expect(reason).toMatchObject({ pointers: [pointer] });
+        expect(
+          standing?.some((line) => line.template.id === 'howSure.reason.resultUnavailable'),
+        ).toBe(windowed);
+        expect(
+          standing?.some((line) => line.template.id === 'howSure.reason.unplacedEvidence'),
+        ).toBe(false);
         assertP1(account, recording);
+
+        const legacy = JSON.parse(
+          JSON.stringify(recording, (field, value: unknown) =>
+            field === 'callOccurrenceKey' ? undefined : value,
+          ),
+        ) as Recording;
+        const legacyReason = assessAnswer(legacy).reasons.find(
+          (row) => row.reason === 'argument-unverified',
+        );
+        expect(legacyReason?.witness).toEqual([pointer]);
+        expect(legacyReason?.source).toEqual(bothEvicted ? named : unplaced);
       } finally {
         recorder.stop();
         await agent.shutdown();

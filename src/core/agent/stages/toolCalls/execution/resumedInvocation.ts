@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { buildArgumentRefusal } from '../access/argumentValidation.js';
 import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
@@ -125,11 +126,12 @@ export function buildResumedInvocation(
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
     const tool = resolved.tool;
+    const occurrence = callOccurrenceField(seen?.callOccurrenceKey);
     if (seen !== undefined)
       seen.resultFinalizer = nativeResultFinalizer(
         scope,
         tool,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         deps,
         links.runFactsOf(scope)?.runId,
         resolved.party,
@@ -137,7 +139,7 @@ export function buildResumedInvocation(
     /** What the approval covers — the arguments as handed in, before any
      *  `wants` resolution or clock redraw derives the ones `execute` gets. */
     let prepared = approved;
-    const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration });
+    const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration, ...occurrence });
     // The two refusals share one door here too (9.92.0): a name nothing holds,
     // and a name whose offered party cannot answer on this resume.
     if (!tool) {
@@ -166,7 +168,7 @@ export function buildResumedInvocation(
       iteration,
     });
     if (invalidArgs !== undefined) return { result: invalidArgs, error: true };
-    links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration });
+    links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration, ...occurrence });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly
     // as an inline call's, BEFORE credentials, and a refusal means the tool
@@ -195,7 +197,7 @@ export function buildResumedInvocation(
         deps.time !== undefined
           ? (await import('../../timeLayer.js')).timeAtDispatch(
               scope,
-              { toolCallId, toolName },
+              { toolCallId, toolName, ...occurrence },
               iteration,
               tool,
               prepared,
@@ -204,6 +206,7 @@ export function buildResumedInvocation(
           : undefined;
       const callTime = dispatched?.context;
       const access = await recheckResumedCall(scope, deps, {
+        ...occurrence,
         gate: heldTo,
         tool,
         toolName,
@@ -251,10 +254,11 @@ export function buildResumedInvocation(
           toolName,
           toolCallId,
           seen?.resultFinalizer?.needsPublications,
+          seen?.callOccurrenceKey,
         ),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
-        ...links.toolProgress(scope, { toolName, toolCallId, iteration }),
-        ...requestEvidenceFor(scope, { toolName, toolCallId, iteration }),
+        ...links.toolProgress(scope, { toolName, toolCallId, iteration, ...occurrence }),
+        ...requestEvidenceFor(scope, { toolName, toolCallId, iteration, ...occurrence }),
         ...mcpClientUseFor(scope, { toolCallId }),
         ...links.sessionContext(scope, toolName, toolCallId),
         // The resume doors hand their gates the committed history; so does an inner call.
@@ -287,7 +291,11 @@ export function buildResumedInvocation(
       if (approvalChanged || !access.matchesPrepared(args)) {
         // Nothing ran. Release the sessions as for a run that ended here.
         await links.endCall(scope).catch(() => undefined);
-        recordResumedRefusal(scope, { toolName, toolCallId, iteration }, 'call-changed');
+        recordResumedRefusal(
+          scope,
+          { toolName, toolCallId, iteration, ...occurrence },
+          'call-changed',
+        );
         return {
           result: rewrittenAfterApproval(
             toolName,
@@ -341,7 +349,7 @@ export function buildResumedInvocation(
         result = captureNegativeResult(scope, negativeDispatch, result, tool);
       await links.endCall(scope);
       const searchBoundary = (status: ToolResultStatus | undefined) => ({
-        call: { toolName, toolCallId, iteration },
+        call: { toolName, toolCallId, iteration, ...occurrence },
         tool,
         ...(resolved.party !== undefined && { party: resolved.party }),
         args: negativeDispatch?.args ?? args,
@@ -367,7 +375,7 @@ export function buildResumedInvocation(
         const declaredContent = searched !== undefined ? searched.value : envelope.content;
         const coverageStatus = links.declareCoverage(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           declaredContent,
           searched?.reading,
         );
@@ -378,7 +386,7 @@ export function buildResumedInvocation(
         // what the model will actually read.
         const semanticView = links.declareSemantics(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           declaredContent,
         );
         const content = semanticView ?? declaredContent;
@@ -391,7 +399,7 @@ export function buildResumedInvocation(
         // `result_refused` event keeps what was declared).
         const refusal = links.refuseOverCeiling(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           tool,
           content,
           declaredStatus,
@@ -413,7 +421,7 @@ export function buildResumedInvocation(
         // path keeps every byte it had.
         const columnRefusal = links.judgeColumns(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           content,
         );
         if (columnRefusal !== undefined) {
@@ -454,7 +462,7 @@ export function buildResumedInvocation(
       if (searched !== undefined) result = searched.value;
       const coverageStatus = links.declareCoverage(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         result,
         searched?.reading,
       );
@@ -462,13 +470,13 @@ export function buildResumedInvocation(
       // a resumed call's envelope is judged exactly as an inline one's.
       const semanticView = links.declareSemantics(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         result,
       );
       if (semanticView !== undefined) result = semanticView;
       const refusal = links.refuseOverCeiling(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         tool,
         result,
         coverageStatus,
@@ -490,7 +498,11 @@ export function buildResumedInvocation(
       }
       // The column-type contract on this path's own execute boundary — a
       // resumed call's rows are judged exactly as an inline one's.
-      const columnRefusal = links.judgeColumns(scope, { toolName, toolCallId, iteration }, result);
+      const columnRefusal = links.judgeColumns(
+        scope,
+        { toolName, toolCallId, iteration, ...occurrence },
+        result,
+      );
       if (columnRefusal !== undefined) {
         if (negativeDispatch !== undefined) keepNegativeResultOut(scope, negativeDispatch.resultId);
         return {

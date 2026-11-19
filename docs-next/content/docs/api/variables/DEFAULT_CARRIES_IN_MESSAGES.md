@@ -6,7 +6,7 @@ title: DEFAULT_CARRIES_IN_MESSAGES
 
 > `const` **DEFAULT\_CARRIES\_IN\_MESSAGES**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/provider-contract/types.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L269)
+Defined in: [src/provider-contract/types.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L268)
 
 The floor every known wire supports. Used for any provider that does not
 declare `carriesInMessages` — a third-party adapter is assumed to carry

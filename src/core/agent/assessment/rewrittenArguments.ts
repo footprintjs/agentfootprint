@@ -1,3 +1,4 @@
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { argumentRewritesOf, type ArgumentRewrite } from '../middleware/rewrites.js';
 import type { historyCallResolver } from '../recordedCalls.js';
 import { isRecord, str } from './recordValues.js';
@@ -17,18 +18,23 @@ export function rewritesByOccurrence(
   const admitted = new Map<number, DecisionRead[]>();
   decisions.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.at !== 'tool' || !Array.isArray(row.changedKeys)) return;
-    const id = str(row.toolCallId);
-    const resolved = id === undefined ? undefined : resolve(id, str(row.toolName));
-    if (resolved?.kind !== 'matched') return;
+    const resolved = resolve(str(row.toolCallId), str(row.toolName), readCallOccurrenceKey(row));
+    if (resolved.kind !== 'matched') return;
     const occurrence = resolved.call.index;
     const rows = admitted.get(occurrence) ?? [];
     rows.push({ row, index });
     admitted.set(occurrence, rows);
   });
   for (const [occurrence, rows] of admitted) {
-    const byArgument = argumentRewritesOf(rows.map((read) => read.row))
-      .values()
-      .next().value;
+    const address = String(occurrence);
+    const byArgument = argumentRewritesOf(
+      rows.map(({ row }) => ({
+        at: 'tool',
+        toolCallId: address,
+        changedKeys: row.changedKeys,
+        from: row.from,
+      })),
+    ).get(address);
     if (byArgument === undefined) continue;
     const witnesses = new Map<string, ArgumentRewrite>();
     for (const [argument, rewrite] of byArgument) {

@@ -1,4 +1,8 @@
-import type { InstructionDeliveryLease, ToolResultStatus } from './dependencyTypes.js';
+import type {
+  InstructionDeliveryLease,
+  ToolCallEventIdentity,
+  ToolResultStatus,
+} from './dependencyTypes.js';
 import type { CoverageItemPayload } from './toolSemantics.js';
 
 /**
@@ -137,10 +141,8 @@ export interface ToolRepeatedCallPayload {
  * tool declared — never the arguments the model passed, which are the model's
  * own words about what it wanted, not the tool's about what it covered.
  */
-export interface ToolAbsentPayload {
+export interface ToolAbsentPayload extends ToolCallEventIdentity {
   readonly toolName: string;
-  readonly toolCallId: string;
-  readonly iteration: number;
   /** What the tool says it was looking for (its own prose). */
   readonly lookedFor?: string;
   /** Ground the search DID cover. Non-empty by construction — `absent()`

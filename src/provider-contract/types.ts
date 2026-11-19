@@ -13,6 +13,8 @@ import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
+import type { CallOccurrenceKey } from '../lib/callOccurrence.js';
+import type { RecordedToolCall } from './recordedToolCall.js';
 export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
 
@@ -23,6 +25,8 @@ export interface LLMMessage {
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */
   readonly toolCallId?: string;
+  /** Recording-only address of a library-observed tool call. Omitted from provider requests. */
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /** For `role: 'tool'` — the tool name this result corresponds to. */
   readonly toolName?: string;
   /**
@@ -65,14 +69,9 @@ export interface LLMMessage {
    * {@link LLMResponse}'s `toolCalls[].providerMeta`. Unlike `injectedBy`, it
    * is NOT stripped on the way to a provider: it exists to be sent.
    */
-  readonly toolCalls?: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly args: Readonly<Record<string, unknown>>;
-    /** Stream integrity evidence retained with the attempted call; never tool input. */
-    readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
-    readonly providerMeta?: Readonly<Record<string, unknown>>;
-  }[];
+  readonly toolCalls?: readonly RecordedToolCall<
+    LLMResponse['toolCalls'][number]['argumentsFailure']
+  >[];
   /**
    * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
    *

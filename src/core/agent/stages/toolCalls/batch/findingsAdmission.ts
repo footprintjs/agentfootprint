@@ -10,6 +10,8 @@ import { withUnsettledRows } from '../../../findings/unsettled.js';
 import type { DeclaredCoverage } from '../../../../../semantics/coverage/index.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import { withSourceFindingsRecovery } from '../../../sourceEvidence/findingsRecovery.js';
+import type { DispatchCall } from '../contracts/batchCall.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 
 /** Compose the existing synchronous findingsAdmission phase; no additional await or checkpoint state. */
 export function buildFindingsAdmission(
@@ -24,14 +26,7 @@ export function buildFindingsAdmission(
     // message and into typed event payloads (tool_start args,
     // iteration_end history), which must be detached plain data
     // (RFC-001 'clone' capture under observerDelivery: 'deferred').
-    const toolCalls = [
-      ...(scope.llmLatestToolCalls as readonly {
-        readonly id: string;
-        readonly name: string;
-        readonly args: Readonly<Record<string, unknown>>;
-        readonly argumentsFailure?: LLMMessage['toolArgumentsFailure'];
-      }[]),
-    ];
+    const toolCalls = [...(scope.llmLatestToolCalls as readonly DispatchCall[])];
     const iteration = scope.iteration as number;
     // ── STANDINGS OF EARLIER RESULTS AND REFERENCE ADMISSION ───────
     // Freeze admission before batch asks, kept-answer consumption or any
@@ -65,7 +60,7 @@ export function buildFindingsAdmission(
             ? []
             : [
                 referenceRefusalRow(
-                  { toolCallId: tc.id },
+                  { toolCallId: tc.id, ...callOccurrenceField(tc.callOccurrenceKey) },
                   iteration,
                   (findingsPeels[index]?.malformed ?? 0) > 0,
                   findingsPeels[index]?.malformed ? tc.args._findings : undefined,
@@ -80,10 +75,13 @@ export function buildFindingsAdmission(
           toolCalls.flatMap((tc, index) => {
             const declared = findingsPeels[index]?.findings;
             return declared?.previous !== undefined
-              ? standingRowsFrom(known, declared, { toolCallId: tc.id }, iteration, {
-                  witness: scope.findingsRequest?.[0],
-                  placedTickets: scope.placedTickets,
-                })
+              ? standingRowsFrom(
+                  known,
+                  declared,
+                  { toolCallId: tc.id, ...callOccurrenceField(tc.callOccurrenceKey) },
+                  iteration,
+                  { witness: scope.findingsRequest?.[0], placedTickets: scope.placedTickets },
+                )
               : [];
           }),
           known,

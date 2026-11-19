@@ -21,8 +21,8 @@
  *   integration — the `source-clock` rows and the `Clocks` lines; `Z` vs `-07:00` periods raise
  *                 no `clocks-differ`; the rows cross the checkpoint door (a forged one refused);
  *                 the `findings.period` event carries the checks' names, never a range;
- *   byte identity — without `.time()` the period row, the event and the limits block are the
- *                 bytes they were, and no `source-clock` row is filed.
+ *   off         — without `.time()` the period verdict, event and limits block keep their
+ *                 behavior, and no `source-clock` row is filed.
  * Unit, property, security, boundary, performance: check.test.ts.
  */
 
@@ -42,6 +42,7 @@ import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { timeOfBatch } from '../../src/core/agent/honesty/mounts.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -387,6 +388,8 @@ describe('period-differs-from-asked — what was read against what was asked', (
       timeArm,
     );
     await agent.run({ message: 'activity', time: { now: NOW, window: hour } });
+    const result = agent.checkpoint()?.history.find((message) => message.role === 'tool');
+    expect(result && readCallOccurrenceKey(result)).toEqual(expect.any(String));
     expect(ofKind(agent, 'period')).toEqual([
       {
         kind: 'period',
@@ -396,6 +399,7 @@ describe('period-differs-from-asked — what was read against what was asked', (
         iteration: 1,
         verdict: 'undeclared',
         argument: 'start_time',
+        callOccurrenceKey: result?.callOccurrenceKey,
       },
     ]);
   });
@@ -437,18 +441,20 @@ describe('period-beyond-retention', () => {
 // ─── clocks ──────────────────────────────────────────────────────────
 
 /** A tool that mints one dataset whose axis declares `zone` (or none), and declares `period`. */
-function datasetTool(name: string, zone: string | undefined, period?: unknown) {
+function datasetTool(name: string, zone: string | undefined, period?: unknown, copies = 1) {
   return defineTool({
     name,
     description: 'Rows over a window.',
     inputSchema: { type: 'object', properties: {} },
     execute: async (_args, ctx: ToolExecutionContext) => {
-      await ctx.artifacts.put({
-        kind: 'dataset/rows',
-        mediaType: 'application/json',
-        data: [{ at: '2026-10-09T08:00:00', n: 1 }],
-        timeAxis: { column: 'at', unit: 'iso', ...(zone !== undefined && { zone }) },
-      });
+      for (let n = 1; n <= copies; n++) {
+        await ctx.artifacts.put({
+          kind: 'dataset/rows',
+          mediaType: 'application/json',
+          data: [{ at: '2026-10-09T08:00:00', n }],
+          timeAxis: { column: 'at', unit: 'iso', ...(zone !== undefined && { zone }) },
+        });
+      }
       return period === undefined
         ? 'rows'
         : describedResult({
@@ -461,6 +467,26 @@ function datasetTool(name: string, zone: string | undefined, period?: unknown) {
 }
 
 describe('clocks — declared wall-clock zones, a label only', () => {
+  it('files one clock per occurrence and zone when a provider ID repeats', async () => {
+    const { agent } = await build(
+      [call('c1', 'packet_records'), call('c1', 'packet_records'), answer('x')],
+      [datasetTool('packet_records', LA, undefined, 2)],
+      timeArm,
+      true,
+    );
+    await agent.run({ message: 'rows', time: { now: NOW } });
+    const results = agent.checkpoint()?.history.filter((message) => message.role === 'tool') ?? [];
+    const keys = results.map(readCallOccurrenceKey);
+    expect(keys).toEqual([expect.any(String), expect.any(String)]);
+    expect(keys[0]).not.toBe(keys[1]);
+    const clocks = ofKind(agent, 'source-clock');
+    expect(clocks.map((row) => [row.toolCallId, row.zone])).toEqual([
+      ['c1', LA],
+      ['c1', LA],
+    ]);
+    expect(clocks.map(readCallOccurrenceKey)).toEqual(keys);
+  });
+
   it('each wall-clock source is named; two zones say the clocks differ', async () => {
     const { agent } = await build(
       [
@@ -572,9 +598,7 @@ describe('the rows cross the checkpoint door', () => {
   });
 });
 
-// ─── byte identity ───────────────────────────────────────────────────
-
-describe('off: without .time() nothing is checked, filed or printed', () => {
+describe('time inputs for result checks', () => {
   it('a clock carried from an earlier turn judges nothing this turn', () => {
     const clock = { kind: 'clock', turn: 1, iteration: 0, now: NOW, zone: LA };
     const window = {
@@ -595,7 +619,51 @@ describe('off: without .time() nothing is checked, filed or printed', () => {
     ).toMatchObject({ now: NOW, times: [{ toolCallId: 'c1', window: { how: 'filled' } }] });
   });
 
-  it('the period row, the event and the limits block are the bytes they were', async () => {
+  it('matches each occurrence to its own time rows and still reads legacy time rows', () => {
+    const identity = { toolCallId: 'c1', toolName: 'client_activity' };
+    const first = { ...identity, callOccurrenceKey: [1, 2, 3, 4, 0] as const };
+    const second = { ...identity, callOccurrenceKey: [1, 2, 3, 4, 1] as const };
+    const later = { ...identity, callOccurrenceKey: [1, 2, 3, 4, 2] as const };
+    const firstDrift = { outcome: 'shifted', byMs: 1000 };
+    const secondDrift = { outcome: 'shifted', byMs: 2000 };
+    const legacyDrift = { outcome: 'shifted', byMs: 3000 };
+    const clock = { kind: 'clock', turn: 1, iteration: 0, now: NOW, zone: LA };
+    const dispatch = { kind: 'call', turn: 1, iteration: 1, dispatchedAt: NOW };
+    const window = { kind: 'call-window', turn: 1, iteration: 1, how: 'filled' };
+    const firstAsked = { from: iso(NOW_MS - DAY), to: NOW };
+    const secondAsked = { from: iso(NOW_MS - 2 * DAY), to: NOW };
+    const findingsLedger = [
+      clock,
+      { ...dispatch, ...identity, drift: legacyDrift },
+      { ...dispatch, ...first, drift: firstDrift },
+      { ...window, ...first, asked: firstAsked },
+      { ...dispatch, ...second, drift: secondDrift },
+      { ...window, ...second, asked: secondAsked },
+    ];
+    expect(
+      timeOfBatch({ findingsLedger, turnNumber: 1 }, [first, second, identity, later]),
+    ).toEqual({
+      now: NOW,
+      times: [
+        {
+          toolCallId: first.toolCallId,
+          callOccurrenceKey: first.callOccurrenceKey,
+          drift: firstDrift,
+          window: { how: 'filled', asked: firstAsked },
+        },
+        {
+          toolCallId: second.toolCallId,
+          callOccurrenceKey: second.callOccurrenceKey,
+          drift: secondDrift,
+          window: { how: 'filled', asked: secondAsked },
+        },
+        { toolCallId: identity.toolCallId, drift: legacyDrift },
+        { toolCallId: later.toolCallId, callOccurrenceKey: later.callOccurrenceKey },
+      ],
+    });
+  });
+
+  it('without .time() keeps the period verdict and limits and records the call key', async () => {
     const clamp: Declare = () => ({
       queried: { from: iso(NOW_MS - 7 * DAY), to: iso(NOW_MS - 1) },
       held: { from: iso(NOW_MS - 90 * DAY), to: NOW },
@@ -620,6 +688,10 @@ describe('off: without .time() nothing is checked, filed or printed', () => {
       true,
     );
     const out = await agent.run({ message: 'activity' });
+    const result = agent
+      .checkpoint()
+      ?.history.find((message) => message.role === 'tool' && message.toolCallId === 'c1');
+    expect(result && readCallOccurrenceKey(result)).toEqual(expect.any(String));
     // The dataset tool declares no period, so only the clamping call is judged.
     expect(ofKind(agent, 'period')).toEqual([
       {
@@ -630,10 +702,18 @@ describe('off: without .time() nothing is checked, filed or printed', () => {
         iteration: 1,
         verdict: 'covered',
         argument: 'start_time',
+        callOccurrenceKey: result?.callOccurrenceKey,
       },
     ]);
     expect(periodEvents).toEqual([
-      { toolCallId: 'c1', toolName: 'client_activity', iteration: 1, turn: 1, verdict: 'covered' },
+      {
+        toolCallId: 'c1',
+        toolName: 'client_activity',
+        iteration: 1,
+        turn: 1,
+        verdict: 'covered',
+        callOccurrenceKey: result?.callOccurrenceKey,
+      },
     ]);
     expect(ofKind(agent, 'source-clock')).toEqual([]);
     const text = finalOf(out);

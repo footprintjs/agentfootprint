@@ -1,4 +1,5 @@
 import type { TypedScope } from 'footprintjs';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { AgentState } from '../../../types.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { TOOL_BATCH_FRAME_PREFIX } from '../../../../../lib/saidByPerson.js';
@@ -57,6 +58,7 @@ export function refuseSourceDeclarationBatch(
       content: contents[index]!,
       toolCallId: call.id,
       toolName: call.name,
+      ...callOccurrenceField(call.callOccurrenceKey),
       toolChars: 0,
       toolResultOrigin: 'not-entered',
     });

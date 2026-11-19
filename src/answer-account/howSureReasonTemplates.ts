@@ -34,6 +34,12 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.unplacedEvidence': t(
     "{{count:n,'evidence row','evidence rows'}} could not be matched to a call.",
   ),
+  'howSure.reason.resultUnavailable': t(
+    "The call result is unavailable in the retained history for {{count:n,'evidence row','evidence rows'}}.",
+  ),
+  'howSure.reason.callAddressUnreadable': t(
+    "The recorded call address is unreadable for {{count:n,'evidence row','evidence rows'}}.",
+  ),
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),

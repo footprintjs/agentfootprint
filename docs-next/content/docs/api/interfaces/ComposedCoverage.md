@@ -19,11 +19,23 @@ is never `complete`, and it establishes nothing.
 
 ## Properties
 
+### callOccurrenceKey?
+
+> `readonly` `optional` **callOccurrenceKey?**: `CallOccurrenceKey`
+
+Defined in: [src/semantics/coverage/types.ts:484](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L484)
+
+#### Inherited from
+
+[`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage).[`callOccurrenceKey`](/docs/api/interfaces/DeclaredCoverage#calloccurrencekey)
+
+***
+
 ### cannotCover
 
 > `readonly` **cannotCover**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L125)
+Defined in: [src/semantics/coverage/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L126)
 
 #### Inherited from
 
@@ -88,7 +100,7 @@ R5). Library-minted, like `resultId`; never the provider's call id.
 
 > `readonly` `optional` **inProgress?**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:499](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L499)
+Defined in: [src/semantics/coverage/types.ts:501](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L501)
 
 What the call found still running — its outcome not known yet — as the
 `coverage()` declared it (copied item by item; `short` and `count` when
@@ -105,7 +117,7 @@ well-formed, non-empty `in_progress`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L483)
+Defined in: [src/semantics/coverage/types.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L485)
 
 #### Inherited from
 
@@ -117,7 +129,7 @@ Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs
 
 > `readonly` **kind**: `"absence"` \| `"ledger"`
 
-Defined in: [src/semantics/coverage/types.ts:480](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L480)
+Defined in: [src/semantics/coverage/types.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L481)
 
 #### Inherited from
 
@@ -129,7 +141,7 @@ Defined in: [src/semantics/coverage/types.ts:480](https://github.com/footprintjs
 
 > `readonly` `optional` **lookedFor?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L485)
+Defined in: [src/semantics/coverage/types.ts:487](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L487)
 
 Present for `'absence'` only — what the search was for.
 
@@ -143,7 +155,7 @@ Present for `'absence'` only — what the search was for.
 
 > `readonly` **notChecked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L124)
+Defined in: [src/semantics/coverage/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L125)
 
 #### Inherited from
 
@@ -194,7 +206,7 @@ and turns, and some providers mint none.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:482](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L482)
+Defined in: [src/semantics/coverage/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L483)
 
 #### Inherited from
 
@@ -206,7 +218,7 @@ Defined in: [src/semantics/coverage/types.ts:482](https://github.com/footprintjs
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L481)
+Defined in: [src/semantics/coverage/types.ts:482](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L482)
 
 #### Inherited from
 

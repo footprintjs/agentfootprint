@@ -7,6 +7,7 @@ import { joinSystemPrompt } from '../../../composeRequest.js';
 import type { InjectionRecord } from '../../../../../recorders/core/types.js';
 import type { BatchSettlement } from '../contracts/callFacts.js';
 import { pausedBatchOf } from './paused.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { notDispatchedResult, notDispatchedMarker } from './settle.js';
 import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
@@ -73,6 +74,7 @@ export function buildToolSettlementOperations(
             content: result,
             toolCallId: call.id,
             toolName: call.name,
+            ...callOccurrenceField(call.callOccurrenceKey),
             notDispatched: notDispatchedMarker(paused),
           }),
         ),
@@ -131,6 +133,7 @@ export function buildToolSettlementOperations(
           toolCallId: call.id,
           args: links.peelCall(call).args,
           parallelCount: settlement.size,
+          ...callOccurrenceField(call.callOccurrenceKey),
           notDispatched: notDispatchedMarker(settlement.paused),
         },
         links.resolveTool(call.name).tool,
@@ -142,6 +145,7 @@ export function buildToolSettlementOperations(
           toolCallId: call.id,
           result,
           durationMs: 0,
+          ...callOccurrenceField(call.callOccurrenceKey),
           notDispatched: notDispatchedMarker(settlement.paused),
         },
         false,

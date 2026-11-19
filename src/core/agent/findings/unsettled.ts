@@ -111,6 +111,7 @@ import type {
 } from '../../../semantics/coverage/types.js';
 import type { PreviousResult } from './ledger.js';
 import type { FindingsRow, StandingRow, UnsettledByAbsenceRow } from './types.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 
 /** A result as the model was served it, read as an absence — the row's only source of words. */
 interface ServedAbsence {
@@ -201,6 +202,7 @@ function rowOf(
   return {
     kind: 'unsettled-by-absence',
     toolCallId: standing.toolCallId,
+    ...callOccurrenceField(standing.callOccurrenceKey),
     ...(notChecked.length > 0 && { notChecked }),
     ...(cannotCover.length > 0 && { cannotCover }),
     ...(isSaid(said) && { tryInstead: said }),

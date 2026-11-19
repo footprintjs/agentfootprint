@@ -8,6 +8,7 @@ import type { MentionRefusal, TimeParts } from '../reader.js';
 import type { CallWindow, WindowSource } from '../bind.js';
 import type { TimeRefusal } from '../periodForm.js';
 import type { ReadingChoice, TimeCandidate } from '../resolveRecord.js';
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 
 /** A window set in a UI, as the clock row records it. */
 export interface ControlWindow extends TimeRange {
@@ -37,13 +38,17 @@ export interface ClockOnResumeRow {
   readonly kept: ClockChange['kept'];
 }
 
+export interface TimeCallIdentity {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
+}
+
 /** One dispatched call's wall-clock moment (time design § 4, § 7.4). */
-export interface CallRow {
+export interface CallRow extends TimeCallIdentity {
   readonly kind: 'call';
   readonly turn: number;
   readonly iteration: number;
-  readonly toolCallId: string;
-  readonly toolName: string;
   /** The wall clock when the library handed the call to the tool — UTC, millisecond precision. */
   readonly dispatchedAt: InstantText;
   /**
@@ -168,12 +173,10 @@ export interface PersonWindow extends TimeRange {
  * answer is bound (`arguments/ask.ts` · `bindAnswer`). The LATEST row of a
  * call is the window it runs with (`callWindowOfCall`).
  */
-export interface CallWindowRow {
+export interface CallWindowRow extends TimeCallIdentity {
   readonly kind: 'call-window';
   readonly turn: number;
   readonly iteration: number;
-  readonly toolCallId: string;
-  readonly toolName: string;
   readonly how: CallWindow['how'];
   /** The index of the tool's form the call used (filled into, or read back from). */
   readonly form?: number;
@@ -216,12 +219,10 @@ export interface TimeDerivedRow {
  * wall times in `zone`. One row per call and zone. A period's offset is never
  * read as a clock — only a declared axis zone files this row.
  */
-export interface SourceClockRow {
+export interface SourceClockRow extends TimeCallIdentity {
   readonly kind: 'source-clock';
   readonly turn: number;
   readonly iteration: number;
-  readonly toolCallId: string;
-  readonly toolName: string;
   readonly zone: ZoneName;
 }
 

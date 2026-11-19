@@ -36,12 +36,18 @@
  */
 
 import { isPlacedToolResult, type PlacedToolResult } from '../../artifacts/placement.js';
+import {
+  callOccurrenceField,
+  readCallOccurrenceKey,
+  type CallOccurrenceKey,
+} from '../../lib/callOccurrence.js';
 import { leadingJsonValue } from '../../lib/servedJson.js';
 
 /** One ticket the library minted: the call it stands for and the ref it named. */
 export interface PlacedTicket {
   readonly toolCallId: string;
   readonly ref: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
 }
 
 /**
@@ -127,25 +133,51 @@ export function readPlacement(
  * The tickets a stored conversation keeps: only those whose call is still a
  * `role: 'tool'` message of the stored `history`, so the list is bounded by
  * the history it stands beside (a ticket whose message a window or a fold
- * removed can never be read again). A reused call id keeps every pair minted
- * under it while any message under that id remains, because the id alone
- * cannot say which of them is gone. `undefined` when none is left, so a
- * conversation that placed nothing stores no key.
+ * removed can never be read again). A recorded occurrence address names its
+ * own retained result; older receipts keep every pair for a still-present
+ * provider ID. A conversation that placed nothing stores no key.
  */
 export function ticketsStillServed(
   tickets: unknown,
   history: readonly { readonly role: string; readonly toolCallId?: string }[],
 ): readonly PlacedTicket[] | undefined {
-  const issued = issuedTicketsOf(tickets);
-  if (issued.size === 0) return undefined;
+  if (!Array.isArray(tickets)) return undefined;
+  const legacy: PlacedTicket[] = [];
+  const keyed: PlacedTicket[] = [];
+  for (const ticket of tickets as readonly unknown[]) {
+    if (typeof ticket !== 'object' || ticket === null) continue;
+    const row = ticket as Partial<PlacedTicket>;
+    if (typeof row.toolCallId !== 'string' || typeof row.ref !== 'string') continue;
+    const key = readCallOccurrenceKey(row);
+    if (key === undefined) legacy.push({ toolCallId: row.toolCallId, ref: row.ref });
+    else if (key !== null)
+      keyed.push({
+        toolCallId: row.toolCallId,
+        ref: row.ref,
+        ...callOccurrenceField(row.callOccurrenceKey),
+      });
+  }
   const served = new Set<string>();
-  for (const { role, toolCallId } of history) {
-    if (role === 'tool' && toolCallId !== undefined) served.add(toolCallId);
+  const occurrences = new Map<string, number>();
+  for (const message of history) {
+    if (message.role !== 'tool') continue;
+    if (message.toolCallId !== undefined) served.add(message.toolCallId);
+    const key = readCallOccurrenceKey(message);
+    if (typeof key === 'string') occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
   }
   const kept: PlacedTicket[] = [];
-  for (const [toolCallId, refs] of issued) {
+  for (const [toolCallId, refs] of issuedTicketsOf(legacy)) {
     if (!served.has(toolCallId)) continue;
     for (const ref of refs) kept.push({ toolCallId, ref });
+  }
+  const seen = new Set<string>();
+  for (const ticket of keyed) {
+    const key = readCallOccurrenceKey(ticket);
+    if (typeof key !== 'string' || occurrences.get(key) !== 1) continue;
+    const pair = JSON.stringify([key, ticket.ref]);
+    if (seen.has(pair)) continue;
+    seen.add(pair);
+    kept.push(ticket);
   }
   return kept.length > 0 ? kept : undefined;
 }
@@ -165,7 +197,8 @@ export function carriedTicketsOf(value: unknown): readonly PlacedTicket[] {
         typeof t === 'object' &&
         t !== null &&
         typeof (t as { toolCallId?: unknown }).toolCallId === 'string' &&
-        typeof (t as { ref?: unknown }).ref === 'string',
+        typeof (t as { ref?: unknown }).ref === 'string' &&
+        readCallOccurrenceKey(t) !== null,
     );
   if (!ok) {
     throw new TypeError(
@@ -174,7 +207,15 @@ export function carriedTicketsOf(value: unknown): readonly PlacedTicket[] {
         "stored history's calls.",
     );
   }
-  return (value as readonly PlacedTicket[]).map(({ toolCallId, ref }) => ({ toolCallId, ref }));
+  return (value as readonly PlacedTicket[]).map(copyTicket);
+}
+
+function copyTicket({ toolCallId, ref, callOccurrenceKey }: PlacedTicket): PlacedTicket {
+  return {
+    toolCallId,
+    ref,
+    ...callOccurrenceField(callOccurrenceKey),
+  };
 }
 
 /**
@@ -188,7 +229,6 @@ export function seededTickets(
   carried: readonly PlacedTicket[] | undefined,
   nudgeArmed: boolean,
 ): PlacedTicket[] | undefined {
-  if (carried !== undefined && carried.length > 0)
-    return carried.map(({ toolCallId, ref }) => ({ toolCallId, ref }));
+  if (carried !== undefined && carried.length > 0) return carried.map(copyTicket);
   return nudgeArmed ? [] : undefined;
 }

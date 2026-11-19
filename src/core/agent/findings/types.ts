@@ -56,6 +56,7 @@ import type {
 } from '../../../time/rows.js';
 import type { CoverageItem } from '../../../semantics/coverage/types.js';
 import type { ClaimVerificationRow } from './verificationTypes.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 /** Reserved metadata: optional observations; source-armed ASK declarations require our envelope. */
 export { RESERVED_ARGUMENT } from '../sourceContract.js';
@@ -140,12 +141,15 @@ export interface FindingsDeclaration {
 }
 
 /** Where a standing was declared: on a later tool call, or on the answer. */
-export type DeclaredOn = { readonly toolCallId: string } | 'answer';
+export type DeclaredOn =
+  | { readonly toolCallId: string; readonly callOccurrenceKey?: CallOccurrenceKey }
+  | 'answer';
 
 /** The model's basis for ONE tool call, filed before the call runs. */
 export interface BasisRow {
   readonly kind: 'basis';
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly iteration: number;
   readonly basis: Basis;
@@ -178,6 +182,7 @@ export interface StandingRow {
   readonly kind: 'standing';
   /** The PREVIOUS result's id — the result being judged, not the judging call. */
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /**
    * From the identified result (`offer.ts · knownResults`: the served
    * history's tool messages plus the previous batch); absent when the id
@@ -217,6 +222,7 @@ export interface StandingRow {
 /** One witness of a conflict — identities only, never the value. */
 export interface ConflictWitness {
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly subject: { readonly kind: string; readonly id: string };
   readonly predicate: string;
 }
@@ -268,6 +274,7 @@ export interface JudgmentRow {
   readonly kind: 'judgment';
   /** The RESULT judged — the tool call's id, the same key `StandingRow` uses. */
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly source: 'judge';
   /** The classifier's port name and the provider's resolved model string. */
@@ -303,6 +310,7 @@ export interface JudgmentRow {
 export interface JudgmentErrorRow {
   readonly kind: 'judgment-error';
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly source: 'judge';
   /** The classifier's port name; the model string is unknown when the call failed. */
@@ -430,6 +438,7 @@ export interface UnsettledByAbsenceRow {
   readonly kind: 'unsettled-by-absence';
   /** The ruled-out RESULT — the key of the standing this row is beside. */
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /**
    * The SERVED envelope's `not_checked` (the served result's leading JSON
    * object — a framework note joined after it is not part of it) — a

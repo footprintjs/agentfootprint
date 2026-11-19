@@ -6,6 +6,8 @@
  * Emits:   (types only — no runtime behavior here).
  */
 
+import type { CallOccurrenceKey } from '../lib/callOccurrence.js';
+
 export type ContextSlot = 'system-prompt' | 'messages' | 'tools';
 
 /**
@@ -73,14 +75,15 @@ export type LLMProviderName =
 export type ToolProtocol = 'native' | 'mcp' | 'http' | 'python-fn';
 
 /**
- * The tool call an event was produced for. Qualify this pair with the
- * event's run identity: providers may reuse call ids across iterations or
- * runs. A nested `ctx.tools` call carries its existing inner call id.
- * This identifies an invocation, not permission to execute it.
+ * The tool call an event was produced for. The library's occurrence key
+ * ties the recorded events and history result to one outer call. Providers
+ * may reuse their call ids across iterations or runs. Nested `ctx.tools`
+ * calls carry their own inner call ids.
  */
 export interface ToolCallEventIdentity {
   readonly toolCallId: string;
   readonly iteration: number;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
 }
 
 export type CompositionKind = 'Sequence' | 'Parallel' | 'Conditional' | 'Loop';

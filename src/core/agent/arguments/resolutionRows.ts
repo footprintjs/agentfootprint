@@ -1,5 +1,8 @@
 import type { InputValue } from '../../../tools/inputRequest.js';
 import type { CallWindow } from '../../../time/bind.js';
+import type { CallWindowRow } from '../../../time/rows.js';
+import { callWindowRow } from '../../../time/rowsBuild.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { carriesArgumentView, shownArgsOf } from '../../toolShownArgs.js';
 import type { SourceCheck } from './checks.js';
 import type { KeptAnswer } from './kept.js';
@@ -202,11 +205,12 @@ export function composeResolutionRows(
       context = fullRowContext(call, checked, toolOf, kept, decisions?.get(call.id), ports);
       contexts.set(call.id, context);
     }
-    const row =
+    const verdict =
       c.check !== undefined
         ? sourcedRow({ ...c, check: c.check }, toolOf, sources, stamp, context, ports)
         : plainRow(c, toolOf, stamp, kept, decisions?.get(c.toolCallId), context, ports);
-    if (row === undefined) continue;
+    if (verdict === undefined) continue;
+    const row = { ...verdict, ...callOccurrenceField(call.callOccurrenceKey) };
     const malformed = sources?.declared.get(c.toolCallId)?.malformed;
     if (malformed !== undefined && malformed > 0 && !counted.has(c.toolCallId)) {
       counted.add(c.toolCallId);
@@ -216,6 +220,24 @@ export function composeResolutionRows(
     rows.push(row);
   }
   return rows;
+}
+
+/** The `call-window` rows for this batch's decisions, in batch order. */
+export function callWindowRowsOf(
+  decisions: ReadonlyMap<string, CallWindow>,
+  calls: readonly BatchCall[],
+  stamp: { readonly turn: number; readonly iteration: number },
+): CallWindowRow[] {
+  return calls.flatMap((call) => {
+    const decision = decisions.get(call.id);
+    if (decision === undefined) return [];
+    return [
+      {
+        ...callWindowRow({ toolCallId: call.id, toolName: call.name }, decision, stamp),
+        ...callOccurrenceField(call.callOccurrenceKey),
+      },
+    ];
+  });
 }
 
 /** Only real private views need sibling fills; an ordinary call keeps its exact argument reference. */

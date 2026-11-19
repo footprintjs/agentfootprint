@@ -1,14 +1,9 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import type { TypedScope } from 'footprintjs';
-import type { AgentState } from '../../../types.js';
 import {
-  type CoverageReading,
   readCoverageResult,
   type DeclaredCoverage,
   type CoverageFacts,
-  type ToolAbsence,
 } from '../../../../../semantics/coverage/index.js';
-import type { ToolResultStatus } from '../../../../../semantics/toolEffects.js';
 import { copyPeriod } from '../../../../../semantics/coverage/period.js';
 import { warnPeriodUnjudged } from '../helpers/periodWarnings.js';
 import { type CoverageSection, readItemExtras } from '../../../../../semantics/coverage/items.js';
@@ -17,7 +12,7 @@ import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { composedEventFields } from '../../../../../semantics/coverage/search/events.js';
 import type { ComposedCoverage } from '../../../../../semantics/coverage/composedCoverage.js';
 import { captureNegativeCoverage } from '../../../negativeClaims/capture.js';
-import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolCoverageOperations } from '../contracts/operations/coverage.js';
 import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
 
@@ -53,15 +48,21 @@ export function buildToolCoverageOperations(
    * block reads it. Written only when a tool declares one, so an agent that
    * returns neither shape commits exactly what it always did.
    */
-  const declareCoverage = (
-    scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
-    value: unknown,
+  const declareCoverage: ToolCoverageOperations['declareCoverage'] = (
+    scope,
+    call,
+    value,
     /** What the search funnel composed (`../../searchCoverage.ts`) — read in place of the value. */
-    composed?: CoverageReading,
-  ): ToolResultStatus | undefined => {
+    composed,
+  ) => {
     const reading = composed ?? readCoverageResult(value, call.toolName);
     if (reading === undefined) return undefined;
+    const base = {
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+      ...callOccurrenceField(call.callOccurrenceKey),
+    };
     const rows: DeclaredCoverage[] = [];
     for (const facts of reading.declared) {
       // A statement the LIBRARY composed from the tool's `search`: the row
@@ -99,9 +100,7 @@ export function buildToolCoverageOperations(
       const inProgress = facts.inProgress?.map(copyInProgressItem);
       if (facts.kind === 'absence') {
         typedEmit(scope, 'agentfootprint.tools.absent', {
-          toolName: call.toolName,
-          toolCallId: call.toolCallId,
-          iteration: call.iteration,
+          ...base,
           ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
           checked,
           ...(notChecked.length > 0 && { notChecked }),
@@ -120,9 +119,7 @@ export function buildToolCoverageOperations(
         });
       } else {
         typedEmit(scope, 'agentfootprint.tools.coverage_declared', {
-          toolName: call.toolName,
-          toolCallId: call.toolCallId,
-          iteration: call.iteration,
+          ...base,
           ...(checked.length > 0 && { checked }),
           ...(notChecked.length > 0 && { notChecked }),
           ...(cannotCover.length > 0 && { cannotCover }),
@@ -132,9 +129,7 @@ export function buildToolCoverageOperations(
       }
       rows.push({
         kind: facts.kind,
-        toolName: call.toolName,
-        toolCallId: call.toolCallId,
-        iteration: call.iteration,
+        ...base,
         ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
         checked,
         notChecked,
@@ -154,11 +149,7 @@ export function buildToolCoverageOperations(
    * declaration's constants, the gaps and each other facet as a reference —
    * never a composed value, armed or not (`search/events.ts`).
    */
-  const declareComposed = (
-    scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
-    facts: CoverageFacts,
-  ): DeclaredCoverage => {
+  const declareComposed: ToolCoverageOperations['declareComposed'] = (scope, call, facts) => {
     const composed = facts.composed as NonNullable<CoverageFacts['composed']>;
     const period = facts.period !== undefined ? copyPeriod(facts.period) : undefined;
     if (period !== undefined && deps.resultsLayer !== true) warnPeriodUnjudged(call.toolName);
@@ -167,6 +158,7 @@ export function buildToolCoverageOperations(
       toolName: call.toolName,
       toolCallId: call.toolCallId,
       iteration: call.iteration,
+      ...callOccurrenceField(call.callOccurrenceKey),
     };
     if (facts.kind === 'absence') {
       typedEmit(scope, 'agentfootprint.tools.absent', {
@@ -245,13 +237,13 @@ export function buildToolCoverageOperations(
    * caller errors the call with it and does not pause. That is what the same
    * value returned would do. `undefined` means filed.
    */
-  const declareRaisedAbsence = (
-    scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
-    args: Readonly<Record<string, unknown>>,
-    absence: ToolAbsence,
-    history: readonly LLMMessage[],
-  ): string | undefined => {
+  const declareRaisedAbsence: ToolCoverageOperations['declareRaisedAbsence'] = (
+    scope,
+    call,
+    args,
+    absence,
+    history,
+  ) => {
     try {
       declareCoverage(scope, call, absence);
     } catch (err) {

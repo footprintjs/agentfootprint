@@ -1,4 +1,5 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
+import type { CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
@@ -96,6 +97,7 @@ export function buildDispatchContext(
       toolName: string;
       result: string;
       toolCallId: string;
+      callOccurrenceKey?: CallOccurrenceKey;
       status?: ToolResultStatus;
     }[] = [];
     // Findings standings were preserved in the admission preflight, before

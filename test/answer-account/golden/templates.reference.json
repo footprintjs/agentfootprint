@@ -1783,6 +1783,24 @@
   ],
   "source": "library"
  },
+ "howSure.reason.resultUnavailable@1": {
+  "text": "The call result is unavailable in the retained history for 2 evidence rows.",
+  "parts": [
+   {
+    "text": "The call result is unavailable in the retained history for 2 evidence rows."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callAddressUnreadable@1": {
+  "text": "The recorded call address is unreadable for 2 evidence rows.",
+  "parts": [
+   {
+    "text": "The recorded call address is unreadable for 2 evidence rows."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.emptyUndeclared@1": {
   "text": "2 calls returned nothing and did not say what they searched.",
   "parts": [

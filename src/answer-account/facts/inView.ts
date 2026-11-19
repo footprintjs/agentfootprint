@@ -11,7 +11,9 @@
  *   `source: 'tool-result'`, `sourceId: <toolCallId>` whose
  *   `meta.runtimeStageId` equals that of the `context.slot_composed` with
  *   `slot: 'messages'` and `iteration: N`.
- * The content is parsed from the matching `history` message (by `toolCallId`).
+ * The content is parsed from the matching `history` message. The witness's
+ * occurrence key identifies that message; legacy witnesses use the provider
+ * id or the recorded position and content hash.
  *
  * Only EARLIER answers' results: `distance` (messages a PERSON wrote after the
  * result, up to and including the current one — `lib/saidByPerson.ts` · `isPersonEntry`,
@@ -22,6 +24,7 @@
  */
 
 import { historyCallForWitness, readHistoryCalls } from '../../core/agent/recordedCalls.js';
+import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
 import type { InViewFact, SentenceVar } from '../types.js';
@@ -121,12 +124,13 @@ export function readInView(ctx: ReadContext, currentResults: ReadonlySet<number>
       keptOut += 1;
       continue;
     }
-    const occurrence = historyCallForWitness(
-      calls,
-      id,
-      witness.payload.position,
-      witness.payload.contentHash,
-    );
+    const key = isFieldKeptOut(witness, 'callOccurrenceKey')
+      ? null
+      : readCallOccurrenceKey(witness.payload);
+    const occurrence =
+      key === undefined
+        ? historyCallForWitness(calls, id, witness.payload.position, witness.payload.contentHash)
+        : historyCallForWitness(calls, id, undefined, undefined, key);
     if (occurrence === undefined) continue;
     const { index: historyIndex, message, toolName } = occurrence;
     if (currentResults.has(historyIndex) || toolName === undefined) continue;
