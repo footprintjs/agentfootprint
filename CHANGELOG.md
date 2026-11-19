@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.0.0] - 2026-11-19
+
+### Breaking
+
+- **The answer's standing now reports a tool call that was refused or failed.** A later
+  completed call of the same tool with equal recorded arguments clears the earlier
+  reason. Calls whose arguments are unavailable or hidden cannot establish a match.
+  Each recorded result keeps its own outcome even when two calls share an ID.
+  The answer account also shows a recorded non-success status for a tool that ran.
+
+  Migration: Handle the new `call-not-completed` assessment reason in code that
+  switches exhaustively on reason types. Displays that show the standing may now say
+  "not sure" for a turn that previously said "not assessed" or "consistent."
+
+- **The answer's standing reports unfinished tool work and skipped steps.** It
+  reads an admitted partial or pending result and the committed record of a
+  procedure advancing past a declared step.
+  Each reported status belongs to its own recorded result, even when calls share an ID.
+
+  Migration: Handle `work-not-finished` and `step-skipped` in exhaustive
+  assessment reason switches. Tool history can now include the record-only
+  `reportedStatus` field. An inline result that fails validation after the
+  envelope is read now omits the rejected status from its end event, matching
+  the resumed paths.
+
+- **Snapshots and saved recordings include recorded value types and array lengths by default.** Read a path at a replay commit with `contextShapeAt` from `agentfootprint/observe`. Redacted values withhold their type and length. Recursive discovery is opt-in.
+
+  Migration: If you store, hash or compare the JSON from `getSnapshot()`, `getLastSnapshot()` or `recordRun(agent)`, eligible snapshots now contain a `contextShapes` field and their bytes change. Pass `{ contextShapes: false }` to the snapshot getter or as the second argument to `recordRun` to keep the previous bytes.
+
+### Added
+
+- **Read coverage counts and evidence for a completed turn.** Hosts can read
+  per-call declaration counts and the final evidence verdict before filing a
+  recording, and use the same readers when the recording is loaded later.
+
+### Fixed
+
+- **Keep repeated tool-call IDs separate in answer accounts.** Calls keep their
+  own recorded result, status and evidence when a provider reuses an ID. The
+  account identifies evidence rows it could not match to a call and keeps them
+  out of call totals.
+
 ## [15.0.1] - 2026-11-19
 
 ### Fixed
