@@ -61,7 +61,7 @@ import {
   STANDING_LINE_OPENINGS,
   type AnswerAssessmentData,
 } from '../../../../src/core/agent/assessment/compose.js';
-import { answerFoldReads } from '../../../../src/core/agent/honesty/mounts.js';
+import { answerFoldReads } from '../../../../src/core/agent/honesty/answerFoldReads.js';
 import { honestyLayersOf } from '../../../../src/core/agent/honesty/armed.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import { TOOL_RESULTS } from '../fixtures/sanEvidence.js';

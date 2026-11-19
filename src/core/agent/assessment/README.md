@@ -49,7 +49,7 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **One stage** — `stage.ts` · `assessAnswerStage`, mounted by `honesty/mounts.ts` ·
   `startFinalBranch` (the one helper both chart builders call) and loaded through
   `import()` on the first armed answer. It reads ONLY the committed keys the fold
-  reads that this agent's arms can write (`honesty/mounts.ts` · `answerFoldReads`),
+  reads that this agent's arms can write (`honesty/answerFoldReads.ts` · `answerFoldReads`),
   folds them, files the projection for PrepareFinal (`answerAssessment`, committed in
   the final branch's own state — its subflow result keeps that copy — never in the
   run's state; the copy is a hand-off, not a source: every reader re-folds) and fires
