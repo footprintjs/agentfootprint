@@ -33,7 +33,7 @@
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
-    "agentfootprint-lens": "file:vendor/lens/agentfootprint-lens-0.83.0.tgz",
+    "agentfootprint-lens": "0.84.0",
     "footprint-explainable-ui": "^2.0.0",
     "footprintjs": "^14.0.0",
     "fumadocs-core": "^16.10.5",
@@ -50,12 +50,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "semver": "^7.8.5",
     "tsx": "^4.19.2"
-  },
-  "overrides": {
-    "agentfootprint-lens": {
-      "agentfootprint": "$agentfootprint"
-    }
   }
 }
