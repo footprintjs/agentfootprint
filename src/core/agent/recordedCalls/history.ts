@@ -103,19 +103,33 @@ export function readHistoryCalls(history: readonly unknown[]): readonly HistoryC
   });
 }
 
+function* historyProposalLists(history: readonly unknown[], begins: number) {
+  for (let index = begins + 1; index < history.length; index++) {
+    const message: unknown = Object.getOwnPropertyDescriptor(history, String(index))?.value;
+    if (!isRecord(message) || message.role !== 'assistant' || message.toolCalls === undefined) {
+      continue;
+    }
+    yield { index, list: readOwnList(message.toolCalls, MAX_PROPOSALS) };
+  }
+}
+
+function* historyProposals(history: readonly unknown[]): Iterable<Proposal> {
+  for (const { index, list } of historyProposalLists(history, -1)) {
+    for (const call of list?.entries ?? []) {
+      if (isRecord(call)) yield { index, call };
+    }
+  }
+}
+
 export function uniqueHistoryProposal(
   history: readonly unknown[],
   id: string,
 ): Proposal | undefined {
   let found: Proposal | undefined;
-  for (let index = 0; index < history.length; index++) {
-    const message: unknown = Object.getOwnPropertyDescriptor(history, String(index))?.value;
-    if (!isRecord(message) || message.role !== 'assistant') continue;
-    for (const call of proposalsOf(message)) {
-      if (!isRecord(call) || call.id !== id) continue;
-      if (found !== undefined) return undefined;
-      found = { index, call };
-    }
+  for (const proposal of historyProposals(history)) {
+    if (proposal.call.id !== id) continue;
+    if (found !== undefined) return undefined;
+    found = proposal;
   }
   return found;
 }
@@ -151,6 +165,90 @@ export function historyCallResolver(calls: readonly HistoryCall[]) {
   }
   return (id: string, name?: string): ResolvedHistoryCall =>
     resolveHistoryCall(byId.get(id) ?? [], id, name);
+}
+
+function countProposals(history: readonly unknown[], begins: number) {
+  const byId = new Map<string, Map<string | undefined, number>>();
+  for (const { list } of historyProposalLists(history, begins)) {
+    // An unreadable part of a batch cannot prove that it holds no competitor.
+    if (list === undefined || list.unread > 0) return { complete: false, byId };
+    for (const call of list.entries) {
+      if (!isRecord(call)) return { complete: false, byId };
+      const id = str(call.id);
+      if (id === undefined) return { complete: false, byId };
+      const name = str(call.name);
+      const names = byId.get(id) ?? new Map<string | undefined, number>();
+      names.set(name, (names.get(name) ?? 0) + 1);
+      byId.set(id, names);
+    }
+  }
+  return { complete: true, byId };
+}
+
+type ArgumentIteration = number | null;
+
+/** A missing or conflicting stamp cannot establish one iteration. */
+function argumentIterations(rows: Iterable<readonly [number, Readonly<Record<string, unknown>>]>) {
+  const byId = new Map<string, Map<string | undefined, ArgumentIteration>>();
+  for (const [, row] of rows) {
+    const id = str(row.toolCallId);
+    if (id === undefined) continue;
+    const name = str(row.toolName);
+    const iteration =
+      typeof row.iteration === 'number' && Number.isSafeInteger(row.iteration) && row.iteration >= 0
+        ? row.iteration
+        : null;
+    const names = byId.get(id) ?? new Map<string | undefined, ArgumentIteration>();
+    const previous = names.get(name);
+    names.set(name, previous === undefined || previous === iteration ? iteration : null);
+    byId.set(id, names);
+  }
+  return byId;
+}
+
+function hasOneIteration(
+  names: ReadonlyMap<string | undefined, ArgumentIteration> | undefined,
+  tool: string | undefined,
+): boolean {
+  if (names === undefined) return false;
+  let iteration: number | undefined;
+  for (const [name, stamp] of names) {
+    if (tool !== undefined && name !== undefined && name !== tool) continue;
+    if (stamp === null || (iteration !== undefined && iteration !== stamp)) return false;
+    iteration = stamp;
+  }
+  return iteration !== undefined;
+}
+
+/**
+ * An argument row has a result address only with one ledger iteration, at
+ * most one compatible retained proposal and exactly one compatible result.
+ * The ledger can outlive its history window. Without a result, the existing
+ * never-landed proposal correction still uses its own key.
+ */
+export function argumentHistoryCallResolver(
+  calls: readonly HistoryCall[],
+  history: readonly unknown[],
+  begins: number,
+  rows: Iterable<readonly [number, Readonly<Record<string, unknown>>]>,
+) {
+  const resolve = historyCallResolver(calls);
+  let retained: ReturnType<typeof countProposals> | undefined;
+  let iterationsById: ReturnType<typeof argumentIterations> | undefined;
+  return (id: string, name?: string): ResolvedHistoryCall => {
+    const result = resolve(id, name);
+    if (result.kind !== 'matched') return result;
+    retained ??= countProposals(history, begins);
+    if (!retained.complete) return { kind: 'ambiguous' };
+    const tool = result.call.toolName === undefined ? undefined : name;
+    const names = retained.byId.get(id);
+    let proposals = 0;
+    for (const [name, count] of names ?? []) {
+      if (tool === undefined || name === undefined || name === tool) proposals += count;
+    }
+    const iterations = (iterationsById ??= argumentIterations(rows)).get(id);
+    return proposals <= 1 && hasOneIteration(iterations, tool) ? result : { kind: 'ambiguous' };
+  };
 }
 
 /** An id-only witness can name a result only when the retained history has one candidate. */

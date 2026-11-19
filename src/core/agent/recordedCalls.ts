@@ -1,4 +1,5 @@
 export {
+  argumentHistoryCallResolver,
   historyCallAt,
   historyCallForWitness,
   historyCallResolver,

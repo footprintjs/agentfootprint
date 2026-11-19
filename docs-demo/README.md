@@ -2,8 +2,11 @@
 
 This app runs the published cohort pinned in its own lock. The Quick Start
 viewer opens a saved graph of the real, deterministic mock weather run. The
-skill views show the routing graphs from the two skill guides. The docs run
-the same fixtures against the library at the current commit in `check:tryit`.
+skill views show the routing graphs from the two skill guides. Dynamic ReAct
+records a live run with a scripted model and opens the native Lens viewer.
+Its separate subflow view shows the recorded structure of the model-call
+loop. The docs run the same fixtures against the library at the current
+commit in `check:tryit`.
 
 ```sh
 npm ci --strict-peer-deps
@@ -24,9 +27,10 @@ weather fixture or cohort change. For a reviewed AgentFootprint version bump,
 record its release commit in the generator. Graphviz's pinned WASM build draws
 both SVGs from the Explainable UI recorder's graph; the viewer reads the same
 graph and uses Explainable UI's native `TracedFlow`. Use
-`npm run gen:skill-graphs` for changes to the skill fixtures.
+`npm run gen:skill-graphs` for changes to the skill fixtures and
+`npm run gen:dynamic-react` for changes to the Dynamic ReAct fixture.
 
 The build emits `dist/` with relative asset URLs for `/demo/quick-start/`.
-The guide links use the `view` query parameter to open a skill graph and a
+The guide links use the `view` query parameter to open the matching view and a
 fragment to reach its section on the static fallback. Deploy can replace that
 fallback's HTML with the verified viewer and add its assets.

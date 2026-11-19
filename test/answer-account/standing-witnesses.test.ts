@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, defineTool, isInputPause, requestInput, slidingWindow } from '../../src/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer, recordRun } from '../../src/observe.js';
+import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
 import { assertP1 } from './helpers.js';
@@ -84,6 +84,7 @@ interface MutableSnapshot {
   sharedState: {
     history: Record<string, unknown>[];
     findingsLedger: Record<string, unknown>[] | string;
+    compactions?: readonly unknown[];
   };
   recorders: { id: string }[];
 }
@@ -104,6 +105,112 @@ function assertUnclaimed(recording: Recording) {
 }
 
 describe('standing reasons rebuilt from their committed witnesses', () => {
+  it.each(['in-tool pause', 'sliding window', 'sliding window after both results left'] as const)(
+    'keeps the first same-ID argument failure with a %s',
+    async (mode) => {
+      const windowed = mode !== 'in-tool pause';
+      const bothEvicted = mode === 'sliding window after both results left';
+      const name = 'read_shelf';
+      const read = (shelf: string, quote: string, id = 'reused') =>
+        call(id, name, {
+          shelf,
+          _findings: { from: [{ argument: 'shelf', source: 'user', quote }] },
+        });
+      const entered: string[] = [];
+      const builder = Agent.create({
+        provider: mock({
+          replies: [
+            read('alpha', 'missing alpha'),
+            read('beta', 'beta'),
+            ...(bothEvicted ? [read('gamma', 'gamma', 'different')] : []),
+            { content: 'Read the shelf.' },
+          ],
+        }),
+        model: 'mock',
+        ...(windowed && { keepLastToolResults: false }),
+      })
+        .tool(
+          defineTool({
+            name,
+            description: 'Read an inert fixture shelf.',
+            inputSchema: { type: 'object', properties: { shelf: { type: 'string' } } },
+            askOrAssume: { shelf: { assume: 'fallback' } },
+            execute({ shelf }) {
+              entered.push(String(shelf));
+              if (!windowed && shelf === 'beta') {
+                return requestInput({
+                  id: 'confirm-shelf',
+                  question: 'Continue the fixture lookup?',
+                  fields: [{ id: 'confirm', type: 'string', required: true }],
+                });
+              }
+              return `${shelf} fixture result ${'x'.repeat(600)}`;
+            },
+          }),
+        )
+        .inputsLayer({ argumentSources: true });
+      if (windowed) builder.window(slidingWindow({ keepRecentTurns: 1 }));
+      const agent = builder.build();
+      const recorder = recordRun(agent);
+      try {
+        const result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
+        if (windowed) expect(result).toBe('Read the shelf.');
+        else expect(isInputPause(result)).toBe(true);
+        expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
+        const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+        const { history, findingsLedger, compactions } = snapshotOf(recording).sharedState;
+        const results = history.filter((message) => message.role === 'tool');
+        expect(results).toHaveLength(1);
+        if (windowed) {
+          const retained = bothEvicted ? 'gamma' : 'beta';
+          expect(results[0]?.content).toContain(`${retained} fixture result`);
+          expect(history.filter((message) => Array.isArray(message.toolCalls))).toMatchObject([
+            { toolCalls: [{ args: { shelf: retained } }] },
+          ]);
+          expect(compactions).toContainEqual(expect.objectContaining({ removedMessageCount: 2 }));
+          const settled = recording.events.filter(
+            (event) =>
+              event.type === 'agentfootprint.stream.tool_end' &&
+              event.payload.toolCallId === 'reused',
+          );
+          expect(settled).toHaveLength(2);
+        }
+        expect(findingsLedger).toMatchObject([
+          { kind: 'argument', argument: 'shelf', iteration: 1, failed: 'quote-not-found' },
+          { kind: 'argument', argument: 'shelf', iteration: 2, source: 'said' },
+          ...(bothEvicted
+            ? [
+                {
+                  kind: 'argument',
+                  toolCallId: 'different',
+                  argument: 'shelf',
+                  iteration: 3,
+                  source: 'said',
+                },
+              ]
+            : []),
+        ]);
+        const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
+        const assessment = assessAnswer(recording);
+        expect(
+          assessment.reasons.find((row) => row.reason === 'argument-unverified'),
+        ).toMatchObject({
+          witness: [pointer],
+          ...(!bothEvicted && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
+        });
+        const account = accountForAnswer(recording);
+        const reason = account.rows
+          .find((row) => row.id === 'how-sure')
+          ?.lines.find((line) => line.template.id === 'howSure.reason.argumentUnverified');
+        expect(reason).toMatchObject({ pointers: [pointer] });
+        assertP1(account, recording);
+      } finally {
+        recorder.stop();
+        await agent.shutdown();
+      }
+    },
+  );
+
   it.each([
     ['Review', 'Review reported its work as partial and Submission reported its work as pending'],
     [undefined, 'Submission reported its work as pending and a tool reported unfinished work'],

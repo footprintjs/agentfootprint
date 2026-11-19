@@ -4,6 +4,7 @@ import { TracedFlow, type TraceGraph } from 'footprint-explainable-ui/flowchart'
 import { useState, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DemoFrame, RecordingCohort, type DemoFrameContent } from './DemoFrame';
+import type { DynamicReactViewProps } from './DynamicReactRun';
 import type { SkillGraphDemo, SkillGraphViewProps } from './SkillGraphTryItInner';
 import weatherRun from './generated/weather-run.json';
 import './style.css';
@@ -76,15 +77,30 @@ const skillViews = {
   { demo: SkillGraphDemo; title: string; guideTitle: string; guideHref: string }
 >;
 
+const dynamicReactViews = {
+  'dynamic-react': {
+    title: 'Dynamic ReAct live demo',
+    anchor: 'try-it-live',
+    fallback: 'The guide has the recorded run.',
+    load: () => import('./DynamicReactRun'),
+  },
+  'dynamic-react-subflows': {
+    title: 'Dynamic ReAct subflows',
+    anchor: 'how-every-iteration-actually-works',
+    fallback: 'The guide has the recorded diagram.',
+    load: () => import('./DynamicReactSubflows'),
+  },
+};
+
 const root = createRoot(document.getElementById('root')!);
 const params = new URLSearchParams(window.location.search);
 const view = params.get('view');
+const version = params.get('agentfootprint');
 const skillView =
   view === 'skill-graph-quickstart' || view === 'skills-explained' ? skillViews[view] : undefined;
 
 if (skillView) {
   document.title = `${skillView.title} · AgentFootprint`;
-  const version = params.get('agentfootprint');
 
   const renderSkillView = (View?: ComponentType<SkillGraphViewProps>) => {
     root.render(
@@ -110,6 +126,41 @@ if (skillView) {
     ({ default: View }) => renderSkillView(View),
     () => renderSkillView(),
   );
+} else if (view === 'dynamic-react' || view === 'dynamic-react-subflows') {
+  const { anchor, fallback, load, title } = dynamicReactViews[view];
+  // All generated views and the live SDK use the same locked app cohort.
+  const { provenance } = weatherRun;
+  document.title = `${title} · AgentFootprint`;
+
+  const renderDynamicReactView = (View?: ComponentType<DynamicReactViewProps>, error?: string) => {
+    root.render(
+      <DemoFrame>
+        {(frame) => (
+          <>
+            <a href={`../../docs/build/dynamic-react/#${anchor}`}>← Back to Dynamic ReAct</a>
+            <header id={view}>
+              <h1>{title}</h1>
+            </header>
+            {View ? (
+              <View {...frame} provenance={provenance} />
+            ) : (
+              <p>{error ? `${error} ${fallback}` : 'Loading the interactive viewer…'}</p>
+            )}
+          </>
+        )}
+      </DemoFrame>,
+    );
+  };
+
+  if (version !== null && !provenance.cohort.includes(`agentfootprint@${version}`)) {
+    renderDynamicReactView(undefined, 'The interactive viewer is unavailable for this version.');
+  } else {
+    renderDynamicReactView();
+    load().then(
+      ({ default: View }) => renderDynamicReactView(View),
+      () => renderDynamicReactView(undefined, 'The interactive viewer is unavailable.'),
+    );
+  }
 } else {
   root.render(<DemoFrame>{(frame) => <QuickStartWeatherTrace {...frame} />}</DemoFrame>);
 }

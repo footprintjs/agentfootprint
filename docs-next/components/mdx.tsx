@@ -5,9 +5,8 @@ import { Aside, Card, CardGrid, Tabs, TabItem } from '@/components/starlight-shi
 import { Diagram } from '@/components/Diagram';
 import { AgentFlowchart } from '@/components/AgentFlowchart';
 import { ReplayEmbed } from '@/components/ReplayEmbed';
-import { DynamicReactTryIt } from '@/components/DynamicReactTryIt';
+import { DynamicReactRecording, DynamicReactSubflowsFigure } from '@/components/DynamicReactFigure';
 import { SkillGraphFigure, QuickstartSkillGraphMermaid } from '@/components/SkillGraphFigure';
-import { SubflowLensTryIt } from '@/components/SubflowLensTryIt';
 import type { MDXComponents } from 'mdx/types';
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
@@ -24,10 +23,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Diagram,
     AgentFlowchart,
     ReplayEmbed,
-    DynamicReactTryIt,
+    DynamicReactRecording,
+    DynamicReactSubflowsFigure,
     SkillGraphFigure,
     QuickstartSkillGraphMermaid,
-    SubflowLensTryIt,
     ...components,
   };
 }
