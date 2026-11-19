@@ -10,6 +10,7 @@ import {
   UnsupportedNativeOutputError,
 } from '../../../../provider-contract/nativeOutputSchema.js';
 import type { LLMProvider, LLMRequest } from '../../../../provider-contract/types.js';
+import { freezeNativeOutputFormat } from '../../nativeOutputFormat.js';
 
 type OutputFormat = LLMRequest['outputFormat'];
 
@@ -35,7 +36,7 @@ export function selectOutputFormat(
 ): LLMRequest {
   if (!auto || outputFormat === undefined) return request;
   if (autoNativeOutputSchemaFor(provider, request.model)) {
-    return request.outputFormat === undefined ? { ...request, outputFormat } : request;
+    return request.outputFormat === outputFormat ? request : { ...request, outputFormat };
   }
   if (request.outputFormat === undefined) return request;
   const { outputFormat: _unused, ...ordinary } = request;
@@ -51,7 +52,7 @@ export function detachProviderInput(
   markers: readonly CacheMarker[],
   outputFormat: OutputFormat,
 ) {
-  return structuredClone({
+  const detached = structuredClone({
     request: {
       ...request,
       messages: [...request.messages],
@@ -60,6 +61,8 @@ export function detachProviderInput(
     markers: [...markers],
     outputFormat,
   });
+  if (detached.outputFormat !== undefined) freezeNativeOutputFormat(detached.outputFormat);
+  return detached;
 }
 
 /** The built-in strategies leave the message values alone. The receipt can
@@ -84,11 +87,18 @@ export function providerDispatchFor(
   outputFormat: OutputFormat,
 ) {
   let prior: { input: LLMRequest; provider: LLMProvider; effective: LLMRequest } | undefined;
-  return (input: LLMRequest, provider: LLMProvider): LLMRequest => {
-    if (prior?.input === input && prior.provider === provider) return prior.effective;
-    const selected = selectOutputFormat(input, provider, auto, outputFormat);
-    const effective = withRequestSignal(selected, signal);
-    prior = { input, provider, effective };
-    return effective;
+  const select = (request: LLMRequest, provider: LLMProvider): LLMRequest =>
+    selectOutputFormat(request, provider, auto, outputFormat);
+  return {
+    select,
+    forAttempt(input: LLMRequest, provider: LLMProvider): LLMRequest {
+      if (prior?.input === input && prior.provider === provider) {
+        prior.effective = select(prior.effective, provider);
+        return prior.effective;
+      }
+      const effective = withRequestSignal(select(input, provider), signal);
+      prior = { input, provider, effective };
+      return effective;
+    },
   };
 }

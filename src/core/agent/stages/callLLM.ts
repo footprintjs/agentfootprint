@@ -657,7 +657,7 @@ export function buildCallLLMStage(
     );
     const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
       const selectedProvider = hooks.provider ?? provider;
-      req = dispatchFor(req, selectedProvider);
+      req = dispatchFor.forAttempt(req, selectedProvider);
       assertForcedRequestSupported(selectedProvider, req);
       throwIfAborted(runSignal);
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
@@ -759,10 +759,10 @@ export function buildCallLLMStage(
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
         if (deps.findings === true) candidate = capture(attempts.request);
-        resp = await untilAborted(
-          selectedProvider.complete(attempts.request, attemptHooks),
-          runSignal,
-        );
+        const completion = selectedProvider.stream
+          ? dispatchFor.select(attempts.request, selectedProvider)
+          : attempts.request;
+        resp = await untilAborted(selectedProvider.complete(completion, attemptHooks), runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
