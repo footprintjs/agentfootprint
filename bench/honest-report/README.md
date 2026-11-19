@@ -79,9 +79,11 @@ node --permission --allow-fs-read="$PWD" \
 Before loading the adapter, the runner verifies the input hashes and exact
 candidate archive, lock and installed tree against the rehearsal receipt. It
 then exclusively creates the run ledger so a second invocation cannot overwrite
-attempts. The first B draw in each cell determines the USD 3 projection gate.
-Requests use the USD 4 budget stop and the existing eight-request bound. Keep
+attempts. The first B draw in each cell determines the USD 4 projection gate.
+Requests use the USD 5 budget stop and the existing eight-request bound. Keep
 partial rows and the ledger on any stop.
+
+The completed comparison is recorded in [Batch 6 results](RESULTS.md).
 
 The strict and supplemental summaries report literal `done` and `partly` for
 incomplete desk outcomes separately from the frozen rule count. On the pending
