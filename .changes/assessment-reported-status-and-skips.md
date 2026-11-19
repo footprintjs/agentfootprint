@@ -6,6 +6,7 @@ bump: major
 **The answer's standing reports unfinished tool work and skipped steps.** It
 reads an admitted partial or pending result and the committed record of a
 procedure advancing past a declared step.
+Each reported status belongs to its own recorded result, even when calls share an ID.
 
 Migration: Handle `work-not-finished` and `step-skipped` in exhaustive
 assessment reason switches. Tool history can now include the record-only

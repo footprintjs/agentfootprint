@@ -13,14 +13,18 @@ const call = (id: string, name: string, args: Record<string, unknown> = {}) => (
   toolCalls: [{ id, name, args }],
 });
 
-async function recorded(agent: Agent): Promise<Recording> {
+async function recorded(agent: Agent) {
   const recorder = recordRun(agent);
-  await agent.run({ message: 'Submit the request.' });
-  recorder.stop();
-  return JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+  try {
+    const result = await agent.run({ message: 'Submit the request.' });
+    const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+    return { result, recording };
+  } finally {
+    recorder.stop();
+  }
 }
 
-function pending(displayName?: string): Promise<Recording> {
+async function pending(displayName?: string): Promise<Recording> {
   const agent = Agent.create({
     provider: mock({ replies: [call('c1', 'submit_request'), { content: REPLY }] }),
     model: 'mock',
@@ -36,10 +40,10 @@ function pending(displayName?: string): Promise<Recording> {
     )
     .answerLayer({ standingLine: true })
     .build();
-  return recorded(agent);
+  return (await recorded(agent)).recording;
 }
 
-function skipped(count = 1): Promise<Recording> {
+async function skipped(count = 1): Promise<Recording> {
   const steps = Array.from({ length: count }, (_, i) => ({
     tool: `submit_request_${i + 1}`,
     note: 'Submit the request.',
@@ -73,7 +77,7 @@ function skipped(count = 1): Promise<Recording> {
     )
     .answerLayer({ standingLine: true })
     .build();
-  return recorded(agent);
+  return (await recorded(agent)).recording;
 }
 
 interface MutableSnapshot {
@@ -100,6 +104,69 @@ function assertUnclaimed(recording: Recording) {
 }
 
 describe('standing reasons rebuilt from their committed witnesses', () => {
+  it.each([
+    ['Review', 'Review reported its work as partial and Submission reported its work as pending'],
+    [undefined, 'Submission reported its work as pending and a tool reported unfinished work'],
+  ])(
+    'keeps each reported status when two batches reuse an id (review name %s)',
+    async (displayName, clause) => {
+      const id = 'request';
+      const agent = Agent.create({
+        provider: mock({
+          replies: [call(id, 'review_request'), call(id, 'submit_request'), { content: REPLY }],
+        }),
+        model: 'mock',
+      })
+        .tools([
+          defineTool({
+            name: 'review_request',
+            ...(displayName !== undefined && { displayName }),
+            description: 'Review the request.',
+            inputSchema: { type: 'object' },
+            execute: () => ({ content: 'Review started.', effects: [], status: 'partial' }),
+          }),
+          defineTool({
+            name: 'submit_request',
+            displayName: 'Submission',
+            description: 'Submit the request.',
+            inputSchema: { type: 'object' },
+            execute: () => ({ content: 'Request received.', effects: [], status: 'pending' }),
+          }),
+        ])
+        .answerLayer({ standingLine: true })
+        .build();
+
+      const { result, recording } = await recorded(agent);
+      const history = snapshotOf(recording).sharedState.history;
+      const messages = history.filter((message) => message.role === 'tool');
+      expect(messages).toMatchObject([
+        { toolCallId: id, toolName: 'review_request', reportedStatus: 'partial' },
+        { toolCallId: id, toolName: 'submit_request', reportedStatus: 'pending' },
+      ]);
+      const pointers = messages.map((message) => ({
+        kind: 'history',
+        index: history.indexOf(message),
+        path: '/reportedStatus',
+        toolCallId: id,
+      }));
+
+      const line = `Not sure — ${clause}.`;
+      expect.soft(result).toBe(`${REPLY}\n\n---\n\n${line}`);
+      const account = accountForAnswer(recording);
+      expect.soft(account.answer.value).toBe(REPLY);
+      expect.soft(account.facts.limitsBlock.value).toBe(line);
+      const reason = account.rows
+        .find((row) => row.id === 'how-sure')
+        ?.lines.find((sentence) => sentence.template.id === 'howSure.reason.workNotFinished');
+      expect(reason).toMatchObject({
+        text: '2 calls reported unfinished work.',
+        status: 'recorded',
+        pointers,
+      });
+      assertP1(account, recording);
+    },
+  );
+
   it.each([
     [undefined, 'Not sure — a tool reported unfinished work.'],
     ['Request submission', 'Not sure — Request submission reported its work as pending.'],

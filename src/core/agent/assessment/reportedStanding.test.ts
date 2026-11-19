@@ -62,6 +62,29 @@ describe('standing over a committed reported status', () => {
     ];
     expect(reasonCodes(history).some((r) => r.reason === 'work-not-finished')).toBe(!clears);
   });
+
+  it('clears only the occurrence retried with matching arguments under a reused id', () => {
+    const id = 'c1';
+    const history = [
+      user,
+      proposed(id, { item: 'a' }),
+      landed(id, 'pending'),
+      proposed(id, { item: 'b' }),
+      landed(id, 'partial'),
+      proposed(id, { item: 'a' }),
+      landed(id),
+    ];
+    expect(reasonCodes(history)).toMatchObject([
+      {
+        reason: 'work-not-finished',
+        source: {
+          kind: 'calls',
+          calls: [{ toolCallId: id, toolName: tool, reportedStatus: 'partial' }],
+        },
+        witness: [{ kind: 'history', index: 4, path: '/reportedStatus' }],
+      },
+    ]);
+  });
 });
 
 describe('standing over committed procedure skips', () => {
