@@ -63,6 +63,27 @@ describe('ticketsStillServed — a stored conversation keeps what its history ca
     expect(ticketsStillServed([{ toolCallId: 'gone', ref: 'art_0' }], [])).toBeUndefined();
     expect(ticketsStillServed(undefined, [{ role: 'tool', toolCallId: 'c1' }])).toBeUndefined();
   });
+
+  it('carries the precise receipt through restore when a different call reused its ID', () => {
+    const first = {
+      toolCallId: 'reused',
+      ref: 'art_1',
+      callOccurrenceKey: [1, 2, 3, 4, 0] as const,
+    };
+    const second = {
+      toolCallId: 'reused',
+      ref: 'art_2',
+      callOccurrenceKey: [1, 2, 3, 4, 1] as const,
+    };
+    const history = [
+      { role: 'tool', toolCallId: 'reused', callOccurrenceKey: [...second.callOccurrenceKey] },
+    ];
+    const carried = ticketsStillServed([first, second], history);
+    expect(seededTickets(carriedTicketsOf(JSON.parse(JSON.stringify(carried))), false)).toEqual([
+      second,
+    ]);
+    expect(ticketsStillServed([first, second], [...history, ...history])).toBeUndefined();
+  });
 });
 
 describe('carriedTicketsOf — the checkpoint door', () => {

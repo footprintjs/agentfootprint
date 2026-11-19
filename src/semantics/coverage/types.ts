@@ -18,6 +18,7 @@
 import type { DescribedResultDeclaration, SemanticProvenance } from '../types.js';
 import type { DeclaredPeriod, PeriodOnWire } from './period.js';
 import type { PagingDeclaration, ResolvedDeclaration } from './search/resultFacts.js';
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 
 /**
  * One piece of ground, and (optionally) why it is where it is.
@@ -480,6 +481,7 @@ export interface DeclaredCoverage extends Coverage {
   readonly kind: 'absence' | 'ledger';
   readonly toolName: string;
   readonly toolCallId?: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly iteration: number;
   /** Present for `'absence'` only — what the search was for. */
   readonly lookedFor?: string;

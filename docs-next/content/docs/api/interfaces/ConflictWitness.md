@@ -4,17 +4,25 @@ title: ConflictWitness
 
 # Interface: ConflictWitness
 
-Defined in: [src/core/agent/findings/types.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L218)
+Defined in: [src/core/agent/findings/types.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L223)
 
 One witness of a conflict — identities only, never the value.
 
 ## Properties
 
+### callOccurrenceKey?
+
+> `readonly` `optional` **callOccurrenceKey?**: `CallOccurrenceKey`
+
+Defined in: [src/core/agent/findings/types.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L225)
+
+***
+
 ### predicate
 
 > `readonly` **predicate**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L221)
+Defined in: [src/core/agent/findings/types.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L227)
 
 ***
 
@@ -22,7 +30,7 @@ Defined in: [src/core/agent/findings/types.ts:221](https://github.com/footprintj
 
 > `readonly` **subject**: `object`
 
-Defined in: [src/core/agent/findings/types.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L220)
+Defined in: [src/core/agent/findings/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L226)
 
 #### id
 
@@ -38,4 +46,4 @@ Defined in: [src/core/agent/findings/types.ts:220](https://github.com/footprintj
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L219)
+Defined in: [src/core/agent/findings/types.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L224)

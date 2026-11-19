@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
 import { checkToolPermission } from '../access/toolPermission.js';
@@ -187,6 +188,7 @@ export function buildCallDispatch(
       // layer's refusals land in the same shape, before the chain.)
       if (!execution.denied && !argumentGate.argsRejected && tool) {
         const invalidArgs = operations.argumentRefusal(scope, tool, callArguments.callArgs, {
+          ...callOccurrenceField(tc.callOccurrenceKey),
           toolName: tc.name,
           toolCallId: tc.id,
           iteration: batch.iteration,
@@ -423,6 +425,7 @@ export function buildCallDispatch(
         !execution.denied
       ) {
         const presented = await operations.applyPresent(scope, {
+          ...callOccurrenceField(tc.callOccurrenceKey),
           args: callArguments.callArgs,
           toolCallId: tc.id,
           iteration: batch.iteration,
@@ -490,7 +493,12 @@ export function buildCallDispatch(
         scope,
         deps.findingsJudge,
         execution.executed && !execution.denied && !skillRoute.skillRejected,
-        { toolName: tc.name, result: delivery.resultStr, toolCallId: tc.id },
+        {
+          toolName: tc.name,
+          result: delivery.resultStr,
+          toolCallId: tc.id,
+          ...callOccurrenceField(tc.callOccurrenceKey),
+        },
         batch.iteration,
         operations.turnStampOf(scope),
       );

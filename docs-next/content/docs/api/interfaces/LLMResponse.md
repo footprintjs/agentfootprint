@@ -4,7 +4,7 @@ title: LLMResponse
 
 # Interface: LLMResponse
 
-Defined in: [src/provider-contract/types.ts:357](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L357)
+Defined in: [src/provider-contract/types.ts:370](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L370)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:357](https://github.com/footprintjs/
 
 > `readonly` **content**: `string`
 
-Defined in: [src/provider-contract/types.ts:362](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L362)
+Defined in: [src/provider-contract/types.ts:375](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L375)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/provider-contract/types.ts:362](https://github.com/footprintjs/
 
 > `readonly` `optional` **providerRef?**: `string`
 
-Defined in: [src/provider-contract/types.ts:423](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L423)
+Defined in: [src/provider-contract/types.ts:436](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L436)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/provider-contract/types.ts:423](https://github.com/footprintjs/
 
 > `readonly` `optional` **rawThinking?**: `unknown`
 
-Defined in: [src/provider-contract/types.ts:438](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L438)
+Defined in: [src/provider-contract/types.ts:451](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L451)
 
 v2.14 — Provider-specific raw thinking data, opaque to the
 framework. Providers that support extended thinking populate this
@@ -49,7 +49,7 @@ etc.). The thinking subflow's stage early-returns in this case.
 
 > `readonly` `optional` **replay?**: `MessageReplay`
 
-Defined in: [src/provider-contract/types.ts:359](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L359)
+Defined in: [src/provider-contract/types.ts:372](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L372)
 
 Ordered replay evidence, retained with the assistant message.
 
@@ -59,7 +59,7 @@ Ordered replay evidence, retained with the assistant message.
 
 > `readonly` `optional` **replayOmissions?**: readonly `ThinkingReplayOmission`[]
 
-Defined in: [src/provider-contract/types.ts:361](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L361)
+Defined in: [src/provider-contract/types.ts:374](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L374)
 
 Leaf-side omissions, also available to standalone callers without hooks.
 
@@ -69,7 +69,7 @@ Leaf-side omissions, also available to standalone callers without hooks.
 
 > `readonly` **stopReason**: `string`
 
-Defined in: [src/provider-contract/types.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L422)
+Defined in: [src/provider-contract/types.ts:435](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L435)
 
 ***
 
@@ -77,7 +77,7 @@ Defined in: [src/provider-contract/types.ts:422](https://github.com/footprintjs/
 
 > `readonly` **toolCalls**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:363](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L363)
+Defined in: [src/provider-contract/types.ts:376](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L376)
 
 ***
 
@@ -85,7 +85,7 @@ Defined in: [src/provider-contract/types.ts:363](https://github.com/footprintjs/
 
 > `readonly` **usage**: `object`
 
-Defined in: [src/provider-contract/types.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L397)
+Defined in: [src/provider-contract/types.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L410)
 
 #### cacheRead?
 
@@ -130,7 +130,7 @@ are billed as a separate line item).
 
 > `readonly` `optional` **wireManifest?**: [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
 
-Defined in: [src/provider-contract/types.ts:453](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L453)
+Defined in: [src/provider-contract/types.ts:466](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L466)
 
 9.60.0 — what this request ACTUALLY carried, read back from the
 serialized body after every transform (see adapters/llm/wireManifest.ts,

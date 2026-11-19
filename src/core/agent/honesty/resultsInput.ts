@@ -1,3 +1,8 @@
+import {
+  callOccurrenceField,
+  readCallOccurrenceKey,
+  storedCallOccurrenceField,
+} from '../../../lib/callOccurrence.js';
 import { copyPeriod, type DeclaredPeriod } from '../../../semantics/coverage/period.js';
 import { toolRanOf } from '../../../semantics/toolRan.js';
 import {
@@ -49,17 +54,44 @@ export function resultsLayerInput(parent: Record<string, unknown>): ResultsLayer
   const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
   const calls: RanCall[] = [];
   for (const entry of batch) {
-    if (!isRecord(entry) || toolRanOf(entry) === 'not-run' || entry.threw === true) continue;
+    if (
+      !isRecord(entry) ||
+      readCallOccurrenceKey(entry) === null ||
+      toolRanOf(entry) === 'not-run' ||
+      entry.threw === true
+    )
+      continue;
     if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
-    calls.push({ toolCallId: entry.toolCallId, toolName: entry.toolName });
+    calls.push({
+      toolCallId: entry.toolCallId,
+      toolName: entry.toolName,
+      ...storedCallOccurrenceField(entry),
+    });
   }
   if (calls.length === 0) return { calls };
-  const ids = new Set(calls.map((c) => c.toolCallId));
+  const legacyIds = new Set<string>();
+  const idsByOccurrence = new Map<string, string>();
+  for (const call of calls) {
+    const key = readCallOccurrenceKey(call);
+    if (key === undefined) legacyIds.add(call.toolCallId);
+    else if (key !== null) idsByOccurrence.set(key, call.toolCallId);
+  }
   const periods: CallPeriod[] = [];
   for (const row of (parent.coverageDeclared as readonly unknown[] | undefined) ?? []) {
     if (!isRecord(row) || row.iteration !== batchIteration || row.period === undefined) continue;
-    if (typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
-    periods.push({ toolCallId: row.toolCallId, period: copyPeriod(row.period as DeclaredPeriod) });
+    if (typeof row.toolCallId !== 'string') continue;
+    const key = readCallOccurrenceKey(row);
+    if (key === null) continue;
+    const matches =
+      key === undefined
+        ? legacyIds.has(row.toolCallId)
+        : idsByOccurrence.get(key) === row.toolCallId;
+    if (!matches) continue;
+    periods.push({
+      toolCallId: row.toolCallId,
+      period: copyPeriod(row.period as DeclaredPeriod),
+      ...storedCallOccurrenceField(row),
+    });
   }
   const time = timeOfBatch(parent, calls);
   return {
@@ -92,14 +124,17 @@ export function timeOfBatch(
   if (clock === undefined || clock.turn !== turn) return {};
   const times: CallTime[] = [];
   for (const call of calls) {
-    const window = callWindowOfCall(ledger, call.toolCallId, turn);
-    const drift = callRowOfCall(ledger, call.toolCallId, turn)?.drift;
+    const key = readCallOccurrenceKey(call);
+    const matches = (row: object) => key !== null && readCallOccurrenceKey(row) === key;
+    const window = callWindowOfCall(ledger, call.toolCallId, turn, matches);
+    const drift = callRowOfCall(ledger, call.toolCallId, turn, matches)?.drift;
     if (window === undefined && drift === undefined) {
-      times.push({ toolCallId: call.toolCallId });
+      times.push({ toolCallId: call.toolCallId, ...callOccurrenceField(call.callOccurrenceKey) });
       continue;
     }
     times.push({
       toolCallId: call.toolCallId,
+      ...callOccurrenceField(call.callOccurrenceKey),
       ...(window !== undefined && { window: windowForCheck(window) }),
       ...(drift !== undefined && { drift }),
     });

@@ -10,6 +10,8 @@ Native refusals discovered during current time/origin admission settle only thei
 
 The actual omission notice carries a closed JSON body inside the existing native frame. `findings/sourceContractFeedback.ts` derives the immutable minimal error schema from the reserved owner's frozen required `basis`/`from` members (or sources-only `from`), under the literal `_findings` property. It is protocol data, not another tool decoration or declaration reader. The same pure leaf projects only actual missing argument names; it never reads values, quotes, result offers or corpora. The sibling held notice stays unchanged. Every framed notice counts toward 8 KiB UTF-8 and the whole batch toward 64 KiB; each call has at most the canonical 32 ask names. A batch that cannot be represented reaches the ordinary human ask before spending or settling correction. The existing feedback bounds and source admission remain unchanged.
 
+The composer groups omissions by the proposal's accepted position. If a provider repeats an ID, only the occurrence with an omission gets the missing-argument notice. The outgoing message keeps its provider ID and does not carry the recorded occurrence field.
+
 
 ## One canonical served source contract
 

@@ -63,9 +63,11 @@
  */
 
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import {
   assessmentCallOutcome,
   historyCallResolver,
+  historyProposalForOccurrence,
   readHistoryCalls,
   uniqueHistoryProposal,
   unlandedCallKey,
@@ -102,6 +104,7 @@ export function rowList(value: unknown): OwnList | undefined {
 interface CallRef {
   readonly id?: string;
   readonly name?: string;
+  readonly occurrenceKey?: string | null;
   readonly index?: number;
   readonly thisTurn?: true;
   readonly argumentRow?: true;
@@ -156,7 +159,14 @@ function refsIn(value: unknown): CallRef[] {
     if (!isRecord(entry)) return {};
     const id = str(Object.getOwnPropertyDescriptor(entry, 'toolCallId')?.value);
     const name = str(Object.getOwnPropertyDescriptor(entry, 'toolName')?.value);
-    return id === undefined ? {} : { id, ...(name !== undefined && { name }) };
+    const occurrenceKey = readCallOccurrenceKey(entry);
+    return id === undefined && occurrenceKey === undefined
+      ? {}
+      : {
+          ...(id !== undefined && { id }),
+          ...(name !== undefined && { name }),
+          ...(occurrenceKey !== undefined && { occurrenceKey }),
+        };
   });
   return [...refs, ...unreadRefs(list)];
 }
@@ -173,13 +183,17 @@ function callsOfRow(reason: AssessmentReason, row: unknown, read: SourceRead): C
   }
   const id = str(row.toolCallId);
   const name = str(row.toolName);
+  const occurrenceKey = readCallOccurrenceKey(row);
   const waiting = row.kind === 'argument' ? waitingArgumentIteration(read.state) : undefined;
-  return id === undefined && name === undefined
+  return id === undefined && name === undefined && occurrenceKey === undefined
     ? []
     : [
         {
-          ...(id !== undefined && { id, unlandedKey: unlandedCallKey(row) }),
+          ...(id !== undefined && { id }),
+          ...(id !== undefined &&
+            occurrenceKey === undefined && { unlandedKey: unlandedCallKey(row) }),
           ...(name !== undefined && { name }),
+          ...(occurrenceKey !== undefined && { occurrenceKey }),
           thisTurn: true,
           ...(row.kind === 'argument' && { argumentRow: true }),
           ...(waiting !== undefined && row.iteration === waiting && { predispatch: true }),
@@ -260,9 +274,10 @@ function callsOfWitness(
     const checks = isRecord(report) && list === 'checks' ? report.checks : undefined;
     return callsOfCheck(arrayEntry(checks, Number(at)));
   }
-  const refs = callsOfRow(reason, rowAt(read.state, w.key, w.path), read);
+  const row = rowAt(read.state, w.key, w.path);
+  const refs = callsOfRow(reason, row, read);
   const index =
-    w.key === 'coverageDeclared'
+    w.key === 'coverageDeclared' && isRecord(row) && readCallOccurrenceKey(row) === undefined
       ? read.declarationAddresses?.get(Number(w.path.split('/')[1]))
       : undefined;
   return index !== undefined ? refs.map((ref) => ({ ...ref, index })) : refs;
@@ -297,18 +312,19 @@ export function reasonSourceOf(
   let current: ReturnType<typeof historyCallResolver> | undefined;
   let argument: ReturnType<typeof resolveArgumentHistory> | undefined;
   const currentCalls = () => occurrences.filter((call) => call.index > begins);
-  const resolve = (id: string, ref: CallRef) => {
+  const resolve = (ref: CallRef) => {
     if (ref.argumentRow) {
       return (argument ??= resolveArgumentHistory(read.state, currentCalls(), history, begins))(
-        id,
+        ref.id,
         ref.name,
+        ref.occurrenceKey,
       );
     }
     return (
       ref.thisTurn && begins >= 0
         ? (current ??= historyCallResolver(currentCalls()))
         : (whole ??= historyCallResolver(occurrences))
-    )(id, ref.name);
+    )(ref.id, ref.name, ref.occurrenceKey);
   };
   const calls: Extract<AssessmentReasonSource, { kind: 'calls' }>['calls'][number][] = [];
   const seen = new Set<number | string>();
@@ -324,10 +340,23 @@ export function reasonSourceOf(
     if (refs.length === 0) unnamed += 1;
     for (const ref of refs) {
       const found =
-        ref.index === undefined && ref.id !== undefined && (!ref.predispatch || ref.argumentRow)
-          ? resolve(ref.id, ref)
+        ref.index === undefined &&
+        (ref.occurrenceKey !== undefined || ref.id !== undefined) &&
+        (!ref.predispatch || ref.argumentRow)
+          ? resolve(ref)
           : undefined;
+      // The retained proposal can name an argument's call even when no
+      // result is held. This establishes the call's identity only.
+      const proposed =
+        ref.argumentRow && typeof ref.occurrenceKey === 'string' && found?.kind === 'missing'
+          ? historyProposalForOccurrence(history, ref.occurrenceKey)
+          : undefined;
+      const keyedProposal =
+        proposed !== undefined && proposed.index > begins ? proposed : undefined;
       if (
+        (ref.occurrenceKey !== undefined &&
+          found?.kind !== 'matched' &&
+          keyedProposal === undefined) ||
         (declaration && ref.index === undefined && found?.kind !== 'matched') ||
         (ref.thisTurn && found?.kind === 'ambiguous')
       ) {
@@ -342,6 +371,7 @@ export function reasonSourceOf(
       const key =
         ref.index ??
         call?.index ??
+        ref.occurrenceKey ??
         (ref.id === undefined
           ? undefined
           : ref.unlandedKey ?? unlandedCallKey({ toolCallId: ref.id }));
@@ -351,6 +381,7 @@ export function reasonSourceOf(
       }
       const proposal =
         !ref.predispatch &&
+        ref.occurrenceKey === undefined &&
         found?.kind === 'missing' &&
         ref.id !== undefined &&
         ref.name === undefined
@@ -360,15 +391,20 @@ export function reasonSourceOf(
         ref.name ??
         str(call?.toolName) ??
         str(call?.proposal?.call.name) ??
+        str(keyedProposal?.call.name) ??
         (proposal !== undefined && (!ref.thisTurn || proposal.index > begins)
           ? str(proposal.call.name)
           : undefined);
-      if (ref.id === undefined || toolName === undefined) {
+      const toolCallId =
+        ref.id ??
+        (ref.occurrenceKey !== undefined ? str(call?.providerId) : undefined) ??
+        str(keyedProposal?.call.id);
+      if (toolCallId === undefined || toolName === undefined) {
         unnamed += ref.count ?? 1;
         continue;
       }
       calls.push({
-        toolCallId: ref.id,
+        toolCallId,
         toolName,
         ...(ref.outcome !== undefined && { outcome: ref.outcome }),
         ...(ref.reportedStatus !== undefined && { reportedStatus: ref.reportedStatus }),
@@ -381,4 +417,23 @@ export function reasonSourceOf(
     ...(unnamed > 0 && { unnamed }),
     ...(unplaced.length > 0 && { unplaced }),
   };
+}
+
+/** Why an existing unplaced witness can no longer be assigned a result. */
+export function unplacedEvidenceKind(
+  reason: AssessmentReason,
+  witness: AssessmentPointer,
+  state: Readonly<Record<string, unknown>>,
+  resolve: ReturnType<typeof historyCallResolver>,
+): 'legacy' | 'result-unavailable' | 'call-unreadable' {
+  if (witness.kind !== 'state') return 'legacy';
+  const row = rowAt(state, witness.key, witness.path);
+  const refs = callsOfRow(reason, row, { state, turnResults: [] });
+  const keys = refs.flatMap(({ occurrenceKey }) =>
+    occurrenceKey === undefined ? [] : [occurrenceKey],
+  );
+  if (keys.length === 0) return 'legacy';
+  const outcomes = keys.map((key) => resolve(undefined, undefined, key).kind);
+  if (outcomes.includes('ambiguous')) return 'call-unreadable';
+  return outcomes.includes('missing') ? 'result-unavailable' : 'call-unreadable';
 }

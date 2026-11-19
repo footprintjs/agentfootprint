@@ -1,3 +1,4 @@
+import type { BatchAddress } from '../arguments/batchAddress.js';
 import type { ToolOf } from '../arguments/resolve.js';
 import type { ZoneName } from '../../../time/zone.js';
 import type { TimeAskMessages } from '../../../time/ask.js';
@@ -8,7 +9,7 @@ import type { AskedArgument } from '../arguments/sourceCorrection.js';
 /** What the dispatch stage hands the ask — closures, never scope. */
 export interface ArgumentAskDeps {
   /** Already refused calls do not acquire new obligations. */
-  readonly excludedCallIds?: readonly string[];
+  readonly excludedCallAddresses?: readonly BatchAddress[];
   readonly admitAnswer?: () => void;
   readonly saveParties?: () => void;
   /** Immediately before a newly raised input pause, while this batch is wholly undispatched. */
@@ -16,7 +17,7 @@ export interface ArgumentAskDeps {
   /** Only after the native time/protocol owner confirms this batch has no other human obligation. */
   readonly correctOmissions?: (asks: readonly CallAsk[]) => boolean;
   /** Current native refusals, before early return or any newly raised human pause. */
-  readonly refusedCalls?: (ids: readonly string[]) => void;
+  readonly refusedCalls?: (addresses: readonly BatchAddress[]) => void;
   readonly pendingAsk?: boolean;
   readonly settledAsk?: () => void;
   readonly refuseMalformedBatch?: () => boolean;

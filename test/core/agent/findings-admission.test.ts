@@ -115,14 +115,52 @@ describe('findings served-reference admission', () => {
     const agent = f.builder.build();
     await agent.run({ message: 'read' });
     expect(f.execute).toHaveBeenCalledTimes(2);
-    expect(state(agent).findingsLedger).toContainEqual(
-      expect.objectContaining({ toolCallId: 'same', unknownId: true }),
+    const saved = state(agent);
+    const result = saved.history.find(
+      (message) => message.role === 'tool' && message.toolCallId === 'c3',
+    );
+    expect(result?.callOccurrenceKey).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+    const standing = saved.findingsLedger?.find((row) => row.kind === 'standing');
+    expect(standing).toMatchObject({
+      toolCallId: 'same',
+      unknownId: true,
+      declaredOn: { toolCallId: 'c3', callOccurrenceKey: result?.callOccurrenceKey },
+    });
+    expect(standing).not.toHaveProperty('callOccurrenceKey');
+    expect(saved.findingsLedger).toContainEqual(
+      expect.objectContaining({
+        kind: 'reference-refusal',
+        declaredOn: { toolCallId: 'c3', callOccurrenceKey: result?.callOccurrenceKey },
+      }),
     );
   });
   it('admits an unambiguous served result and leaves the findings schema enum unchanged', async () => {
     const f = fixture([turn(call('c1')), turn(call('c2', ['c1'])), 'done']);
-    await f.builder.build().run({ message: 'read' });
+    const agent = f.builder.build();
+    await agent.run({ message: 'read' });
     expect(f.execute).toHaveBeenCalledTimes(2);
+    const saved = state(agent);
+    const [prior, declaring] = saved.history.filter((message) => message.role === 'tool');
+    expect(prior?.callOccurrenceKey).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+    expect(declaring?.callOccurrenceKey).toEqual(
+      Array.from({ length: 5 }, () => expect.any(Number)),
+    );
+    expect(prior?.callOccurrenceKey).not.toEqual(declaring?.callOccurrenceKey);
+    expect(saved.findingsLedger).toContainEqual(
+      expect.objectContaining({
+        kind: 'standing',
+        toolCallId: 'c1',
+        callOccurrenceKey: prior?.callOccurrenceKey,
+        declaredOn: { toolCallId: 'c2', callOccurrenceKey: declaring?.callOccurrenceKey },
+      }),
+    );
+    expect(saved.findingsLedger).toContainEqual(
+      expect.objectContaining({
+        kind: 'basis',
+        toolCallId: 'c2',
+        callOccurrenceKey: declaring?.callOccurrenceKey,
+      }),
+    );
     const schema = f.requests[1]?.tools?.[0]?.inputSchema as {
       properties: {
         _findings: {

@@ -46,6 +46,9 @@
 
 import { beyondRetentionLine } from '../../time/retentionRefusals.js';
 import { isDevMode } from 'footprintjs';
+import { readCallOccurrenceKey, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
+import { PERIOD_ROW_VERDICTS } from './periodRowVocabulary.js';
+export { PERIOD_ROW_VERDICTS } from './periodRowVocabulary.js';
 
 import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
 import type { BoundPresentation } from '../../time/present.js';
@@ -648,6 +651,7 @@ function periodLineInZone(
  * Readers that switch over every row kind must skip one they do not know.
  */
 export interface PeriodRow {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly kind: 'period';
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
   readonly turn: number;
@@ -698,15 +702,6 @@ function isHeldSpan(value: unknown): boolean {
   );
 }
 
-/** Every verdict a period row may carry, in the order the fold reports them. */
-export const PERIOD_ROW_VERDICTS: readonly PeriodRow['verdict'][] = Object.freeze([
-  'covered',
-  'partly-held',
-  'not-held',
-  'unknown',
-  'undeclared',
-]);
-
 /**
  * The checkpoint door's test for a `period` row (`core/checkpointLedger.ts` ·
  * `ledgerRowIsWellFormed`) — the one owner of the row's shape, so the door
@@ -715,6 +710,7 @@ export const PERIOD_ROW_VERDICTS: readonly PeriodRow['verdict'][] = Object.freez
 export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): boolean {
   return (
     row.kind === 'period' &&
+    readCallOccurrenceKey(row) !== null &&
     typeof row.turn === 'number' &&
     typeof row.toolCallId === 'string' &&
     typeof row.toolName === 'string' &&

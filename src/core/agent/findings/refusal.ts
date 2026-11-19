@@ -1,5 +1,6 @@
 /** Bounded diagnostic beside model declarations; never source authority or model testimony. */
 import type { DeclaredOn } from './types.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 export interface ReferenceRefusalRow {
   readonly kind: 'reference-refusal';
   readonly declaredOn: DeclaredOn;
@@ -59,10 +60,11 @@ export function referenceRefusalRowIsWellFormed(value: unknown): boolean {
     if (on !== null && typeof on === 'object' && !Array.isArray(on)) {
       const keys = Object.getOwnPropertyDescriptors(on);
       validOn =
-        Object.keys(keys).length === 1 &&
+        Object.keys(keys).every((key) => key === 'toolCallId' || key === 'callOccurrenceKey') &&
         keys.toolCallId !== undefined &&
         'value' in keys.toolCallId &&
-        typeof keys.toolCallId.value === 'string';
+        typeof keys.toolCallId.value === 'string' &&
+        readCallOccurrenceKey(on) !== null;
     }
     return (
       field('kind') === 'reference-refusal' &&

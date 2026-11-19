@@ -250,19 +250,21 @@ describe('a failed judgment', () => {
     const failed = events.filter((e) => e.type === 'agentfootprint.findings.judge_failed');
     expect(failed).toHaveLength(1);
     expect(Object.keys(failed[0]!.payload).sort()).toEqual(
-      ['iteration', 'latencyMs', 'status', 'toolCallId', 'toolName'].sort(),
+      ['callOccurrenceKey', 'iteration', 'latencyMs', 'status', 'toolCallId', 'toolName'].sort(),
     );
+    expect(failed[0]!.payload.callOccurrenceKey).toEqual(errors[0]?.callOccurrenceKey);
   });
 });
 
 describe('the events', () => {
   it('`findings.judged` carries identities, enums and numbers — never `agrees` (the model has no standing yet)', async () => {
-    const { events } = await run(mockClassifier([verdict('noise'), verdict('fact')]));
+    const { events, ledger } = await run(mockClassifier([verdict('noise'), verdict('fact')]));
     const judged = events.filter((e) => e.type === 'agentfootprint.findings.judged');
     expect(judged).toHaveLength(2);
     // c1 is judged before the model's standing on it exists (that lands with call 2): no `agrees`.
     expect(judged[0]!.payload).toEqual({
       toolCallId: 'c1',
+      callOccurrenceKey: ledger.find((row) => row.kind === 'judgment')?.callOccurrenceKey,
       toolName: 'lookup',
       iteration: 1,
       against: 'proposition',
@@ -287,9 +289,11 @@ describe('the events', () => {
     // the standing event, and only there.
     const disagree = await run(mockClassifier([verdict('noise'), verdict('fact')]));
     const standing = disagree.events.filter((e) => e.type === 'agentfootprint.findings.standing');
+    const judgment = disagree.ledger.find((row) => row.kind === 'judgment');
     expect(standing).toHaveLength(1);
     expect(standing[0]!.payload).toEqual({
       toolCallId: 'c1',
+      callOccurrenceKey: judgment?.callOccurrenceKey,
       toolName: 'lookup',
       iteration: 2,
       standing: 'ruled-out',
@@ -404,7 +408,7 @@ describe('only a result the TOOL produced is judged', () => {
     const ledger = agent.findings() ?? [];
     expect(ledger.filter((row) => row.kind === 'reference-refusal')).toEqual([
       expect.objectContaining({
-        declaredOn: { toolCallId: 'c2' },
+        declaredOn: { toolCallId: 'c2', callOccurrenceKey: refusedMessage?.callOccurrenceKey },
         reason: 'unidentified',
       }),
     ]);

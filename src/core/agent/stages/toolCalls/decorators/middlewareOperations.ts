@@ -69,7 +69,7 @@ export function buildToolMiddlewareOperations(
       ...(call.identity && { identity: call.identity }),
       ...(call.signal && { signal: call.signal }),
     });
-    recordDecisions(scope, verdict.decisions);
+    recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
     if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.

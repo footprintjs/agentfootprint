@@ -4,7 +4,7 @@ title: BrowserShot
 
 # Interface: BrowserShot
 
-Defined in: [src/provider-contract/types.ts:991](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L991)
+Defined in: [src/provider-contract/types.ts:1004](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1004)
 
 One screenshot a browser session took.
 
@@ -14,7 +14,7 @@ One screenshot a browser session took.
 
 > `readonly` **data**: `Uint8Array`
 
-Defined in: [src/provider-contract/types.ts:993](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L993)
+Defined in: [src/provider-contract/types.ts:1006](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1006)
 
 Image bytes.
 
@@ -24,6 +24,6 @@ Image bytes.
 
 > `readonly` **format**: `string`
 
-Defined in: [src/provider-contract/types.ts:995](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L995)
+Defined in: [src/provider-contract/types.ts:1008](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1008)
 
 Image format, lower-case (`'png'`).

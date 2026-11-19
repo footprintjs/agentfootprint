@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import type { LoopMoment } from './dependencyTypes.js';
 import type { FixedPauseReason } from './agent.js';
 
@@ -34,6 +35,7 @@ export interface PauseResumePayload {
 /** A tool declared `checkIn` and it tripped — the run paused to ask a human,
  *  with the evidence pack riding the ask. Emitted BEFORE the tool executes. */
 export interface CheckInRequestPayload {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly toolCallId: string;
   readonly iteration: number;
@@ -43,6 +45,7 @@ export interface CheckInRequestPayload {
 /** A human answered a pending check-in. Emitted on resume, BEFORE the tool
  *  runs (approve) or the decline result lands. */
 export interface CheckInDecisionPayload {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly toolCallId: string;
   readonly iteration: number;
@@ -86,6 +89,7 @@ export interface CheckInDecisionPayload {
  * a scrubbed value should not leave the run through it.
  */
 export interface MiddlewareDecisionPayload {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly middleware: string;
   /** Where in the loop this happened — the vocabulary `.act()` is keyed on. */
   readonly moment: LoopMoment;

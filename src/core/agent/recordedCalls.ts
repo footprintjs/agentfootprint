@@ -1,10 +1,13 @@
 export {
   argumentHistoryCallResolver,
   historyCallAt,
+  historyCallForOccurrence,
   historyCallForWitness,
   historyCallResolver,
+  historyProposalForOccurrence,
   historyStartsWith,
   rowsForHistoryCall,
+  rowsForOccurrence,
   resolveHistoryCall,
   readHistoryCalls,
   uniqueHistoryCall,

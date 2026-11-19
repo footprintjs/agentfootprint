@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import { buildToolResolver } from '../../toolResolver.js';
@@ -71,6 +72,7 @@ export function buildResumeCredential(
     frame: ResumeCallFrame,
   ): Promise<void> => {
     const { toolName, toolCallId, startMs } = frame;
+    const occurrence = callOccurrenceField(frame.callOccurrenceKey);
     deps.resources?.answer.record();
 
     const iteration = scope.iteration as number;
@@ -82,7 +84,7 @@ export function buildResumeCredential(
     const resolved = links.resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
     const tool = resolved.tool;
     /** What the call's `execute` saw — its script row reads it. */
-    const scriptSeen: ResumedCallFacts = {};
+    const scriptSeen: ResumedCallFacts = { ...occurrence };
     try {
       const dispatched =
         taken?.kind === 'copied'
@@ -104,6 +106,7 @@ export function buildResumeCredential(
       let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
         ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+          ...occurrence,
           ...(tool && { tool }),
           toolName,
           toolCallId,
@@ -124,7 +127,7 @@ export function buildResumeCredential(
       // Placement then the truncation net — the batch loop's precedence.
       const consentPlaced = await links.placeResults(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         { result, modelResult },
         dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true,
       );
@@ -191,7 +194,7 @@ export function buildResumeCredential(
       if (deps.stepPlanFor) {
         consentResultStr = links.applyStepReturn(
           scope,
-          { toolName, toolCallId, iteration, settled: consentSettled },
+          { toolName, toolCallId, iteration, ...occurrence, settled: consentSettled },
           consentResultStr,
         );
       }
@@ -199,7 +202,7 @@ export function buildResumeCredential(
         const consentTransition: TransitionBatchState = { losers: [] };
         consentResultStr += links.applyToolEffects(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           consentEnvelope,
           consentTransition,
         );
@@ -215,6 +218,7 @@ export function buildResumeCredential(
             ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
             toolCallId,
             toolName,
+            ...occurrence,
             ...(deps.findings === true &&
               dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
             ...toolResultExecutionField(
@@ -232,7 +236,7 @@ export function buildResumeCredential(
             ...reportedStatusField(consentSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const consentHistory = consentSettlement.history;
       scope.history = consentHistory;
@@ -245,6 +249,7 @@ export function buildResumeCredential(
         toolName,
         result: consentResultStr,
         toolCallId,
+        ...occurrence,
         ...(deps.resultsLayer === true &&
           missingResultFields(dispatched.executed === true, scriptSeen.threw)),
         ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
@@ -253,7 +258,7 @@ export function buildResumeCredential(
         scope,
         deps.findingsJudge,
         dispatched.executed === true,
-        { toolName, result: consentResultStr, toolCallId },
+        { toolName, result: consentResultStr, toolCallId, ...occurrence },
         iteration,
         links.turnStampOf(scope),
       );
@@ -270,6 +275,7 @@ export function buildResumeCredential(
         toolName,
         {
           toolCallId,
+          ...occurrence,
           result: consentCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),

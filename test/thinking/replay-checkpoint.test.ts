@@ -1,5 +1,6 @@
 /** Core owns durable transport of replay evidence, not its wire-specific judgement. */
 import { describe, expect, it, vi } from 'vitest';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { Agent, defineTool, isPaused, RunCheckpointError } from '../../src/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { askHuman } from '../../src/core/pause.js';
@@ -402,7 +403,12 @@ describe.each(MODES)('durable replay in %s', (reactMode) => {
     expect(await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), 'yes')).toBe(
       'approved',
     );
-    expect(fixture.messages[1]).toContainEqual(saved.history[1]);
+    const pausedProposal = saved.history[1]!;
+    expect(readCallOccurrenceKey(pausedProposal.toolCalls?.[0] ?? {})).toMatch(/\.0$/);
+    expect(fixture.messages[1]).toContainEqual({
+      ...pausedProposal,
+      toolCalls: [{ id: 't1', name: 'ask_first', args: {} }],
+    });
     expect(agent.checkpoint()!.history.at(-1)).toEqual({
       role: 'assistant',
       content: 'approved',

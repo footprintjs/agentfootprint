@@ -372,6 +372,7 @@ describe('regression — a tool with no search composes nothing new', () => {
     expect('resultIdentities' in r.state).toBe(false);
     expect(Object.keys(r.rows[0] ?? {}).sort()).toEqual(
       [
+        'callOccurrenceKey',
         'cannotCover',
         'checked',
         'iteration',
@@ -384,6 +385,10 @@ describe('regression — a tool with no search composes nothing new', () => {
     );
     const [event] = absentEvents(r) as Record<string, unknown>[];
     expect(event !== undefined && 'composition' in event).toBe(false);
+    expect(r.rows[0]?.callOccurrenceKey).toEqual(
+      Array.from({ length: 5 }, () => expect.any(Number)),
+    );
+    expect(event?.callOccurrenceKey).toEqual(r.rows[0]?.callOccurrenceKey);
   });
 });
 

@@ -1,4 +1,5 @@
 import { isRecord } from './recordValues.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 /** One coverage row the run committed, as the fold reads it. */
 export interface CoverageRow {
@@ -19,7 +20,9 @@ export function coverageRows(
   if (!Array.isArray(rows)) return [];
   return rows.flatMap((row: unknown, index) => {
     if (!isRecord(row) || (row.kind !== 'absence' && row.kind !== 'ledger')) return [];
-    const historyIndex = resolve(row) ?? addresses?.get(index);
+    const historyIndex =
+      resolve(row) ??
+      (readCallOccurrenceKey(row) === undefined ? addresses?.get(index) : undefined);
     if (nativeFacts?.(row, historyIndex) === false) return [];
     return [
       {

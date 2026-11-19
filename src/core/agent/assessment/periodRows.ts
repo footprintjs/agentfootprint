@@ -1,3 +1,4 @@
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { isRecord, str } from './recordValues.js';
 
 /** One `period` row of this turn — one judged call. */
@@ -37,7 +38,11 @@ export function periodRows(
     if (!isRecord(row) || row.kind !== 'period') return;
     if (turn !== undefined && row.turn !== turn) return;
     const verdict = str(row.verdict);
-    if (str(row.toolCallId) === undefined || verdict === undefined) return;
+    if (
+      verdict === undefined ||
+      (str(row.toolCallId) === undefined && readCallOccurrenceKey(row) === undefined)
+    )
+      return;
     const argument = str(row.argument);
     const historyIndex = resultIndexOf(row);
     if (!nativeFacts(row, historyIndex)) return;

@@ -1,3 +1,8 @@
+import {
+  callOccurrenceField,
+  readCallOccurrenceKey,
+  type CallOccurrenceKey,
+} from '../../../lib/callOccurrence.js';
 /**
  * results/subflow — the four stages of the results layer's subflow
  * (`sf-results`): Declare → Verify → Record → Resolve (honesty layer 3).
@@ -74,18 +79,21 @@ import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
 
 /** One call of the batch ToolCalls just ran — identities only. */
 export interface RanCall {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolCallId: string;
   readonly toolName: string;
 }
 
 /** One period a call's result declared, read off its committed coverage row. */
 export interface CallPeriod {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolCallId: string;
   readonly period: DeclaredPeriod;
 }
 
 /** A call the layer will judge: the periods its result declared, and the argument its tool's `ToolPeriod` names. */
 export interface PlannedPeriod {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolCallId: string;
   readonly toolName: string;
   /** Every period the call's result declared — empty when it declared none. */
@@ -98,6 +106,7 @@ export interface PlannedPeriod {
 
 /** A judged call — the verdict and, under `.time()`, the time layer's checks that hold. */
 export interface CheckedPeriod {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolCallId: string;
   readonly toolName: string;
   readonly verdict: PeriodRow['verdict'];
@@ -113,6 +122,7 @@ export interface CheckedPeriod {
  * row's `drift` — read off the ledger, never recomputed.
  */
 export interface CallTime {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolCallId: string;
   readonly window?: PeriodCheckInput['window'];
   readonly drift?: PeriodCheckInput['drift'];
@@ -173,6 +183,11 @@ export interface ResultsLayerDeps {
  * in ONE batch is judged once, over every period declared under it (the least
  * held wins, so merging can only over-report).
  */
+function batchCallAddress(call: { readonly toolCallId: string }): string | null {
+  const key = readCallOccurrenceKey(call);
+  return key === undefined ? `provider:${call.toolCallId}` : key;
+}
+
 export function planPeriods(
   calls: readonly RanCall[],
   periods: readonly CallPeriod[],
@@ -187,16 +202,18 @@ export function planPeriods(
   const done = new Set<string>();
   const plan: PlannedPeriod[] = [];
   for (const call of calls) {
-    if (done.has(call.toolCallId)) continue;
-    done.add(call.toolCallId);
-    const declared = periods.filter((p) => p.toolCallId === call.toolCallId).map((p) => p.period);
+    const address = batchCallAddress(call);
+    if (address === null || done.has(address)) continue;
+    done.add(address);
+    const declared = periods.filter((p) => batchCallAddress(p) === address).map((p) => p.period);
     const argument = periodArgumentOf(call.toolName);
     if (declared.length === 0 && argument === undefined) continue;
-    const rows = time?.times.find((t) => t.toolCallId === call.toolCallId);
+    const rows = time?.times.find((t) => batchCallAddress(t) === address);
     const facts = rows === undefined ? undefined : time?.periodFactsOf?.(call.toolName);
     const forms = rows === undefined ? undefined : time?.periodFormsOf?.(call.toolName);
     plan.push({
       toolCallId: call.toolCallId,
+      ...callOccurrenceField(call.callOccurrenceKey),
       toolName: call.toolName,
       declared,
       ...(argument !== undefined && { argument }),
@@ -267,6 +284,7 @@ export function checkPeriods(plan: readonly PlannedPeriod[]): CheckedPeriod[] {
     const held = p.time === undefined ? undefined : heldSpanOf(p.declared, verdict);
     return {
       toolCallId: p.toolCallId,
+      ...callOccurrenceField(p.callOccurrenceKey),
       toolName: p.toolName,
       verdict,
       ...(p.argument !== undefined && { argument: p.argument }),
@@ -285,6 +303,7 @@ export function periodRowsOf(
     kind: 'period',
     turn: stamp.turn,
     toolCallId: c.toolCallId,
+    ...callOccurrenceField(c.callOccurrenceKey),
     toolName: c.toolName,
     iteration: stamp.iteration,
     verdict: c.verdict,
@@ -300,6 +319,7 @@ export function periodRowsOf(
 function callsOf(scope: TypedScope<ResultsLayerState>): RanCall[] {
   return [...((scope.calls as readonly RanCall[] | undefined) ?? [])].map((c) => ({
     toolCallId: c.toolCallId,
+    ...callOccurrenceField(c.callOccurrenceKey),
     toolName: c.toolName,
   }));
 }
@@ -320,6 +340,7 @@ export function declareResultsStage(
   }
   const periods = [...((scope.periods as readonly CallPeriod[] | undefined) ?? [])].map((p) => ({
     toolCallId: p.toolCallId,
+    ...callOccurrenceField(p.callOccurrenceKey),
     period: copyPeriod(p.period),
   }));
   const times = scope.times as readonly CallTime[] | undefined;

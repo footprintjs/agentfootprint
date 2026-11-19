@@ -195,7 +195,7 @@ it('rejects a later snapshot paired with the earlier events and proves empty on 
   expect(readTurnCoverage(first, terminalId(first))).toHaveLength(1);
 });
 
-it('preserves a committed count with no provable call and declines hidden state', async () => {
+it('places keyed coverage without its declaration event and preserves keyless or hidden state', async () => {
   const build = (redact: boolean) =>
     Agent.create({
       provider: mock({
@@ -212,6 +212,14 @@ it('preserves a committed count with no provable call and declines hidden state'
     events: full.events.filter((event) => event.type !== 'agentfootprint.tools.coverage_declared'),
   };
   expect(readTurnCoverage(partial, terminalId(full))).toEqual([
+    { toolCallId: 'fixture', declarations: 1, checked: 1, notChecked: 0, cannotCover: 0 },
+  ]);
+  const legacy = JSON.parse(
+    JSON.stringify(partial, (key, value: unknown) =>
+      key === 'callOccurrenceKey' ? undefined : value,
+    ),
+  ) as Recording;
+  expect(readTurnCoverage(legacy, terminalId(full))).toEqual([
     { declarations: 1, checked: 1, notChecked: 0, cannotCover: 0 },
   ]);
   const hidden = await finished(build(true));

@@ -79,6 +79,7 @@ import {
   snapshotProjectionSemantics,
 } from '../../../src/semantics/projection.js';
 import type { LLMMessage, LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -225,14 +226,15 @@ const runOnce = async (
   const out = await agent.run('is the cluster slow?');
   const state = agent.getLastSnapshot()?.sharedState as {
     history: LLMMessage[];
-    coverageDeclared?: unknown;
+    coverageDeclared?: readonly Ev[];
   };
-  const toolTurn = state.history.find((m) => m.role === 'tool')?.content ?? '';
+  const toolMessage = state.history.find((m) => m.role === 'tool');
   return {
     answer: String(out),
     absences,
     toolEnds,
-    toolTurn,
+    toolTurn: toolMessage?.content ?? '',
+    toolMessage,
     sent,
     coverageDeclared: state.coverageDeclared,
   };
@@ -751,6 +753,18 @@ describe('edge: the one recognizer is the one reader, whoever minted the envelop
 const REFERENCE_PATH = resolve(__dirname, 'fixtures/absent-try-instead-sentence.reference.json');
 const UPDATE_REFERENCE = process.env.AF_TRY_INSTEAD_REFERENCE === 'update';
 
+function withoutOccurrence({ callOccurrenceKey: _key, ...record }: Ev): Ev {
+  return record;
+}
+
+function expectOccurrence(run: Awaited<ReturnType<typeof runOnce>>): void {
+  const key = run.toolMessage === undefined ? undefined : readCallOccurrenceKey(run.toolMessage);
+  expect(key).toMatch(/^\d+(\.\d+){4}$/);
+  for (const row of [run.absences[0], run.coverageDeclared?.[0], run.toolEnds[0]]) {
+    expect(row === undefined ? undefined : readCallOccurrenceKey(row)).toBe(key);
+  }
+}
+
 interface SentenceFormReference {
   /** `JSON.stringify(absent(SENTENCE_DECL))` — the README absence. */
   readonly envelope: string;
@@ -770,16 +784,17 @@ interface SentenceFormReference {
 }
 
 describe('regression: the sentence form is byte-identical', () => {
-  it('byte-identical to the 9.112.2 reference — the event gains `tryInstead`, and nothing else moves', async () => {
+  it('matches the 9.112.2 reference with the event suggestion and recorded occurrence', async () => {
     const t = await runOnce(() => absent(SENTENCE_DECL), { limits: true });
+    expectOccurrence(t);
     const observed: SentenceFormReference = {
       envelope: JSON.stringify(absent(SENTENCE_DECL)),
       flagshipEnvelope: JSON.stringify(absent(FLAGSHIP_SENTENCE)),
       sent: t.sent,
       toolTurn: t.toolTurn,
       answer: t.answer,
-      coverageDeclared: t.coverageDeclared,
-      absentEvent: t.absences[0] ?? {},
+      coverageDeclared: t.coverageDeclared?.map(withoutOccurrence),
+      absentEvent: withoutOccurrence(t.absences[0] ?? {}),
       toolEndStatus: t.toolEnds[0]?.status,
     };
     if (UPDATE_REFERENCE) {
@@ -796,8 +811,7 @@ describe('regression: the sentence form is byte-identical', () => {
       JSON.stringify(reference.coverageDeclared),
     );
     expect(observed.toolEndStatus).toBe(reference.toolEndStatus);
-    // The ONE byte change, and it is the point: the event gains `tryInstead`,
-    // LAST, verbatim — every key 9.112.2 filed keeps its place and value.
+    // The event gains the verbatim `tryInstead` after the original fields.
     expect(JSON.stringify(observed.absentEvent)).toBe(
       JSON.stringify({ ...reference.absentEvent, tryInstead: SENTENCE_DECL.tryInstead }),
     );
@@ -825,9 +839,10 @@ describe('regression: a `tryInstead` that is not a sentence still delivers the a
       const t = await runOnce(() =>
         absent({ ...SENTENCE_DECL, tryInstead: value } as unknown as AbsenceDeclaration),
       );
+      expectOccurrence(t);
       observed[label] = {
         toolEndStatus: t.toolEnds[0]?.status,
-        absentEvents: t.absences,
+        absentEvents: t.absences.map(withoutOccurrence),
         modelRead: t.sent[1]?.find((m) => m.role === 'tool' && m.toolCallId === 't1')?.content,
       };
     }
@@ -870,10 +885,14 @@ describe('regression: the appended block and the tracked rows never read a sugge
     // The block states GROUND; a suggestion is advice about a call not yet
     // made, and it would change the bytes of every answer that declared one.
     expect(none.answer).toContain('Coverage of this answer');
+    expectOccurrence(none);
     for (const suggestion of variants) {
       const t = await runOnce(() => absent({ ...base, ...suggestion }), { limits: true });
       expect(t.answer).toBe(none.answer);
-      expect(JSON.stringify(t.coverageDeclared)).toBe(JSON.stringify(none.coverageDeclared));
+      expectOccurrence(t);
+      expect(JSON.stringify(t.coverageDeclared?.map(withoutOccurrence))).toBe(
+        JSON.stringify(none.coverageDeclared?.map(withoutOccurrence)),
+      );
     }
   });
 });

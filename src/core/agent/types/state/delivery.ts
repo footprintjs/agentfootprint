@@ -36,6 +36,7 @@ export interface DeliveryState {
     toolName: string;
     result: string;
     toolCallId: string;
+    callOccurrenceKey?: import('../../../../lib/callOccurrence.js').CallOccurrenceKey;
     /** The results layer carries a synthetic notice across a checkpoint without judging it. */
     entered?: false;
     threw?: true;

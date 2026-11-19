@@ -4,6 +4,8 @@ import { absent, Agent, defineTool, isInputPause, requestInput } from '../../src
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, answerAccountPointerKey, recordRun } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
+import type { LLMMessage, LLMRequest } from '../../src/provider-contract/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { assertP1 } from './helpers.js';
 
@@ -172,15 +174,23 @@ describe('reused call IDs across recording boundaries', () => {
   });
 
   it('distinguishes a prior result in view from a follow-up call with the same ID', async () => {
+    const requests: LLMRequest[] = [];
+    const fixture = mock({
+      replies: [
+        { toolCalls: [proposal('lookup', 'read_archive')] },
+        { content: 'I found the archived record.' },
+        { toolCalls: [proposal('lookup', 'read_current')] },
+        { content: 'I found the current records.' },
+      ],
+    });
     const agent = Agent.create({
-      provider: mock({
-        replies: [
-          { toolCalls: [proposal('lookup', 'read_archive')] },
-          { content: 'I found the archived record.' },
-          { toolCalls: [proposal('lookup', 'read_current')] },
-          { content: 'I found the current records.' },
-        ],
-      }),
+      provider: {
+        name: fixture.name,
+        complete(request) {
+          requests.push(request);
+          return fixture.complete(request);
+        },
+      },
       model: 'mock',
     })
       .tools([
@@ -208,14 +218,26 @@ describe('reused call IDs across recording boundaries', () => {
         event.payload.slot === 'messages' &&
         event.payload.source === 'tool-result' &&
         event.payload.sourceId === 'lookup'
-          ? [{ index, position: event.payload.position }]
+          ? [{ index, position: event.payload.position, key: readCallOccurrenceKey(event.payload) }]
           : [],
       );
       const priorPosition = resultPosition(recording, 'read_archive');
-      expect(witnesses.map(({ position }) => position)).toEqual([
-        priorPosition,
-        resultPosition(recording, 'read_current'),
-      ]);
+      const currentPosition = resultPosition(recording, 'read_current');
+      expect(witnesses.map(({ position }) => position)).toEqual([priorPosition, currentPosition]);
+      const { sharedState } = recording.snapshot as {
+        sharedState: { history: readonly LLMMessage[] };
+      };
+      expect(witnesses.map(({ key }) => key)).toEqual(
+        [priorPosition, currentPosition].map((position) =>
+          readCallOccurrenceKey(sharedState.history[position]),
+        ),
+      );
+      expect(witnesses.map(({ key }) => key)).toEqual([expect.any(String), expect.any(String)]);
+      expect(witnesses[0]?.key).not.toBe(witnesses[1]?.key);
+      expect(requests.at(-1)?.messages.filter((message) => message.role === 'tool')).toHaveLength(
+        2,
+      );
+      expect(JSON.stringify(requests)).not.toContain('callOccurrenceKey');
 
       expect(account.facts.calls).toEqual([
         expect.objectContaining({ toolCallId: 'lookup', toolName: 'read_current', rows: 2 }),

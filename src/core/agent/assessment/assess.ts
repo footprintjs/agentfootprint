@@ -48,7 +48,7 @@
  * account says the record shows no answer.
  */
 
-import { isRecord, str } from './recordValues.js';
+import { callIndexOf, isRecord, str } from './recordValues.js';
 import { recoveredCallOutcomes, turnResults } from './turnResults.js';
 import { argumentRows, type ArgumentRowRead } from './argumentRows.js';
 import { rowsAtProblem } from '../emptiness.js';
@@ -80,6 +80,7 @@ import type {
   AssessmentReason,
   AssessmentRecord,
 } from './types.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { isPlaceholder, servedUnderPolicy } from '../../../redaction/marker.js';
 
 function fail(message: string): never {
@@ -144,12 +145,6 @@ function keptOutGuard(state: Readonly<Record<string, unknown>>): {
 }
 
 type ResolveCall = ReturnType<typeof historyCallResolver>;
-
-function callIndexOf(row: Readonly<Record<string, unknown>>, resolve: ResolveCall) {
-  const id = str(row.toolCallId);
-  const resolved = id === undefined ? undefined : resolve(id, str(row.toolName));
-  return resolved?.kind === 'matched' ? resolved.call.index : undefined;
-}
 
 /**
  * Every layer: the turn ENDED in a pause still waiting for a person — read from
@@ -256,10 +251,10 @@ interface CallPlaces {
 function callPlacement(ref: unknown, { history, resolve, begins }: CallPlaces) {
   if (!isRecord(ref)) return undefined;
   const id = str(ref.toolCallId);
-  if (id === undefined) return undefined;
-  const resolved = resolve(id, str(ref.toolName));
+  const occurrenceKey = readCallOccurrenceKey(ref);
+  const resolved = resolve(id, str(ref.toolName), occurrenceKey);
   if (resolved.kind === 'matched') return resolved.call.index < begins ? 'earlier' : 'current';
-  if (resolved.kind === 'missing') {
+  if (resolved.kind === 'missing' && id !== undefined && occurrenceKey === undefined) {
     const proposal = uniqueHistoryProposal(history, id);
     if (proposal !== undefined && proposal.index < begins) return 'earlier';
   }

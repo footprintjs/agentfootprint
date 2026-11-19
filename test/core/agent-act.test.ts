@@ -4,8 +4,8 @@
  *
  * Six laws carry this door, and each has at least one test below:
  *
- *   1. PURE SUGAR — every key builds byte-for-byte the agent the individual
- *      door builds. Pinned per key, against the hand-written spelling.
+ *   1. PURE SUGAR — every key matches the individual door, including wire bytes
+ *      and recorded decisions after normalizing independent batch identities.
  *   2. THE COMPLETENESS LOCK — the bundle's keys ARE the moments. The type
  *      half is in `test/type-regressions/ActOptions.completeness.test.ts`;
  *      the runtime half is here, derived from `LOOP_MOMENTS` rather than
@@ -38,8 +38,10 @@ import {
   type ToolMiddleware,
   type WindowRecord,
 } from '../../src/index.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -87,10 +89,10 @@ function records(agent: Agent): readonly WindowRecord[] {
 
 /**
  * Run the same scenario twice — once through `.act()`, once through the
- * individual doors — and assert the two runs are indistinguishable.
+ * individual doors — and compare their answers, wire requests and records.
  *
  * This is the `.compaction()` precedent: same requests on the wire, same
- * records in the run. Anything a consumer could observe has to match.
+ * records in the run, allowing each run its own call addresses.
  */
 async function sameAgent(
   bundle: (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
@@ -102,12 +104,32 @@ async function sameAgent(
   const one = bundle(Agent.create({ provider: viaAct.provider, model: 'm' }).tools([act])).build();
   const two = doors(Agent.create({ provider: viaDoors.provider, model: 'm' }).tools([act])).build();
 
+  const observeStarts = (agent: Agent) => {
+    const starts = new Map<string, string>();
+    agent.on('agentfootprint.stream.tool_start', ({ payload }) => {
+      const key = readCallOccurrenceKey(payload);
+      if (typeof key === 'string') starts.set(payload.toolCallId, key);
+    });
+    return starts;
+  };
+  const startsOne = observeStarts(one);
+  const startsTwo = observeStarts(two);
+
   const answerOne = await one.run({ message: 'go' });
   const answerTwo = await two.run({ message: 'go' });
 
   expect(answerOne).toEqual(answerTwo);
   expect(JSON.stringify(viaAct.requests)).toBe(JSON.stringify(viaDoors.requests));
-  expect(JSON.stringify(ledger(one))).toBe(JSON.stringify(ledger(two)));
+  const checkedLedger = (agent: Agent, starts: Map<string, string>) => {
+    const decisions = ledger(agent);
+    for (const row of decisions) {
+      const key = row.at === 'tool' ? starts.get(row.toolCallId!) : undefined;
+      if (row.at === 'tool') expect(typeof key).toBe('string');
+      expect(readCallOccurrenceKey(row)).toBe(key);
+    }
+    return JSON.stringify(normalizeCallOccurrences(decisions));
+  };
+  expect(checkedLedger(one, startsOne)).toBe(checkedLedger(two, startsTwo));
   expect(JSON.stringify(records(one))).toBe(JSON.stringify(records(two)));
 }
 
@@ -207,9 +229,9 @@ describe('act — unit', () => {
   });
 });
 
-// ─── 2. SCENARIO — byte-equivalence, per key ──────────────────────
+// ─── 2. SCENARIO — equivalence per key ────────────────────────────
 
-describe('act — scenario: LAW 1, byte-equivalent per key', () => {
+describe('act — scenario: LAW 1, equivalent per key', () => {
   const scrub: MessageMiddleware = {
     name: 'scrub',
     onMessage: (msg) => {

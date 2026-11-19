@@ -97,6 +97,7 @@ import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
 import type { InputsMountDeps } from './inputsMountContract.js';
 export type { InputsMountDeps } from './inputsMountContract.js';
+export { batchToJudge, timeOfBatch } from './resultsInput.js';
 
 type StageModule = typeof import('../arguments/subflow.js');
 type CorpusModule = typeof import('./sourceCorpus.js');

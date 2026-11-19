@@ -28,10 +28,12 @@ import type { Tool } from '../../../tools/tools.js';
 import type { ToolArgs } from '../../../tools/runChain.js';
 import type { MiddlewareDecision } from '../middleware/types.js';
 import type { AgentState } from '../types.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { isMissing, rulesOf } from '../../../tools/declare.js';
 import { keptThisTurn, withKept, withoutUsed } from './kept.js';
 import { markPrivateKept, privateFilledArguments } from './privateAnswers.js';
 import type { ArgumentFill, ArgumentResolution } from './resolve.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
 import {
   filledNote,
   keptAnswersNote,
@@ -50,20 +52,21 @@ export { secondPauseRefusal };
 export { pendingOmissions, onlyOmissions, settleOmissions } from './sourceCorrection.js';
 
 /**
- * This batch's entries of `argumentResolutions`, by call id — only the entries
+ * This batch's entries of `argumentResolutions`, by call position — only the entries
  * resolved for THIS iteration (`resolve.ts` stamps each with its batch's).
  */
 export function resolutionsFor(
   scope: { readonly argumentResolutions?: readonly ArgumentResolution[] },
   iteration: number,
-): ReadonlyMap<string, ArgumentResolution> {
+): ReadonlyMap<BatchAddress, ArgumentResolution> {
   // Spread first: a TypedScope array read is a live deep-proxy view.
   const entries = [...(scope.argumentResolutions ?? [])];
-  const byId = new Map<string, ArgumentResolution>();
+  const byAddress = new Map<BatchAddress, ArgumentResolution>();
   for (const entry of entries) {
-    if (entry.iteration === iteration) byId.set(entry.toolCallId, entry);
+    if (entry.iteration === iteration)
+      byAddress.set(batchAddress(entry.toolCallId, entry.callOccurrenceKey), entry);
   }
-  return byId;
+  return byAddress;
 }
 
 /** `args` with the entry's fills — a FRESH object; `args` itself when there are none. */
@@ -86,13 +89,17 @@ export function withFills(args: ToolArgs, resolution: ArgumentResolution | undef
  */
 export function dropUsedKept(
   scope: TypedScope<AgentState>,
-  resolutions: ReadonlyMap<string, ArgumentResolution>,
-  calls: readonly { readonly id: string; readonly name: string }[],
+  resolutions: ReadonlyMap<BatchAddress, ArgumentResolution>,
+  calls: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly callOccurrenceKey?: CallOccurrenceKey;
+  }[],
 ): void {
-  const nameOf = new Map(calls.map((c) => [c.id, c.name]));
+  const nameOf = new Map(calls.map((c) => [batchAddress(c.id, c.callOccurrenceKey), c.name]));
   const used: { toolName: string; argument: string }[] = [];
   for (const entry of resolutions.values()) {
-    const toolName = nameOf.get(entry.toolCallId);
+    const toolName = nameOf.get(batchAddress(entry.toolCallId, entry.callOccurrenceKey));
     if (toolName === undefined) continue;
     for (const fill of entry.fills ?? []) {
       if (fill.source === 'answered') used.push({ toolName, argument: fill.argument });

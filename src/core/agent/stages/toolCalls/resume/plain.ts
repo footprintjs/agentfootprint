@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { toolResultExecutionField } from '../execution/outcomeField.js';
@@ -57,6 +58,7 @@ export function buildResumePlain(
     frame: ResumeResultFrame,
   ): Promise<void> => {
     const { input, toolName, toolCallId, startMs } = frame;
+    const occurrence = callOccurrenceField(frame.callOccurrenceKey);
 
     // ── The `pauseHere` / `askHuman` path ────────────────────────────
     // Reached when none of the three decision pauses above claimed this
@@ -89,9 +91,15 @@ export function buildResumePlain(
     const tool = links.lookupTool(toolName);
     // Peeled under the arm unless the tool owns the name — the same rule as
     // `peelCall` on the dispatch side, asked of the same tool.
-    const args = argsForPausedCall(scope, toolCallId, links.peelsReserved(tool));
+    const args = argsForPausedCall(
+      scope,
+      toolCallId,
+      links.peelsReserved(tool),
+      frame.callOccurrenceKey,
+    );
     // No `error` flag: a human's answer is not a tool failure.
     const { modelResult: rawPauseResult, toolResultDisposition } = await links.afterMoment(scope, {
+      ...occurrence,
       ...(tool && { tool }),
       toolName,
       toolCallId,
@@ -118,7 +126,7 @@ export function buildResumePlain(
     // routes the ticket.
     const pausePlaced = await links.placeResults(
       scope,
-      { toolName, toolCallId, iteration },
+      { toolName, toolCallId, iteration, ...occurrence },
       { result: input, modelResult: rawPauseResult },
       true,
     );
@@ -136,7 +144,7 @@ export function buildResumePlain(
     if (deps.stepPlanFor) {
       resultStr = links.applyStepReturn(
         scope,
-        { toolName, toolCallId, iteration, settled: { ran: true, clean: true } },
+        { toolName, toolCallId, iteration, ...occurrence, settled: { ran: true, clean: true } },
         resultStr,
       );
     }
@@ -162,6 +170,7 @@ export function buildResumePlain(
           content: resultStr,
           toolCallId,
           toolName,
+          ...occurrence,
           ...toolResultExecutionField(
             deps.answerLayer,
             'returned',
@@ -172,20 +181,20 @@ export function buildResumePlain(
           ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
       ],
-      { toolName, toolCallId },
+      { toolName, toolCallId, ...occurrence },
     );
     const newHistory = pauseSettlement.history;
     scope.history = newHistory;
     // Drives `on-tool-return` triggers, same as every other dispatch path.
     scope.lastToolResult = { toolName, result: resultStr };
-    appendBatchResult(scope, { toolName, result: resultStr, toolCallId });
+    appendBatchResult(scope, { toolName, result: resultStr, toolCallId, ...occurrence });
     // The person's answer IS the tool's result (the handler's contract
     // above), so it ran by definition.
     await judgeLanded(
       scope,
       deps.findingsJudge,
       true,
-      { toolName, result: resultStr, toolCallId },
+      { toolName, result: resultStr, toolCallId, ...occurrence },
       iteration,
       links.turnStampOf(scope),
     );
@@ -199,13 +208,14 @@ export function buildResumePlain(
       iteration,
       carried: args,
       entered: true,
-      seen: {},
+      seen: occurrence,
     });
     links.emitToolEnd(
       scope,
       toolName,
       {
         toolCallId,
+        ...occurrence,
         // The REAL value the pause returned, not what a rule let the model read
         // — the same split the other four paths keep. Capped when a ceiling is
         // configured, because the marker IS the result on every channel.

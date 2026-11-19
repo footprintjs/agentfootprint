@@ -19,6 +19,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
@@ -233,11 +234,13 @@ export function landCallResult(
         )
       : '';
   if (layerNote !== '') frame.delivery.resultStr += layerNote;
+  const occurrence = callOccurrenceField(frame.tc.callOccurrenceKey);
   frame.newHistory.push({
     role: 'tool',
     content: frame.delivery.resultStr,
     toolCallId: frame.tc.id,
     toolName: frame.tc.name,
+    ...occurrence,
     ...(deps.findings === true &&
       !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
     ...toolResultExecutionField(
@@ -281,6 +284,7 @@ export function landCallResult(
     toolName: frame.tc.name,
     result: frame.delivery.resultStr,
     toolCallId: frame.tc.id,
+    ...occurrence,
     ...(deps.resultsLayer === true &&
       missingResultFields(frame.execution.executed, frame.execution.executeThrew)),
     ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),

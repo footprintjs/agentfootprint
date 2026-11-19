@@ -179,6 +179,7 @@ export function routingShapes() {
       service: str,
       mode: oneOf('machine', 'user'),
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -187,6 +188,7 @@ export function routingShapes() {
       kind: str,
       expiresAt: num,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -195,6 +197,7 @@ export function routingShapes() {
         service: str,
         sessionId: str,
         toolCallId: str,
+        callOccurrenceKey: listOf(num),
         iteration: num,
       }),
   };

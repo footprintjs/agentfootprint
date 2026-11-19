@@ -4,6 +4,8 @@ import { parseRange } from '../../../../../time/range.js';
 import { chooseReading, resolveMention, withZoneAnswered } from '../../../../../time/resolve.js';
 import type { TimeAnswerRow } from '../../../../../time/rows.js';
 import { isZoneName } from '../../../../../time/zone.js';
+import type { BatchAddress } from '../../batchAddress.js';
+import { fieldAddresses, memberAddresses, windowAddressKey } from '../../askAddresses.js';
 import type { BatchCall, ToolOf } from '../../resolve.js';
 import { WINDOW_FORM_EXPECTATION, WINDOW_ZONE_EXPECTATION } from '../constants.js';
 import type { AskField, AskTime, WindowAskField, WindowFill } from '../types.js';
@@ -25,7 +27,7 @@ import type { WindowBinding, WindowFilled } from './types.js';
 export function bindWindowAnswer(
   field: AskField,
   answer: InputValue,
-  byId: ReadonlyMap<string, BatchCall>,
+  byAddress: ReadonlyMap<BatchAddress, BatchCall>,
   toolOf: ToolOf,
   time: AskTime | undefined,
   answerKind?: TimeAnswerRow['how'],
@@ -67,25 +69,34 @@ export function bindWindowAnswer(
     at >= 0 ? window.zones?.[at] ?? time.zone : editedZone(range, window.zones, time.zone);
   if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
   if (window.role === 'confirm-meaning') {
-    const fills: Record<string, WindowFill> = {};
-    const filled: Record<string, WindowFilled> = {};
-    const refused: Record<string, string> = {};
-    const confirmed = new Set(window.confirmOnlyIds);
-    for (const id of new Set(field.members.flatMap((m) => m.toolCallIds))) {
-      if (confirmed.has(id)) continue;
-      const members = field.members
-        .filter((m) => m.toolCallIds.includes(id))
-        .map((m) => ({ ...m, toolCallIds: [id] }));
+    const fills: Record<string, WindowFill> = Object.create(null);
+    const filled: Record<string, WindowFilled> = Object.create(null);
+    const refused: Record<string, string> = Object.create(null);
+    const confirmed = new Set(window.confirmOnlyAddresses ?? window.confirmOnlyIds);
+    const addressed = field.members.some((member) => member.callAddresses !== undefined);
+    for (const address of fieldAddresses(field)) {
+      if (confirmed.has(address)) continue;
+      const members = field.members.flatMap((member) => {
+        const index = memberAddresses(member).indexOf(address);
+        if (index < 0) return [];
+        return [
+          {
+            ...member,
+            toolCallIds: [member.toolCallIds[index]],
+            ...(addressed && { callAddresses: [address] }),
+          },
+        ];
+      });
       const one = windowFills(
         { ...field, members },
         range,
         zone,
-        byId,
+        byAddress,
         toolOf,
         time,
         answerKind !== 'edited',
       );
-      if ('expected' in one) refused[id] = one.expected;
+      if ('expected' in one) refused[windowAddressKey(field, address)] = one.expected;
       else {
         Object.assign(fills, one.fills);
         Object.assign(filled, one.filled);
@@ -98,7 +109,7 @@ export function bindWindowAnswer(
       answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' },
     };
   }
-  const bound = windowFills(field, range, zone, byId, toolOf, time, answerKind !== 'edited');
+  const bound = windowFills(field, range, zone, byAddress, toolOf, time, answerKind !== 'edited');
   if (!('fills' in bound)) return bound;
   return {
     fills: bound.fills,

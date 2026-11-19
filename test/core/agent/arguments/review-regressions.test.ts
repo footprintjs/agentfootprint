@@ -316,29 +316,54 @@ describe('a call the inputs layer refuses is never put to a person', () => {
     expect(warn.mock.calls.filter((c) => String(c[0]).includes('.inputsLayer()'))).toHaveLength(1);
   });
 
-  it('the ask-resume door: a checkpoint whose entry refused the paused call is refused there', async () => {
-    const ran: Record<string, unknown>[] = [];
-    const m = scripted([call('c1', 'search_logs', { service: 'a' }), answer('could not')]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
-      .tool(searchLogs(ran))
-      .toolMiddleware(approveEveryCall)
-      .build();
-    const paused = await agent.run({ message: 'errors on a?' });
-    expect(isPaused(paused)).toBe(true);
-    if (!isPaused(paused)) return;
-    // The shape a runtime that decided the refusal AFTER the chain left on
-    // its checkpoint: the layer's entry refuses the call the ask paused on.
-    const refused = unreadableRulesRefusal('search_logs', 'askOrAssume.window.assume — "9h"');
-    const state = (paused.checkpoint as unknown as { sharedState: Record<string, unknown> })
-      .sharedState;
-    state.argumentResolutions = [{ toolCallId: 'c1', iteration: 1, refused }];
-    await agent.resume(
-      paused.checkpoint,
-      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
-    );
-    expect(ran).toEqual([]);
-    expect(lastToolMessage(m.requests).content).toBe(refused);
-  });
+  it.each(['keyed', 'legacy'] as const)(
+    'the ask-resume door: a %s checkpoint whose entry refused the paused call is refused there',
+    async (format) => {
+      const ran: Record<string, unknown>[] = [];
+      const m = scripted([call('c1', 'search_logs', { service: 'a' }), answer('could not')]);
+      const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+        .tool(searchLogs(ran))
+        .toolMiddleware(approveEveryCall)
+        .build();
+      const paused = await agent.run({ message: 'errors on a?' });
+      expect(isPaused(paused)).toBe(true);
+      if (!isPaused(paused)) return;
+      // The shape a runtime that decided the refusal AFTER the chain left on
+      // its checkpoint: the layer's entry refuses the call the ask paused on.
+      const refused = unreadableRulesRefusal('search_logs', 'askOrAssume.window.assume — "9h"');
+      const checkpoint: typeof paused.checkpoint =
+        format === 'keyed'
+          ? paused.checkpoint
+          : JSON.parse(
+              JSON.stringify(paused.checkpoint, (key, value) =>
+                key === 'callOccurrenceKey' ? undefined : value,
+              ),
+            );
+      const state = (checkpoint as unknown as { sharedState: Record<string, unknown> }).sharedState;
+      const history = state.history as readonly LLMMessage[];
+      const proposal = history
+        .flatMap((message) => message.toolCalls ?? [])
+        .find((call) => call.id === 'c1');
+      expect(proposal).toBeDefined();
+      const key = proposal?.callOccurrenceKey;
+      if (format === 'keyed') expect(key).toHaveLength(5);
+      else expect(key).toBeUndefined();
+      state.argumentResolutions = [
+        {
+          toolCallId: 'c1',
+          iteration: 1,
+          refused,
+          ...(key !== undefined && { callOccurrenceKey: key }),
+        },
+      ];
+      await agent.resume(
+        checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+      );
+      expect(ran).toEqual([]);
+      expect(lastToolMessage(m.requests).content).toBe(refused);
+    },
+  );
 });
 
 // ─── INTEGRATION — every reader reads the tool's own bytes ──────────

@@ -26,7 +26,7 @@
       "messagesInjections": ["0b80ff73a738be4367b5bdf91d41755bb487e79a56ab359ba0fa9049b27bb7d7",false,false],
       "toolsInjections": ["0b80ff73a738be4367b5bdf91d41755bb487e79a56ab359ba0fa9049b27bb7d7",false,false],
       "llmLatestContent": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",false,false],
-      "llmLatestToolCalls": ["5020e2f7184453ae393343fe46e969011b60fe3dd7e3cfa04d53fc9fb21551b0",false,false],
+      "llmLatestToolCalls": ["9026a5d855693a1966015df7ae73fb6e897c7c33d2c8ec4c8aafd0a409b2b059",false,false],
       "toolResourceOwner": ["3b1ad9f052f28f30063787428735c0f3c2a8a40719e91e527eade085c74a88ed",true,false],
       "servedToolParties": ["f2e015d6fc75327a08388b838302eba0c0f877b06f8cc10d4a7a50027f5e4bc7",true,false],
       "pausedToolCallId": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",false,false],
