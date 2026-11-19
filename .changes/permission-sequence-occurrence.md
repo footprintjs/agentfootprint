@@ -11,3 +11,6 @@ wrong sequence. The built-in role allowlist bases its decisions on role,
 capability, and target, so its decisions were unaffected.
 Recorded non-entry and input cancellation now keep those calls out of the
 permission sequence, regardless of their display text.
+When findings are off, a custom `tellLLM` refusal can still appear in
+`sequence`, so enable findings or start the refusal text with
+`[permission denied:` to keep it out.
