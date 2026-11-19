@@ -206,6 +206,38 @@ describe('retrying a call in the standing', () => {
     expect(run.assessment.standing).toBe('not-assessed');
   });
 
+  it('clears only the matching failure when retries reuse the call id', async () => {
+    const id = 'lookup';
+    const differentFailure = 'The green item could not be read.';
+    const execute = vi
+      .fn<() => unknown>(() => 'Available')
+      .mockImplementationOnce(failed)
+      .mockImplementationOnce(() => ({ ...failed(), content: differentFailure }));
+    const run = await leg(
+      agentFor([call(id, firstArgs), call(id, differentArgs), call(id, equalArgs), answered])
+        .tool(inventory(execute))
+        .build(),
+    );
+    expect(
+      run.history
+        .filter((message) => message.role === 'tool')
+        .map(({ toolCallId, outcome }) => [toolCallId, outcome]),
+    ).toEqual([
+      [id, 'failed'],
+      [id, 'failed'],
+      [id, undefined],
+    ]);
+    expectIncomplete(run.assessment, id);
+    expect(run.assessment.reasons[0]?.witness).toEqual([
+      {
+        kind: 'history',
+        index: run.history.findIndex((message) => message.content === differentFailure),
+        path: '/outcome',
+        toolCallId: id,
+      },
+    ]);
+  });
+
   it('keeps the failure when the matching completion was proposed in the same batch', async () => {
     const execute = vi.fn<() => unknown>(() => 'Available').mockImplementationOnce(failed);
     const batch = {

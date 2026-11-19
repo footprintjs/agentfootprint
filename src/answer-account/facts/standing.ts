@@ -8,12 +8,13 @@ import type {
   AssessmentPointer,
   AssessmentReason,
 } from '../../core/agent/assessment/types.js';
+import { recordedCallOutcome } from '../../semantics/toolOutcome.js';
 import { chip, n } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, RecordPointer, Sentence } from '../types.js';
-import { isKeptOut, keptOut, type RecordingView, type ViewEvent } from '../view.js';
+import { isKeptOut, isRecord, keptOut, type RecordingView, type ViewEvent } from '../view.js';
 import { MAX_CALLS } from './calls.js';
-import { boundedPointer, stateAt, type ReadContext } from './common.js';
+import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.js';
 
 /** Reasons whose standing line needs the committed rows for its details. */
 export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
@@ -167,17 +168,17 @@ const CALL_OUTCOME_LINES = {
   unknown: REASON_LINES['call-not-completed'],
 } as const;
 
-/** Each line points to the recorded outcomes it counts. */
+/** Each line counts and points to the outcomes at the witnesses' own history positions. */
 function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][number]): Sentence[] {
-  const calls = r.source.kind === 'calls' ? r.source.calls : [];
-  const outcomeFor = new Map(calls.map((call) => [call.toolCallId, call.outcome]));
+  const history = historyOf(ctx.view);
   const groups: Record<keyof typeof CALL_OUTCOME_LINES, AssessmentPointer[]> = {
     refused: [],
     failed: [],
     unknown: [],
   };
   for (const w of r.witness) {
-    const outcome = w.kind === 'history' ? outcomeFor.get(w.toolCallId ?? '') : undefined;
+    const row = w.kind === 'history' ? history[w.index] : undefined;
+    const outcome = isRecord(row) && row.role === 'tool' ? recordedCallOutcome(row) : undefined;
     groups[outcome ?? 'unknown'].push(w);
   }
   return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {

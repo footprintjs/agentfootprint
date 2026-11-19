@@ -1,6 +1,5 @@
 /**
- * Row "How sure" — what the record holds about how sure the answer is, side by
- * side:
+ * Row "How sure" — what the record holds about how sure the answer is, side by side:
  *   - the whole-answer standing, FIRST: the one fold
  *     (`core/agent/assessment/assess.ts` · `assessAnswer`) over the run's
  *     committed state — known · consistent with the record · not sure (with the

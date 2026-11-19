@@ -264,17 +264,17 @@ it never hides.
 
 ## What a reason rests on — `reasons[].source`
 
-**The rule.** Every reason carries `source`, one of `{ kind: 'calls', calls:
-{ toolCallId, toolName }[], unnamed? }`, `{ kind: 'answer' }` or `{ kind: 'run' }`.
-The KIND is declared once per reason in `REASONS` (`reasons.ts`), never decided
-per run; the calls of a `calls` reason are read off the very rows its witnesses
-point at (`sources.ts` · `reasonSourceOf`) — a result's own call, a coverage,
-argument, period or middleware row's own call, a conflict's readings, the results
-a contingent value came from, every call this turn of a tool an answer check names
-(`declaration-overclaimed`: it may over-report, it never hides). A call the record
-does not name in full — no id, or no tool name for it — is counted in `unnamed`,
-never dropped and never guessed. Names and ids only: never an argument, a result
-or a value.
+**The rule.** Every reason carries `source`, one of `{ kind: 'calls', calls: {
+toolCallId, toolName }[], unnamed? }`, `{ kind: 'answer' }` or `{ kind: 'run' }`. The
+KIND is declared once per reason in `REASONS` (`reasons.ts`), never decided per run; the
+calls of a `calls` reason are read off the very rows its witnesses point at
+(`sources.ts` · `reasonSourceOf`) — a result's own call, a coverage, argument, period or
+middleware row's own call, a conflict's readings, the results a contingent value came
+from, every call this turn of a tool an answer check names (`declaration-overclaimed`:
+it may over-report, it never hides). A call the record does not name in full — no id, or
+no tool name for it — is counted in `unnamed`, never dropped and never guessed. Names
+and ids only, with the recorded outcome when the reason is `call-not-completed`. Each
+outcome belongs to its own result in `history`; a reused id can appear more than once.
 
 | Rests on | Reasons |
 |---|---|
