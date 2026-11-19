@@ -169,7 +169,9 @@ export function prepareAgentRun(
   // history snapshot), which is read ONLY in run()'s catch — after the
   // engine's terminal flush at the reject boundary — so deferral is safe
   // (pinned by test: crash checkpoints stay complete under 'deferred').
-  attachObserver(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
+  attachObserver(
+    agentRecorder({ dispatcher, getRunContext: getRunCtx, rootTurnAt: redaction.rootTurnAt }),
+  );
   // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,
   // so a thrown run clears in-flight live state + flips monitor status.
   // Deferral-safe: the reject-boundary terminal flush delivers error.fatal

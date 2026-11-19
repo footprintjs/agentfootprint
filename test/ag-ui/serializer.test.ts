@@ -31,7 +31,7 @@ let clock = 1_000;
 function ev(
   type: string,
   payload: Record<string, unknown>,
-  at: { rsid?: string; path?: readonly string[]; runId?: string } = {},
+  at: { rsid?: string; path?: readonly string[]; runId?: string; rootTurn?: true } = {},
 ): AgentfootprintEvent {
   return {
     type,
@@ -43,6 +43,7 @@ function ev(
       subflowPath: at.path ?? [],
       compositionPath: [],
       runId: at.runId ?? 'run-100-1',
+      ...(at.rootTurn === true && { rootTurn: true }),
     },
   } as unknown as AgentfootprintEvent;
 }
@@ -212,19 +213,53 @@ describe('agUiSerializer — text', () => {
     });
   });
 
-  it('never writes an answer the record marks refused', () => {
+  it('recognizes a marked root end after an unmarked end when both starts were missed', () => {
     const { s, out } = feed([
-      ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' }),
-      ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
       ev(
         t('agent.turn_end'),
-        { turnIndex: 0, finalContent: 'made up', refused: { by: 'evidence-rails' } },
-        { rsid: 'final/prepare-final#9', path: ['final'] },
+        { turnIndex: 0, finalContent: 'Mounted answer.' },
+        { rsid: 'child/capture/write#4', path: ['child', 'capture'] },
+      ),
+      ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
+      ev(
+        t('stream.token'),
+        { iteration: 1, tokenIndex: 0, content: 'Root answer.' },
+        { rsid: 'call-llm#5' },
+      ),
+      ev(
+        t('agent.turn_end'),
+        { turnIndex: 0, finalContent: 'Root answer. With a warning.' },
+        { rsid: 'capture/write#9', path: ['capture'], rootTurn: true },
       ),
     ]);
-    expect(only(out, 'TEXT_MESSAGE_CONTENT')).toEqual([]);
-    expect(s.settle({ kind: 'finished' }).at(-1)).not.toHaveProperty('result');
+
+    expect(only(out, 'TEXT_MESSAGE_CONTENT').map((e) => e.delta)).toEqual([
+      'Root answer.',
+      ' With a warning.',
+    ]);
+    expect(s.settle({ kind: 'finished' }).at(-1)).toMatchObject({
+      type: 'RUN_FINISHED',
+      result: 'Root answer. With a warning.',
+    });
   });
+
+  it.each(['after the start', 'with only a marked end'] as const)(
+    'never writes an answer the record marks refused %s',
+    (arrival) => {
+      const late = arrival === 'with only a marked end';
+      const { s, out } = feed([
+        ...(late ? [] : [ev(t('agent.turn_start'), { turnIndex: 0 }, { rsid: 'seed#0' })]),
+        ev(t('stream.llm_start'), { iteration: 1 }, { rsid: 'call-llm#5' }),
+        ev(
+          t('agent.turn_end'),
+          { turnIndex: 0, finalContent: 'made up', refused: { by: 'evidence-rails' } },
+          { rsid: 'capture/write#9', path: ['capture'], ...(late && { rootTurn: true }) },
+        ),
+      ]);
+      expect(only(out, 'TEXT_MESSAGE_CONTENT')).toEqual([]);
+      expect(s.settle({ kind: 'finished' }).at(-1)).not.toHaveProperty('result');
+    },
+  );
 
   it('with no agent around (an LLMCall), llm_end content IS the answer — unless withheld', () => {
     const { out } = feed([

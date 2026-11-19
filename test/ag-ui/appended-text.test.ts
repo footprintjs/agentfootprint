@@ -15,7 +15,16 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { absent, Agent, defineTool } from '../../src/index.js';
+import {
+  absent,
+  Agent,
+  defineTool,
+  isPaused,
+  pauseHere,
+  Sequence,
+  type RedactionPolicy,
+} from '../../src/index.js';
+import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/llm-providers.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
@@ -50,6 +59,47 @@ const archive = defineTool({
 });
 
 const call = (name: string) => ({ content: '', toolCalls: [{ id: 'c1', name, args: {} }] });
+
+const pendingReport = defineTool({
+  name: 'pending_report',
+  description: 'Check whether the report is ready.',
+  inputSchema: { type: 'object' },
+  execute: () => ({ content: 'Queued.', effects: [], status: 'pending' }),
+});
+
+const approval = defineTool({
+  name: 'approval',
+  description: 'Ask the reader whether to continue.',
+  inputSchema: { type: 'object' },
+  execute: () => pauseHere({ question: 'Continue?' }),
+});
+
+const REPORT = 'The report is ready.';
+const WARNING = '\n\n---\n\nNot sure — a tool reported unfinished work.';
+
+function reportAgent(delivery: 'streamed' | 'complete-only', redact?: RedactionPolicy) {
+  const scripted = mock({
+    chunkDelayMs: 0,
+    replies: [
+      call('pending_report'),
+      { toolCalls: [{ id: 'c2', name: 'approval', args: {} }] },
+      REPORT,
+    ],
+  });
+  const provider: LLMProvider =
+    delivery === 'streamed'
+      ? scripted
+      : { name: scripted.name, complete: (request) => scripted.complete(request) };
+  return Agent.create({
+    provider,
+    model: 'm',
+    ...(redact !== undefined && { redact }),
+  })
+    .tool(pendingReport)
+    .tool(approval)
+    .answerLayer({ standingLine: true })
+    .build();
+}
 
 /** The answer the run delivered, as `turn_end` carried it. */
 function finalContentOf(run: { served: readonly { type: string; payload: unknown }[] }): string {
@@ -132,5 +182,79 @@ describe('appended text — regression', () => {
     expect(wireText(run.events)).toBe('There are 12 open orders.');
     // One message for the tool-call turn's text-less call is not opened; one for the answer.
     expect(only(run.events, 'TEXT_MESSAGE_START')).toHaveLength(1);
+  });
+});
+
+describe('appended text — a record reader attached after a pause', () => {
+  it.each(['streamed', 'complete-only'] as const)(
+    'delivers the %s root answer and warning once',
+    async (delivery) => {
+      const agent = reportAgent(delivery);
+      const paused = await agent.run({ message: 'Is the report ready?' });
+      if (!isPaused(paused)) throw new Error('Expected the approval tool to pause');
+
+      const run = await runAsAgUi(agent, undefined, {
+        resume: { checkpoint: paused.checkpoint, answer: { approved: true } },
+      });
+      const expected = REPORT + WARNING;
+      expect(run.out).toBe(expected);
+      expect(finalContentOf(run)).toBe(expected);
+      expect(run.served.some((event) => event.type === 'agentfootprint.agent.turn_start')).toBe(
+        false,
+      );
+      expect(wireText(run.events)).toBe(expected);
+      expect(only(run.events, 'TEXT_MESSAGE_START')).toHaveLength(2);
+      expect(only(run.events, 'CUSTOM')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'agentfootprint.answer.assessed',
+            value: expect.objectContaining({
+              standing: 'not-sure',
+              reasons: ['work-not-finished'],
+            }),
+          }),
+        ]),
+      );
+
+      const client = await replayThroughClient(run.events);
+      expect(
+        client.messages.filter((message) => message.role === 'assistant').map((m) => m.content),
+      ).toEqual([REPORT, WARNING]);
+      expect(client.result.result).toBe(expected);
+    },
+  );
+
+  it('takes the terminal result from the served record under redaction', async () => {
+    const agent = reportAgent('streamed', conversationRedaction());
+    const paused = await agent.run({ message: 'Is the report ready?' });
+    if (!isPaused(paused)) throw new Error('Expected the approval tool to pause');
+
+    const run = await runAsAgUi(agent, undefined, {
+      resume: { checkpoint: paused.checkpoint, answer: { approved: true } },
+    });
+    expect(run.out).toBe(REPORT + WARNING);
+    expect(finalContentOf(run)).toBe('[REDACTED]');
+    expect(run.events.at(-1)).toMatchObject({ type: 'RUN_FINISHED', result: '[REDACTED]' });
+    const deltas = only(run.events, 'TEXT_MESSAGE_CONTENT').map((event) => event.delta);
+    expect(deltas).toEqual(Array.from({ length: 4 }, () => '[REDACTED]'));
+    const wire = JSON.stringify(run.events);
+    expect(wire).not.toContain(REPORT);
+    expect(wire).not.toContain('a tool reported unfinished work');
+  });
+
+  it('does not promote a resumed mounted Agent’s answer to the root', async () => {
+    const inner = Sequence.create().step('report', reportAgent('streamed')).build();
+    const root = Sequence.create().step('inner', inner).build();
+    const paused = await root.run({ message: 'Is the report ready?' });
+    if (!isPaused(paused)) throw new Error('Expected the mounted approval tool to pause');
+
+    const run = await runAsAgUi(root, undefined, {
+      resume: { checkpoint: paused.checkpoint, answer: { approved: true } },
+    });
+    expect(run.out).toBe(REPORT + WARNING);
+    expect(finalContentOf(run)).toBe(REPORT + WARNING);
+    expect(wireText(run.events)).toBe(REPORT);
+    expect(run.events.at(-1)).toMatchObject({ type: 'RUN_FINISHED' });
+    expect(run.events.at(-1)).not.toHaveProperty('result');
   });
 });
