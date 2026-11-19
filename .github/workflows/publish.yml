@@ -157,7 +157,7 @@ jobs:
       mode: publish
 
   plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
@@ -271,7 +271,7 @@ jobs:
   verdict:
     needs: plan
     if: needs.plan.outputs.mode == 'publish'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read # CI's runs and their jobs
@@ -378,7 +378,7 @@ jobs:
     # job run. `release` and `publish` need this job's success, so a held
     # release reaches neither.
     if: ${{ !cancelled() && needs.hold.result == 'success' && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       # Install the pinned toolchain before any source configuration arrives.
@@ -518,7 +518,7 @@ jobs:
     # `verdict` failed (it then ran every gate), and the release must not
     # depend on how success() weighs a failed job further up the chain.
     if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'release' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write # tag + GitHub release
@@ -610,7 +610,7 @@ jobs:
     # a `release` skipped on any other run publishes nothing, so no version can
     # reach npm untagged.
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.release.result == 'success' || (needs.release.result == 'skipped' && github.event_name == 'release')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -727,7 +727,7 @@ jobs:
   docs:
     needs: [plan, release, publish]
     if: ${{ !cancelled() && needs.plan.outputs.mode == 'publish' && needs.release.result == 'success' && needs.publish.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: write # start the docs deploy
@@ -760,7 +760,7 @@ jobs:
   propose:
     needs: plan
     if: needs.plan.outputs.mode == 'propose'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       version: ${{ steps.prepare.outputs.version }}
@@ -829,7 +829,7 @@ jobs:
   release-pr:
     needs: [plan, propose]
     if: needs.plan.outputs.mode == 'propose'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       # Pinned to a full commit SHA, like every action here. The token is scoped
