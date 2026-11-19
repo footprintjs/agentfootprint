@@ -13,13 +13,15 @@
  *
  * The boundary is the paused state itself: a call before the pause is a tool
  * message in `initialState.history` after its last person entry (the request
- * the run was answering when it paused) that is not a call of this leg. Its
- * bytes and declaration are read where a pointer can land — the committed
- * `sharedState` (matched by call id) — and a call the committed history no
- * longer holds is passed over, never guessed.
+ * the run was answering when it paused) that is not a call of this leg. If
+ * that history survives as the committed history's prefix, its tool messages
+ * identify the same occurrences by position. A declaration is attached only
+ * when the committed row identifies one compatible occurrence. If the prefix
+ * has changed, the positions cannot be matched and the rows say so. The
+ * routing verdict can still be read from the paused state.
  *
  * So, exactly:
- *   - RECOVERABLE — each call answered before the pause; what came back, read
+ *   - RECOVERABLE WITH THE PREFIX — each call answered before the pause; what came back, read
  *     by the ONE emptiness reader over the tool's own bytes with the door the
  *     state holds (its `coverageDeclared` rows: an `absence` row, a `ledger`
  *     boundary); what its tool declared it checked, did not check and can
@@ -48,7 +50,7 @@ import {
 } from '../../core/agent/recordedCalls.js';
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
-import type { SentenceVar } from '../types.js';
+import type { Sentence, SentenceVar } from '../types.js';
 import {
   COVERAGE_STATE_KEY,
   readStateCoverage,
@@ -81,13 +83,19 @@ export interface BeforePauseCall {
 }
 
 export interface PausedLegRead {
-  /** The record holds the state the run paused with (`snapshot.initialState`) — the part before the pause is read from it. */
+  /** The record holds the state the run paused with (`snapshot.initialState`). */
   readonly stateHeld: boolean;
-  /** Every call answered before the pause, in history order — none when the leg was not resumed. */
+  /** The paused history's positions do not match the committed history. */
+  readonly historyUnmatched?: true;
+  /** Recoverable calls answered before the pause, in history order. */
   readonly calls: readonly BeforePauseCall[];
 }
 
 const NOT_RESUMED: PausedLegRead = { stateHeld: false, calls: [] };
+
+export function unmatchedBeforePause(ctx: ReadContext): Sentence {
+  return ctx.say('beforePause.unmatched', { status: 'not-recorded', missing: 'unreadable' });
+}
 
 /**
  * On a resumed leg: the part before the pause, read from the committed state
@@ -95,12 +103,17 @@ const NOT_RESUMED: PausedLegRead = { stateHeld: false, calls: [] };
  * that are not calls of this leg, each with what came back and what its tool
  * declared.
  */
-export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead {
+export function readPausedLeg(
+  ctx: ReadContext,
+  calls: Pick<CallsRead, 'historyIndices'>,
+): PausedLegRead {
   const pausedWith = ctx.view.pausedWith;
   if (!ctx.resumedLeg || pausedWith === undefined) return NOT_RESUMED;
   const before = pausedWith.history as readonly unknown[];
   const history = historyOf(ctx.view);
-  if (!historyStartsWith(history, before)) return { stateHeld: true, calls: [] };
+  if (!ctx.view.isStateKeptOut('history') && !historyStartsWith(history, before)) {
+    return { stateHeld: true, historyUnmatched: true, calls: [] };
+  }
   const coverageRows = ctx.view.state?.[COVERAGE_STATE_KEY];
   const rows: readonly unknown[] = Array.isArray(coverageRows) ? coverageRows : [];
   const all = readHistoryCalls(history);

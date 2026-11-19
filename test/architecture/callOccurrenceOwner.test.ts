@@ -7,7 +7,6 @@ const root = join(__dirname, '../..');
 const readers = ['src/answer-account/', 'src/core/agent/assessment/'];
 const owner = 'src/core/agent/recordedCalls';
 const scopedExclusions = new Map([
-  ['src/security/extractSequence.ts', 'known, carded: TASK-Root-16'],
   ['src/core/agent/findings/ledger.ts', 'known, carded: TASK-Root-17'],
   ['src/core/agent/findings/context.ts', 'known, carded: TASK-Root-17'],
   ['src/time-travel/servedView/findings.ts', 'known, carded: TASK-Root-17'],

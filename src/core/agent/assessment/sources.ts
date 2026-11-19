@@ -45,7 +45,8 @@
  * that do — is COUNTED in `unnamed`, never dropped and never guessed. A
  * result is identified by its place in history, even when a provider id
  * recurs. A committed row may only be joined when it identifies a single
- * compatible occurrence.
+ * compatible occurrence. Unplaced evidence keeps its pointer independently
+ * of the calls the record establishes.
  *
  * ## A list is read by index, never through its own code
  *
@@ -123,6 +124,7 @@ export interface SourceRead {
   }[];
   readonly historyCalls?: readonly HistoryCall[];
   readonly turnBegins?: number;
+  readonly declarationAddresses?: ReadonlyMap<number, number> | undefined;
 }
 
 const arrayEntry = (rows: unknown, index: number): unknown =>
@@ -242,7 +244,12 @@ function callsOfWitness(
     const checks = isRecord(report) && list === 'checks' ? report.checks : undefined;
     return callsOfCheck(arrayEntry(checks, Number(at)), read);
   }
-  return callsOfRow(reason, rowAt(read.state, w.key, w.path), read);
+  const refs = callsOfRow(reason, rowAt(read.state, w.key, w.path), read);
+  const index =
+    w.key === 'coverageDeclared'
+      ? read.declarationAddresses?.get(Number(w.path.split('/')[1]))
+      : undefined;
+  return index !== undefined ? refs.map((ref) => ({ ...ref, index })) : refs;
 }
 
 /**
@@ -278,15 +285,28 @@ export function reasonSourceOf(
       : (whole ??= historyCallResolver(occurrences)))(id, ref.name);
   const calls: Extract<AssessmentReasonSource, { kind: 'calls' }>['calls'][number][] = [];
   const seen = new Set<number | string>();
+  const unplaced: AssessmentPointer[] = [];
   let unnamed = 0;
   for (const w of witness) {
     const refs = callsOfWitness(reason, w, read, callAt);
+    const declaration = w.kind === 'state' && w.key === 'coverageDeclared';
+    if (declaration && refs.length === 0) {
+      unplaced.push(w);
+      continue;
+    }
     if (refs.length === 0) unnamed += 1;
     for (const ref of refs) {
       const found =
         ref.index === undefined && ref.id !== undefined && !ref.predispatch
           ? resolve(ref.id, ref)
           : undefined;
+      if (
+        (declaration && ref.index === undefined && found?.kind !== 'matched') ||
+        (ref.thisTurn && found?.kind === 'ambiguous')
+      ) {
+        unplaced.push(w);
+        continue;
+      }
       if (found?.kind === 'ambiguous') {
         unnamed += 1;
         continue;
@@ -325,5 +345,10 @@ export function reasonSourceOf(
       });
     }
   }
-  return { kind: 'calls', calls, ...(unnamed > 0 && { unnamed }) };
+  return {
+    kind: 'calls',
+    calls,
+    ...(unnamed > 0 && { unnamed }),
+    ...(unplaced.length > 0 && { unplaced }),
+  };
 }

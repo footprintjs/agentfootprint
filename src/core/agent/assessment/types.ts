@@ -244,7 +244,8 @@ export type HonestyLayer = 1 | 2 | 3 | 4;
  *   the record does not name in full (no call id, or no tool name for it),
  *   present only when there is one — so a `calls` reason with an empty list
  *   still says it rests on calls, and an empty list never stands for "the
- *   run";
+ *   run"; `unplaced` points to evidence rows without a definite call.
+ *   Those rows establish no additional count of calls;
  * - `answer` — the answer itself: a value in it no evidence carried, a claim
  *   in it, a check on its bytes;
  * - `run` — the run as a whole: it paused for a person, a limit stopped it,
@@ -266,6 +267,7 @@ export type AssessmentReasonSource =
         readonly reportedStatus?: 'partial' | 'pending';
       }[];
       readonly unnamed?: number;
+      readonly unplaced?: readonly AssessmentPointer[];
     }
   | { readonly kind: 'answer' }
   | { readonly kind: 'run' };

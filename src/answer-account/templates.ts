@@ -39,8 +39,7 @@ import { t, type AccountTemplate } from './templateEntry.js';
 
 export type { AccountTemplate, TemplateVoucher } from './templateEntry.js';
 
-/** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 18;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 19;
 
 /** The closed table. Ids are `row.part@version` in prose; the version lives on the entry. */
 export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
@@ -185,6 +184,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "…and {{count:n,'more tool call','more tool calls'}} from before the pause.",
   ),
   'beforePause.noResults': t("No tool result from before the pause is in this record's history."),
+  'beforePause.unmatched': t(
+    'This record cannot match tool results from before the pause to its final history.',
+  ),
   'beforePause.keptOut': t(
     "This record keeps the run's history out, so what came back before the pause cannot be told.",
   ),
@@ -560,8 +562,6 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'wrong.beforePause.held': t(
     "The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.",
   ),
-  // The same, when the routing verdict IS read from that state (or the app routes nothing): the
-  // routing is not named as lost.
   'wrong.beforePause.held.events': t(
     "The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.",
   ),
