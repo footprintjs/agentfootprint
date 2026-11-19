@@ -91,7 +91,8 @@ A paid run must name its cap (`--max-usd`). Before each run the bench projects t
 (the dearest run so far × 1.25, never under $0.03), and it stops rather than cross the cap. The
 stop is written into `results.json`. `--concurrency K` (at most 4) keeps K runs in flight at
 once. They still start in the plan's order, and every run in flight is counted against the cap.
-Only Haiku 4.5 is priced (`harness.mjs` · `PRICES`), so any other model is refused. `--dry-run`
+Only a model with a price row (`harness.mjs` · `PRICES`: Haiku 4.5, and Haiku 5.5 and Opus 5.5 for
+the honest-report bench) can be run; any other model is refused. `--dry-run`
 prints the plan and a generous estimate and calls nothing.
 
 Each paid run writes `results.json`, `report.md`, `raw/*.json.gz` and the blind label files. The
