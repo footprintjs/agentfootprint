@@ -22,5 +22,6 @@ export function agentRecorder(options: AgentRecorderOptions): EmitBridge {
     dispatcher: options.dispatcher,
     getRunContext: options.getRunContext,
     rootTurnAt: options.rootTurnAt,
+    turnMetaAt: options.turnMetaAt,
   });
 }

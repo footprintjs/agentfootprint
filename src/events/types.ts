@@ -130,6 +130,8 @@ export interface EventMeta {
   readonly turnIndex?: number;
   /** Present on the owning Agent's `agent.turn_end`, on either a fresh or resumed turn. */
   readonly rootTurn?: true;
+  /** The event comes from a mounted Agent's turn within an owning Agent's run. */
+  readonly mountedTurn?: true;
   /** Iteration index (Agent context only). */
   readonly iterIndex?: number;
   /** OTEL trace id (when env.traceId is set). */

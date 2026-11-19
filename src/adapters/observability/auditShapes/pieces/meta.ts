@@ -24,6 +24,7 @@ export const boundMeta: BoundRule = shapeOf<EventMeta>({
   compositionPath: listOf(str),
   turnIndex: num,
   rootTurn: bool,
+  mountedTurn: bool,
   iterIndex: num,
   traceId: str,
   spanId: str,
