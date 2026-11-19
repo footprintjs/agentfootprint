@@ -5,7 +5,13 @@ import { groundedTextOf } from './callLLM/groundedText.js';
 import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
-import { observeRequests } from '../../../provider-contract/requestObserver.js';
+import {
+  completeObserved,
+  observeCallRequests,
+  servedRequestRecorder,
+  streamObserved,
+} from './callLLM/servedRequest.js';
+import { assertForcedRequestSupported } from './callLLM/requestCapabilities.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
  *
@@ -31,21 +37,12 @@ import type { TypedScope } from 'footprintjs';
 import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
-  LLMCallHooks,
   LLMProvider,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
 } from '../../../provider-contract/types.js';
-import {
-  forcedToolChoiceFor,
-  UnsupportedToolChoiceError,
-} from '../../../provider-contract/forcedToolChoice.js';
-import {
-  autoNativeOutputSchemaFor,
-  nativeOutputSchemaFor,
-  UnsupportedNativeOutputError,
-} from '../../../provider-contract/nativeOutputSchema.js';
+import { autoNativeOutputSchemaFor } from '../../../provider-contract/nativeOutputSchema.js';
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -66,12 +63,7 @@ import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
-import {
-  abortableIterable,
-  throwIfAborted,
-  untilAborted,
-  withRequestSignal,
-} from '../../../lib/abort.js';
+import { throwIfAborted, withRequestSignal } from '../../../lib/abort.js';
 import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
@@ -99,18 +91,6 @@ import type { AgentState } from '../types.js';
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
-
-/** One capability rule at both request boundaries, before cache or model I/O. */
-function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
-  if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {
-    throw new UnsupportedToolChoiceError({ provider: provider.name, model: request.model });
-  }
-  // The structured-output twin (`strategy: 'native'`), judged on the same
-  // effective model — a configured or per-skill model included.
-  if (request.outputFormat !== undefined && !nativeOutputSchemaFor(provider, request.model)) {
-    throw new UnsupportedNativeOutputError({ provider: provider.name, model: request.model });
-  }
-}
 
 /**
  * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
@@ -476,6 +456,10 @@ export function buildCallLLMStage(
     // A custom strategy can create remote cache handles, so refuse a known
     // unsupported effective request before even that preparation does I/O.
     assertForcedRequestSupported(provider, baseRequest);
+    const serving =
+      deps.recordReceipt === false
+        ? undefined
+        : servedRequestRecorder(scope, committed, messages, wireMessages);
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
     const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
       iteration,
@@ -674,23 +658,17 @@ export function buildCallLLMStage(
         hooks.providerHooks ?? providerHooks,
       );
       let candidate = deps.findings === true ? capture(req) : undefined;
-      const attemptHooks =
-        deps.findings === true
-          ? observeRequests(
-              {
-                ...attempts.hooks,
-                onReplayPrepared: (
-                  preparation: Parameters<NonNullable<LLMCallHooks['onReplayPrepared']>>[0],
-                ) => {
-                  attempts.hooks.onReplayPrepared?.(preparation);
-                  candidate = capture(preparation.request);
-                },
-              },
-              (request) => {
-                candidate = capture(request);
-              },
-            )
-          : attempts.hooks;
+      if (selectedProvider !== provider) serving?.discard();
+      const attemptHooks = observeCallRequests(
+        attempts.hooks,
+        serving === undefined && deps.findings !== true
+          ? undefined
+          : (request) => {
+              serving?.beforeRequest(request);
+              if (deps.findings === true) candidate = capture(request);
+            },
+        serving?.discard,
+      );
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
@@ -705,8 +683,10 @@ export function buildCallLLMStage(
           : undefined;
       let lastTokenIndex = -1;
       if (selectedProvider.stream) {
-        for await (const chunk of abortableIterable(
-          selectedProvider.stream(attempts.request, attemptHooks),
+        for await (const chunk of streamObserved(
+          selectedProvider,
+          attempts.request,
+          attemptHooks,
           runSignal,
         )) {
           if (chunk.done) {
@@ -771,10 +751,7 @@ export function buildCallLLMStage(
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
         if (deps.findings === true) candidate = capture(attempts.request);
-        resp = await untilAborted(
-          selectedProvider.complete(attempts.request, attemptHooks),
-          runSignal,
-        );
+        resp = await completeObserved(selectedProvider, attempts.request, attemptHooks, runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
@@ -880,8 +857,11 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
-          ...((deps.findings === true || deps.outputFormat !== undefined) && {
+          ...((deps.findings === true ||
+            deps.outputFormat !== undefined ||
+            serving !== undefined) && {
             prepareFallback: (request: LLMRequest) => {
+              serving?.discard();
               const witness = deps.findings === true ? capture(request) : undefined;
               return () => {
                 // A callback may return arbitrary text; it did not inherit

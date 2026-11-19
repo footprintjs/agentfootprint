@@ -13,4 +13,11 @@ the inputs layer can write findings. One random batch namespace plus the proposa
 position identifies calls even when a provider repeats an ID. The proposal already
 lives in native state and the assistant history, so resumes carry the same address.
 
+`servedRequest.ts` records the positions of complete history entries at the
+provider port. A request-only message has no history position. Changed
+messages, distinct requests, and provider fallbacks withhold the candidate
+row. Observing a retry of the same request leaves one row. The original
+provider hooks still carry request observations and close when the invocation
+settles.
+
 The oversized runtime stage still needs its step 2/3 extraction.
