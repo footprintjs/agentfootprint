@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.0.1] - 2026-11-19
+
+### Fixed
+
+- **Clarify the evidence and request-lifecycle documentation.** The guides now
+  describe which values the evidence gate exempts, how live findings and legacy
+  replay are composed, and when executed searches reserve a result identity.
+
+- **Corrected result attribution in permission-checker call sequences.** When a
+  tool-call ID repeated, the sequence could list a refused or unanswered call as
+  dispatched, or omit a call that ran. IDs can repeat when a fresh process resumes a
+  saved run with an adapter that generates IDs locally. Custom checkers that
+  use the order or count of calls in `sequence` could make a decision from the
+  wrong sequence. The built-in role allowlist bases its decisions on role,
+  capability, and target, so its decisions were unaffected.
+  Recorded non-entry and input cancellation now keep those calls out of the
+  permission sequence, regardless of their display text.
+  When findings are off, a custom `tellLLM` refusal can still appear in
+  `sequence`, so enable findings or start the refusal text with
+  `[permission denied:` to keep it out.
+
+- **Corrected the message when a saved run carries findings verification evidence.** The
+  message now explains why the saved run cannot resume or continue and points to
+  `agent.run({ message })` to start a new run.
+
 ## [15.0.0] - 2026-11-19
 
 ### Breaking
