@@ -13,7 +13,7 @@
 import type { CombinedRecorder, EmitEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
-import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
+import { buildEventMeta, type RunContext, type TurnEventMeta } from '../../bridge/eventMeta.js';
 import { projectEventSourcePosition } from '../../bridge/eventSourcePosition.js';
 
 export interface EmitBridgeOptions {
@@ -30,6 +30,10 @@ export interface EmitBridgeOptions {
   readonly prefix: string | readonly string[];
   readonly getRunContext: () => RunContext;
   readonly rootTurnAt?: (type: AgentfootprintEventType, runtimeStageId: string) => true | undefined;
+  readonly turnMetaAt?: (
+    type: AgentfootprintEventType,
+    runtimeStageId: string,
+  ) => TurnEventMeta | undefined;
 }
 
 export class EmitBridge implements CombinedRecorder {
@@ -38,6 +42,7 @@ export class EmitBridge implements CombinedRecorder {
   private readonly prefixes: readonly string[];
   private readonly getRunContext: () => RunContext;
   private readonly rootTurnAt: EmitBridgeOptions['rootTurnAt'];
+  private readonly turnMetaAt: EmitBridgeOptions['turnMetaAt'];
 
   constructor(options: EmitBridgeOptions) {
     this.dispatcher = options.dispatcher;
@@ -45,6 +50,7 @@ export class EmitBridge implements CombinedRecorder {
     this.prefixes = typeof options.prefix === 'string' ? [options.prefix] : options.prefix;
     this.getRunContext = options.getRunContext;
     this.rootTurnAt = options.rootTurnAt;
+    this.turnMetaAt = options.turnMetaAt;
   }
 
   onEmit(event: EmitEvent): void {
@@ -62,6 +68,7 @@ export class EmitBridge implements CombinedRecorder {
         timestamp: event.timestamp,
         sourcePosition: projectEventSourcePosition(event),
         rootTurn: this.rootTurnAt?.(type, event.runtimeStageId),
+        ...this.turnMetaAt?.(type, event.runtimeStageId),
       },
       this.getRunContext(),
     );

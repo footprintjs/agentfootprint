@@ -50,7 +50,7 @@
 import { RedactionRule } from 'footprintjs/advanced';
 import type { CombinedRecorder, RedactionPolicy, ScopeFactory } from 'footprintjs';
 
-import type { RunContext } from '../bridge/eventMeta.js';
+import type { RunContext, TurnEventMeta } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
 import type { EventMeta } from '../events/types.js';
 import { conversationRedaction } from './conversation.js';
@@ -91,8 +91,10 @@ export interface RunRedaction {
   readonly recorders: readonly CombinedRecorder[];
   /** Tie an already-created native scope to this exact run and its rule. */
   bindScope(scope: unknown, context: Parameters<ScopeFactory>[0]): void;
-  /** The ownership stamp shared by a root turn end and its real-value twin. */
-  rootTurnAt(type: string, runtimeStageId: string): true | undefined;
+  /** Enable mounted-turn marks for an owning Agent's execution leg. */
+  trackMountedTurns(): void;
+  /** The ownership metadata shared by a served event and its real-value twin. */
+  turnMetaAt(type: string, runtimeStageId: string): TurnEventMeta | undefined;
   /**
    * The value the stage `runtimeStageId` wrote under `key` through
    * `setEventSource` — the oldest one not yet taken — for a recorder whose
@@ -124,6 +126,7 @@ export interface ScopeRun {
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
   markRootTurnEnd?(stageId: string): void;
+  markMountedTurn?(type: string, stageId: string): void;
   /** Capture metadata/serving only, so retained cleanup cannot keep a run bank alive. */
   captureLate?(stageId: string): (type: string, payload: unknown) => void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
@@ -170,7 +173,7 @@ function retirePrivateBinding(privateRun: PrivateRun, bound: NativePrivateRule):
 /** Private working input, never a recorder/export or an instance-wide subscription. */
 export interface ScopeComputation {
   readonly owner: object;
-  readonly ownsTurn?: true;
+  readonly ownsTurn?: boolean;
   retired(): boolean;
   emit(type: string, payload: unknown): void;
 }
@@ -234,6 +237,7 @@ export function createRunRedaction(args: {
     coverage,
     serving,
     markRootTurnEnd: events.markRootTurnEnd,
+    markMountedTurn: events.markMountedTurn,
     real: events.real,
     captureLate: events.captureLate,
     retainStateValue: (name, value) => decided.rule.retain([name], value),
@@ -294,7 +298,8 @@ export function createRunRedaction(args: {
     coverage,
     recorders,
     bindScope,
-    rootTurnAt: events.rootTurnAt,
+    trackMountedTurns: events.trackMountedTurns,
+    turnMetaAt: events.turnMetaAt,
     takeRealWrite(runtimeStageId, key) {
       const at = slot(runtimeStageId, key);
       const queue = waiting.get(at);
@@ -505,10 +510,15 @@ export function emitServed(
 ): void {
   const registration = scopeRuns.get(scope as object);
   const computation = registration?.computation;
+  const entry = registration?.serving;
   // Private reduction precedes native $emit: native's later stale-scope refusal
   // cannot protect an already-delivered private event.
-  if (computation !== undefined && !computation.retired()) computation.emit(type, payload);
-  const entry = registration?.serving;
+  if (computation !== undefined && !computation.retired()) {
+    if (computation.ownsTurn === false && entry !== undefined) {
+      entry.run.markMountedTurn?.(type, entry.stageId);
+    }
+    computation.emit(type, payload);
+  }
   if (entry === undefined) {
     scope.$emit(type, SERVED_PLACEHOLDER);
     return;

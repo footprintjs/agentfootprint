@@ -55,8 +55,9 @@ export interface ToSSEOptions {
    *     RECORD, so under an agent's `redact` policy it is the served event
    *     (the placeholder wherever the policy selected a value).
    *   - 'text' — the answer as plain text (no event/data prefix), for
-   *     piping straight into a chat UI: each `agentfootprint.stream.token`'s
-   *     content, then the rest of the root turn's `turn_end.finalContent`.
+   *     piping straight into a chat UI: token content from the owning Agent,
+   *     then the rest of its `turn_end.finalContent`. Tokens marked
+   *     `meta.mountedTurn: true` stay in the record and out of the text.
    *     A live Agent's stream ends at a fatal error or an `agent.turn_end`
    *     marked `meta.rootTurn: true`. Older records need an observed root
    *     start to append the rest. Events with no metadata are treated as
@@ -221,15 +222,20 @@ export async function* toSSE<TIn, TOut>(
    * Use only the real, unrefused answer of a root turn. For older metadata,
    * an observed root start and no matching inner mount identify it.
    */
-  const answerFor = (event: AgentfootprintEvent, rootEnd: boolean): string | undefined => {
+  const answerFor = (
+    event: AgentfootprintEvent,
+    rootEnd: boolean,
+    mounted: boolean,
+  ): string | undefined => {
     const key = event.meta?.runtimeStageId ?? '';
     const answer = live === undefined ? unrefusedAnswerOf(event) : answers.get(key);
     answers.delete(key);
     if (
-      !rootEnd &&
-      (ownsTurn ||
-        (event.meta !== undefined && !rootTurnOpen) ||
-        innerTurns.some((mount) => leads(mount, pathOf(event))))
+      mounted ||
+      (!rootEnd &&
+        (ownsTurn ||
+          (event.meta !== undefined && !rootTurnOpen) ||
+          innerTurns.some((mount) => leads(mount, pathOf(event)))))
     ) {
       return undefined;
     }
@@ -240,8 +246,9 @@ export async function* toSSE<TIn, TOut>(
   let closesOnPause = false;
   const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
+    const mounted = ownsTurn && event.meta?.mountedTurn === true;
     // These boundaries establish scope even when the output filter drops them.
-    if (format === 'text' && event.type === 'agentfootprint.agent.turn_start') {
+    if (format === 'text' && !mounted && event.type === 'agentfootprint.agent.turn_start') {
       const path = pathOf(event);
       if (path.length === 0) rootTurnOpen = true;
       else if (!ownsTurn) innerTurns.push(path);
@@ -262,13 +269,15 @@ export async function* toSSE<TIn, TOut>(
       done = true;
       wakeup();
     }
-    // Taken before the filter, so a filtered-out token still consumes its text.
+    // Consume paired values before applying either output filter.
     const reply =
       live !== undefined && event.type === 'agentfootprint.stream.token'
         ? replyFor(event)
         : undefined;
-    const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd) : undefined;
+    const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd, mounted) : undefined;
     if (filter && !filter(event)) return;
+    // Mounted call boundaries leave the root answer's streamed prefix intact.
+    if (mounted) return;
     queue.push(
       reply !== undefined
         ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)

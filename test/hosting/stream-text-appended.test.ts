@@ -36,8 +36,8 @@ import {
 } from '../../src/doors/memory.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
-import { toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
-import type { AgentfootprintEvent } from '../../src/events/registry.js';
+import { encodeSSE, toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
+import type { AgentfootprintEvent, AgentfootprintEventMap } from '../../src/events/registry.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { MockReply } from '../../src/adapters/llm/MockProvider.js';
 
@@ -85,7 +85,7 @@ const DRAFT_CHUNKS = ['The ', 'draft ', 'is ', 'ready.'];
 function reportBuilder(
   answer: string,
   pause: boolean,
-  options: Pick<AgentOptions, 'redact' | 'observerDelivery'> = {},
+  options: Pick<AgentOptions, 'redact' | 'observerDelivery' | 'reactMode'> = {},
 ) {
   const replies = [call('pending_report'), ...(pause ? [call('ask_approval', 'c2')] : []), answer];
   return Agent.create({ provider: mock({ replies, chunkDelayMs: 0 }), model: 'm', ...options })
@@ -437,61 +437,115 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
         }).build(),
       )
       .build();
+    const marked: string[] = [];
+    const off = sequence.on('*', (event) => {
+      if (event.meta.mountedTurn !== undefined) marked.push(event.type);
+    });
     const readAfterDrain = readWithHeartbeat(sequence, { format: 'text' });
     try {
       expect(await sequence.run({ message: 'Run both steps.' })).toBe('Second step answer.');
+      expect(marked).toEqual([]);
       expect(await readAfterDrain()).toEqual({
         closed: true,
         chunks: ['First ', 'step ', 'answer.'],
       });
     } finally {
+      off();
       await readAfterDrain();
       await sequence.shutdown();
     }
   });
 
-  it('a fresh stream stays open until the mounting Agent ends', async () => {
+  it.each(['inline', 'deferred'] as const)(
+    'a fresh stream writes only the mounting Agent answer and suffix (%s)',
+    async (observerDelivery) => {
+      const { agent, child } = nestedReport(false, observerDelivery);
+      const readAfterDrain = readWithHeartbeat(agent, { format: 'text' });
+      try {
+        expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
+        await agent.drainObservers();
+        expect(await readAfterDrain()).toEqual({ closed: true, chunks: REPORT_CHUNKS });
+      } finally {
+        await readAfterDrain();
+        await Promise.all([agent.shutdown(), child.shutdown()]);
+      }
+    },
+  );
+
+  it('full format still frames the mounted Agent tokens', async () => {
     const { agent, child } = nestedReport(false);
+    const tokens: AgentfootprintEventMap['agentfootprint.stream.token'][] = [];
+    const off = agent.on('agentfootprint.stream.token', (event) => tokens.push(event));
+    const readAfterDrain = readWithHeartbeat(agent, {
+      format: 'full',
+      filter: (event) => event.type === 'agentfootprint.stream.token',
+    });
+    try {
+      expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
+      await agent.drainObservers();
+      expect(tokens.map((event) => event.payload.content)).toEqual([
+        ...DRAFT_CHUNKS,
+        ...REPORT_CHUNKS.slice(0, -1),
+      ]);
+      // Full format still closes at the first end and writes each admitted event as a frame.
+      expect(await readAfterDrain()).toEqual({
+        closed: true,
+        chunks: tokens.slice(0, DRAFT_CHUNKS.length).map((event) => encodeSSE(event.type, event)),
+      });
+    } finally {
+      off();
+      await readAfterDrain();
+      await Promise.all([agent.shutdown(), child.shutdown()]);
+    }
+  });
+
+  it('text format keeps the owning Agent tokens from its dynamic LLM subflow', async () => {
+    const agent = reportBuilder(REPORT, false, { reactMode: 'dynamic-grouped' }).build();
+    const paths: (readonly string[])[] = [];
+    const off = agent.on('agentfootprint.stream.token', (event) =>
+      paths.push(event.meta.subflowPath),
+    );
     const readAfterDrain = readWithHeartbeat(agent, { format: 'text' });
     try {
       expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
       await agent.drainObservers();
-      expect(await readAfterDrain()).toEqual({
-        closed: true,
-        chunks: [...DRAFT_CHUNKS, ...REPORT_CHUNKS],
-      });
+      expect(paths).toHaveLength(REPORT_CHUNKS.length - 1);
+      expect(paths.every((path) => path.includes('sf-llm-call'))).toBe(true);
+      expect(await readAfterDrain()).toEqual({ closed: true, chunks: REPORT_CHUNKS });
     } finally {
+      off();
       await readAfterDrain();
-      await Promise.all([agent.shutdown(), child.shutdown()]);
+      await agent.shutdown();
     }
   });
 
-  it('a fresh stream stays open across a mounted Agent pause and ends with the root answer', async () => {
-    const { agent, child } = nestedReport(true);
-    const readAfterDrain = readWithHeartbeat(agent, { format: 'text' });
-    try {
-      const paused = await agent.run({ message: 'Is the report ready?' });
-      if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
-      await agent.drainObservers();
-      expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
-      await agent.drainObservers();
-      expect(await readAfterDrain()).toEqual({
-        closed: true,
-        chunks: [...DRAFT_CHUNKS, ...REPORT_CHUNKS],
-      });
-    } finally {
-      await readAfterDrain();
-      await Promise.all([agent.shutdown(), child.shutdown()]);
-    }
-  });
+  it.each(['inline', 'deferred'] as const)(
+    'a stream retained across a mounted Agent pause writes only the root answer and suffix (%s)',
+    async (observerDelivery) => {
+      const { agent, child } = nestedReport(true, observerDelivery);
+      const readAfterDrain = readWithHeartbeat(agent, { format: 'text' });
+      try {
+        const paused = await agent.run({ message: 'Is the report ready?' });
+        if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
+        await agent.drainObservers();
+        expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
+        await agent.drainObservers();
+        expect(await readAfterDrain()).toEqual({ closed: true, chunks: REPORT_CHUNKS });
+      } finally {
+        await readAfterDrain();
+        await Promise.all([agent.shutdown(), child.shutdown()]);
+      }
+    },
+  );
 
-  it('an older nested event port without root markers closes at its first turn end', async () => {
+  it('an older nested event port without turn markers writes the draft and closes at its first turn end', async () => {
     const { agent, child } = nestedReport(false);
     const runner: Pick<Runnable, 'on'> = {
       on: (pattern, listener) =>
         agent.on(pattern, (event) => {
           const meta = { ...event.meta };
           delete meta.rootTurn;
+          delete meta.mountedTurn;
           listener({ ...event, meta });
         }),
     };
@@ -566,13 +620,15 @@ describe('toSSE text — resume', () => {
   it.each([
     { observerDelivery: 'inline', dropRoot: false },
     { observerDelivery: 'inline', dropRoot: true },
+    { observerDelivery: 'deferred', dropRoot: false },
     { observerDelivery: 'deferred', dropRoot: true },
   ] as const)(
-    'closes a nested resume at the root end ($observerDelivery, filter root: $dropRoot)',
+    'a nested resume writes only the root answer and closes ($observerDelivery, filter root end: $dropRoot)',
     async ({ observerDelivery, dropRoot }) => {
       const { agent, child } = nestedReport(true, observerDelivery);
       const paused = await agent.run({ message: 'Is the report ready?' });
       if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
+      await agent.drainObservers();
 
       const ends: unknown[] = [];
       const readAfterDrain = readWithHeartbeat(agent, {
@@ -591,10 +647,7 @@ describe('toSSE text — resume', () => {
           { root: true, answer: REPORT + WARNING },
         ]);
         const rootChunks = dropRoot ? REPORT_CHUNKS.slice(0, -1) : REPORT_CHUNKS;
-        expect(await readAfterDrain()).toEqual({
-          closed: true,
-          chunks: [...DRAFT_CHUNKS, ...rootChunks],
-        });
+        expect(await readAfterDrain()).toEqual({ closed: true, chunks: rootChunks });
       } finally {
         await readAfterDrain();
         await Promise.all([agent.shutdown(), child.shutdown()]);

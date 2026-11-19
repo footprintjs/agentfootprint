@@ -11,6 +11,8 @@ import type { TraversalContext } from 'footprintjs';
 import { parseRuntimeStageId } from 'foottrace';
 import type { EventMeta, EventSourcePosition } from '../events/types.js';
 
+export type TurnEventMeta = Pick<EventMeta, 'rootTurn' | 'mountedTurn'>;
+
 // NOTE: runtimeStageId parsing lives in foottrace
 // (parseRuntimeStageId, buildRuntimeStageId). We reuse their helper instead
 // of re-implementing the split.
@@ -27,7 +29,7 @@ import type { EventMeta, EventSourcePosition } from '../events/types.js';
  *
  * We accept both shapes and normalize inside `buildEventMeta`.
  */
-export interface StageOrigin {
+export interface StageOrigin extends TurnEventMeta {
   /** Actual native traversal identity, when this fact came from a stage. */
   readonly runId?: string;
   readonly runtimeStageId?: string;
@@ -36,8 +38,6 @@ export interface StageOrigin {
   readonly timestamp?: number;
   /** Already validated wire coordinates; never read from live executor state. */
   readonly sourcePosition?: EventSourcePosition;
-  /** The owning Agent marked this turn end at its emitting scope. */
-  readonly rootTurn?: true;
 }
 
 export interface RunContext {
@@ -105,6 +105,7 @@ export function buildEventMeta(
     ...(run.correlationId !== undefined && { correlationId: run.correlationId }),
     ...(run.turnIndex !== undefined && { turnIndex: run.turnIndex }),
     ...(stageOrigin?.rootTurn === true && { rootTurn: true as const }),
+    ...(stageOrigin?.mountedTurn === true && { mountedTurn: true as const }),
     ...(run.iterIndex !== undefined && { iterIndex: run.iterIndex }),
     // Present only when the run really is session-bound. An absent key and an
     // empty string are different facts, and only one of them is honest.
