@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, defineTool, isInputPause, requestInput } from '../../src/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer, recordRun } from '../../src/observe.js';
+import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
 import { assertP1 } from './helpers.js';
@@ -104,6 +104,68 @@ function assertUnclaimed(recording: Recording) {
 }
 
 describe('standing reasons rebuilt from their committed witnesses', () => {
+  it('keeps a landed argument failure when the next same-ID lookup pauses inside its tool', async () => {
+    const name = 'read_shelf';
+    const read = (shelf: string, quote: string) =>
+      call('reused', name, {
+        shelf,
+        _findings: { from: [{ argument: 'shelf', source: 'user', quote }] },
+      });
+    const entered: string[] = [];
+    const agent = Agent.create({
+      provider: mock({ replies: [read('alpha', 'missing alpha'), read('beta', 'beta')] }),
+      model: 'mock',
+    })
+      .tool(
+        defineTool({
+          name,
+          description: 'Read an inert fixture shelf.',
+          inputSchema: { type: 'object', properties: { shelf: { type: 'string' } } },
+          askOrAssume: { shelf: { assume: 'fallback' } },
+          execute({ shelf }) {
+            entered.push(String(shelf));
+            return shelf === 'beta'
+              ? requestInput({
+                  id: 'confirm-shelf',
+                  question: 'Continue the fixture lookup?',
+                  fields: [{ id: 'confirm', type: 'string', required: true }],
+                })
+              : 'Fixture result';
+          },
+        }),
+      )
+      .inputsLayer({ argumentSources: true })
+      .build();
+    const recorder = recordRun(agent);
+    try {
+      const paused = await agent.run({ message: 'Read the fixture shelf beta.' });
+      expect(isInputPause(paused)).toBe(true);
+      expect(entered).toEqual(['alpha', 'beta']);
+      const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+      const { history, findingsLedger } = snapshotOf(recording).sharedState;
+      expect(history.filter((message) => message.role === 'tool')).toHaveLength(1);
+      expect(findingsLedger).toMatchObject([
+        { kind: 'argument', argument: 'shelf', iteration: 1, failed: 'quote-not-found' },
+        { kind: 'argument', argument: 'shelf', iteration: 2, source: 'said' },
+      ]);
+      const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
+      const assessment = assessAnswer(recording);
+      expect(assessment.reasons.find((row) => row.reason === 'argument-unverified')).toMatchObject({
+        witness: [pointer],
+        source: { kind: 'calls', calls: [], unplaced: [pointer] },
+      });
+      const account = accountForAnswer(recording);
+      const reason = account.rows
+        .find((row) => row.id === 'how-sure')
+        ?.lines.find((line) => line.template.id === 'howSure.reason.argumentUnverified');
+      expect(reason).toMatchObject({ pointers: [pointer] });
+      assertP1(account, recording);
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  });
+
   it.each([
     ['Review', 'Review reported its work as partial and Submission reported its work as pending'],
     [undefined, 'Submission reported its work as pending and a tool reported unfinished work'],

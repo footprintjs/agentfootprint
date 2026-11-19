@@ -18,6 +18,48 @@ const corrected = {
   correction: 'source-declaration-required',
 };
 
+describe('argument witnesses when a later proposal reuses a landed call ID', () => {
+  const proposal = {
+    role: 'assistant',
+    content: '',
+    toolCalls: [{ id: base.toolCallId, name: base.toolName, args: { vm: 'fixture' } }],
+  };
+  const result = {
+    role: 'tool',
+    toolCallId: base.toolCallId,
+    toolName: base.toolName,
+    content: 'fixture result',
+  };
+  const witness = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
+
+  it.each([
+    { later: [], label: 'one landed call', placed: true, rowCount: 1 },
+    { later: [proposal], label: 'a second proposal without a result', placed: false, rowCount: 2 },
+    { later: [proposal, result], label: 'two landed calls', placed: false, rowCount: 2 },
+  ])('preserves the first failure with $label', ({ later, placed, rowCount }) => {
+    const traced = { ...base, iteration: 2, source: 'said', claimed: 'user' };
+    const assessment = assessAnswer({
+      snapshot: {
+        sharedState: {
+          turnNumber: 1,
+          history: [{ role: 'user', content: 'Look up the fixture.' }, proposal, result, ...later],
+          findingsLedger: rowCount === 1 ? [failed] : [failed, traced],
+        },
+      },
+    });
+    expect(assessment.reasons.find((row) => row.reason === 'argument-unverified')).toMatchObject({
+      witness: [witness],
+      source: placed
+        ? { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] }
+        : { kind: 'calls', calls: [], unplaced: [witness] },
+    });
+    expect(assessment.checked.find((row) => row.check === 'argument-sources')).toMatchObject({
+      ran: rowCount,
+      of: rowCount,
+    });
+  });
+});
+
 describe('withheld proposals retain the current pointer without earning execution credit', () => {
   it.each([{ correction: 'source-declaration-required' }, { withheld: 'batch-preempted' }])(
     'last-wins before native assessment filters %j',

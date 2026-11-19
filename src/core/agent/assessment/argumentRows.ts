@@ -1,5 +1,9 @@
 /** Fold — current argument observations, with last-wins identity before assessment. */
-import { historyCallResolver, unlandedCallKey, type HistoryCall } from '../recordedCalls.js';
+import {
+  argumentHistoryCallResolver,
+  unlandedCallKey,
+  type HistoryCall,
+} from '../recordedCalls.js';
 import { isRecord, str } from './recordValues.js';
 
 /** One current `argument` row of this turn — the last per (call, argument). */
@@ -40,18 +44,21 @@ export function waitingArgumentIteration(
  * history position. A row marked pre-dispatch or with no compatible history
  * result belongs to the proposal identified by turn, tool name and call ID,
  * so re-proposing it in a later iteration replaces the earlier observation.
- * When history admits several results, every ambiguous row remains evidence.
+ * When proposals outnumber a single compatible result, or several results
+ * could own the row, every ambiguous row remains evidence.
  * A record with no `turnNumber` reads every row.
  */
 export function argumentRows(
   state: Readonly<Record<string, unknown>>,
   currentCalls: readonly HistoryCall[],
+  history: readonly unknown[],
+  turnBegins: number,
 ): readonly ArgumentRowRead[] {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   const waiting = waitingArgumentIteration(state);
   const groups = new Map<number | string | symbol, Map<string, ArgumentRowRead>>();
-  let resolve: ReturnType<typeof historyCallResolver> | undefined;
+  let resolve: ReturnType<typeof argumentHistoryCallResolver> | undefined;
   for (let index = 0; index < ledger.length; index++) {
     const row: unknown = Object.getOwnPropertyDescriptor(ledger, String(index))?.value;
     if (!isRecord(row) || row.kind !== 'argument') continue;
@@ -63,12 +70,13 @@ export function argumentRows(
     const source = str(row.source);
     const withheld = row.correction !== undefined || row.withheld !== undefined;
     const pending = withheld || (waiting !== undefined && row.iteration === waiting);
-    const resolved = pending
-      ? undefined
-      : (resolve ??= historyCallResolver(currentCalls))(toolCallId, toolName);
-    const historyIndex = resolved?.kind === 'matched' ? resolved.call.index : undefined;
+    const resolved = (resolve ??= argumentHistoryCallResolver(currentCalls, history, turnBegins))(
+      toolCallId,
+      toolName,
+    );
+    const historyIndex = !pending && resolved.kind === 'matched' ? resolved.call.index : undefined;
     const proposalKey =
-      resolved === undefined || resolved.kind === 'missing'
+      resolved.kind === 'missing' || (pending && resolved.kind === 'matched')
         ? unlandedCallKey({ turn: row.turn, toolName, toolCallId })
         : undefined;
     const read: ArgumentRowRead = {

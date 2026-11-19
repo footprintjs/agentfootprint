@@ -65,6 +65,7 @@
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
 import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
 import {
+  argumentHistoryCallResolver,
   historyCallResolver,
   readHistoryCalls,
   uniqueHistoryProposal,
@@ -104,6 +105,7 @@ interface CallRef {
   readonly name?: string;
   readonly index?: number;
   readonly thisTurn?: true;
+  readonly argumentRow?: true;
   readonly predispatch?: true;
   readonly unlandedKey?: string;
   readonly count?: number;
@@ -177,6 +179,7 @@ function callsOfRow(reason: AssessmentReason, row: unknown, read: SourceRead): C
           ...(id !== undefined && { id, unlandedKey: unlandedCallKey(row) }),
           ...(name !== undefined && { name }),
           thisTurn: true,
+          ...(row.kind === 'argument' && { argumentRow: true }),
           ...(waiting !== undefined && row.iteration === waiting && { predispatch: true }),
         },
       ];
@@ -279,10 +282,21 @@ export function reasonSourceOf(
     (byIndex ??= new Map(occurrences.map((call) => [call.index, call]))).get(index);
   let whole: ReturnType<typeof historyCallResolver> | undefined;
   let current: ReturnType<typeof historyCallResolver> | undefined;
-  const resolve = (id: string, ref: CallRef) =>
-    (ref.thisTurn && begins >= 0
-      ? (current ??= historyCallResolver(occurrences.filter((call) => call.index > begins)))
-      : (whole ??= historyCallResolver(occurrences)))(id, ref.name);
+  let argument: ReturnType<typeof argumentHistoryCallResolver> | undefined;
+  const currentCalls = () => occurrences.filter((call) => call.index > begins);
+  const resolve = (id: string, ref: CallRef) => {
+    if (ref.argumentRow) {
+      return (argument ??= argumentHistoryCallResolver(currentCalls(), history, begins))(
+        id,
+        ref.name,
+      );
+    }
+    return (
+      ref.thisTurn && begins >= 0
+        ? (current ??= historyCallResolver(currentCalls()))
+        : (whole ??= historyCallResolver(occurrences))
+    )(id, ref.name);
+  };
   const calls: Extract<AssessmentReasonSource, { kind: 'calls' }>['calls'][number][] = [];
   const seen = new Set<number | string>();
   const unplaced: AssessmentPointer[] = [];
@@ -297,7 +311,7 @@ export function reasonSourceOf(
     if (refs.length === 0) unnamed += 1;
     for (const ref of refs) {
       const found =
-        ref.index === undefined && ref.id !== undefined && !ref.predispatch
+        ref.index === undefined && ref.id !== undefined && (!ref.predispatch || ref.argumentRow)
           ? resolve(ref.id, ref)
           : undefined;
       if (
@@ -311,7 +325,7 @@ export function reasonSourceOf(
         unnamed += 1;
         continue;
       }
-      const call = found?.kind === 'matched' ? found.call : undefined;
+      const call = !ref.predispatch && found?.kind === 'matched' ? found.call : undefined;
       const key =
         ref.index ??
         call?.index ??
@@ -323,7 +337,10 @@ export function reasonSourceOf(
         seen.add(key);
       }
       const proposal =
-        found?.kind === 'missing' && ref.id !== undefined && ref.name === undefined
+        !ref.predispatch &&
+        found?.kind === 'missing' &&
+        ref.id !== undefined &&
+        ref.name === undefined
           ? uniqueHistoryProposal(history, ref.id)
           : undefined;
       const toolName =

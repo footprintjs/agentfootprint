@@ -42,9 +42,12 @@ pinned in `test/answer-account/golden/turn2.A.txt`:
 
 The "How sure" row opens with the answer's STANDING — the one fold,
 `core/agent/assessment/assess.ts` · `assessAnswer`, over the recording's
-committed state (never its events): known · consistent with the record · not
-sure (each reason a line, counting CALLS — one `coverage(absent(…))` files two
-rows and is one call) · ask · not assessed. Two cases are settled before the
+committed state: known · consistent with the record · not sure (each reason a
+line, counting CALLS — one `coverage(absent(…))` files two rows and is one
+call) · ask · not assessed. The account also uses recorded declaration events
+to pair committed rows with calls. State supplies the declarations and reasons
+in both reads. The state-only assessment can leave a row unplaced that the
+account can place from its events. Two cases are settled before the
 fold, and they are the only ones the row settles itself:
 
 - the run PAUSED (any kind — a typed input, `askHuman`, a check-in, a middleware

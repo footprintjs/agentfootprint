@@ -925,7 +925,7 @@ export function foldState(
   const reads = readResults(results, coverage);
 
   readPause(state, g);
-  const argumentVerdicts = argumentRows(state, current);
+  const argumentVerdicts = argumentRows(state, current, history, begins);
   readArgumentAsk(state, argumentVerdicts, g);
   readArgumentVerdicts(state, argumentVerdicts, resolveCurrent, g);
   readCoverageRows(coverage, g);

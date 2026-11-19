@@ -103,19 +103,25 @@ export function readHistoryCalls(history: readonly unknown[]): readonly HistoryC
   });
 }
 
+function* historyProposals(history: readonly unknown[], begins = -1): Iterable<Proposal> {
+  for (let index = begins + 1; index < history.length; index++) {
+    const message: unknown = Object.getOwnPropertyDescriptor(history, String(index))?.value;
+    if (!isRecord(message) || message.role !== 'assistant') continue;
+    for (const call of proposalsOf(message)) {
+      if (isRecord(call)) yield { index, call };
+    }
+  }
+}
+
 export function uniqueHistoryProposal(
   history: readonly unknown[],
   id: string,
 ): Proposal | undefined {
   let found: Proposal | undefined;
-  for (let index = 0; index < history.length; index++) {
-    const message: unknown = Object.getOwnPropertyDescriptor(history, String(index))?.value;
-    if (!isRecord(message) || message.role !== 'assistant') continue;
-    for (const call of proposalsOf(message)) {
-      if (!isRecord(call) || call.id !== id) continue;
-      if (found !== undefined) return undefined;
-      found = { index, call };
-    }
+  for (const proposal of historyProposals(history)) {
+    if (proposal.call.id !== id) continue;
+    if (found !== undefined) return undefined;
+    found = proposal;
   }
   return found;
 }
@@ -151,6 +157,42 @@ export function historyCallResolver(calls: readonly HistoryCall[]) {
   }
   return (id: string, name?: string): ResolvedHistoryCall =>
     resolveHistoryCall(byId.get(id) ?? [], id, name);
+}
+
+function countProposals(history: readonly unknown[], begins: number) {
+  const byId = new Map<string, Map<string | undefined, number>>();
+  for (const { call } of historyProposals(history, begins)) {
+    const id = str(call.id);
+    if (id === undefined) continue;
+    const name = str(call.name);
+    const names = byId.get(id) ?? new Map<string | undefined, number>();
+    names.set(name, (names.get(name) ?? 0) + 1);
+    byId.set(id, names);
+  }
+  return byId;
+}
+
+/** An argument row cannot claim the only result when several compatible
+ * proposals could have written it. With no result, the proposal remains open
+ * to correction. Legacy result-only records still use their retained calls. */
+export function argumentHistoryCallResolver(
+  calls: readonly HistoryCall[],
+  history: readonly unknown[],
+  begins: number,
+) {
+  const resolve = historyCallResolver(calls);
+  let byId: ReturnType<typeof countProposals> | undefined;
+  return (id: string, name?: string): ResolvedHistoryCall => {
+    const result = resolve(id, name);
+    if (result.kind !== 'matched') return result;
+    const names = (byId ??= countProposals(history, begins)).get(id);
+    if (names === undefined) return result;
+    const proposals =
+      name === undefined || result.call.toolName === undefined
+        ? [...names.values()].reduce((total, count) => total + count, 0)
+        : (names.get(name) ?? 0) + (names.get(undefined) ?? 0);
+    return proposals > 1 ? { kind: 'ambiguous' } : result;
+  };
 }
 
 /** An id-only witness can name a result only when the retained history has one candidate. */
