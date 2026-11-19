@@ -1,4 +1,4 @@
-/** Fold — current argument observations, with last-wins identity before assessment. */
+/** Fold — argument observations with proved replacement before assessment. */
 import {
   argumentHistoryCallResolver,
   unlandedCallKey,
@@ -6,7 +6,7 @@ import {
 } from '../recordedCalls.js';
 import { isRecord, str } from './recordValues.js';
 
-/** One current `argument` row of this turn — the last per (call, argument). */
+/** One retained `argument` observation of this turn. */
 export interface ArgumentRowRead {
   readonly index: number;
   readonly toolCallId: string;
@@ -60,12 +60,11 @@ export function resolveArgumentHistory(
  * This turn's CURRENT argument rows (honesty layer 2): the ledger's `argument`
  * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
  * continued conversation, and a row from an earlier turn is about a call this
- * answer does not rest on. A later row replaces the same argument at the same
- * history position. A row marked pre-dispatch or with no compatible history
- * result belongs to the proposal identified by turn, tool name and call ID,
- * so re-proposing it in a later iteration replaces the earlier observation.
- * The occurrence owner decides whether a result address can be proved.
- * Every unplaced row remains evidence with its own pointer.
+ * answer does not rest on. A later row replaces an observation of the same
+ * argument at the same proved result position. With no retained compatible
+ * result, only a later library pre-dispatch row can replace the prior
+ * observation of that turn, tool and call ID. A missing result may have been
+ * evicted, so ordinary rows remain separate evidence.
  * A record with no `turnNumber` reads every row.
  */
 export function argumentRows(
@@ -75,7 +74,7 @@ export function argumentRows(
   turnBegins: number,
 ): readonly ArgumentRowRead[] {
   const waiting = waitingArgumentIteration(state);
-  const groups = new Map<number | string | symbol, Map<string, ArgumentRowRead>>();
+  const groups = new Map<number | string | symbol, Map<string, ArgumentRowRead[]>>();
   let resolve: ReturnType<typeof resolveArgumentHistory> | undefined;
   for (const [index, row] of argumentRowsOfTurn(state)) {
     const toolCallId = str(row.toolCallId);
@@ -91,7 +90,10 @@ export function argumentRows(
     );
     const historyIndex = !pending && resolved.kind === 'matched' ? resolved.call.index : undefined;
     const proposalKey =
-      resolved.kind === 'missing' || (pending && resolved.kind === 'matched')
+      resolved.kind === 'missing' &&
+      toolName !== undefined &&
+      typeof row.turn === 'number' &&
+      Number.isSafeInteger(row.turn)
         ? unlandedCallKey({ turn: row.turn, toolName, toolCallId })
         : undefined;
     const read: ArgumentRowRead = {
@@ -111,9 +113,13 @@ export function argumentRows(
       setAside: source === 'result' && typeof row.setAside === 'string',
     };
     const key = historyIndex ?? proposalKey ?? Symbol();
-    const forCall = groups.get(key) ?? new Map<string, ArgumentRowRead>();
-    forCall.set(argument, read);
+    const forCall = groups.get(key) ?? new Map<string, ArgumentRowRead[]>();
+    const observations = forCall.get(argument);
+    const replaces = historyIndex !== undefined || (proposalKey !== undefined && pending);
+    if (observations === undefined) forCall.set(argument, [read]);
+    else if (replaces) observations[observations.length - 1] = read;
+    else observations.push(read);
     groups.set(key, forCall);
   }
-  return [...groups.values()].flatMap((forCall) => [...forCall.values()]);
+  return [...groups.values()].flatMap((forCall) => [...forCall.values()].flat());
 }

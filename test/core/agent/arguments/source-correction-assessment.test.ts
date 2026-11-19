@@ -33,6 +33,7 @@ describe('argument witnesses when a later proposal reuses a landed call ID', () 
   const witness = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
   const traced = { ...base, iteration: 2, source: 'said', claimed: 'user' };
   const withheld = { ...corrected, correction: undefined, withheld: 'batch-preempted' };
+  const otherId = { ...proposal.toolCalls[0]!, id: 'other-call' };
 
   it.each([
     {
@@ -100,11 +101,47 @@ describe('argument witnesses when a later proposal reuses a landed call ID', () 
       checked: [0, 1],
     },
     {
+      label: 'both reused results were evicted and a different call remains',
+      history: [
+        { ...proposal, toolCalls: [otherId] },
+        { ...result, toolCallId: otherId.id },
+      ],
+      ledger: [failed, traced],
+      placement: 'without-result',
+      checked: [0, 1],
+    },
+    {
+      label: 'both reused results were evicted and no call remains',
+      history: [],
+      ledger: [failed, traced],
+      placement: 'without-result',
+      checked: [0, 1],
+    },
+    {
+      label: 'the first result was evicted and the second proposal has no result',
+      history: [proposal],
+      ledger: [failed, traced],
+      placement: 'without-result',
+      checked: [0, 1],
+      paused: true,
+    },
+    {
       label: 'an unstamped legacy argument',
       history: [proposal, result],
       ledger: [{ ...failed, iteration: undefined }],
       placement: 'unplaced',
       checked: [0],
+    },
+    {
+      label: 'two calls in the same reply landed under one ID',
+      history: [
+        { ...proposal, toolCalls: [...proposal.toolCalls, ...proposal.toolCalls] },
+        result,
+        result,
+      ],
+      ledger: [failed, { ...traced, iteration: 1 }],
+      placement: 'unplaced',
+      checked: [0, 1],
     },
     {
       label: 'a pending proposal of a different tool reusing the ID',
@@ -154,11 +191,13 @@ describe('argument witnesses when a later proposal reuses a landed call ID', () 
       if (placement === 'no-failure') expect(reason).toBeUndefined();
       else {
         expect(reason?.witness).toEqual([witness]);
-        expect(reason?.source).toEqual(
-          placement === 'placed'
-            ? { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] }
-            : { kind: 'calls', calls: [], unplaced: [witness] },
-        );
+        if (placement !== 'without-result') {
+          expect(reason?.source).toEqual(
+            placement === 'placed'
+              ? { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] }
+              : { kind: 'calls', calls: [], unplaced: [witness] },
+          );
+        }
       }
       const sources = assessment.checked.find((row) => row.check === 'argument-sources');
       if (checked.length === 0) expect(sources).toBeUndefined();

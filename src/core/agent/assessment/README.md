@@ -160,7 +160,10 @@ filed against the superseded answer stays and may over-report; it never hides.
 
 The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row
-carries its `turn` — and the last row per (call, argument) is the current one.
+carries its `turn`. A later observation replaces one for the same argument at
+the same proved result address. With no retained compatible result, only an
+explicit library pre-dispatch row can replace the prior observation of the
+same turn, tool and call ID. Ordinary observations without an address are kept.
 When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
 is a verdict, so `ran` equals `of`. Under declared sources
 (`.findings({ argumentSources: true })`) `checked` gains `argument-sources` too:
@@ -526,6 +529,12 @@ it at the study's freeze (adopted Q12).
 - **Evicted results.** Under `.window()`, a window strategy can remove this
   turn's early results from `history`; the commit log still has them, but the
   fold reads the final state, so an evicted undeclared `[]` fires nothing.
+- **A correction after an evicted call with the same ID.** When a call's result
+  is evicted and a later proposal with the same turn, tool and ID gets a
+  library correction or another pre-dispatch row, the remaining rows can look
+  exactly like a correction of one proposal that never ran. The earlier
+  argument failure may be replaced in that case. The per-call key in
+  `TASK-Root-19` is the planned record address for distinguishing the two.
 - **Rows from an earlier turn that reuse a call id — on an agent without an
   honesty layer.** Without a turn stamp, the fold places a ledger row in this
   turn by the call ids it names, and a provider that reuses ids across turns

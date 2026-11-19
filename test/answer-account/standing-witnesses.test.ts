@@ -105,13 +105,14 @@ function assertUnclaimed(recording: Recording) {
 }
 
 describe('standing reasons rebuilt from their committed witnesses', () => {
-  it.each(['in-tool pause', 'sliding window'] as const)(
+  it.each(['in-tool pause', 'sliding window', 'sliding window after both results left'] as const)(
     'keeps the first same-ID argument failure with a %s',
     async (mode) => {
-      const windowed = mode === 'sliding window';
+      const windowed = mode !== 'in-tool pause';
+      const bothEvicted = mode === 'sliding window after both results left';
       const name = 'read_shelf';
-      const read = (shelf: string, quote: string) =>
-        call('reused', name, {
+      const read = (shelf: string, quote: string, id = 'reused') =>
+        call(id, name, {
           shelf,
           _findings: { from: [{ argument: 'shelf', source: 'user', quote }] },
         });
@@ -121,6 +122,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
           replies: [
             read('alpha', 'missing alpha'),
             read('beta', 'beta'),
+            ...(bothEvicted ? [read('gamma', 'gamma', 'different')] : []),
             { content: 'Read the shelf.' },
           ],
         }),
@@ -135,15 +137,14 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             askOrAssume: { shelf: { assume: 'fallback' } },
             execute({ shelf }) {
               entered.push(String(shelf));
-              return !windowed && shelf === 'beta'
-                ? requestInput({
-                    id: 'confirm-shelf',
-                    question: 'Continue the fixture lookup?',
-                    fields: [{ id: 'confirm', type: 'string', required: true }],
-                  })
-                : shelf === 'alpha'
-                ? `Alpha fixture result ${'x'.repeat(600)}`
-                : 'Beta fixture result';
+              if (!windowed && shelf === 'beta') {
+                return requestInput({
+                  id: 'confirm-shelf',
+                  question: 'Continue the fixture lookup?',
+                  fields: [{ id: 'confirm', type: 'string', required: true }],
+                });
+              }
+              return `${shelf} fixture result ${'x'.repeat(600)}`;
             },
           }),
         )
@@ -152,24 +153,42 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
       const agent = builder.build();
       const recorder = recordRun(agent);
       try {
-        const result = await agent.run({ message: 'Read the fixture shelf beta.' });
+        const result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
         if (windowed) expect(result).toBe('Read the shelf.');
         else expect(isInputPause(result)).toBe(true);
-        expect(entered).toEqual(['alpha', 'beta']);
+        expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
         const { history, findingsLedger, compactions } = snapshotOf(recording).sharedState;
         const results = history.filter((message) => message.role === 'tool');
         expect(results).toHaveLength(1);
         if (windowed) {
-          expect(results[0]?.content).toContain('Beta fixture result');
+          const retained = bothEvicted ? 'gamma' : 'beta';
+          expect(results[0]?.content).toContain(`${retained} fixture result`);
           expect(history.filter((message) => Array.isArray(message.toolCalls))).toMatchObject([
-            { toolCalls: [{ args: { shelf: 'beta' } }] },
+            { toolCalls: [{ args: { shelf: retained } }] },
           ]);
           expect(compactions).toContainEqual(expect.objectContaining({ removedMessageCount: 2 }));
+          const settled = recording.events.filter(
+            (event) =>
+              event.type === 'agentfootprint.stream.tool_end' &&
+              event.payload.toolCallId === 'reused',
+          );
+          expect(settled).toHaveLength(2);
         }
         expect(findingsLedger).toMatchObject([
           { kind: 'argument', argument: 'shelf', iteration: 1, failed: 'quote-not-found' },
           { kind: 'argument', argument: 'shelf', iteration: 2, source: 'said' },
+          ...(bothEvicted
+            ? [
+                {
+                  kind: 'argument',
+                  toolCallId: 'different',
+                  argument: 'shelf',
+                  iteration: 3,
+                  source: 'said',
+                },
+              ]
+            : []),
         ]);
         const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
         const assessment = assessAnswer(recording);
@@ -177,7 +196,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
           assessment.reasons.find((row) => row.reason === 'argument-unverified'),
         ).toMatchObject({
           witness: [pointer],
-          source: { kind: 'calls', calls: [], unplaced: [pointer] },
+          ...(!bothEvicted && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
         });
         const account = accountForAnswer(recording);
         const reason = account.rows
