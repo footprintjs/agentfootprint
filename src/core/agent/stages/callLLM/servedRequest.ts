@@ -1,0 +1,153 @@
+import type { TypedScope } from 'footprintjs';
+import { abortableIterable, untilAborted } from '../../../../lib/abort.js';
+import type {
+  LLMCallHooks,
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+} from '../../../../provider-contract/types.js';
+import { observeRequests, requestAttempt } from '../../../../provider-contract/requestObserver.js';
+import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
+import type { AgentState } from '../../types.js';
+
+/** Record only entries that kept their retained bodies through the known,
+ * position-preserving history projection. Request-only messages follow it. */
+export function servedRequestRecorder(
+  scope: TypedScope<AgentState>,
+  history: readonly LLMMessage[],
+  projected: readonly LLMMessage[],
+  wire: readonly LLMMessage[],
+) {
+  const consumer = scope.$attempt?.().series;
+  if (!consumer) return undefined;
+  const whole = Array.from(history, (entry, index) => {
+    const message = projected[index];
+    return message?.role === entry.role && message.content === entry.content;
+  });
+  const row = servedHistoryRow(consumer, whole);
+  // Keep the positions and text as they were before cache preparation. A
+  // callback can replace an entry inside the same array.
+  const preparedFrom = wire.map((message) => ({
+    message,
+    role: message.role,
+    content: message.content,
+  }));
+  let previous: readonly ServedRow[] | undefined;
+  let first: PropertyDescriptorMap | undefined;
+  let discarded = false;
+
+  function discard(): void {
+    if (first !== undefined) {
+      if (previous === undefined) scope.$delete('sourceLinkServedRows');
+      else scope.sourceLinkServedRows = previous;
+      first = undefined;
+    }
+    discarded = true;
+  }
+
+  return {
+    discard,
+    beforeRequest(request: LLMRequest): void {
+      if (discarded) return;
+      const signature = requestHead(request);
+      // A replacement messages array may have reordered even identical
+      // messages. Its entries do not have proved positions in this view.
+      if (
+        signature === undefined ||
+        signature.messages?.value !== wire ||
+        preparedFrom.length !== wire.length ||
+        !preparedFrom.every((entry, index) => {
+          const current = wire[index];
+          return (
+            current === entry.message &&
+            current.role === entry.role &&
+            current.content === entry.content
+          );
+        })
+      ) {
+        discard();
+        return;
+      }
+      if (first !== undefined) {
+        if (!sameRequest(first, signature)) discard();
+        return;
+      }
+      const retained = scope.sourceLinkServedRows;
+      previous = retained === undefined ? undefined : [...retained];
+      scope.sourceLinkServedRows = [...(previous ?? []), row];
+      first = signature;
+    },
+  };
+}
+
+/** Compare readonly port requests without serializing values or invoking
+ * getters. A cloned field is conservatively treated as a different request. */
+function requestHead(request: LLMRequest): PropertyDescriptorMap | undefined {
+  const { signal: _signal, ...fields } = Object.getOwnPropertyDescriptors(request);
+  void _signal;
+  if (!Object.values(fields).every((field) => 'value' in field)) return undefined;
+  return fields;
+}
+
+function sameRequest(first: PropertyDescriptorMap, next: PropertyDescriptorMap): boolean {
+  const keys = Object.keys(first);
+  return (
+    keys.length === Object.keys(next).length &&
+    keys.every((key) => Object.hasOwn(next, key) && Object.is(first[key]?.value, next[key]?.value))
+  );
+}
+
+/** Inspect the same leaf requests as the findings carrier, including replay preparation. */
+export function observeCallRequests(
+  hooks: LLMCallHooks,
+  observe: ((request: LLMRequest) => void) | undefined,
+  discardServing: (() => void) | undefined,
+): LLMCallHooks {
+  if (observe === undefined) return hooks;
+  return observeRequests(
+    {
+      ...hooks,
+      ...(discardServing !== undefined && {
+        onResilience(report) {
+          if (report.kind === 'fell-back') discardServing();
+          hooks.onResilience?.(report);
+        },
+      }),
+      onReplayPrepared(preparation) {
+        hooks.onReplayPrepared?.(preparation);
+        observe(preparation.request);
+      },
+    },
+    observe,
+  );
+}
+
+/** Observe the requested port values just before I/O and only until it settles. */
+export async function completeObserved(
+  provider: LLMProvider,
+  request: LLMRequest,
+  hooks: LLMCallHooks,
+  signal: AbortSignal | undefined,
+) {
+  const attempt = requestAttempt(hooks, request);
+  try {
+    return await untilAborted(provider.complete(request, attempt.hooks), signal);
+  } finally {
+    attempt.close();
+  }
+}
+
+export async function* streamObserved(
+  provider: LLMProvider,
+  request: LLMRequest,
+  hooks: LLMCallHooks,
+  signal: AbortSignal | undefined,
+) {
+  if (provider.stream === undefined) return;
+  const attempt = requestAttempt(hooks, request);
+  try {
+    yield* abortableIterable(provider.stream(request, attempt.hooks), signal);
+  } finally {
+    attempt.close();
+  }
+}

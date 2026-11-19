@@ -38,6 +38,11 @@ export function requestAttempt(
     [REQUEST_OBSERVER]: (next) => {
       if (active) observer(next);
     },
+    ...(hooks?.onResilience !== undefined && {
+      onResilience: (report) => {
+        if (active) hooks.onResilience?.(report);
+      },
+    }),
     onReplayPrepared: (preparation) => {
       if (active) hooks?.onReplayPrepared?.(preparation);
     },
