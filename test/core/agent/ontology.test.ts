@@ -12,10 +12,11 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  *     it again;
  *   • `callLLM · buildCallLLMStage` serves ONE piece with `source:
  *     'ontology'` on EVERY call, composed by `ontology/serve.ts ·
- *     ontologyPiece` from that key, joined after the recovery piece and
- *     before the findings piece, never as an injection;
- *   • `servedView.ts · viewOf` recomposes it byte-equal from the record and
- *     the receipt hashes it as sent (the conformance law);
+ *     ontologyPiece` from that key, joined as the last live system piece
+ *     after the optional recovery piece. Live findings DATA arrives in a
+ *     separate request-only user-role frame;
+ *   • `servedView/ontology.ts · ontologyAt` recomposes it byte-equal from
+ *     the record and the receipt hashes it as sent (the conformance law);
  *   • the grouped chart's `sf-llm-call` boundary carries the key across, so
  *     BOTH chart shapes serve byte-equal text;
  *   • `agentfootprint.ontology.served` fires once per call with identities
@@ -237,9 +238,9 @@ describe('the declared ontology — served on every call', () => {
     expect((stateOf(r).activeInjections ?? []).some((i) => i.source === 'ontology')).toBe(false);
   });
 
-  it('joined AFTER the recovery piece and BEFORE the findings piece: injections → recovery → ontology → findings', async () => {
-    // A findings ledger with a standing declared on the second call, so the
-    // third call serves a findings piece beside the ontology piece.
+  it('ends the live system prompt with ontology and serves findings as request-only DATA', async () => {
+    // The second call declares a standing that the third call's findings
+    // DATA frame carries in the request messages.
     const declaring: readonly Reply[] = [
       call('c1', 'lookup_port', { q: 'p1', _findings: { basis: 'exploratory' } }),
       call('c2', 'lookup_port', {
@@ -272,7 +273,7 @@ describe('the declared ontology — served on every call', () => {
       { toolCallId: 'c1' },
     ]);
     expect(r.wire[2]!.systemPrompt).toBe(view.system.text);
-    // Epoch 1: no standing yet, so the ontology piece is last.
+    // The ontology also ends the system prompt on the first call.
     const at1 = servedAt(r.snapshot, 1)!.system.pieces.map((p) => p.source);
     expect(at1[at1.length - 1]).toBe('ontology');
   });
