@@ -367,6 +367,7 @@ describe('record-only fields — every serving path goes through the one strip',
     // to a model? If so it must serve `reading.served` (or go through
     // `afterMoment`) and be driven by this file.
     const PINNED = [
+      'core/agent/assessment/resultDispositions.ts', // reads the governed history without serving bytes
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
       // Bounded inspection of the final governed/placed/capped surface for
       // canonical absence only; this reader serves no envelope or record-only lists.

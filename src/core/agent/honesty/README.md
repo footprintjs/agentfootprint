@@ -33,7 +33,7 @@ branch loop back to it, so it reads the batch just run before the window
 strategy folds it away; a re-entry that ran no tool files nothing twice. It
 tells the two apart by the iteration that dispatched the batch — ToolCalls
 stamps it (`AgentState.toolResultsIteration`, under the arm) — never by call
-id, which a provider may reuse (`mounts.ts` · `batchToJudge`).
+id, which a provider may reuse (`resultsInput.ts` · `batchToJudge`).
 
 - **Handed** (the input mapping, frozen inside the subflow): only what the layer reads — for
   the inputs layer, the batch, Route's dispatch values and `turnNumber`; for the results

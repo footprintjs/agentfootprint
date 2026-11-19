@@ -389,6 +389,7 @@ column changes, so this table can lag it but the code cannot:
 | `coverage-gap` | a tool said there is ground it did not check or cannot cover | {who} declared ground that was not checked or cannot be covered |
 | `empty-undeclared` | a lookup came back empty without saying what it searched | {who} came back empty without saying what was searched |
 | `call-not-completed` | a call was refused / a call failed | {who} did not complete (refused) / {who} did not complete (failed) |
+| `result-withheld` | a result was kept out by a rule | Same wording for every tool |
 | `period-not-held` | a tool's data does not reach the time the question asked about | {who} read data that does not reach the time the question asked about |
 | `period-partly-held` | a tool's data covers only part of the time the question asked about | {who} read data that covers only part of the time the question asked about |
 | `period-unknown` | a tool could not say what time its data covers | {who} could not say what time the data covers |

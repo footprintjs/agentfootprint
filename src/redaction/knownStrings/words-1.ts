@@ -238,6 +238,7 @@ export const words1 = {
   returned: true,
   reused: true,
   'revision-asked': true,
+  rewritten: true,
   rounded: true,
   route: true,
   rows: true,
@@ -299,5 +300,4 @@ export const words1 = {
   system: true,
   'system-prompt': true,
   terminated: true,
-  text: true,
 } as const;

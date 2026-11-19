@@ -89,7 +89,7 @@ export function buildResumePlain(
     // `peelCall` on the dispatch side, asked of the same tool.
     const args = argsForPausedCall(scope, toolCallId, links.peelsReserved(tool));
     // No `error` flag: a human's answer is not a tool failure.
-    const rawPauseResult = await links.afterMoment(scope, {
+    const { modelResult: rawPauseResult, toolResultDisposition } = await links.afterMoment(scope, {
       ...(tool && { tool }),
       toolName,
       toolCallId,
@@ -160,6 +160,7 @@ export function buildResumePlain(
           content: resultStr,
           toolCallId,
           toolName,
+          ...(toolResultDisposition !== undefined && { toolResultDisposition }),
           ...(answersAsk !== undefined && { answersAsk }),
           ...innerCallsFieldOf(scope, toolCallId, iteration),
         },

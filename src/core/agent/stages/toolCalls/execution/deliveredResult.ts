@@ -23,6 +23,7 @@ import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
 import { outcomeField, reportedStatusField } from './outcomeField.js';
+import { missingResultFields } from '../batch/settle.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -59,7 +60,7 @@ export function landCallResult(
   scope: TypedScope<AgentState>,
   deps: Pick<
     ToolCallsHandlerDeps,
-    'negativeClaimsArmed' | 'stepPlanFor' | 'repeatedCallNudge' | 'findings'
+    'negativeClaimsArmed' | 'stepPlanFor' | 'repeatedCallNudge' | 'findings' | 'resultsLayer'
   >,
   frame: LandCallResultFrame,
 ): void {
@@ -234,6 +235,9 @@ export function landCallResult(
     toolName: frame.tc.name,
     ...(deps.findings === true &&
       !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
+    ...(frame.delivery.toolResultDisposition !== undefined && {
+      toolResultDisposition: frame.delivery.toolResultDisposition,
+    }),
     ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },
@@ -262,6 +266,8 @@ export function landCallResult(
     toolName: frame.tc.name,
     result: frame.delivery.resultStr,
     toolCallId: frame.tc.id,
+    ...(deps.resultsLayer === true &&
+      missingResultFields(frame.execution.executed, frame.execution.executeThrew)),
     ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
   });
   scope.toolResults = [...frame.batchResults];

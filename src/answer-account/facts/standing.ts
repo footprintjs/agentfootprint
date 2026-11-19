@@ -82,6 +82,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'declared-absent': 'howSure.reason.declaredAbsent',
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
   'call-not-completed': 'howSure.reason.callNotCompleted',
+  'result-withheld': 'howSure.reason.resultWithheld',
   'work-not-finished': 'howSure.reason.workNotFinished',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',

@@ -128,6 +128,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "history: a tool message of this turn with outcome 'refused' or 'failed', without a later completed call of the same tool with equal recorded arguments",
   },
   {
+    reason: 'result-withheld',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads: 'at least one delivered tool-result notice records an after-tool host denial',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',
@@ -204,7 +211,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      'findingsLedger: a period row of this turn with beyondRetention (the time layer, step T8) — the window was wholly older than the tool declares its source keeps: refused before dispatch, or read that way',
+      'findingsLedger: a call-window refused for beyond-retention or a period row with beyondRetention (step T8) — the window was wholly older than the tool declares its source keeps',
   },
   {
     reason: 'sources-conflict',

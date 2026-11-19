@@ -44,6 +44,7 @@
  * instants to compare.
  */
 
+import { beyondRetentionLine } from '../../time/retentionRefusals.js';
 import { isDevMode } from 'footprintjs';
 
 import { compareInstants, instantOf, type Instant } from '../../time/instant.js';
@@ -790,9 +791,7 @@ export function periodCheckLine(
     parts.push(`${row.toolName}'s look-back ran after the clock moved on`);
   }
   if (row.beyondRetention === true) {
-    parts.push(
-      `${row.toolName}: the time asked about is older than the oldest data the tool declares its source keeps`,
-    );
+    parts.push(beyondRetentionLine(row.toolName));
   }
   return parts.length === 0 ? undefined : parts.join('. ');
 }

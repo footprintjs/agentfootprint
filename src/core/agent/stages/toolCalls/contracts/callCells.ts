@@ -1,3 +1,4 @@
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type {
   ReadToolResultEnvelope,
   ToolResultStatus,
@@ -62,4 +63,5 @@ export interface CallSkillRoute {
 
 export interface CallDelivery {
   resultStr: string;
+  toolResultDisposition?: LLMMessage['toolResultDisposition'];
 }

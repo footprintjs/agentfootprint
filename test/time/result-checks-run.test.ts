@@ -40,7 +40,7 @@ import {
 } from '../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
-import { timeOfBatch } from '../../src/core/agent/honesty/mounts.js';
+import { timeOfBatch } from '../../src/core/agent/honesty/resultsInput.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -412,8 +412,12 @@ describe('period-beyond-retention', () => {
       timeArm,
     );
     const out = await agent.run({ message: 'activity', time: { now: NOW } });
-    expect(ofKind(agent, 'period')[0]).toMatchObject({ beyondRetention: true });
+    expect(ofKind(agent, 'period')).toEqual([]);
+    expect(ofKind(agent, 'call-window')).toContainEqual(
+      expect.objectContaining({ toolCallId: 'c1', how: 'refused', refused: 'beyond-retention' }),
+    );
     expect(await reasonsOf(agent)).toContain('period-beyond-retention');
+    expect(await reasonsOf(agent)).not.toContain('period-undeclared');
     expect(finalOf(out)).toContain(
       '- client_activity: the time asked about is older than the oldest data the tool declares its source keeps',
     );

@@ -122,6 +122,8 @@ export interface SourceRead {
     readonly index: number;
     readonly toolCallId?: string;
     readonly toolName?: string;
+    readonly outcome?: ReturnType<typeof recordedCallOutcome>;
+    readonly reportedStatus?: ReturnType<typeof unfinishedCallStatus>;
   }[];
   readonly historyCalls?: readonly HistoryCall[];
   readonly turnBegins?: number;
@@ -220,9 +222,20 @@ function callsOfWitness(
   if (w.kind === 'history') {
     const call = callAt(w.index);
     if (call === undefined) return [];
-    const outcome = reason === 'call-not-completed' ? recordedCallOutcome(call.message) : undefined;
+    const served =
+      w.path === '/content' ? read.turnResults.find((r) => r.index === w.index) : undefined;
+    const outcome =
+      reason !== 'call-not-completed'
+        ? undefined
+        : served === undefined
+        ? recordedCallOutcome(call.message)
+        : served.outcome;
     const reportedStatus =
-      reason === 'work-not-finished' ? unfinishedCallStatus(call.message) : undefined;
+      reason !== 'work-not-finished'
+        ? undefined
+        : served === undefined
+        ? unfinishedCallStatus(call.message)
+        : served.reportedStatus;
     const id = str(call.providerId);
     const name =
       str(call.toolName) ??

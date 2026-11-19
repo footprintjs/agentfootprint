@@ -1,9 +1,5 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import type { TypedScope } from 'footprintjs';
-import type { AgentState } from '../../../types.js';
-import type { Tool } from '../../../../../tools/tools.js';
-import { type ToolArgs, runToolAfterChain } from '../../../../../tools/runChain.js';
-import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { runToolAfterChain } from '../../../../../tools/runChain.js';
 import { captureNegativeRefusal, keepNegativeResultOut } from '../../../negativeClaims/capture.js';
 import { servedToModel } from '../../../../../semantics/coverage/read.js';
 import { recordDecisions } from '../../../middleware/ledger.js';
@@ -39,24 +35,11 @@ export function buildToolMiddlewareOperations(
    * `stream.tool_end`, so an event stream keeps reporting what the tool
    * returned while the history carries what the rules allowed through — and
    * the ledger row beside them says which is which.
+   * Also returns the disposition to record on the landed history occurrence.
    */
   const afterMoment = async (
-    scope: TypedScope<AgentState>,
-    call: {
-      readonly tool?: Tool;
-      readonly toolName: string;
-      readonly toolCallId: string;
-      readonly iteration: number;
-      readonly args: ToolArgs;
-      readonly result: unknown;
-      readonly error?: boolean;
-      readonly negativeResultId?: string;
-      readonly onSourceWithheld?: () => void;
-      readonly history: readonly LLMMessage[];
-      readonly identity?: { tenant?: string; principal?: string; conversationId: string };
-      readonly signal?: AbortSignal;
-    },
-  ): Promise<unknown> => {
+    ...[scope, call]: Parameters<ToolMiddlewareOperations['afterMoment']>
+  ): ReturnType<ToolMiddlewareOperations['afterMoment']> => {
     // The record-only coverage fields (`short`, `kind`) come off FIRST, so the
     // model is never served them and every link below is handed what the
     // model will read — none can re-serve them. Every dispatch path calls
@@ -73,7 +56,7 @@ export function buildToolMiddlewareOperations(
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return served;
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return { modelResult: served };
     const verdict = await runToolAfterChain(chain, {
       toolName: call.toolName,
       ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
@@ -101,7 +84,14 @@ export function buildToolMiddlewareOperations(
       if (verdict.kind === 'deny' || notRead)
         captureNegativeRefusal(scope, call.toolName, delivered, call.args);
     }
-    return delivered;
+    if (verdict.kind === 'deny')
+      return { modelResult: delivered, toolResultDisposition: 'withheld' };
+    return {
+      modelResult: delivered,
+      ...(verdict.decisions.some((decision) => decision.changed) && {
+        toolResultDisposition: 'rewritten',
+      }),
+    };
   };
 
   return { afterMoment };

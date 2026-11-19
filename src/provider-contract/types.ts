@@ -13,8 +13,10 @@ import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
+import type { WireRole } from './wireRole.js';
 export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
+export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
@@ -43,6 +45,8 @@ export interface LLMMessage {
    * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
    */
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
+  /** A host's after-tool rule withheld or replaced this result. Kept off the provider wire. */
+  readonly toolResultDisposition?: 'withheld' | 'rewritten';
   /**
    * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
    * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
@@ -251,25 +255,6 @@ export interface LLMMessage {
   /** On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent. */
   readonly calls?: readonly import('./innerCalls.js').InnerCallRan[];
 }
-
-/**
- * The roles a provider can carry INSIDE the `messages` array.
- *
- * `'tool'` is deliberately absent: a tool message is an answer to a specific
- * `tool_use` id, so it cannot be authored by an injection — there is no call
- * for it to answer. See `LLMProvider.carriesInMessages`.
- */
-export type WireRole = 'system' | 'user' | 'assistant';
-
-/**
- * The floor every known wire supports. Used for any provider that does not
- * declare `carriesInMessages` — a third-party adapter is assumed to carry
- * only what all of them do, never more.
- */
-export const DEFAULT_CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze([
-  'user',
-  'assistant',
-]);
 
 export interface LLMToolSchema {
   readonly name: string;

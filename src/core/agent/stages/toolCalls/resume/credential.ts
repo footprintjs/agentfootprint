@@ -9,7 +9,7 @@ import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFa
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
-import { appendBatchResult } from '../batch/settle.js';
+import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
 import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
@@ -52,6 +52,7 @@ export function buildResumeCredential(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -95,8 +96,9 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
+      let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        modelResult = await links.afterMoment(scope, {
+        ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
           ...(tool && { tool }),
           toolName,
           toolCallId,
@@ -111,7 +113,7 @@ export function buildResumeCredential(
           history: [...(scope.history as readonly LLMMessage[])],
           ...(scope.runIdentity && { identity: scope.runIdentity }),
           ...(env.signal && { signal: env.signal }),
-        });
+        }));
       }
       if (modelResult === undefined) modelResult = result;
       // Placement then the truncation net — the batch loop's precedence.
@@ -210,6 +212,7 @@ export function buildResumeCredential(
             toolName,
             ...(deps.findings === true &&
               dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A blocked credential ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(consentSettled),
@@ -229,6 +232,8 @@ export function buildResumeCredential(
         toolName,
         result: consentResultStr,
         toolCallId,
+        ...(deps.resultsLayer === true &&
+          missingResultFields(dispatched.executed === true, scriptSeen.threw)),
         ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
       });
       await judgeLanded(

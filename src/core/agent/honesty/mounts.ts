@@ -84,28 +84,14 @@ import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
 import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
-import {
-  callRowOfCall,
-  callWindowOfCall,
-  clockOf,
-  type CallWindowRow,
-} from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
+import type { CallWindowRow } from '../../../time/rows.js';
 
-import {
-  copyPeriod,
-  type DeclaredPeriod,
-  type PeriodRow,
-} from '../../../semantics/coverage/period.js';
+import type { PeriodRow } from '../../../semantics/coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
-import type {
-  RanCall,
-  CallPeriod,
-  CallTime,
-  ResultsLayerDeps,
-  ResultsLayerState,
-} from '../results/subflow.js';
+import type { ResultsLayerDeps, ResultsLayerState } from '../results/subflow.js';
+import { resultsLayerInput } from './resultsInput.js';
 import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
 import type { InputsMountDeps } from './inputsMountContract.js';
@@ -432,119 +418,6 @@ export function buildResultsSubflow(deps: ResultsMountDeps): FlowChart {
     .build();
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/**
- * WHICH BATCH the loop head hands the results layer on this visit — the
- * iteration that dispatched it, or `undefined` when there is none to judge.
- *
- * `stamp` is the iteration ToolCalls wrote beside the batch it dispatched
- * (`AgentState.toolResultsIteration`, under the arm); `iteration` is the loop
- * head's. ToolCalls advances the iteration by exactly one and loops straight
- * here; every other way back — the schema re-ask, the step nudge, the evidence
- * recheck, the wrap-up — runs no tool, leaves the batch in place and advances
- * the iteration again. So the batch is new on this visit exactly when
- * `iteration === stamp + 1`: each batch judged ONCE per run.
- *
- * Never by call id. A provider's synthetic counter restarts with each provider
- * instance (`<prefix>-call-${++toolCallSeq}`), so a resumed leg repeats the ids
- * of the leg that failed — whose rows the conversation checkpoint carries — and
- * nothing stops a provider reusing an id across batches of one run. A stamp is
- * per run: no conversation checkpoint carries it, so a resumed leg starts with
- * none. Were the invariant above ever broken, a batch would be judged twice —
- * an over-report, never a hidden verdict.
- */
-export function batchToJudge(iteration: number, stamp: unknown): number | undefined {
-  return typeof stamp === 'number' && iteration === stamp + 1 ? stamp : undefined;
-}
-
-/**
- * What the loop head hands the results layer — the batch's identities, the
- * periods ITS results declared (the coverage rows of the batch's iteration, so
- * a call id an earlier batch also used cannot lend it a period), and the
- * stamps. Only on the first visit after ToolCalls ran the batch
- * (`batchToJudge`); every other visit is handed an empty batch and reads
- * nothing else, so the layer never reads a key the run has not written.
- */
-function resultsLayerInput(parent: Record<string, unknown>): ResultsLayerState {
-  const batchIteration = batchToJudge(parent.iteration as number, parent.toolResultsIteration);
-  if (batchIteration === undefined) return { calls: [] };
-  const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
-  const calls: RanCall[] = [];
-  for (const entry of batch) {
-    if (!isRecord(entry)) continue;
-    if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
-    calls.push({ toolCallId: entry.toolCallId, toolName: entry.toolName });
-  }
-  if (calls.length === 0) return { calls };
-  const ids = new Set(calls.map((c) => c.toolCallId));
-  const periods: CallPeriod[] = [];
-  for (const row of (parent.coverageDeclared as readonly unknown[] | undefined) ?? []) {
-    if (!isRecord(row) || row.iteration !== batchIteration || row.period === undefined) continue;
-    if (typeof row.toolCallId !== 'string' || !ids.has(row.toolCallId)) continue;
-    periods.push({ toolCallId: row.toolCallId, period: copyPeriod(row.period as DeclaredPeriod) });
-  }
-  const time = timeOfBatch(parent, calls);
-  return {
-    calls,
-    batchIteration,
-    turnNumber: parent.turnNumber as number,
-    ...(periods.length > 0 && { periods }),
-    ...time,
-  };
-}
-
-/**
- * Under `.time()` (step T8): each call's time rows — its `call-window` row
- * and its `call` row's `drift` — and the turn's clock `now`, for the result
- * checks (`time/check.ts` · `periodTimeCheck`). Nothing when the turn has
- * no clock (an agent without `.time()`), so an unarmed run hands the layer the
- * input it always did. "This turn" is checked, not assumed: a ledger carried
- * forward (a checkpoint's `findingsLedger` from an agent that had `.time()`,
- * resumed and then run on by one that has not) holds an EARLIER turn's clock,
- * and that clock's `now` must not judge this turn's calls. Exported for that
- * test only.
- */
-export function timeOfBatch(
-  parent: Record<string, unknown>,
-  calls: readonly RanCall[],
-): Pick<ResultsLayerState, 'times' | 'now'> {
-  const ledger = parent.findingsLedger as readonly unknown[] | undefined;
-  const clock = clockOf(ledger);
-  const turn = parent.turnNumber as number;
-  if (clock === undefined || clock.turn !== turn) return {};
-  const times: CallTime[] = [];
-  for (const call of calls) {
-    const window = callWindowOfCall(ledger, call.toolCallId, turn);
-    const drift = callRowOfCall(ledger, call.toolCallId, turn)?.drift;
-    if (window === undefined && drift === undefined) {
-      times.push({ toolCallId: call.toolCallId });
-      continue;
-    }
-    times.push({
-      toolCallId: call.toolCallId,
-      ...(window !== undefined && { window: windowForCheck(window) }),
-      ...(drift !== undefined && { drift }),
-    });
-  }
-  return { times, now: clock.now };
-}
-
-/** The fields of a `call-window` row the result checks read — plain data. */
-function windowForCheck(row: CallWindowRow): NonNullable<CallTime['window']> {
-  return {
-    how: row.how,
-    ...(row.form !== undefined && { form: row.form }),
-    ...(row.asked !== undefined && { asked: { from: row.asked.from, to: row.asked.to } }),
-    ...(row.person !== undefined && { person: row.person }),
-    ...(row.sent !== undefined && { sent: { from: row.sent.from, to: row.sent.to } }),
-    ...(row.trimmedByTool === true && { trimmedByTool: true as const }),
-    ...(row.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
-    ...(row.refused !== undefined && { refused: row.refused }),
-  };
-}
-
 /**
  * Mount the results layer at the LOOP HEAD — or return the builder untouched
  * when the layer is not armed (`deps === undefined`), so an agent without it
@@ -640,8 +513,9 @@ export interface AnswerMountDeps {
  *   coverage);
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
- * - the inputs layer: `argumentAsk`, and `middlewareDecisions` when a
- *   before-tool chain can rewrite a filled value.
+ * - the inputs layer: `argumentAsk`;
+ * - tool middleware: `middlewareDecisions` holds argument rewrites and
+ *   after-tool decisions on older records kept across a pause.
  *
  * Every key's writers were checked against this list: a writer that no arm
  * gates puts its key in the always group — decide by the writer, never by the
@@ -670,7 +544,7 @@ export function answerFoldReads(arms: {
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),
-    ...(arms.inputs && arms.toolMiddleware ? (['middlewareDecisions'] as const) : []),
+    ...(arms.toolMiddleware ? (['middlewareDecisions'] as const) : []),
   ];
 }
 

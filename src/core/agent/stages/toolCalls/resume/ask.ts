@@ -15,7 +15,7 @@ import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../../../../artifacts/present.js';
 import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
-import { appendBatchResult } from '../batch/settle.js';
+import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
 import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
@@ -65,6 +65,7 @@ export function buildResumeAsk(
     ToolCallsHandlerDeps,
     | 'resources'
     | 'inputsLayer'
+    | 'resultsLayer'
     | 'artifactStore'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -99,6 +100,7 @@ export function buildResumeAsk(
     /** What the model reads. Differs from `result` only when a rule at the
      *  after-tool moment transformed or withheld it. */
     let modelResult: unknown;
+    let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** The call REALLY ran, clean — the step-advance eligibility this
      *  path knows about itself (a decline or a chain-deny never ran). */
@@ -206,7 +208,7 @@ export function buildResumeAsk(
         // last word here too — a rule about results cannot be skipped by
         // routing a call through a human.
         if (dispatched.executed === true) {
-          modelResult = await links.afterMoment(scope, {
+          ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
             ...(tool && { tool }),
             toolName,
             toolCallId,
@@ -221,7 +223,7 @@ export function buildResumeAsk(
             history: [...(scope.history as readonly LLMMessage[])],
             ...(scope.runIdentity && { identity: scope.runIdentity }),
             ...(env.signal && { signal: env.signal }),
-          });
+          }));
         }
       }
 
@@ -311,6 +313,7 @@ export function buildResumeAsk(
             toolCallId,
             toolName,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A declined ask ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(askSettled),
@@ -330,6 +333,7 @@ export function buildResumeAsk(
         toolName,
         result: askResultStr,
         toolCallId,
+        ...(deps.resultsLayer === true && missingResultFields(toolRan, scriptSeen.threw)),
         ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
       });
       await judgeLanded(

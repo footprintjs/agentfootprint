@@ -160,6 +160,7 @@ export type AssessmentReason =
   | 'coverage-gap'
   | 'empty-undeclared'
   | 'call-not-completed'
+  | 'result-withheld'
   | 'work-not-finished'
   | 'period-not-held'
   | 'period-partly-held'

@@ -34,7 +34,7 @@
  * the arm): ToolCalls advances the iteration by one and loops straight here,
  * and every other way back advances it again — so the batch is new exactly
  * when the loop head's iteration is the stamp plus one, and the mount hands
- * the batch only then (`honesty/mounts.ts` · `batchToJudge`). A
+ * the batch only then (`honesty/resultsInput.ts` · `batchToJudge`). A
  * call id cannot say it: a provider's synthetic counter restarts with each
  * provider instance (a resumed leg repeats the ids of the leg that failed,
  * whose rows the conversation checkpoint carries), and nothing stops a
@@ -140,7 +140,7 @@ export interface ResultsLayerState {
   readonly calls: readonly RanCall[];
   /** The periods the batch's results declared — handed only when there are some. */
   readonly periods?: readonly CallPeriod[];
-  /** The iteration that dispatched the batch (`honesty/mounts.ts` · `batchToJudge`) — handed only with a batch. */
+  /** The iteration that dispatched the batch (`honesty/resultsInput.ts` · `batchToJudge`) — handed only with a batch. */
   readonly batchIteration?: number;
   /** The conversation turn — handed only with a batch. */
   readonly turnNumber?: number;

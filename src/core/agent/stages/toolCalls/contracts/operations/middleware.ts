@@ -23,5 +23,8 @@ export interface ToolMiddlewareOperations {
       readonly identity?: { tenant?: string; principal?: string; conversationId: string };
       readonly signal?: AbortSignal;
     },
-  ) => Promise<unknown>;
+  ) => Promise<{
+    readonly modelResult: unknown;
+    readonly toolResultDisposition?: LLMMessage['toolResultDisposition'];
+  }>;
 }

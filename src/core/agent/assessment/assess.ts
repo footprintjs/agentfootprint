@@ -66,6 +66,9 @@ import {
 } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { statePointer } from './pointer.js';
+import { periodRows, type PeriodRowRead } from './periodRows.js';
+import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
+import { nativeFactsOf, resultDispositions, rewrittenResult } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
@@ -367,57 +370,6 @@ function readArgumentAsk(
   }
 }
 
-/** One `period` row of this turn — one judged call. */
-interface PeriodRowRead {
-  readonly index: number;
-  readonly historyIndex?: number;
-  readonly verdict: string;
-  /** The argument the tool's `ToolPeriod` names — the join key to the call's argument row. */
-  readonly argument?: string;
-  /** The time layer's checks on the row (step T8) — filed only under `.time()`. */
-  readonly differs: boolean;
-  readonly beyondRetention: boolean;
-}
-
-/**
- * This turn's period verdicts (honesty layer 3): EVERY `period` row whose
- * `turn` is the run's `turnNumber`, in ledger order. A record with no
- * `turnNumber` reads every period row (it may over-report; it never hides).
- *
- * Never collapsed by call id. The layer files one row per judged call — each
- * batch judged once (`honesty/mounts.ts` · `batchToJudge`) — so a second row
- * under an id is ANOTHER call: a provider's synthetic counter restarts with
- * each provider instance, so a resumed leg repeats the ids of the leg that
- * failed (whose rows ride the checkpoint, under the same turn), and a provider
- * may reuse an id across batches. "The last per call" would let a later
- * `covered` hide an earlier `not-held` the answer can still rest on.
- */
-function periodRows(
-  state: Readonly<Record<string, unknown>>,
-  resolve: ResolveCall,
-): readonly PeriodRowRead[] {
-  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
-  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  const rows: PeriodRowRead[] = [];
-  ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'period') return;
-    if (turn !== undefined && row.turn !== turn) return;
-    const verdict = str(row.verdict);
-    if (str(row.toolCallId) === undefined || verdict === undefined) return;
-    const argument = str(row.argument);
-    const historyIndex = callIndexOf(row, resolve);
-    rows.push({
-      index,
-      ...(historyIndex !== undefined && { historyIndex }),
-      verdict,
-      ...(argument !== undefined && { argument }),
-      differs: isRecord(row.differs),
-      beyondRetention: row.beyondRetention === true,
-    });
-  });
-  return rows;
-}
-
 /** The reason each period verdict fires — `covered` fires none. */
 const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
   'not-held': 'period-not-held',
@@ -540,9 +492,12 @@ function readTurnResults(
   const readable: AssessmentPointer[] = [];
   for (const { result, at, rows, own } of reads) {
     if (result.outcome !== undefined && !recovered.has(result.index)) {
-      fire(g, 'call-not-completed', { ...at, path: '/outcome' });
+      fire(g, 'call-not-completed', { ...at, path: result.rewritten ? '/content' : '/outcome' });
     } else if (result.reportedStatus !== undefined && !recovered.has(result.index)) {
-      fire(g, 'work-not-finished', { ...at, path: '/reportedStatus' });
+      fire(g, 'work-not-finished', {
+        ...at,
+        path: result.rewritten ? '/content' : '/reportedStatus',
+      });
     }
     const absenceRow = rows.some((c) => c.kind === 'absence');
     const door =
@@ -913,14 +868,30 @@ export function foldState(
   const g: Gathered = { fired: new Map(), checked: [] };
   const history = Array.isArray(state.history) ? (state.history as readonly unknown[]) : [];
   const historyCalls = readHistoryCalls(history);
-  const { results, from, begins } = turnResults(history, historyCalls);
+  const { results: recordedResults, from, begins } = turnResults(history, historyCalls);
   const current = historyCalls.filter((call) => call.index > begins);
   const resolveCurrent = historyCallResolver(current);
+  const dispositions = resultDispositions(current, state.middlewareDecisions);
+  const nativeFacts = nativeFactsOf(current, dispositions);
+  const results = recordedResults.flatMap((result) => {
+    const disposition = dispositions.get(result.index);
+    if (disposition === 'withheld') {
+      // An occurrence witness would reveal how many results the host withheld.
+      if (!g.fired.has('result-withheld')) g.fired.set('result-withheld', []);
+      return [];
+    }
+    if (disposition !== 'rewritten') return [result];
+    const projection = rewrittenResult(result);
+    const reason = projection.period === undefined ? undefined : PERIOD_REASONS[projection.period];
+    if (reason !== undefined) fire(g, reason, historyPointer(result));
+    return [projection.result];
+  });
   const places = { history, resolve: historyCallResolver(historyCalls), begins };
   const coverage = coverageRows(
     state.coverageDeclared,
     (row) => callIndexOf(row, resolveCurrent),
     declarationAddresses,
+    nativeFacts,
   );
   const reads = readResults(results, coverage);
 
@@ -938,7 +909,17 @@ export function foldState(
     issuedTicketsOf(recorded.placedTickets),
     g,
   );
-  readPeriodVerdicts(periodRows(state, resolveCurrent), argumentVerdicts, g);
+  readPeriodVerdicts(
+    periodRows(state, (row) => callIndexOf(row, resolveCurrent), nativeFacts),
+    argumentVerdicts,
+    g,
+  );
+  if (Array.isArray(state.findingsLedger)) {
+    const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+    for (const { index } of retentionRefusalsOf(state.findingsLedger, turn)) {
+      fire(g, 'period-beyond-retention', statePointer('findingsLedger', index, 'refused'));
+    }
+  }
   readConflicts(state, places, g);
   readAnswerRows(state, g);
   const integrity = readIntegrityRows(state);

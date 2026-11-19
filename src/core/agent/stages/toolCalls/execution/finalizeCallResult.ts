@@ -30,7 +30,7 @@ export async function finalizeCallResult(
   // Last thing before the result becomes history, and only for a call
   // that ran. `modelResult` is what the model reads; `result` stays the
   // truth about the tool and is what `stream.tool_end` reports.
-  const rawModelResult = execution.executed
+  const delivery = execution.executed
     ? await operations.afterMoment(scope, {
         ...(tool && { tool }),
         toolName: tc.name,
@@ -45,7 +45,8 @@ export async function finalizeCallResult(
         ...(batch.runIdentity && { identity: batch.runIdentity }),
         ...(batch.env.signal && { signal: batch.env.signal }),
       })
-    : outcome.result;
+    : undefined;
+  const rawModelResult = delivery === undefined ? outcome.result : delivery.modelResult;
   const sourceHalt = frame.sourceEvidenceArmed ? sourceEvidenceHaltOf(scope) : undefined;
   if (sourceHalt !== undefined) {
     execution.denied = true;
@@ -101,5 +102,5 @@ export async function finalizeCallResult(
   const modelResult = capped.modelResult;
   execution.resultFinalizer?.assertFinalized();
 
-  return { capped, modelResult };
+  return { capped, modelResult, toolResultDisposition: delivery?.toolResultDisposition };
 }

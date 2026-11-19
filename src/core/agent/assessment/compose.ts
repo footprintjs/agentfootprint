@@ -55,7 +55,7 @@ import type {
  * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
  */
-export const STANDING_LINE_VERSION = 6;
+export const STANDING_LINE_VERSION = 7;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -292,6 +292,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'value-contingent':
     'a value a call ran with was taken from a result the model itself had set aside',
   'call-not-completed': 'a call did not complete',
+  'result-withheld': 'a result was kept out by a rule',
   'work-not-finished': 'a tool reported unfinished work',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',

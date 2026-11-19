@@ -11,6 +11,7 @@ import type { AnswerAssessment } from './types.js';
 /** One tool result of this turn, where it sits in `history`. */
 export interface TurnResult {
   readonly index: number;
+  readonly rewritten?: true;
   readonly toolCallId?: string;
   readonly toolName?: string;
   readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;

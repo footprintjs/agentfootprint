@@ -90,6 +90,7 @@
   `turn_end.answerAssessment` — their fields are pinned and unchanged; read
   `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
   can carry it.
+- **Older recordings.** When neither the result disposition mark nor its after-tool denial record is readable, the assessment cannot determine whether a host rule withheld a result.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.

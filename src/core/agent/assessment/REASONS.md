@@ -12,6 +12,7 @@ in [README.md](./README.md).
 | `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
 | `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `assess.ts` · `firstRowOfTurn`) |
 | `call-not-completed` | 3 | `history`: a tool message of this turn whose `outcome` is `refused` or `failed`. A later completed call of the same tool with equal recorded arguments clears the reason for that call. If the arguments are absent or kept out of the record, the reason fires. |
+| `result-withheld` | 3 | The host denied at least one tool result after execution. The standing gives no number, call name, witness or result facts. |
 | `work-not-finished` | 3 | `history`: a tool message of this turn records `partial` or `pending` without an `outcome`. The same completed-retry rule applies. |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
@@ -21,7 +22,7 @@ in [README.md](./README.md).
 | `period-unknown` | 3 | `findingsLedger`: a `period` row of this turn with verdict `unknown` — the tool declared `held: 'unknown'`, on a non-empty result too (adopted Q33) |
 | `period-undeclared` | 3 | `findingsLedger`: a `period` row of this turn with verdict `undeclared` — the tool declares a `ToolPeriod` and its result declared no period |
 | `period-differs-from-asked` | 3 | `findingsLedger`: a `period` row of this turn with `differs` (the time layer, step T8 — `time/check.ts` · `periodTimeCheck`): what the call read is not the range it asked for — `missing` (asked, not read) or `extra` (read, not asked; TQ8: "not sure" too) — or, for a window the model chose, not the person's window. Witnesses: the row and the call's `argument` row |
-| `period-beyond-retention` | 3 | `findingsLedger`: a `period` row of this turn with `beyondRetention` (step T8): the window was wholly older than the tool declares its source keeps — refused before dispatch, or read that way |
+| `period-beyond-retention` | 3 | `findingsLedger`: a pre-dispatch `call-window` refused for `beyond-retention` or a `period` row of this turn with `beyondRetention` (step T8). The window was wholly older than the tool declares its source keeps. |
 | `sources-conflict` | 3 | `findingsLedger`: a conflict row of this turn — one whose witnesses name a call of this turn, or one stamped with this turn whose witnesses the record does not all place in earlier turns (the incomplete-record policy, below) |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
