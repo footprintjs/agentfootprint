@@ -287,6 +287,38 @@ describe('negative runtime evidence capture', () => {
     expect(JSON.stringify(scope.negativeClaimState)).not.toContain('does not exist');
   });
 
+  it('records exact call and iteration only for a native returned declaration', () => {
+    const scope = scopeOf();
+    const tool = scopedTool();
+    const content = 'ITEM-A does not exist.';
+    captureNegativeRefusal(scope, 'lookup', content, { item: 'ITEM-A' });
+    for (const [toolCallId, iteration] of [
+      ['first-read', 1],
+      ['second-read', 2],
+    ] as const) {
+      const started = dispatch(scope, tool, { toolCallId, iteration });
+      captureNegativeResult(scope, started, { content, effects: [], status: 'invalid' }, tool);
+    }
+    expect(scope.negativeClaimState?.overclaims).toEqual([
+      { tool: 'lookup', code: 'refusal-asserts-absence', turn: 1 },
+      {
+        tool: 'lookup',
+        code: 'refusal-asserts-absence',
+        turn: 1,
+        toolCallId: 'first-read',
+        iteration: 1,
+      },
+      {
+        tool: 'lookup',
+        code: 'refusal-asserts-absence',
+        turn: 1,
+        toolCallId: 'second-read',
+        iteration: 2,
+      },
+    ]);
+    expect(JSON.stringify(scope.negativeClaimState?.overclaims)).not.toContain(content);
+  });
+
   it('uses the recorded turn start when the time layer is unarmed', () => {
     expect(negativeRecordOf(scopeOf()).clock).toBe('2026-01-01T00:00:00.000Z');
   });

@@ -91,7 +91,13 @@ export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | u
         row.code !== 'refusal-asserts-absence' ||
         !Number.isSafeInteger(row.turn) ||
         row.turn < 1 ||
-        row.turn > raw.turn,
+        row.turn > raw.turn ||
+        ((row.toolCallId !== undefined || row.iteration !== undefined) &&
+          (typeof row.toolCallId !== 'string' ||
+            row.toolCallId.length === 0 ||
+            typeof row.iteration !== 'number' ||
+            !Number.isSafeInteger(row.iteration) ||
+            row.iteration < 1)),
     )
   )
     throw new TypeError('Invalid negative-claims declaration diagnostics.');

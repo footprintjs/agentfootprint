@@ -236,6 +236,7 @@ export const words1 = {
   'retry-other': true,
   retryable: true,
   returned: true,
+  'returned-unserved': true,
   reused: true,
   'revision-asked': true,
   rewritten: true,
@@ -299,5 +300,4 @@ export const words1 = {
   superseded: true,
   system: true,
   'system-prompt': true,
-  terminated: true,
 } as const;

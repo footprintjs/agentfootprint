@@ -13,6 +13,7 @@ import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
+import type { ToolResultRecord } from './toolResultRecord.js';
 import type { WireRole } from './wireRole.js';
 export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
@@ -20,7 +21,7 @@ export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
-export interface LLMMessage {
+export interface LLMMessage extends ToolResultRecord {
   readonly role: ContextRole;
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */
@@ -33,20 +34,6 @@ export interface LLMMessage {
    * text, never as a successful parse of substituted empty input.
    */
   readonly toolArgumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
-  /**
-   * Producer-owned notice origin, recorded only under findings admission.
-   * `not-entered` means the producer refused before tool.execute; an error
-   * thrown inside execute remains a result. `input-cancelled` is the host's
-   * notice, not a completed result, and says nothing about prior tool entry.
-   * `outcome-unknown` is the host's notice for a call left open by a run that
-   * stopped after a person's decision was used (`hosting/answeredPause.ts`):
-   * whether it entered is not known, and the notice is not its result.
-   * Absent on old history: no missing origin is reconstructed from text.
-   * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
-   */
-  readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
-  /** A host's after-tool rule withheld or replaced this result. Kept off the provider wire. */
-  readonly toolResultDisposition?: 'withheld' | 'rewritten';
   /**
    * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
    * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.

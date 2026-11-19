@@ -46,6 +46,8 @@ import type {
   AssessmentReasonSource,
 } from './types.js';
 
+export { assumedValuesSourceOf } from './assumedValues.js';
+
 /**
  * Bumped whenever any word of the tables below changes. 2: the named clauses
  * (`NAMED_REASON_WORDS`) and the assumed clause's named form — said only for a
@@ -218,50 +220,6 @@ export function rewrittenBehind(assessed: AnswerAssessment): boolean {
 }
 
 /**
- * Where this turn's assumed values are read from: the ledger, the turn, and
- * the before-tool rewrites a row may have been superseded by — handed to the
- * "Assumed" block's own reader (`arguments/serve/assumed.ts` · `assumedLinesFor`),
- * which the caller loads: the answer layer's stage through `import()` (the
- * optional-family law), the answer account statically.
- */
-export interface AssumedValuesSource {
-  readonly ledger: readonly { readonly kind: string }[];
-  readonly turn: number;
-  readonly readDecisions: (() => readonly unknown[]) | undefined;
-}
-
-// FOLD · the one choice of what the line's assumed values are read from
-// consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage (to compose
-// the line), answer-account/account.ts · appendedStandingLine (to find it again in the answer)
-/**
- * The source of the line's assumed values in `record` (committed state) —
- * `undefined` when the line names none: no `argument-assumed` reason, no
- * turn, or no `argument` row. Rows that are not objects are passed over, so a
- * damaged record is read, never thrown on.
- */
-export function assumedValuesSourceOf(
-  reasons: readonly AssessmentReason[],
-  record: Readonly<Record<string, unknown>>,
-): AssumedValuesSource | undefined {
-  if (!reasons.includes('argument-assumed')) return undefined;
-  const turn = record.turnNumber;
-  if (typeof turn !== 'number') return undefined;
-  const rows: readonly unknown[] = Array.isArray(record.findingsLedger)
-    ? record.findingsLedger
-    : [];
-  const ledger = rows.filter(
-    (row): row is { readonly kind: string } => isRecord(row) && typeof row.kind === 'string',
-  );
-  if (!ledger.some((row) => row.kind === 'argument')) return undefined;
-  const decisions = record.middlewareDecisions;
-  return {
-    ledger,
-    turn,
-    readDecisions: Array.isArray(decisions) ? () => decisions as readonly unknown[] : undefined,
-  };
-}
-
-/**
  * How many reason clauses the line prints before it folds the rest into a
  * count. The assumed clauses are never counted and never cut: beside
  * `.limitsTravelWithTheAnswer()` the line REPLACES the "Assumed" block, which
@@ -375,6 +333,7 @@ export interface StandingNames {
   readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
   readonly displayNames: ReadonlyMap<string, string>;
   readonly skippedSteps?: number;
+  readonly batchRefused?: true;
 }
 
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
@@ -410,10 +369,19 @@ export function standingFactsOf(
   displayNames: ReadonlyMap<string, string>,
 ): StandingNames {
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
+  const batchRefused = assessment.reasons
+    .find((r) => r.reason === 'call-not-completed')
+    ?.witness.some(
+      (pointer) =>
+        pointer.kind === 'history' &&
+        pointer.path === '/toolResultExecution' &&
+        pointer.toolCallId === undefined,
+    );
   return {
     sources: sourcesByReason(assessment),
     displayNames,
     ...(skippedSteps !== undefined && { skippedSteps }),
+    ...(batchRefused && { batchRefused: true as const }),
   };
 }
 
@@ -479,9 +447,16 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  if (reason === 'value-contingent' && source?.kind === 'answer') {
+    return 'a value in the answer came from a result the model had set aside';
+  }
   if (names !== undefined && source !== undefined) {
     if (reason === 'call-not-completed') {
-      return callNotCompletedClause(source, names.displayNames, REASON_WORDS[reason]);
+      return callNotCompletedClause(
+        source,
+        names.displayNames,
+        names.batchRefused ? 'a call was refused' : REASON_WORDS[reason],
+      );
     }
     if (reason === 'work-not-finished') {
       return unfinishedWorkClause(source, names.displayNames, REASON_WORDS[reason]);

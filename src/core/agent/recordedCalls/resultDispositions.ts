@@ -32,7 +32,7 @@ function legacyDispositions(
 export function resultDispositions(
   calls: readonly HistoryCall[],
   decisions: unknown,
-): ReadonlyMap<number, Disposition> {
+): Map<number, Disposition> {
   const legacy = legacyDispositions(decisions);
   const stamped = new Set<string>();
   const dispositions = new Map<number, Disposition>();
@@ -54,22 +54,4 @@ export function resultDispositions(
     if (disposition !== undefined) dispositions.set(index, disposition);
   }
   return dispositions;
-}
-
-/** Native rows without a unique address are usable only when no possible owner rewrote them. */
-export function nativeFactsOf(
-  calls: readonly HistoryCall[],
-  dispositions: ReadonlyMap<number, Disposition>,
-): (row: Readonly<Record<string, unknown>>, address?: number) => boolean {
-  const affected = calls.filter((call) => dispositions.has(call.index));
-  return (row, address) => {
-    if (address !== undefined) return !dispositions.has(address);
-    return !affected.some(
-      (call) =>
-        call.providerId === row.toolCallId &&
-        (row.toolName === undefined ||
-          call.toolName === undefined ||
-          row.toolName === call.toolName),
-    );
-  };
 }

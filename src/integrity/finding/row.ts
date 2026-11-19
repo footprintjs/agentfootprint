@@ -6,9 +6,8 @@
  * Role:    a `ContextError` holds values: its `message` and `witnesses` quote
  *          the arguments and the rows it is about, and a `predicate` names an
  *          argument path or a column. The event channel carries those. The row
- *          carries none of them: the kind, the seam, the iteration, the softer
- *          class, and the names of the tools among its subjects. A value cannot
- *          reach the record through a field that does not exist.
+ *          carries the finding kind, seam, iteration, advisory flag and tool
+ *          identities. Call-bound rows keep the provider's call ID.
  */
 
 import type { IntegritySeam } from '../disposition/types.js';
@@ -28,6 +27,8 @@ export interface IntegrityFindingRow {
   readonly seam: IntegritySeam;
   /** The tools among the finding's subjects, by registered name. */
   readonly tools?: readonly string[];
+  /** The provider's call ID when the check has a specific occurrence. */
+  readonly toolCallId?: string;
   /** Copied from the finding: it reports doubt rather than contradiction. */
   readonly advisory?: true;
 }
@@ -41,7 +42,11 @@ export interface IntegrityFindingRow {
  * // { kind: 'integrity-finding', iteration: 3, finding: 'missing-column', seam: 'write', tools: ['list_ports'] }
  * ```
  */
-export function integrityFindingRowOf(f: ContextError, iteration: number): IntegrityFindingRow {
+export function integrityFindingRowOf(
+  f: ContextError,
+  iteration: number,
+  toolCallId?: string,
+): IntegrityFindingRow {
   const tools = f.subjects
     .filter((s) => s.kind === 'tool' && s.id.length <= MAX_TOOL_NAME_CHARS)
     .map((s) => s.id)
@@ -52,6 +57,7 @@ export function integrityFindingRowOf(f: ContextError, iteration: number): Integ
     finding: f.kind,
     seam: f.seam,
     ...(tools.length > 0 && { tools }),
+    ...(toolCallId !== undefined && { toolCallId }),
     ...(f.advisory === true && { advisory: true as const }),
   };
 }

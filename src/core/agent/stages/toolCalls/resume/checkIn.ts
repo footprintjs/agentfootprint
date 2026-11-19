@@ -18,7 +18,11 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type {
   ResumedInvocation,
@@ -60,6 +64,7 @@ export function buildResumeCheckIn(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
     | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
@@ -266,6 +271,14 @@ export function buildResumeCheckIn(
             toolCallId,
             toolName,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !stepToolRan ||
+                resumedHalt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, decisionPlaced.modelResult),
+            ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A decline ran nothing → 'refused'; read by the check-in trail.

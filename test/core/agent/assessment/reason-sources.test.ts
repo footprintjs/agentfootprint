@@ -11,8 +11,8 @@
  *   - UNIT      — the table declares a kind for every reason (pinned); the
  *                 projection off hand-built records: a call the record names in
  *                 full, a call it does not (counted in `unnamed`, never
- *                 dropped), a conflict's readings, a contingent value's
- *                 carriers; the display-name rule and the naming phrase;
+ *                 dropped), a conflict's returned readings, and an answer's
+ *                 contingent value; the display-name rule and the naming phrase;
  *   - SCENARIO  — real agents on the mock provider: two calls, one absent and
  *                 one clean → the reason lists only the absent call; a run-level
  *                 reason → `run`; an answer-level reason → `answer`; the line
@@ -37,8 +37,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   Agent,
   absent,
+  allow,
   coverage,
   defineTool,
+  deny,
   type OutputSchemaParser,
   type Tool,
 } from '../../../../src/index.js';
@@ -248,6 +250,14 @@ const toolMsg = (
 });
 const fold = (state: Record<string, unknown>) => assessAnswer({ snapshot: { sharedState: state } });
 
+const overclaimCheck = (tools: readonly unknown[], toolCallId?: string) => ({
+  id: 'agent:negative-claims:declaration:0',
+  disposition: 'not-applicable',
+  reason: 'declaration-overclaimed',
+  tools,
+  ...(toolCallId !== undefined && { toolCallId, iteration: 1 }),
+});
+
 describe('UNIT — the calls are read off the rows the witnesses point at', () => {
   it('a result names its own call; a clean result is never listed', () => {
     const a = fold({
@@ -320,63 +330,32 @@ describe('UNIT — the calls are read off the rows the witnesses point at', () =
     });
   });
 
-  it('a contingent value rests on the results it came from — the ones set aside', () => {
-    const a = fold({
-      history: [user('q'), toolMsg('c1', 'inventory', [{ id: 'x-1' }])],
-      findingsLedger: [
-        {
-          kind: 'contingent',
-          declaredOn: 'answer',
-          value: 'x-1',
-          carriers: [{ toolCallId: 'c1', standing: 'noise' }],
-          iteration: 2,
-        },
-      ],
-    });
-    expect(sourceOf(a, 'value-contingent')).toEqual({
-      kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
-    });
-  });
-
-  it('an answer check that names its TOOL rests on that tool’s calls this turn — or on a call the record cannot name', () => {
-    const overclaimed = (tools: readonly string[]) => ({
+  it('an overclaim needs the exact returned tool occurrence', () => {
+    const history = [
+      user('q'),
+      toolMsg('c1', 'inventory', [{ id: 1 }]),
+      toolMsg('c2', 'inventory', [{ id: 2 }]),
+    ];
+    const reportFor = (toolCallId?: string) => ({
       mode: 'observe',
       status: 'passed',
-      checks: [
-        {
-          id: 'agent:negative-claims:declaration:0',
-          disposition: 'not-applicable',
-          reason: 'declaration-overclaimed',
-          tools,
-        },
-      ],
+      checks: [overclaimCheck(['inventory'], toolCallId)],
     });
-    const history = [user('q'), toolMsg('c1', 'inventory', [{ id: 1 }])];
-    expect(
-      sourceOf(
-        fold({ history, answerValidation: overclaimed(['inventory']) }),
-        'declaration-overclaimed',
-      ),
-    ).toEqual({ kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'inventory' }] });
-    // A tool no call of this turn ran: the reason still rests on a call — one the record cannot name.
-    expect(
-      sourceOf(
-        fold({ history, answerValidation: overclaimed(['archive']) }),
-        'declaration-overclaimed',
-      ),
-    ).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
-    // Both at once: the tool that ran is named, the one that did not is counted beside it.
-    expect(
-      sourceOf(
-        fold({ history, answerValidation: overclaimed(['inventory', 'archive']) }),
-        'declaration-overclaimed',
-      ),
-    ).toEqual({
+    const assessment = (
+      toolCallId?: string,
+      record: ReadonlyArray<Record<string, unknown>> = history,
+    ) => fold({ history: record, answerValidation: reportFor(toolCallId) });
+
+    expect(sourceOf(assessment('c2'), 'declaration-overclaimed')).toEqual({
       kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
-      unnamed: 1,
+      calls: [{ toolCallId: 'c2', toolName: 'inventory' }],
     });
+    expect(sourceOf(assessment(), 'declaration-overclaimed')).toBeUndefined();
+    expect(sourceOf(assessment('missing'), 'declaration-overclaimed')).toBeUndefined();
+    for (const execution of ['threw', 'not-entered', 'returned-unserved']) {
+      const failed = [...history.slice(0, 2), { ...history[2]!, toolResultExecution: execution }];
+      expect(sourceOf(assessment('c2', failed), 'declaration-overclaimed')).toBeUndefined();
+    }
   });
 
   it('an answer-level and a run-level reason carry their kind and nothing else', () => {
@@ -389,11 +368,12 @@ describe('UNIT — the calls are read off the rows the witnesses point at', () =
   });
 });
 
-describe('UNIT — a list that names some calls and not others never loses one', () => {
-  // A conflict's readings and a contingent value's carriers are LISTS of calls. An entry
-  // with no call id is counted in `unnamed` — beside the named ones, never dropped — and
-  // only a KNOWN id is said once. Read through the public fold, then rendered as the line.
-  const history = [user('q'), toolMsg('c1', 'inventory', [{ id: 'x' }])];
+describe('UNIT — witness lists and the source they support', () => {
+  const history = [
+    user('q'),
+    toolMsg('c1', 'inventory', [{ id: 'x' }]),
+    toolMsg('c2', 'inventory', [{ id: 'x' }]),
+  ];
   const reading = (toolCallId?: string) => ({
     ...(toolCallId !== undefined && { toolCallId }),
     subject: { kind: 'host', id: 'x' },
@@ -416,7 +396,7 @@ describe('UNIT — a list that names some calls and not others never loses one',
     iteration: 2,
     carriers,
   });
-  /** The line the layer would append for `a`, the inventory call named in the app's words. */
+  const displayNames = new Map([['inventory', 'checking inventory']]);
   const lineOf = (a: AnswerAssessment) =>
     standingLineOf(
       {
@@ -427,82 +407,59 @@ describe('UNIT — a list that names some calls and not others never loses one',
       },
       [],
       false,
-      { sources: sourcesByReason(a), displayNames: new Map([['inventory', 'checking inventory']]) },
+      { sources: sourcesByReason(a), displayNames },
+    );
+  const projectConflict = (row: ReturnType<typeof conflict>) =>
+    reasonSourceOf(
+      'sources-conflict',
+      'calls',
+      [{ kind: 'state', key: 'findingsLedger', path: '/0/kind' }],
+      { state: { history, findingsLedger: [row] }, turnResults: [] },
     );
 
-  it('conflict, mixed: the named reading, the repeated one said once, and every unnamed one counted', () => {
+  it('a conflict of returned readings names each distinct occurrence once', () => {
     const a = fold({
       history,
-      findingsLedger: [conflict([reading('c1'), reading('c1'), reading(), reading()])],
+      findingsLedger: [conflict([reading('c1'), reading('c2'), reading('c1')])],
     });
     expect(sourceOf(a, 'sources-conflict')).toEqual({
+      kind: 'calls',
+      calls: [
+        { toolCallId: 'c1', toolName: 'inventory' },
+        { toolCallId: 'c2', toolName: 'inventory' },
+      ],
+    });
+  });
+
+  it('a partially named conflict retains its source counts without contributing to standing', () => {
+    const row = conflict([reading('c1'), reading('c1'), reading(), reading()]);
+    expect(sourceOf(fold({ history, findingsLedger: [row] }), 'sources-conflict')).toBeUndefined();
+    expect(projectConflict(row)).toEqual({
       kind: 'calls',
       calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
       unnamed: 2,
     });
-    expect(lineOf(a)).toBe(
-      'Not sure — results from checking inventory and 2 other calls disagree.',
-    );
   });
 
-  it('conflict, all unnamed: unstamped, the fold places no such row in this turn — stamped with it, both readings are counted', () => {
-    // An UNSTAMPED conflict counts for this turn only when one of its readings names a call
-    // of the turn — a missing id never places it (`assess.ts` · `conflictOfThisTurn`, the
-    // incomplete-record policy) — so a row naming none fires nothing at all…
-    const a = fold({ history, findingsLedger: [conflict([reading(), reading()])] });
-    expect(a.reasons.map((r) => r.reason)).toEqual([]);
-    // …while a row STAMPED with this turn stays this turn's, its readings counted (L-49)…
-    const stamped = fold({
-      history,
-      turnNumber: 1,
-      findingsLedger: [{ ...conflict([reading(), reading()]), turn: 1 }],
-    });
-    expect(sourceOf(stamped, 'sources-conflict')).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
-    expect(lineOf(stamped)).toBe('Not sure — two results the answer stood on disagree.');
-    // …and the projection, asked of the unstamped row directly, counts both readings too.
-    const source = reasonSourceOf(
-      'sources-conflict',
-      'calls',
-      [{ kind: 'state', key: 'findingsLedger', path: '/0/kind' }],
-      { state: { history, findingsLedger: [conflict([reading(), reading()])] }, turnResults: [] },
-    );
+  it('all unnamed readings are insufficient with or without a turn stamp', () => {
+    const row = conflict([reading(), reading()]);
+    const a = fold({ history, findingsLedger: [row] });
+    const stamped = fold({ history, turnNumber: 1, findingsLedger: [{ ...row, turn: 1 }] });
+    expect(sourceOf(a, 'sources-conflict')).toBeUndefined();
+    expect(sourceOf(stamped, 'sources-conflict')).toBeUndefined();
+
+    const source = projectConflict(row);
     expect(source).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
     expect(
       standingLineOf(
         { assessment: 'unknown', standing: 'not-sure', reasons: ['sources-conflict'], checked: [] },
         [],
         false,
-        {
-          sources: new Map([['sources-conflict', source]]),
-          displayNames: new Map([['inventory', 'checking inventory']]),
-        },
+        { sources: new Map([['sources-conflict', source]]), displayNames },
       ),
     ).toBe('Not sure — two results the answer stood on disagree.');
   });
 
-  it('contingent, mixed: the named carrier, and the unnamed one counted beside it', () => {
-    const a = fold({ history, findingsLedger: [contingent([carrier('c1'), carrier()])] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({
-      kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
-      unnamed: 1,
-    });
-    expect(lineOf(a)).toBe(
-      'Not sure — a value came from checking inventory and 1 other call, whose results the model itself had set aside.',
-    );
-  });
-
-  it('contingent, an empty carrier list: the row still rests on calls — one counted, never "the run"', () => {
-    const a = fold({ history, findingsLedger: [contingent([])] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
-  });
-
-  // A SPARSE list (L-48): an in-memory record — a live snapshot, a host-built one — can hold an
-  // index no value was ever assigned to. A saved recording spells it `null`; in memory it is no
-  // entry at all, and `Array.prototype.map` / `filter` skip it. Before the fix the projection
-  // mapped a carrier or witness list with `map`, kept the hole, and read `ref.id` off it — a
-  // TypeError out of `assessAnswer` — and `filter` dropped a hole in an answer check's `tools`.
-  // Read by index, a hole is one entry that names no call: counted in `unnamed`.
   const HOLE = Symbol('hole');
   const sparse = (...entries: readonly unknown[]): unknown[] => {
     const list: unknown[] = new Array(entries.length);
@@ -512,66 +469,59 @@ describe('UNIT — a list that names some calls and not others never loses one',
     return list;
   };
 
-  it('a sparse carrier list never throws: the hole is one call the record cannot name (L-48)', () => {
-    const carriers = sparse(carrier('c1'), HOLE);
-    expect(1 in carriers).toBe(false); // a real hole — not `undefined` written at index 1
+  it.each([
+    { case: 'named and unnamed', carriers: [carrier('c1'), carrier()] },
+    { case: 'empty', carriers: [] },
+    { case: 'sparse', carriers: sparse(carrier('c1'), HOLE) },
+    { case: 'all unnamed', carriers: [carrier(), carrier()] },
+  ])('an answer’s contingent value speaks for the answer with $case carriers', ({ carriers }) => {
     const a = fold({ history, findingsLedger: [contingent(carriers)] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({
-      kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
-      unnamed: 1,
-    });
+    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'answer' });
     expect(lineOf(a)).toBe(
-      'Not sure — a value came from checking inventory and 1 other call, whose results the model itself had set aside.',
+      'Not sure — a value in the answer came from a result the model had set aside.',
     );
   });
 
-  it('a sparse conflict witness list never throws: the hole is counted beside the named reading (L-48)', () => {
-    const a = fold({
-      history,
-      findingsLedger: [conflict(sparse(reading('c1'), HOLE, reading('c1')))],
-    });
-    expect(sourceOf(a, 'sources-conflict')).toEqual({
+  it('a sparse conflict witness list cannot supply the missing reading', () => {
+    const witnesses = sparse(reading('c1'), HOLE, reading('c2'));
+    expect(1 in witnesses).toBe(false);
+    const row = conflict(witnesses);
+    expect(sourceOf(fold({ history, findingsLedger: [row] }), 'sources-conflict')).toBeUndefined();
+    expect(projectConflict(row)).toEqual({
       kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      calls: [
+        { toolCallId: 'c1', toolName: 'inventory' },
+        { toolCallId: 'c2', toolName: 'inventory' },
+      ],
       unnamed: 1,
     });
   });
 
-  it('a sparse tools list on an answer check: the hole is counted, never dropped (L-48)', () => {
-    const a = fold({
-      history,
-      answerValidation: {
-        mode: 'observe',
-        status: 'passed',
-        checks: [
-          {
-            id: 'agent:negative-claims:declaration:0',
-            disposition: 'not-applicable',
-            reason: 'declaration-overclaimed',
-            tools: sparse('inventory', HOLE),
-          },
-        ],
-      },
-    });
-    expect(sourceOf(a, 'declaration-overclaimed')).toEqual({
+  it('a sparse tools list on a report check adds no occurrence', () => {
+    const tools = sparse('inventory', HOLE);
+    const assess = (toolCallId?: string) =>
+      fold({
+        history,
+        answerValidation: {
+          mode: 'observe',
+          status: 'passed',
+          checks: [overclaimCheck(tools, toolCallId)],
+        },
+      });
+    expect(sourceOf(assess(), 'declaration-overclaimed')).toBeUndefined();
+    expect(sourceOf(assess('c1'), 'declaration-overclaimed')).toEqual({
       kind: 'calls',
       calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
-      unnamed: 1,
     });
   });
 
-  // A list is read by INDEX, never through its own code (review of #250): a host-built record
-  // can give a list its own iterator, put a getter at an index, or hand over something that is
-  // not a plain array at all. `Array.from` ran the iterator — an empty one hid the named call —
-  // and would have run the getter inside the fold.
   const iterating = (list: unknown[], iterate: () => Generator<unknown>): unknown[] =>
     Object.defineProperty(list, Symbol.iterator, { value: iterate });
   const fromNowhere = function* (): Generator<unknown> {};
 
-  it('a witness list with its own iterator: never called — the named reading is still named', () => {
-    // A conflict stamped with this turn whose list's iterator yields nothing.
-    const witnesses = iterating([reading('c1'), reading()], fromNowhere);
+  it('reads witness indices without executing an own iterator', () => {
+    const iterator = vi.fn(fromNowhere);
+    const witnesses = iterating([reading('c1'), reading('c2')], iterator);
     const a = fold({
       history,
       turnNumber: 1,
@@ -579,27 +529,19 @@ describe('UNIT — a list that names some calls and not others never loses one',
     });
     expect(sourceOf(a, 'sources-conflict')).toEqual({
       kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
-      unnamed: 1,
+      calls: [
+        { toolCallId: 'c1', toolName: 'inventory' },
+        { toolCallId: 'c2', toolName: 'inventory' },
+      ],
     });
+    expect(iterator).not.toHaveBeenCalled();
   });
 
-  it('a carrier list and a tools list with their own iterators: read by index, never iterated', () => {
-    const carriers = iterating([carrier('c1'), carrier()], function* () {
-      yield carrier('elsewhere');
+  it('never executes the own iterator of the report check’s tools', () => {
+    const iterator = vi.fn(function* () {
+      yield 'unrelated';
     });
-    expect(
-      sourceOf(fold({ history, findingsLedger: [contingent(carriers)] }), 'value-contingent'),
-    ).toEqual({ kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'inventory' }], unnamed: 1 });
-    const tools = iterating(['inventory'], function* () {
-      yield 'archive';
-    });
-    const check = {
-      id: 'agent:negative-claims:declaration:0',
-      disposition: 'not-applicable',
-      reason: 'declaration-overclaimed',
-      tools,
-    };
+    const check = overclaimCheck(iterating(['inventory'], iterator), 'c1');
     const a = fold({
       history,
       answerValidation: { mode: 'observe', status: 'passed', checks: [check] },
@@ -608,14 +550,16 @@ describe('UNIT — a list that names some calls and not others never loses one',
       kind: 'calls',
       calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
     });
+    expect(iterator).not.toHaveBeenCalled();
   });
 
-  it('an entry behind a getter is never read through it: one call the record cannot name', () => {
-    const getter = vi.fn(() => carrier('c1'));
-    const carriers: unknown[] = [carrier('c1')];
-    Object.defineProperty(carriers, 1, { enumerable: true, get: getter });
-    const a = fold({ history, findingsLedger: [contingent(carriers)] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({
+  it('never executes a getter at a witness index', () => {
+    const getter = vi.fn(() => reading('c2'));
+    const witnesses: unknown[] = [reading('c1')];
+    Object.defineProperty(witnesses, 1, { enumerable: true, get: getter });
+    const row = conflict(witnesses);
+    expect(sourceOf(fold({ history, findingsLedger: [row] }), 'sources-conflict')).toBeUndefined();
+    expect(projectConflict(row)).toEqual({
       kind: 'calls',
       calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
       unnamed: 1,
@@ -623,63 +567,63 @@ describe('UNIT — a list that names some calls and not others never loses one',
     expect(getter).not.toHaveBeenCalled();
   });
 
-  it('the fold never iterates a record list through the list’s own code: history and the report’s checks', () => {
-    // `history` with an iterator that yields nothing: the tool-name join reads it by index.
-    const quiet = iterating([...history], fromNowhere);
-    const a = fold({ history: quiet, findingsLedger: [conflict([reading('c1')])] });
+  it('reads history and report checks without calling their own list methods', () => {
+    const iterator = vi.fn(fromNowhere);
+    const quiet = iterating([...history], iterator);
+    const a = fold({ history: quiet, findingsLedger: [conflict([reading('c1'), reading('c2')])] });
     expect(sourceOf(a, 'sources-conflict')).toEqual({
+      kind: 'calls',
+      calls: [
+        { toolCallId: 'c1', toolName: 'inventory' },
+        { toolCallId: 'c2', toolName: 'inventory' },
+      ],
+    });
+    expect(iterator).not.toHaveBeenCalled();
+
+    const entries = vi.fn(() => [][Symbol.iterator]());
+    const checkGetter = vi.fn(() => overclaimCheck(['inventory'], 'c2'));
+    const checks = [overclaimCheck(['inventory'], 'c1')];
+    Object.defineProperties(checks, {
+      entries: { value: entries },
+      1: { get: checkGetter },
+    });
+    const b = fold({ history, answerValidation: { mode: 'observe', status: 'passed', checks } });
+    expect(sourceOf(b, 'declaration-overclaimed')).toEqual({
       kind: 'calls',
       calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
     });
-    // The report's checks with their own `entries`: never called — every row is read by index.
-    const entries = vi.fn(() => [][Symbol.iterator]());
-    const checks = Object.defineProperty(
-      [
-        {
-          id: 'agent:negative-claims:declaration:0',
-          disposition: 'not-applicable',
-          reason: 'declaration-overclaimed',
-          tools: ['inventory'],
-        },
-      ],
-      'entries',
-      { value: entries },
-    );
-    const b = fold({ history, answerValidation: { mode: 'observe', status: 'passed', checks } });
-    expect(b.reasons.map((r) => r.reason)).toContain('declaration-overclaimed');
     expect(entries).not.toHaveBeenCalled();
+    expect(checkGetter).not.toHaveBeenCalled();
   });
 
-  it('a list that is not a plain array is not trusted as one: one call the record cannot name', () => {
-    const carriers = Object.setPrototypeOf([carrier('c1')], null) as unknown[];
-    expect(Array.isArray(carriers)).toBe(true);
-    const a = fold({ history, findingsLedger: [contingent(carriers)] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+  it('a nonplain witness list cannot support a conflict', () => {
+    const witnesses = Object.setPrototypeOf([reading('c1'), reading('c2')], null) as unknown[];
+    expect(Array.isArray(witnesses)).toBe(true);
+    const row = conflict(witnesses);
+    expect(sourceOf(fold({ history, findingsLedger: [row] }), 'sources-conflict')).toBeUndefined();
+    expect(projectConflict(row)).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
   });
 
-  it('a list longer than the fold reads: the entries past the bound are counted, never read', () => {
-    // `length` is the record's own claim: a hostile 4,294,967,295 must not be walked.
-    const carriers: unknown[] = [];
-    carriers[MAX_ROW_LIST_ENTRIES + 1] = carrier('c1'); // past the bound: counted, not read
-    const a = fold({ history, findingsLedger: [contingent(carriers)] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({
+  it('counts witness entries past the bound without walking them', () => {
+    const witnesses: unknown[] = [];
+    const getter = vi.fn(() => reading('c2'));
+    Object.defineProperty(witnesses, MAX_ROW_LIST_ENTRIES + 1, { get: getter });
+    const row = conflict(witnesses);
+    expect(sourceOf(fold({ history, findingsLedger: [row] }), 'sources-conflict')).toBeUndefined();
+    expect(projectConflict(row)).toEqual({
       kind: 'calls',
       calls: [],
       unnamed: MAX_ROW_LIST_ENTRIES + 2,
     });
+    expect(getter).not.toHaveBeenCalled();
+
     const huge: unknown[] = [];
     huge.length = 2 ** 32 - 1;
-    expect(
-      sourceOf(fold({ history, findingsLedger: [contingent(huge)] }), 'value-contingent'),
-    ).toEqual({ kind: 'calls', calls: [], unnamed: 2 ** 32 - 1 });
-  });
-
-  it('contingent, all unnamed: every carrier counted, and the line keeps its own words', () => {
-    const a = fold({ history, findingsLedger: [contingent([carrier(), carrier()])] });
-    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
-    expect(lineOf(a)).toBe(
-      'Not sure — a value a call ran with was taken from a result the model itself had set aside.',
-    );
+    expect(projectConflict(conflict(huge))).toEqual({
+      kind: 'calls',
+      calls: [],
+      unnamed: 2 ** 32 - 1,
+    });
   });
 });
 
@@ -810,62 +754,90 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
     expect(sourceOf(assessAnswer(r.recording), 'value-unsupported')).toEqual({ kind: 'answer' });
   });
 
-  it('a refusal that asserted an absence → declaration-overclaimed rests on the call that refused (L-41)', async () => {
-    // Under `.negativeClaims()`, a refused call read nothing, so a refusal saying "does not
-    // exist" overclaims. The run files ONE check row for it, and the fold reads that row as
-    // committed: its code as `reason`, the tool it names as `tools`. Before the fix the
-    // projection onto the report dropped `tools`, so the source read `{ calls: [], unnamed: 1 }`
-    // — "a call the record cannot name" — on every real run, though the record names it.
-    const refusing = defineTool({
-      name: 'read_incidents',
-      description: 'Read open incidents for a service',
-      inputSchema: {
-        type: 'object',
-        properties: { service: { type: 'string' } },
-        required: ['service'],
-      },
-      effects: 'read',
-      search: {
-        source: { what: 'the incident store', said: ['the incident store'] },
-        subject: { what: 'incidents', said: ['incident', 'incidents'] },
-        arguments: [{ name: 'service', role: 'population' }],
-        complete: 'within-arguments',
-      },
-      execute: () => {
-        throw new Error('Service payments does not exist.');
-      },
-    });
-    const agent = Agent.create({
-      provider: mock({
-        replies: [
-          { toolCalls: [{ id: 'c1', name: 'read_incidents', args: { service: 'payments' } }] },
-          { content: JSON.stringify({ summary: 'The read was refused.', negatives: [] }) },
-        ] as never,
-      }),
-      model: 'mock',
-    })
-      .tool(refusing)
-      .outputSchema(typedReply, { jsonSchema: TYPED_REPLY_SCHEMA })
-      .negativeClaims({ field: 'negatives', tools: ['read_incidents'] })
-      .build();
-    const r = await runOnce(agent, 'Any open incidents for payments?');
-    for (const a of [r.live, assessAnswer(r.recording)]) {
-      expect(a.standing).toBe('not-sure');
-      expect(sourceOf(a, 'declaration-overclaimed')).toEqual({
-        kind: 'calls',
-        calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }],
+  it.each(['throw', 'native return', 'framework refusal'] as const)(
+    'an absence assertion on a %s uses only native returned evidence for standing',
+    async (kind) => {
+      const message = 'Service payments does not exist.';
+      const execute = vi.fn(({ service }: Record<string, unknown>) => {
+        if (service === 'billing') return [{ incident: 'incident-1' }];
+        if (kind === 'throw') throw new Error(message);
+        return { content: message, effects: [], status: 'denied' as const };
       });
-    }
-    // The row as the run committed it — the documented `AnswerCheck` shape.
-    const row = agent.answerValidation()?.checks.find((c) => c.id.endsWith(':declaration:0'));
-    expect(row).toEqual({
-      id: 'agent:negative-claims:declaration:0',
-      path: '/',
-      disposition: 'not-applicable',
-      reason: 'declaration-overclaimed',
-      tools: ['read_incidents'],
-    });
-  });
+      const incidents = defineTool({
+        name: 'read_incidents',
+        description: 'Read open incidents for a service',
+        inputSchema: {
+          type: 'object',
+          properties: { service: { type: 'string' } },
+          required: ['service'],
+        },
+        effects: 'read',
+        search: {
+          source: { what: 'the incident store', said: ['the incident store'] },
+          subject: { what: 'incidents', said: ['incident', 'incidents'] },
+          arguments: [{ name: 'service', role: 'population' }],
+          complete: 'within-arguments',
+        },
+        execute,
+      });
+      const builder = Agent.create({
+        provider: mock({
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'read_incidents', args: { service: 'billing' } }] },
+            { toolCalls: [{ id: 'c2', name: 'read_incidents', args: { service: 'payments' } }] },
+            {
+              content: JSON.stringify({ summary: 'The payments read was refused.', negatives: [] }),
+            },
+          ] as never,
+        }),
+        model: 'mock',
+      })
+        .tool(incidents)
+        .outputSchema(typedReply, { jsonSchema: TYPED_REPLY_SCHEMA })
+        .negativeClaims({ field: 'negatives', tools: ['read_incidents'] });
+      if (kind === 'framework refusal') {
+        builder.toolMiddleware({
+          name: 'refuse-payments',
+          onToolCall: (call) => (call.args.service === 'payments' ? deny(message) : allow()),
+        });
+      }
+      const agent = builder.build();
+      const r = await runOnce(agent, 'Any open incidents for billing and payments?');
+      expect(execute).toHaveBeenCalledTimes(kind === 'framework refusal' ? 1 : 2);
+      for (const a of [r.live, assessAnswer(r.recording)]) {
+        expect(a.standing).toBe('not-sure');
+        expect(sourceOf(a, 'call-not-completed')).toEqual({
+          kind: 'calls',
+          calls: [
+            {
+              toolCallId: 'c2',
+              toolName: 'read_incidents',
+              outcome: kind === 'throw' ? 'failed' : 'refused',
+            },
+          ],
+        });
+        expect(sourceOf(a, 'declaration-overclaimed')).toEqual(
+          kind === 'native return'
+            ? { kind: 'calls', calls: [{ toolCallId: 'c2', toolName: 'read_incidents' }] }
+            : undefined,
+        );
+      }
+
+      if (kind !== 'framework refusal') {
+        const rows = agent.answerValidation()?.checks.filter((c) => c.id.includes(':declaration:'));
+        expect(rows).toEqual([
+          {
+            id: 'agent:negative-claims:declaration:0',
+            path: '/',
+            disposition: 'not-applicable',
+            reason: 'declaration-overclaimed',
+            tools: ['read_incidents'],
+            ...(kind === 'native return' && { toolCallId: 'c2', iteration: 2 }),
+          },
+        ]);
+      }
+    },
+  );
 });
 
 describe('SCENARIO — the line names a reason’s calls only in the app’s words', () => {

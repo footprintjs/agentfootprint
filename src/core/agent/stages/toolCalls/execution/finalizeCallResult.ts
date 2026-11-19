@@ -83,6 +83,7 @@ export async function finalizeCallResult(
   // already summarized a huge result is measured on what it produced, so
   // the cap composes with governance rather than pre-empting it.
   let capped = operations.capResults(tc.name, placedValues);
+  const modelResultCapped = !Object.is(capped.modelResult, placedValues.modelResult);
   const uncapped = capped.modelResult === placedValues.modelResult;
   const refusal =
     execution.resultFinalizer === undefined
@@ -102,5 +103,10 @@ export async function finalizeCallResult(
   const modelResult = capped.modelResult;
   execution.resultFinalizer?.assertFinalized();
 
-  return { capped, modelResult, toolResultDisposition: delivery?.toolResultDisposition };
+  return {
+    capped,
+    modelResult,
+    modelResultCapped,
+    toolResultDisposition: delivery?.toolResultDisposition,
+  };
 }

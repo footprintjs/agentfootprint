@@ -8,7 +8,11 @@ import type { DispatchCall } from '../contracts/batchCall.js';
 import { assistantToolTurn } from './assistantTurn.js';
 
 /** Malformed protocol IDs cannot acquire fabricated tool-result correlations. */
-export function refuseToolBatch(scope: TypedScope<AgentState>, reason: ToolBatchFailure): void {
+export function refuseToolBatch(
+  scope: TypedScope<AgentState>,
+  reason: ToolBatchFailure,
+  answerLayer: boolean,
+): void {
   const iteration = scope.iteration as number;
   const history: LLMMessage[] = [...scope.history];
   const text = scope.llmLatestContent;
@@ -22,6 +26,7 @@ export function refuseToolBatch(scope: TypedScope<AgentState>, reason: ToolBatch
   });
   history.push({
     role: 'user',
+    ...(answerLayer && { toolResultExecution: 'not-entered' as const }),
     content:
       `${TOOL_BATCH_FRAME_PREFIX} — framework feedback, not a person's words or evidence. ` +
       `The entire proposed batch was refused before dispatch (${reason}); no tools ran. ` +

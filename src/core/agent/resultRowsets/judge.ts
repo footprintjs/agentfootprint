@@ -127,7 +127,7 @@ export async function judgeGovernedRowsets(
           : 'checked-pass';
       ledger?.current?.note(kind, 'write', checkDisposition, fired ? Date.now() : undefined);
     }
-    fileIntegrityFindings(scope, encounter.findings, call.iteration, ledger);
+    fileIntegrityFindings(scope, encounter.findings, call.iteration, ledger, () => call.toolCallId);
     const payload: ToolRowsetCheckedPayload = {
       ...call,
       rowset: declaration.key,

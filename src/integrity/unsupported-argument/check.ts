@@ -129,6 +129,8 @@ export interface ChoiceCorpus {
 /** What the choice-seam check found — the findings AND the excusals. */
 export interface UnsupportedArguments {
   readonly findings: readonly ContextError[];
+  /** Exact provider call IDs for the findings, separate from the incident payloads. */
+  readonly callIds: ReadonlyMap<ContextError, string>;
   /** Values an app-asserted external ground excused, with their sources. */
   readonly externalGroundings: readonly ExternalGrounding[];
 }
@@ -185,8 +187,9 @@ export function unsupportedArgumentsOf(
   epoch: number,
 ): UnsupportedArguments {
   const findings: ContextError[] = [];
+  const callIds = new Map<ContextError, string>();
   const externalGroundings: ExternalGrounding[] = [];
-  if (calls.length === 0) return { findings, externalGroundings };
+  if (calls.length === 0) return { findings, externalGroundings, callIds };
   const served = corpus.grounded.map((text) => text.toLowerCase());
   const written = corpus.assistant.map((text) => text.toLowerCase());
   // The external entries, lowered once and kept only when both halves are
@@ -262,7 +265,7 @@ export function unsupportedArgumentsOf(
         },
       ];
 
-      findings.push({
+      const finding: ContextError = {
         kind: 'unsupported-argument',
         seam: 'choice',
         subjects: [subject],
@@ -287,8 +290,10 @@ export function unsupportedArgumentsOf(
             `in any message from the user, not in any tool result. Nothing served it, so ` +
             `nothing in this run can say what it refers to. To ground it, ${refetch}. Nothing ` +
             `here blocked the call.`,
-      });
+      };
+      findings.push(finding);
+      callIds.set(finding, call.toolCallId);
     }
   }
-  return { findings, externalGroundings };
+  return { findings, externalGroundings, callIds };
 }

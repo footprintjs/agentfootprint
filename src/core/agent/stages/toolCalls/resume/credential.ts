@@ -12,7 +12,11 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -52,6 +56,7 @@ export function buildResumeCredential(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
     | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
@@ -212,6 +217,14 @@ export function buildResumeCredential(
             toolName,
             ...(deps.findings === true &&
               dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !consentSettled.clean ||
+                dispatched.halt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, consentPlaced.modelResult),
+            ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A blocked credential ran nothing → 'refused'; read by the check-in trail.

@@ -113,7 +113,8 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * `notDispatched`, the batch settlement's marker (9.113.0 — the model reads the
  * settled call's sentence; the marker is that fact for the library's readers),
  * `toolResultOrigin`, the findings-only producer notice origin,
- * `toolResultDisposition`, the after-tool rule's disposition, and
+ * `toolResultDisposition`, the after-tool rule's disposition,
+ * `toolResultExecution`, the tool's entry and return, and
  * `toolChars`, the tool-bytes boundary on a result the inputs layer
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
@@ -147,6 +148,7 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
       notDispatched: _settled,
       toolResultOrigin: _resultOrigin,
       toolResultDisposition: _resultDisposition,
+      toolResultExecution: _resultExecution,
       toolChars: _toolBytes,
       foldedExempt: _lineage,
       answersAsk: _typedAnswer,
@@ -159,6 +161,7 @@ export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly 
     void _settled;
     void _resultOrigin;
     void _resultDisposition;
+    void _resultExecution;
     void _toolBytes;
     void _lineage;
     void _typedAnswer;
@@ -176,6 +179,7 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.notDispatched !== undefined ||
     message.toolResultOrigin !== undefined ||
     message.toolResultDisposition !== undefined ||
+    message.toolResultExecution !== undefined ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
     message.answersAsk !== undefined ||

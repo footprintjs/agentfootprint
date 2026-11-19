@@ -1082,20 +1082,17 @@ export function buildCallLLMStage(
         // library records what the app asserts; the source label rides every
         // excusal so a reader can audit the chain.
         const external = readExternalGrounds(deps.externalGrounds);
-        const { findings: argumentFindings, externalGroundings } = unsupportedArgumentsOf(
+        const {
+          findings: argumentFindings,
+          externalGroundings,
+          callIds,
+        } = unsupportedArgumentsOf(
           armedCalls.map((c) => ({
             toolName: c.name,
             toolCallId: c.id,
-            // Peeled under the arm (9.101.0): `_findings` carries the model's
-            // own assertion subjects and values, and `stringLeaves` walks
-            // every nested leaf — an unpeeled declaration would file that
-            // family's unrecoverable false finding. Unconditional by
-            // construction: `toolGrounding` is harvested from the REGISTRY
-            // alone (`Agent.build`), and an armed registry tool never owns
-            // the name (`buildToolRegistry · assertReservedArgument`), so
-            // the value here is always the model's. Unarmed: `c.args` itself.
-            // Declared sources without the ledger decorate RULED tools only:
-            // peeled where the served schema carries the decoration.
+            // Peel the model's `_findings` metadata before reading argument
+            // leaves. Grounded registry tools reserve that key. With sources
+            // alone, only ruled tools advertise it in their served schemas.
             args:
               deps.findings === true ||
               (deps.argumentSources === true && carriesFindingsDecoration(schemaOf.get(c.name)))
@@ -1142,7 +1139,8 @@ export function buildCallLLMStage(
           argumentFindings.length > 0 ? 'checked-fail' : 'checked-pass',
           argumentFindings.length > 0 ? Date.now() : undefined,
         );
-        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger);
+        const callIdOf = (finding: (typeof argumentFindings)[number]) => callIds.get(finding);
+        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger, callIdOf);
         // Each excusal is a per-attempt fact and rides the emit channel —
         // deliberately NOT deduplicated the way findings are: a repeated call
         // is a fresh choice, and each excusal names the assertion that stood

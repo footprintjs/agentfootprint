@@ -322,9 +322,12 @@ export function buildResumedInvocation(
         seen.submitted = links.programOfCall(tool, args);
       }
       let result: unknown;
+      let returned = false;
       try {
         result = await tool.execute(args, executionContext);
+        returned = true;
       } finally {
+        if (seen !== undefined) seen.toolResultExecution = returned ? 'returned' : 'threw';
         await binding.close(env.signal);
       }
       ended = runEndedBy(env.signal);

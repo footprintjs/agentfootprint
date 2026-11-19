@@ -27,6 +27,7 @@ export const fields2 = {
   toolId: true,
   toolName: true,
   toolResultDisposition: true,
+  toolResultExecution: true,
   toolResultOrigin: true,
   tools: true,
   toolsCount: true,

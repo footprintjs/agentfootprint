@@ -39,6 +39,7 @@ type ResultRecording = Recording & {
       history: Record<string, unknown>[];
       middlewareDecisions?: unknown;
       coverageDeclared?: unknown;
+      findingsLedger?: unknown;
     };
   };
 };
@@ -53,14 +54,19 @@ async function run({
   hook,
   observerDelivery = 'inline',
   includePending = false,
+  throws = false,
+  columnRows,
 }: {
   readonly hook?: NonNullable<ToolMiddleware['onToolResult']>;
   readonly observerDelivery?: 'inline' | 'deferred';
   readonly includePending?: boolean;
+  readonly throws?: boolean;
+  readonly columnRows?: readonly Record<string, unknown>[];
 } = {}) {
-  const execute = vi.fn(({ pending }: { pending?: boolean }) =>
-    pending ? NATIVE_PENDING : NATIVE_ABSENCE,
-  );
+  const execute = vi.fn(({ pending }: { pending?: boolean }) => {
+    if (throws) throw new Error('Fixture archive failed.');
+    return columnRows ?? (pending ? NATIVE_PENDING : NATIVE_ABSENCE);
+  });
   const toolCalls = [
     { id: 'native-absence', name: TOOL, args: {} },
     ...(includePending ? [{ id: 'native-pending', name: TOOL, args: { pending: true } }] : []),
@@ -69,6 +75,7 @@ async function run({
     provider: mock({ chunkDelayMs: 0, replies: [{ content: '', toolCalls }, BODY] }),
     model: 'mock',
     observerDelivery,
+    ...(columnRows && { checkColumnTypes: 'warn' as const }),
   })
     .tool(
       defineTool({
@@ -76,6 +83,7 @@ async function run({
         description: 'Read the archive.',
         inputSchema: { type: 'object', properties: { pending: { type: 'boolean' } } },
         execute,
+        ...(columnRows && { resultColumns: { logical_unit_number: 'number' } }),
       }),
     )
     .resultsLayer()
@@ -122,6 +130,16 @@ async function run({
 }
 
 describe('standing reads results within the host rule', () => {
+  it('a withheld error notice preserves the call failure without claiming a withheld return', async () => {
+    const hook = vi.fn(() => deny('The error details are unavailable.'));
+    const proof = await run({ throws: true, hook });
+    expect(hook).toHaveBeenCalledOnce();
+    expect(proof.eventAssessment.reasons).toEqual(['call-not-completed']);
+    expect(assessmentDataOf(proof.saved)).toEqual(proof.eventAssessment);
+    expect(proof.returned).toBe(`${BODY}${DIVIDER}Not sure — a call failed.`);
+    expect(proof.sse).toBe(proof.returned);
+  });
+
   it.each(['inline', 'deferred'] as const)(
     'REGRESSION — denied results contribute one public fact (%s)',
     async (observerDelivery) => {
@@ -247,4 +265,72 @@ describe('standing reads results within the host rule', () => {
       'work-not-finished',
     ]);
   });
+});
+
+describe.each([
+  {
+    reason: 'column-type-mismatch',
+    words: "a tool's rows hold a different type than the tool declares",
+    columnRows: [{ logical_unit_number: 'fixture-lun' }],
+  },
+  {
+    reason: 'missing-column',
+    words: 'a column a tool declares is in none of its rows',
+    columnRows: [{ port: 1 }],
+  },
+])('standing for a native $reason', ({ reason, words, columnRows }) => {
+  it.each(['inline', 'deferred'] as const)(
+    'REGRESSION — governance limits what the standing reads (%s)',
+    async (observerDelivery) => {
+      const control = await run({ columnRows, observerDelivery });
+      expect(control.eventAssessment.reasons).toEqual([reason]);
+      expect(assessmentDataOf(control.saved)).toEqual(control.eventAssessment);
+      expect(control.returned).toContain(words);
+
+      const denied = await run({
+        columnRows,
+        observerDelivery,
+        hook: () => deny('Archive result is unavailable.'),
+      });
+      const expectedText = `${BODY}${DIVIDER}Not sure — a result was kept out by a rule.`;
+      expect.soft(denied.returned, 'denied agent.run').toBe(expectedText);
+      expect.soft(denied.sse, 'denied text SSE').toBe(expectedText);
+      expect.soft(denied.turnEnd.finalContent, 'denied turn_end text').toBe(expectedText);
+      const expected = {
+        assessment: 'unknown',
+        standing: 'not-sure',
+        reasons: ['result-withheld'],
+        checked: [],
+      };
+      expect.soft(denied.turnEnd.answerAssessment, 'denied turn_end standing').toEqual(expected);
+      expect.soft(denied.eventAssessment, 'denied answer.assessed').toEqual(expected);
+      expect.soft(assessmentDataOf(denied.saved), 'denied saved standing').toEqual(expected);
+      expect(denied.recording.snapshot.sharedState.findingsLedger).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'integrity-finding', finding: reason }),
+        ]),
+      );
+
+      const rewritten = await run({
+        columnRows,
+        observerDelivery,
+        hook: () => allow([{ logical_unit_number: 1 }], 'Serve the public numeric index.'),
+      });
+      expect.soft(rewritten.returned, 'rewritten agent.run').not.toContain(words);
+      expect.soft(rewritten.sse, 'rewritten text SSE').toBe(rewritten.returned);
+      expect
+        .soft(rewritten.turnEnd.finalContent, 'rewritten turn_end text')
+        .toBe(rewritten.returned);
+      expect
+        .soft(rewritten.turnEnd.answerAssessment?.reasons, 'rewritten turn_end standing')
+        .toEqual([]);
+      expect.soft(rewritten.eventAssessment.reasons, 'rewritten answer.assessed').toEqual([]);
+      expect.soft(rewritten.saved.reasons, 'rewritten saved standing').toEqual([]);
+      expect(rewritten.recording.snapshot.sharedState.findingsLedger).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'integrity-finding', finding: reason }),
+        ]),
+      );
+    },
+  );
 });

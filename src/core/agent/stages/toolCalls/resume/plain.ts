@@ -1,5 +1,6 @@
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
+import { toolResultExecutionField } from '../execution/outcomeField.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { PauseAnswerRequiredError } from '../../../../pause.js';
@@ -42,6 +43,7 @@ export function buildResumePlain(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -160,6 +162,11 @@ export function buildResumePlain(
           content: resultStr,
           toolCallId,
           toolName,
+          ...toolResultExecutionField(
+            deps.answerLayer,
+            'returned',
+            !Object.is(modelResult, pausePlaced.modelResult),
+          ),
           ...(toolResultDisposition !== undefined && { toolResultDisposition }),
           ...(answersAsk !== undefined && { answersAsk }),
           ...innerCallsFieldOf(scope, toolCallId, iteration),

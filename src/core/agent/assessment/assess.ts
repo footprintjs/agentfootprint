@@ -49,25 +49,13 @@
  */
 
 import { isRecord, str } from './recordValues.js';
-import { recoveredCallOutcomes, turnResults, type TurnResult } from './turnResults.js';
+import { recoveredCallOutcomes, turnResults } from './turnResults.js';
 import { argumentRows, type ArgumentRowRead } from './argumentRows.js';
-import {
-  declaredByValue,
-  readEmptiness,
-  rowsAtProblem,
-  type ValueDeclaration,
-} from '../emptiness.js';
-import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
-import {
-  groupOccurrenceEvidence,
-  historyCallResolver,
-  nativeFactsOf,
-  readHistoryCalls,
-  resultDispositions,
-  uniqueHistoryProposal,
-} from '../recordedCalls.js';
+import { rowsAtProblem } from '../emptiness.js';
+import { issuedTicketsOf } from '../placedTickets.js';
+import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
-import { statePointer } from './pointer.js';
+import { historyPointer, statePointer } from './pointer.js';
 import { periodRows, type PeriodRowRead } from './periodRows.js';
 import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
 import { deliveredResults } from './resultDispositions.js';
@@ -75,7 +63,16 @@ import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import { rewritesByOccurrence } from './rewrittenArguments.js';
-import { coverageRows, type CoverageRow } from './coverageRows.js';
+import { coverageRows } from './coverageRows.js';
+import { fire, type Gathered } from './gathered.js';
+import {
+  readCallOutcomes,
+  readCoverageRows,
+  readResults,
+  readTurnResults,
+  readTurnCalls,
+} from './resultEvidence.js';
+import { standingAdmission } from './standingAdmission.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -152,31 +149,6 @@ function callIndexOf(row: Readonly<Record<string, unknown>>, resolve: ResolveCal
   const id = str(row.toolCallId);
   const resolved = id === undefined ? undefined : resolve(id, str(row.toolName));
   return resolved?.kind === 'matched' ? resolved.call.index : undefined;
-}
-
-const historyPointer = (result: TurnResult): AssessmentPointer => ({
-  kind: 'history',
-  index: result.index,
-  path: result.toolCallId !== undefined ? '/toolCallId' : '/role',
-  ...(result.toolCallId !== undefined && { toolCallId: result.toolCallId }),
-});
-
-// ── the fold, as small steps over one accumulator ───────────────────────────
-
-/** One check whose verdict the record holds. */
-type CheckRan = AnswerAssessment['checked'][number];
-
-/** What the steps gather as they read: the reasons with their rows, the checks that ran, the support. */
-interface Gathered {
-  readonly fired: Map<AssessmentReason, AssessmentPointer[]>;
-  readonly checked: CheckRan[];
-  support?: AnswerAssessment['support'];
-}
-
-function fire(g: Gathered, reason: AssessmentReason, witness: AssessmentPointer): void {
-  const list = g.fired.get(reason) ?? [];
-  list.push(witness);
-  g.fired.set(reason, list);
 }
 
 /**
@@ -345,7 +317,11 @@ function readContingentRows(
     } else if (since < 0 || index < since) {
       return;
     }
-    fire(g, 'value-contingent', statePointer('findingsLedger', index, 'value'));
+    fire(
+      g,
+      'value-contingent',
+      statePointer('findingsLedger', index, row.declaredOn === 'answer' ? 'declaredOn' : 'value'),
+    );
   });
 }
 
@@ -436,130 +412,6 @@ function readPeriodVerdicts(
     fireJoined(reason, at);
   }
   g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
-}
-
-/** Layer 3, the tools' own declarations: every absence and every declared gap. */
-function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
-  for (const row of coverage) {
-    const at = statePointer('coverageDeclared', row.index, 'kind');
-    if (row.kind === 'absence') fire(g, 'declared-absent', at);
-    if (row.gap) fire(g, 'coverage-gap', at);
-  }
-}
-
-/**
- * One result of the turn, with what the record holds about its call: the
- * committed coverage rows, and — only when there are none — the envelope in
- * the result itself (`agent/emptiness.ts` · `declaredByValue`).
- */
-interface ResultRead {
-  readonly result: TurnResult;
-  readonly at: AssessmentPointer;
-  readonly rows: readonly CoverageRow[];
-  /**
-   * The result's OWN envelope, read when its call has no committed row: the run
-   * filed none (an envelope it never recognized, such as JSON text), or the row
-   * was lost on the way here (a history restored by `resumeOnError` carries no
-   * `coverageDeclared`; a trimmed recording drops it). Never read as silence.
-   */
-  readonly own?: ValueDeclaration;
-}
-
-function readResults(
-  results: readonly TurnResult[],
-  coverage: readonly CoverageRow[],
-): readonly ResultRead[] {
-  const { byOccurrence } = groupOccurrenceEvidence(coverage, (row) => row.historyIndex);
-  return results.map((result) => {
-    const rows = byOccurrence.get(result.index) ?? [];
-    const own = rows.length === 0 ? declaredByValue(result.content) : undefined;
-    return { result, at: historyPointer(result), rows, ...(own !== undefined && { own }) };
-  });
-}
-
-/**
- * Layer 3, what came back: every result of the turn through the ONE emptiness
- * reader. A call with committed coverage rows is read through the door those
- * rows are; a call with none is handed NO door, so the reader reads the
- * envelope in the bytes by the rule the run's recognizer files rows — and a gap
- * that envelope lists is a reason too.
- */
-function readTurnResults(
-  reads: readonly ResultRead[],
-  recovered: ReadonlySet<number>,
-  declarations: AssessmentDeclarations | undefined,
-  issued: IssuedPairs,
-  g: Gathered,
-): void {
-  const readable: AssessmentPointer[] = [];
-  for (const { result, at, rows, own } of reads) {
-    if (result.outcome !== undefined && !recovered.has(result.index)) {
-      fire(g, 'call-not-completed', { ...at, path: result.rewritten ? '/content' : '/outcome' });
-    } else if (result.reportedStatus !== undefined && !recovered.has(result.index)) {
-      fire(g, 'work-not-finished', {
-        ...at,
-        path: result.rewritten ? '/content' : '/reportedStatus',
-      });
-    }
-    const absenceRow = rows.some((c) => c.kind === 'absence');
-    const door =
-      rows.length > 0
-        ? { absent: absenceRow, bounded: rows.some((c) => c.kind === 'ledger') }
-        : undefined;
-    const rowsAt =
-      result.toolName !== undefined ? declarations?.tools?.[result.toolName]?.rowsAt : undefined;
-    const reading = readEmptiness(result.content, {
-      placement: { toolCallId: result.toolCallId, issued },
-      ...(door !== undefined && { door }),
-      ...(rowsAt !== undefined && { rowsAt }),
-    });
-    if (reading.emptiness !== 'unknown') readable.push(at);
-    // An empty rowset inside a declared boundary, or an absence no row holds; an absence row fired for itself.
-    if (reading.emptiness === 'declared-absent' && !absenceRow) fire(g, 'declared-absent', at);
-    if (reading.emptiness === 'undeclared-empty' && rows.length === 0) {
-      fire(g, 'empty-undeclared', at);
-    }
-    // A gap the result's own envelope lists, when no row holds it.
-    if (own?.gap === true) fire(g, 'coverage-gap', at);
-  }
-  if (reads.length > 0) {
-    g.checked.push({
-      layer: 3,
-      check: 'result-shape',
-      ran: readable.length,
-      of: reads.length,
-      witness: readable,
-    });
-  }
-}
-
-/**
- * A call declared coverage when its rows or its own envelope say so.
- * Unplaced coverage rows remain evidence. They add no call to either count.
- */
-function readTurnCalls(
-  reads: readonly ResultRead[],
-  coverage: readonly CoverageRow[],
-  g: Gathered,
-): void {
-  const witness = coverage
-    .filter((row) => row.historyIndex !== undefined)
-    .map((c) => statePointer('coverageDeclared', c.index, 'kind'));
-  let declared = 0;
-  for (const { at, rows, own } of reads) {
-    if (rows.length > 0 || own !== undefined) declared += 1;
-    if (own !== undefined) witness.push(at);
-  }
-  const of = reads.length;
-  if (of > 0) {
-    g.checked.push({
-      layer: 3,
-      check: 'tool-coverage',
-      ran: declared,
-      of,
-      witness,
-    });
-  }
 }
 
 /**
@@ -678,7 +530,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   // By index over the list's own length — never its iterator or its own `entries`.
   const checks: readonly unknown[] = Array.isArray(report.checks) ? report.checks : [];
   for (let index = 0; index < checks.length; index++) {
-    const check = checks[index];
+    const check: unknown = Object.getOwnPropertyDescriptor(checks, String(index))?.value;
     if (!isRecord(check) || typeof check.id !== 'string') continue;
     if (!check.id.startsWith('agent:negative-claims:')) continue;
     if (check.disposition === 'checked-fail')
@@ -766,12 +618,17 @@ function valueOf(g: Gathered, read: SourceRead): Pick<AnswerAssessment, 'assessm
   const reasons = REASONS.flatMap((entry) => {
     const witness = g.fired.get(entry.reason);
     if (witness === undefined) return [];
+    const source =
+      entry.reason === 'value-contingent' &&
+      witness.some((w) => w.kind === 'state' && w.path.endsWith('/declaredOn'))
+        ? 'answer'
+        : entry.source;
     return [
       {
         reason: entry.reason,
         ...(entry.layer !== undefined && { layer: entry.layer }),
         witness,
-        source: reasonSourceOf(entry.reason, entry.source, witness, read),
+        source: reasonSourceOf(entry.reason, source, witness, read),
       },
     ];
   });
@@ -867,15 +724,23 @@ export function foldState(
   const { state, asked } = served
     ? keptOutGuard(recorded)
     : { state: recorded, asked: new Set<string>() };
-  const g: Gathered = { fired: new Map(), checked: [] };
   const history = Array.isArray(state.history) ? (state.history as readonly unknown[]) : [];
   const historyCalls = readHistoryCalls(history);
   const { results: recordedResults, from, begins } = turnResults(history, historyCalls);
   const current = historyCalls.filter((call) => call.index > begins);
   const resolveCurrent = historyCallResolver(current);
-  const dispositions = resultDispositions(current, state.middlewareDecisions);
-  const nativeFacts = nativeFactsOf(current, dispositions);
-  const { results, withheld, periods } = deliveredResults(recordedResults, dispositions);
+  const argumentVerdicts = argumentRows(state, current, history, begins);
+  const admission = standingAdmission(
+    state,
+    historyCalls,
+    current,
+    argumentVerdicts,
+    declarationAddresses,
+  );
+  const g: Gathered = { admit: admission.admit, fired: new Map(), checked: [] };
+  const nativeFacts = (_row: Readonly<Record<string, unknown>>, address?: number) =>
+    admission.returned(address, true);
+  const { results, withheld, periods } = deliveredResults(recordedResults, admission.dispositions);
   // An occurrence witness would reveal how many results the host withheld.
   if (withheld) g.fired.set('result-withheld', []);
   for (const { result, verdict } of periods) {
@@ -889,25 +754,23 @@ export function foldState(
     declarationAddresses,
     nativeFacts,
   );
-  const reads = readResults(results, coverage);
+  const reads = readResults(
+    results.filter((result) => admission.returned(result.index)),
+    coverage,
+  );
 
   readPause(state, g);
-  const argumentVerdicts = argumentRows(state, current, history, begins);
   readArgumentAsk(state, argumentVerdicts, g);
-  readArgumentVerdicts(state, argumentVerdicts, resolveCurrent, g);
+  const enteredArguments = argumentVerdicts.filter((row) => admission.entered(row.historyIndex));
+  readArgumentVerdicts(state, enteredArguments, resolveCurrent, g);
   readCoverageRows(coverage, g);
   readTurnCalls(reads, coverage, g);
   readContingentRows(state, places, g);
-  readTurnResults(
-    reads,
-    recoveredCallOutcomes(results, history, begins, retainedHistory),
-    declarations,
-    issuedTicketsOf(recorded.placedTickets),
-    g,
-  );
+  readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
+  readTurnResults(reads, declarations, issuedTicketsOf(recorded.placedTickets), g);
   readPeriodVerdicts(
     periodRows(state, (row) => callIndexOf(row, resolveCurrent), nativeFacts),
-    argumentVerdicts,
+    enteredArguments,
     g,
   );
   if (Array.isArray(state.findingsLedger)) {

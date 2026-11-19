@@ -22,14 +22,14 @@
  *
  * WHY A ROW IS HELD. The answer's standing reads committed ledger rows, never
  * events, and the compose, wire and choice seams run inside subflows that cannot
- * write the ledger. So while the answer layer is armed, each new finding also
- * holds one row on `integrityFindingRows`, which crosses every boundary beside
+ * write the ledger. While the answer layer is armed, new findings and
+ * call-bound findings hold rows on `integrityFindingRows` beside
  * the seen-list, and the Route decider files them through the one writer
  * (`stages/routeIntegrity.ts`). Unarmed, the key is never read or written.
  */
 
 import { typedEmit } from '../../recorders/core/typedEmit.js';
-import { integrityFindingRowOf } from '../../integrity/finding/row.js';
+import { integrityFindingRowOf, type IntegrityFindingRow } from '../../integrity/finding/row.js';
 import { contextErrorIdentity, type ContextError } from '../../integrity/finding/types.js';
 
 /** The run's integrity holder as a seam has it: `answerLayer` says rows are wanted. */
@@ -51,6 +51,7 @@ export function fileIntegrityFindings(
   findings: readonly ContextError[],
   iteration: number,
   run?: IntegrityRun,
+  callIdOf?: (finding: ContextError) => string | undefined,
 ): void {
   if (findings.length === 0) return;
   const seenIds =
@@ -58,34 +59,38 @@ export function fileIntegrityFindings(
     (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ??
     [];
   const newIds: string[] = [...seenIds];
-  const filed: ContextError[] = [];
-  for (const f of findings) {
-    const id = contextErrorIdentity({ ...f, epoch: undefined });
-    if (newIds.includes(id)) continue;
-    newIds.push(id);
-    filed.push(f);
-    typedEmit(scope, 'agentfootprint.integrity.context_error', { ...f, iteration });
+  const rows: IntegrityFindingRow[] = [];
+  for (const finding of findings) {
+    const id = contextErrorIdentity({ ...finding, epoch: undefined });
+    const newFinding = !newIds.includes(id);
+    if (run?.answerLayer === true) {
+      const candidate = callIdOf?.(finding);
+      const toolCallId = typeof candidate === 'string' && candidate !== '' ? candidate : undefined;
+      // Preserve call witnesses even when the host event already filed the same defect.
+      if (toolCallId !== undefined || newFinding) {
+        rows.push(integrityFindingRowOf(finding, iteration, toolCallId));
+      }
+    }
+    if (newFinding) {
+      newIds.push(id);
+      typedEmit(scope, 'agentfootprint.integrity.context_error', { ...finding, iteration });
+    }
   }
   if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
-  holdIntegrityRows(scope, filed, iteration, run);
+  holdIntegrityRows(scope, rows);
 }
 
-/** Hold one row per finding just filed, while the answer layer is armed. */
-export function holdIntegrityRows(
+/** Hold call witnesses and whole-run findings for the answer layer. */
+function holdIntegrityRows(
   scope: { $getValue(key: string): unknown; $setValue(key: string, value: unknown): void },
-  filed: readonly ContextError[],
-  iteration: number,
-  run: IntegrityRun | undefined,
+  rows: readonly IntegrityFindingRow[],
 ): void {
-  if (run?.answerLayer !== true || filed.length === 0) return;
+  if (rows.length === 0) return;
   const held =
     (scope.$getValue('integrityFindingRows') as readonly unknown[] | undefined) ??
     (scope.$getValue('priorIntegrityFindingRows') as readonly unknown[] | undefined) ??
     [];
-  scope.$setValue('integrityFindingRows', [
-    ...held,
-    ...filed.map((f) => integrityFindingRowOf(f, iteration)),
-  ]);
+  scope.$setValue('integrityFindingRows', [...held, ...rows]);
 }
 
 /** The rail's two keys OUT of a subflow, under their own names. Value-conditional. */

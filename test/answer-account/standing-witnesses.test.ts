@@ -104,11 +104,20 @@ function assertUnclaimed(recording: Recording) {
   expect(account.facts.limitsBlock.status).toBe('not-applicable');
 }
 
+const SAME_ID_WITNESS_MODES = [
+  'in-tool pause',
+  'sliding window',
+  'sliding window after both results left',
+  'complete history',
+] as const;
+
 describe('standing reasons rebuilt from their committed witnesses', () => {
-  it.each(['in-tool pause', 'sliding window', 'sliding window after both results left'] as const)(
+  it.each(SAME_ID_WITNESS_MODES)(
     'keeps the first same-ID argument failure with a %s',
     async (mode) => {
-      const windowed = mode !== 'in-tool pause';
+      const paused = mode === 'in-tool pause';
+      const bothRetained = mode === 'complete history';
+      const windowed = !paused && !bothRetained;
       const bothEvicted = mode === 'sliding window after both results left';
       const name = 'read_shelf';
       const read = (shelf: string, quote: string, id = 'reused') =>
@@ -137,7 +146,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             askOrAssume: { shelf: { assume: 'fallback' } },
             execute({ shelf }) {
               entered.push(String(shelf));
-              if (!windowed && shelf === 'beta') {
+              if (paused && shelf === 'beta') {
                 return requestInput({
                   id: 'confirm-shelf',
                   question: 'Continue the fixture lookup?',
@@ -150,17 +159,38 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         )
         .inputsLayer({ argumentSources: true });
       if (windowed) builder.window(slidingWindow({ keepRecentTurns: 1 }));
+      if (bothRetained) builder.answerLayer({ standingLine: true });
       const agent = builder.build();
       const recorder = recordRun(agent);
       try {
         const result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
         if (windowed) expect(result).toBe('Read the shelf.');
-        else expect(isInputPause(result)).toBe(true);
+        else if (paused) expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
         const { history, findingsLedger, compactions } = snapshotOf(recording).sharedState;
         const results = history.filter((message) => message.role === 'tool');
-        expect(results).toHaveLength(1);
+        expect(results).toHaveLength(bothRetained ? 2 : 1);
+        if (bothRetained) {
+          expect(
+            results.map(({ toolCallId, toolResultExecution, content }) => ({
+              toolCallId,
+              toolResultExecution,
+              content,
+            })),
+          ).toEqual([
+            {
+              toolCallId: 'reused',
+              toolResultExecution: 'returned',
+              content: expect.stringContaining('alpha fixture result'),
+            },
+            {
+              toolCallId: 'reused',
+              toolResultExecution: 'returned',
+              content: expect.stringContaining('beta fixture result'),
+            },
+          ]);
+        }
         if (windowed) {
           const retained = bothEvicted ? 'gamma' : 'beta';
           expect(results[0]?.content).toContain(`${retained} fixture result`);
@@ -197,13 +227,21 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         );
         expect(argumentReason).toMatchObject({
           witness: [pointer],
-          ...(!bothEvicted && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
+          ...(!bothEvicted &&
+            !bothRetained && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
         });
         if (bothEvicted) {
           expect(argumentReason?.source).toEqual({
             kind: 'calls',
             calls: [{ toolCallId: 'reused', toolName: name }],
           });
+        }
+        if (bothRetained) {
+          expect((await agent.assessment())?.reasons).toEqual(assessment.reasons);
+          expect(result).toBe(
+            'Read the shelf.\n\n---\n\n' +
+              'Not sure — a value a call ran with came from the model, with no source on the record.',
+          );
         }
         const account = accountForAnswer(recording);
         const reason = account.rows

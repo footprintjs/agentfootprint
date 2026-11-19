@@ -66,7 +66,7 @@ export function buildToolBatchExecution(
     const { toolCalls, iteration, findingsRefusals } = operations.admitFindingsBatch(scope);
     if (hasUnbindableCallId(toolCalls)) {
       if (deps.declarationCorrection !== undefined) scope.argumentSourceOmissionRows = [];
-      refuseToolBatch(scope, 'invalid-call-id');
+      refuseToolBatch(scope, 'invalid-call-id', deps.answerLayer === true);
       return;
     }
     // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
@@ -146,7 +146,7 @@ export function buildToolBatchExecution(
           const malformed = toolBatchFailure(toolCalls);
           if (malformed === undefined) return false;
           settle('preempted');
-          refuseToolBatch(scope, malformed);
+          refuseToolBatch(scope, malformed, deps.answerLayer === true);
           return true;
         },
         ...(deps.declarationCorrection !== undefined &&

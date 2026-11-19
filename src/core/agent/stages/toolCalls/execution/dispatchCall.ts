@@ -431,10 +431,8 @@ export function buildCallDispatch(
         if (!presented.ok) outcome.error = true;
       }
 
-      const { capped, modelResult, toolResultDisposition } = await finalizeCallResult(
-        scope,
-        operations,
-        {
+      const { capped, modelResult, modelResultCapped, toolResultDisposition } =
+        await finalizeCallResult(scope, operations, {
           tool,
           tc,
           batch,
@@ -442,8 +440,7 @@ export function buildCallDispatch(
           execution,
           outcome,
           sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
-        },
-      );
+        });
 
       const durationMs = Date.now() - startMs;
       recordCallSettlement(scope, {
@@ -464,6 +461,7 @@ export function buildCallDispatch(
       });
       const delivery: CallDelivery = {
         resultStr: typeof modelResult === 'string' ? modelResult : safeStringify(modelResult),
+        modelResultCapped,
         toolResultDisposition,
       };
       landCallResult(scope, deps, {

@@ -1,4 +1,8 @@
-import { historyCallAt } from '../../core/agent/recordedCalls.js';
+import {
+  assessmentCallOutcome,
+  historyCallAt,
+  isRecordedBatchRefusal,
+} from '../../core/agent/recordedCalls.js';
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
 import { foldState } from '../../core/agent/assessment/assess.js';
@@ -9,7 +13,6 @@ import type {
   AssessmentPointer,
   AssessmentReason,
 } from '../../core/agent/assessment/types.js';
-import { recordedCallOutcome } from '../../semantics/toolOutcome.js';
 import { chip, n } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, RecordPointer, Sentence } from '../types.js';
@@ -20,6 +23,7 @@ import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.j
 /** Reasons whose standing line needs the committed rows for its details. */
 export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'argument-assumed',
+  'value-contingent',
   'call-not-completed',
   'work-not-finished',
   'step-skipped',
@@ -180,7 +184,16 @@ function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][numbe
   };
   for (const w of r.witness) {
     const row = w.kind === 'history' ? historyCallAt(history, w.index)?.message : undefined;
-    const outcome = row === undefined ? undefined : recordedCallOutcome(row);
+    const message =
+      w.kind === 'history'
+        ? Object.getOwnPropertyDescriptor(history, String(w.index))?.value
+        : undefined;
+    const outcome =
+      row !== undefined
+        ? assessmentCallOutcome(row)
+        : isRecordedBatchRefusal(message)
+        ? 'refused'
+        : undefined;
     groups[outcome ?? 'unknown'].push(w);
   }
   return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {

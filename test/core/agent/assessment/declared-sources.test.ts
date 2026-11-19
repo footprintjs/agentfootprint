@@ -40,11 +40,24 @@ const row = (over: Record<string, unknown>) => ({
   ...over,
 });
 
-const state = (...rows: object[]): State => ({
-  turnNumber: 1,
-  history: [{ role: 'user', content: 'errors?' }],
-  findingsLedger: rows,
-});
+function state(...rows: ReturnType<typeof row>[]): State {
+  const calls = new Map(rows.map((entry) => [entry.toolCallId, entry]));
+  return {
+    turnNumber: 1,
+    history: [
+      { role: 'user', content: 'errors?' },
+      ...Array.from(calls.values()).flatMap(({ toolCallId, toolName, argument }) => [
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: toolCallId, name: toolName, args: { [argument]: '7d' } }],
+        },
+        { role: 'tool', toolCallId, toolName, content: 'Recorded tool result.' },
+      ]),
+    ],
+    findingsLedger: rows,
+  };
+}
 
 describe('UNIT — the declared-sources rows, reason by reason', () => {
   it('a traced source fires nothing and supports nothing: consistent, never known', () => {
@@ -67,6 +80,26 @@ describe('UNIT — the declared-sources rows, reason by reason', () => {
     expect(
       reasons(state(row({ source: 'said', reading: true, claimed: 'user', value: '7d' }))),
     ).toEqual(['argument-read']);
+  });
+
+  it('a proposed reading without an entered call does not describe what the tool ran with', () => {
+    const entered = state(row({ source: 'said', reading: true, claimed: 'user', value: '7d' }));
+    const history = entered.history as readonly object[];
+    const unentered = run({ ...entered, history: history.slice(0, -1) });
+    expect(unentered.reasons).toEqual([]);
+    expect(unentered.checked.some(({ check }) => check === 'argument-sources')).toBe(false);
+
+    const threw = run({
+      ...entered,
+      history: [
+        ...history.slice(0, -1),
+        { ...history.at(-1), toolResultExecution: 'threw', outcome: 'failed' },
+      ],
+    });
+    expect(threw.reasons.map(({ reason }) => reason)).toEqual([
+      'argument-read',
+      'call-not-completed',
+    ]);
   });
 
   it('a result the model had set aside fires value-contingent', () => {

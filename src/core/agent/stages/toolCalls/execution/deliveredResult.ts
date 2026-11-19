@@ -22,7 +22,7 @@ import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from './outcomeField.js';
+import { outcomeField, reportedStatusField, toolResultExecutionField } from './outcomeField.js';
 import { missingResultFields } from '../batch/settle.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
@@ -60,7 +60,12 @@ export function landCallResult(
   scope: TypedScope<AgentState>,
   deps: Pick<
     ToolCallsHandlerDeps,
-    'negativeClaimsArmed' | 'stepPlanFor' | 'repeatedCallNudge' | 'findings' | 'resultsLayer'
+    | 'negativeClaimsArmed'
+    | 'stepPlanFor'
+    | 'repeatedCallNudge'
+    | 'findings'
+    | 'resultsLayer'
+    | 'answerLayer'
   >,
   frame: LandCallResultFrame,
 ): void {
@@ -235,6 +240,16 @@ export function landCallResult(
     toolName: frame.tc.name,
     ...(deps.findings === true &&
       !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
+    ...toolResultExecutionField(
+      deps.answerLayer,
+      frame.execution.toolResultExecution,
+      frame.outcome.error === true ||
+        frame.execution.denied ||
+        frame.execution.ceilingRefused ||
+        frame.execution.haltContext !== undefined ||
+        frame.skillRoute.skillRejected ||
+        frame.delivery.modelResultCapped,
+    ),
     ...(frame.delivery.toolResultDisposition !== undefined && {
       toolResultDisposition: frame.delivery.toolResultDisposition,
     }),

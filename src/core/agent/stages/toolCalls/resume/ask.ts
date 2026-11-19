@@ -18,7 +18,11 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
@@ -65,6 +69,7 @@ export function buildResumeAsk(
     ToolCallsHandlerDeps,
     | 'resources'
     | 'inputsLayer'
+    | 'answerLayer'
     | 'resultsLayer'
     | 'artifactStore'
     | 'negativeClaimsArmed'
@@ -313,6 +318,14 @@ export function buildResumeAsk(
             toolCallId,
             toolName,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !stepToolRan ||
+                resumedHalt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, askPlaced.modelResult),
+            ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A declined ask ran nothing → 'refused'; read by the check-in trail.

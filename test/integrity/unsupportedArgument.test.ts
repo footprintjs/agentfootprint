@@ -65,6 +65,17 @@ const corpus = (grounded: string[], assistant: string[] = []): ChoiceCorpus => (
 });
 
 describe('unit: unsupportedArgumentsOf — the rule', () => {
+  it('keeps per-call provenance separate from same-tool incident payloads', () => {
+    const calls = [
+      chose({ machine: 'unserved-first-machine' }, { toolCallId: 'first-call' }),
+      chose({ machine: 'unserved-second-machine' }, { toolCallId: 'second-call' }),
+    ];
+    const { findings, callIds } = unsupportedArgumentsOf(calls, corpus(['Nothing served.']), 2);
+    expect(findings).toHaveLength(2);
+    expect(findings.map((finding) => callIds.get(finding))).toEqual(['first-call', 'second-call']);
+    expect(findings.every((finding) => !Object.hasOwn(finding, 'toolCallId'))).toBe(true);
+  });
+
   it('a value whose only ground is the model’s own earlier prose files a finding', () => {
     const found = unsupportedArgumentsOf(
       [chose({ machine: '4417-ganymede' })],
