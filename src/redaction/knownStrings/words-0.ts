@@ -197,6 +197,7 @@ export const words0 = {
   budget_exhausted: true,
   call: true,
   'call-end': true,
+  'call-not-completed': true,
   cancelled: true,
   'cap-reached': true,
   causal: true,
@@ -301,5 +302,4 @@ export const words0 = {
   flagged: true,
   fn: true,
   framework: true,
-  gate_open: true,
 } as const;

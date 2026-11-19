@@ -1,4 +1,3 @@
-/** Teaching projections, not provider wire messages or a runnable agent configuration. */
 export type StoryStep = {
   id: string;
   label: string;
@@ -6,6 +5,7 @@ export type StoryStep = {
   description: string;
   owner: string;
   takeaway: string;
+  /** Authored teaching projection. Recorded answer excerpts come from the saved run. */
   context: Record<string, unknown>;
 };
 
@@ -43,41 +43,41 @@ export const answerSteps: readonly StoryStep[] = [
   {
     id: 'question',
     label: 'Question',
-    title: 'Start with a question.',
+    title: 'Start with the question.',
     description:
-      'A person wants an answer about the nodes they selected. Before preparing the model’s context, the context object is empty.',
-    owner: 'Person + application',
-    takeaway: 'The question defines the task. It does not supply the evidence.',
+      'The application starts with a question about selected nodes. The Run start excerpt is empty.',
+    owner: 'Application',
+    takeaway: 'Route 1 records the question alongside the tool request.',
     context: {},
   },
   {
     id: 'selection',
     label: 'Scope',
-    title: 'Keep “these nodes” precise.',
+    title: 'The model requests scoped summaries.',
     description:
-      'The application adds the saved cluster, time window and filter. A follow-up can refer to this selection without copying the dashboard.',
-    owner: 'Application adapter',
-    takeaway: 'The model does not need to guess what “selected” means.',
+      'At Route 1, the mock model requests node_summaries with cluster demo-a, the one-hour window, revision 3 and the P95 filter.',
+    owner: 'Mock provider',
+    takeaway: 'The tool arguments specify which selection the question refers to.',
     context: { question, selection },
   },
   {
     id: 'reference',
     label: 'Reference',
-    title: 'Give data an address—and meaning.',
+    title: 'The tool returns the source and rows.',
     description:
-      'The rows stay in backend storage. The prepared context carries a reference, the field’s unit and grain, and what an unknown value means.',
-    owner: 'Provider adapter + reference store',
-    takeaway: 'A reference locates data. Its metadata explains how that data can be used.',
+      'Tool call 1 returns the nodes@v1 source metadata and all four rows, for nodes 11–14.',
+    owner: 'Mock node_summaries tool',
+    takeaway: 'The source describes the unit and grain. Node 14’s P95 is unknown.',
     context: { question, selection, source },
   },
   {
     id: 'prepare',
     label: 'Prepare',
-    title: 'Make the next decision smaller.',
+    title: 'The next iteration carries the tool result.',
     description:
-      'For the already-selected analytical skill, the host prepares the relevant operation and coverage. Declared comparable assertions can be checked for disagreement before the model is called.',
-    owner: 'AgentFootprint + configured checks',
-    takeaway: '“No conflict found” applies to the supplied assertions. It is not a proof of truth.',
+      'Iteration 2 carries forward the previous node_summaries result, including all four rows.',
+    owner: 'AgentFootprint tool loop',
+    takeaway: 'The next model call has the returned summaries and their source metadata.',
     context: {
       ...prepared,
       availableOperation: 'rank selected rows; keep ties',
@@ -87,11 +87,11 @@ export const answerSteps: readonly StoryStep[] = [
   {
     id: 'model',
     label: 'Model',
-    title: 'The model chooses an operation.',
+    title: 'The mock model proposes a finding.',
     description:
-      'The model sees the question, scoped reference and relevant operation. It asks the backend to rank the selected rows by their reported P95.',
-    owner: 'Model → authorized tool',
-    takeaway: 'The model selects the work. The backend calculates the result.',
+      'At Route 2, the mock provider supplies a structured finding that names nodes 11 and 13, the source reference and the selection revision.',
+    owner: 'Mock provider',
+    takeaway: 'Both nodes report the same P95 of 1,500 microseconds.',
     context: {
       ...prepared,
       proposedCall: {
@@ -106,13 +106,12 @@ export const answerSteps: readonly StoryStep[] = [
   },
   {
     id: 'finding',
-    label: 'Finding',
-    title: 'Return a finding, with its source.',
+    label: 'Checks',
+    title: 'The proposed finding passes three checks.',
     description:
-      'The backend applies the filter and finds a tie. Nodes 11 and 13 both report 1,500 microseconds. The next model call gets a bounded finding with references and coverage.',
-    owner: 'Backend computation → next model call',
-    takeaway:
-      'In a tool loop, the host can rebuild compact context from current results instead of accumulating tables.',
+      'Answer 1 reports that the source reference matches, the proposed maximum appears in a retained row, and the selection revision matches.',
+    owner: 'Configured answer validator',
+    takeaway: 'These three field checks define the scope of the validation report.',
     context: {
       question,
       selection,
@@ -124,11 +123,11 @@ export const answerSteps: readonly StoryStep[] = [
   {
     id: 'answer',
     label: 'Answer',
-    title: 'Explain only what the result supports.',
+    title: 'The run ends with the checked finding.',
     description:
-      'The model selects the finding to explain. The host checks its scope and reference, then renders the factual value from the stored result.',
-    owner: 'Configured answer validation + renderer',
-    takeaway: 'The result supports a comparison. It does not establish why the nodes are slow.',
+      'After the checks pass, Run end records the structured finding proposed at Route 2.',
+    owner: 'AgentFootprint run recorder',
+    takeaway: 'The saved output is the finding JSON. The cause of the latency remains unknown.',
     context: {
       selectedFindingRef: finding.ref,
       validation: 'passed configured scope and reference checks',

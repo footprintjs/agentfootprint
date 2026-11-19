@@ -17,7 +17,8 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
+import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
+import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type {
   ResumedInvocation,
@@ -266,6 +267,7 @@ export function buildResumeCheckIn(
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A decline ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(decisionSettled),
+            ...reportedStatusField(decisionSettled),
           },
         ],
         { toolName, toolCallId },

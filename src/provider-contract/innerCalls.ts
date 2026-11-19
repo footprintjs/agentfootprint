@@ -35,3 +35,26 @@ export interface InnerCallRan {
   /** Reference to protected policy input; `null` confirms that the shown arguments are the bound input. */
   readonly policyArgsRef?: string | null;
 }
+
+/**
+ * One entry in the in-flight tool-call sequence delivered to
+ * `PermissionChecker.check()` since v2.12. Lets sequence-aware
+ * policies (exfil chain detection, idempotency limits, cost guards)
+ * inspect what has already been dispatched: the model's calls, and each
+ * call a tool made through `ctx.tools.call` right after its outer call.
+ *
+ * Derived from `scope.history` at check time — single source of truth,
+ * survives `agent.resumeOnError(checkpoint)` correctly.
+ */
+export interface ToolCallEntry {
+  /** Tool name dispatched. */
+  readonly name: string;
+  /** Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view. */
+  readonly args: Readonly<Record<string, unknown>> | undefined;
+  /** ReAct iteration the call was dispatched on. */
+  readonly iteration: number;
+  /** `'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin. */
+  readonly providerId?: string;
+  /** `true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own. */
+  readonly inner?: true;
+}

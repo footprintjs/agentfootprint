@@ -707,7 +707,7 @@ export const PERIOD_ROW_VERDICTS: readonly PeriodRow['verdict'][] = Object.freez
 ]);
 
 /**
- * The checkpoint door's test for a `period` row (`core/runCheckpoint.ts` ·
+ * The checkpoint door's test for a `period` row (`core/checkpointLedger.ts` ·
  * `ledgerRowIsWellFormed`) — the one owner of the row's shape, so the door
  * refuses exactly what this module never files.
  */

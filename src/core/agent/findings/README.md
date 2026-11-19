@@ -893,8 +893,8 @@ beside, in the same write, at the two moments that file standings (a call's
   first, and it is strings the moment already held — so a run whose model
   rules out only results that held something records the bytes it always
   did, with no new tracked read (no narrative line, no `readKeys` entry).
-- **It survives a continued conversation.** The checkpoint door
-  (`../../runCheckpoint.ts · validateCheckpoint`) admits the kind with the
+- **It survives a continued conversation.** The checkpoint ledger
+  (`../../checkpointLedger.ts · ledgerRowIsWellFormed`) admits the kind with the
   fields the fold and the piece read; without that arm, a checkpoint holding
   the row would be refused on resume.
 - **Not covered, named here so nobody reads it as covered:**

@@ -91,7 +91,7 @@ execution and armed negative-claim capture reserve result identities through
 `reserveResultIdentity`. The reservation writes the `resultIdentities` carrier
 to shared state and gives the coverage row an ID such as
 `claim-result/<namespace>/<runId>/1`. `scope.ts · ownConfigArray` is used by
-`core/runCheckpoint.ts`; `admit.ts · readEvidenceSnapshot` runs at a run's first
+`core/checkpointLedger.ts` · `validateCheckpointLedger`. `admit.ts · readEvidenceSnapshot` runs at a run's first
 reservation, at the first reservation under a new run id
 (`verificationState.ts · continueVerificationState`) and when a saved carrier is
 read back; `admit.ts · validateCoverage` runs when a stored verification row is read back.

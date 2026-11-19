@@ -1,7 +1,7 @@
 /**
  * The answer account's "How sure" reason lines — one part of the closed table
  * (`templates.ts`, which holds its laws and its version), one line per reason
- * of the fold (`facts/howSure.ts` · `REASON_LINES`).
+ * of the fold (`facts/standing.ts` · `REASON_LINES`).
  */
 
 import { t, type AccountTemplate } from './templateEntry.js';
@@ -31,8 +31,17 @@ export const HOW_SURE_REASON_TEMPLATES = {
     "{{count:n,'call declared ground it did not check or can never cover','calls declared ground they did not check or can never cover'}}.",
   ),
   'howSure.reason.declaredAbsent': t("{{count:n,'call','calls'}} declared that nothing matched."),
+  'howSure.reason.unplacedEvidence': t(
+    "{{count:n,'evidence row','evidence rows'}} could not be matched to a call.",
+  ),
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
+  ),
+  'howSure.reason.callNotCompleted': t("{{count:n,'call','calls'}} did not complete."),
+  'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
+  'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
+  'howSure.reason.workNotFinished': t(
+    "{{count:n,'call reported','calls reported'}} unfinished work.",
   ),
   // The results layer's period verdicts (honesty layer 3, step 7b) — set 6.
   'howSure.reason.periodNotHeld': t(
@@ -73,6 +82,7 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.stepsUnfinished': t(
     "The answer came before the active skill's declared steps finished.",
   ),
+  'howSure.reason.stepSkipped': t("{{count:n,'declared step was','declared steps were'}} skipped."),
   'howSure.reason.negativeProseUnverified': t('Model prose was not verified for negative claims.'),
   // Integrity findings and unsettled claims on the record — set 15.
   'howSure.reason.invariantViolation': t(

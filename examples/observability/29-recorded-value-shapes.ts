@@ -4,7 +4,7 @@ import { contextShapeAt, recordRun } from '../../src/observe.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'observability/28-recorded-value-shapes',
+  id: 'observability/29-recorded-value-shapes',
   title: 'Record value types and array lengths',
   group: 'observability',
   description: 'Read the length of the recorded message history without opening its messages.',

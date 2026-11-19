@@ -149,10 +149,16 @@ describe('UNIT — which rows the fold reads', () => {
 });
 
 describe('UNIT — the join with the inputs layer (results.md § 3.7)', () => {
+  const result = { role: 'tool', content: '[]', toolCallId: 'c1', toolName: 'backup_runs' };
+
   it('a period reason names the argument row that says who chose the period', () => {
     const a = run({
       turnNumber: 1,
-      findingsLedger: [argumentRow('c1'), periodRow('c1', 'not-held', { argument: 'window' })],
+      history: [{ ...result, content: '[1]' }],
+      findingsLedger: [
+        { ...argumentRow('c1'), toolName: 'backup_runs' },
+        periodRow('c1', 'not-held', { argument: 'window' }),
+      ],
     });
     const notHeld = a.reasons.find((r) => r.reason === 'period-not-held')!;
     expect(notHeld.witness).toEqual([
@@ -161,6 +167,20 @@ describe('UNIT — the join with the inputs layer (results.md § 3.7)', () => {
     ]);
     // …and the argument row fires its own layer-2 reason beside it.
     expect(a.reasons.map((r) => r.reason)).toEqual(['argument-assumed', 'period-not-held']);
+  });
+
+  it('keeps its own witness when more than one occurrence could have chosen the period', () => {
+    const a = run({
+      turnNumber: 1,
+      history: [result, { ...result, content: '[1]' }],
+      findingsLedger: [
+        { ...argumentRow('c1'), toolName: 'backup_runs' },
+        periodRow('c1', 'not-held', { argument: 'window' }),
+      ],
+    });
+    expect(a.reasons.find((r) => r.reason === 'period-not-held')!.witness).toEqual([
+      { kind: 'state', key: 'findingsLedger', path: '/1/verdict' },
+    ]);
   });
 
   it('no join without the argument name, or across calls', () => {

@@ -5,7 +5,7 @@
  * `convertWidened`, `periodFactProblem`).
  *
  *   unit        — each documented example answers what the docs say it answers
- *                 (the door header, docs-next build/time.mdx, src/time/README.md); a tool's
+ *                 (the door header, docs-next build/time.mdx, src/time/examples.md); a tool's
  *                 `maxRange`, a `day`-only tool's `multi-day` and a partly-retained window reach
  *                 the app through `convertForTool` — the parts alone cannot see them;
  *   integration — the door's answer IS the run's: examples/features/85-time-widen-and-refuse.ts

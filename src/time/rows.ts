@@ -5,7 +5,7 @@
  * Pattern: one owner of each row's shape (the `coverage/period.ts` ·
  *          `periodRowIsWellFormed` precedent): the module that defines a row
  *          also answers "is this a row I would have filed?", so the
- *          checkpoint door (`core/runCheckpoint.ts` · `ledgerRowIsWellFormed`)
+ *          checkpoint door (`core/checkpointLedger.ts` · `ledgerRowIsWellFormed`)
  *          refuses exactly what the library never files.
  * Role:    L0 leaf (the time layer). Imports `instant.ts`, `zone.ts`,
  *          `range.ts`, `reader.ts` (the parts check), `resolveRecord.ts` (the

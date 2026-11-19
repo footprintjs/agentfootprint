@@ -1,10 +1,8 @@
+import type { CallOccurrence } from '../../core/agent/recordedCalls.js';
 import { readNotDispatched, toolRanOf } from '../../semantics/toolRan.js';
 import type { ToolCallFact } from '../types.js';
 import { keptOut, str, type ViewEvent } from '../view.js';
 import type { ReadContext } from './common.js';
-
-/** Select one event type and call id in recording order. */
-export type CallIndex = (type: string, id: string) => readonly ViewEvent[];
 
 /**
  * The permission rows between this call's start and end that name its tool —
@@ -14,23 +12,12 @@ export type CallIndex = (type: string, id: string) => readonly ViewEvent[];
  * one, even when both calls name the same tool. A row that names no call (an
  * app's own `agent.emit`) is still read by its window and tool name.
  */
-function permissionRows(
-  ctx: ReadContext,
-  id: string,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): ViewEvent[] {
+function permissionRows(occurrence: CallOccurrence<ViewEvent>, toolName: string): ViewEvent[] {
+  const { start, end } = occurrence;
   if (start === undefined) return [];
   const upTo = end?.index ?? Number.POSITIVE_INFINITY;
-  return ctx.view.ofType('permission.check').filter((e) => {
-    const call = str(e.payload.toolCallId);
-    return (
-      e.index > start.index &&
-      e.index < upTo &&
-      e.payload.target === toolName &&
-      (call === undefined || call === id)
-    );
+  return occurrence.eventsOf('permission.check').filter((e) => {
+    return e.index > start.index && e.index < upTo && e.payload.target === toolName;
   });
 }
 
@@ -50,14 +37,12 @@ const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'entered', 'error'] as c
 
 export function outcomeOf(
   ctx: ReadContext,
-  byCall: CallIndex,
-  id: string,
+  occurrence: CallOccurrence<ViewEvent>,
   toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
 ): Outcome {
-  const decisions = byCall('middleware.decision', id);
-  const checkIns = byCall('checkin.decision', id);
+  const { end, start, eventsOf } = occurrence;
+  const decisions = eventsOf('middleware.decision');
+  const checkIns = eventsOf('checkin.decision');
   const stoppedByMiddleware = (e: ViewEvent) =>
     e.payload.outcome === 'deny' || e.payload.outcome === 'refused';
   const beforeDeny = decisions.find(
@@ -68,7 +53,7 @@ export function outcomeOf(
   );
   // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
   // allow || gate_open), so it is never a refusal.
-  const resumePermissionDeny = byCall('permission.check', id).find(
+  const resumePermissionDeny = eventsOf('permission.check').find(
     (e) =>
       e.payload.phase === 'resume' &&
       e.index < (end?.index ?? Infinity) &&
@@ -76,15 +61,11 @@ export function outcomeOf(
   );
   const permissionDeny =
     resumePermissionDeny ??
-    permissionRows(ctx, id, toolName, start, end).find((e) =>
-      PERMISSION_REFUSALS.has(e.payload.result),
-    );
+    permissionRows(occurrence, toolName).find((e) => PERMISSION_REFUSALS.has(e.payload.result));
   const checkInDeclined = checkIns.find(
     (e) => e.payload.approved === false && e.payload.phase === undefined,
   );
-  const pausedId = str(ctx.view.state?.pausedToolCallId);
-  const isPausedCall =
-    ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
+  const isPausedCall = ctx.resumedLeg && start === undefined;
 
   // The record keeps out a field that says how the call ended (a redaction
   // policy's placeholder): how it ended cannot be told, so it is not guessed.

@@ -450,7 +450,7 @@ const optionalTrue = (value: unknown): boolean => value === undefined || value =
  * Whether a value read from a stored checkpoint is an `argument` row this
  * library could have written: the identity strings, a numeric `iteration` and
  * `turn`, a source/ask or finite withheld outcome in its vocabulary, and every
- * enum field in its own. The checkpoint door's `argument` arm (`core/runCheckpoint.ts`).
+ * enum field in its own. The `argument` arm of `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` calls this.
  */
 export function argumentRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {
   return (

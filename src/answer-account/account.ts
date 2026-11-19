@@ -10,23 +10,20 @@
  */
 
 import { assumedLinesFor } from '../core/agent/arguments/serve.js';
-import { assessAnswer } from '../core/agent/assessment/assess.js';
 import {
   assessmentDataFrom,
   assumedValuesSourceOf,
   rewrittenBehind,
-  sourcesByReason,
+  standingFactsOf,
   standingLineOf,
-  standingNamesFrom,
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
-import { scriptRowsOfTurn } from '../core/agent/scripts/rows.js';
+import { scriptRowsOfTurn, scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
 import {
   rebuildBoundary,
   recordedScripts,
   scriptsBlock,
 } from '../core/agent/scripts/attachment.js';
-import { scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
 import type { ScriptRow } from '../core/agent/scripts/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
@@ -76,6 +73,11 @@ import { readCheckedRows } from './facts/checked.js';
 import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
 import { beforePausePointers, readFoundRow } from './facts/found.js';
 import { readHowSure } from './facts/howSure.js';
+import {
+  recordedStandingNames,
+  recordedStandingWitnesses,
+  WITNESSED_REASONS,
+} from './facts/standing.js';
 import { runChecks, summaryOf, wrongLines } from './signals.js';
 
 export interface AccountOptions {
@@ -151,42 +153,29 @@ const BLOCK_HEADINGS: readonly string[] = [
  * `turn_end.answerAssessment` exists only on a run whose answer layer folded
  * the standing, and the line is ONE function of that projection
  * (`assessment/compose.ts` · `standingLineOf`) — plus, when a value was
- * assumed, of the committed rows it names, read from the source the layer's
- * stage read (`assumedValuesSourceOf`) and the fold's rewrite witness. Only
- * that exact line, where the composer puts it, is the library's. Without the
- * committed state an assumed value cannot be rebuilt, and the line is not
- * claimed.
+ * assumed, of the rows `assumedValuesSourceOf` reads and the fold's rewrite
+ * witness. The account claims only the exact line in its appended position.
  *
- * A line that named calls in the app's words (a tool's `displayName`) is
- * rebuilt from the words the record kept beside it (`turn_end.standingLineNames`)
- * and the calls the fold reads off the committed state (each reason's
- * `source`) — the same two inputs the layer's stage composed it from. Words
- * the record does not hold in full, or no committed state, and the line is
- * not claimed.
+ * The fold supplies the witnesses and `turn_end.standingLineNames` supplies names.
+ * The account leaves the line unclaimed when required committed state or the
+ * complete recorded display names are unavailable.
  */
-function appendedStandingLine(
-  end: ViewEvent,
-  state: Readonly<Record<string, unknown>> | undefined,
-): string | undefined {
+function appendedStandingLine(end: ViewEvent, view: RecordingView): string | undefined {
   const data = assessmentDataFrom(end.payload.answerAssessment);
   if (data === undefined) return undefined;
-  const kept = end.payload.standingLineNames;
-  const displayNames = kept === undefined ? undefined : standingNamesFrom(kept);
-  if (kept !== undefined && displayNames === undefined) return undefined;
-  if (!data.reasons.includes('argument-assumed') && displayNames === undefined) {
+  const displayNames = recordedStandingNames(end, view);
+  if (displayNames === null) return undefined;
+  if (displayNames === undefined && !data.reasons.some((reason) => WITNESSED_REASONS.has(reason))) {
     return standingLineOf(data, [], false);
   }
-  if (state === undefined) return undefined;
+  const assessed = recordedStandingWitnesses(view, data.reasons);
+  const { state } = view;
+  if (assessed === undefined || state === undefined) return undefined;
   const source = assumedValuesSourceOf(data.reasons, state);
   const assumed =
     source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
-  const assessed = assessAnswer({ snapshot: { sharedState: state } });
-  return standingLineOf(
-    data,
-    assumed,
-    rewrittenBehind(assessed),
-    displayNames === undefined ? undefined : { sources: sourcesByReason(assessed), displayNames },
-  );
+  const facts = standingFactsOf(assessed, displayNames ?? new Map());
+  return standingLineOf(data, assumed, rewrittenBehind(assessed), facts);
 }
 
 /**
@@ -387,7 +376,7 @@ function readAnswer(view: RecordingView): {
   const data = readLimitsData(end);
   const { model, appended } = splitAppended(
     content,
-    appendedStandingLine(end, view.state),
+    appendedStandingLine(end, view),
     appendedScriptsOpenings(end, view.state, content.length),
   );
   const answer: AccountFact<string> = {
@@ -619,7 +608,7 @@ export function buildAccount(
   const asked = readAsked(ctx);
   const understood = readUnderstood(ctx);
   const calls = readCalls(ctx);
-  const inView = readInView(ctx, calls.ids);
+  const inView = readInView(ctx, calls.historyIndices);
   const pausedLeg = readPausedLeg(ctx, calls);
   const beforePause = pausedLeg.calls;
   const checkedRows = readCheckedRows(ctx, calls, pausedLeg);

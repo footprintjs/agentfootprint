@@ -531,6 +531,9 @@ export async function invokeInitialTool(
     // settled here too — the returned path's error, not a pause.
     await frame.endCall(scope);
     frame.outcome.error = true;
+    // A return refused by validation contributes neither its envelope nor its status.
+    frame.outcome.toolEnvelope = undefined;
+    frame.outcome.toolStatus = undefined;
     frame.execution.executeThrew = frame.execution.executed;
     frame.outcome.result =
       (innerHalt !== undefined && isPauseRequest(err) ? innerHalt.tellLLM : undefined) ??
