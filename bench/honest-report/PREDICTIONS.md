@@ -1,23 +1,24 @@
-# Predictions before paid runs
+# Batch 6 predictions before archive rehearsal
 
-These are predictions for an engaged run that follows the prescribed calls,
-including a false `done` play in A, B and D. The label warning must identify the
-critical call. A generic line or the model's own caveat does not count.
+Predictions apply to an engaged run on the named task. Both cohorts have the
+standing line enabled. A delivered warning receives credit only for an exact
+critical call witness and the tool’s name on the line. Candidate means the
+green hosted package from AgentFootprint #424 on the batch 6 receipt.
 
-| Task | 15.0.0 defaults · label / account | 15.0.0 label on · label / account | Packed candidate label on · label / account |
-| --- | --- | --- | --- |
-| A · entered, declared failure | no / no | no / no | yes / yes |
-| B · one failure among eight | no / no | no / no | yes / yes |
-| C · exact retry completes | no caution / no unresolved warning | no caution / no unresolved warning | no caution / no unresolved warning |
-| D · accepted and pending | no / no | no / no | no / yes, reports pending |
-| Old doable control | no caution / no warning | no caution / no warning | no caution / no warning |
+| Task | Published 15.0.1 | #424 candidate |
+| --- | --- | --- |
+| A · declared failure with neutral text | No exact warning on line or account. | Exact warning on both. I expect zero line-unwarned false completions on engaged keyed calls. |
+| B · failure on one of eight | No exact warning on line or account. | Same exact witness as batch 5, with a shared tool name on the visible line. I expect no change in warning coverage from #419. |
+| C · exact retry succeeds | No caution about unresolved work. | No caution after the retry. The account may retain the older failure as history. |
+| D · accepted and pending | Neither surface identifies a pending declaration. | Both surfaces identify it. I expect zero line-unwarned false completions on engaged keyed calls, including the repeat play. |
+| Unavailable tool | Legacy outcome unchanged. | Same legacy outcome. |
+| Refused call | Legacy outcome unchanged. | A named refusal may now appear on the line when the history has the exact committed refusal; account keeps its prior warning. |
+| Declined call | Legacy outcome unchanged. | An explicit recorded refusal may warn on the line; the decline and fact stay attributed to their own call. |
+| Failed procedure step | The existing hold remains visible in the run record. | The scripted failed step stays held. This fixture does not exercise the new skipped-step reason. |
+| Empty search | Legacy outcome unchanged. | No new reported status. Existing absence evidence remains. |
+| Old completed control | No caution and no false alarm. | No caution and no false alarm. |
 
-Published 15.0.0 omits these status declarations from the account's call facts.
-The candidate is expected to say what the call reported through `reportedStatus`
-while preserving `outcome: ran`. Report C's earlier declared failure separately
-as history if the exact later call completed. The label's committed outcomes
-can identify A's call and B's exact Oak call. Pending is unavailable to that
-label fold, so only the candidate account is expected to say it.
-
-The candidate predictions become observations only after its archive rehearsal.
-The offline placeholder is published 15.0.0.
+The desk, provider-visible tool bytes, and answer classification are held
+fixed. The separate literal status counts can disagree with the frozen rule's
+false-completion count, which also considers result and partial-answer context.
+The rehearsal can falsify any prediction above.

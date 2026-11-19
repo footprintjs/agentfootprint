@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { packageTreeDigest, verifyCandidate } from './candidate.mjs';
 
-const published = { agentfootprint: '15.0.0', footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
+const published = { agentfootprint: '15.0.1', footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
 
 export function loadCohort(label, candidate) {
   if (label !== 'published' && label !== 'candidate') throw new Error('Unknown benchmark cohort');

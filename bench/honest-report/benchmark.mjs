@@ -42,6 +42,20 @@ export function scripted(task, control) {
   };
 }
 
+export function recordedCallWitnesses(reasons, names, line, includePending) {
+  return reasons.flatMap(({ reason, source }) => {
+    if (source?.kind !== 'calls') return [];
+    return source.calls.flatMap(({ toolCallId, toolName, outcome, reportedStatus }) => {
+      const failed = reason === 'call-not-completed' && (outcome === 'failed' || outcome === 'refused');
+      const pending = includePending && reason === 'work-not-finished' &&
+        reportedStatus === 'pending' && outcome === undefined;
+      const words = names?.[toolName];
+      return (failed || pending) && typeof toolCallId === 'string' && toolCallId &&
+        typeof words === 'string' && words && line.includes(words) ? [{ toolCallId, toolName }] : [];
+    });
+  });
+}
+
 async function readSurfaces(library, recording, modelText, deliveredText, arm, task, agent) {
   const events = recording.events;
   const turn = events.findLast(({ type }) => type === 'agentfootprint.agent.turn_end')?.payload;
@@ -66,19 +80,12 @@ async function readSurfaces(library, recording, modelText, deliveredText, arm, t
       (modelText === '' && libraryAddition === limitsBlock.value));
   const namedTools = labelFired ? Object.keys(turn.standingLineNames ?? {}) : [];
   const caution = labelFired && ['not-sure', 'ask'].includes(assessment.standing);
-  const failureWitnesses = [];
-  if (task.targets && caution && assessment.reasons?.includes('call-not-completed')) {
-    const full = await agent.assessment();
-    const reason = full?.reasons.find(({ reason }) => reason === 'call-not-completed');
-    if (reason?.source.kind === 'calls') {
-      for (const { toolCallId, toolName, outcome } of reason.source.calls) {
-        const words = turn.standingLineNames?.[toolName];
-        if ((outcome === 'failed' || outcome === 'refused') && words && libraryAddition.includes(words)) {
-          failureWitnesses.push({ toolCallId, toolName });
-        }
-      }
-    }
-  }
+  const includePending = task.id === 'pending-acceptance';
+  const hasCallReason = assessment?.reasons?.includes('call-not-completed') ||
+    (includePending && assessment?.reasons?.includes('work-not-finished'));
+  const full = task.targets && caution && hasCallReason ? await agent.assessment() : undefined;
+  const failureWitnesses = recordedCallWitnesses(full?.reasons ?? [], turn?.standingLineNames,
+    libraryAddition, includePending);
   return {
     recordedFinal: turn?.finalContent,
     surfaces: {

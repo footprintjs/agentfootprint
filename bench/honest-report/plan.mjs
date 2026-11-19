@@ -6,7 +6,6 @@ const legacyRepeats = 10;
 const preflightTask = hiddenTasks.find(({ id }) => id === 'partial-failure');
 
 export const cells = Object.freeze([
-  Object.freeze({ label: 'published', arm: 'defaults' }),
   Object.freeze({ label: 'published', arm: 'label-on' }),
   Object.freeze({ label: 'candidate', arm: 'label-on' }),
 ]);

@@ -7,6 +7,7 @@ import { assertRehearsal, controls, HiddenReplyExposureError, runOne, scripted }
 import { createBudget, PROJECTED_LIMIT_UNITS, SPEND_LIMIT_UNITS } from './budget.mjs';
 import { loadCohort } from './cohorts.mjs';
 import { hiddenScripted, hiddenTasks } from './hiddenTasks.mjs';
+import { literalClaims } from './literalClaims.mjs';
 import { cells, cellKey, limits, paidSchedule, projectPreflight } from './plan.mjs';
 import { repeatedHiddenScripted } from './repeatPlay.mjs';
 import { summarize } from './score.mjs';
@@ -16,7 +17,8 @@ function rehearsalInputs() {
   const files = [
     'RULE.md', 'PLAN.md', 'PREDICTIONS.md', 'tasks.mjs', 'hiddenTasks.mjs', 'benchmark.mjs',
     'budget.mjs', 'candidate.mjs', 'cohorts.mjs', 'plan.mjs', 'run.mjs', 'score.mjs',
-    'terminalAnswer.mjs', 'repeatPlay.mjs', 'replyBoundary.mjs', 'cohorts/after/package-lock.json',
+    'terminalAnswer.mjs', 'repeatPlay.mjs', 'replyBoundary.mjs', 'literalClaims.mjs',
+    'cohorts/after/package-lock.json', 'cohorts/candidate-source.json',
   ];
   return Object.fromEntries(files.map((name) => [
     name, createHash('sha256').update(readFileSync(new URL(name, import.meta.url))).digest('hex'),
@@ -63,12 +65,29 @@ async function rehearse(installed, inputs) {
   return { rows, rehearsal };
 }
 
-async function coordinatorRun(installed, inputs) {
+function readHostedCandidate(sha256) {
+  const source = JSON.parse(readFileSync(new URL('./cohorts/candidate-source.json', import.meta.url)));
+  assert.equal(source.sha256, sha256, 'Expected the green hosted candidate archive digest');
+  assert.match(source.head, /^[0-9a-f]{40}$/);
+  assert.match(source.tree, /^[0-9a-f]{40}$/);
+  assert.match(source.testedHead, /^[0-9a-f]{40}$/);
+  assert.ok(Number.isSafeInteger(source.runId) && source.runId > 0);
+  assert.ok(Number.isSafeInteger(source.artifactId) && source.artifactId > 0);
+  assert.ok(typeof source.artifactName === 'string' && source.artifactName.trim().length > 0);
+  assert.match(source.archiveName, /^[a-zA-Z0-9_.-]+\.tgz$/);
+  return source;
+}
+
+function verifyRehearsal(installed, inputs) {
   const receiptData = JSON.parse(readFileSync(new URL('./rehearsal-lock.json', import.meta.url)));
   assert.deepEqual(receiptData.inputs, inputs, 'Harness inputs changed after rehearsal');
   assert.deepEqual(receiptData.cohorts, recordedCohorts(installed), 'Rehearse against the exact packed candidate first');
-  assert.equal(receiptData.scriptedRows, taskPlays.length * cells.length, 'The three-cell rehearsal must be complete');
+  assert.equal(receiptData.scriptedRows, taskPlays.length * cells.length, 'The two-cell rehearsal must be complete');
   assert.match(receiptData.transcriptSha256, /^[a-f0-9]{64}$/, 'Rehearsal transcript digest required');
+  return receiptData;
+}
+
+async function coordinatorRun(installed, inputs) {
   const createProvider = await createPaidFactory();
   const receipt = openSync(new URL('./paid-attempts.jsonl', import.meta.url), 'wx', 0o600);
   const append = (value) => { writeSync(receipt, `${JSON.stringify(value)}\n`); };
@@ -132,30 +151,39 @@ async function main() {
     throw new Error('Run with filesystem read restricted to the benchmark directory');
   }
   const [mode = '--rehearse', flag, path, sha256, ...rest] = process.argv.slice(2);
-  if (!['--rehearse', '--coordinator-run'].includes(mode) || rest.length ||
-      (flag !== undefined && (flag !== '--candidate' || path === undefined || sha256 === undefined))) {
-    throw new Error('Use --rehearse or --coordinator-run, with optional --candidate <archive> <sha256>');
+  if (!['--rehearse', '--verify-receipt', '--coordinator-run'].includes(mode) || rest.length ||
+      flag !== '--candidate' || path === undefined || sha256 === undefined) {
+    throw new Error('Use --rehearse, --verify-receipt, or --coordinator-run with --candidate <archive> <sha256>');
   }
-  if (mode === '--coordinator-run' && flag === undefined) throw new Error('A real packed candidate is required before paid preflight');
+  const source = readHostedCandidate(sha256);
   const inputs = rehearsalInputs();
-  // The candidate loader verifies the archive and lock before requiring its code.
   const published = loadCohort('published');
-  const candidate = flag === undefined
-    ? { library: published.library, stamp: { ...published.stamp, placeholder: 'published-15.0.0' } }
-    : loadCohort('candidate', { path, sha256 });
-  const installed = { published, candidate };
+  const candidate = loadCohort('candidate', { path, sha256 });
+  const installed = { published, candidate: { ...candidate, stamp: { ...candidate.stamp, source } } };
+  const verified = mode === '--rehearse' ? undefined : verifyRehearsal(installed, inputs);
+  if (mode === '--verify-receipt') {
+    process.stdout.write(`${JSON.stringify({ mode, rehearsal: verified }, null, 2)}\n`);
+    return;
+  }
   const result = mode === '--rehearse' ? await rehearse(installed, inputs) : await coordinatorRun(installed, inputs);
-  const summarizeCells = (rows) => Object.fromEntries(cells.map(({ label, arm }) => {
-    const selected = rows.filter((row) => row.label === label && row.arm === arm);
-    const byTask = Object.fromEntries([...tasks, ...hiddenTasks].map(({ id }) => [
-      id, summarize(selected.filter(({ task }) => task.id === id)),
-    ]));
-    return [cellKey(label, arm), { ...summarize(selected), byTask }];
-  }));
+  const summarizeCells = (rows, allowTerminalObject = false) => {
+    const applyOutputSchema = published.library.applyOutputSchema;
+    const summarizeSelection = (selected) => ({
+      ...summarize(allowTerminalObject ? selected.map((row) => ({ ...row, score: row.supplementalScore })) : selected),
+      literalClaims: literalClaims(selected, applyOutputSchema, { allowTerminalObject }),
+    });
+    return Object.fromEntries(cells.map(({ label, arm }) => {
+      const selected = rows.filter((row) => row.label === label && row.arm === arm);
+      const byTask = Object.fromEntries([...tasks, ...hiddenTasks].map(({ id }) => [
+        id, summarizeSelection(selected.filter(({ task }) => task.id === id)),
+      ]));
+      return [cellKey(label, arm), { ...summarizeSelection(selected), byTask }];
+    }));
+  };
   const report = {
     mode, inputs, limits, cohorts: recordedCohorts(installed),
     totals: summarizeCells(result.rows),
-    supplementalTotals: summarizeCells(result.rows.map((row) => ({ ...row, score: row.supplementalScore }))),
+    supplementalTotals: summarizeCells(result.rows, true),
     ...result,
   };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
