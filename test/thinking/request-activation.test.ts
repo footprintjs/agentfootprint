@@ -18,7 +18,7 @@
  *   3. Integration  — full activation + response round-trip (request asks, response delivers)
  *   4. Property     — random budgets pass through unmodified
  *   5. Security     — thinking config doesn't pollute systemPrompt / messages / tools
- *   6. Performance  — adding .thinking() doesn't measurably slow agent build/run
+ *   6. Performance  — .thinking() adds no normalization entries, provider calls, or request history reads
  *   7. ROI          — realistic agent: ask 5000-token budget, see request shape on every turn
  */
 
@@ -26,12 +26,16 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   Agent,
   defineTool,
+  type LLMMessage,
   type LLMProvider,
   type LLMResponse,
   type LLMRequest,
 } from '../../src/index.js';
 import { AnthropicProvider } from '../../src/adapters/llm/AnthropicProvider.js';
-import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
+import * as callLLM from '../../src/core/agent/stages/callLLM.js';
+import { SUBFLOW_IDS } from '../../src/lib/conventions.js';
+import { mockThinkingHandler } from '../../src/thinking/index.js';
+import { countArrayReads } from '../helpers/inputWork.js';
 
 // ─── Fake Anthropic SDK ───────────────────────────────────────────
 
@@ -386,47 +390,83 @@ describe('Phase 6.5 — security: thinking config does not pollute other request
   });
 });
 
-// ─── 6. PERFORMANCE — no overhead when omitted ───────────────────
+// ─── 6. PERFORMANCE — count request work across growing histories ─
 
-describe('Phase 6.5 — performance: setting .thinking() has minimal overhead', () => {
-  it(
-    'agent with vs without .thinking() — comparable build+run perf',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      const provider: LLMProvider = {
-        name: 'mock',
-        complete: async () => ({
+describe('Phase 6.5 — counted request activation work', () => {
+  it('adding .thinking() adds no stage entries, provider calls, or history-row reads', async () => {
+    const buildStage = callLLM.buildCallLLMStage;
+    const historyVisits: number[] = [];
+    const stageProbe = vi.spyOn(callLLM, 'buildCallLLMStage').mockImplementation((deps) => {
+      const runStage = buildStage(deps);
+      return async (scope) => {
+        // Observe indexed reads of the actual history entering request assembly.
+        // Use the raw array so native array methods read through our proxy
+        // instead of binding to the underlying array of the TypedScope handle.
+        const history = scope.$getValue('history') as LLMMessage[];
+        const { input, reads } = countArrayReads(history);
+        await runStage(
+          new Proxy(scope, {
+            get(target, key, receiver) {
+              return key === 'history' ? input : Reflect.get(target, key, receiver);
+            },
+          }),
+        );
+        historyVisits.push(reads());
+      };
+    });
+
+    async function run(budget?: number) {
+      historyVisits.length = 0;
+      const complete = vi.fn(
+        async (_request: LLMRequest): Promise<LLMResponse> => ({
           content: 'ok',
           toolCalls: [],
           usage: { input: 1, output: 1 },
           stopReason: 'end_turn',
         }),
-      };
+      );
+      const provider = { name: 'mock', thinkingHandler: mockThinkingHandler, complete };
+      const builder = Agent.create({ provider, model: 'mock' }).system('s');
+      if (budget !== undefined) builder.thinking({ budget });
+      const agent = builder.build();
 
-      // Comparative against the same twenty runs without .thinking(), sampled
-      // alternately here. The old `+ 200ms` cushion is replaced by a load-scaled
-      // floor inside the helper, so the claim reads the same on any machine.
-      await expectWithinTimes({
-        baseline: async () => {
-          for (let i = 0; i < 5; i++) {
-            const a = Agent.create({ provider, model: 'mock' }).system('s').build();
-            await a.run({ message: 'x' });
-          }
+      let stageEntries = 0;
+      agent.attach({
+        id: 'count-thinking-entries',
+        onStageStart: ({ runtimeStageId }) => {
+          if (runtimeStageId.startsWith(`${SUBFLOW_IDS.THINKING}/`)) stageEntries += 1;
         },
-        subject: async () => {
-          for (let i = 0; i < 5; i++) {
-            const a = Agent.create({ provider, model: 'mock' })
-              .system('s')
-              .thinking({ budget: 1000 })
-              .build();
-            await a.run({ message: 'x' });
-          }
-        },
-        times: 2,
-        why: '.thinking() must not double the run cost',
       });
-    },
-  );
+
+      await agent.run({ message: 'first' });
+      await agent.followUp('second');
+      await agent.followUp('third');
+      return {
+        stageEntries,
+        providerCalls: complete.mock.calls.length,
+        historyVisits: [...historyVisits],
+        historyLengths: complete.mock.calls.map(([request]) => request.messages.length),
+        budgets: complete.mock.calls.map(([request]) => request.thinking?.budget),
+      };
+    }
+
+    try {
+      const ordinary = await run();
+      expect(ordinary.stageEntries).toBe(3);
+      expect(ordinary.providerCalls).toBe(3);
+      expect(ordinary.historyLengths).toEqual([1, 3, 5]);
+      expect(ordinary.budgets).toEqual([undefined, undefined, undefined]);
+      // Establish that the probe observes reads at each of the three history sizes.
+      expect(ordinary.historyVisits).toHaveLength(3);
+      const [first = 0, second = 0, third = 0] = ordinary.historyVisits;
+      expect(first).toBeGreaterThan(0);
+      expect(second).toBeGreaterThan(first);
+      expect(third).toBeGreaterThan(second);
+      expect(await run(2048)).toEqual({ ...ordinary, budgets: [2048, 2048, 2048] });
+    } finally {
+      stageProbe.mockRestore();
+    }
+  });
 });
 
 // ─── 7. ROI — realistic agent with thinking ──────────────────────

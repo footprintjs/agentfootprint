@@ -9,12 +9,13 @@
  * blocking in the hot path. Those cost orders of magnitude, not jitter.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { LLMCall } from '../../../src/core/LLMCall.js';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
-import { expectWithinReferenceUnits, expectWithinTimes, measureAsync } from '../../helpers/perf.js';
+import { EventDispatcher } from '../../../src/events/dispatcher.js';
+import { expectWithinReferenceUnits, measureAsync } from '../../helpers/perf.js';
 
 function scripted(...responses: readonly LLMResponse[]): LLMProvider {
   let i = 0;
@@ -120,38 +121,53 @@ describe('performance — Agent with ReAct iterations', () => {
   );
 });
 
-describe('performance — event dispatch overhead is bounded', () => {
-  it(
-    'attaching 10 listeners does not slow a single run by >2x baseline',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // Baseline: no listeners.
-      const baseLlm = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
-        .system('')
-        .build();
+describe('LLMCall event dispatch work', () => {
+  it.each([
+    [1, 0],
+    [8, 0],
+    [1, 1],
+    [8, 1],
+    [1, 10],
+    [8, 10],
+  ])(
+    'dispatches once per event over %i runs with %i listeners per event',
+    async (runs, listenerCount) => {
+      const provider = new MockProvider({ reply: 'ok' });
+      const complete = vi.spyOn(provider, 'complete');
+      const llm = LLMCall.create({ provider, model: 'mock' }).system('').build();
+      const eventTypes = [
+        'agentfootprint.stream.llm_start',
+        'agentfootprint.stream.llm_end',
+      ] as const;
+      const listeners = eventTypes.map((type) =>
+        Array.from({ length: listenerCount }, () => {
+          const listener = vi.fn();
+          llm.on(type, listener);
+          return listener;
+        }),
+      );
 
-      // With 10 listeners.
-      const inst = LLMCall.create({ provider: new MockProvider({ reply: 'ok' }), model: 'mock' })
-        .system('')
-        .build();
-      for (let i = 0; i < 10; i++) {
-        inst.on('agentfootprint.stream.llm_start', () => {});
-        inst.on('agentfootprint.stream.llm_end', () => {});
+      // Count real entries to the dispatcher, independently of listener delivery.
+      const dispatch = vi.spyOn(EventDispatcher.prototype, 'dispatch');
+      const dispatchServed = vi.spyOn(EventDispatcher.prototype, 'dispatchServed');
+      try {
+        for (let run = 0; run < runs; run++) {
+          expect(await llm.run({ message: 'x' })).toBe('ok');
+        }
+
+        expect(complete).toHaveBeenCalledTimes(runs);
+        const dispatched = [...dispatch.mock.calls, ...dispatchServed.mock.calls];
+        for (const [index, type] of eventTypes.entries()) {
+          const entries = dispatched.filter(([event]) => event.type === type);
+          expect(entries, type).toHaveLength(listenerCount === 0 ? 0 : runs);
+          for (const listener of listeners[index]) {
+            expect(listener, type).toHaveBeenCalledTimes(runs);
+          }
+        }
+      } finally {
+        dispatch.mockRestore();
+        dispatchServed.mockRestore();
       }
-      // Comparative on purpose: the SAME twenty runs with and without
-      // listeners, sampled alternately on this machine, so load cancels. 4× is
-      // the headroom for dispatch bookkeeping; an O(n²) fan-out over listeners
-      // would land far beyond it.
-      await expectWithinTimes({
-        baseline: async () => {
-          for (let i = 0; i < 8; i++) await baseLlm.run({ message: 'x' });
-        },
-        subject: async () => {
-          for (let i = 0; i < 8; i++) await inst.run({ message: 'x' });
-        },
-        times: 4,
-        why: '10 listeners must not multiply run cost',
-      });
     },
   );
 });
