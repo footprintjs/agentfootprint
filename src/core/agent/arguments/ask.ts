@@ -66,8 +66,15 @@ import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { timeAnswerRow } from '../../../time/rows.js';
 import { isArgumentAskContext } from './askMarker.js';
 import type { ArgumentFill, ArgumentResolution, BatchCall, ToolOf } from './resolve.js';
-import { askedRowOf } from './rows.js';
-import { answeredRows, memberCalls, memberValue, windowAnsweredRows } from './answerRows.js';
+import { unansweredRefusal } from './serve.js';
+import { answeredRows, invalidAnswerRows, memberValue, windowAnsweredRows } from './answerRows.js';
+import type { BatchAddress } from './batchAddress.js';
+import {
+  callsByAddress,
+  fieldAddresses,
+  memberAddresses,
+  windowAddressKey,
+} from './askAddresses.js';
 import { MAX_ASK_FIELDS, MAX_ASK_ROUNDS } from './ask/constants.js';
 import type { ArgumentAskState, AskField, AskTime, BoundAnswer, SettledCall } from './ask/types.js';
 import { checkAnswer, pairsBroken } from './ask/validation.js';
@@ -203,15 +210,15 @@ export function bindAnswer(
   toolOf: ToolOf,
   stamp: { readonly turn: number; readonly iteration: number },
   time?: AskTime,
-  baseResolutions?: ReadonlyMap<string, ArgumentResolution>,
+  baseResolutions?: ReadonlyMap<BatchAddress, ArgumentResolution>,
 ): BoundAnswer {
   const waiting = state.waiting;
   if (waiting === undefined) return { state, rows: [] };
-  const byId = new Map(calls.map((c) => [c.id, c]));
+  const byAddress = callsByAddress(calls);
   const progress = [...state.progress];
   const rowParts: (() => BoundAnswer['rows'])[] = [];
-  const filledById = new Map<string, BatchCall['args']>();
-  const pairs = pairsBroken(state, values, byId, toolOf, time);
+  const filled = new Map<BatchAddress, BatchCall['args']>();
+  const pairs = pairsBroken(state, values, byAddress, toolOf, time);
   const fields = [...state.fields];
   waiting.fieldIndexes.forEach((index, k) => {
     const field = state.fields[index];
@@ -223,7 +230,7 @@ export function bindAnswer(
         values,
         `f${k + 1}`,
         waiting.awaiting,
-        byId,
+        byAddress,
         toolOf,
         time,
       );
@@ -243,7 +250,7 @@ export function bindAnswer(
           ...('refused' in bound && { refused: bound.refused }),
         };
         rowParts.push(() =>
-          windowAnsweredRows(field, bound.fills, byId, toolOf, stamp, filledById),
+          windowAnsweredRows(field, bound.fills, byAddress, toolOf, stamp, filled),
         );
         // The person's window for the mention — the only door a window of words becomes theirs.
         const answerRow = timeAnswerRow(
@@ -254,26 +261,29 @@ export function bindAnswer(
         // Each filled call's window, as it will run: the person's answer, exactly or WIDER (the
         // covering look-back's `sent` and `extra`) — the call's latest `call-window` row, so the
         // clock at dispatch, `ctx.time` and the result checks read the window the call carries.
-        for (const [toolCallId, { toolName, decision }] of Object.entries(bound.filled)) {
-          const windowRow = callWindowRow({ toolCallId, toolName }, decision, stamp);
+        for (const address of fieldAddresses(field)) {
+          const call = byAddress.get(address);
+          const key = windowAddressKey(field, address);
+          if (call === undefined || !Object.hasOwn(bound.filled, key)) continue;
+          const { toolName, decision } = bound.filled[key];
+          const windowRow = {
+            ...callWindowRow({ toolCallId: call.id, toolName }, decision, stamp),
+            ...callOccurrenceField(call.callOccurrenceKey),
+          };
           rowParts.push(() => [windowRow]);
         }
         return;
       }
       if ('outside' in bound) {
         progress[index] = { rounds: was.rounds, exhausted: true, expected: bound.outside };
-        rowParts.push(() =>
-          memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')),
-        );
+        rowParts.push(() => invalidAnswerRows(field, byAddress, stamp));
         return;
       }
       progress[index] =
         was.rounds >= MAX_ASK_ROUNDS
           ? { rounds: was.rounds, exhausted: true, expected: bound.expected }
           : { rounds: was.rounds, invalid: true, expected: bound.expected };
-      rowParts.push(() =>
-        memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')),
-      );
+      rowParts.push(() => invalidAnswerRows(field, byAddress, stamp));
       return;
     }
     const alone =
@@ -283,7 +293,7 @@ export function bindAnswer(
     const check = alone.fits && pair !== undefined ? { fits: false, expected: pair } : alone;
     if (answer !== undefined && check.fits) {
       progress[index] = { rounds: was.rounds, answer };
-      rowParts.push(() => answeredRows(field, byId, toolOf, stamp, filledById));
+      rowParts.push(() => answeredRows(field, byAddress, toolOf, stamp, filled));
       return;
     }
     const expected =
@@ -292,46 +302,40 @@ export function bindAnswer(
       was.rounds >= MAX_ASK_ROUNDS
         ? { rounds: was.rounds, exhausted: true, ...expected }
         : { rounds: was.rounds, invalid: true, ...expected };
-    rowParts.push(() => memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
+    rowParts.push(() => invalidAnswerRows(field, byAddress, stamp));
   });
   const { waiting: _settled, ...rest } = state;
   void _settled;
   const settled = { ...rest, fields, progress };
   const fills = settledCalls(settled);
-  for (const call of calls) {
-    filledById.set(
-      call.id,
+  for (const [address, call] of byAddress) {
+    filled.set(
+      address,
       Object.assign(
         {},
         call.args,
         Object.fromEntries(
           [
-            ...(baseResolutions?.get(call.id)?.fills ?? []),
-            ...(fills.get(call.id)?.fills ?? []),
+            ...(baseResolutions?.get(address)?.fills ?? []),
+            ...(fills.get(address)?.fills ?? []),
           ].map((fill) => [fill.argument, fill.value]),
         ),
       ),
     );
   }
-  const rows = rowParts.flatMap((part) =>
-    part().map((row) =>
-      'toolCallId' in row
-        ? { ...row, ...callOccurrenceField(byId.get(row.toolCallId)?.callOccurrenceKey) }
-        : row,
-    ),
-  );
+  const rows = rowParts.flatMap((part) => part());
   return { state: settled, rows };
 }
 
 // ─── The settled ask ────────────────────────────────────────────────────
 
-/** Per call id, what the settled ask resolved for it (only calls the ask touched). */
-export function settledCalls(state: ArgumentAskState): ReadonlyMap<string, SettledCall> {
+/** Per call, what the settled ask resolved for it (only calls the ask touched). */
+export function settledCalls(state: ArgumentAskState): ReadonlyMap<BatchAddress, SettledCall> {
   const out = new Map<
-    string,
+    BatchAddress,
     { fills: ArgumentFill[]; exhausted: SettledCall['exhausted'][number][] }
   >();
-  const entry = (id: string) => {
+  const entry = (id: BatchAddress) => {
     const seen = out.get(id);
     if (seen !== undefined) return seen;
     const fresh = {
@@ -353,14 +357,17 @@ export function settledCalls(state: ArgumentAskState): ReadonlyMap<string, Settl
       throw new TypeError('argumentAsk: incomplete meaning progress');
     }
     if (field.window !== undefined && p.fills !== undefined) {
-      for (const [id, expected] of Object.entries(p.refused ?? {})) {
-        for (const member of field.members.filter((m) => m.toolCallIds.includes(id))) {
-          entry(id).exhausted.push({ argument: member.argument, expected });
+      for (const address of fieldAddresses(field)) {
+        const key = windowAddressKey(field, address);
+        if (p.refused !== undefined && Object.hasOwn(p.refused, key)) {
+          for (const member of field.members.filter((m) => memberAddresses(m).includes(address))) {
+            entry(address).exhausted.push({ argument: member.argument, expected: p.refused[key] });
+          }
         }
-      }
-      for (const [id, fill] of Object.entries(p.fills)) {
+        if (!Object.hasOwn(p.fills, key)) continue;
+        const fill = p.fills[key];
         for (const [argument, value] of Object.entries(fill.values)) {
-          entry(id).fills.push({
+          entry(address).fills.push({
             argument,
             value: value as InputValue | Readonly<Record<string, InputValue>>,
             source: 'answered',
@@ -372,7 +379,7 @@ export function settledCalls(state: ArgumentAskState): ReadonlyMap<string, Settl
       return;
     }
     for (const m of field.members) {
-      for (const id of m.toolCallIds) {
+      for (const id of memberAddresses(m)) {
         if (p.answer !== undefined) {
           const value = memberValue(field, m, p.answer);
           if (value !== undefined)
@@ -387,4 +394,42 @@ export function settledCalls(state: ArgumentAskState): ReadonlyMap<string, Settl
     }
   });
   return out;
+}
+
+/** Each call's entry with the settled ask folded in: the answered fills, or the unanswered refusal. */
+export function withSettled(
+  resolutions: ReadonlyMap<BatchAddress, ArgumentResolution>,
+  state: ArgumentAskState,
+  calls: readonly BatchCall[],
+): Map<BatchAddress, ArgumentResolution> {
+  const byAddress = callsByAddress(calls);
+  const settled = settledCalls(state);
+  const merged = new Map<BatchAddress, ArgumentResolution>();
+  for (const [address, entry] of resolutions) {
+    const s = settled.get(address);
+    if (s === undefined || entry.refused !== undefined) {
+      merged.set(address, entry);
+      continue;
+    }
+    if (s.exhausted.length > 0) {
+      merged.set(address, {
+        toolCallId: entry.toolCallId,
+        ...callOccurrenceField(entry.callOccurrenceKey),
+        iteration: entry.iteration,
+        refused: unansweredRefusal(byAddress.get(address)?.name ?? entry.toolCallId, s.exhausted),
+      });
+      continue;
+    }
+    // An answered value replaces any earlier fill of the same argument (a window answered for
+    // a form whose other argument the tool's rule had assumed).
+    const answered = new Set(s.fills.map((f) => f.argument));
+    const fills = [...(entry.fills ?? []).filter((f) => !answered.has(f.argument)), ...s.fills];
+    merged.set(address, {
+      toolCallId: entry.toolCallId,
+      ...callOccurrenceField(entry.callOccurrenceKey),
+      iteration: entry.iteration,
+      ...(fills.length > 0 && { fills }),
+    });
+  }
+  return merged;
 }

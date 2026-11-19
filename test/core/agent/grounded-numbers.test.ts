@@ -475,6 +475,37 @@ describe('integration: the receipt names what the library placed, and only that'
     }
   });
 
+  it('keeps both placement receipts when siblings share one provider ID', async () => {
+    const { agent, requests } = build(
+      [
+        () => ({
+          content: '',
+          toolCalls: [
+            { id: 'same', name: 'export_rows', args: {} },
+            { id: 'same', name: 'export_rows', args: {} },
+          ],
+        }),
+        answer(SAFE_ANSWER),
+      ],
+      { gate: { nudge: true } },
+    );
+    await agent.run('stage the rows');
+
+    const refs = refsIn(requests);
+    expect(refs).toHaveLength(2);
+    const checkpoint = agent.checkpoint()!;
+    expect(checkpoint.placedTickets).toEqual(
+      refs.map((ref) => ({
+        toolCallId: 'same',
+        ref,
+        callOccurrenceKey: placedResultOf(checkpoint, ref).callOccurrenceKey,
+      })),
+    );
+    expect(checkpoint.placedTickets?.map((ticket) => ticket.callOccurrenceKey?.[4])).toEqual([
+      0, 1,
+    ]);
+  });
+
   it('the crash checkpoint carries the receipt to a fresh agent', async () => {
     for (const reactMode of SHAPES) {
       const failing = build(

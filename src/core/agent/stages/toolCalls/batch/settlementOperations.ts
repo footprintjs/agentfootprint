@@ -54,11 +54,10 @@ export function buildToolSettlementOperations(
     return systemPrompt ? [{ role: 'system', content: systemPrompt }, ...history] : [...history];
   };
 
-  const settleBatch = (
-    answered: LLMMessage[],
-    paused: { readonly toolName: string; readonly toolCallId: string },
-  ): BatchSettlement => {
-    const batch = pausedBatchOf(answered, paused.toolCallId);
+  const settleBatch: ToolSettlementOperations['settleBatch'] = (answered, frame) => {
+    const { toolName, toolCallId, callOccurrenceKey } = frame;
+    const paused = { toolName, toolCallId };
+    const batch = pausedBatchOf(answered, toolCallId, callOccurrenceKey);
     if (batch.undispatched.length === 0)
       return { history: answered, settled: [], size: batch.size, paused };
     const settled = batch.undispatched.map((call) => ({

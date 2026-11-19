@@ -4,6 +4,7 @@ import type { CallWindowRow } from '../../../time/rows.js';
 import { callWindowRow } from '../../../time/rowsBuild.js';
 import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { carriesArgumentView, shownArgsOf } from '../../toolShownArgs.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
 import type { SourceCheck } from './checks.js';
 import type { KeptAnswer } from './kept.js';
 import type { BatchCall, CheckedArgument, SourcesArm, ToolOf } from './resolve.js';
@@ -29,7 +30,7 @@ interface RowPorts {
   isFreeAsk(toolOf: ToolOf, toolName: string, argument: string): boolean;
   claimFor(
     sources: SourcesArm | undefined,
-    toolCallId: string,
+    address: BatchAddress,
     argument: string,
   ): DeclaredSource | undefined;
 }
@@ -57,7 +58,11 @@ function sourcedRow(
   // A name nothing answers has no view to ask — shown as hidden, never raw.
   const shown = tool === undefined ? HIDDEN_VALUE : shownArgsOf(tool, context)[c.argument];
   const quoteShown = c.quoteShown === true;
-  const quote = ports.claimFor(sources, c.toolCallId, c.argument)?.quote;
+  const quote = ports.claimFor(
+    sources,
+    batchAddress(c.toolCallId, c.callOccurrenceKey),
+    c.argument,
+  )?.quote;
   const { check } = c;
   const asked = c.asked === 'unverified';
   return sourcedRowOf(
@@ -190,30 +195,33 @@ export function composeResolutionRows(
   stamp: { readonly turn: number; readonly iteration: number },
   kept: readonly KeptAnswer[] | undefined,
   sources: SourcesArm | undefined,
-  decisions: ReadonlyMap<string, CallWindow> | undefined,
+  decisions: ReadonlyMap<BatchAddress, CallWindow> | undefined,
   ports: RowPorts,
 ): ArgumentRow[] {
-  const byId = new Map(calls.map((call) => [call.id, call]));
-  const contexts = new Map<string, Readonly<Record<string, unknown>>>();
+  const byAddress: ReadonlyMap<BatchAddress, BatchCall> = new Map(
+    calls.map((call) => [batchAddress(call.id, call.callOccurrenceKey), call]),
+  );
+  const contexts = new Map<BatchAddress, Readonly<Record<string, unknown>>>();
   const rows: ArgumentRow[] = [];
-  const counted = new Set<string>();
+  const counted = new Set<BatchAddress>();
   for (const c of checked) {
-    const call = byId.get(c.toolCallId);
+    const address = batchAddress(c.toolCallId, c.callOccurrenceKey);
+    const call = byAddress.get(address);
     if (call === undefined) continue;
-    let context = contexts.get(call.id);
+    let context = contexts.get(address);
     if (context === undefined) {
-      context = fullRowContext(call, checked, toolOf, kept, decisions?.get(call.id), ports);
-      contexts.set(call.id, context);
+      context = fullRowContext(call, checked, toolOf, kept, decisions?.get(address), ports);
+      contexts.set(address, context);
     }
     const verdict =
       c.check !== undefined
         ? sourcedRow({ ...c, check: c.check }, toolOf, sources, stamp, context, ports)
-        : plainRow(c, toolOf, stamp, kept, decisions?.get(c.toolCallId), context, ports);
+        : plainRow(c, toolOf, stamp, kept, decisions?.get(address), context, ports);
     if (verdict === undefined) continue;
     const row = { ...verdict, ...callOccurrenceField(call.callOccurrenceKey) };
-    const malformed = sources?.declared.get(c.toolCallId)?.malformed;
-    if (malformed !== undefined && malformed > 0 && !counted.has(c.toolCallId)) {
-      counted.add(c.toolCallId);
+    const malformed = sources?.declared.get(address)?.malformed;
+    if (malformed !== undefined && malformed > 0 && !counted.has(address)) {
+      counted.add(address);
       rows.push(withMalformed(row, malformed));
       continue;
     }
@@ -224,12 +232,12 @@ export function composeResolutionRows(
 
 /** The `call-window` rows for this batch's decisions, in batch order. */
 export function callWindowRowsOf(
-  decisions: ReadonlyMap<string, CallWindow>,
+  decisions: ReadonlyMap<BatchAddress, CallWindow>,
   calls: readonly BatchCall[],
   stamp: { readonly turn: number; readonly iteration: number },
 ): CallWindowRow[] {
   return calls.flatMap((call) => {
-    const decision = decisions.get(call.id);
+    const decision = decisions.get(batchAddress(call.id, call.callOccurrenceKey));
     if (decision === undefined) return [];
     return [
       {
@@ -250,9 +258,15 @@ function fullRowContext(
   ports: RowPorts,
 ): Readonly<Record<string, unknown>> {
   if (!carriesArgumentView(toolOf(call.name))) return call.args;
+  const address = batchAddress(call.id, call.callOccurrenceKey);
   const filled: Record<string, unknown> = { ...call.args };
   for (const item of checked) {
-    if (item.toolCallId !== call.id || item.filled !== true || item.asked !== undefined) continue;
+    if (
+      batchAddress(item.toolCallId, item.callOccurrenceKey) !== address ||
+      item.filled !== true ||
+      item.asked !== undefined
+    )
+      continue;
     const value =
       item.source === 'answered'
         ? ports.keptValue(toolOf, kept, item.toolName, item.argument)

@@ -4,6 +4,8 @@ import { utf8Length } from '../../../lib/utf8.js';
 import { MAX_ASK_ARGUMENTS } from '../../../tools/declare.js';
 import { FINDINGS_ARGUMENT_SCHEMA_WITH_FROM, FINDINGS_SOURCES_SCHEMA } from './reserved.js';
 import { SOURCE_DECLARATION_PATH, sourceDeclarationView } from '../sourceContract.js';
+import { batchAddress, type BatchAddress } from '../arguments/batchAddress.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 const LEDGER_SOURCE_CONTRACT = sourceDeclarationView(FINDINGS_ARGUMENT_SCHEMA_WITH_FROM);
 const SOURCE_CONTRACT = sourceDeclarationView(FINDINGS_SOURCES_SCHEMA);
@@ -23,23 +25,28 @@ const HELD_NOTICE =
 
 /** No values enter this port. Undefined preserves the native human fallback before spend. */
 export function prepareSourceContractFeedback(
-  calls: readonly { readonly id: string }[],
-  omissions: readonly { readonly toolCallId: string; readonly argument: string }[],
+  calls: readonly { readonly id: string; readonly callOccurrenceKey?: CallOccurrenceKey }[],
+  omissions: readonly {
+    readonly toolCallId: string;
+    readonly argument: string;
+    readonly callOccurrenceKey?: CallOccurrenceKey;
+  }[],
   findings: boolean,
 ): readonly string[] | undefined {
-  const names = new Map<string, Set<string>>();
+  const names = new Map<BatchAddress, Set<string>>();
   for (const omission of omissions) {
     // UTF-8 JSON cannot be shorter than this UTF-16 character count.
     if (omission.argument.length > NOTICE_BYTES) return undefined;
-    const missing = names.get(omission.toolCallId) ?? new Set<string>();
+    const address = batchAddress(omission.toolCallId, omission.callOccurrenceKey);
+    const missing = names.get(address) ?? new Set<string>();
     missing.add(omission.argument);
     if (missing.size > MAX_ASK_ARGUMENTS) return undefined;
-    names.set(omission.toolCallId, missing);
+    names.set(address, missing);
   }
   const contents: string[] = [];
   let total = 0;
   for (const call of calls) {
-    const missing = names.get(call.id);
+    const missing = names.get(batchAddress(call.id, call.callOccurrenceKey));
     const content =
       missing === undefined
         ? HELD_NOTICE

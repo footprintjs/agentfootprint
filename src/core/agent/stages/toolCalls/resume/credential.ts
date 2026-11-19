@@ -220,7 +220,7 @@ export function buildResumeCredential(
             ...reportedStatusField(consentSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const consentHistory = consentSettlement.history;
       scope.history = consentHistory;

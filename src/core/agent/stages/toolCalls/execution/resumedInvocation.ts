@@ -1,4 +1,5 @@
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
+import { batchAddress } from '../../../arguments/batchAddress.js';
 import { buildArgumentRefusal } from '../access/argumentValidation.js';
 import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
@@ -31,6 +32,7 @@ import { runEndedBy, runsAsAsked, gatedCallOf } from '../../../../consentRequest
 import { rewrittenAfterApproval } from '../access/bindings.js';
 import { recheckResumedCall, recordResumedRefusal } from '../access/resumedAdmission.js';
 import { resumedCredential } from './resumedCredential.js';
+import { resumedPauseRefusal } from './resumedPauseRefusal.js';
 import { awaitUnder } from '../../../../../lib/abort.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
@@ -159,7 +161,9 @@ export function buildResumedInvocation(
       deps.inputsLayer === true ? await import('../../../arguments/dispatch.js') : undefined;
     const unmounted = links.unmountedRules(tool, toolName);
     const rulesRefusal =
-      inputs?.resolutionsFor(scope, iteration).get(toolCallId)?.refused ??
+      inputs
+        ?.resolutionsFor(scope, iteration)
+        .get(batchAddress(toolCallId, seen?.callOccurrenceKey))?.refused ??
       (unmounted === undefined ? undefined : await unmounted);
     if (rulesRefusal !== undefined) return { result: rulesRefusal, error: true };
     const invalidArgs = links.argumentRefusal(scope, tool, approved, {
@@ -326,7 +330,10 @@ export function buildResumedInvocation(
         // Read now, before any tool code runs: what the call proposed and
         // what `execute` is handed — values, never the arguments object.
         seen.entered = true;
-        seen.proposed = links.programOfCall(tool, links.proposedArgsOf(scope, toolCallId) ?? args);
+        seen.proposed = links.programOfCall(
+          tool,
+          links.proposedArgsOf(scope, toolCallId, seen.callOccurrenceKey) ?? args,
+        );
         seen.submitted = links.programOfCall(tool, args);
       }
       let result: unknown;
@@ -551,19 +558,8 @@ export function buildResumedInvocation(
       await links.endCall(scope);
       if (seen !== undefined && executed) seen.threw = true;
       if (isPauseRequest(err)) {
-        // Name the door this call actually came through (`heldTo`; the
-        // credential door passes none): an ask or a credential resume that
-        // read "an approved check-in" reported a gate nobody opened.
-        const door =
-          heldTo === 'checkIn'
-            ? 'an approved check-in'
-            : heldTo === 'ask'
-            ? 'an approved ask'
-            : 'granted credential consent';
         return {
-          result:
-            binding.halt?.tellLLM ??
-            `tool '${toolName}' requested a pause while resuming ${door}, which is not supported`,
+          result: binding.halt?.tellLLM ?? resumedPauseRefusal(toolName, heldTo),
           error: true,
           // It ran — a tool that asked to pause had already started work.
           executed,

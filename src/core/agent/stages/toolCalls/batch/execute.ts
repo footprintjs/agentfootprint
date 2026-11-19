@@ -2,6 +2,7 @@ import { refuseToolBatch, refuseSourceDeclarationBatch } from './refusal.js';
 import { recordFindings } from '../../../findings/ledger.js';
 import { shownArgsOf } from '../../../../toolShownArgs.js';
 import type { AskedArgument } from '../../../arguments/sourceCorrection.js';
+import { batchAddress, type BatchAddress } from '../../../arguments/batchAddress.js';
 import { prepareSourceContractFeedback } from '../../../findings/sourceContractFeedback.js';
 import { toolBatchFailure } from '../../toolCallShape.js';
 import { hasUnbindableCallId } from '../../batchParties.js';
@@ -73,12 +74,15 @@ export function buildToolBatchExecution(
     // `import()` only under the arm, so an unarmed batch awaits nothing new.
     const inputs: InputsDispatch | undefined =
       deps.inputsLayer === true ? await import('../../../arguments/dispatch.js') : undefined;
+    const excludedCallAddresses = toolCalls
+      .filter((_, index) => findingsRefusals[index] !== undefined)
+      .map((call) => batchAddress(call.id, call.callOccurrenceKey));
     let resolutions = readBatchResolutions(
       scope,
       inputs,
       iteration,
       toolCalls,
-      findingsRefusals,
+      excludedCallAddresses,
       deps.declarationCorrection === undefined,
     );
     const originalResolutions = resolutions;
@@ -97,25 +101,27 @@ export function buildToolBatchExecution(
         members,
       );
     };
-    const settleRefused = (ids: readonly string[]) => {
-      if (deps.declarationCorrection === undefined || inputs === undefined || ids.length === 0)
+    const settleRefused = (addresses: readonly BatchAddress[]) => {
+      if (
+        deps.declarationCorrection === undefined ||
+        inputs === undefined ||
+        addresses.length === 0
+      )
         return;
-      const refused = new Set(ids);
+      const refused = new Set(addresses);
       settle(
         'preempted',
         inputs
           .pendingOmissions(scope, scope.turnNumber as number, iteration)
-          .filter((row) => refused.has(row.toolCallId)),
+          .filter((row) => refused.has(batchAddress(row.toolCallId, row.callOccurrenceKey))),
       );
     };
     if (deps.declarationCorrection !== undefined)
       settleRefused([
-        ...toolCalls
-          .filter((_, index) => findingsRefusals[index] !== undefined)
-          .map((call) => call.id),
-        ...[...(resolutions?.values() ?? [])]
-          .filter((entry) => entry.refused !== undefined)
-          .map((entry) => entry.toolCallId),
+        ...excludedCallAddresses,
+        ...[...(resolutions ?? [])]
+          .filter(([, entry]) => entry.refused !== undefined)
+          .map(([address]) => address),
       ]);
     // ── THE BATCH ASK (honesty layer 2, step 4) — FIRST, before anything
     // is written or dispatched: when the layer named an `ask` argument a
@@ -191,9 +197,7 @@ export function buildToolBatchExecution(
               return true;
             },
           }),
-        excludedCallIds: toolCalls
-          .filter((_, index) => findingsRefusals[index] !== undefined)
-          .map((call) => call.id),
+        excludedCallAddresses,
         ...(deps.argumentSources === true && { argumentSources: true as const }),
         toolOf: (toolName) => operations.resolveTool(toolName).tool,
         admitAnswer: () => deps.resources?.answer.record(),

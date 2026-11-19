@@ -40,6 +40,7 @@ import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { turnWindowsOf } from '../../../time/bind.js';
 import type { CallWindowRow, ClockRow, TimeAnswerRow, TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
 import type { SourceCorpus } from './checks.js';
 import type { KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
@@ -178,13 +179,15 @@ export interface InputsLayerDeps {
   };
 }
 
-/** The calls' declared sources, by call id — `undefined` when the arm is off. */
+/** The calls' declared sources, by batch address — `undefined` when the arm is off. */
 function declaredOf(
   deps: InputsLayerDeps,
   calls: readonly BatchCall[],
-): ReadonlyMap<string, CallSources> | undefined {
+): ReadonlyMap<BatchAddress, CallSources> | undefined {
   if (deps.sources === undefined) return undefined;
-  return new Map(deps.sources.declaredOf(calls).map((d) => [d.toolCallId, d]));
+  return new Map(
+    deps.sources.declaredOf(calls).map((d) => [batchAddress(d.toolCallId, d.callOccurrenceKey), d]),
+  );
 }
 
 /**
@@ -193,7 +196,7 @@ function declaredOf(
  * build-time fact: a registered tool with an argument view, or a ToolProvider).
  */
 function armOf(
-  declared: ReadonlyMap<string, CallSources> | undefined,
+  declared: ReadonlyMap<BatchAddress, CallSources> | undefined,
   corpus?: SourceCorpus,
   argumentViews?: true,
 ): SourcesArm | undefined {
