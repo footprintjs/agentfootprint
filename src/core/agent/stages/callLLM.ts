@@ -236,7 +236,7 @@ export function buildCallLLMStage(
     // so `messages[i]` is still the message the cache marker's index names.
     // `committed` keeps both markers for the readers below that must see them.
     const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
-    const projected = stripFrameworkFields(committed);
+    const projected = stripFrameworkFields(committed, true);
     // The unmarked fast path can return the scope's live array. An adapter
     // that retains its request must never see later writes to history through it.
     const history = projected === committed ? [...projected] : projected;
@@ -264,7 +264,7 @@ export function buildCallLLMStage(
       deps.hasFindingsLedger === true
         ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
         : committed;
-    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed);
+    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the

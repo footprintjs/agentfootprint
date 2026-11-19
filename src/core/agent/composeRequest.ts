@@ -139,44 +139,90 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * // [{ role: 'user', content: 'hi' }]
  * ```
  */
-export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
+export function stripFrameworkFields(
+  messages: readonly LLMMessage[],
+  reuseProjection = false,
+): readonly LLMMessage[] {
   if (!messages.some(carriesFrameworkFields)) return messages;
-  return messages.map((m) => {
-    if (!carriesFrameworkFields(m)) return m;
-    const {
-      injectedBy: _delivered,
-      notDispatched: _settled,
-      toolResultOrigin: _resultOrigin,
-      toolChars: _toolBytes,
-      foldedExempt: _lineage,
-      answersAsk: _typedAnswer,
-      calls: _inner,
-      outcome: _settledAs,
-      reportedStatus: _reportedStatus,
-      callOccurrenceKey: _occurrenceKey,
-      ...composed
-    } = m;
-    void _delivered;
-    void _settled;
-    void _resultOrigin;
-    void _toolBytes;
-    void _lineage;
-    void _typedAnswer;
-    void _inner;
-    void _settledAs;
-    void _reportedStatus;
-    void _occurrenceKey;
-    if (!carriesToolCallKeys(composed.toolCalls)) return composed;
-    return {
-      ...composed,
-      toolCalls: composed.toolCalls.map((call) => {
-        if (!hasOccurrenceKey(call)) return call;
-        const { callOccurrenceKey: _key, ...providerCall } = call;
-        void _key;
-        return providerCall;
-      }),
-    };
+  return messages.map((message) => {
+    if (!carriesFrameworkFields(message)) return message;
+    return reuseProjection ? rememberedProjection(message) : stripMessageFields(message);
   });
+}
+
+// Committed history swaps immutable entries. A record-only address on every
+// tool message would otherwise mint a fresh port object on every iteration,
+// defeat the receipt's by-object memo and hash the whole conversation again.
+// Weak keys tie each projection to that history entry's own lifetime.
+interface MessageProjection {
+  readonly input: readonly (readonly [string, unknown])[];
+  readonly output: readonly (readonly [string, unknown])[];
+  readonly message: LLMMessage;
+}
+const projections = new WeakMap<LLMMessage, MessageProjection>();
+
+function rememberedProjection(source: LLMMessage): LLMMessage {
+  const input = Object.entries(source);
+  const prior = projections.get(source);
+  if (
+    prior !== undefined &&
+    sameMessageFields(prior.input, input) &&
+    sameMessageFields(prior.output, Object.entries(prior.message))
+  ) {
+    return prior.message;
+  }
+  const message = stripMessageFields(source);
+  projections.set(source, { input, output: Object.entries(message), message });
+  return message;
+}
+
+function sameMessageFields(
+  before: MessageProjection['input'],
+  after: MessageProjection['input'],
+): boolean {
+  return (
+    before.length === after.length &&
+    before.every(([key, value], index) => {
+      const field = after[index];
+      return field?.[0] === key && Object.is(field[1], value);
+    })
+  );
+}
+
+function stripMessageFields(m: LLMMessage): LLMMessage {
+  const {
+    injectedBy: _delivered,
+    notDispatched: _settled,
+    toolResultOrigin: _resultOrigin,
+    toolChars: _toolBytes,
+    foldedExempt: _lineage,
+    answersAsk: _typedAnswer,
+    calls: _inner,
+    outcome: _settledAs,
+    reportedStatus: _reportedStatus,
+    callOccurrenceKey: _occurrenceKey,
+    ...composed
+  } = m;
+  void _delivered;
+  void _settled;
+  void _resultOrigin;
+  void _toolBytes;
+  void _lineage;
+  void _typedAnswer;
+  void _inner;
+  void _settledAs;
+  void _reportedStatus;
+  void _occurrenceKey;
+  if (!carriesToolCallKeys(composed.toolCalls)) return composed;
+  return {
+    ...composed,
+    toolCalls: composed.toolCalls.map((call) => {
+      if (!hasOccurrenceKey(call)) return call;
+      const { callOccurrenceKey: _key, ...providerCall } = call;
+      void _key;
+      return providerCall;
+    }),
+  };
 }
 
 /** Does this message carry a field {@link stripFrameworkFields} removes? */

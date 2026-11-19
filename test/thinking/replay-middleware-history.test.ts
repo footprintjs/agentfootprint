@@ -4,9 +4,10 @@ import { Agent, defineTool } from '../../src/index.js';
 import { allow } from '../../src/core/agent/middleware/outcomes.js';
 import { assistantReplayFields } from '../../src/core/agent/assistantReplay.js';
 import { frozenTurnOf } from '../../src/core/agent/stages/toolCalls/access/bindings.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { mockAnthropicRaw, mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
 import { conversationRedaction } from '../../src/doors/security.js';
-import type { LLMMessage, LLMResponse } from '../../src/provider-contract/types.js';
+import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import type { MessageReplay } from '../../src/thinking/replay.js';
 
 const block = {
@@ -37,6 +38,11 @@ const response = (extra: Partial<LLMResponse>): LLMResponse => ({
   stopReason: 'stop',
   ...extra,
 });
+const expectedToolCall = {
+  id: 'actual-tool-call',
+  name: 'read_fixture',
+  args: { q: 'complete-identifier' },
+};
 
 describe('provider replay at native middleware history', () => {
   for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
@@ -44,8 +50,8 @@ describe('provider replay at native middleware history', () => {
       `${reactMode} keeps its actual assistant proposal with %s`,
       async (mode) => {
         const replay = proof();
-        let requests = 0,
-          executed = 0,
+        const requests: LLMRequest[] = [];
+        let executed = 0,
           observed = 0;
         const agent = Agent.create({
           model: 'fixture',
@@ -54,8 +60,9 @@ describe('provider replay at native middleware history', () => {
           provider: {
             name: 'provider-replay-native-fixture',
             thinkingHandler: mockThinkingHandler,
-            async complete() {
-              return ++requests === 1
+            async complete(request) {
+              requests.push(request);
+              return requests.length === 1
                 ? response({
                     toolCalls: [
                       {
@@ -98,13 +105,12 @@ describe('provider replay at native middleware history', () => {
                   message.role === 'assistant' &&
                   message.toolCalls?.some((tool) => tool.id === call.toolCallId),
               );
-              expect(proposal?.toolCalls).toEqual([
-                {
-                  id: 'actual-tool-call',
-                  name: 'read_fixture',
-                  args: { q: 'complete-identifier' },
-                },
-              ]);
+              expect(proposal?.toolCalls).toHaveLength(1);
+              const recordedCall = proposal!.toolCalls![0]!;
+              expect(readCallOccurrenceKey(recordedCall)).toEqual(expect.any(String));
+              const { callOccurrenceKey, ...providerFields } = recordedCall;
+              expect(callOccurrenceKey?.[4]).toBe(0);
+              expect(providerFields).toEqual(expectedToolCall);
               expect(() => structuredClone(proposal)).not.toThrow();
               expect(Object.isFrozen(proposal)).toBe(true);
               if (mode !== 'without-replay') {
@@ -126,7 +132,12 @@ describe('provider replay at native middleware history', () => {
           .build();
         try {
           expect(await agent.run({ message: 'Read the fixture.' })).toBe('Done.');
-          expect([requests, observed, executed]).toEqual([2, 1, 1]);
+          expect([requests.length, observed, executed]).toEqual([2, 1, 1]);
+          const sent = requests[1]!.messages;
+          expect(sent.find(({ role }) => role === 'assistant')?.toolCalls).toEqual([
+            expectedToolCall,
+          ]);
+          expect(sent.find(({ role }) => role === 'tool')).not.toHaveProperty('callOccurrenceKey');
           expect(replay).toEqual(proof());
           expect(block.signature).toBe('PRIVATE-EXACT-SIGNATURE');
           expect(JSON.stringify(agent.getLastSnapshot())).not.toContain('PRIVATE-');

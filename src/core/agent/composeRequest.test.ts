@@ -55,4 +55,22 @@ describe('stripFrameworkFields keeps call occurrence keys on the record', () => 
     expect(projectedAssistant.toolCalls?.[0]).not.toHaveProperty('callOccurrenceKey');
     expect(projectedResult).not.toHaveProperty('callOccurrenceKey');
   });
+
+  it('reuses a stable projection and rebuilds it when either side changes', () => {
+    const recordedResult = { ...result, content: 'found', callOccurrenceKey: occurrence };
+    const history = [recordedResult];
+    const [first] = stripFrameworkFields(history, true);
+    expect(stripFrameworkFields(history, true)[0]).toBe(first);
+
+    (first as { content: string }).content = 'edited by an adapter';
+    const [restored] = stripFrameworkFields(history, true);
+    expect(restored).not.toBe(first);
+    expect(restored).toEqual(result);
+
+    recordedResult.content = 'new recorded content';
+    expect(stripFrameworkFields(history, true)[0]).toEqual({
+      ...result,
+      content: 'new recorded content',
+    });
+  });
 });
