@@ -685,6 +685,7 @@ describe('UNIT — the reason table', () => {
       'coverage-gap',
       'empty-undeclared',
       'call-not-completed',
+      'result-withheld',
       'work-not-finished',
       // Honesty layer 3 (the results layer's period verdicts, step 7b).
       'period-not-held',

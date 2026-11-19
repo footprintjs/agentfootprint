@@ -197,6 +197,10 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'calls a tool made through `ctx.tools` that ran). One interface, no imports.',
   ],
   [
+    'src/provider-contract/wireRole.ts',
+    'The provider port’s existing wire-role type and immutable defaults. No imports.',
+  ],
+  [
     'src/thinking/replay.ts',
     'Replay metadata/report types reached by the provider PORT, plus a data-only refusal ' +
       'class. Its sole import points back to `LLMRequest` as a type: no replay planner, ' +

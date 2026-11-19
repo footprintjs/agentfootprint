@@ -187,6 +187,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'asked',
         'check-unreachable',
         'invariant-violation',
+        'result-withheld',
         'step-skipped',
         'steps-unfinished',
         'stopped-early',

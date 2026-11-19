@@ -14,3 +14,4 @@ export {
 } from './recordedCalls/history.js';
 export { readCallOccurrences, type CallOccurrence } from './recordedCalls/events.js';
 export { declarationOccurrences, groupOccurrenceEvidence } from './recordedCalls/evidence.js';
+export { nativeFactsOf, resultDispositions } from './recordedCalls/resultDispositions.js';

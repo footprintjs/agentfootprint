@@ -251,8 +251,11 @@ describe('UNIT — the read list and the run constant', () => {
       'argumentAsk',
       'middlewareDecisions',
     ]);
-    // A rewrite needs a ruled argument to rewrite: no inputs layer, no read.
+    // A tool result has an after-tool decision even when inputs are unarmed.
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('middlewareDecisions');
+    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toContain(
+      'middlewareDecisions',
+    );
   });
 
   it('names every armed layer and nothing else — absent when none is armed', () => {

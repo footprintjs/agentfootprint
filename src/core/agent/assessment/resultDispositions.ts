@@ -3,85 +3,10 @@ import { periodVerdict, leastHeld } from '../../../semantics/coverage/period.js'
 import { readToolResultEnvelope } from '../../../semantics/toolEffects.js';
 import { callOutcomeOf } from '../../../semantics/toolOutcome.js';
 import { parseMaybeJson } from '../emptiness.js';
-import type { HistoryCall } from '../recordedCalls.js';
-import { isRecord, str } from './recordValues.js';
 import type { TurnResult } from './turnResults.js';
 
-type Disposition = 'withheld' | 'rewritten';
-
-/** On old recordings the after-tool decision can still prove what policy served. */
-function legacyDispositions(
-  decisions: unknown,
-): ReadonlyMap<string, ReadonlyMap<string, Disposition>> {
-  const byId = new Map<string, Map<string, Disposition>>();
-  if (!Array.isArray(decisions)) return byId;
-  for (const decision of decisions) {
-    if (!isRecord(decision) || decision.moment !== 'after-tool' || decision.at !== 'tool') continue;
-    if (decision.changed !== true) continue;
-    const id = str(decision.toolCallId);
-    const name = str(decision.toolName);
-    if (id === undefined || name === undefined) continue;
-    const disposition =
-      decision.outcome === 'deny' || decision.outcome === 'refused'
-        ? 'withheld'
-        : decision.outcome === 'allow'
-        ? 'rewritten'
-        : undefined;
-    if (disposition === undefined) continue;
-    const byName = byId.get(id) ?? new Map<string, Disposition>();
-    if (byName.get(name) !== 'withheld') byName.set(name, disposition);
-    byId.set(id, byName);
-  }
-  return byId;
-}
-
-export function resultDispositions(
-  calls: readonly HistoryCall[],
-  decisions: unknown,
-): ReadonlyMap<number, Disposition> {
-  const legacy = legacyDispositions(decisions);
-  const stamped = new Set<string>();
-  const dispositions = new Map<number, Disposition>();
-  for (const { index, message, providerId, toolName } of calls) {
-    const mark = message.toolResultDisposition;
-    if (mark === 'withheld' || mark === 'rewritten') {
-      dispositions.set(index, mark);
-      if (providerId !== undefined && toolName !== undefined) {
-        stamped.add(JSON.stringify([providerId, toolName]));
-      }
-    }
-  }
-  for (const { index, providerId, toolName } of calls) {
-    if (providerId === undefined || toolName === undefined) continue;
-    // A new mark binds policy to its occurrence. Applying legacy decisions
-    // across another occurrence with the same provider ID would hide it too.
-    if (stamped.has(JSON.stringify([providerId, toolName]))) continue;
-    const disposition = legacy.get(providerId)?.get(toolName);
-    if (disposition !== undefined) dispositions.set(index, disposition);
-  }
-  return dispositions;
-}
-
-/** Native rows without a unique address are usable only when no possible owner rewrote them. */
-export function nativeFactsOf(
-  calls: readonly HistoryCall[],
-  dispositions: ReadonlyMap<number, Disposition>,
-): (row: Readonly<Record<string, unknown>>, address?: number) => boolean {
-  const affected = calls.filter((call) => dispositions.has(call.index));
-  return (row, address) => {
-    if (address !== undefined) return !dispositions.has(address);
-    return !affected.some(
-      (call) =>
-        call.providerId === row.toolCallId &&
-        (row.toolName === undefined ||
-          call.toolName === undefined ||
-          row.toolName === call.toolName),
-    );
-  };
-}
-
 /** Read a rewrite's declarations from its served bytes, without reading the native rows. */
-export function rewrittenResult(result: TurnResult): {
+function rewrittenResult(result: TurnResult): {
   readonly result: TurnResult;
   readonly period: ReturnType<typeof leastHeld>;
 } {
@@ -106,4 +31,24 @@ export function rewrittenResult(result: TurnResult): {
     },
     period: periods === undefined ? undefined : leastHeld(periods),
   };
+}
+
+export function deliveredResults(
+  recorded: readonly TurnResult[],
+  dispositions: ReadonlyMap<number, 'withheld' | 'rewritten'>,
+) {
+  let withheld = false;
+  const periods: { result: TurnResult; verdict: NonNullable<ReturnType<typeof leastHeld>> }[] = [];
+  const results = recorded.flatMap((result) => {
+    const disposition = dispositions.get(result.index);
+    if (disposition === 'withheld') {
+      withheld = true;
+      return [];
+    }
+    if (disposition !== 'rewritten') return [result];
+    const projection = rewrittenResult(result);
+    if (projection.period !== undefined) periods.push({ result, verdict: projection.period });
+    return [projection.result];
+  });
+  return { results, withheld, periods };
 }

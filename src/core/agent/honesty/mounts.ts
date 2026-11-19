@@ -544,7 +544,9 @@ export function answerFoldReads(arms: {
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),
-    ...(arms.toolMiddleware ? (['middlewareDecisions'] as const) : []),
+    ...(arms.toolMiddleware && (arms.tools || arms.inputs)
+      ? (['middlewareDecisions'] as const)
+      : []),
   ];
 }
 

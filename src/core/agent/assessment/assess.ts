@@ -61,14 +61,16 @@ import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
 import {
   groupOccurrenceEvidence,
   historyCallResolver,
+  nativeFactsOf,
   readHistoryCalls,
+  resultDispositions,
   uniqueHistoryProposal,
 } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { statePointer } from './pointer.js';
 import { periodRows, type PeriodRowRead } from './periodRows.js';
 import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
-import { nativeFactsOf, resultDispositions, rewrittenResult } from './resultDispositions.js';
+import { deliveredResults } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
@@ -873,19 +875,13 @@ export function foldState(
   const resolveCurrent = historyCallResolver(current);
   const dispositions = resultDispositions(current, state.middlewareDecisions);
   const nativeFacts = nativeFactsOf(current, dispositions);
-  const results = recordedResults.flatMap((result) => {
-    const disposition = dispositions.get(result.index);
-    if (disposition === 'withheld') {
-      // An occurrence witness would reveal how many results the host withheld.
-      if (!g.fired.has('result-withheld')) g.fired.set('result-withheld', []);
-      return [];
-    }
-    if (disposition !== 'rewritten') return [result];
-    const projection = rewrittenResult(result);
-    const reason = projection.period === undefined ? undefined : PERIOD_REASONS[projection.period];
+  const { results, withheld, periods } = deliveredResults(recordedResults, dispositions);
+  // An occurrence witness would reveal how many results the host withheld.
+  if (withheld) g.fired.set('result-withheld', []);
+  for (const { result, verdict } of periods) {
+    const reason = PERIOD_REASONS[verdict];
     if (reason !== undefined) fire(g, reason, historyPointer(result));
-    return [projection.result];
-  });
+  }
   const places = { history, resolve: historyCallResolver(historyCalls), begins };
   const coverage = coverageRows(
     state.coverageDeclared,

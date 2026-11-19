@@ -1819,6 +1819,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.resultWithheld@1": {
+  "text": "A result was kept out by a rule.",
+  "parts": [
+   {
+    "text": "A result was kept out by a rule."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.workNotFinished@1": {
   "text": "2 calls reported unfinished work.",
   "parts": [
