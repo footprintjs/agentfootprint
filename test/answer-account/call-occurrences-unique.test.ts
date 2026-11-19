@@ -176,9 +176,9 @@ it.each(SEEDS)(
           if (!runs.has(meta.runId)) runs.set(meta.runId, `recorded-run-${runs.size + 1}`);
         }
         const account = accountForAnswer(recording);
-        // The new unmatched-evidence templates advance the vocabulary only.
+        // New templates advance the vocabulary for unmatched evidence and withheld results.
         // Compare every old sentence and pointer against the pinned version-18 account.
-        expect(account.templates).toEqual({ set: 'answer-account', version: 19 });
+        expect(account.templates).toEqual({ set: 'answer-account', version: 20 });
         captures.push({
           account: { ...account, templates: { ...account.templates, version: 18 } },
           answer: typeof result === 'string' ? result : 'paused',

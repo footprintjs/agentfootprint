@@ -4,7 +4,7 @@ title: PricingTable
 
 # Interface: PricingTable
 
-Defined in: [src/provider-contract/types.ts:975](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L975)
+Defined in: [src/provider-contract/types.ts:960](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L960)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:975](https://github.com/footprintjs/
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:976](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L976)
+Defined in: [src/provider-contract/types.ts:961](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L961)
 
 ## Methods
 
@@ -20,7 +20,7 @@ Defined in: [src/provider-contract/types.ts:976](https://github.com/footprintjs/
 
 > **pricePerToken**(`model`, `kind`): `number`
 
-Defined in: [src/provider-contract/types.ts:978](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L978)
+Defined in: [src/provider-contract/types.ts:963](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L963)
 
 USD per ONE token for the given model+kind.
 

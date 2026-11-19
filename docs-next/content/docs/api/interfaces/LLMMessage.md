@@ -4,7 +4,7 @@ title: LLMMessage
 
 # Interface: LLMMessage
 
-Defined in: [src/provider-contract/types.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L21)
+Defined in: [src/provider-contract/types.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L23)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:21](https://github.com/footprintjs/a
 
 > `readonly` `optional` **answersAsk?**: [`TypedAnswerMark`](/docs/api/interfaces/TypedAnswerMark)
 
-Defined in: [src/provider-contract/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L250)
+Defined in: [src/provider-contract/types.ts:254](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L254)
 
 The library's mark on a person's typed answer: see [TypedAnswerMark](/docs/api/interfaces/TypedAnswerMark).
 
@@ -22,7 +22,7 @@ The library's mark on a person's typed answer: see [TypedAnswerMark](/docs/api/i
 
 > `readonly` `optional` **calls?**: readonly `InnerCallRan`[]
 
-Defined in: [src/provider-contract/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L252)
+Defined in: [src/provider-contract/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L256)
 
 On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent.
 
@@ -32,7 +32,7 @@ On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ra
 
 > `readonly` **content**: `string`
 
-Defined in: [src/provider-contract/types.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L23)
+Defined in: [src/provider-contract/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L25)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/provider-contract/types.ts:23](https://github.com/footprintjs/a
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L121)
+Defined in: [src/provider-contract/types.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L125)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -70,7 +70,7 @@ audit-invisible prompts.
 
 > `readonly` `optional` **foldedExempt?**: readonly `string`[]
 
-Defined in: [src/provider-contract/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L248)
+Defined in: [src/provider-contract/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L252)
 
 THE EXEMPTION LINEAGE OF A FOLD — on a compaction summary frame
 (`core/agent/window/summarize.ts` · `buildSummaryMessage`), the lookup
@@ -99,7 +99,7 @@ existed) exempts nothing. Absent when the fold carried no exempt value.
 
 > `readonly` `optional` **injectedBy?**: `object`
 
-Defined in: [src/provider-contract/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L141)
+Defined in: [src/provider-contract/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L145)
 
 v7.21 — WHO let this message into the window.
 
@@ -149,7 +149,7 @@ The injection's description, when it had one.
 
 > `readonly` `optional` **notDispatched?**: `object`
 
-Defined in: [src/provider-contract/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L193)
+Defined in: [src/provider-contract/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L197)
 
 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
 DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
@@ -212,7 +212,7 @@ The call in the same batch the run paused on — the one the sentence names.
 
 > `readonly` `optional` **outcome?**: `"refused"` \| `"failed"`
 
-Defined in: [src/provider-contract/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L51)
+Defined in: [src/provider-contract/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L55)
 
 `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
 `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
@@ -224,7 +224,7 @@ Not whether `execute` was entered. Never derived from `content`; read by `checki
 
 > `readonly` `optional` **replay?**: `MessageReplay`
 
-Defined in: [src/provider-contract/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L97)
+Defined in: [src/provider-contract/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L101)
 
 Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe.
 
@@ -234,7 +234,7 @@ Replay layout and local consistency evidence (including known loss); JSON/checkp
 
 > `readonly` `optional` **reportedStatus?**: `ReportedToolStatus`
 
-Defined in: [src/provider-contract/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L53)
+Defined in: [src/provider-contract/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L57)
 
 Tool-only status of an admitted return. Never derived from `content` or sent to a provider.
 
@@ -244,7 +244,7 @@ Tool-only status of an admitted return. Never derived from `content` or sent to 
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: [src/provider-contract/types.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L22)
+Defined in: [src/provider-contract/types.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L24)
 
 ***
 
@@ -252,7 +252,7 @@ Defined in: [src/provider-contract/types.ts:22](https://github.com/footprintjs/a
 
 > `readonly` `optional` **thinkingBlocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/provider-contract/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L95)
+Defined in: [src/provider-contract/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L99)
 
 v2.14 — Thinking blocks emitted by the LLM on assistant turns.
 
@@ -278,7 +278,7 @@ Empty array OR undefined when no thinking is present (most calls).
 
 > `readonly` `optional` **toolArgumentsFailure?**: `object`
 
-Defined in: [src/provider-contract/types.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L33)
+Defined in: [src/provider-contract/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L35)
 
 For a refused `role: 'tool'` result only: the same finite argument failure
 carried by its attempted call. Anthropic projects this pair as recovery
@@ -294,7 +294,7 @@ text, never as a successful parse of substituted empty input.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L25)
+Defined in: [src/provider-contract/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L27)
 
 For `role: 'tool'` — the tool_use id this result corresponds to.
 
@@ -304,7 +304,7 @@ For `role: 'tool'` — the tool_use id this result corresponds to.
 
 > `readonly` `optional` **toolCalls?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L68)
+Defined in: [src/provider-contract/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L72)
 
 For `role: 'assistant'` only — the tool calls the LLM requested in this
 turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -325,7 +325,7 @@ is NOT stripped on the way to a provider: it exists to be sent.
 
 > `readonly` `optional` **toolChars?**: `number`
 
-Defined in: [src/provider-contract/types.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L225)
+Defined in: [src/provider-contract/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L229)
 
 THE TOOL-BYTES BOUNDARY (honesty layer 2) — on a `role: 'tool'` message
 whose `content` the library annotated with a note that carries a VALUE
@@ -360,9 +360,19 @@ exactly what it always did.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/provider-contract/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L27)
+Defined in: [src/provider-contract/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L29)
 
 For `role: 'tool'` — the tool name this result corresponds to.
+
+***
+
+### toolResultDisposition?
+
+> `readonly` `optional` **toolResultDisposition?**: `"withheld"` \| `"rewritten"`
+
+Defined in: [src/provider-contract/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L49)
+
+A host's after-tool rule withheld or replaced this result. Kept off the provider wire.
 
 ***
 
@@ -370,7 +380,7 @@ For `role: 'tool'` — the tool name this result corresponds to.
 
 > `readonly` `optional` **toolResultOrigin?**: `"not-entered"` \| `"input-cancelled"` \| `"outcome-unknown"`
 
-Defined in: [src/provider-contract/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L45)
+Defined in: [src/provider-contract/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L47)
 
 Producer-owned notice origin, recorded only under findings admission.
 `not-entered` means the producer refused before tool.execute; an error
