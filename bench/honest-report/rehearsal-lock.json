@@ -31,14 +31,14 @@
       "footprintjs": "14.0.0",
       "foottrace": "2.1.0",
       "contextfootprint": "0.1.1",
-      "lockDigest": "c5ce7b60fc16b24a000c55b87494b76bf53f07ca923d7696a35833e202053ebf",
+      "lockDigest": "b540645022b2fb5a3b2e122781ef1530b743a8391e639b452a20255e056f8861",
       "archive": {
         "archive": "cohorts/candidate/candidate.tgz",
-        "sha256": "7eec9b93dd9b1d1ceab8ba80eee12666813d98a7f2d407ed7c4024b90541866a",
+        "sha256": "82355d7c4de3139b5f1a686b4ca6f1fa1b8d37daeace793e03d7275dfe72e99e",
         "version": "15.0.0"
       },
-      "packageSha256": "757eea4ad1bfc91960ef3f8133c77849d19017521c9c2cc4ce45c309ce82ced7"
+      "packageSha256": "cb90a6a0fa8b01874293f53257929bdb34a4e3f9dfc87e318a42c88e601d756a"
     }
   },
-  "transcriptSha256": "8a002b695f6641c0e05306033cbce4ad34138c7b328705cac66ab5d338bf9fca"
+  "transcriptSha256": "0a02a45be523179cafff9a01e028fee943c475ed182ffd9a8a0c983d050ca844"
 }
