@@ -391,6 +391,21 @@ function uniqueAssetBytes(urls, label, gzip = true) {
   return [...files].reduce((sum, file) => sum + (gzip ? gzipFile(file) : statSync(file).size), 0);
 }
 
+function hasLocalLink(html, route) {
+  return [...html.matchAll(/<a\b[^>]*>/gi)].some(([tag]) => {
+    const url = attribute(tag, 'href')?.replaceAll('&amp;', '&');
+    return url?.startsWith('/') && !url.startsWith('//') && url.endsWith(`/${route}`);
+  });
+}
+
+function hasEagerDemoAssets(html, demoPath) {
+  return html.includes(`/${demoPath}assets/`) ||
+    [...html.matchAll(/<(?:script|link|iframe)\b[^>]*>/gi)].some(([tag]) =>
+      attribute(tag, 'rel') !== 'canonical' &&
+      [attribute(tag, 'href'), attribute(tag, 'src')].some((url) => url?.includes(`/${demoPath}`)),
+    );
+}
+
 function analyzeRoute(route) {
   const htmlFile = path.join(outputRoot, route.file);
   if (!existsSync(htmlFile)) {
@@ -564,27 +579,10 @@ function analyzeSkillGraphFigures() {
       if (!page.html.includes(`id="${page.section}"`)) {
         fail(`${slug}: missing anchor #${page.section} in ${page.path}`);
       }
-      const links = [...page.html.matchAll(/<a\b[^>]*>/gi)].map(([tag]) =>
-        attribute(tag, 'href')?.replaceAll('&amp;', '&'),
-      );
-      if (
-        !links.some(
-          (url) => url?.startsWith('/') && !url.startsWith('//') && url.endsWith(`/${page.link}`),
-        )
-      ) {
+      if (!hasLocalLink(page.html, page.link)) {
         fail(`${slug}: missing link from ${page.path} to ${page.link}`);
       }
-      const eagerElements = [...page.html.matchAll(/<(?:script|link|iframe)\b[^>]*>/gi)];
-      if (
-        page.html.includes(`/${fallbackPath}assets/`) ||
-        eagerElements.some(
-          ([tag]) =>
-            attribute(tag, 'rel') !== 'canonical' &&
-            [attribute(tag, 'href'), attribute(tag, 'src')].some((url) =>
-              url?.includes(`/${fallbackPath}`),
-            ),
-        )
-      ) {
+      if (hasEagerDemoAssets(page.html, fallbackPath)) {
         fail(`${slug}: ${page.path} eagerly references the separate viewer assets`);
       }
     }
@@ -593,6 +591,73 @@ function analyzeSkillGraphFigures() {
   console.log(
     `Skill graph diagrams ${formatBytes(bytes)} gzip across ${figureUrls.length} theme assets`,
   );
+}
+
+function analyzeDynamicReact() {
+  const guidePath = 'docs/build/dynamic-react/';
+  const fallbackPath = 'demo/quick-start/';
+  const guideFile = requiredOutputAsset(`${guidePath}index.html`, 'Dynamic ReAct guide');
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Dynamic ReAct fallback');
+  if (!guideFile || !fallbackFile) return;
+  const guide = readFileSync(guideFile, 'utf8');
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const recorded = JSON.parse(
+    readFileSync(new URL('../lib/dynamic-react-figure.json', import.meta.url)),
+  );
+  const appVersion = manifest.dependencies.agentfootprint;
+  const views = [
+    { view: 'dynamic-react', anchor: 'try-it-live' },
+    { view: 'dynamic-react-subflows', anchor: 'how-every-iteration-actually-works' },
+  ];
+  for (const { view, anchor } of views) {
+    const query = new URLSearchParams({ view, agentfootprint: appVersion });
+    if (
+      !guide.includes(`id="${anchor}"`) ||
+      !hasLocalLink(guide, `${fallbackPath}?${query}#${view}`)
+    ) {
+      fail(`Dynamic ReAct: missing #${anchor} or its versioned ${view} launch link`);
+    }
+    const section = [...fallback.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/gi)]
+      .map(([html]) => html)
+      .find((html) => attribute(html.slice(0, html.indexOf('>') + 1), 'id') === view);
+    if (
+      !section?.includes('The interactive viewer is unavailable') ||
+      !hasLocalLink(section, `${guidePath}#${anchor}`)
+    ) {
+      fail(`Dynamic ReAct: missing static #${view} fallback text or return link`);
+    }
+  }
+  if (hasEagerDemoAssets(guide, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+    fail('Dynamic ReAct: guide or fallback HTML eagerly references the separate viewer assets');
+  }
+  const images = [...guide.matchAll(/<img\b[^>]*>/gi)].map(([tag]) => tag);
+  const figures = ['light', 'dark'].map((theme) => `/assets/dynamic-react-context-${theme}.svg`);
+  for (const figure of figures) {
+    const image = images.find((tag) => attribute(tag, 'src')?.endsWith(figure));
+    if (
+      !image || !attribute(image, 'alt') ||
+      attribute(image, 'width') !== String(recorded.figure.width) ||
+      attribute(image, 'height') !== String(recorded.figure.height)
+    ) {
+      fail(`Dynamic ReAct: ${guidePath} needs ${figure} with alt text and recorded dimensions`);
+    }
+  }
+  const captions = [...guide.matchAll(/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/gi)];
+  const recordedCaptions = captions.filter(([caption]) =>
+    caption.includes(`/commit/${recorded.commit}`) &&
+    recorded.cohort.every((member) => caption.includes(member)),
+  );
+  if (recordedCaptions.length !== 2) {
+    fail('Dynamic ReAct: both recordings must show their recorded commit and cohort');
+  }
+  if (!guide.includes(recorded.recording.result)) {
+    fail('Dynamic ReAct: missing the final mock answer in the guide');
+  }
+  const bytes = uniqueAssetBytes(figures, 'Dynamic ReAct diagram');
+  console.log(`Dynamic ReAct diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
 }
 
 function countSearchRecords(index) {
@@ -690,6 +755,7 @@ console.log(`Checking static-site budgets in ${outputRoot}`);
 for (const route of ROUTES) analyzeRoute(route);
 analyzeQuickStartFlowchart();
 analyzeSkillGraphFigures();
+analyzeDynamicReact();
 analyzeSearch();
 analyzeOutput();
 
