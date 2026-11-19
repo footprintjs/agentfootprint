@@ -86,6 +86,7 @@ describe('SCENARIO — the standing line follows the output formatter', () => {
       options: { standingLine: false } as const,
       expected: formatted,
     },
+    { mode: 'layer off', options: false as const, expected: formatted },
   ])('$mode', async ({ options, expected }) => {
     const formatterInputs: string[] = [];
     const builder = Agent.create({
@@ -107,7 +108,9 @@ describe('SCENARIO — the standing line follows the output formatter', () => {
     const agent = (options === undefined ? builder : builder.answerLayer(options)).build();
     const tokens: string[] = [];
     const endings: { text: string; standing?: string }[] = [];
+    const assessed: string[] = [];
     agent.on('agentfootprint.stream.token', ({ payload }) => tokens.push(payload.content));
+    agent.on('agentfootprint.answer.assessed', ({ payload }) => assessed.push(payload.standing));
     agent.on('agentfootprint.agent.turn_end', ({ payload }) =>
       endings.push({ text: payload.finalContent, standing: payload.answerAssessment?.standing }),
     );
@@ -115,6 +118,8 @@ describe('SCENARIO — the standing line follows the output formatter', () => {
     expect(await agent.run({ message: 'Please do the work.' })).toBe(expected);
     expect(formatterInputs).toEqual([ANSWER]);
     expect(tokens).toEqual([expected]);
-    expect(endings).toEqual([{ text: expected, standing: 'not-sure' }]);
+    const standing = options === false ? undefined : 'not-sure';
+    expect(endings).toEqual([{ text: expected, standing }]);
+    expect(assessed).toEqual(standing === undefined ? [] : [standing]);
   });
 });
