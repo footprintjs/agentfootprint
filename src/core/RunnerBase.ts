@@ -35,6 +35,7 @@ import {
 } from '../redaction/runRedaction.js';
 import type { EventServing } from '../redaction/served.js';
 import { registerRunnerLive } from './runnerLive.js';
+import { createRunnerSnapshotReader, type RunnerSnapshotOptions } from './runnerSnapshot.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { requireArgumentPartyCheckpoint } from './agent/stages/argumentParties.js';
@@ -103,6 +104,7 @@ export abstract class RunnerBase<
 {
   protected readonly dispatcher = new EventDispatcher();
   protected readonly attachedRecorders: CombinedRecorder[] = [];
+  private readonly readServedSnapshot = createRunnerSnapshotReader();
 
   /** Domain values and metadata over the native chart's one run lifecycle. */
   private execution: RunnerExecution<TValues> | undefined;
@@ -151,23 +153,8 @@ export abstract class RunnerBase<
    * native view; without either arm the snapshot is unchanged. The library's own logic never reads this
    * getter — what it computes on is the live run (`liveSnapshot`).
    */
-  getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
-    const selected = this.execution?.selected();
-    if (selected === undefined) return undefined;
-    const coverage = selected.value.redaction?.coverage;
-    if (coverage === undefined) return undefined;
-    switch (coverage.state) {
-      case 'covered':
-        return selected.view.snapshot({ redact: true });
-      case 'declared-none':
-        return selected.value.redaction?.recordPolicy === undefined
-          ? selected.view.snapshot()
-          : selected.view.snapshot({ redact: true });
-      case 'unknown':
-        // An executor no run of this runner opened: nothing says what its
-        // record may show, so none of it is served — fail closed, never raw.
-        return undefined;
-    }
+  getLastSnapshot(options?: RunnerSnapshotOptions) {
+    return this.readServedSnapshot(this.execution?.selected(), options);
   }
 
   /**
@@ -321,8 +308,8 @@ export abstract class RunnerBase<
    * started. Served exactly as `getLastSnapshot()` is: under the run's
    * redaction policy, the placeholder where a selected value was.
    */
-  getSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
-    return this.getLastSnapshot();
+  getSnapshot(options?: RunnerSnapshotOptions) {
+    return this.getLastSnapshot(options);
   }
 
   /**

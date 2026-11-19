@@ -60,7 +60,10 @@ it('the documented Agent facade holds only declarations and direct wiring', () =
       const name = member.name.getText(source);
       if (name === 'getLastSnapshot') {
         expect(call.expression.getText(source)).toBe('super.getLastSnapshot');
-        expect(call.arguments).toHaveLength(0);
+        expect(member.parameters).toHaveLength(1);
+        expect(call.arguments.map((argument) => argument.getText(source))).toEqual([
+          member.parameters[0]!.name.getText(source),
+        ]);
         continue;
       }
       const nativeReaders = new Set([
