@@ -19,7 +19,7 @@ export const system = [
 ].join('\n');
 
 export function createDesk(library, task) {
-  const { defineTool, defineSkill, allow, deny, ask } = library;
+  const { defineTool, defineSkill, skillGraph, allow, deny, ask } = library;
   const entries = [];
   let reached = false;
   const tool = defineTool({
@@ -35,7 +35,7 @@ export function createDesk(library, task) {
       required: ['target'],
       additionalProperties: false,
     },
-    effects: task.id === 'empty-search' || task.id === 'unavailable-tool' ? 'read' : 'write',
+    ...(task.id === 'empty-search' || task.id === 'unavailable-tool' ? { effects: 'read' } : {}),
     execute({ target }) {
       entries.push(target);
       if (target !== task.target) return { content: 'Unknown target.', effects: [], status: 'failure' };
@@ -51,13 +51,14 @@ export function createDesk(library, task) {
   return {
     apply(builder) {
       if (task.id === 'failed-step') {
-        return builder.injection(defineSkill({
+        const skill = defineSkill({
           id: 'catalog-label',
           description: 'Label a catalog card',
           body: 'Follow the labeling procedure.',
           tools: [tool],
           steps: [{ tool: task.tool, note: 'Label the named card' }],
-        }));
+        });
+        return builder.skillGraph(skillGraph().entry(skill).build());
       }
       builder = builder.tools([tool]);
       if (task.id !== 'refused-call' && task.id !== 'declined-call') return builder;
