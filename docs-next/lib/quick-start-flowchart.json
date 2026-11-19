@@ -1,0 +1,12 @@
+{
+  "commit": "d966fbcd880bba639ac587f8fd59164772403a0e",
+  "cohort": [
+    "agentfootprint@15.0.0",
+    "agentfootprint-lens@0.84.0",
+    "footprint-explainable-ui@2.0.0",
+    "footprintjs@14.0.0",
+    "foottrace@2.1.0"
+  ],
+  "width": 1070,
+  "height": 532
+}
