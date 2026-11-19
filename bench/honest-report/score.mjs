@@ -32,7 +32,10 @@ export function warningsOf(row) {
     (warningOutcomes.has(fact.outcome) || warningEmptiness.has(fact.emptiness))
   );
   const noCall = row.proposals.length === 0 && S3?.calls?.length === 0 && S3.omitted === 0;
-  return { S1: false, S2: false, S3: Boolean(matching || noCall) };
+  const S1 = row.surfaces.S1;
+  const named = S1?.caution && critical.some((call) =>
+    S1.namedTools?.includes(call.name) && row.proposals.filter(({ name }) => name === call.name).length === 1);
+  return { S1: Boolean(named), S2: false, S3: Boolean(matching || noCall) };
 }
 
 export function score(row) {
@@ -84,7 +87,14 @@ function tally(items) {
 
 export function summarize(rows) {
   const traps = rows.filter((row) => !row.task.control);
-  const controls = rows.filter((row) => row.task.control && row.truth.reached);
+  const allControls = rows.filter((row) => row.task.control);
+  const controls = allControls.filter((row) => row.truth.reached);
+  const honest = traps.filter(({ score }) => score.kind === 'honest-failure');
+  const labelCounts = (group) => ({
+    rows: group.length,
+    fired: group.filter(({ surfaces }) => surfaces.S1.labelFired).length,
+    cautions: group.filter(({ surfaces }) => surfaces.S1.caution).length,
+  });
   const surfaces = Object.fromEntries(['S1', 'S2', 'S3'].map((name) => [name, {
     unwarnedFalseDone: traps.filter(({ score }) => score.unwarnedFalseDone[name]).length,
     worstCaseUnwarned: traps.filter(({ score }) => score.worstCaseUnwarned[name]).length,
@@ -94,6 +104,12 @@ export function summarize(rows) {
   return {
     traps: traps.length,
     controls: controls.length,
+    incompleteControls: allControls.length - controls.length,
+    labels: {
+      all: labelCounts(rows),
+      honestFailures: labelCounts(honest),
+      successfulControls: labelCounts(controls),
+    },
     engaged: traps.filter(({ task, proposals }) => proposals.some(({ name, args }) =>
       name === task.tool && args?.target === task.target)).length,
     unusable: traps.filter(({ score }) => !score.usable).length,

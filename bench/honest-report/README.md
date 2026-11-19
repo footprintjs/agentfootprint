@@ -1,8 +1,9 @@
 # Scripted honesty comparison
 
-This bench pairs the same five blocked catalog tasks under the published AgentFootprint
-14.10.1 and 15.0.0 packages. A sixth, doable task is a rehearsal-only control. See the
-[frozen scoring rule](RULE.md) and [paid pilot plan](PLAN.md).
+This bench pairs the same five blocked catalog tasks and one doable control under
+the published AgentFootprint 14.10.1 and 15.0.0 packages. Both versions run with
+defaults and the documented `.answerLayer({ standingLine: true })`.
+See the [frozen scoring rule](RULE.md) and [paid pilot plan](PLAN.md).
 
 ## Rehearse
 
@@ -12,7 +13,7 @@ filesystem access outside this directory for the benchmark process.
 ```sh
 npm --prefix cohorts/before ci --ignore-scripts --strict-peer-deps
 npm --prefix cohorts/after ci --ignore-scripts --strict-peer-deps
-node --permission --allow-fs-read="$PWD" --test --test-isolation=none score.test.mjs
+node --permission --allow-fs-read="$PWD" --test --test-isolation=none budget.test.mjs plan.test.mjs score.test.mjs
 node --permission --allow-fs-read="$PWD" run.mjs --rehearse > rehearsal.json
 ```
 
@@ -23,10 +24,12 @@ lock. Both contain the same ContextFootPrint 0.1.1. These are whole-cohort compa
 
 The rehearsal uses only scripted replies. It fails when a task enters the wrong tool path,
 a blocked task obtains its result, the decline fails to resume, a real step is missing,
-or the scorer fails to separate an honest answer, a false claim and a false claim with
-a caveat. The JSON report keeps provider text, delivered text, fake-desk outcome,
-structural account facts, step events and model-visible tool replies separate. It also
-retains request/response sizing, cohort lock digests, and the counts for each surface.
+the verified standing line and attached assessment disagree with the arm, or the
+scorer fails to separate an honest answer, a false claim and a false claim with a caveat. The JSON report keeps provider text, delivered text, fake-desk outcome,
+structural account facts, step events and model-visible tool replies separate. It
+retains full synthetic transcripts, request/response sizing, cohort lock digests,
+and the counts for each surface. The paid entry point verifies the harness and rule
+against the input hashes from the complete rehearsal before loading the adapter.
 
 The initial adapter setup rejected a declaration of `effects: 'write'`. Both releases use
 the absence of a read-only declaration for write-capable tools. The failed-step adapter
@@ -48,7 +51,9 @@ forced `maxTokens`. Translate these without adding prompting content or extra to
 The adapter must honor the plan's Haiku model, 4,096-token response cap, zero retries,
 uncached requests and no server-side tools. Leave sampling and thinking at the model
 defaults. The cap includes thinking. Pass through provider failure/stop information
-and usage. If the adapter cannot account for its attempt, the reservation still counts.
+and version-independent usage `{ input, output }`. Both are final token totals.
+Translate explicit absent usage to `undefined`; the reservation still counts. Include
+reported caching fields if the upstream unexpectedly provides them.
 The harness depends on the adapter honoring that contract.
 
 The coordinator owns adapter provisioning, credentials, and execution in a sandbox.
@@ -60,10 +65,14 @@ node --permission --allow-fs-read="$PWD" \
   --allow-fs-write="$PWD/paid-attempts.jsonl" run.mjs --coordinator-run > pilot.json
 ```
 
-The runner reserves the conservative cost before each dispatch. The exclusively created
-`paid-attempts.jsonl` records reservations and completed rows, including partial batches.
-Keep it if a batch stops. A second invocation with that receipt present refuses to run.
-The adapter contract bounds billable attempts. The [$15 plan](PLAN.md) leaves reserve.
+The four paid preflight runs are part of repeat one. The runner prints the usage
+and projection before dispatching any later run, and continues only at USD 8 or
+less. The exclusively created `paid-attempts.jsonl` holds each reservation and
+settlement, provider requests and responses, complete records, and any stop. It
+uses reported actual usage and a fallback reservation for missing usage, with
+a separate worst-exposure check before every dispatch. Both checks use the USD 10
+spend stop. Keep the receipt if a batch stops. A second invocation with that
+receipt present refuses to run. [Projection and spend details](PLAN.md)
 
 Read paid output as a paired pilot. Real providers may decline without proposing the
 missing tool or any other critical call. The engagement count shows that difference.
