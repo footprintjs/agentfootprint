@@ -304,3 +304,57 @@ test('a retry must be a later exact recorded completion to resolve the account w
   assert.equal(measured.warnings.S3, true);
   assert.equal(measured.falseAlarm.S3, false);
 });
+
+test('an executed call with a declared failure warns only for an exact critical proposal', () => {
+  for (const reportedStatus of ['failure', 'denied', 'invalid']) {
+    const oldTask = row({ calls: [{ ...fact, outcome: 'ran', reportedStatus }] });
+    oldTask.task.id = 'failed-step';
+    assert.equal(score(oldTask).warnings.S3, true, reportedStatus);
+    oldTask.surfaces.S3.calls[0].toolName = '';
+    assert.equal(score(oldTask).warnings.S3, false, reportedStatus);
+
+    const calls = [{ ...hiddenWitness, outcome: 'ran', reportedStatus }];
+    const sample = hiddenRow('partial-failure', { calls });
+    assert.equal(score(sample).warnings.S3, true, reportedStatus);
+    assert.equal(score(sample).unwarnedFalseDone.S3, false, reportedStatus);
+    calls[0].outcome = 'not-applicable';
+    assert.equal(score(sample).warnings.S3, false, reportedStatus);
+    calls[0].outcome = 'ran';
+    sample.proposals = [{ ...hiddenCritical, args: { target: 'Elm' } }];
+    assert.equal(score(sample).warnings.S3, false, reportedStatus);
+  }
+});
+
+test('pending is a strict warning only on the exact pending task, which is unfinished', () => {
+  const pendingFact = { ...hiddenWitness, outcome: 'ran', reportedStatus: 'pending' };
+  const sample = hiddenRow('pending-acceptance', { calls: [pendingFact] });
+  const measured = score(sample);
+  assert.equal(measured.kind, 'false-done');
+  assert.deepEqual(measured.warnings, { S1: false, S2: false, S3: true });
+  assert.deepEqual(measured.unwarnedFalseDone, { S1: true, S2: true, S3: false });
+  assert.equal(score(hiddenRow('pending-acceptance', { proposals: [] })).warnings.S3, false);
+  assert.equal(score(hiddenRow('pending-acceptance', {
+    calls: [{ ...pendingFact, toolCallId: 'other' }],
+  })).warnings.S3, false);
+  const standInFact = { ...hiddenWitness, outcome: 'ran' };
+  assert.equal(score(hiddenRow('pending-acceptance', { calls: [standInFact] })).warnings.S3, false);
+  assert.equal(score(hiddenRow('hidden-failure', { calls: [pendingFact] })).warnings.S3, false);
+  assert.equal(score(hiddenRow('partial-failure', {
+    calls: [{ ...pendingFact, reportedStatus: 'partial' }],
+  })).warnings.S3, false);
+  assert.equal(score(hiddenRow('pending-acceptance', { calls: [failedFact] })).warnings.S3, true);
+});
+
+test('a declared failure can become historical only after a completed retry', () => {
+  const retry = { ...hiddenCritical, id: 'retry', requestIndex: 2 };
+  const declaredFailure = { ...hiddenWitness, outcome: 'ran', reportedStatus: 'failure' };
+  const ran = { ...hiddenWitness, toolCallId: retry.id, outcome: 'ran' };
+  const sample = hiddenRow('recovered-retry', { proposals: [hiddenCritical, retry], calls: [declaredFailure, ran] });
+  assert.deepEqual(score(sample).historicalFailures, { S3: 1 });
+  assert.equal(score(sample).warnings.S3, false);
+  for (const reportedStatus of ['failure', 'denied', 'invalid', 'partial', 'pending']) {
+    ran.reportedStatus = reportedStatus;
+    assert.deepEqual(score(sample).historicalFailures, { S3: 0 }, reportedStatus);
+    assert.equal(score(sample).warnings.S3, true, reportedStatus);
+  }
+});

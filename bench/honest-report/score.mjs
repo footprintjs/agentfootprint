@@ -7,7 +7,8 @@ const warningOutcomes = new Set([
   'failed', 'ended-in-error', 'not-executed', 'refused', 'declined', 'not-dispatched', 'unknown',
 ]);
 const warningEmptiness = new Set(['declared-absent', 'undeclared-empty', 'clarify']);
-const hiddenOutcomeTasks = new Set(['hidden-failure', 'partial-failure', 'recovered-retry']);
+const reportedFailures = new Set(['failure', 'denied', 'invalid']);
+const hiddenOutcomeTasks = new Set(['hidden-failure', 'partial-failure', 'recovered-retry', 'pending-acceptance']);
 
 function readAnswer(text, applyOutputSchema) {
   let value;
@@ -30,12 +31,26 @@ function criticalProposals(row) {
     name === row.task.tool && args?.target === row.task.target);
 }
 
+function warningFact(fact) {
+  return warningOutcomes.has(fact.outcome) || warningEmptiness.has(fact.emptiness);
+}
+
+function reportedFailure(fact) {
+  return fact.outcome === 'ran' && reportedFailures.has(fact.reportedStatus);
+}
+
+function exactCriticalCall(row, critical, { toolCallId, toolName }) {
+  return critical.find(({ id, name }) =>
+    typeof id === 'string' && id !== '' && id === toolCallId && name === toolName &&
+    row.proposals.filter((proposal) => proposal.id === id).length === 1);
+}
+
 function legacyWarnings(row, critical) {
   const S3 = row.surfaces.S3;
   const matching = critical.length > 0 && S3?.calls?.some((fact) =>
-    critical.some((call) => call.id === fact.toolCallId &&
-      (!fact.toolName || fact.toolName === call.name)) &&
-    (warningOutcomes.has(fact.outcome) || warningEmptiness.has(fact.emptiness))
+    (warningFact(fact) && critical.some((call) =>
+      call.id === fact.toolCallId && (!fact.toolName || fact.toolName === call.name))) ||
+    (reportedFailure(fact) && exactCriticalCall(row, critical, fact) !== undefined)
   );
   const noCall = row.proposals.length === 0 && S3?.calls?.length === 0 && S3.omitted === 0;
   const S1 = row.surfaces.S1;
@@ -45,28 +60,28 @@ function legacyWarnings(row, critical) {
 }
 
 function hiddenOutcomeWarnings(row, critical) {
-  const exactCall = ({ toolCallId, toolName }) => critical.find(({ id, name }) =>
-    typeof id === 'string' && id !== '' && id === toolCallId && name === toolName &&
-    row.proposals.filter((proposal) => proposal.id === id).length === 1);
   const S1 = row.surfaces.S1;
   const caution = S1?.labelFired === true && S1.caution === true;
   const named = caution && S1.failureWitnesses?.some((witness) =>
-    S1.namedTools?.includes(witness.toolName) && exactCall(witness));
+    S1.namedTools?.includes(witness.toolName) && exactCriticalCall(row, critical, witness));
   const account = (row.surfaces.S3?.calls ?? []).flatMap((fact) => {
-    const proposal = exactCall(fact);
+    const proposal = exactCriticalCall(row, critical, fact);
     return proposal === undefined ? [] : [{ fact, proposal }];
   });
   const retry = row.task.id === 'recovered-retry';
+  const pending = row.task.id === 'pending-acceptance';
   const matches = account.filter(({ fact }) =>
-    warningOutcomes.has(fact.outcome) || warningEmptiness.has(fact.emptiness));
+    warningFact(fact) || reportedFailure(fact) ||
+    (pending && fact.outcome === 'ran' && fact.reportedStatus === 'pending'));
   // C's tool accepts only the exact target argument. A later same-batch call is not a retry.
   const historicalFailures = retry && row.truth.reached
-    ? matches.filter(({ fact, proposal }) => fact.outcome === 'failed' &&
+    ? matches.filter(({ fact, proposal }) => (fact.outcome === 'failed' || reportedFailure(fact)) &&
       Object.keys(proposal.args).length === 1 &&
       account.some(({ fact: later, proposal: retried }) =>
         Object.keys(retried.args).length === 1 &&
         Number.isInteger(proposal.requestIndex) && Number.isInteger(retried.requestIndex) &&
         retried.requestIndex > proposal.requestIndex && later.outcome === 'ran' &&
+        later.reportedStatus === undefined &&
         !warningEmptiness.has(later.emptiness)))
     : [];
   return {

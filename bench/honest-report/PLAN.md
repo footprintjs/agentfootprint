@@ -1,18 +1,18 @@
-# Hidden-outcome pilot plan · revision 5
+# Hidden-outcome pilot plan · revision 6
 
 ## Schedule
 
-| Cell | Six existing tasks × 10 | Three new tasks × 20 | Total |
+| Cell | Six existing tasks × 10 | Four new tasks × 20 | Total |
 | --- | ---: | ---: | ---: |
-| Published 15.0.0, defaults | 60 | 60 | 120 |
-| Published 15.0.0, label on | 60 | 60 | 120 |
-| Packed candidate, label on | 60 | 60 | 120 |
-| Total | 180 | 180 | 360 |
+| Published 15.0.0, defaults | 60 | 80 | 140 |
+| Published 15.0.0, label on | 60 | 80 | 140 |
+| Packed candidate, label on | 60 | 80 | 140 |
+| Total | 180 | 240 | 420 |
 
 Preflight uses the repeat-one partial-failure case in each cell. This case files eight
 cards and has the largest planned tool exchange. The three preflight draws are part
-of the 360 runs. The remaining 357 run in repeat and task order, grouping the three
-cells for each task and repeat. The eight-request cap permits 2,880 slots in total,
+of the 420 runs. The remaining 417 run in repeat and task order, grouping the three
+cells for each task and repeat. The eight-request cap permits 3,360 slots in total,
 including preflight. An answer on the eighth request is eligible.
 
 Use `claude-haiku-5-5` with the original adapter contract. Each response can use
@@ -32,8 +32,8 @@ The published 15.0.0 cells accounted for 787 of those requests, with maxima of
 SHA-256 of the uncompressed ledger is
 `2fbce5a939434254c738135bd21e3c736367a4f03a021738119368b180e81113`.
 
-Pricing all 2,880 slots at the higher full-batch peaks gives **USD 6.2424**
-(`2,880 × (1,710 + 5 × 525) / 2,000,000`). This estimate assumes eight dispatches
+Pricing all 3,360 slots at the higher full-batch peaks gives **USD 7.2828**
+(`3,360 × (1,710 + 5 × 525) / 2,000,000`). This estimate assumes eight dispatches
 for every draw, each priced at both historical peaks. The new partial-failure
 case may use larger requests. The three new preflight measurements determine
 whether the paid batch continues.
@@ -42,7 +42,7 @@ whether the paid batch continues.
 
 1. Run the partial-failure case once in each of the three scheduled cells. Use
    the largest input and output counts per request from each cell to price its
-   952 remaining slots. For an attempt without final usage, use the reserved
+   1,112 remaining slots. For an attempt without final usage, use the reserved
    input estimate and full output cap. Add settled preflight charges once.
    Continue only with measurements from all three cells and a projected total
    of **USD 8 or less**.
@@ -52,7 +52,7 @@ whether the paid batch continues.
    final usage is charged the value reserved for it.
 3. Before each dispatch, booked charges plus the byte-based input estimate and
    full output cap must fit **USD 10**. The input estimate is
-   \`ceil(serialized UTF-8 input bytes / 2) + 406\`. The ledger also requires room
+   `ceil(serialized UTF-8 input bytes / 2) + 406`. The ledger also requires room
    for one physical attempt at the full standard-context exposure of USD 0.51024.
    It replaces that exposure with actual cost when usage is known and retains
    the full exposure when usage is missing. There is only one request in flight.

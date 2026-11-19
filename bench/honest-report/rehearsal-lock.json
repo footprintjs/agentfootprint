@@ -1,18 +1,18 @@
 {
-  "scriptedRows": 72,
+  "scriptedRows": 78,
   "inputs": {
-    "RULE.md": "fabdae146a8968455835d26ba908196b6ec07d656946b1b4adcf389dc593eef7",
-    "PLAN.md": "b0fb4ae3b86babbac11d5f48ef69d6b7a8526055e91bd8671ab99b83140a5858",
-    "PREDICTIONS.md": "3cc8cc44f1d600b98885dfd20ab12124cd1dc91b9d70f55a53e24faeb93e1da3",
-    "tasks.mjs": "48e9ce531052a30e9f0c010df367c19e3978a40ca77af507ed2e06069b66f508",
-    "hiddenTasks.mjs": "9557142b18abf31acf7cf164803a194960badfa539b0f8245be13a3e7fc3b03d",
-    "benchmark.mjs": "76af8bda25b831c17a129b26a017a5fde07f205ec03483cc25ac3ee134b40313",
+    "RULE.md": "8c89a702f01901613dcdf3c97c222ab09e74e891d5b8c88e87e0936aaf2d4be1",
+    "PLAN.md": "2e08bc115dcfeb481e23509f7c5cce588e6172ebb185b46ca4397a65e05099e0",
+    "PREDICTIONS.md": "d21dfd3b7c9cd37e81af8752ecbf7f39a34719772a572063937565c3dc63d02e",
+    "tasks.mjs": "4c5a780aacf6b583637a33d467963865c631cac4cfb2f16dd2bc9efbc6e16175",
+    "hiddenTasks.mjs": "337983ad02ad2ecc24f5fd28ad5f97d9aae67658b17e0384d380060f09a2b7b3",
+    "benchmark.mjs": "6b2b91668cd4106fe7f53226d26a43275e06884b8c333c02d4423f6914dc4f2e",
     "budget.mjs": "2737ea23214458c63d337f3878ba7cfc3a8bd70507b9c17a53119f91f1d55a30",
     "candidate.mjs": "69471d6f0be1fc1c6106614d6ead720dd53f904dab85a4031bf43e529a1419f9",
     "cohorts.mjs": "2fb8b87527498d180d983acb49518005f7a3835ff28628bac211d7851659a1e5",
     "plan.mjs": "ffa4dc067886153e1db7b4579603abaedbd4e84a5d64d13e0804cf3412d2d449",
-    "run.mjs": "9cc10627c22feaefe08a899ac3ea9cfa6d2477452cf93a8470971848f5746ba8",
-    "score.mjs": "855cb167901e8eeb0b1bfff5d21746f7be985893b0ec60766560da9690e8d242",
+    "run.mjs": "5c03a507329a05249a971f043b04f51e99bd6ff5cd7633e4e67ab7a7ae2cb240",
+    "score.mjs": "8f296ea5311f7764605d94e19ca604c5cb1d3bd76dd2916a936b482ab101bb79",
     "terminalAnswer.mjs": "5ff6289360eb6f5b9204e443e2b152d3f9bf451df9c378ba8ec6e2f147efdc11",
     "cohorts/after/package-lock.json": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
   },
@@ -33,5 +33,5 @@
       "placeholder": "published-15.0.0"
     }
   },
-  "transcriptSha256": "e94ab3408678b888d42e23de104053f995dac370e33ba782cbb8d29c14056f83"
+  "transcriptSha256": "728e232cf192f517023c60110bbfd715a6ce7c3bcd212d8eabd82e42382d6fc8"
 }

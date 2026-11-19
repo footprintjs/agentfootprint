@@ -53,7 +53,7 @@ async function rehearse(installed, inputs) {
       rows.push({ ...run, ...result });
     }
   }
-  assertRehearsal(rows);
+  assertRehearsal(rows, { packedCandidate: installed.candidate.stamp.archive !== undefined });
   const rehearsal = { scriptedRows: rows.length, inputs, cohorts: recordedCohorts(installed),
     transcriptSha256: createHash('sha256').update(JSON.stringify(rows)).digest('hex') };
   return { rows, rehearsal };
