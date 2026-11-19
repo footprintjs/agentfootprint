@@ -119,6 +119,7 @@ export function prepareAgentRun(
   // identity, but the stages' scopes still feed the real-value path the
   // crash checkpoint and the window's meter read.
   const redaction = this.native.prepareRunRedaction(invocation, runOptions?.redact);
+  redaction.trackMountedTurns();
 
   const attachments: NonNullable<RunSetup['attachments']>[number][] = redaction.recorders.map(
     (recorder) => ({ recorder }),
@@ -164,14 +165,13 @@ export function prepareAgentRun(
   // The InjectionEngine typedEmits context.evaluated; this bridge forwards it
   // to the dispatcher (ContextRecorder handles the write-derived context.*).
   attachObserver(contextEvaluatedRecorder({ dispatcher, getRunContext: getRunCtx }));
-  attachObserver(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
+  const turnEvents = { dispatcher, getRunContext: getRunCtx, turnMetaAt: redaction.turnMetaAt };
+  attachObserver(streamRecorder(turnEvents));
   // agentRecorder feeds the run-checkpoint tracker (iteration_end →
   // history snapshot), which is read ONLY in run()'s catch — after the
   // engine's terminal flush at the reject boundary — so deferral is safe
   // (pinned by test: crash checkpoints stay complete under 'deferred').
-  attachObserver(
-    agentRecorder({ dispatcher, getRunContext: getRunCtx, rootTurnAt: redaction.rootTurnAt }),
-  );
+  attachObserver(agentRecorder(turnEvents));
   // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,
   // so a thrown run clears in-flight live state + flips monitor status.
   // Deferral-safe: the reject-boundary terminal flush delivers error.fatal
