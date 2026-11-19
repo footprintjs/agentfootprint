@@ -140,12 +140,11 @@ export class ShapeBook {
     const before = target.shape;
     if (before?.[0] !== 'array' || !Array.isArray(tail)) {
       this.forgetChildren(path, target);
-      const shape = classify(tail);
-      this.set(
-        path,
-        shape[0] !== 'array' || absentRoot || (before && before[0] !== 'unknown') ? shape : unknown,
-        target,
-      );
+      // The native append concatenates only when both operands are arrays.
+      // An unmeasured predecessor leaves an array tail's final positions unknown.
+      if (Array.isArray(tail) && !absentRoot && (!before || before[0] === 'unknown'))
+        this.set(path, unknown, target);
+      else this.observe(path, tail);
       return;
     }
     const start = before[1]!;

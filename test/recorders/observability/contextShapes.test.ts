@@ -144,6 +144,23 @@ describe('recorded context shapes', () => {
     expect(precise.changes[0][1]).toContainEqual([['a'], 'array', 3]);
   });
 
+  it('observes selected and full paths when an append establishes the entire value', () => {
+    const nested = ['a', '0', 'rows'];
+    const append = row('a', 'append', { a: [{ rows: [1, 2] }] });
+    const masked = { ...append, redactedPaths: [nested.join('\u001f')] };
+    for (const opts of [{ paths: [nested] }, { scan: 'full' } as const]) {
+      for (const base of [{}, { a: false }]) {
+        expect(contextShapeAt(shapes(base, [append], opts), 0, nested)).toEqual(['array', 2]);
+        expect(contextShapeAt(shapes(base, [masked], opts), 0, nested)).toEqual(['unknown']);
+      }
+      // An unknown previous array length gives us no position for the appended element.
+      const ambiguous = shapes({ a: 'REDACTED' }, [append], opts);
+      expect(contextShapeAt(ambiguous, 0, nested)).toEqual(['unknown']);
+      expect(contextShapeAt(ambiguous, 0, ['a'])).toEqual(['unknown']);
+    }
+    expect(contextShapeAt(shapes({}, [append]), 0, nested)).toEqual(['unknown']);
+  });
+
   it('explicit and deep observations respect redaction inside a replaced parent', () => {
     const hidden = 'box\u001fsecret';
     for (const opts of [
