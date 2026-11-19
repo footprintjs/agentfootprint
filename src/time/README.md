@@ -6,7 +6,7 @@
 duration or a zone, or splits or joins a range.
 
 The one grammar prevents result, argument and dataset time readers from drifting. The
-design is [docs/design/time/](../../docs/design/time/README.md).
+design is [docs/design/time/](../../docs/design/time/README.md). See [clock dispatch cost](clock-cost.md).
 
 It is a leaf: it imports nothing outside itself, and `readers/` imports only the port (pinned by
 `test/time/byte-identity-rows.test.ts` and `english-reader.test.ts`).
