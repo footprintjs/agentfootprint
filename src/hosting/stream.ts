@@ -248,33 +248,33 @@ export async function* toSSE<TIn, TOut>(
     }
     const turnEnd = event.type === 'agentfootprint.agent.turn_end';
     const rootEnd = turnEnd && event.meta?.rootTurn === true;
+    // Completion follows the run boundary even when no output is admitted.
+    const fatal = event.type === 'agentfootprint.error.fatal';
+    const terminal = awaitingResumedRoot
+      ? rootEnd || fatal || event.type === 'agentfootprint.pause.request'
+      : turnEnd || fatal;
+    if (terminal) {
+      done = true;
+      wakeup();
+    }
     // Taken before the filter, so a filtered-out token still consumes its text.
     const reply =
       live !== undefined && event.type === 'agentfootprint.stream.token'
         ? replyFor(event)
         : undefined;
     const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd) : undefined;
-    const admitted = filter === undefined || filter(event);
-    if (admitted) {
-      queue.push(
-        reply !== undefined
-          ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
-          : format === 'text' && turnEnd
-          ? ({
-              type: event.type,
-              payload: { finalContent: answer },
-            } as unknown as AgentfootprintEvent)
-          : event,
-      );
-    }
-    // A resumed Agent's completion is independent of output selection.
-    // Fresh streams and compositions still close on an admitted end.
-    const fatal = event.type === 'agentfootprint.error.fatal';
-    const terminal = awaitingResumedRoot
-      ? rootEnd || fatal || event.type === 'agentfootprint.pause.request'
-      : admitted && (turnEnd || fatal);
-    if (terminal) done = true;
-    if (admitted || terminal) wakeup();
+    if (filter && !filter(event)) return;
+    queue.push(
+      reply !== undefined
+        ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+        : format === 'text' && turnEnd
+        ? ({
+            type: event.type,
+            payload: { finalContent: answer },
+          } as unknown as AgentfootprintEvent)
+        : event,
+    );
+    wakeup();
   };
   const offRecord: Unsubscribe = runner.on('*', listener);
   const unsub = (): void => {

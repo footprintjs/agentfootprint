@@ -106,6 +106,24 @@ async function readText(
   return chunks;
 }
 
+/** Start reading now. Once the run's observers have drained, the next heartbeat bounds the wait. */
+function readWithHeartbeat(agent: Agent, options: ToSSEOptions) {
+  let drained = false;
+  const reading = (async () => {
+    const chunks: string[] = [];
+    for await (const chunk of toSSE(agent, { ...options, heartbeatMs: 50 })) {
+      if (chunk !== ': ping\n\n') chunks.push(chunk);
+      // Returning releases the iterator even when the stream failed to close.
+      else if (drained) return { closed: false, chunks };
+    }
+    return { closed: true, chunks };
+  })();
+  return () => {
+    drained = true;
+    return reading;
+  };
+}
+
 /** Run once, reading the text reply; returns the reply and the run's answer. */
 async function textReply(
   agent: Runnable,
@@ -203,6 +221,36 @@ describe('toSSE text — the appended text reaches the reader', () => {
 });
 
 describe('toSSE text — regression', () => {
+  it.each(['text', 'full'] as const)(
+    'a fresh %s stream closes with a token-only filter',
+    async (format) => {
+      const agent = reportBuilder(REPORT, false).build();
+      const readAfterDrain = readWithHeartbeat(agent, {
+        format,
+        filter: (event) => event.type === 'agentfootprint.stream.token',
+      });
+      try {
+        expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
+        await agent.drainObservers();
+        const { closed, chunks } = await readAfterDrain();
+        expect(closed).toBe(true);
+        const tokens = REPORT_CHUNKS.slice(0, -1);
+        if (format === 'text') {
+          expect(chunks).toEqual(tokens);
+        } else {
+          expect(chunks).toHaveLength(tokens.length);
+          chunks.forEach((chunk, i) => {
+            expect(chunk).toMatch(/^event: agentfootprint\.stream\.token\n/);
+            expect(chunk).toContain(`"content":${JSON.stringify(tokens[i])}`);
+          });
+        }
+      } finally {
+        await readAfterDrain();
+        await agent.shutdown();
+      }
+    },
+  );
+
   it('with nothing appended, the streamed answer is not written twice', async () => {
     const agent = Agent.create({
       provider: mock({ chunkDelayMs: 0, replies: [call('lookup'), 'There are 12 open orders.'] }),
@@ -457,41 +505,28 @@ describe('toSSE text — resume', () => {
       if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
 
       const ends: unknown[] = [];
-      let resumed = false;
-      const reading = (async () => {
-        const chunks: string[] = [];
-        for await (const chunk of toSSE(agent, {
-          format: 'text',
-          heartbeatMs: 50,
-          filter: (event) => {
-            if (event.type !== 'agentfootprint.agent.turn_end') return true;
-            ends.push({ root: event.meta.rootTurn, answer: event.payload.finalContent });
-            return !(dropRoot && event.meta.rootTurn === true);
-          },
-        })) {
-          if (chunk !== ': ping\n\n') chunks.push(chunk);
-          // Once observers drain, an extra heartbeat means the stream stayed
-          // open. Returning from the loop releases the iterator in that case.
-          else if (resumed) return { closed: false, chunks };
-        }
-        return { closed: true, chunks };
-      })();
+      const readAfterDrain = readWithHeartbeat(agent, {
+        format: 'text',
+        filter: (event) => {
+          if (event.type !== 'agentfootprint.agent.turn_end') return true;
+          ends.push({ root: event.meta.rootTurn, answer: event.payload.finalContent });
+          return !(dropRoot && event.meta.rootTurn === true);
+        },
+      });
       try {
         expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
         await agent.drainObservers();
-        resumed = true;
         expect(ends).toEqual([
           { root: undefined, answer: 'The draft is ready.' + WARNING },
           { root: true, answer: REPORT + WARNING },
         ]);
         const rootChunks = dropRoot ? REPORT_CHUNKS.slice(0, -1) : REPORT_CHUNKS;
-        expect(await reading).toEqual({
+        expect(await readAfterDrain()).toEqual({
           closed: true,
           chunks: ['The ', 'draft ', 'is ', 'ready.', ...rootChunks],
         });
       } finally {
-        resumed = true;
-        await reading;
+        await readAfterDrain();
         await Promise.all([agent.shutdown(), child.shutdown()]);
       }
     },
