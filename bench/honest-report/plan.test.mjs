@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { PROJECTED_LIMIT_UNITS } from './budget.mjs';
-import { limits, paidSchedule, projectPreflight } from './plan.mjs';
+import { cellKey, cells, limits, paidSchedule, projectPreflight } from './plan.mjs';
 
-const schedule = paidSchedule(['before', 'after']);
+const schedule = paidSchedule();
 
 function withUsage(inputTokens, outputTokens) {
   return schedule.preflight.map((run) => ({
@@ -13,29 +13,72 @@ function withUsage(inputTokens, outputTokens) {
   }));
 }
 
-test('four preflight draws are included once in the 480-run schedule', () => {
+test('each scheduled cell includes ten repeats per legacy task and twenty per hidden task', () => {
+  assert.deepEqual(cells.map(({ label, arm }) => cellKey(label, arm)), [
+    'published/defaults', 'published/label-on', 'candidate/label-on',
+  ]);
   const all = [...schedule.preflight, ...schedule.remaining];
-  assert.equal(schedule.preflight.length, 4);
-  assert.equal(all.length, 480);
-  assert.equal(all.filter(({ task }) => task.control).length, 80);
-  assert.equal(new Set(all.map(({ arm, label, task, repeat }) => [arm, label, task.id, repeat].join('/'))).size, 480);
+  assert.equal(all.length, 360);
+  for (const { label, arm } of cells) {
+    const draws = all.filter((item) => item.label === label && item.arm === arm);
+    assert.equal(draws.length, 120);
+    for (const [taskId, count] of Object.entries({
+      'unavailable-tool': 10,
+      'refused-call': 10,
+      'declined-call': 10,
+      'failed-step': 10,
+      'empty-search': 10,
+      'done-control': 10,
+      'hidden-failure': 20,
+      'partial-failure': 20,
+      'recovered-retry': 20,
+    })) {
+      assert.deepEqual(draws.filter(({ task }) => task.id === taskId).map(({ repeat }) => repeat),
+        Array.from({ length: count }, (_, index) => index + 1));
+    }
+  }
   assert.equal(limits.maxRequests, 8);
-  assert.equal(all.length * limits.maxRequests, 3840);
+  assert.equal(all.length * limits.maxRequests, 2880);
+});
+
+test('preflight uses the first partial-failure draw in each cell', () => {
+  assert.equal(schedule.preflight.length, 3);
+  assert.equal(schedule.remaining.length, 357);
+  assert.deepEqual(schedule.preflight.map(({ task, repeat, ...cell }) => {
+    assert.equal(task.id, 'partial-failure');
+    assert.equal(repeat, 1);
+    return cell;
+  }), cells);
+  assert.ok(!schedule.remaining.some(({ task, repeat }) => task.id === 'partial-failure' && repeat === 1));
 });
 
 test('the projection prices remaining slots and adds settled preflight charges exactly once', () => {
-  const estimate = projectPreflight(withUsage(1000, 200), schedule.remaining, 8000);
-  assert.equal(estimate.cells.length, 4);
+  const rows = withUsage(1000, 200);
+  rows[2].requests.push({ accounting: { inputTokens: 2000, outputTokens: 100, usageKnown: true } });
+  const estimate = projectPreflight(rows, schedule.remaining, 8000);
+  assert.equal(estimate.cells.length, 3);
   assert.ok(estimate.cells.every(({ remainingSlots }) => remainingSlots === 952));
-  assert.equal(estimate.projectedUnits, 8000 + 4 * 952 * 2000);
+  assert.equal(estimate.projectedUnits, 8000 + 952 * (2000 + 2000 + 3000));
   assert.equal(estimate.canContinue, true);
 });
 
-test('the USD 8 ceiling is inclusive and an unmeasurable cell cannot continue', () => {
-  const empty = withUsage(0, 0);
-  assert.equal(projectPreflight(empty, schedule.remaining, PROJECTED_LIMIT_UNITS).canContinue, true);
-  assert.equal(projectPreflight(empty, schedule.remaining, PROJECTED_LIMIT_UNITS + 1).canContinue, false);
-  assert.equal(projectPreflight(empty.slice(1), schedule.remaining, 0).canContinue, false);
+test('the USD 8 ceiling is inclusive', () => {
+  const rows = withUsage(1000, 200);
+  const projectedRemaining = 3 * 952 * (1000 + 5 * 200);
+  const onLimit = PROJECTED_LIMIT_UNITS - projectedRemaining;
+  assert.equal(projectPreflight(rows, schedule.remaining, onLimit).canContinue, true);
+  assert.equal(projectPreflight(rows, schedule.remaining, onLimit + 1).canContinue, false);
+});
+
+test('the projection requires one measured row for each exact cell', () => {
+  const [defaults, published, candidate] = withUsage(1000, 200);
+  const continues = (rows) => projectPreflight(rows, schedule.remaining, 20_000).canContinue;
+  assert.equal(continues([candidate, defaults, published]), true);
+  assert.equal(continues([defaults, published]), false);
+  assert.equal(continues([defaults, published, published]), false);
+  assert.equal(continues([defaults, published, { ...candidate, arm: 'defaults' }]), false);
+  assert.equal(continues([defaults, published, { ...candidate, requests: [{}] }]), false);
+  assert.equal(continues([defaults, published, candidate, candidate]), false);
 });
 
 test('missing usage enters the projection with the settlement fallback, including the output cap', () => {
@@ -44,10 +87,4 @@ test('missing usage enters the projection with the settlement fallback, includin
   const estimate = projectPreflight(rows, schedule.remaining, 24_000);
   assert.deepEqual(estimate.cells[0].peaks, { input: 1000, output: 4096 });
   assert.equal(estimate.cells[0].measuredRequests.at(-1).usageKnown, false);
-});
-
-test('the revised schedule yields USD 5.088 at the reviewed request peaks', () => {
-  const projected = projectPreflight(withUsage(1300, 270), schedule.remaining, 32 * (1300 + 5 * 270));
-  assert.equal(projected.projectedUsd, 5.088);
-  assert.equal(projected.canContinue, true);
 });

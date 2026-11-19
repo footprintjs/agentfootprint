@@ -1,75 +1,63 @@
-# Four-cell pilot plan · revision 3
+# Hidden-outcome pilot plan · revision 5
 
 ## Schedule
 
-Five blocked tasks and one successful control × both published cohorts × defaults
-and the documented answer-label opt-in × 20 repeats = **480 runs**. That is 400
-blocked-case runs and 80 controls. The four failed-step preflight runs are part
-of repeat one, leaving 476 later runs. Each task interleaves the two cohorts
-within each arm. Every run allows eight provider requests, for at most 3,840
-dispatch slots before the spend stop.
+| Cell | Six existing tasks × 10 | Three new tasks × 20 | Total |
+| --- | ---: | ---: | ---: |
+| Published 15.0.0, defaults | 60 | 60 | 120 |
+| Published 15.0.0, label on | 60 | 60 | 120 |
+| Packed candidate, label on | 60 | 60 | 120 |
+| Total | 180 | 180 | 360 |
 
-Use `claude-haiku-5-5`, as named in the original rule and used in the earlier
-benchmark batches. Each response has a 4,096-output-token cap, including thinking.
-The coordinator's adapter uses default thinking and sampling and exactly one
-physical generation attempt without caching, retries or separately billed tools.
-[Haiku 5.5 reference](https://platform.claude.com/docs/en/models/haiku-5-5/overview) · [Claude API pricing](https://platform.claude.com/docs/en/about-claude/pricing)
+Preflight uses the repeat-one partial-failure case in each cell. This case files eight
+cards and has the largest planned tool exchange. The three preflight draws are part
+of the 360 runs. The remaining 357 run in repeat and task order, grouping the three
+cells for each task and repeat. The eight-request cap permits 2,880 slots in total,
+including preflight. An answer on the eighth request is eligible.
 
-## Scripted sizing
+Use `claude-haiku-5-5` with the original adapter contract. Each response can use
+up to 4,096 output tokens including thinking. The adapter uses default thinking
+and sampling and one physical generation attempt without caching, retries or
+separately billed tools.
 
-The runner measures the UTF-8 bytes of system text, messages and tool definitions.
-The planning estimate is `ceil(input bytes / 2) + 406` per request. The table uses
-the largest estimate among scripted answer variants. It applies to both arms
-in the rehearsal, which produced identical prompt sizes. Output is charged from
-provider usage in a paid run; scripted output cannot forecast adaptive thinking.
+## Estimate using completed batch 3
 
-| Task | 14.10.1 requests | Estimated input tokens/run | 15.0.0 requests | Estimated input tokens/run |
-| --- | ---: | ---: | ---: | ---: |
-| Unavailable tool | 2 | 1,648 | 2 | 1,648 |
-| Refused call | 2 | 1,607 | 2 | 1,607 |
-| Declined call | 2 | 1,606 | 2 | 1,606 |
-| Failed step | 2 | 2,593 | 3 | 4,837 |
-| Empty search | 3 | 2,737 | 3 | 2,737 |
-| Successful control | 2 | 1,604 | 2 | 1,604 |
+The completed revision-4 batch ran 480 cases with 1,492 settled requests, 1,094,499
+input tokens and 219,038 output tokens. The high-tier prices used by the ledger
+give a total of USD 1.0948445. The maximum per-request counts were 1,710 input
+and 525 output tokens, taken independently across all known-usage settlements.
+The published 15.0.0 cells accounted for 787 of those requests, with maxima of
+1,710 input and 473 output tokens. These counts come from the coordinator's
+`outputs/honesty-20261119/batch-3-complete/paid-attempts.jsonl.gz`. The verified
+SHA-256 of the uncompressed ledger is
+`2fbce5a939434254c738135bd21e3c736367a4f03a021738119368b180e81113`.
 
-At those scripted request counts the schedule would use about 1,033,360
-estimated input tokens and 63,160 estimated scripted output tokens across
-1,080 requests, or about **USD 0.67** at the high-tier prices. Filling the
-output cap on every scripted-sized request would instead cost about USD 11.58.
-
-The coordinator's stopped revision-2 batch reported peaks of about 1,300 input
-and 270 output tokens per request. At those observed peaks, all 3,840 revision-3
-slots would project **USD 5.088** at the high tier
-(`3,840 × (1,300 + 5 × 270) / 2,000,000`). The new preflight measures the
-actual revision-3 requests before the batch continues.
+Pricing all 2,880 slots at the higher full-batch peaks gives **USD 6.2424**
+(`2,880 × (1,710 + 5 × 525) / 2,000,000`). This estimate assumes eight dispatches
+for every draw, each priced at both historical peaks. The new partial-failure
+case may use larger requests. The three new preflight measurements determine
+whether the paid batch continues.
 
 ## Admission and actual spend
 
-1. Run one failed-step case per cell. Print each final input/output pair or its
-   flagged fallback. Project each cell's remaining request slots at that
-   cell's maximum observed input and output tokens per request, then add
-   the four runs' settled costs once. Continue only for a projection of **USD 8
-   or less**. Missing usage contributes the reservation values to this projection.
+1. Run the partial-failure case once in each of the three scheduled cells. Use
+   the largest input and output counts per request from each cell to price its
+   952 remaining slots. For an attempt without final usage, use the reserved
+   input estimate and full output cap. Add settled preflight charges once.
+   Continue only with measurements from all three cells and a projected total
+   of **USD 8 or less**.
 2. Account after each response at **USD 0.50 per million input tokens** and
    **USD 2.50 per million output tokens**, using integer half-microdollars.
-   Output already includes thinking. A refusal or failed request without
-   reported final usage is charged the estimate used for its reservation.
+   Output includes thinking. A refusal or failed request without reported
+   final usage is charged the value reserved for it.
 3. Before each dispatch, booked charges plus the byte-based input estimate and
-   full output cap must fit **USD 10**. Separately require room for one physical
-   attempt at the full standard-context exposure of USD 0.51024. Replace that
-   exposure with actual known cost at settlement. An attempt without usage
-   retains its full exposure in this second accounting. There is only one
-   in-flight request. A breach stops dispatches and preserves the existing rows.
+   full output cap must fit **USD 10**. The input estimate is
+   \`ceil(serialized UTF-8 input bytes / 2) + 406\`. The ledger also requires room
+   for one physical attempt at the full standard-context exposure of USD 0.51024.
+   It replaces that exposure with actual cost when usage is known and retains
+   the full exposure when usage is missing. There is only one request in flight.
 
-Both checks rely on the trusted adapter conforming to the model, cap, one-attempt,
-uncached and no-server-tools contract. A token-count heuristic alone cannot cap
-a real bill. The second check covers estimation error without pre-reserving the full
-context for every scheduled run. If usage is inconsistent with the contract, stop.
-The USD 8 projection leaves USD 2 before the spend stop and USD 5 below the
-original USD 15 authorization. Neither the projection nor the scripted sizing
-guarantees that the full schedule will finish.
-
-The plan keeps the successful controls and removes the legacy extra arms, model
-judges, closed-set matrix, and separately billed smoke run. It starts with traps.
-Report an early stop and the completed denominators without presenting a partial
-batch as a complete comparison.
+The coordinator runs the paid batch with the same ledger for preflight and all
+later attempts. Preserve rows on either stop and report how many scheduled
+runs finished. The adapter's model, cap, one-attempt, uncached and no-server-tools
+contract governs both checks. Inconsistent usage stops the batch.

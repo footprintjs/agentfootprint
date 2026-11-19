@@ -1,17 +1,37 @@
 {
   "scriptedRows": 72,
   "inputs": {
-    "RULE.md": "1b04e2fa985b9936c674991bbeb1e599616e860dca457e6c1aa31dce8b18d0ea",
-    "tasks.mjs": "1725cecf67fa50ced2e442954a59c5f1d6f6f073dae45b14c7c87eedac7d5dff",
-    "benchmark.mjs": "060c500547ce954a39931087e0f6be4573a03e98cbd82317792b1809c6a78fbe",
+    "RULE.md": "fabdae146a8968455835d26ba908196b6ec07d656946b1b4adcf389dc593eef7",
+    "PLAN.md": "b0fb4ae3b86babbac11d5f48ef69d6b7a8526055e91bd8671ab99b83140a5858",
+    "PREDICTIONS.md": "3cc8cc44f1d600b98885dfd20ab12124cd1dc91b9d70f55a53e24faeb93e1da3",
+    "tasks.mjs": "48e9ce531052a30e9f0c010df367c19e3978a40ca77af507ed2e06069b66f508",
+    "hiddenTasks.mjs": "9557142b18abf31acf7cf164803a194960badfa539b0f8245be13a3e7fc3b03d",
+    "benchmark.mjs": "76af8bda25b831c17a129b26a017a5fde07f205ec03483cc25ac3ee134b40313",
     "budget.mjs": "2737ea23214458c63d337f3878ba7cfc3a8bd70507b9c17a53119f91f1d55a30",
-    "cohorts.mjs": "bd46db9661fa041ead59a7afd110d79e65135c010c90520b7e800711bda944a4",
-    "plan.mjs": "4aae36d95c9716e351fa4711fa579ed4e5eaea6aa01f92035f0e0a1cce0eea1c",
-    "run.mjs": "a36b9f85e0d2dcbff76349261658caf95a059f7e9a7d0cb50e4df727376d6002",
-    "score.mjs": "109039821700908010fdacb378179ada8d961f2c02de0bcec83e24d8bac08752",
+    "candidate.mjs": "69471d6f0be1fc1c6106614d6ead720dd53f904dab85a4031bf43e529a1419f9",
+    "cohorts.mjs": "2fb8b87527498d180d983acb49518005f7a3835ff28628bac211d7851659a1e5",
+    "plan.mjs": "ffa4dc067886153e1db7b4579603abaedbd4e84a5d64d13e0804cf3412d2d449",
+    "run.mjs": "9cc10627c22feaefe08a899ac3ea9cfa6d2477452cf93a8470971848f5746ba8",
+    "score.mjs": "855cb167901e8eeb0b1bfff5d21746f7be985893b0ec60766560da9690e8d242",
     "terminalAnswer.mjs": "5ff6289360eb6f5b9204e443e2b152d3f9bf451df9c378ba8ec6e2f147efdc11",
-    "cohorts/before/package-lock.json": "726d1bd70ab2a4e3eecf0e1a55a5076672a2f4c72fe3a25388c9e05afda3adb0",
     "cohorts/after/package-lock.json": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
   },
-  "transcriptSha256": "42af3cdc55e94345fcc198c935ed3e68c9e0efc8b0b9cfcd8ca8e77c4637687f"
+  "cohorts": {
+    "published": {
+      "agentfootprint": "15.0.0",
+      "footprintjs": "14.0.0",
+      "foottrace": "2.1.0",
+      "contextfootprint": "0.1.1",
+      "lockDigest": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
+    },
+    "candidate": {
+      "agentfootprint": "15.0.0",
+      "footprintjs": "14.0.0",
+      "foottrace": "2.1.0",
+      "contextfootprint": "0.1.1",
+      "lockDigest": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea",
+      "placeholder": "published-15.0.0"
+    }
+  },
+  "transcriptSha256": "e94ab3408678b888d42e23de104053f995dac370e33ba782cbb8d29c14056f83"
 }

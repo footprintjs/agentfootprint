@@ -1,5 +1,15 @@
 import { MAX_OUTPUT_TOKENS, PROJECTED_LIMIT_UNITS, toDollars, unitsFor } from './budget.mjs';
-import { arms, maxRequestsPerRun, preflightTask, repeats, tasks } from './tasks.mjs';
+import { hiddenTasks } from './hiddenTasks.mjs';
+import { maxRequestsPerRun, repeats, tasks } from './tasks.mjs';
+
+const legacyRepeats = 10;
+const preflightTask = hiddenTasks.find(({ id }) => id === 'partial-failure');
+
+export const cells = Object.freeze([
+  Object.freeze({ label: 'published', arm: 'defaults' }),
+  Object.freeze({ label: 'published', arm: 'label-on' }),
+  Object.freeze({ label: 'candidate', arm: 'label-on' }),
+]);
 
 export const limits = Object.freeze({
   model: 'claude-haiku-5-5',
@@ -13,19 +23,20 @@ export const limits = Object.freeze({
 
 export const cellKey = (label, arm) => `${label}/${arm}`;
 
-export function paidSchedule(labels) {
-  const cells = arms.flatMap((arm) => labels.map((label) => ({ arm, label })));
+export function paidSchedule() {
   const runs = (task, repeat) => cells.map((cell) => ({ ...cell, task, repeat }));
-  const first = tasks.find(({ id }) => id === preflightTask);
-  const preflight = runs(first, 1);
-  const remaining = Array.from({ length: repeats }, (_, index) => index + 1).flatMap((repeat) =>
-    tasks.filter((task) => repeat !== 1 || task !== first).flatMap((task) => runs(task, repeat)),
-  );
+  const preflight = runs(preflightTask, 1);
+  const allTasks = [...tasks, ...hiddenTasks];
+  const remaining = Array.from({ length: repeats }, (_, index) => index + 1).flatMap((repeat) => {
+    const roundTasks = repeat <= legacyRepeats ? allTasks : hiddenTasks;
+    return roundTasks.filter((task) => repeat !== 1 || task !== preflightTask)
+      .flatMap((task) => runs(task, repeat));
+  });
   return { preflight, remaining };
 }
 
 export function projectPreflight(preflightRows, remaining, chargedUnits) {
-  const cells = preflightRows.map((row) => {
+  const cellProjections = preflightRows.map((row) => {
     const peaks = { input: 0, output: 0 };
     const requests = row.requests.filter(({ accounting }) => accounting !== undefined);
     for (const { accounting } of requests) {
@@ -42,10 +53,13 @@ export function projectPreflight(preflightRows, remaining, chargedUnits) {
       remainingUnits: unitsFor(peaks.input, peaks.output) * slots,
     };
   });
-  const projectedUnits = chargedUnits + cells.reduce((n, { remainingUnits }) => n + remainingUnits, 0);
-  const measurable = cells.length === 4 && cells.every(({ measuredRequests }) => measuredRequests.length > 0);
+  const projectedUnits = chargedUnits + cellProjections.reduce((n, { remainingUnits }) => n + remainingUnits, 0);
+  const measurableKeys = new Set(cellProjections.filter(({ measuredRequests }) => measuredRequests.length > 0)
+    .map(({ cell }) => cell));
+  const measurable = preflightRows.length === cells.length &&
+    cells.every(({ label, arm }) => measurableKeys.has(cellKey(label, arm)));
   return {
-    cells, chargedUnits, projectedUnits,
+    cells: cellProjections, chargedUnits, projectedUnits,
     projectedUsd: toDollars(projectedUnits),
     canContinue: measurable && projectedUnits <= PROJECTED_LIMIT_UNITS,
   };

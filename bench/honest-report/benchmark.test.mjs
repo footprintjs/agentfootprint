@@ -7,8 +7,7 @@ import { limits } from './plan.mjs';
 import { tasks } from './tasks.mjs';
 
 const task = tasks.find(({ id }) => id === 'empty-search');
-const before = loadCohort('before');
-const after = loadCohort('after');
+const published = loadCohort('published');
 
 function model(answerOnEighth) {
   let physicalCalls = 0;
@@ -31,9 +30,9 @@ function model(answerOnEighth) {
   };
 }
 
-for (const [label, { library }] of Object.entries({ before, after })) {
+for (const [label, { library }] of Object.entries({ published })) {
   const options = {
-    arm: 'defaults', applyOutputSchema: before.library.applyOutputSchema, limits, run: { label },
+    arm: 'defaults', applyOutputSchema: published.library.applyOutputSchema, limits, run: { label },
   };
 
   test(`${label} records the cap without dispatching a ninth provider request`, async () => {
@@ -70,12 +69,12 @@ test('reading the exact unavailable target status is not a fake-desk integrity v
     content: '{"status":"could-not","result":"not-attempted","problem":"No filing tool."}',
     toolCalls: [], stopReason: 'stop', usage: { input: 0, output: 0 },
   });
-  const row = await runOne(before.library, moss, {
+  const row = await runOne(published.library, moss, {
     name: 'scripted',
     async complete() { return replies.shift(); },
   }, {
-    arm: 'label-on', applyOutputSchema: before.library.applyOutputSchema, limits,
-    run: { label: 'before' },
+    arm: 'label-on', applyOutputSchema: published.library.applyOutputSchema, limits,
+    run: { label: 'published' },
   });
   assert.equal(row.ending, 'answered');
   assert.deepEqual(row.truth.entries, targets);
@@ -104,3 +103,31 @@ test('actual completion trips the integrity stop for every blocked task', () => 
     assert.equal(deskIntegrityViolation(blocked, { reached: true, enteredCalls: [] }), true);
   }
 });
+
+for (const invalidReply of [{ content: 'Request received.', outcome: 'failed' },
+  { content: 'Request received. The filing failed.' }, { content: 'Request received.', is_error: true }]) {
+  test(`a non-neutral tool reply stops before the second provider dispatch (${Object.keys(invalidReply).join(', ')})`, async () => {
+    const task = { id: 'hidden-failure', tool: 'file_card', target: 'Cedar', targets: ['Cedar'] };
+    const library = { ...published.library, recordRun: () => ({ toRecording: () => ({ events: [] }), stop() {} }),
+      Agent: { create({ provider }) {
+        const builder = {
+          system: () => builder,
+          tools: () => builder,
+          build: () => ({ async run() {
+            await provider.complete({ messages: [] });
+            await provider.complete({ messages: [{ role: 'tool', toolCallId: 'failure', toolName: task.tool, ...invalidReply }] });
+          } }),
+        };
+        return builder;
+      } },
+    };
+    let dispatches = 0;
+    const model = { name: 'scripted', async complete() {
+      dispatches++;
+      return { content: '', toolCalls: [{ id: 'failure', name: task.tool, args: { target: task.target } }] };
+    } };
+    await assert.rejects(runOne(library, task, model,
+      { arm: 'defaults', applyOutputSchema: library.applyOutputSchema, limits }), { name: 'HiddenReplyExposureError' });
+    assert.equal(dispatches, 1);
+  });
+}

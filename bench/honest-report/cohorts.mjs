@@ -3,13 +3,14 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-export const cohorts = {
-  before: { agentfootprint: '14.10.1', footprintjs: '12.0.0', foottrace: '1.11.1' },
-  after: { agentfootprint: '15.0.0', footprintjs: '14.0.0', foottrace: '2.1.0' },
-};
+import { packageTreeDigest, verifyCandidate } from './candidate.mjs';
 
-export function loadCohort(label) {
-  const path = new URL(`./cohorts/${label}/`, import.meta.url);
+const published = { agentfootprint: '15.0.0', footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
+
+export function loadCohort(label, candidate) {
+  if (label !== 'published' && label !== 'candidate') throw new Error('Unknown benchmark cohort');
+  if (label === 'candidate' && candidate === undefined) throw new Error('Candidate archive proof required');
+  const path = new URL(`./cohorts/${label === 'published' ? 'after' : 'candidate'}/`, import.meta.url);
   const require = createRequire(new URL('package.json', path));
   const cohortRoot = fileURLToPath(path);
   const readLocal = (name) => {
@@ -17,29 +18,37 @@ export function loadCohort(label) {
     if (!realpathSync(file).startsWith(cohortRoot)) throw new Error(`${label}: ${name} is outside its lock`);
     return readFileSync(file);
   };
-  const pins = Object.entries(cohorts[label]).map(([name, expected]) => {
+  const lockBytes = readLocal('package-lock.json');
+  const archive = label === 'candidate' ? verifyCandidate(
+    fileURLToPath(new URL('./', import.meta.url)), cohortRoot, JSON.parse(lockBytes), candidate.path, candidate.sha256,
+  ) : undefined;
+  const versions = archive === undefined ? published : { ...published, agentfootprint: archive.version };
+  const lock = JSON.parse(lockBytes);
+  for (const [name, expected] of Object.entries(versions)) {
     const installed = JSON.parse(readLocal(`node_modules/${name}/package.json`));
-    if (installed.version !== expected) throw new Error(`${label} ${name}: expected ${expected}`);
-    return [name, installed.version];
-  });
-  const dependencyRoot = fileURLToPath(new URL('node_modules/', path));
-  const local = (resolver, specifier) => {
-    if (!realpathSync(resolver.resolve(specifier)).startsWith(dependencyRoot)) {
-      throw new Error(`${label}: resolved ${specifier} outside its lock`);
+    if (installed.version !== expected || lock.packages?.[`node_modules/${name}`]?.version !== expected) {
+      throw new Error(`${label} ${name}: expected lock and installed version ${expected}`);
+    }
+  }
+  const local = (resolver, specifier, name = specifier) => {
+    const packageRoot = fileURLToPath(new URL(`node_modules/${name}/`, path));
+    if (!realpathSync(resolver.resolve(specifier)).startsWith(packageRoot)) {
+      throw new Error(`${label}: resolved ${specifier} outside its pinned package`);
     }
   };
   for (const specifier of ['agentfootprint', 'agentfootprint/observe', 'agentfootprint/context', 'agentfootprint/skill-graph']) {
-    local(require, specifier);
+    local(require, specifier, 'agentfootprint');
   }
   const libraryRequire = createRequire(require.resolve('agentfootprint'));
-  local(libraryRequire, 'footprintjs');
-  local(libraryRequire, 'foottrace');
+  for (const dependency of ['footprintjs', 'foottrace', 'contextfootprint']) local(libraryRequire, dependency);
   local(createRequire(libraryRequire.resolve('footprintjs')), 'foottrace');
+  const packageSha256 = archive === undefined ? undefined
+    : packageTreeDigest(realpathSync(fileURLToPath(new URL('node_modules/agentfootprint', path))));
   const core = require('agentfootprint');
   const observe = require('agentfootprint/observe');
   const { defineSkill } = require('agentfootprint/context');
   const { skillGraph } = require('agentfootprint/skill-graph');
   const library = { ...core, ...observe, defineSkill, skillGraph };
-  const lockDigest = createHash('sha256').update(readLocal('package-lock.json')).digest('hex');
-  return { library, stamp: { ...Object.fromEntries(pins), lockDigest } };
+  const lockDigest = createHash('sha256').update(lockBytes).digest('hex');
+  return { library, stamp: { ...versions, lockDigest, ...(archive && { archive, packageSha256 }) } };
 }
