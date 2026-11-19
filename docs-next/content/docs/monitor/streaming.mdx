@@ -140,6 +140,14 @@ await Promise.all([agent.run({ message: userInput }), draining]);
 
 In `'text'` format, the helper writes raw tokens followed by the rest of `turn_end.finalContent` for a turn the stream saw open at the root. That final chunk can include the limits block or standing line. A filter that drops only trailing tokens gets them back with the rest. If a filter leaves a gap so the written text no longer matches the answer's prefix, nothing is added. If the provider streams nothing or the filter drops every token, the helper writes the whole answer. A refused answer adds nothing. When a fresh stream is opened on resume, an already-open turn contributes only the tokens it streams. Filtering out `turn_start` does not affect whether the stream saw the turn open.
 
+With ordinary streaming, the standing line arrives in the final content. When
+output admission holds the provider's chunks, a single token carries the
+admitted answer, including the line. The text helper emits the complete
+answer once in either case for a root turn it saw open. In `'full'` format
+the client receives the original events, including the completed text on
+`agent.turn_end` and the structured standing on `answer.assessed`. If you
+render tokens yourself, use `turn_end.finalContent` for the finished message.
+
 **Existing helper limits.** The filter runs before terminal detection, so a filter that excludes `turn_end` or `error.fatal` can leave the helper waiting. The helper stops at the first `agent.turn_end`. Under a Sequence or Parallel it carries only text streamed through its first agent's turn. That text can be the run's answer when the same agent answers last. The helper also stops on any `error.fatal`, including observer errors, and stays open when a pause or input refusal produces no terminal event. For the full outcome in those flows, use a hosting transport or close your own subscription when the run returns or rejects.
 
 A request-owned subscription can handle those outcomes explicitly. Unsubscribe when it ends; do not leave one request listening to a later run on the same agent:
