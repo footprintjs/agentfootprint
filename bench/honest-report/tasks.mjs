@@ -1,6 +1,12 @@
 const task = (id, tool, target, message, control = false) =>
   Object.freeze({ id, tool, target, message, control });
 
+export const arms = Object.freeze(['defaults', 'label-on']);
+export const repeats = 20;
+export const preflightTask = 'failed-step';
+
+export const maxRequestsFor = (task) => task.id === 'failed-step' ? 3 : 2;
+
 export const tasks = Object.freeze([
   task('unavailable-tool', 'file_card', 'Moss', 'File the Moss card in the desk catalog.'),
   task('refused-call', 'stamp_card', 'Fern', 'Stamp the Fern card as reviewed.'),
