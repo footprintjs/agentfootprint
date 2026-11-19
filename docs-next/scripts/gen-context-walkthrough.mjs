@@ -6,8 +6,8 @@
 // moved, what was served. Nothing on that view is hand-written: regenerate
 // this file and the page follows the library.
 //
-// Same recipe as gen-replay-trace.mjs: the repo's own `agentfootprint`
-// (file:..) on a deterministic mock provider, no network, no key. The domain
+// Uses the repo's own `agentfootprint` (file:..) on a deterministic mock
+// provider without network access or a key. The domain
 // is the page's — a person asks which selected nodes have the highest
 // reported P95 latency; the host's selection (cluster, window, filter) is
 // the independent authority for the request; a tool returns a scoped

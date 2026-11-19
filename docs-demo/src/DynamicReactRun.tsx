@@ -4,12 +4,8 @@ import { mock } from 'agentfootprint/providers';
 import { Lens, LensRecorder } from 'agentfootprint-lens';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { buildDynamicReactAgent, dynamicReactInput } from '../shared/dynamicReactDemo';
-import { RecordingCohort, type DemoFrameContent } from './DemoFrame';
+import { RecordingCohort, type PublishedDemoViewProps } from './DemoFrame';
 import './dynamic-react.css';
-
-export interface DynamicReactViewProps extends DemoFrameContent {
-  provenance: { commit: string; cohort: readonly string[] };
-}
 
 interface RunCapture {
   number: number;
@@ -20,7 +16,11 @@ interface RunCapture {
 
 const sdk = { Agent, defineTool, mock, defineFact, defineInstruction, defineSkill, defineSteering };
 
-export default function DynamicReactRun({ theme, themeToggle, provenance }: DynamicReactViewProps) {
+export default function DynamicReactRun({
+  theme,
+  themeToggle,
+  provenance,
+}: PublishedDemoViewProps) {
   const [message, setMessage] = useState(dynamicReactInput);
   const [running, setRunning] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);

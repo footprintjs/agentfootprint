@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -406,6 +407,12 @@ function hasEagerDemoAssets(html, demoPath) {
     );
 }
 
+function staticFallbackSection(html, id) {
+  return [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/gi)]
+    .map(([section]) => section)
+    .find((section) => attribute(section.slice(0, section.indexOf('>') + 1), 'id') === id);
+}
+
 function analyzeRoute(route) {
   const htmlFile = path.join(outputRoot, route.file);
   if (!existsSync(htmlFile)) {
@@ -620,9 +627,7 @@ function analyzeDynamicReact() {
     ) {
       fail(`Dynamic ReAct: missing #${anchor} or its versioned ${view} launch link`);
     }
-    const section = [...fallback.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/gi)]
-      .map(([html]) => html)
-      .find((html) => attribute(html.slice(0, html.indexOf('>') + 1), 'id') === view);
+    const section = staticFallbackSection(fallback, view);
     if (
       !section?.includes('The interactive viewer is unavailable') ||
       !hasLocalLink(section, `${guidePath}#${anchor}`)
@@ -658,6 +663,120 @@ function analyzeDynamicReact() {
   }
   const bytes = uniqueAssetBytes(figures, 'Dynamic ReAct diagram');
   console.log(`Dynamic ReAct diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+}
+
+function analyzeReplayArtifacts(guide) {
+  for (const anchor of [
+    'step-2a--render-it-in-why-lens-the-agent-view',
+    'step-2b--render-it-in-flow-lens-the-pipeline-view',
+  ]) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Offline replay: missing the #${anchor} anchor`);
+  }
+  const figureRecord = JSON.parse(
+    readFileSync(new URL('../lib/offline-replay-figure.json', import.meta.url)),
+  );
+  const { figure, meta, commit, cohort, traceSha256 } = figureRecord;
+  const figures = ['light', 'dark'].map((theme) => `/assets/${figure.asset}-${theme}.svg`);
+  const images = [...guide.matchAll(/<img\b[^>]*>/gi)].map(([tag]) => tag);
+  for (const file of figures) {
+    const image = images.find((tag) => attribute(tag, 'src')?.endsWith(file));
+    if (
+      !image || !attribute(image, 'alt') ||
+      attribute(image, 'width') !== String(figure.width) ||
+      attribute(image, 'height') !== String(figure.height)
+    ) {
+      fail(`Offline replay: ${file} needs alt text and recorded dimensions`);
+    }
+  }
+  const captions = [...guide.matchAll(/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/gi)];
+  if (!captions.some(([caption]) => {
+    const text = caption.replace(/<[^>]+>/g, '');
+    return caption.includes(`/commit/${commit}`) &&
+      cohort.every((member) => text.includes(member)) &&
+      text.includes(`${meta.events} events and ${meta.redaction} redaction`);
+  })) {
+    fail('Offline replay: missing the figure caption with saved event count, redaction, commit and cohort');
+  }
+
+  const traceUrl = '/assets/offline-replay-trace.json';
+  const downloadLink = [...guide.matchAll(/<a\b[^>]*>/gi)].some(([tag]) => {
+    const href = attribute(tag, 'href');
+    return /\sdownload(?=[\s=>])/i.test(tag) &&
+      href?.startsWith('/') && !href.startsWith('//') && href.endsWith(traceUrl);
+  });
+  if (!downloadLink) {
+    fail('Offline replay: missing the local Trace download');
+  }
+  const traceFile = requiredOutputAsset(traceUrl, 'Offline replay Trace');
+  if (traceFile) {
+    const bytes = readFileSync(traceFile);
+    if (createHash('sha256').update(bytes).digest('hex') !== traceSha256) {
+      fail('Offline replay: the exported Trace differs from the recorded artifact');
+    }
+    const trace = JSON.parse(bytes.toString('utf8'));
+    if (trace.redaction !== 'pii' || trace.events?.length !== meta.events || !trace.structure) {
+      fail('Offline replay: Trace is missing the redacted events or chart structure');
+    }
+    console.log(`Offline replay Trace ${formatBytes(gzipFile(traceFile))} gzip`);
+  }
+  const bytes = uniqueAssetBytes(figures, 'Offline replay diagram');
+  console.log(`Offline replay diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+
+  const rawFile = requiredOutputAsset('llms.mdx/docs/debug/offline-replay', 'Offline replay Markdown');
+  if (rawFile) {
+    const raw = readFileSync(rawFile, 'utf8');
+    const snippets = [...raw.matchAll(/^```tsx[^\S\r\n]*\r?\n([\s\S]*?)^```[^\S\r\n]*$/gm)];
+    for (const markers of [
+      ['observeRecording(recording)', '<Lens '],
+      ['<ExplainableShell', 'structureGraphFromSpec(recording.structure)', 'overlayFromSnapshot(recording.snapshot)'],
+      ['<Replay trace={trace}', 'ReplayProps'],
+    ]) {
+      if (!snippets.some(([, code]) => markers.every((marker) => code.includes(marker)))) {
+        fail(`Offline replay: machine-readable guide is missing the ${markers[0]} code sample`);
+      }
+    }
+  }
+}
+
+function analyzeReplayDemos() {
+  const fallbackPath = 'demo/quick-start/';
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Replay demo fallback');
+  if (!fallbackFile) return;
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const views = [
+    {
+      view: 'offline-replay',
+      guide: 'docs/debug/offline-replay/',
+      anchor: 'replay-trace--the-chart-only-subset',
+    },
+    { view: 'how-to-build-lens', guide: 'how-to-build/', anchor: 'debug' },
+  ];
+  for (const { view, guide, anchor } of views) {
+    const guideFile = requiredOutputAsset(`${guide}index.html`, view);
+    if (!guideFile) continue;
+    const html = readFileSync(guideFile, 'utf8');
+    const query = new URLSearchParams({ view, agentfootprint: manifest.dependencies.agentfootprint });
+    if (!html.includes(`id="${anchor}"`) || !hasLocalLink(html, `${fallbackPath}?${query}#${view}`)) {
+      fail(`${view}: missing the #${anchor} anchor or its versioned launch link`);
+    }
+    const section = staticFallbackSection(fallback, view);
+    if (!section?.includes('The interactive viewer is unavailable') || !hasLocalLink(section, `${guide}#${anchor}`)) {
+      fail(`${view}: missing static fallback text or return link`);
+    }
+    if (hasEagerDemoAssets(html, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+      fail(`${view}: guide or fallback HTML eagerly references the separate viewer assets`);
+    }
+    if (view === 'offline-replay') {
+      analyzeReplayArtifacts(html);
+    } else if (![...html.matchAll(/<pre\b[^>]*>[\s\S]*?<\/pre>/gi)].some(([code]) =>
+      code.includes('lensRecorder()') && code.includes('Hello!') && code.includes('Hi!'),
+    )) {
+      fail('How to Build: missing the Hello Lens code sample');
+    }
+  }
 }
 
 function countSearchRecords(index) {
@@ -756,6 +875,7 @@ for (const route of ROUTES) analyzeRoute(route);
 analyzeQuickStartFlowchart();
 analyzeSkillGraphFigures();
 analyzeDynamicReact();
+analyzeReplayDemos();
 analyzeSearch();
 analyzeOutput();
 
