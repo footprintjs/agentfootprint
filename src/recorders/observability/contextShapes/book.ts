@@ -90,6 +90,87 @@ export class ShapeBook {
       this.observe([key], lookup(base, [key]));
     }
   }
+  /** Account for the parents a native write traverses. Return the target only
+   * if its shape can be observed at this path. */
+  private prepareWrite(path: Path, deleting: boolean, absentRoot: boolean): Node | undefined {
+    if (deleting && path.length === 1) this.present.delete(path[0]);
+    else if (!deleting) this.present.add(path[0]);
+    for (let i = 1; i < path.length; i++) {
+      const parent = path.slice(0, i);
+      const holder = this.at(parent);
+      if (holder.shape?.[0] === 'array') {
+        const index = arrayIndex(path[i]);
+        if (index === undefined) {
+          if (path[i] === 'length' && !deleting) {
+            this.forgetChildren(parent, holder);
+            this.set(parent, unknown, holder);
+          }
+          return undefined;
+        }
+        if (!deleting) this.set(parent, ['array', Math.max(holder.shape[1]!, index + 1)], holder);
+      } else if (!deleting) {
+        // A named property written onto an unmeasured container could be an
+        // array decoration, which does not survive JSON. Numeric paths work
+        // for both arrays and objects; other paths need a proven container.
+        if (
+          !absentRoot &&
+          (!holder.shape || holder.shape[0] === 'unknown') &&
+          arrayIndex(path[i]) === undefined
+        ) {
+          const target = this.at(path);
+          this.forgetChildren(path, target);
+          this.set(path, unknown, target);
+          return undefined;
+        }
+        if (this.masks.hides(parent)) this.set(parent, unknown, holder);
+        else if (
+          absentRoot ||
+          (holder.shape && known(holder.shape) && holder.shape[0] !== 'object')
+        )
+          this.set(parent, ['object'], holder);
+      }
+    }
+    const target = this.at(path);
+    if (!this.masks.hides(path)) return target;
+    this.forgetChildren(path, target);
+    this.set(path, unknown, target);
+    return undefined;
+  }
+  private append(path: Path, target: Node, absentRoot: boolean, tail: unknown): void {
+    const before = target.shape;
+    if (before?.[0] !== 'array' || !Array.isArray(tail)) {
+      this.forgetChildren(path, target);
+      const shape = classify(tail);
+      this.set(
+        path,
+        shape[0] !== 'array' || absentRoot || (before && before[0] !== 'unknown') ? shape : unknown,
+        target,
+      );
+      return;
+    }
+    const start = before[1]!;
+    this.set(path, ['array', start + tail.length], target);
+    if (this.masks.hidesChildren(path)) return;
+    if (this.options.scan === 'full') {
+      for (const key of Object.keys(tail)) {
+        const index = arrayIndex(key);
+        if (index !== undefined)
+          this.sample([...path, String(start + index)], lookup(tail, [key]), new Set());
+      }
+    } else {
+      for (const watched of this.options.paths ?? []) {
+        if (watched.length <= path.length || !prefix(path, watched)) continue;
+        const index = arrayIndex(watched[path.length]);
+        if (index !== undefined && index >= start && index < start + tail.length)
+          this.set(
+            watched,
+            this.masks.hides(watched)
+              ? unknown
+              : classify(lookup(tail, [String(index - start), ...watched.slice(path.length + 1)])),
+          );
+      }
+    }
+  }
   commit(bundle: unknown, folded: () => object): boolean {
     if (!isCommitBundle(bundle)) return false;
     if (
@@ -103,129 +184,62 @@ export class ShapeBook {
       this.forgetChildren(mask.path, at);
       if (!mask.childrenOnly) this.set(mask.path, unknown, at);
     }
-    if (this.options.scan === 'full' && bundle.trace.some((row) => row.verb === 'merge')) {
-      // Deduplication in a native array merge depends on its contents. Only
-      // the explicit full-scan mode pays for the native fold in this case.
-      const state = folded();
-      const roots = new Set<string>();
-      for (const row of bundle.trace) {
-        const path = pathSegments(row.path);
-        if (path.length && !path.some(isDeniedSegment)) roots.add(path[0]);
+    // A full scan resolves merged array cardinality against the native fold.
+    // Its rows still pass through the same switch before we trust the result.
+    const foldedRoots =
+      this.options.scan === 'full' && bundle.trace.some((row) => row.verb === 'merge')
+        ? new Set<string>()
+        : undefined;
+    for (const { path: encoded, verb } of bundle.trace) {
+      const path = pathSegments(encoded);
+      const valid = path.length > 0 && !path.some(isDeniedSegment);
+      if (valid && foldedRoots) foldedRoots.add(path[0]);
+      const absentRoot = !this.present.has(path[0]);
+      const target =
+        valid && !foldedRoots ? this.prepareWrite(path, verb === 'delete', absentRoot) : undefined;
+      if (target && verb !== 'append') this.forgetChildren(path, target);
+      switch (verb) {
+        case 'set':
+          // The recorded value is complete. Read its type without cloning it.
+          if (target) this.observe(path, lookup(bundle.overwrite, path));
+          break;
+        case 'delete':
+          if (target) this.set(path, deleted, target);
+          break;
+        case 'append':
+          if (target) this.append(path, target, absentRoot, lookup(bundle.overwrite, path));
+          break;
+        case 'merge':
+          if (target) {
+            const delta = classify(lookup(bundle.updates, path));
+            const before = target.shape;
+            // Deduplication against an unknown base requires an array scan.
+            this.set(
+              path,
+              delta[0] === 'array' &&
+                delta[1] !== 0 &&
+                !absentRoot &&
+                (!before || before[0] === 'array' || before[0] === 'unknown')
+                ? unknown
+                : delta,
+              target,
+            );
+          }
+          break;
+        default:
+          verb satisfies never;
+          return false;
       }
-      for (const root of roots) {
+    }
+    if (foldedRoots?.size) {
+      const state = folded();
+      for (const root of foldedRoots) {
         const path = [root];
         this.forgetChildren(path, this.at(path));
         const value = lookup(state, path);
         if (value === missing) this.present.delete(root);
         else this.present.add(root);
         this.observe(path, value);
-      }
-      return true;
-    }
-    for (const row of bundle.trace) {
-      const path = pathSegments(row.path);
-      if (!path.length || path.some(isDeniedSegment)) continue;
-      const absentRoot = !this.present.has(path[0]);
-      if (row.verb === 'delete' && path.length === 1) this.present.delete(path[0]);
-      else if (row.verb !== 'delete') this.present.add(path[0]);
-      let outsideElements = false;
-      for (let i = 1; i < path.length; i++) {
-        const parent = path.slice(0, i);
-        const holder = this.at(parent);
-        // A string-keyed native path creates a plain object if its
-        // intermediate container was a primitive. An array index assignment
-        // can extend its length; deleting a property never shrinks it.
-        if (holder.shape?.[0] === 'array') {
-          const key = path[i];
-          const index = arrayIndex(key);
-          if (index === undefined) {
-            if (key === 'length' && row.verb !== 'delete') {
-              this.forgetChildren(parent, holder);
-              this.set(parent, unknown);
-            }
-            outsideElements = true;
-            break;
-          }
-          if (row.verb !== 'delete')
-            this.set(parent, ['array', Math.max(holder.shape[1]!, index + 1)]);
-        } else if (row.verb === 'delete') {
-          continue;
-        } else if (this.masks.hides(parent)) {
-          this.set(parent, unknown);
-        } else if (
-          absentRoot ||
-          (holder.shape && known(holder.shape) && holder.shape[0] !== 'object')
-        ) {
-          this.set(parent, ['object']);
-        }
-      }
-      if (outsideElements) continue;
-      const target = this.at(path);
-      const before = target.shape;
-      const hidden = this.masks.hides(path);
-      if (row.verb === 'append' && !hidden && before?.[0] === 'array') {
-        const tail = lookup(bundle.overwrite, path);
-        if (Array.isArray(tail)) {
-          const start = before[1]!;
-          this.set(path, ['array', start + tail.length]);
-          if (this.masks.hidesChildren(path)) continue;
-          if (this.options.scan === 'full') {
-            for (const key of Object.keys(tail)) {
-              const index = arrayIndex(key);
-              if (index !== undefined)
-                this.sample([...path, String(start + index)], lookup(tail, [key]), new Set());
-            }
-          } else {
-            for (const watched of this.options.paths ?? []) {
-              if (watched.length <= path.length || !prefix(path, watched)) continue;
-              const token = watched[path.length];
-              const index = Number(token);
-              if (
-                String(index) === token &&
-                Number.isInteger(index) &&
-                index >= start &&
-                index < start + tail.length
-              )
-                this.set(
-                  watched,
-                  this.masks.hides(watched)
-                    ? unknown
-                    : classify(
-                        lookup(tail, [String(index - start), ...watched.slice(path.length + 1)]),
-                      ),
-                );
-            }
-          }
-          continue;
-        }
-      }
-      this.forgetChildren(path, target);
-      if (hidden) {
-        this.set(path, unknown);
-      } else if (row.verb === 'delete') {
-        this.set(path, deleted);
-      } else if (row.verb === 'set') {
-        // Only a set operand is a complete recorded value. Inspect its type
-        // in place; folding the value here would clone its entire contents.
-        this.observe(path, lookup(bundle.overwrite, path));
-      } else if (row.verb === 'append') {
-        const tail = lookup(bundle.overwrite, path);
-        const shape = classify(tail);
-        if (shape[0] !== 'array') this.set(path, shape);
-        else this.set(path, absentRoot || (before && before[0] !== 'unknown') ? shape : unknown);
-      } else {
-        const delta = classify(lookup(bundle.updates, path));
-        // A nonempty array merge deduplicates against its base. Discovering
-        // that cardinality would scan both arrays, so leave it unmeasured.
-        this.set(
-          path,
-          delta[0] === 'array' &&
-            delta[1] !== 0 &&
-            !absentRoot &&
-            (!before || before[0] === 'array' || before[0] === 'unknown')
-            ? unknown
-            : delta,
-        );
       }
     }
     return true;
