@@ -231,7 +231,13 @@ export class ShapeBook {
       }
     }
     if (foldedRoots?.size) {
-      const state = folded();
+      let state: object;
+      try {
+        state = folded();
+      } catch {
+        // A retained log may contain an operation the native fold cannot apply.
+        return false;
+      }
       for (const root of foldedRoots) {
         const path = [root];
         this.forgetChildren(path, this.at(path));

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createRunnerSnapshotReader } from '../../../src/core/runnerSnapshot.js';
 import {
   createContextShapeCapture,
   markNativeShapeSource,
@@ -292,6 +293,50 @@ describe('recorded context shapes', () => {
     ]);
     expect(wrapped(snapshot, { recordEmbeddings: true, contextShapes: false })).toBe(snapshot);
     expect(wrapped({ commitLog: [] }).contextShapes).toBeUndefined();
+  });
+
+  it.each([
+    row('items\u001flength', 'delete'),
+    row('items\u001flength', 'set', { items: { length: -1 } }),
+  ])(
+    'serves the snapshot and recording without an index when the native full scan throws',
+    (bad) => {
+      const snapshot = source({ items: [0] }, [bad, row('items', 'merge', { items: [1] })]);
+      const readSnapshot = createRunnerSnapshotReader();
+      const selection = {
+        view: { snapshot: () => snapshot },
+        value: { redaction: { coverage: { state: 'declared-none' } } },
+      } as unknown as Parameters<typeof readSnapshot>[0];
+      const options = { contextShapes: { scan: 'full' } } as const;
+      expect(readSnapshot(selection, options)).toBe(snapshot);
+      expect(wrappedRecording(snapshot, options)).toStrictEqual({
+        snapshot,
+        events: [],
+        structure: {},
+      });
+      expect(readSnapshot(selection)?.contextShapes).toBeDefined();
+    },
+  );
+
+  it('discards partial work from a thrown fold before retrying with a corrected native log', () => {
+    const base = Object.freeze({ items: [0], events: [] });
+    const seed = Object.freeze(row('events', 'append', { events: ['initial'] }));
+    const extra = Object.freeze(row('events', 'append', { events: ['extra'] }));
+    const failure = Object.freeze(row('items\u001flength', 'delete'));
+    const merge = Object.freeze(row('items', 'merge', { items: [1] }));
+    const snapshotWith = (...log: readonly (typeof seed)[]) =>
+      markNativeShapeSource(source(base, Object.freeze(log)));
+
+    const capture = createContextShapeCapture({ scan: 'full' });
+    const first = capture(snapshotWith(seed)).contextShapes!;
+    expect(contextShapeAt(first, 0, ['events'])).toEqual(['array', 1]);
+    expect(capture(snapshotWith(seed, extra, failure, merge))).not.toHaveProperty('contextShapes');
+
+    const corrected = snapshotWith(seed, extra, merge);
+    const retried = capture(corrected).contextShapes;
+    expect(retried).toEqual(createContextShapeCapture({ scan: 'full' })(corrected).contextShapes);
+    expect(contextShapeAt(retried, 2, ['events'])).toEqual(['array', 2]);
+    expect(contextShapeAt(first, 0, ['events'])).toEqual(['array', 1]);
   });
 
   it('rejects incomplete logs and resets a corrected immutable prefix', () => {
