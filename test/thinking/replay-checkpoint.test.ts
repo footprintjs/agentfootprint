@@ -53,6 +53,38 @@ const response = (content: string, extra: Partial<LLMResponse> = {}): LLMRespons
   ...extra,
 });
 
+/** An unset read can name the slot in metadata without retaining any state. */
+function replayStatePaths(value: unknown, path = '$'): string[] {
+  if (value === null || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>;
+  // A stored MessageReplay may sit in history or under a generic commit value.
+  if (
+    record.version === 1 &&
+    record.protocol === 'anthropic-messages' &&
+    Array.isArray(record.layout) &&
+    typeof record.contentDigest === 'string'
+  ) {
+    return [path];
+  }
+  return Object.entries(record).flatMap(([key, child]) => {
+    const at = path + '.' + key;
+    return key === 'llmLatestReplay' && child !== undefined ? [at] : replayStatePaths(child, at);
+  });
+}
+
+it('finds valued replay state and a replay payload beside unset read names', () => {
+  const snapshot = {
+    undefinedReadKeys: ['llmLatestReplay'],
+    stageReads: { llmLatestReplay: undefined },
+    sharedState: { llmLatestReplay: [] },
+    history: [{ replay: proof('stored') }],
+  };
+  expect(replayStatePaths(snapshot)).toEqual([
+    '$.sharedState.llmLatestReplay',
+    '$.history.0.replay',
+  ]);
+});
+
 function scripted(replies: readonly (LLMResponse | Error)[], stream = false) {
   const messages: (readonly LLMMessage[])[] = [];
   const complete = vi.fn(async (req: LLMRequest): Promise<LLMResponse> => {
@@ -425,7 +457,9 @@ describe.each(MODES)('durable replay in %s', (reactMode) => {
       { role: 'user', content: 'question' },
       { role: 'assistant', content: 'answer' },
     ]);
-    expect(JSON.stringify(agent.getLastSnapshot())).not.toContain('llmLatestReplay');
+    const snapshot = agent.getLastSnapshot();
+    expect(snapshot).toBeDefined();
+    expect(replayStatePaths(snapshot)).toEqual([]);
   });
 
   it('surfaces an unsafe replay refusal after a completed tool iteration without a retry checkpoint', async () => {
