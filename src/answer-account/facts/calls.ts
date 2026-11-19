@@ -22,7 +22,8 @@
  *   - `ran`            — otherwise. An AFTER-tool deny keeps `ran` and sets
  *                        `withheldBy`: the tool ran and the model read the
  *                        rule's refusal (`notExecuted` covers before-tool rules
- *                        only, and its absence proves nothing).
+ *                        only, and its absence proves nothing). The recorded
+ *                        result status is a separate fact, `reportedStatus`.
  *
  * Emptiness is read from what the MODEL read — `modelResult ?? result` — and
  * never judged on a withheld result. The reader is the ONE emptiness reader
@@ -33,6 +34,7 @@
  */
 
 import { strip } from '../../semantics/coverage/read.js';
+import { readToolResultStatus } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
 import { outcomeOf, type CallIndex } from './callOutcome.js';
@@ -356,6 +358,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   if (named === undefined) ctx.noteUnread();
   const toolName = named?.name ?? '';
   const outcome = outcomeOf(ctx, byCall, id, toolName, start, end);
+  const status = outcome.outcome === 'ran' ? readToolResultStatus(end?.payload.status) : undefined;
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   // The door THIS record holds for the call — its events — decides what was declared; a marker
   // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
@@ -394,6 +397,11 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     toolName: toolName.slice(0, FACT_TEXT_CHARS),
     ...(named === undefined && { unnamed: true as const }),
     outcome: outcome.outcome,
+    ...(status !== undefined &&
+      status !== 'success' &&
+      status !== 'absent' && {
+        reportedStatus: status,
+      }),
     ...(outcome.refusedBy !== undefined && { refusedBy: outcome.refusedBy }),
     ...(outcome.withheldBy !== undefined && { withheldBy: outcome.withheldBy }),
     emptiness: emptiness.emptiness,

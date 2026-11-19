@@ -82,13 +82,28 @@ function foundForCall(ctx: ReadContext, call: CallRead): Sentence | Sentence[] {
     case 'ran':
       break;
   }
+  const status = call.fact.reportedStatus;
+  const statusLine =
+    end !== undefined && status !== undefined
+      ? ctx.say(status === 'invalid' ? 'found.invalidStatus' : 'found.reportedStatus', {
+          vars: {
+            tool,
+            ...(status !== 'invalid' && {
+              status: v(status, `tool:${call.fact.toolName}`, at(end, 'status')),
+            }),
+          },
+          pointers: [at(end, 'entered'), at(end, 'status')],
+        })
+      : undefined;
   if (call.fact.withheldBy !== undefined && call.ruleEvent !== undefined) {
     const who = call.ruleEvent.payload.outcome === 'refused' ? 'outcome' : 'middleware';
-    return ctx.say('found.withheld', {
+    const withheld = ctx.say('found.withheld', {
       vars: { tool, by: v(call.fact.withheldBy, 'library', at(call.ruleEvent, who)) },
       pointers: [at(call.ruleEvent, 'moment'), at(call.ruleEvent, 'outcome')],
     });
+    return statusLine === undefined ? withheld : [statusLine, withheld];
   }
+  if (statusLine !== undefined) return statusLine;
   const reading = call.emptiness;
   const basis: AccountSource[] = [emptinessSource(reading)];
   const extra = rowsAtPointers(ctx, call.toolName, reading.source);

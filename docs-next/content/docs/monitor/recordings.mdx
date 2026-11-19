@@ -340,6 +340,11 @@ in an error.". The "Anything wrong" count says such a call as "not executed",
 never "failed": "1 tool call did not run cleanly: 0 failed, 1 not executed, 0
 refused by a rule, 0 declined by a person, 0 not run.".
 
+A call can run and still return a status such as failure, denial, partial work
+or pending work. The account reports that status alongside the fact that the
+tool ran. An invalid result is shown as recorded because the library can also
+mark a result invalid.
+
 ## How far an answer stands
 
 The account's "How sure" row — and anything else that needs one word for an

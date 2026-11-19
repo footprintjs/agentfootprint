@@ -303,6 +303,14 @@ name:
   1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.  ⟨wrong.errors@2 · library · recorded⟩
 ```
 
+A tool that ran can report `failure`, `denied`, `invalid`, `partial` or
+`pending`. Its fact keeps `outcome: 'ran'` and carries `reportedStatus` from
+the normalized `stream.tool_end.status`. The "It found" line names both facts.
+A library refusal can also record `invalid`, so the line reports the recorded
+status without attributing that word to the tool. Declared absence keeps its
+coverage wording. The "Anything wrong" row consults the same completion rule
+as committed history before saying no call failed or was refused.
+
 When a saved bracket has a non-boolean `error`, `entered` or `notExecuted`,
 `toolRanOf` returns `not-recorded` even beside a valid entry stamp. With a
 recorded `error: true`, the account says the call ended in an error. Without

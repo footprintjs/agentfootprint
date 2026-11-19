@@ -2158,6 +2158,30 @@
   ],
   "source": "library"
  },
+ "found.reportedStatus@1": {
+  "text": "lookup_volumes ran. The tool reported a status of status value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran. The tool reported a status of status value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.invalidStatus@1": {
+  "text": "lookup_volumes ran. The result was recorded as invalid.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran. The result was recorded as invalid."
+   }
+  ],
+  "source": "library"
+ },
  "wrong.errors@2": {
   "text": "2 tool calls did not run cleanly: 1 failed, 1 not executed, 1 refused by a rule, 1 declined by a person, 1 not run.",
   "parts": [

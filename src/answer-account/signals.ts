@@ -15,6 +15,7 @@
  * left out of the count (`reachable + unreachable + notApplicable = 3`).
  */
 
+import { callOutcomeOf } from '../core/agent/stages/toolCalls/execution/callOutcome.js';
 import { chip, dedupePointers, joinSentences, n, v } from './render.js';
 import type {
   CheckId,
@@ -404,7 +405,13 @@ export function wrongLines(
         pointers: troubled.flatMap((c) => c.fact.pointers.slice(-1)),
       }),
     );
-  } else if (all.length > 0) {
+  } else if (
+    all.length > 0 &&
+    all.every(
+      ({ fact }) =>
+        callOutcomeOf({ ran: true, clean: true, status: fact.reportedStatus }) === undefined,
+    )
+  ) {
     lines.push(
       ctx.say('wrong.noErrors', { pointers: all.flatMap((c) => c.fact.pointers.slice(-1)) }),
     );
