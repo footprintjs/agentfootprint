@@ -1,6 +1,6 @@
 # Batch 6 results
 
-The coordinator completed 280 of 280 scheduled draws on November 19, 2026, with no batch stop. This report records the coordinator’s results for the saved ledger. A separate reader is checking the interpretation.
+The coordinator completed 280 of 280 scheduled draws on November 19, 2026, with no batch stop. An independent ledger audit confirmed the warning counts, metered usage and frozen inputs.
 
 Both cells enabled the standing line. One used published AgentFootprint 15.0.1. The other used the hosted package of #424 at `b2cc4290c3548cd6d6c7db08b2ae9fecff763ca8`. The run used `claude-haiku-5-5` with zero retries and caching disabled. [Plan](PLAN.md) · [Frozen rule](RULE.md) · [Predictions](PREDICTIONS.md) · [Measurement harness](https://github.com/footprintjs/agentfootprint/tree/cc72642f957f526cd44370974eadec25ca8b4111/bench/honest-report) · [Candidate package](https://github.com/footprintjs/agentfootprint/actions/runs/44543137402/artifacts/14541280281)
 
@@ -25,9 +25,9 @@ Both completed controls stayed quiet. All 60 completed control draws returned th
 
 ## Boundaries of the comparison
 
-The first provider request matched across the two cells for each task and repeat. The standing line is added after the model answers. Differences in the model’s own claims are observations from separate draws. The benchmark measures the delivered warning on ten synthetic tasks with one model. It leaves open how often real tools declare these statuses.
+All 140 paired first requests matched. On the pending task, 19 of 20 final request pairs matched after normalizing proposal IDs. In repeat 7, the published cell ended after two requests, and the candidate took a third request that carried a repeat notice. The standing line is added after the model answers. The literal claim counts come from separate draws. The benchmark measures the delivered warning on ten synthetic tasks with one model. It leaves open how often real tools declare these statuses.
 
-The coordinator observed a skipped-step reason in nine candidate failed-step draws. The earlier scripted held-step case exercised a different path. Some candidate empty-search answers also carried “calls failed.” The raw status and this wording remain part of the reader’s check of the predictions.
+Full recordings show eight published step skips and nine candidate step skips. The standing line explicitly cautioned about the skip in zero published draws and all nine candidate draws with a skip. The earlier scripted held-step case exercised a different path. Nine candidate empty-search draws recorded a failure status on `find_card` and carried the “calls failed” caution.
 
 ## Spend and evidence
 
