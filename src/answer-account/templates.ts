@@ -34,11 +34,13 @@
  */
 
 import { DID_IT_RUN_TEMPLATES } from './didItRunTemplates.js';
+import { BEFORE_PAUSE_TEMPLATES } from './beforePauseTemplates.js';
 import { HOW_SURE_REASON_TEMPLATES } from './howSureReasonTemplates.js';
 import { t, type AccountTemplate } from './templateEntry.js';
 
 export type { AccountTemplate, TemplateVoucher } from './templateEntry.js';
 
+/** Bumped whenever any template's words change (a pinned digest enforces it). */
 export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 19;
 
 /** The closed table. Ids are `row.part@version` in prose; the version lives on the entry. */
@@ -171,25 +173,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'checked.declined': t('It asked to run {{tool:code}}; a person was asked and declined.'),
   'checked.notDispatched': t('It asked to run {{tool:code}}, but the call was not run.'),
   'checked.unknown': t('It started {{tool:code}}; how the call ended is not recorded.'),
-  // A call answered BEFORE a pause, read from the committed state (`facts/pausedLeg.ts`): what
-  // came back is in history, what its tool declared is in `coverageDeclared` — never its events.
-  'checked.beforePause.declared': t('Before the pause, {{tool:code}} said it checked:', 'tool'),
-  'checked.beforePause.silent': t(
-    'Before the pause, {{tool:code}} declared its limits but did not say what it checked.',
-  ),
-  'checked.beforePause.undeclared': t(
-    'Before the pause, the model read what came back from {{tool:code}}; the tool did not say what it checked.',
-  ),
-  'beforePause.more': t(
-    "…and {{count:n,'more tool call','more tool calls'}} from before the pause.",
-  ),
-  'beforePause.noResults': t("No tool result from before the pause is in this record's history."),
-  'beforePause.unmatched': t(
-    'This record cannot match tool results from before the pause to its final history.',
-  ),
-  'beforePause.keptOut': t(
-    "This record keeps the run's history out, so what came back before the pause cannot be told.",
-  ),
+  ...BEFORE_PAUSE_TEMPLATES,
   'checked.unnamed': t(
     'A tool call ({{id:code}}) is in this record, but no event of it names its tool.',
   ),
@@ -562,6 +546,8 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'wrong.beforePause.held': t(
     "The part before the pause is read from the state this record holds. That part's events are not in this record, so how it was routed, what was in front of the model then, and whether a call then failed or was refused by a rule cannot be told here.",
   ),
+  // The same, when the routing verdict IS read from that state (or the app routes nothing): the
+  // routing is not named as lost.
   'wrong.beforePause.held.events': t(
     "The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.",
   ),

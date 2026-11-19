@@ -25,7 +25,6 @@
     "src/ag-ui/serializer.ts": 1050,
     "src/answer-account/account.ts": 718,
     "src/answer-account/facts/understood.ts": 633,
-    "src/answer-account/templates.ts": 611,
     "src/artifacts/conformance/cases.ts": 1221,
     "src/artifacts/s3Artifacts.ts": 714,
     "src/bug-report/build.ts": 943,
