@@ -191,13 +191,11 @@ describe('argument witnesses when a later proposal reuses a landed call ID', () 
       if (placement === 'no-failure') expect(reason).toBeUndefined();
       else {
         expect(reason?.witness).toEqual([witness]);
-        if (placement !== 'without-result') {
-          expect(reason?.source).toEqual(
-            placement === 'placed'
-              ? { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] }
-              : { kind: 'calls', calls: [], unplaced: [witness] },
-          );
-        }
+        expect(reason?.source).toEqual(
+          placement === 'unplaced'
+            ? { kind: 'calls', calls: [], unplaced: [witness] }
+            : { kind: 'calls', calls: [{ toolCallId: base.toolCallId, toolName: base.toolName }] },
+        );
       }
       const sources = assessment.checked.find((row) => row.check === 'argument-sources');
       if (checked.length === 0) expect(sources).toBeUndefined();

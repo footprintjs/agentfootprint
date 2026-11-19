@@ -74,4 +74,8 @@ export async function main() {
   // #endregion verdict
 }
 
-if (isCliEntry(import.meta.url)) await main();
+if (isCliEntry(import.meta.url))
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

@@ -532,6 +532,9 @@ and before returning a pooled agent. Read its recording in memory or load the
 same recording later. Both readers take the exact run ID from the turn or its
 recording envelope. Import the readers from `agentfootprint/observe`.
 
+`TurnEvidenceSource` is the served snapshot and event list from `recordRun`.
+The readers accept the recording directly, in memory or after loading it.
+
 <CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="completed-turn" title="Keep the finished turn's record" />
 
 ### Coverage declarations per call
@@ -539,8 +542,9 @@ recording envelope. Import the readers from `agentfootprint/observe`.
 `readTurnCoverage` counts committed declarations and their checked, not-checked
 and cannot-cover items before merging. It reads the current leg after a resume.
 It works with prose and typed answers independently of the limits block. An
-empty result means the readable leg declared nothing. A row without a definite
-call association keeps its counts and omits the call ID.
+empty result means the readable leg declared nothing. Each `TurnCallCoverage`
+row counts declarations and the three item lists. A row without a definite call
+association keeps its counts and omits `toolCallId`.
 
 Coverage returns `undefined` if the snapshot is missing or belongs to another
 run, either end of the leg's state is unreadable, the starting ledger cannot be
@@ -552,9 +556,10 @@ lacks any of its three item lists.
 ### The final evidence verdict
 
 `readTurnEvidenceVerdict` reads the finished turn's final served check, including
-the check after a revision. Its status is `clean`, `disabled`, `not-checked`, or
-`unsupported`. Unsupported items carry the recorded value and shape. If the
-verdict is visible but its item list is unavailable, `items` is `null`.
+the check after a revision. `TurnEvidenceVerdict` has status `clean`, `disabled`,
+`not-checked`, or `unsupported`. Unsupported items carry the recorded value and
+shape. If the verdict is visible but its item list is unavailable, `items` is
+`null`.
 The verdict uses events alone. An unreadable terminal iteration or a missing
 or unreadable final check yields `not-checked` unless the record establishes
 that the gate was disabled.

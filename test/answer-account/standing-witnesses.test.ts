@@ -192,12 +192,19 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         ]);
         const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
         const assessment = assessAnswer(recording);
-        expect(
-          assessment.reasons.find((row) => row.reason === 'argument-unverified'),
-        ).toMatchObject({
+        const argumentReason = assessment.reasons.find(
+          (row) => row.reason === 'argument-unverified',
+        );
+        expect(argumentReason).toMatchObject({
           witness: [pointer],
           ...(!bothEvicted && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
         });
+        if (bothEvicted) {
+          expect(argumentReason?.source).toEqual({
+            kind: 'calls',
+            calls: [{ toolCallId: 'reused', toolName: name }],
+          });
+        }
         const account = accountForAnswer(recording);
         const reason = account.rows
           .find((row) => row.id === 'how-sure')
