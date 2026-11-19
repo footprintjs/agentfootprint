@@ -77,7 +77,7 @@ agent.turn_end         { turnIndex: 0, finalContent: 'Your order was denied…',
 
 (All names carry the `agentfootprint.` prefix; it is dropped above for width.) Iterations count from 1, turns from 0. `agentfootprint.error.fatal` fires instead of a clean ending when a run fails.
 
-With output middleware, there are no provider-draft token events in this sequence. The accepted final token follows the output decision and the last `llm_end`, before `turn_end`. **A model call ending is not the turn ending**: more tools, retries or policy checks may follow. Never close a turn's stream at `llm_end`.
+With output middleware, there are no provider-draft token events in this sequence. The accepted final token follows the output decision and the last `llm_end`, before `turn_end`.
 
 ## Parallel tool calls
 
@@ -97,7 +97,7 @@ agent.on('agentfootprint.stream.tool_end', (e) => {
 
 ## Pause events
 
-When a tool asks for a human (`pauseHere(...)` / `askHuman(...)`), the stream stops mid-turn: that tool's `tool_start` is followed by `agentfootprint.pause.request` — no `tool_end`, no `turn_end` — and `agent.run()` returns a paused outcome (`{ paused: true, checkpoint, pauseData }`) instead of a string. `agent.resume(...)` fires `agentfootprint.pause.resume`, then the paused tool's `tool_end` and the rest of the turn stream as usual.
+When a tool asks for a human (`pauseHere(...)` / `askHuman(...)`), the run suspends mid-turn. The tool's `tool_start` is followed by `agentfootprint.pause.request`, and `agent.run()` returns a paused outcome (`{ paused: true, checkpoint, pauseData }`). Both `tool_end` and `turn_end` are still pending at that point. `agent.resume(...)` fires `agentfootprint.pause.resume`, then the paused tool's `tool_end` and the rest of the turn events as usual.
 
 ```ts
 import { isPaused } from 'agentfootprint';
@@ -113,7 +113,7 @@ if (isPaused(outcome)) {
 }
 ```
 
-For a chat UI this means: end the SSE stream on `pause.request` too, not only on `turn_end`. Runnable end to end: [`examples/features/01-pause-resume.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/01-pause-resume.ts).
+A request-owned SSE connection can close at `pause.request` and open a new connection for the answer to the prompt. See [`examples/features/01-pause-resume.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/01-pause-resume.ts).
 
 ## A throwing listener never breaks the run
 
@@ -123,7 +123,7 @@ Listeners are also never awaited. An `async` listener runs in the background, an
 
 ## SSE for browser clients
 
-The built-in `toSSE()` helper from `agentfootprint/observe` yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`). Start consuming it **before** starting the run, so the subscriber is already listening. For an agent whose run ends with `turn_end` or a run failure event:
+The built-in `toSSE()` helper from `agentfootprint/observe` yields SSE-formatted strings (`event: <name>\ndata: <json>\n\n`). Start consuming it **before** starting the run, so the subscriber is already listening. This example uses an Agent with no mounted Agents.
 
 ```ts
 import { toSSE } from 'agentfootprint/observe';
@@ -138,11 +138,13 @@ await Promise.all([agent.run({ message: userInput }), draining]);
 
 `toSSE(runner, options?)` accepts `filter` (skip events), `format: 'full' | 'text'`, `eventName` (rename events), and `heartbeatMs` (keep-alive `: ping` comments for proxies). The class form `new SSEFormatter(agent).stream()` is identical. `encodeSSE(name, payload)` formats a one-off frame for app-level events outside the typed registry.
 
-In `'text'` format, the helper writes raw tokens followed by the rest of `turn_end.finalContent` when the end event carries `meta.rootTurn: true`. This also applies when you open a new stream after a pause and before calling `resume()`. For older records without the marker, the helper adds the rest only if it saw the root turn open. That final chunk can include the limits block or standing line. A filter that drops only trailing tokens gets them back with the rest. If a filter leaves a gap so the written text no longer matches the answer's prefix, nothing is added. If the provider streams nothing or the filter drops every token, the helper writes the whole answer. A refused answer adds nothing. Filtering out `turn_start` does not affect whether the stream saw the turn open.
+In `'text'` format, the helper delivers raw tokens in event order, including tokens from mounted Agents. It adds the rest of the owning Agent's `turn_end.finalContent` at the end marked `meta.rootTurn: true`. That final chunk can include the limits block or standing line. For older records without the marker, the helper adds the rest if it saw the root turn open or if the events carry no metadata. Filtering out `turn_start` still lets the helper see the opening. A filter that drops only trailing tokens gets them back with the rest. If a filter leaves a gap so the written text no longer matches the answer's prefix, nothing is added. If the provider streams nothing or the filter drops every token, the helper writes the whole answer. A refused answer adds nothing.
 
-**Existing helper limits.** Stream completion is independent of the output filter. If the filter drops a terminal event, the helper closes without writing a frame or the remaining answer for that event. A new text stream on a resumed Agent closes at the marked root end, `error.fatal`, or the next `pause.request`. Other streams close at the first `agent.turn_end` or `error.fatal`. Under a Sequence or Parallel the helper carries only text streamed through its first agent's turn. That text can be the run's answer when the same agent answers last. If a pause or input refusal leaves the helper waiting, use a hosting transport or close your own subscription when the run returns or rejects.
+A live Agent's text stream closes at its marked root end or `agentfootprint.error.fatal`. A mounted Agent's turn end can arrive earlier while the stream stays open for the root answer. A text stream opened before the original run stays open across a pause. A new text stream opened for `resume()` also closes if that resumed run requests another pause.
 
-A request-owned subscription can handle those outcomes explicitly. Unsubscribe when it ends; do not leave one request listening to a later run on the same agent:
+Full event streams, streams over older records without the marker, and streams over standalone compositions such as Sequence and Parallel close at the first `agentfootprint.agent.turn_end` or `agentfootprint.error.fatal`. Read the composition's full answer from the returned outcome. Stream completion is independent of the output filter. If the filter drops a terminal event, the helper closes without writing a frame or the remaining answer for that event.
+
+A request-owned subscription can also close when the run pauses or rejects before emitting a terminal event. Unsubscribe when the request ends. This example listens for the live Agent's marked root end.
 
 ```ts
 import { isPaused } from 'agentfootprint';
@@ -159,7 +161,9 @@ const unsubscribe = [
   agent.on('agentfootprint.stream.token', (e) => {
     if (!ended) res.write(`data: ${JSON.stringify({ type: 'token', content: e.payload.content })}\n\n`);
   }),
-  agent.on('agentfootprint.agent.turn_end', () => finish('done')),
+  agent.on('agentfootprint.agent.turn_end', (e) => {
+    if (e.meta.rootTurn) finish('done');
+  }),
   agent.on('agentfootprint.error.fatal', (e) => {
     if (e.payload.scope === 'run') finish('failed');
   }),
@@ -187,7 +191,7 @@ The browser consumes via `EventSource` and renders tokens into the UI as they ar
 ## Anti-patterns
 
 - Don't try to dispatch tools off `stream.token`. Tool calls land in the final chunk's `response.toolCalls`. Token chunks are content-only.
-- Don't close SSE at `stream.llm_end`: it ends one model call, not the turn. Close on `agent.turn_end`, a run-scoped `error.fatal`, or a pause; handle the run's rejected promise too.
+- Keep the stream open at `stream.llm_end`. That event ends one model call, and tools, retries, or policy checks can still follow in the same turn. For a request-owned subscription, close when the owning Agent's turn ends, the run fails, or the request needs to return a pause. Handle rejection of the run's promise as well.
 - Don't run two `stream()`s concurrently on the same agent. Build one, run one.
 
 ## Next steps

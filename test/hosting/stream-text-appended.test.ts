@@ -77,8 +77,10 @@ const pendingReport = defineTool({
 const call = (name: string, id = 'c1') => ({ content: '', toolCalls: [{ id, name, args: {} }] });
 
 const REPORT = 'The report is ready.';
+const DRAFT = 'The draft is ready.';
 const WARNING = '\n\n---\n\nNot sure — a tool reported unfinished work.';
 const REPORT_CHUNKS = ['The ', 'report ', 'is ', 'ready.', WARNING];
+const DRAFT_CHUNKS = ['The ', 'draft ', 'is ', 'ready.'];
 
 function reportBuilder(
   answer: string,
@@ -90,6 +92,30 @@ function reportBuilder(
     .tool(pendingReport)
     .tool(approval)
     .answerLayer({ standingLine: true });
+}
+
+function nestedReport(pause: boolean, observerDelivery?: AgentOptions['observerDelivery']) {
+  const child = reportBuilder(DRAFT, pause).build();
+  const read = flowChart('Seed', () => undefined, 'seed')
+    .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
+      inputMapper: () => ({
+        message: 'Check the draft.',
+        identity: { conversationId: 'specialist' },
+      }),
+      outputMapper: () => ({ formatted: 'The specialist finished.' }),
+    })
+    .build();
+  const memory = defineMemory({
+    id: 'nested',
+    type: MEMORY_TYPES.EPISODIC,
+    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
+    store: new InMemoryStore(),
+    readOnly: true,
+  });
+  const agent = reportBuilder(REPORT, false, { observerDelivery })
+    .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
+    .build();
+  return { agent, child };
 }
 
 type Runnable = {
@@ -107,11 +133,11 @@ async function readText(
 }
 
 /** Start reading now. Once the run's observers have drained, the next heartbeat bounds the wait. */
-function readWithHeartbeat(agent: Agent, options: ToSSEOptions) {
+function readWithHeartbeat(runner: Pick<Runnable, 'on'>, options: ToSSEOptions) {
   let drained = false;
   const reading = (async () => {
     const chunks: string[] = [];
-    for await (const chunk of toSSE(agent, { ...options, heartbeatMs: 50 })) {
+    for await (const chunk of toSSE(runner, { ...options, heartbeatMs: 50 })) {
       if (chunk !== ': ping\n\n') chunks.push(chunk);
       // Returning releases the iterator even when the stream failed to close.
       else if (drained) return { closed: false, chunks };
@@ -366,10 +392,8 @@ describe('toSSE text — regression', () => {
 });
 
 describe('toSSE text — composition: only the outermost turn writes the rest', () => {
-  // The stream still ends at the FIRST agent's turn_end, inner or not (older
-  // than this rule; README "Not covered"). That inner turn's answer is not the
-  // run's answer, so an inner turn_end writes nothing more: these runs read as
-  // they did before the rest was written at all.
+  // Standalone compositions keep closing at the first turn_end. An inner end
+  // has no owning Agent answer to append to the stream.
   it.each([
     ['with all events', undefined],
     ['with turn starts filtered out', noTurnStarts],
@@ -413,8 +437,73 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
         }).build(),
       )
       .build();
-    const { reply } = await textReply(sequence);
-    expect(reply).toBe('First step answer.');
+    const readAfterDrain = readWithHeartbeat(sequence, { format: 'text' });
+    try {
+      expect(await sequence.run({ message: 'Run both steps.' })).toBe('Second step answer.');
+      expect(await readAfterDrain()).toEqual({
+        closed: true,
+        chunks: ['First ', 'step ', 'answer.'],
+      });
+    } finally {
+      await readAfterDrain();
+      await sequence.shutdown();
+    }
+  });
+
+  it('a fresh stream stays open until the mounting Agent ends', async () => {
+    const { agent, child } = nestedReport(false);
+    const readAfterDrain = readWithHeartbeat(agent, { format: 'text' });
+    try {
+      expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
+      await agent.drainObservers();
+      expect(await readAfterDrain()).toEqual({
+        closed: true,
+        chunks: [...DRAFT_CHUNKS, ...REPORT_CHUNKS],
+      });
+    } finally {
+      await readAfterDrain();
+      await Promise.all([agent.shutdown(), child.shutdown()]);
+    }
+  });
+
+  it('a fresh stream stays open across a mounted Agent pause and ends with the root answer', async () => {
+    const { agent, child } = nestedReport(true);
+    const readAfterDrain = readWithHeartbeat(agent, { format: 'text' });
+    try {
+      const paused = await agent.run({ message: 'Is the report ready?' });
+      if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
+      await agent.drainObservers();
+      expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
+      await agent.drainObservers();
+      expect(await readAfterDrain()).toEqual({
+        closed: true,
+        chunks: [...DRAFT_CHUNKS, ...REPORT_CHUNKS],
+      });
+    } finally {
+      await readAfterDrain();
+      await Promise.all([agent.shutdown(), child.shutdown()]);
+    }
+  });
+
+  it('an older nested event port without root markers closes at its first turn end', async () => {
+    const { agent, child } = nestedReport(false);
+    const runner: Pick<Runnable, 'on'> = {
+      on: (pattern, listener) =>
+        agent.on(pattern, (event) => {
+          const meta = { ...event.meta };
+          delete meta.rootTurn;
+          listener({ ...event, meta });
+        }),
+    };
+    const readAfterDrain = readWithHeartbeat(runner, { format: 'text' });
+    try {
+      expect(await agent.run({ message: 'Is the report ready?' })).toBe(REPORT + WARNING);
+      await agent.drainObservers();
+      expect(await readAfterDrain()).toEqual({ closed: true, chunks: DRAFT_CHUNKS });
+    } finally {
+      await readAfterDrain();
+      await Promise.all([agent.shutdown(), child.shutdown()]);
+    }
   });
 });
 
@@ -481,26 +570,7 @@ describe('toSSE text — resume', () => {
   ] as const)(
     'closes a nested resume at the root end ($observerDelivery, filter root: $dropRoot)',
     async ({ observerDelivery, dropRoot }) => {
-      const child = reportBuilder('The draft is ready.', true).build();
-      const read = flowChart('Seed', () => undefined, 'seed')
-        .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
-          inputMapper: () => ({
-            message: 'Check the draft.',
-            identity: { conversationId: 'specialist' },
-          }),
-          outputMapper: () => ({ formatted: 'The specialist finished.' }),
-        })
-        .build();
-      const memory = defineMemory({
-        id: 'nested',
-        type: MEMORY_TYPES.EPISODIC,
-        strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
-        store: new InMemoryStore(),
-        readOnly: true,
-      });
-      const agent = reportBuilder(REPORT, false, { observerDelivery })
-        .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
-        .build();
+      const { agent, child } = nestedReport(true, observerDelivery);
       const paused = await agent.run({ message: 'Is the report ready?' });
       if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
 
@@ -517,13 +587,13 @@ describe('toSSE text — resume', () => {
         expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
         await agent.drainObservers();
         expect(ends).toEqual([
-          { root: undefined, answer: 'The draft is ready.' + WARNING },
+          { root: undefined, answer: DRAFT + WARNING },
           { root: true, answer: REPORT + WARNING },
         ]);
         const rootChunks = dropRoot ? REPORT_CHUNKS.slice(0, -1) : REPORT_CHUNKS;
         expect(await readAfterDrain()).toEqual({
           closed: true,
-          chunks: ['The ', 'draft ', 'is ', 'ready.', ...rootChunks],
+          chunks: [...DRAFT_CHUNKS, ...rootChunks],
         });
       } finally {
         await readAfterDrain();
