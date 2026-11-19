@@ -20,8 +20,11 @@ conversation retains that message, the next request can carry the line within
 its assistant history.
 
 Ordinary streaming sends the model's text in `stream.token`. If output admission
-holds the provider's chunks, the released token contains the composed answer
-with the line. The built-in text stream sends any remaining text after the tokens
-for a turn it saw open. If your app paints its own tokens, use
-`turn_end.finalContent` for the finished message or render the standing and
-reason codes from `agentfootprint.answer.assessed` in your own UI.
+holds the provider's chunks, the released token contains the composed answer.
+Output middleware formats the model's text first. The standing line is appended
+after that formatting, outside any closing marker the formatter added. Use
+`.answerLayer({ standingLine: false })` if your app needs the formatter's exact
+text and still wants the standing as data. The built-in text stream sends any
+remaining text after the tokens for a turn it saw open. If your app paints its
+own tokens, use `turn_end.finalContent` for the finished message or render the
+standing and reason codes from `agentfootprint.answer.assessed` in your own UI.

@@ -69,3 +69,52 @@ describe.each(['default', 'explicit'] as const)(
     });
   },
 );
+
+describe('SCENARIO — the standing line follows the output formatter', () => {
+  const formatted = `<card>\n${ANSWER}\n</card>`;
+  const withWarning = formatted + DELIVERED.slice(ANSWER.length);
+
+  it.each([
+    { mode: 'default', options: undefined, expected: withWarning },
+    {
+      mode: 'explicit',
+      options: { standingLine: { when: 'not-sure-or-ask' } } as const,
+      expected: withWarning,
+    },
+    {
+      mode: 'data only',
+      options: { standingLine: false } as const,
+      expected: formatted,
+    },
+  ])('$mode', async ({ options, expected }) => {
+    const formatterInputs: string[] = [];
+    const builder = Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        replies: [{ toolCalls: [{ id: 'c1', name: 'submit', args: {} }] }, ANSWER],
+      }),
+      model: 'mock',
+    })
+      .tool(submit)
+      .messageMiddleware({
+        name: 'card-formatter',
+        onMessage({ phase, content }) {
+          if (phase === 'input') return allow();
+          formatterInputs.push(content);
+          return allow(`<card>\n${content}\n</card>`, 'Format the text as a card.');
+        },
+      });
+    const agent = (options === undefined ? builder : builder.answerLayer(options)).build();
+    const tokens: string[] = [];
+    const endings: { text: string; standing?: string }[] = [];
+    agent.on('agentfootprint.stream.token', ({ payload }) => tokens.push(payload.content));
+    agent.on('agentfootprint.agent.turn_end', ({ payload }) =>
+      endings.push({ text: payload.finalContent, standing: payload.answerAssessment?.standing }),
+    );
+
+    expect(await agent.run({ message: 'Please do the work.' })).toBe(expected);
+    expect(formatterInputs).toEqual([ANSWER]);
+    expect(tokens).toEqual([expected]);
+    expect(endings).toEqual([{ text: expected, standing: 'not-sure' }]);
+  });
+});

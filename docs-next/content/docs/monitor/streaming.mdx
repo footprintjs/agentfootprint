@@ -142,8 +142,12 @@ In `'text'` format, the helper writes raw tokens followed by the rest of `turn_e
 
 With ordinary streaming, the standing line arrives in the final content. When
 output admission holds the provider's chunks, a single token carries the
-admitted answer, including the line. The text helper emits the complete
-answer once in either case for a root turn it saw open. In `'full'` format
+composed answer. Output middleware sees the model's text and formats it before
+the line is appended. If the formatter adds a closing marker, the line follows
+that marker in the released token and the final content. Use
+`.answerLayer({ standingLine: false })` to preserve the exact formatted text
+while keeping the assessment data. The text helper emits the complete answer
+once in either case for a root turn it saw open. In `'full'` format
 the client receives the original events, including the completed text on
 `agent.turn_end` and the structured standing on `answer.assessed`. If you
 render tokens yourself, use `turn_end.finalContent` for the finished message.
