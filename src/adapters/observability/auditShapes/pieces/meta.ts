@@ -1,6 +1,6 @@
 import type { BoundRule } from '../../auditBounding.js';
 import type { EventMeta, EventSourcePosition } from '../../../../events/types.js';
-import { listOf, num, shapeOf, str } from '../../auditBounding.js';
+import { bool, listOf, num, shapeOf, str } from '../../auditBounding.js';
 import { metaIdentity } from '../../auditKeptByContract.js';
 
 /**
@@ -23,6 +23,7 @@ export const boundMeta: BoundRule = shapeOf<EventMeta>({
   subflowPath: listOf(str),
   compositionPath: listOf(str),
   turnIndex: num,
+  rootTurn: bool,
   iterIndex: num,
   traceId: str,
   spanId: str,

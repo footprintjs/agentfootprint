@@ -14,6 +14,9 @@
  * Occurrence addressing gives each of the four singleton batches one address.
  * The stream uses it on proposals, results, start/end, validation and context
  * injection records. The fixture still pins every other byte.
+ *
+ * The owning Agent's end also gains `meta.rootTurn`. The Sequence member's
+ * end remains unchanged.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,7 +34,11 @@ describe('no policy preserves the whole stream with native run identity', () => 
     const events = JSON.parse(golden) as {
       type: string;
       payload: Record<string, unknown>;
-      meta: { runId: string; sourcePosition?: { engineRunId?: string; logRunId?: string } };
+      meta: {
+        runId: string;
+        rootTurn?: true;
+        sourcePosition?: { engineRunId?: string; logRunId?: string };
+      };
     }[];
     // The first two aliases named one execution, and so on. This fixture's
     // resume is FRESH. SAME resumes retain their original native log identity.
@@ -54,6 +61,10 @@ describe('no policy preserves the whole stream with native run identity', () => 
       if (source?.engineRunId !== undefined) source.engineRunId = nativeAlias(source.engineRunId);
       if (source?.logRunId !== undefined) source.logRunId = nativeAlias(source.logRunId);
     }
+    // The fixture ends its resumed Agent first and its Sequence member second.
+    const turnEnds = events.filter((event) => event.type === 'agentfootprint.agent.turn_end');
+    expect(turnEnds).toHaveLength(2);
+    turnEnds[0]!.meta.rootTurn = true;
     // A decided record change: `stream.tool_end` says whether the tool's function was
     // entered (`entered`). The two calls that never reached a tool — an unknown name
     // (`c2`) and rejected arguments (`c3`) — carry `entered: false`. The two

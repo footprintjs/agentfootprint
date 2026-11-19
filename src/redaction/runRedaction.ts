@@ -50,10 +50,9 @@
 import { RedactionRule } from 'footprintjs/advanced';
 import type { CombinedRecorder, RedactionPolicy, ScopeFactory } from 'footprintjs';
 
-import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
+import type { RunContext } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
 import type { EventMeta } from '../events/types.js';
-import type { AgentfootprintEvent } from '../events/registry.js';
 import { conversationRedaction } from './conversation.js';
 import { namesAnything } from './policy.js';
 import {
@@ -64,6 +63,7 @@ import {
 } from './coverage.js';
 import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
+import { createRunEventRelay } from './runEventRelay.js';
 import {
   carryPrivateRuleNames,
   createPrivateRun,
@@ -91,6 +91,8 @@ export interface RunRedaction {
   readonly recorders: readonly CombinedRecorder[];
   /** Tie an already-created native scope to this exact run and its rule. */
   bindScope(scope: unknown, context: Parameters<ScopeFactory>[0]): void;
+  /** The ownership stamp shared by a root turn end and its real-value twin. */
+  rootTurnAt(type: string, runtimeStageId: string): true | undefined;
   /**
    * The value the stage `runtimeStageId` wrote under `key` through
    * `setEventSource` — the oldest one not yet taken — for a recorder whose
@@ -121,6 +123,7 @@ export interface ScopeRun {
   readonly serving: EventServing;
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
+  markRootTurnEnd?(stageId: string): void;
   /** Capture metadata/serving only, so retained cleanup cannot keep a run bank alive. */
   captureLate?(stageId: string): (type: string, payload: unknown) => void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
@@ -167,6 +170,7 @@ function retirePrivateBinding(privateRun: PrivateRun, bound: NativePrivateRule):
 /** Private working input, never a recorder/export or an instance-wide subscription. */
 export interface ScopeComputation {
   readonly owner: object;
+  readonly ownsTurn?: true;
   retired(): boolean;
   emit(type: string, payload: unknown): void;
 }
@@ -224,24 +228,14 @@ export function createRunRedaction(args: {
   const waiting = new Map<string, { readonly value: unknown; readonly keptOut: boolean }[]>();
   const slot = (runtimeStageId: string, key: string): string => `${runtimeStageId}\u001f${key}`;
   const coverage = coverageOfOpenedRun(policy);
+  const events = createRunEventRelay(dispatcher, serving, getRunContext);
   const run: ScopeRun = {
     wantsRecordedContext: () => dispatcher.listenerCount('agentfootprint.context.recorded') > 0,
     coverage,
     serving,
-    real(type, payload, stageId) {
-      if (!dispatcher.hasRealListeners()) return;
-      // The stage's position, as the bridge stamps it on the served twin
-      // (`buildEventMeta`); only footprintjs's `sourcePosition` is the bridge's alone.
-      const origin = stageId !== '' ? { runtimeStageId: stageId } : undefined;
-      dispatcher.deliverReal({
-        type,
-        payload,
-        meta: buildEventMeta(origin, getRunContext()),
-      } as unknown as AgentfootprintEvent);
-    },
-    captureLate(stageId) {
-      return lateEmitter(dispatcher, serving, Object.freeze({ ...getRunContext() }), stageId);
-    },
+    markRootTurnEnd: events.markRootTurnEnd,
+    real: events.real,
+    captureLate: events.captureLate,
     retainStateValue: (name, value) => decided.rule.retain([name], value),
     keepsOut(name) {
       return privateRun.hasRecordPolicy(decided.rule) && decided.rule.isKeyRedacted(name);
@@ -300,6 +294,7 @@ export function createRunRedaction(args: {
     coverage,
     recorders,
     bindScope,
+    rootTurnAt: events.rootTurnAt,
     takeRealWrite(runtimeStageId, key) {
       const at = slot(runtimeStageId, key);
       const queue = waiting.get(at);
@@ -309,24 +304,6 @@ export function createRunRedaction(args: {
       return written;
     },
   };
-}
-
-/** The returned closure has no shared activation with a run-context reader. */
-function lateEmitter(
-  dispatcher: EventDispatcher,
-  serving: EventServing,
-  context: RunContext,
-  stageId: string,
-): (type: string, payload: unknown) => void {
-  return (type, payload) =>
-    dispatcher.dispatchForRun(
-      {
-        type,
-        payload,
-        meta: buildEventMeta({ runtimeStageId: stageId }, context),
-      } as unknown as AgentfootprintEvent,
-      serving,
-    );
 }
 
 /**
@@ -500,6 +477,15 @@ export interface EmitScope {
 /** Whether this actual native component has an explicit recording subscriber. */
 export function wantsRecordedContext(scope: object): boolean {
   return scopeRuns.get(scope)?.serving?.run.wantsRecordedContext?.() ?? false;
+}
+
+/** Mark the terminal capture using the ownership of this actual native scope. */
+export function markRootTurnEnd(scope: object): void {
+  const entry = scopeRuns.get(scope);
+  const computation = entry?.computation;
+  if (computation?.ownsTurn !== true || computation.retired()) return;
+  const serving = entry?.serving;
+  serving?.run.markRootTurnEnd?.(serving.stageId);
 }
 
 /**
