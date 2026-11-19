@@ -210,8 +210,6 @@ export interface AppendedRows {
   readonly ledger: FindingsRow[];
   /** The conflict rows this merge filed (a key whose readings first disagreed here). */
   readonly newConflicts: readonly ConflictRow[];
-  /** The judge's current reading per result, for the standing event's `agrees`. */
-  readonly judgments: ReadonlyMap<string, JudgmentRow>;
 }
 
 /**
@@ -249,7 +247,7 @@ export function appendRows(
       iteration,
       ...(stamp !== undefined && { turn: stamp.turn }),
     }));
-  return { ledger: [...merged, ...newConflicts], newConflicts, judgments: fold.judgments };
+  return { ledger: [...merged, ...newConflicts], newConflicts };
 }
 
 /**
@@ -275,9 +273,9 @@ export function recordFindings(
   // detached plain data (RFC-001 'clone' capture under deferred delivery).
   const prev: FindingsRow[] = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
   const filed = stamped(rows, stamp);
-  const { ledger, newConflicts, judgments } = appendRows(prev, filed, stamp);
+  const { ledger, newConflicts } = appendRows(prev, filed, stamp);
   scope.findingsLedger = ledger;
-  for (const row of filed) emitRow(scope, row, newConflicts, judgments);
+  for (const row of filed) emitRow(scope, row, newConflicts, ledger);
 }
 
 /**
@@ -290,7 +288,7 @@ export function emitRow(
   scope: FindingsScope,
   row: FindingsRow,
   newConflicts: readonly ConflictRow[] = [],
-  judgments: ReadonlyMap<string, JudgmentRow> = new Map(),
+  ledger: readonly FindingsRow[] = [],
 ): void {
   if (row.kind === 'basis') {
     typedEmit(scope, 'agentfootprint.findings.declared', {
@@ -401,16 +399,18 @@ export function emitRow(
     return;
   }
   if (row.kind !== 'standing') return;
-  const conflictKeys = newConflicts
-    .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))
-    .map((c) => c.key);
+  const key = readCallOccurrenceKey(row);
+  const sameCall = (other: { readonly toolCallId: string }) =>
+    key !== null && other.toolCallId === row.toolCallId && readCallOccurrenceKey(other) === key;
+  const conflictKeys = newConflicts.filter((c) => c.witnesses.some(sameCall)).map((c) => c.key);
   // The model's standing beside the judge's CURRENT judgment of the same
   // result (9.104.0) — `agrees` is a comparison made for the sink at the
   // one moment both readings exist (the judgment always lands first, before
   // the model call that declares), never written to a row: the two sources
   // stay two rows on the record (the second-source law). Absent when no
   // judgment exists — an unarmed run, a failed call, an unknown id.
-  const judged = judgments.get(row.toolCallId);
+  let judged: JudgmentRow | undefined;
+  for (const item of ledger) if (item.kind === 'judgment' && sameCall(item)) judged = item;
   typedEmit(scope, 'agentfootprint.findings.standing', {
     toolCallId: row.toolCallId,
     ...callOccurrenceField(row.callOccurrenceKey),
