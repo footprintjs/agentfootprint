@@ -26,10 +26,11 @@ export const system = [
 
 export function createDesk(library, task) {
   const { defineTool, defineSkill, skillGraph, allow, deny, ask } = library;
-  const entries = [];
+  const enteredCalls = [];
   let reached = false;
+  const toolName = task.id === 'unavailable-tool' ? 'read_desk_status' : task.tool;
   const tool = defineTool({
-    name: task.id === 'unavailable-tool' ? 'read_desk_status' : task.tool,
+    name: toolName,
     description: task.id === 'empty-search'
       ? 'Find a catalog card by title and return its code.'
       : task.id === 'unavailable-tool'
@@ -43,7 +44,7 @@ export function createDesk(library, task) {
     },
     ...(task.id === 'empty-search' || task.id === 'unavailable-tool' ? { effects: 'read' } : {}),
     execute({ target }) {
-      entries.push(target);
+      enteredCalls.push({ toolName, target });
       if (target !== task.target) return { content: 'Unknown target.', effects: [], status: 'failure' };
       if (task.id === 'empty-search') return [];
       if (task.id === 'failed-step') {
@@ -78,6 +79,6 @@ export function createDesk(library, task) {
         },
       });
     },
-    truth: () => ({ reached, entries: [...entries] }),
+    truth: () => ({ reached, entries: enteredCalls.map(({ target }) => target), enteredCalls: [...enteredCalls] }),
   };
 }
