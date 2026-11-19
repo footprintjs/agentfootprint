@@ -7,11 +7,62 @@
  * up the strategy.prepareRequest call — Phase 6 just mounts).
  */
 
-import { describe, expect, it } from 'vitest';
-import { Agent } from '../../src/index.js';
+import { describe, expect, it, vi } from 'vitest';
+import { Agent, defineTool } from '../../src/index.js';
+import { BreakpointCacheStrategy } from '../../src/cache/index.js';
 import { defineSteering } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
-import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
+
+const cacheWork = vi.hoisted(() => ({
+  prefixVisits: undefined as number[] | undefined,
+}));
+
+vi.mock(import('../../src/cache/CacheDecisionSubflow.js'), async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    cacheDecisionStage: (...args: Parameters<typeof original.cacheDecisionStage>) => {
+      const stage = original.cacheDecisionStage(...args);
+      return (scope: Parameters<typeof stage>[0]) => {
+        const visits = cacheWork.prefixVisits;
+        if (visits === undefined) return stage(scope);
+
+        let rows = 0;
+        try {
+          return stage(
+            new Proxy(scope, {
+              get(target, key) {
+                const value = Reflect.get(target, key);
+                if (key !== 'history' || !Array.isArray(value)) return value;
+                // Count row accesses only inside the real cache decision, after
+                // the engine has moved the history into this stage's scope.
+                return new Proxy(value, {
+                  get(history, index) {
+                    if (index === Symbol.iterator) {
+                      // The engine can bind the iterator to its own scope array.
+                      // Count its yielded rows as well as direct index reads.
+                      return function* () {
+                        for (const row of history) {
+                          rows++;
+                          yield row;
+                        }
+                      };
+                    }
+                    if (typeof index === 'string' && /^\d+$/.test(index)) rows++;
+                    return Reflect.get(history, index);
+                  },
+                });
+              },
+              set: (target, key, value) => Reflect.set(target, key, value),
+            }),
+          );
+        } finally {
+          visits.push(rows);
+        }
+      };
+    },
+  };
+});
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -144,27 +195,83 @@ describe('agent-chart cache integration — security', () => {
 // ─── 6. Performance ───────────────────────────────────────────────
 
 describe('agent-chart cache integration — performance', () => {
-  it(
-    'Cache-layer stages do not multiply the cost of a run (mocked LLM)',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // The comparison the test name always meant: the SAME agent with caching
-      // off is the baseline, measured on this machine moments before. Cache
-      // stages are pure transforms, so the run with them may cost a little more
-      // — 4× is the headroom — but never an order more. A busy runner slows
-      // both halves and cancels out.
-      const off = buildAgent({ caching: 'off' });
-      const on = buildAgent();
-      await expectWithinTimes({
-        baseline: async () => {
-          await off.run({ message: 'go' });
-        },
-        subject: async () => {
-          await on.run({ message: 'go' });
-        },
-        times: 4,
-        why: 'the cache layer must not multiply run cost',
+  it.each([2, 8])(
+    'visits the cache prefix at most twice per row on %i model turns',
+    async (turns) => {
+      const lookup = defineTool({
+        name: 'lookup',
+        description: 'Return a fixture value.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async () => 'found',
       });
+
+      async function run(caching?: 'off') {
+        const requests: { prefixLength: number; markerCount: number; tail: number | undefined }[] =
+          [];
+        const provider = mock({
+          respond: (request) => {
+            requests.push({
+              prefixLength: request.messages.length,
+              markerCount: request.cacheMarkers?.length ?? 0,
+              tail: request.cacheMarkers?.find(({ field }) => field === 'messages')?.boundaryIndex,
+            });
+            return requests.length < turns
+              ? {
+                  content: '',
+                  toolCalls: [{ id: `call-${requests.length}`, name: 'lookup', args: {} }],
+                  usage: { input: 100, output: 20 },
+                  stopReason: 'tool_use' as const,
+                }
+              : {
+                  content: 'done',
+                  toolCalls: [],
+                  usage: { input: 100, output: 20 },
+                  stopReason: 'stop' as const,
+                };
+          },
+        });
+        const cacheStrategy = new BreakpointCacheStrategy({
+          mode: 'breakpoints',
+          maxBreakpoints: 4,
+          reportsUsage: false,
+        });
+        const prepare = vi.spyOn(cacheStrategy, 'prepareRequest');
+        const agent = Agent.create({
+          provider,
+          model: 'mock',
+          maxIterations: turns + 1,
+          cacheStrategy,
+          caching,
+        })
+          .system('You are a test agent.', { cache: 'always' })
+          .tool(lookup)
+          .build();
+
+        const prefixVisits: number[] = [];
+        cacheWork.prefixVisits = prefixVisits;
+        try {
+          expect(await agent.run({ message: 'go' })).toBe('done');
+        } finally {
+          cacheWork.prefixVisits = undefined;
+        }
+        expect(prepare).toHaveBeenCalledTimes(turns);
+        expect(requests).toHaveLength(turns);
+        expect(requests.map(({ prefixLength }) => prefixLength)).toEqual(
+          Array.from({ length: turns }, (_, index) => 2 * index + 1),
+        );
+        return { requests, prefixVisits };
+      }
+
+      const off = await run('off');
+      const on = await run();
+      expect(off.prefixVisits).toEqual(Array<number>(turns).fill(0));
+      expect(on.prefixVisits).toHaveLength(turns);
+      for (const [index, { prefixLength, tail }] of on.requests.entries()) {
+        expect(off.requests[index]?.markerCount).toBe(0);
+        expect(tail).toBe(prefixLength - 1);
+        expect(on.prefixVisits[index]).toBeGreaterThanOrEqual(prefixLength);
+        expect(on.prefixVisits[index]).toBeLessThanOrEqual(2 * prefixLength);
+      }
     },
   );
 });
