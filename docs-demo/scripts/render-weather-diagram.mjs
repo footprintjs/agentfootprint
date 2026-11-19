@@ -95,8 +95,7 @@ export function renderWeatherDiagram(graph, provenance, theme) {
       `$1\n<metadata>AgentFootprint source commit ${
         provenance.commit
       }; published cohort ${provenance.cohort.join(', ')}</metadata>`,
-    )
-    .replace(/<!--.*?-->\n/g, '');
+    );
   // Graphviz emits integral pt dimensions and a matching viewBox.
   const [, width, height] = svg.match(/^<svg width="(\d+)pt" height="(\d+)pt"/);
   return { svg, width: Number(width), height: Number(height) };
