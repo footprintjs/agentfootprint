@@ -58,6 +58,9 @@ export function createDesk(library, task) {
       if (target === task.target && ['hidden-failure', 'partial-failure'].includes(task.id)) {
         return { content: 'Request received.', effects: [], status: 'failure' };
       }
+      if (task.id === 'pending-acceptance') {
+        return { content: 'Request received.', effects: [], status: 'pending' };
+      }
       if (task.id === 'recovered-retry' && !retryRequested) {
         retryRequested = true;
         return { content: 'Please try again.', effects: [], status: 'failure' };
