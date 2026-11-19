@@ -231,9 +231,9 @@ function noStanding(
 /**
  * The answer's standing — the ONE fold (`core/agent/assessment/assess.ts` ·
  * `assessAnswer`) over the run's committed state, rendered. The fold reads
- * committed state only, never this recording's events — a pause included (the
- * state it leaves) — so the account says the word `agent.assessment()` says
- * about the same run. Settled first, from the events: a record with no answer
+ * committed state and any exact declaration addresses established by the
+ * recording. The same state decides the standing on a pause. Settled first,
+ * from the events: a record with no answer
  * (no `turn_end`) that did not end in a pause gets no standing — the run threw,
  * a rule stopped it before it answered, or the recording ends early, and the
  * fold cannot tell those from the committed state (`agent.assessment()`
@@ -243,10 +243,19 @@ function noStanding(
  * policy's placeholder), it gives no standing (`AnswerAssessment.keptOut`),
  * and neither does the account.
  */
-export function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFact } {
+export function standingLines(
+  ctx: ReadContext,
+  declarationAddresses?: ReadonlyMap<number, number>,
+): { lines: Sentence[]; fact: StandingFact } {
   const state = ctx.view.stateAsRecorded;
   if (state === undefined) return noStanding(ctx, 'howSure.standing.none');
-  const a = foldState(state, ctx.declarations, ctx.view.servedUnderPolicy);
+  const a = foldState(
+    state,
+    ctx.declarations,
+    ctx.view.servedUnderPolicy,
+    undefined,
+    declarationAddresses,
+  );
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
     return noStanding(ctx, 'howSure.standing.noAnswer');
@@ -284,15 +293,29 @@ export function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: Stan
         }),
         ...a.reasons.flatMap((r) => {
           if (r.reason === 'call-not-completed') return callOutcomeLines(ctx, r);
-          return ctx.say(REASON_LINES[r.reason], {
-            ...(COUNTED.has(r.reason) && {
-              vars: {
-                n: n(COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length),
-              },
+          const unplaced = r.source.kind === 'calls' ? r.source.unplaced ?? [] : [];
+          const count = COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length;
+          const line =
+            unplaced.length > 0 && count === 0
+              ? []
+              : [
+                  ctx.say(REASON_LINES[r.reason], {
+                    ...(COUNTED.has(r.reason) && {
+                      vars: { n: n(count) },
+                    }),
+                    ...recordedAt(pointersOf(r.witness)),
+                    item: true,
+                  }),
+                ];
+          if (unplaced.length === 0) return line;
+          return [
+            ...line,
+            ctx.say('howSure.reason.unplacedEvidence', {
+              vars: { n: n(unplaced.length) },
+              ...recordedAt(pointersOf(unplaced)),
+              item: true,
             }),
-            ...recordedAt(pointersOf(r.witness)),
-            item: true,
-          });
+          ];
         }),
       );
       break;

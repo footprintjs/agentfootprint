@@ -6,7 +6,7 @@ import {
   type HistoryCall,
 } from './history.js';
 
-interface RecordedEvent {
+export interface RecordedEvent {
   readonly index: number;
   readonly type: string;
   readonly payload: Readonly<Record<string, unknown>>;

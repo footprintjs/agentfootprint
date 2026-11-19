@@ -203,7 +203,7 @@ function evidenceLines(ctx: ReadContext, e: ViewEvent, fact: EvidenceFact): Sent
 }
 
 export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
-  const standing = standingLines(ctx);
+  const standing = standingLines(ctx, calls.declarationAddresses);
   const lines: Sentence[] = [...standing.lines, ...expectationLines(ctx, calls)];
   const e = evidenceEvent(ctx);
   // The scripts the answer showed and the library attached — beside the

@@ -34,6 +34,7 @@
  */
 
 import {
+  declarationOccurrences,
   readCallOccurrences,
   type CallOccurrence,
   type HistoryCall,
@@ -137,6 +138,7 @@ export interface CallsRead {
   readonly omitted: number;
   /** Committed result positions of the calls linked to this run. */
   readonly historyIndices: ReadonlySet<number>;
+  readonly declarationAddresses?: ReadonlyMap<number, number>;
 }
 
 const SECTIONS: readonly CoverageSectionKey[] = ['checked', 'notChecked', 'cannotCover'];
@@ -430,10 +432,24 @@ function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallR
 export function readCalls(ctx: ReadContext): CallsRead {
   const occurrences = readCallOccurrences(ctx.view.events, historyOf(ctx.view));
   const calls = occurrences.map((occurrence) => readOne(ctx, occurrence));
+  const rows = ctx.view.stateAsRecorded?.coverageDeclared;
+  const declarationAddresses = new Map<number, number>();
+  if (Array.isArray(rows)) {
+    const linked = declarationOccurrences(
+      rows,
+      ctx.view.events,
+      occurrences,
+      ctx.view.servedUnderPolicy,
+    );
+    for (const [index, call] of linked) {
+      if (call.history !== undefined) declarationAddresses.set(index, call.history.index);
+    }
+  }
   return {
     all: calls,
     calls: calls.slice(0, MAX_CALLS),
     omitted: Math.max(0, calls.length - MAX_CALLS),
+    ...(declarationAddresses.size > 0 && { declarationAddresses }),
     historyIndices: new Set(
       calls.flatMap((call) => (call.historyIndex === undefined ? [] : [call.historyIndex])),
     ),

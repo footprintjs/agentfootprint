@@ -974,6 +974,15 @@
   ],
   "source": "library"
  },
+ "beforePause.unmatched@1": {
+  "text": "This record cannot match tool results from before the pause to its final history.",
+  "parts": [
+   {
+    "text": "This record cannot match tool results from before the pause to its final history."
+   }
+  ],
+  "source": "library"
+ },
  "beforePause.keptOut@1": {
   "text": "This record keeps the run's history out, so what came back before the pause cannot be told.",
   "parts": [
@@ -1761,6 +1770,15 @@
   "parts": [
    {
     "text": "2 calls declared that nothing matched."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.unplacedEvidence@1": {
+  "text": "2 evidence rows could not be matched to a call.",
+  "parts": [
+   {
+    "text": "2 evidence rows could not be matched to a call."
    }
   ],
   "source": "library"

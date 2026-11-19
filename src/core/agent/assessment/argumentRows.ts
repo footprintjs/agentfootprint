@@ -7,7 +7,6 @@ export interface ArgumentRowRead {
   readonly index: number;
   readonly toolCallId: string;
   readonly historyIndex?: number;
-  readonly unlandedKey?: string;
   readonly argument: string;
   readonly source?: string;
   /** Set on a row that ASKED the person — no source yet. */
@@ -37,10 +36,12 @@ export function waitingArgumentIteration(
  * This turn's CURRENT argument rows (honesty layer 2): the ledger's `argument`
  * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
  * continued conversation, and a row from an earlier turn is about a call this
- * answer does not rest on. The last observation wins for one argument of a
- * proved history occurrence, or for a proposal the record has not landed.
- * When the retained history admits several calls, each row remains evidence
- * without replacing another. A record with no `turnNumber` reads every row.
+ * answer does not rest on. A later row replaces the same argument at the same
+ * history position. A row marked pre-dispatch or with no compatible history
+ * result belongs to the proposal identified by turn, tool name and call ID,
+ * so re-proposing it in a later iteration replaces the earlier observation.
+ * When history admits several results, every ambiguous row remains evidence.
+ * A record with no `turnNumber` reads every row.
  */
 export function argumentRows(
   state: Readonly<Record<string, unknown>>,
@@ -56,6 +57,7 @@ export function argumentRows(
     if (!isRecord(row) || row.kind !== 'argument') continue;
     if (turn !== undefined && row.turn !== turn) continue;
     const toolCallId = str(row.toolCallId);
+    const toolName = str(row.toolName);
     const argument = str(row.argument);
     if (toolCallId === undefined || argument === undefined) continue;
     const source = str(row.source);
@@ -63,16 +65,17 @@ export function argumentRows(
     const pending = withheld || (waiting !== undefined && row.iteration === waiting);
     const resolved = pending
       ? undefined
-      : (resolve ??= historyCallResolver(currentCalls))(toolCallId, str(row.toolName));
+      : (resolve ??= historyCallResolver(currentCalls))(toolCallId, toolName);
     const historyIndex = resolved?.kind === 'matched' ? resolved.call.index : undefined;
-    const unlandedKey =
-      resolved === undefined || resolved.kind === 'missing' ? unlandedCallKey(row) : undefined;
+    const proposalKey =
+      resolved === undefined || resolved.kind === 'missing'
+        ? unlandedCallKey({ turn: row.turn, toolName, toolCallId })
+        : undefined;
     const read: ArgumentRowRead = {
       index,
       toolCallId,
       argument,
       ...(historyIndex !== undefined && { historyIndex }),
-      ...(unlandedKey !== undefined && { unlandedKey }),
       ...(source !== undefined && { source }),
       asked: typeof row.asked === 'string' && source === undefined,
       ruled: row.rule !== undefined || row.period === true,
@@ -84,7 +87,7 @@ export function argumentRows(
       reading: source === 'said' && row.reading === true,
       setAside: source === 'result' && typeof row.setAside === 'string',
     };
-    const key = historyIndex ?? unlandedKey ?? Symbol();
+    const key = historyIndex ?? proposalKey ?? Symbol();
     const forCall = groups.get(key) ?? new Map<string, ArgumentRowRead>();
     forCall.set(argument, read);
     groups.set(key, forCall);

@@ -24,7 +24,7 @@ import {
 } from './common.js';
 import { isRecord, str } from '../view.js';
 import { endPointer, type CallRead, type CallsRead } from './calls.js';
-import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
+import { unmatchedBeforePause, type BeforePauseCall, type PausedLegRead } from './pausedLeg.js';
 import {
   anchorPointer,
   beforePauseMore,
@@ -306,7 +306,9 @@ export function readFoundRow(
   // The same "…and N more tool calls" the other call rows carry, right after the listed calls.
   const more = foldMore(ctx, calls);
   if (more !== undefined) lines.push(more);
-  if (ctx.resumedLeg && pausedLeg.stateHeld) {
+  if (pausedLeg.historyUnmatched) {
+    lines.push(unmatchedBeforePause(ctx));
+  } else if (ctx.resumedLeg && pausedLeg.stateHeld) {
     const before = pausedLeg.calls;
     lines.push(...before.slice(0, MAX_LISTED_CALLS).map((c) => foundBeforePause(ctx, c)));
     const moreBefore = beforePauseMore(ctx, before);

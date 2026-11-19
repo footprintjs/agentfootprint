@@ -16,7 +16,7 @@ concurrency:
 # This advisory check is independent of the required CI checks and release verdict.
 jobs:
   docs-demo:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,12 +36,10 @@ jobs:
         working-directory: docs-demo
         run: npm ci --strict-peer-deps --no-audit
 
-      - name: Install the locked browser revision
-        working-directory: docs-demo
-        run: npx --no-install playwright-core install --with-deps --only-shell chromium
-
       - name: Verify the generated figure and smoke-test the demo
         working-directory: docs-demo
+        env:
+          DOCS_DEMO_CHROMIUM_EXECUTABLE: /usr/bin/google-chrome
         run: npm run check
 
       - name: Upload the checked demo bundle

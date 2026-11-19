@@ -58,13 +58,19 @@ import {
   type ValueDeclaration,
 } from '../emptiness.js';
 import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
-import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
+import {
+  groupOccurrenceEvidence,
+  historyCallResolver,
+  readHistoryCalls,
+  uniqueHistoryProposal,
+} from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { statePointer } from './pointer.js';
 import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import { rewritesByOccurrence } from './rewrittenArguments.js';
+import { coverageRows, type CoverageRow } from './coverageRows.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -141,36 +147,6 @@ function callIndexOf(row: Readonly<Record<string, unknown>>, resolve: ResolveCal
   const id = str(row.toolCallId);
   const resolved = id === undefined ? undefined : resolve(id, str(row.toolName));
   return resolved?.kind === 'matched' ? resolved.call.index : undefined;
-}
-
-/** One coverage row the run committed, as the fold reads it. */
-interface CoverageRow {
-  readonly index: number;
-  readonly kind: 'absence' | 'ledger';
-  readonly historyIndex?: number;
-  readonly gap: boolean;
-}
-
-const listed = (value: unknown): boolean => Array.isArray(value) && value.length > 0;
-
-function coverageRows(
-  state: Readonly<Record<string, unknown>>,
-  resolve: ResolveCall,
-): readonly CoverageRow[] {
-  const rows = state.coverageDeclared;
-  if (!Array.isArray(rows)) return [];
-  const out: CoverageRow[] = [];
-  rows.forEach((row: unknown, index) => {
-    if (!isRecord(row) || (row.kind !== 'absence' && row.kind !== 'ledger')) return;
-    const historyIndex = callIndexOf(row, resolve);
-    out.push({
-      index,
-      kind: row.kind,
-      ...(historyIndex !== undefined && { historyIndex }),
-      gap: listed(row.notChecked) || listed(row.cannotCover),
-    });
-  });
-  return out;
 }
 
 const historyPointer = (result: TurnResult): AssessmentPointer => ({
@@ -539,15 +515,9 @@ function readResults(
   results: readonly TurnResult[],
   coverage: readonly CoverageRow[],
 ): readonly ResultRead[] {
-  const rowsByCall = new Map<number, CoverageRow[]>();
-  for (const row of coverage) {
-    if (row.historyIndex === undefined) continue;
-    const rows = rowsByCall.get(row.historyIndex) ?? [];
-    rows.push(row);
-    rowsByCall.set(row.historyIndex, rows);
-  }
+  const { byOccurrence } = groupOccurrenceEvidence(coverage, (row) => row.historyIndex);
   return results.map((result) => {
-    const rows = rowsByCall.get(result.index) ?? [];
+    const rows = byOccurrence.get(result.index) ?? [];
     const own = rows.length === 0 ? declaredByValue(result.content) : undefined;
     return { result, at: historyPointer(result), rows, ...(own !== undefined && { own }) };
   });
@@ -608,26 +578,27 @@ function readTurnResults(
 
 /**
  * A call declared coverage when its rows or its own envelope say so.
- * Coverage rows that cannot be attributed to a result count on their own.
+ * Unplaced coverage rows remain evidence. They add no call to either count.
  */
 function readTurnCalls(
   reads: readonly ResultRead[],
   coverage: readonly CoverageRow[],
   g: Gathered,
 ): void {
-  const witness = coverage.map((c) => statePointer('coverageDeclared', c.index, 'kind'));
+  const witness = coverage
+    .filter((row) => row.historyIndex !== undefined)
+    .map((c) => statePointer('coverageDeclared', c.index, 'kind'));
   let declared = 0;
   for (const { at, rows, own } of reads) {
     if (rows.length > 0 || own !== undefined) declared += 1;
     if (own !== undefined) witness.push(at);
   }
-  const unjoined = coverage.filter((c) => c.historyIndex === undefined).length;
-  const of = reads.length + unjoined;
+  const of = reads.length;
   if (of > 0) {
     g.checked.push({
       layer: 3,
       check: 'tool-coverage',
-      ran: declared + unjoined,
+      ran: declared,
       of,
       witness,
     });
@@ -934,6 +905,7 @@ export function foldState(
   declarations: AssessmentDeclarations | undefined,
   served: boolean,
   retainedHistory?: (history: readonly unknown[]) => unknown,
+  declarationAddresses?: ReadonlyMap<number, number>,
 ): AnswerAssessment {
   const { state, asked } = served
     ? keptOutGuard(recorded)
@@ -945,7 +917,11 @@ export function foldState(
   const current = historyCalls.filter((call) => call.index > begins);
   const resolveCurrent = historyCallResolver(current);
   const places = { history, resolve: historyCallResolver(historyCalls), begins };
-  const coverage = coverageRows(state, resolveCurrent);
+  const coverage = coverageRows(
+    state.coverageDeclared,
+    (row) => callIndexOf(row, resolveCurrent),
+    declarationAddresses,
+  );
   const reads = readResults(results, coverage);
 
   readPause(state, g);
@@ -983,6 +959,7 @@ export function foldState(
     turnResults: results,
     historyCalls,
     turnBegins: begins,
+    declarationAddresses,
   });
   return {
     assessment,

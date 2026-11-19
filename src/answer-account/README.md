@@ -133,7 +133,10 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
    `summary.resumed.held`). "The routing happened before the pause and is not
    in this record" is printed only when the state holds no verdict either, and
    "what happened before the pause is not in this record" only when the record
-   holds no paused state (an older or trimmed recording).
+   holds no paused state (an older or trimmed recording). If the final history
+   no longer begins with the paused history, the account says it cannot match
+   the earlier tool results. The checks that need them are unreachable, and
+   any routing verdict held by the paused state remains readable.
 
    ```ts
    // a resumed `.time()` leg: the person confirmed "6:25 to 6:45 AM" (test/answer-account/paused-leg.test.ts)

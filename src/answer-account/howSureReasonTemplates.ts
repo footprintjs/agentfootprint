@@ -31,6 +31,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
     "{{count:n,'call declared ground it did not check or can never cover','calls declared ground they did not check or can never cover'}}.",
   ),
   'howSure.reason.declaredAbsent': t("{{count:n,'call','calls'}} declared that nothing matched."),
+  'howSure.reason.unplacedEvidence': t(
+    "{{count:n,'evidence row','evidence rows'}} could not be matched to a call.",
+  ),
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),

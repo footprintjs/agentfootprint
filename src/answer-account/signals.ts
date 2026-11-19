@@ -37,7 +37,7 @@ import { itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
 import { endedInError, errorCounts } from './facts/errorCounts.js';
 import { heldChip } from './facts/checked.js';
 import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
-import type { PausedLegRead } from './facts/pausedLeg.js';
+import { unmatchedBeforePause, type PausedLegRead } from './facts/pausedLeg.js';
 import type { InViewAll } from './facts/inView.js';
 import type { UnderstoodRead } from './facts/understood.js';
 
@@ -117,6 +117,14 @@ export function runChecks(
     });
   }
   if (understood.check === 'reachable') checkPointers.push(...understood.checkPointers);
+
+  if (pausedLeg.historyUnmatched) {
+    addUnreachable({
+      check: 'empty-results',
+      missing: 'unreadable',
+      sentence: unmatchedBeforePause(ctx),
+    });
+  }
 
   // A call no event names cannot be put in a sentence about its tool: every check it would
   // feed is said to be unreachable for it, by its call id — never silently skipped.
@@ -351,6 +359,10 @@ export function runChecks(
     });
   }
 
+  if (pausedLeg.historyUnmatched) {
+    states.existence = 'unreachable';
+    states['empty-results'] = 'unreachable';
+  }
   const ids: readonly CheckId[] = ['decided-delivered', 'existence', 'empty-results'];
   return {
     signals,
@@ -465,7 +477,7 @@ export function wrongLines(
   if (applicable === 0 && checks.signals.length === 0) {
     lines.push(ctx.say('wrong.notApplicable', { status: 'not-applicable' }));
   }
-  if (ctx.resumedLeg) {
+  if (ctx.resumedLeg && !pausedLeg.historyUnmatched) {
     lines.push(
       pausedLeg.stateHeld
         ? // The routing is named as lost only when it is: a verdict the paused state holds is
@@ -495,11 +507,8 @@ export interface SummaryRead {
 }
 
 /**
- * The one-liner. On a resumed leg whose record holds the committed state, the
- * checks above read the part before the pause from it, so the one-liner is
- * the one any answer gets, followed by what this record does NOT hold of the
- * part before the pause (its events). Only a record with no committed history
- * says the part before the pause is not in it.
+ * The one-liner for a resumed leg reports whether the paused state is held
+ * and whether the tool results from it can be matched to the final history.
  */
 export function summaryOf(
   ctx: ReadContext,
@@ -509,10 +518,14 @@ export function summaryOf(
 ): SummaryRead {
   const read = summaryOfChecks(ctx, checks, finished, pausedLeg.stateHeld);
   if (!finished || !ctx.resumedLeg || !pausedLeg.stateHeld) return read;
+  const resumed = ctx.say('summary.resumed.held', {
+    status: 'not-recorded',
+    missing: 'before-pause',
+  });
   return {
     sentence: joinSentences(
       read.sentence,
-      ctx.say('summary.resumed.held', { status: 'not-recorded', missing: 'before-pause' }),
+      pausedLeg.historyUnmatched ? joinSentences(resumed, unmatchedBeforePause(ctx)) : resumed,
     ),
     tone: read.tone,
   };

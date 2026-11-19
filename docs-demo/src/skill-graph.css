@@ -1,0 +1,35 @@
+.skill-graph {
+  --fp-bg-primary: var(--surface);
+  --fp-bg-secondary: var(--bg);
+  --fp-bg-tertiary: var(--bg);
+  --fp-text-primary: var(--fg);
+  --fp-text-secondary: var(--muted);
+  --fp-text-muted: var(--muted);
+  --fp-border: var(--border);
+  --fp-src-skill: #6d28d9;
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--bg);
+  --xy-controls-button-color: var(--fg);
+  --xy-controls-button-border-color: var(--border);
+}
+
+[data-theme='dark'] .skill-graph {
+  --fp-src-skill: #c4b5fd;
+}
+
+@media (max-width: 42rem) {
+  .skill-graph-flow {
+    flex-direction: column;
+  }
+
+  .skill-graph-flow > [role='separator'] {
+    display: none;
+  }
+
+  .skill-graph-flow > aside {
+    border-left: 0 !important;
+    border-top: 1px solid var(--border);
+    flex: 0 0 35% !important;
+    width: 100% !important;
+  }
+}
