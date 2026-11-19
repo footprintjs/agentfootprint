@@ -12,3 +12,8 @@ leave `callOccurrenceKey` out of the comparison. Nothing sent to a provider
 changes.
 Use a complete text marker when checking records for leaked text, since a short
 run of digits can also occur inside an address.
+
+A cache strategy or a provider adapter can no longer change the saved record.
+Each model call hands the `CacheStrategy` its own copy of the request and
+passes what the strategy returns to the provider as it is. Before, an edit
+made in place to that request could reach the history the run saved.

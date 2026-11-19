@@ -15,8 +15,9 @@ lives in native state and the assistant history, so resumes carry the same addre
 
 `providerRequest.ts` detaches library-owned request data before cache preparation.
 The prepared request belongs to that model call. Edits to it survive a retry or
-stream fallthrough of the same payload. Each new model call starts with a fresh
-copy of library data. The receipt reuses internal message digests for built-in
+stream fallthrough of the same payload. A fallback provider inside the same
+model call receives that same request, including an earlier adapter's edits.
+Each new model call starts with a fresh copy of library data. The receipt reuses internal message digests for built-in
 strategies, which only add cache markers, and reads host rewrites directly.
 The live cancellation signal is composed at dispatch.
 
