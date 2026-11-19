@@ -539,8 +539,13 @@ recording envelope. Import the readers from `agentfootprint/observe`.
 `readTurnCoverage` counts committed declarations and their checked, not-checked
 and cannot-cover items before merging. It reads the current leg after a resume.
 It works with prose and typed answers independently of the limits block. An
-empty result means the readable leg declared nothing. An unreadable leg returns
-`undefined`. A row without a definite call association omits the call ID.
+empty result means the readable leg declared nothing. A row without a definite
+call association keeps its counts and omits the call ID.
+
+Coverage returns `undefined` if the snapshot is missing or belongs to another
+run, either end of the leg's state is unreadable, the starting ledger cannot be
+matched to the beginning of the final ledger, or a declaration is malformed or
+lacks any of its three item lists.
 
 <CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="coverage" title="Read unmerged coverage counts" />
 
@@ -550,8 +555,18 @@ empty result means the readable leg declared nothing. An unreadable leg returns
 the check after a revision. Its status is `clean`, `disabled`, `not-checked`, or
 `unsupported`. Unsupported items carry the recorded value and shape. If the
 verdict is visible but its item list is unavailable, `items` is `null`.
+The verdict uses events alone. An unreadable terminal iteration or a missing
+or unreadable final check yields `not-checked` unless the record establishes
+that the gate was disabled.
 
 <CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="verdict" title="Read the served evidence verdict" />
+
+Both readers need one terminal event with a readable component path for the
+named run. A recording with no terminal, such as a paused run, or more than one
+terminal for that ID returns `undefined` for coverage and `not-checked` for the
+verdict. Independently invoked child agents have their own run IDs. Native
+compositions can retain multiple agent completions under one run ID. Record the
+Agent invocation you intend to read.
 
 ## Next steps
 

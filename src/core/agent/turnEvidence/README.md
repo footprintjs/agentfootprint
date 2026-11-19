@@ -1,4 +1,4 @@
-# Completed-turn evidence
+# Fold — completed-turn evidence
 
 `turnEvidence.ts` is the facade for two pure readers used by hosts immediately
 after an answer or after they load its recording. The caller names the typed

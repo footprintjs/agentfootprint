@@ -1,5 +1,9 @@
-import { isPlaceholder, servedUnderPolicy } from '../../../redaction/marker.js';
-import { historyStartsWith, readCallOccurrences } from '../recordedCalls.js';
+import { servedUnderPolicy } from '../../../redaction/marker.js';
+import {
+  declarationOccurrences,
+  historyStartsWith,
+  readCallOccurrences,
+} from '../recordedCalls.js';
 import { isRecord, recordedTurn } from './source.js';
 import type { TurnEvidenceSource } from './types.js';
 
@@ -13,15 +17,11 @@ export interface TurnCallCoverage {
   readonly cannotCover: number;
 }
 
-const DECLARATION_KIND = {
-  'agentfootprint.tools.absent': 'absence',
-  'agentfootprint.tools.coverage_declared': 'ledger',
-} as const;
-const DECLARATION_TYPES = Object.keys(DECLARATION_KIND);
 const CALL_TYPES = new Set([
   'agentfootprint.stream.tool_start',
   'agentfootprint.stream.tool_end',
-  ...DECLARATION_TYPES,
+  'agentfootprint.tools.absent',
+  'agentfootprint.tools.coverage_declared',
 ]);
 
 type Declaration = Readonly<Record<string, unknown>>;
@@ -44,21 +44,6 @@ function countsOf(row: Declaration): Counts | undefined {
   };
 }
 
-function declarationKey(row: Declaration, kind: unknown, served: boolean): string | undefined {
-  const { toolCallId, toolName, iteration } = row;
-  if (
-    (kind !== 'absence' && kind !== 'ledger') ||
-    typeof toolCallId !== 'string' ||
-    toolCallId.length === 0 ||
-    typeof toolName !== 'string' ||
-    typeof iteration !== 'number' ||
-    !Number.isSafeInteger(iteration) ||
-    (served && (isPlaceholder(toolCallId) || isPlaceholder(toolName)))
-  )
-    return undefined;
-  return JSON.stringify([toolCallId, toolName, iteration, kind]);
-}
-
 function ownRows(snapshot: Declaration): readonly unknown[] | undefined {
   const { sharedState, initialState } = snapshot;
   if (!isRecord(sharedState) || !isRecord(initialState)) return undefined;
@@ -69,12 +54,6 @@ function ownRows(snapshot: Declaration): readonly unknown[] | undefined {
   if (before === undefined) return after;
   if (!Array.isArray(before) || !historyStartsWith(after, before)) return undefined;
   return after.slice(before.length);
-}
-
-function group<T>(byKey: Map<string, T[]>, key: string, value: T): void {
-  const existing = byKey.get(key);
-  if (existing === undefined) byKey.set(key, [value]);
-  else existing.push(value);
 }
 
 /**
@@ -97,68 +76,41 @@ export function readTurnCoverage(
   if (rows === undefined) return undefined;
   if (rows.length === 0) return [];
 
-  const served = servedUnderPolicy(turn.snapshot);
   const rowCounts: Counts[] = [];
-  const rowsByKey = new Map<string, number[]>();
-  for (const [index, row] of rows.entries()) {
+  for (const row of rows) {
     if (!isRecord(row)) return undefined;
     const counts = countsOf(row);
     if (counts === undefined) return undefined;
     rowCounts.push(counts);
-    const key = declarationKey(row, row.kind, served);
-    if (key !== undefined) group(rowsByKey, key, index);
   }
 
-  // Typed events identify the occurrence. Their item lists may omit composed
-  // facets, so only the committed rows supply counts. Dispatch writes and
-  // emits declarations in the same order. Refuse positional attribution for
-  // a key if either side lost a declaration or retained an unpaired event.
+  // The occurrence reader pairs declarations through recorded events.
+  // Event item lists may omit composed facets, so only committed rows supply counts.
   const events = turn.events.flatMap(({ type, meta, payload }, index) =>
     CALL_TYPES.has(type) && isRecord(meta) && isRecord(payload)
       ? [{ type, meta, payload, index }]
       : [],
   );
   const occurrences = readCallOccurrences(events, []);
-  const eventOwners = new Map<number, number>();
-  for (const [index, occurrence] of occurrences.entries()) {
-    for (const type of DECLARATION_TYPES) {
-      for (const event of occurrence.eventsOf(type)) eventOwners.set(event.index, index);
-    }
-  }
-  const eventsByKey = new Map<string, number[]>();
-  for (const event of events) {
-    if (
-      event.type !== 'agentfootprint.tools.absent' &&
-      event.type !== 'agentfootprint.tools.coverage_declared'
-    )
-      continue;
-    const key = declarationKey(event.payload, DECLARATION_KIND[event.type], served);
-    if (key !== undefined) group(eventsByKey, key, event.index);
-  }
-  const rowOwners = new Map<number, number>();
-  for (const [key, indices] of rowsByKey) {
-    const witnesses = eventsByKey.get(key);
-    if (witnesses?.length !== indices.length) continue;
-    for (const [position, eventIndex] of witnesses.entries()) {
-      const rowIndex = indices[position];
-      const owner = eventOwners.get(eventIndex);
-      if (rowIndex !== undefined && owner !== undefined) rowOwners.set(rowIndex, owner);
-    }
-  }
+  const rowOwners = declarationOccurrences(
+    rows,
+    events,
+    occurrences,
+    servedUnderPolicy(turn.snapshot),
+  );
 
   const result: TurnCallCoverage[] = [];
-  const byOccurrence = new Map<number, Counts>();
+  const byOccurrence = new Map<(typeof occurrences)[number], Counts>();
   for (const [index, row] of rowCounts.entries()) {
-    const owner = rowOwners.get(index);
-    const occurrence = owner === undefined ? undefined : occurrences[owner];
-    if (owner === undefined || occurrence === undefined) {
+    const occurrence = rowOwners.get(index);
+    if (occurrence === undefined) {
       result.push(row);
       continue;
     }
-    const previous = byOccurrence.get(owner);
+    const previous = byOccurrence.get(occurrence);
     if (previous === undefined) {
       const summary = { toolCallId: occurrence.providerId, ...row };
-      byOccurrence.set(owner, summary);
+      byOccurrence.set(occurrence, summary);
       result.push(summary);
       continue;
     }
