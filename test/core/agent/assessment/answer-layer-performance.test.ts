@@ -5,7 +5,7 @@
  * `test/helpers/perf.ts` plus structural facts.
  *
  * Test types (Convention 3):
- *   - PERFORMANCE — the armed run's cost against its unarmed twin (a ratio);
+ *   - PERFORMANCE — one committed-record fold on the armed run against its unarmed twin;
  *                   the fold scales linearly with the record it reads (100 →
  *                   1,000 results and ledger rows) — one pass, never a rescan
  *                   per row;
@@ -14,13 +14,16 @@
  *                   decider files at most one witness row per verdict.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Agent, defineTool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
+import type { LLMProvider } from '../../../../src/provider-contract/types.js';
+import * as assessment from '../../../../src/core/agent/assessment/assess.js';
 import { assessAnswer } from '../../../../src/observe.js';
 import { groundedRowFrom } from '../../../../src/core/agent/assessment/witness.js';
-import { expectScalesLinearly, expectWithinTimes } from '../../../helpers/perf.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../../../../src/lib/conventions.js';
+import { countMountedStageRuns } from '../../../helpers/mountWork.js';
+import { expectScalesLinearly } from '../../../helpers/perf.js';
 
 const lookup = defineTool({
   name: 'list_ports',
@@ -30,19 +33,25 @@ const lookup = defineTool({
 });
 
 /** `calls` iterations that each call the tool, then an answer. */
-function provider(calls: number) {
+function provider(calls: number): LLMProvider {
   let i = 0;
   return {
     name: 'perf-mock',
-    complete: async (_req: LLMRequest): Promise<LLMResponse> => {
+    complete: async () => {
       i += 1;
       return i <= calls
         ? {
             content: '',
             toolCalls: [{ id: `c${i}`, name: 'list_ports', args: { page: i } }],
             usage: { input: 0, output: 0 },
+            stopReason: 'tool_use',
           }
-        : { content: 'Port 3 is down.', toolCalls: [], usage: { input: 0, output: 0 } };
+        : {
+            content: 'Port 3 is down.',
+            toolCalls: [],
+            usage: { input: 0, output: 0 },
+            stopReason: 'end_turn',
+          };
     },
   };
 }
@@ -50,7 +59,7 @@ function provider(calls: number) {
 async function run(armed: boolean, calls: number) {
   const events: unknown[] = [];
   const b = Agent.create({
-    provider: provider(calls) as never,
+    provider: provider(calls),
     model: 'm',
     maxIterations: calls + 5,
   })
@@ -88,18 +97,23 @@ describe('performance — the answer layer, measured', () => {
     },
   );
 
-  it(
-    'the armed run stays within 2× of its unarmed twin',
-    { timeout: 120_000, retry: 2 },
-    async () => {
-      await expectWithinTimes({
-        subject: () => run(true, 5),
-        baseline: () => run(false, 5),
-        times: 2,
-        why:
-          'the armed run adds ONE stage per answer (one fold over the committed record) and one ' +
-          'witness row per verdict; 2× bounds it well above that and still trips on a fold per iteration',
-      });
+  it.each([5, 20])(
+    'folds the committed record once per answer after %i dispatching iterations',
+    async (calls) => {
+      const fold = vi.spyOn(assessment, 'assessAnswer');
+      const stage = STAGE_IDS.ASSESS_ANSWER;
+      try {
+        const unarmed = await run(false, calls);
+        expect(fold).not.toHaveBeenCalled();
+        expect(countMountedStageRuns(unarmed.snapshot, SUBFLOW_IDS.FINAL, stage)).toBe(0);
+
+        const armed = await run(true, calls);
+        // Count calls into the real fold, including calls that never file a stage or event.
+        expect(fold).toHaveBeenCalledTimes(1);
+        expect(countMountedStageRuns(armed.snapshot, SUBFLOW_IDS.FINAL, stage)).toBe(1);
+      } finally {
+        fold.mockRestore();
+      }
     },
   );
 

@@ -1424,9 +1424,9 @@ export class AgentBuilder {
    * WHICH ANSWER FIELDS ARE CLAIMS ABOUT WHICH FACTS (9.61.0) — the claim
    * seam's contract.
    *
-   * The evidence gate (`.namesAndNumbersFromEvidence()`) grounds the answer's
-   * names and numbers: every value must appear in a tool result. Its own limit is
-   * stated in its docs — it cannot catch a false claim assembled from real
+   * The evidence gate (`.namesAndNumbersFromEvidence()`) checks extracted values
+   * against tool results and exempts values from the person, prompt context and
+   * declared defaults. It cannot catch a false claim assembled from real
    * values ("fc1/3 is healthy" when the data says the port is down uses
    * entirely grounded tokens). This closes that hole for the facts you
    * name: the run's semantic envelopes settle typed readings, and each
@@ -2421,8 +2421,8 @@ export class AgentBuilder {
    * `seed` writes the whole spec once as the run constant
    * `AgentState.ontology`, every model call is served ONE request-only
    * system piece composed from that key (`ontology/serve.ts ·
-   * ontologyPiece`, joined after the recovery piece and before the findings
-   * piece, hashed on the receipt, rebuilt byte-equal by `servedAt`) and
+   * ontologyPiece`, joined after the recovery piece, hashed on the receipt,
+   * rebuilt byte-equal by `servedAt`) and
    * `agentfootprint.ontology.served` fires per call with identities and
    * counts only. Registers the always-on `ontology` instruction
    * (`ONTOLOGY_INSTRUCTION`, the `outputSchema()` twin: a system piece on
