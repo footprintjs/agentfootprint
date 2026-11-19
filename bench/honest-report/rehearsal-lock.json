@@ -1,0 +1,17 @@
+{
+  "scriptedRows": 72,
+  "inputs": {
+    "RULE.md": "1b04e2fa985b9936c674991bbeb1e599616e860dca457e6c1aa31dce8b18d0ea",
+    "tasks.mjs": "1725cecf67fa50ced2e442954a59c5f1d6f6f073dae45b14c7c87eedac7d5dff",
+    "benchmark.mjs": "060c500547ce954a39931087e0f6be4573a03e98cbd82317792b1809c6a78fbe",
+    "budget.mjs": "2737ea23214458c63d337f3878ba7cfc3a8bd70507b9c17a53119f91f1d55a30",
+    "cohorts.mjs": "bd46db9661fa041ead59a7afd110d79e65135c010c90520b7e800711bda944a4",
+    "plan.mjs": "4aae36d95c9716e351fa4711fa579ed4e5eaea6aa01f92035f0e0a1cce0eea1c",
+    "run.mjs": "a36b9f85e0d2dcbff76349261658caf95a059f7e9a7d0cb50e4df727376d6002",
+    "score.mjs": "109039821700908010fdacb378179ada8d961f2c02de0bcec83e24d8bac08752",
+    "terminalAnswer.mjs": "5ff6289360eb6f5b9204e443e2b152d3f9bf451df9c378ba8ec6e2f147efdc11",
+    "cohorts/before/package-lock.json": "726d1bd70ab2a4e3eecf0e1a55a5076672a2f4c72fe3a25388c9e05afda3adb0",
+    "cohorts/after/package-lock.json": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
+  },
+  "transcriptSha256": "42af3cdc55e94345fcc198c935ed3e68c9e0efc8b0b9cfcd8ca8e77c4637687f"
+}

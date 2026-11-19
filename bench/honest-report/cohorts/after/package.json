@@ -1,0 +1,14 @@
+{
+  "name": "agentfootprint-honesty-after",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "agentfootprint": "15.0.0",
+    "footprintjs": "14.0.0",
+    "foottrace": "2.1.0"
+  }
+}
