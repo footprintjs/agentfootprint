@@ -96,6 +96,7 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
   construct: (parts: BuildParts) => TAgent,
 ): TAgent {
   const { negativeClaims, negativeSchema, answerLayer } = checkContracts(self);
+  const overrideAnswerLayer = answerLayer !== false || self.answerLayerValue !== undefined;
   // Resolve the voice config: bundled defaults + consumer overrides.
   // Templates flow through the same barrel exports the rest of the
   // library uses, so a future locale-pack swap is a single import.
@@ -115,7 +116,7 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
     self.ontologyValue !== undefined ||
     self.inputsLayerValue ||
     self.resultsLayerValue ||
-    answerLayer !== undefined ||
+    overrideAnswerLayer ||
     self.timeValue !== undefined
       ? {
           ...self.opts,
@@ -143,12 +144,12 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
           ...(self.resultsLayerValue && { resultsLayer: true }),
           // The answer layer (honesty layer 4), the same door grammar — the
           // value resolved above, whichever door set it.
-          ...(answerLayer !== undefined && {
+          ...(overrideAnswerLayer && {
             answerLayer:
-              answerLayer.standingLine === undefined
+              answerLayer === false
+                ? false
+                : answerLayer.standingLine === undefined
                 ? true
-                : answerLayer.standingLine === 'always'
-                ? { standingLine: true }
                 : { standingLine: { when: answerLayer.standingLine } },
           }),
           // The time layer, the same door grammar — the builder's value wins

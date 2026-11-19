@@ -75,6 +75,13 @@ describe('no policy preserves the whole stream with native run identity', () => 
         runId: 'run#2',
       },
     });
-    expect(await noPolicyStream()).toBe(JSON.stringify(events, null, 1));
+    expect(await noPolicyStream(true)).toBe(JSON.stringify(events, null, 1));
+  });
+
+  it('pins the whole stream with the default answer assessment', async () => {
+    const stream = await noPolicyStream(false);
+    expect(createHash('sha256').update(stream).digest('hex')).toBe(
+      'fb3434222d5e0ede8e16a2688af261847d20b77867166cb440d1f66b3cc2f46e',
+    );
   });
 });

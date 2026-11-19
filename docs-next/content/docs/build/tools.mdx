@@ -264,9 +264,9 @@ When a call leaves `window` out:
   search_logs call this result answers; the call ran with "2h", the value the
   tool's rule assumes — recorded as assumed, not as the person's*;
 - `agent.assessment()` reads **not sure**, with the reason `argument-assumed`;
-- with `.limitsTravelWithTheAnswer()`, the answer ends with an
-  *Assumed (a tool's rule, not your words)* block — or, on a typed answer, the
-  same values come back as data, `agent.answerCoverage().assumed`.
+- the default standing line names the assumed window. With the line off,
+  `.limitsTravelWithTheAnswer()` puts the value in an *Assumed* block. For
+  typed answers, read the value from `agent.answerCoverage().assumed`.
 
 A model that sends the default itself is filed `default` too (with the value it
 sent as `proposed`): copying a default from a description is not a choice. Any

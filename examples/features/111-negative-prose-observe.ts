@@ -20,7 +20,7 @@ export const meta: ExampleMeta = {
   title: 'Prose negatives — observe a warning without rewriting the answer',
   group: 'features',
   description:
-    'A native search has a source gap; the model overclaims, a bounded warning fires, and the original answer is delivered unchanged.',
+    'A native search has a source gap. The model overclaims and the observer emits a warning. With the standing line off, the answer retains its exact text.',
   defaultInput: 'Check incidents for payments.',
   providerSlots: [],
   tags: ['features', 'tools', 'observability'],
@@ -88,6 +88,7 @@ export async function run(input: string): Promise<string> {
   const agent = Agent.create({ provider, model: 'mock' })
     .tool(listIncidents)
     .negativeClaims({ prose: true })
+    .answerLayer({ standingLine: false })
     .build();
 
   agent.on('agentfootprint.findings.negative_claim', ({ payload }) => {
