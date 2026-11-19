@@ -4,7 +4,7 @@ title: HostFillFromIdentity
 
 # Interface: HostFillFromIdentity
 
-Defined in: [src/tools/hostFilled.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L64)
+Defined in: [src/tools/hostFilled.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L70)
 
 Fill from the identity the run's caller named (`ctx.identity`).
 
@@ -14,7 +14,7 @@ Fill from the identity the run's caller named (`ctx.identity`).
 
 > `readonly` **field**: [`HostFilledIdentityField`](/docs/api/type-aliases/HostFilledIdentityField)
 
-Defined in: [src/tools/hostFilled.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L66)
+Defined in: [src/tools/hostFilled.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L72)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/tools/hostFilled.ts:66](https://github.com/footprintjs/agentfoo
 
 > `readonly` **from**: `"identity"`
 
-Defined in: [src/tools/hostFilled.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L65)
+Defined in: [src/tools/hostFilled.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L71)
