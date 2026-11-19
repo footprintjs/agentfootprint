@@ -53,7 +53,8 @@ function readEntries(
 /**
  * Read one path from the compact versioned index without loading the recorded values.
  * Commit -1 selects the initial state. Later commits include every change through
- * that position. A missing, deleted, hidden or undescribed value yields `['unknown']`.
+ * that position. A missing or unreadable index yields `['unknown']`, as does
+ * a missing, deleted, hidden or undescribed value.
  * Use exact path segments so a key containing a dot remains a single key.
  */
 export function contextShapeAt(

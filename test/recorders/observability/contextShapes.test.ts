@@ -26,7 +26,7 @@ const source = (initialState: object, commitLog: readonly unknown[] = []) => ({
 const shapes = (base: object, log: readonly unknown[], opts?: ContextShapeOptions) =>
   createContextShapeCapture(opts)(source(base, log)).contextShapes!;
 const inventory = 'inventory';
-const wrapped = (snapshot: unknown, options?: Parameters<typeof recordRun>[1]) => {
+const wrappedRecording = (snapshot: unknown, options?: Parameters<typeof recordRun>[1]) => {
   const runner = {
     on: () => () => {},
     attach: () => () => {},
@@ -36,15 +36,53 @@ const wrapped = (snapshot: unknown, options?: Parameters<typeof recordRun>[1]) =
   } as unknown as Parameters<typeof recordRun>[0];
   const rec = recordRun(runner, options);
   try {
-    return rec.toRecording().snapshot as ReturnType<typeof source> & {
-      contextShapes?: ReturnType<typeof shapes>;
-    };
+    return rec.toRecording();
   } finally {
     rec.stop();
   }
 };
 
+const wrapped = (snapshot: unknown, options?: Parameters<typeof recordRun>[1]) =>
+  wrappedRecording(snapshot, options).snapshot as ReturnType<typeof source> & {
+    contextShapes?: ReturnType<typeof shapes>;
+  };
+
 describe('recorded context shapes', () => {
+  it('pins the complete saved recording bytes with the default index and with shapes off', () => {
+    const snapshot = source({ history: ['first'] }, [
+      row('history', 'append', { history: ['next'] }),
+    ]);
+    const index = {
+      version: 1,
+      initial: [[['history'], 'array', 1]],
+      changes: [[0, [[['history'], 'array', 2]]]],
+    };
+    const previous = { snapshot, events: [], structure: {} };
+    expect(JSON.stringify(wrappedRecording(snapshot, { contextShapes: false }))).toBe(
+      JSON.stringify(previous),
+    );
+    expect(JSON.stringify(wrappedRecording(snapshot))).toBe(
+      JSON.stringify({ ...previous, snapshot: { ...snapshot, contextShapes: index } }),
+    );
+  });
+
+  it('withholds a hidden array type and length by default and preserves visible sibling lengths', () => {
+    const index = shapes({ hidden: 'REDACTED', items: ['public'], visible: [1, 2] }, [
+      row('items', 'set', { items: [1, 2, 3] }, ['items']),
+    ]);
+    expect(index).toEqual({
+      version: 1,
+      initial: [
+        [['items'], 'array', 1],
+        [['visible'], 'array', 2],
+      ],
+      changes: [[0, [[['items'], 'unknown']]]],
+    });
+    expect(contextShapeAt(index, 0, ['hidden'])).toEqual(['unknown']);
+    expect(contextShapeAt(index, 0, ['items'])).toEqual(['unknown']);
+    expect(contextShapeAt(index, 0, ['visible'])).toEqual(['array', 2]);
+  });
+
   it('samples the seed and writes, with no traversal of arrays or unrelated nested objects', () => {
     const getter = vi.fn(() => {
       throw Error('value read');

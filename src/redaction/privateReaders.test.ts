@@ -7,8 +7,9 @@ import { declarationOf } from './declared.js';
 import { servedUnderPolicy } from './marker.js';
 import { answer, scripted } from '../../test/core/agent/arguments/askReviewHarness.js';
 import { nativeRetainsSafeBase } from '../../test/redaction/nativeFoldBase.js';
+import defaultAnswerShapes from '../../test/redaction/fixtures/context-shapes/private-readers.json';
 
-it('an agent without a hidden argument keeps native snapshot bytes when shape metadata is omitted', async () => {
+it('with shapes off nothing changes; the default adds the pinned index for a public answer', async () => {
   const mock = scripted([answer('Public answer')]);
   const agent = Agent.create({ provider: mock.provider as never, model: 'fixture' }).build();
   try {
@@ -17,9 +18,8 @@ it('an agent without a hidden argument keeps native snapshot bytes when shape me
     const served = agent.getSnapshot();
     expect(raw).toBeDefined();
     expect(JSON.stringify(agent.getSnapshot({ contextShapes: false }))).toBe(JSON.stringify(raw));
-    expect(served?.contextShapes?.version).toBe(1);
     expect(JSON.stringify(served)).toBe(
-      JSON.stringify({ ...raw, contextShapes: served?.contextShapes }),
+      JSON.stringify({ ...raw, contextShapes: defaultAnswerShapes }),
     );
     expect(servedUnderPolicy(served)).toBe(false);
     expect(served).toHaveProperty('initialState');
