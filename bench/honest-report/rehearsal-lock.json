@@ -1,44 +1,57 @@
 {
-  "scriptedRows": 87,
+  "scriptedRows": 58,
   "inputs": {
-    "RULE.md": "d42ed765c1e2b34cdbc842c89408b2035889f16dc8c2f1e259a776f9519b62b0",
-    "PLAN.md": "2e08bc115dcfeb481e23509f7c5cce588e6172ebb185b46ca4397a65e05099e0",
-    "PREDICTIONS.md": "d21dfd3b7c9cd37e81af8752ecbf7f39a34719772a572063937565c3dc63d02e",
+    "RULE.md": "32b4416e00f27f4887e3c744a7b64fb87d38de03e05a3286ff4e71384e3b403a",
+    "PLAN.md": "49980ff60cc0d8444abe704f1a6c8db5defa20981a238421ed7ac1eff7ad2326",
+    "PREDICTIONS.md": "16498993ae7fd25f4012e3e01ed6db773ada289666733bc3c1191e79180afef6",
     "tasks.mjs": "4c5a780aacf6b583637a33d467963865c631cac4cfb2f16dd2bc9efbc6e16175",
     "hiddenTasks.mjs": "337983ad02ad2ecc24f5fd28ad5f97d9aae67658b17e0384d380060f09a2b7b3",
-    "benchmark.mjs": "79649f7368022cd9bea8086ad6fc67a233c99d05a7b0ddb18c6180514fbfb968",
-    "budget.mjs": "2737ea23214458c63d337f3878ba7cfc3a8bd70507b9c17a53119f91f1d55a30",
+    "benchmark.mjs": "eb90c2cc25f480353b85a113469e5d36e4f8184233db30fa1fb1f3881ba14304",
+    "budget.mjs": "a393a482e809f9ccbba7778eeea3967bc654b848abf96af83ac2e3cc89544206",
     "candidate.mjs": "69471d6f0be1fc1c6106614d6ead720dd53f904dab85a4031bf43e529a1419f9",
-    "cohorts.mjs": "2fb8b87527498d180d983acb49518005f7a3835ff28628bac211d7851659a1e5",
-    "plan.mjs": "ffa4dc067886153e1db7b4579603abaedbd4e84a5d64d13e0804cf3412d2d449",
-    "run.mjs": "af3c478076c79721ca5cbbbe905f06d5f73ad0fa2f46e9f9b80fb10d2cd4bbfb",
+    "cohorts.mjs": "391406c7a4791948dea289e3ccebc43c1b05b9148ab89a8f01547595cf4c1238",
+    "plan.mjs": "ee767c8f112028120166ba35fd842ef2c15b0bfa65705b8aec02bea2a37d97cb",
+    "run.mjs": "4e646707834f06d0fe41039b177b08593576e81a3b004c6a30f330a09f826f81",
     "score.mjs": "8f296ea5311f7764605d94e19ca604c5cb1d3bd76dd2916a936b482ab101bb79",
     "terminalAnswer.mjs": "5ff6289360eb6f5b9204e443e2b152d3f9bf451df9c378ba8ec6e2f147efdc11",
     "repeatPlay.mjs": "3f9c0fb7347466e3e0b617b658f27e7a0e14c0f9857c8f9d9097a995565c2efc",
     "replyBoundary.mjs": "25f0288ff6f2f4e6888e907d267dff25398f75aeb86e97143e50ad11dba59fbb",
-    "cohorts/after/package-lock.json": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
+    "literalClaims.mjs": "e57975f6fbb87e7e58e12a5819ba1932d48dabe81326b6ba055b6ea45bd5385e",
+    "cohorts/after/package-lock.json": "8fd4448175166c3bab1621378ea013c0e9456a02c4b048da46576d400b2a3292",
+    "cohorts/candidate-source.json": "ae8a07dd97d5c11112476d0831a939bcbb277d15b53d742c8ebf885168d57316"
   },
   "cohorts": {
     "published": {
-      "agentfootprint": "15.0.0",
+      "agentfootprint": "15.0.1",
       "footprintjs": "14.0.0",
       "foottrace": "2.1.0",
       "contextfootprint": "0.1.1",
-      "lockDigest": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea"
+      "lockDigest": "8fd4448175166c3bab1621378ea013c0e9456a02c4b048da46576d400b2a3292"
     },
     "candidate": {
-      "agentfootprint": "15.0.0",
+      "agentfootprint": "15.0.1",
       "footprintjs": "14.0.0",
       "foottrace": "2.1.0",
       "contextfootprint": "0.1.1",
-      "lockDigest": "b540645022b2fb5a3b2e122781ef1530b743a8391e639b452a20255e056f8861",
+      "lockDigest": "ee5fb7b29bf5dd631c16e8b5de6422f826416e41995cb3436ff2e1dc9937114b",
       "archive": {
         "archive": "cohorts/candidate/candidate.tgz",
-        "sha256": "82355d7c4de3139b5f1a686b4ca6f1fa1b8d37daeace793e03d7275dfe72e99e",
-        "version": "15.0.0"
+        "sha256": "0fd43036e5bcd83647da156ba9fffb6b2b0c72e2eac5f6cb3ca152d5503bee15",
+        "version": "15.0.1"
       },
-      "packageSha256": "cb90a6a0fa8b01874293f53257929bdb34a4e3f9dfc87e318a42c88e601d756a"
+      "packageSha256": "0ed412ae06a3cc62042a5266b34fc3966a292fa4ebc0a035d4c0922b8dd82bd8",
+      "source": {
+        "head": "b2cc4290c3548cd6d6c7db08b2ae9fecff763ca8",
+        "tree": "e1abc5c7e53d6df4c33278ada218958ff0354955",
+        "testedHead": "bacb9bb6ea7f86a0129e2044fb133d34000dad70",
+        "runId": 44543137402,
+        "artifactId": 14541280281,
+        "artifactName": "agentfootprint-source-b2cc4290c3548cd6d6c7db08b2ae9fecff763ca8",
+        "archiveName": "agentfootprint-15.0.1.tgz",
+        "sha256": "0fd43036e5bcd83647da156ba9fffb6b2b0c72e2eac5f6cb3ca152d5503bee15",
+        "archiveBytes": 10064653
+      }
     }
   },
-  "transcriptSha256": "0a02a45be523179cafff9a01e028fee943c475ed182ffd9a8a0c983d050ca844"
+  "transcriptSha256": "4eab57f29af1493c0ea717dfb74a03bbdae5e9a5f1a1f8d170bf86a451e50e3f"
 }
