@@ -55,6 +55,20 @@ the run facts, an optional privacy statement and an optional `configuration`
 override; `run` is a `RecordingRunFacts` — the half of the truth the library
 cannot derive.
 
+## Read a value's type and array length
+
+By default, `getSnapshot()`, `getLastSnapshot()`, and snapshots saved by `recordRun(agent)` include a `contextShapes` index when a served initial state and complete commit log are available. It describes the initial top-level values and records changes at their commit positions. An array description carries its length. Import `contextShapeAt` from `agentfootprint/observe` to look up a path in this index without loading the values. Pass its commit index, or `-1` for the initial state. A path is an array of literal keys.
+
+<CodeFile path="examples/observability/29-recorded-value-shapes.ts" region="history" title="Read the recorded length of the message history" />
+
+To track a nested array such as `inventory.rows`, pass `{ contextShapes: { paths: [['inventory', 'rows']] } }` to the recorder or live snapshot getter. Supplying a path reads just that field. `scan: 'full'` opts into visiting nested entries of initial and newly assigned values and can increase recording size significantly. If you hash or compare stored bytes, pass `{ contextShapes: false }` to the snapshot getter or to `recordRun` to keep the previous format.
+
+The public `ContextShapeIndex` holds the initial observations and commit changes. Each `ShapeEntry` identifies an observed path. `contextShapeAt` returns a `RecordedContextShape` with the element count for arrays. Hidden and deleted values read as `['unknown']`. Use `ContextShapeOptions` to type the paths and scan mode passed to the recorder.
+
+An older recording or an incomplete log can have no index. Individual paths can also be unavailable, for example when a redaction hides a value or an array merge would require inspecting its items. Treat a missing length as unknown. A recorded zero means an empty array.
+
+The default index withholds both the type and the length of a redacted field. If its shape was previously visible, the index records the change to `unknown` at that commit. When the shape was already unknown, the index can omit the entry. The field stays unknown through partial updates until a later public write replaces it. If a masked array update leaves the final position of a hidden item ambiguous, the index withholds element details. The array can still have a recorded length. The recorder also treats the literal strings `REDACTED` and `[REDACTED]` as redaction markers, so their type is unknown.
+
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its

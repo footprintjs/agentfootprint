@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "initial": [],
+  "changes": [
+    [0, [
+      [["toolResourceOwner"], "object"],
+      [["userMessage"], "string"],
+      [["history"], "array", 1],
+      [["runIdentity"], "object"],
+      [["runIdentitySource"], "string"],
+      [["runSessionId"], "null"],
+      [["newMessages"], "array", 0],
+      [["turnNumber"], "number"],
+      [["contextTokensRemaining"], "number"],
+      [["iteration"], "number"],
+      [["maxIterations"], "number"],
+      [["finalContent"], "string"],
+      [["totalInputTokens"], "number"],
+      [["totalOutputTokens"], "number"],
+      [["turnStartMs"], "number"],
+      [["systemPromptInjections"], "array", 0],
+      [["messagesInjections"], "array", 0],
+      [["toolsInjections"], "array", 0],
+      [["llmLatestContent"], "string"],
+      [["llmLatestToolCalls"], "array", 0],
+      [["thinkingBlocks"], "array", 0],
+      [["pausedToolCallId"], "string"],
+      [["pausedToolName"], "string"],
+      [["pausedToolStartMs"], "number"],
+      [["cumTokensInput"], "number"],
+      [["cumTokensOutput"], "number"],
+      [["cumEstimatedUsd"], "number"],
+      [["costBudgetHit"], "boolean"],
+      [["activeInjections"], "array", 0],
+      [["activatedInjectionIds"], "array", 0],
+      [["dynamicToolSchemas"], "array", 0],
+      [["deliveredMessageKeys"], "array", 0],
+      [["cacheMarkers"], "array", 0],
+      [["cachingDisabled"], "boolean"],
+      [["skillHistory"], "array", 0]
+    ]],
+    [1, [
+      [["activeByslot"], "object"],
+      [["activeByslot", "systemPrompt"], "array", 0],
+      [["activeByslot", "messages"], "array", 0],
+      [["activeByslot", "tools"], "array", 0]
+    ]],
+    [4, [
+      [["messagesInjections"], "array", 1]
+    ]],
+    [13, [
+      [["cacheMarkers"], "array", 2]
+    ]],
+    [15, [
+      [["receipt"], "object"]
+    ]],
+    [16, [
+      [["answerGuarantee"], "string"]
+    ]],
+    [17, [
+      [["finalContent"], "unknown"]
+    ]]
+  ]
+}

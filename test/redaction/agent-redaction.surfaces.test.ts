@@ -11,8 +11,8 @@
  *
  * Every surface has its CONTROL: the same run with no policy, through the same
  * surface, must carry the secrets — so a surface that never shows content
- * cannot pass by being empty. And with no policy, every served surface is the
- * run's real one, byte for byte (the last section).
+ * cannot pass by being empty. With shapes off and no policy the snapshot keeps
+ * the native bytes. With shapes on the added index is pinned below.
  *
  * The SERVED form is the claim. Whether the agent still RAN on real values is
  * `agent-redaction.live.test.ts`; the policy's reach into composed and nested
@@ -24,6 +24,7 @@ import type { RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import {
   callTraceTool,
+  contextShapeAt,
   describeBugReport,
   exportBugReport,
   packRecording,
@@ -45,6 +46,7 @@ import {
   withoutAnswerBoundary,
 } from './fixture.js';
 import { everySurface, type Surfaced } from './everySurface.js';
+import defaultToolRunShapes from './fixtures/context-shapes/agent-redaction.json';
 import { nativeRetainsSafeBase } from './nativeFoldBase.js';
 
 // ─── The one run, with every surface attached (`./everySurface.ts`) ──
@@ -80,6 +82,18 @@ describe('agent redaction — snapshot and narrative', () => {
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
     expect((snapshot.sharedState as Record<string, unknown>)['history']).toBe('REDACTED');
     expect(snapshot.initialState).toEqual((await nativeRetainsSafeBase()) ? {} : undefined);
+  });
+
+  it('keeps the history length out of both default indexes under the conversation policy', () => {
+    const visible = control.agent.getLastSnapshot()!;
+    expect(
+      contextShapeAt(visible.contextShapes, visible.commitLog.length - 1, ['history']),
+    ).toEqual(['array', 3]);
+    const snapshot = run.agent.getLastSnapshot()!;
+    const saved = run.recording.snapshot as typeof snapshot;
+    expect(saved.contextShapes).toEqual(snapshot.contextShapes);
+    for (let commit = -1; commit < snapshot.commitLog.length; commit++)
+      expect(contextShapeAt(saved.contextShapes, commit, ['history'])).toEqual(['unknown']);
   });
 
   it('getSnapshot() is the same served view', () => {
@@ -232,8 +246,8 @@ describe('agent redaction — the trace toolpack (a past run served to a model)'
   });
 });
 
-describe('agent redaction — with no door, nothing changes', () => {
-  it('every served surface IS the real run: the snapshot and the events', async () => {
+describe('agent redaction — without a policy', () => {
+  it('with shapes off nothing changes; by default only the pinned index is added', async () => {
     const plain = fixtureAgent();
     const live = runnerLive(plain)!;
     const real: unknown[] = [];
@@ -241,9 +255,14 @@ describe('agent redaction — with no door, nothing changes', () => {
     live.onRealEvent((event) => real.push(event));
     plain.on('*', (event) => served.push(event));
     await plain.run({ message: MESSAGE });
-    // The served snapshot is footprintjs's own, byte for byte — no mirror, the
-    // fold base present, no marker row.
-    expect(JSON.stringify(plain.getLastSnapshot())).toBe(JSON.stringify(live.liveSnapshot()));
+    const rawSnapshot = live.liveSnapshot();
+    const enriched = plain.getLastSnapshot();
+    expect(JSON.stringify(plain.getLastSnapshot({ contextShapes: false }))).toBe(
+      JSON.stringify(rawSnapshot),
+    );
+    expect(JSON.stringify(enriched)).toBe(
+      JSON.stringify({ ...rawSnapshot, contextShapes: defaultToolRunShapes }),
+    );
     expect((plain.getLastSnapshot() as RuntimeSnapshot).initialState).toBeDefined();
     expect(JSON.stringify(plain.getLastSnapshot())).not.toContain(REDACTION_MARKER_ID);
     // Every event reaches a consumer as its producer made it: the same types,

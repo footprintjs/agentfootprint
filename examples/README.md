@@ -424,6 +424,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 26 | [`26-localize-conclusion.ts`](observability/26-localize-conclusion.ts) | Read what a localizer report's verdicts add up to (BETA) | Three bugs in one refunds agent, read by report.conclusion: one planted fact is named as the one cause, two facts that are each enough alone are found as a pair, and a mistake that several true facts appear to cause is reported as no single cause. |
 | 27 | [`27-context-values.ts`](observability/27-context-values.ts) | Context recorded once, each call as changes | Opt-in value-table recording with unchanged model requests; call prose reads the change list. |
 | 28 | [`28-completed-turn-evidence.ts`](observability/28-completed-turn-evidence.ts) | Coverage and evidence for a completed turn | Read per-call declaration counts and the final evidence verdict before filing. |
+| 29 | [`29-recorded-value-shapes.ts`](observability/29-recorded-value-shapes.ts) | Record value types and array lengths | Read the length of the recorded message history without opening its messages. |
 
 ### [`rag/`](rag/) — examples
 

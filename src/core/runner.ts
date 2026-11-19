@@ -17,11 +17,11 @@
 import type {
   CombinedRecorder,
   FlowChart,
-  FlowChartExecutor,
   FlowchartCheckpoint,
   RunOptions as EngineRunOptions,
 } from 'footprintjs';
 import type { RequestContext } from '../identity/requestContext.js';
+import type { RunnerSnapshotOptions, ServedRunnerSnapshot } from './runnerSnapshot.js';
 import type { RunnerPauseOutcome } from './pause.js';
 import type {
   EventListener,
@@ -142,7 +142,7 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * their own per-stage payload by `runtimeStageId`, rather than
    * re-deriving structure from typed events.
    */
-  getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined;
+  getLastSnapshot(options?: RunnerSnapshotOptions): ServedRunnerSnapshot | undefined;
 
   /**
    * How many commits the run has written so far — the run's TIME AXIS.
