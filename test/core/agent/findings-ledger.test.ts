@@ -223,6 +223,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
 
   it('files the basis row before tool_start, and the standing off the next call', async () => {
     const agent = Agent.create({
+      answerLayer: false,
       provider: scripted([], CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
@@ -465,7 +466,11 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
   });
 
   it('files declaredOn: answer, judges the peeled content (no retry), and runTyped returns the peeled object', async () => {
-    const agent = Agent.create({ provider: scripted([], CALL_ONE, ANSWER), model: 'm' })
+    const agent = Agent.create({
+      answerLayer: false,
+      provider: scripted([], CALL_ONE, ANSWER),
+      model: 'm',
+    })
       .tool(recordingTool('look', []) as never)
       .findings()
       .outputSchema(strict, { retries: 0 })
@@ -566,7 +571,12 @@ describe(".findings() without an output schema — every decider peels the answe
   describe.each(SHAPES)('%s', (_label, arm, opts) => {
     const build = (answer: string): Agent =>
       arm(
-        Agent.create({ provider: scripted([], CALL_ONE, answer), model: 'm', ...opts })
+        Agent.create({
+          answerLayer: false,
+          provider: scripted([], CALL_ONE, answer),
+          model: 'm',
+          ...opts,
+        })
           .tool(look as never)
           .findings(),
       ).build();
@@ -706,6 +716,7 @@ describe(".findings() without an output schema — every decider peels the answe
     });
     // Tools on the wire → keep asking; the wrap-up call withholds them.
     const agent = Agent.create({
+      answerLayer: false,
       provider: mock({
         respond: (req: LLMRequest): string | Partial<LLMResponse> => {
           if ((req.tools?.length ?? 0) === 0) return WRAPPED;
@@ -763,7 +774,7 @@ describe(".findings() without an output schema — every decider peels the answe
       (b: ReturnType<typeof Agent.create>) => b.namesAndNumbersFromEvidence(),
     ]) {
       const agent = arm(
-        Agent.create({ provider: scripted([], CALL_ONE, PEELED), model: 'm' })
+        Agent.create({ answerLayer: false, provider: scripted([], CALL_ONE, PEELED), model: 'm' })
           .tool(look as never)
           .findings()
           .messageMiddleware(annotate as never),
@@ -1531,7 +1542,11 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
       ],
     };
     const seen: Shot[] = [];
-    const agent = Agent.create({ provider: scripted(seen, BATCH, 'done'), model: 'm' })
+    const agent = Agent.create({
+      answerLayer: false,
+      provider: scripted(seen, BATCH, 'done'),
+      model: 'm',
+    })
       .toolProvider(staticTools([owning, plain]))
       .findings()
       .build();

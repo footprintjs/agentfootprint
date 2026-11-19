@@ -92,6 +92,7 @@ function fixture(
     },
   });
   const builder = Agent.create({
+    answerLayer: false,
     provider,
     model: 'mock',
     maxIterations: 6,

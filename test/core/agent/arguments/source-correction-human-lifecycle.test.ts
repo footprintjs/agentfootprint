@@ -99,6 +99,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .tool(timed)
         .time({ zone: 'UTC', reader: englishTimeReader(), policy: { year: 'current' } })
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
+        .answerLayer({ standingLine: false })
         .build();
       try {
         const ordinary = await agent.run({
@@ -172,6 +173,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .tool(fields)
         .tool(vmTool(ran))
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
+        .answerLayer({ standingLine: false })
         .build();
       try {
         const first = await agent.run(QUESTION);
@@ -294,6 +296,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           .tool(vmTool(ran))
           .time({ zone: 'UTC', reader: englishTimeReader(), policy: { year: 'current' } })
           .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
+          .answerLayer({ standingLine: false })
           .build();
         try {
           let result = await agent.run({

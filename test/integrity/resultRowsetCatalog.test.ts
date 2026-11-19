@@ -113,6 +113,7 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
   it('holds raw static declarations before later mutation without cloning class-backed tools', async () => {
     const tool = new SharedTool();
     const agent = Agent.create({
+      answerLayer: false,
       provider: model(),
       model: 'mock',
       checkColumnTypes: 'warn',
@@ -250,7 +251,12 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
       body: 'Read synthetic rows.',
       tools: [tool],
     });
-    const agent = Agent.create({ provider: model(), model: 'mock', checkColumnTypes: 'warn' })
+    const agent = Agent.create({
+      answerLayer: false,
+      provider: model(),
+      model: 'mock',
+      checkColumnTypes: 'warn',
+    })
       .skills({ list: () => [skill] })
       .toolsFromActiveSkill()
       .toolProvider({
@@ -274,6 +280,7 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
     const tool = new SharedTool();
     let lists = 0;
     const agent = Agent.create({
+      answerLayer: false,
       provider: mock({ replies: [{ toolCalls: [call(1)] }, { toolCalls: [call(2)] }, 'Done.'] }),
       model: 'mock',
       checkColumnTypes: 'warn',
@@ -302,6 +309,7 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
     const tool = new SharedTool();
     let lists = 0;
     const agent = Agent.create({
+      answerLayer: false,
       model: 'mock',
       checkColumnTypes: 'warn',
       integrityPosture: 'dev',
@@ -459,6 +467,7 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
     let lists = 0;
     const executed: string[] = [];
     const agent = Agent.create({
+      answerLayer: false,
       model: 'mock',
       checkColumnTypes: 'warn',
       integrityPosture: 'dev',

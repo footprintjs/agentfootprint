@@ -86,6 +86,8 @@ export function buildAgent(doors, arm, provider, model, tools, temperature) {
     model,
     maxIterations: MAX_ITERATIONS,
     maxTokens: MAX_TOKENS,
+    // This comparison isolates the results layer and its post-run assessment.
+    answerLayer: false,
     ...(temperature !== undefined && { temperature }),
   })
     .system(SYSTEM_PROMPT)

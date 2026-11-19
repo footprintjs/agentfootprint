@@ -96,7 +96,8 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
   construct: (parts: BuildParts) => TAgent,
 ): TAgent {
   const { negativeClaims, negativeSchema, answerLayer } = checkContracts(self);
-  const overrideAnswerLayer = answerLayer !== false || self.answerLayerValue !== undefined;
+  const overrideAnswerLayer =
+    answerLayer !== undefined && (answerLayer !== false || self.answerLayerValue !== undefined);
   // Resolve the voice config: bundled defaults + consumer overrides.
   // Templates flow through the same barrel exports the rest of the
   // library uses, so a future locale-pack swap is a single import.

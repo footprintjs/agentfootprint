@@ -29,6 +29,7 @@ function setup(
   const events: AgentfootprintEvent[] = [];
   const results: string[] = [];
   const agent = Agent.create({
+    answerLayer: false,
     provider: mock({
       respond: (request) => {
         const result = request.messages.find((message) => message.role === 'tool');

@@ -467,7 +467,14 @@ describe('scenario — the history fallback never re-injects `_findings` (9.101.
 
     expect(seen).toEqual([{ topic: 'refund', amount: 500 }]);
     expect(agent.findings()).toEqual([
-      { kind: 'basis', toolCallId: 't1', toolName: 'ask_person', iteration: 1, basis: 'direct' },
+      {
+        kind: 'basis',
+        toolCallId: 't1',
+        toolName: 'ask_person',
+        iteration: 1,
+        basis: 'direct',
+        turn: 1,
+      },
     ]);
   });
 

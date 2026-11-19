@@ -91,7 +91,7 @@ async function dispatch(options: {
     ...(options.mode !== undefined && { toolArgValidation: options.mode }),
   }).tool(tool);
   if (options.findings) builder.findings();
-  const agent = builder.build();
+  const agent = builder.answerLayer({ standingLine: false }).build();
   agent.on('*', (event) => events.push(event));
   expect(await agent.run({ message: 'Compute the requested result', identity })).toBe('done');
   return { ...recording, tool, offered, results, events, getCredential, args };

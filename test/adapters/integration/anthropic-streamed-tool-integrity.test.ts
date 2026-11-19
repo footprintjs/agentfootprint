@@ -291,7 +291,12 @@ describe('official SDK + public Agent optional-argument recovery', () => {
         [toolReply({ reason }), toolReply({ raw: '{}', id: 'good-call' }), finalReply()],
         () => executionsAtSend.push(execute.mock.calls.length),
       );
-      const agent = Agent.create({ provider: s.provider, model: MODEL, maxIterations: 4 })
+      const agent = Agent.create({
+        answerLayer: false,
+        provider: s.provider,
+        model: MODEL,
+        maxIterations: 4,
+      })
         .tool(
           defineTool({
             name: 'lookup',
@@ -415,7 +420,12 @@ describe('official SDK + public Agent mixed-batch recovery ordering', () => {
     const execute = vi.fn((_args: Readonly<Record<string, unknown>>) => 'Valid sibling result.');
     const executionsAtSend: number[] = [];
     const s = setup([mixed, finalReply()], () => executionsAtSend.push(execute.mock.calls.length));
-    const agent = Agent.create({ provider: s.provider, model: MODEL, maxIterations: 3 })
+    const agent = Agent.create({
+      answerLayer: false,
+      provider: s.provider,
+      model: MODEL,
+      maxIterations: 3,
+    })
       .tool(
         defineTool({
           name: 'lookup',

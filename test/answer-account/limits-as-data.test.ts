@@ -172,6 +172,7 @@ describe('INTEGRATION — a prose answer’s appended section, split at the sepa
     })
       .tool(searchLogs)
       .limitsTravelWithTheAnswer()
+      .answerLayer({ standingLine: false })
       .build();
     const recording = await recorded(agent, 'errors on checkout?');
     const account = accountForAnswer(recording);

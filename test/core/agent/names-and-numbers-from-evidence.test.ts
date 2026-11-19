@@ -67,6 +67,7 @@ const buildAgent = (
 ) => {
   const caps = capture();
   let builder = Agent.create({
+    answerLayer: false,
     provider: mock({ replies: replies as never }),
     model: 'mock',
     maxIterations: 8,
@@ -197,7 +198,12 @@ describe('functional: guard corrects in the loop', () => {
       },
     };
     const caps = capture();
-    const agent = Agent.create({ provider: counting as never, model: 'm', maxIterations: 8 })
+    const agent = Agent.create({
+      answerLayer: false,
+      provider: counting as never,
+      model: 'm',
+      maxIterations: 8,
+    })
       .tool(flogiTool)
       .namesAndNumbersFromEvidence({ posture: 'guard' })
       .watch(caps.recorder)
@@ -393,7 +399,12 @@ describe('integration: composes with .reliability()', () => {
       },
     };
     const caps = capture();
-    const agent = Agent.create({ provider: flaky as never, model: 'm', maxIterations: 4 })
+    const agent = Agent.create({
+      answerLayer: false,
+      provider: flaky as never,
+      model: 'm',
+      maxIterations: 4,
+    })
       .reliability({
         postDecide: [
           {

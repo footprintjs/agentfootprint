@@ -704,7 +704,9 @@ it('a fresh continuation and error-resume accept a checkpoint containing a refus
     await continued.run({ message: 'continue', continueFrom: structuredClone(checkpoint) }),
   ).toBe('continued');
   const resumed = fixture(['resumed']).builder.build();
-  expect(await resumed.resumeOnError(structuredClone(checkpoint))).toBe('resumed');
+  expect(await resumed.resumeOnError(structuredClone(checkpoint))).toBe(
+    'resumed\n\n---\n\nNot sure — a call was refused.',
+  );
 });
 
 it('a successful silent fallback leaf resets a discarded replay preparation', async () => {

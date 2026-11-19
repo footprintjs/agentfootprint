@@ -49,6 +49,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           'Done.',
         ];
         const agent = Agent.create({
+          answerLayer: false,
           model: 'mock',
           reactMode: mode,
           checkColumnTypes: 'warn',

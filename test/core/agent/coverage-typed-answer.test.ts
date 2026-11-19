@@ -32,6 +32,7 @@ import {
   describedResult,
   isInputPause,
   requestInput,
+  type AgentOptions,
   type Coverage,
   type DeclaredCoverage,
 } from '../../../src/index.js';
@@ -119,6 +120,7 @@ function build(args: {
   replies: readonly unknown[];
   tools: readonly unknown[];
   typed?: boolean;
+  answerLayer?: AgentOptions['answerLayer'];
   limits?: boolean;
   reactMode?: ReactMode;
   retries?: number;
@@ -129,6 +131,7 @@ function build(args: {
     provider: mock({ replies: args.replies as never, chunkDelayMs: 0 }),
     model: 'mock',
     maxIterations: 6,
+    ...(args.answerLayer !== undefined && { answerLayer: args.answerLayer }),
     ...(args.reactMode !== undefined && { reactMode: args.reactMode }),
   }).system('You are a storage engineer.');
   for (const t of args.tools) builder = builder.tool(t as never);
@@ -400,6 +403,7 @@ describe('integration: one value, three readers — the accessor, the state and 
       replies: [call('replication_health', 'c1'), call('ndm_sessions', 'c2'), final('All fine.')],
       tools: [healthTool, sessionsTool],
       typed: false,
+      answerLayer: { standingLine: false },
     });
     const answer = await prose.agent.run('is replication healthy?');
     expect(answer).toBe(`All fine.\n\n---\n\n${asBlock(typed.agent.answerCoverage()!)}`);
@@ -568,6 +572,7 @@ describe('regression: a prose answer is byte-identical', () => {
       ],
       tools: [healthTool, sessionsTool],
       typed: false,
+      answerLayer: false,
     });
     const out = await t.agent.run('go');
     expect(out).toBe(

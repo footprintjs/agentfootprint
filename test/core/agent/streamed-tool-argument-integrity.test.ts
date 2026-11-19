@@ -118,6 +118,7 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
             { content: 'Recovered from the invalid call.' },
           ]);
           const agent = Agent.create({
+            answerLayer: false,
             provider: script.provider,
             model: 'mock',
             reactMode,
@@ -302,6 +303,7 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
           { content: 'Please send a complete tool call.' },
         ]);
         const builder = Agent.create({
+          answerLayer: false,
           provider: script.provider,
           model: 'mock',
           reactMode,
@@ -372,7 +374,13 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
       const execute = vi.fn((_args: Record<string, unknown>) => 'saved item');
       const pause = vi.fn(() => askHuman({ question: 'Continue to read the saved item?' }));
       const build = (provider: ReturnType<typeof mock>) =>
-        Agent.create({ provider, model: 'mock', reactMode, toolArgValidation: 'off' })
+        Agent.create({
+          answerLayer: false,
+          provider,
+          model: 'mock',
+          reactMode,
+          toolArgValidation: 'off',
+        })
           .tool(
             defineTool({
               name: TOOL,
@@ -435,7 +443,13 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
     it('keeps the refusal in an error checkpoint and lets a fresh agent recover', async () => {
       const execute = vi.fn((_args: Record<string, unknown>) => 'saved item');
       const build = (provider: ReturnType<typeof mock>) =>
-        Agent.create({ provider, model: 'mock', reactMode, toolArgValidation: 'off' })
+        Agent.create({
+          answerLayer: false,
+          provider,
+          model: 'mock',
+          reactMode,
+          toolArgValidation: 'off',
+        })
           .tool(
             defineTool({
               name: TOOL,
@@ -503,6 +517,7 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
         { content: 'No saved item was read.' },
       ]);
       const agent = Agent.create({
+        answerLayer: false,
         provider: script.provider,
         model: 'mock',
         reactMode,

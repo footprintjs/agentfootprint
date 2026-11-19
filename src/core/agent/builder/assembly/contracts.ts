@@ -53,11 +53,11 @@ export function checkContracts(self: ContractsPort) {
   // builder's `.answerLayer()` wins; otherwise `AgentOptions.answerLayer`,
   // checked by the same rules — so the refusals below and the arm `Agent`
   // receives can never read two different values.
-  const specified = self.answerLayerValue ?? answerLayerFromOptions(self.opts.answerLayer);
+  const answerLayer = self.answerLayerValue ?? answerLayerFromOptions(self.opts.answerLayer);
   // The answer layer's line appends prose to the answer — refused where the
   // answer's bytes are judged or must parse. The standing itself still
   // travels as data on both (`turn_end.answerAssessment`).
-  if (specified && specified.standingLine !== undefined) {
+  if (answerLayer && answerLayer.standingLine !== undefined) {
     if (self.answerValidationConfig !== undefined) {
       throw new Error(
         'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +
@@ -75,12 +75,5 @@ export function checkContracts(self: ContractsPort) {
       );
     }
   }
-  // Omission uses the existing selective mode. The default respects the
-  // answer contract's exact bytes by serving only data on checked/typed answers.
-  const defaultArm: AnswerLayerArm =
-    self.answerValidationConfig !== undefined || self.outputSchemaParser !== undefined
-      ? {}
-      : { standingLine: 'not-sure-or-ask' };
-  const answerLayer = specified ?? defaultArm;
   return { negativeClaims, negativeSchema, answerLayer };
 }

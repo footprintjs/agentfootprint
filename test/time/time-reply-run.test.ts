@@ -93,6 +93,7 @@ function make(
         }
       : tool;
   const agent = Agent.create({
+    answerLayer: false,
     provider: provider.provider as never,
     model: 'mock',
     maxIterations: 5,

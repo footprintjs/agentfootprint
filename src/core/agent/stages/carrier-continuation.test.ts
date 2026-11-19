@@ -146,7 +146,12 @@ for (const mounted of [false, true]) {
 it('truncated history never turns a dropped provider name into a unique inactive-skill holder', async () => {
   const ran: string[] = [],
     s = script([['noop'], ['gate'], ['x'], []]);
-  const agent = Agent.create({ provider: s.provider, model: 'mock', reactMode: 'dynamic' })
+  const agent = Agent.create({
+    answerLayer: false,
+    provider: s.provider,
+    model: 'mock',
+    reactMode: 'dynamic',
+  })
     .tools([
       ordinary('noop', ran),
       defineTool({

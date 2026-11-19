@@ -388,6 +388,7 @@ describe('assume — across turns (the turn stamp and the widened restore)', () 
 describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', () => {
   it('appends one line per assumed value; the answer is unchanged with nothing assumed', async () => {
     const withFill = Agent.create({
+      answerLayer: false,
       provider: scripted([call('c1', 'search_logs', { service: 'a' }), answer('No errors.')])
         .provider as never,
       model: 'm',
@@ -401,6 +402,7 @@ describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', ()
     );
 
     const noFill = Agent.create({
+      answerLayer: false,
       provider: scripted([
         call('c1', 'search_logs', { service: 'a', window: '24h' }),
         answer('No errors.'),

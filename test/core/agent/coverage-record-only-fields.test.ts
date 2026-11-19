@@ -154,6 +154,7 @@ function build(path: Path, shape: Shape, declare: boolean, withLink: boolean): H
     },
   });
   let builder = Agent.create({
+    answerLayer: false,
     provider,
     model: 'mock',
     ...(path === 'consent' && { credentials }),

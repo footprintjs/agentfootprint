@@ -464,6 +464,7 @@ describe('BOUNDARY — not armed, nothing moves', () => {
       checkColumnTypes: 'warn',
     })
       .tools([inventory(), backupStatus(), lunMap([{ other: 1 }])])
+      .answerLayer(false)
       .build();
     agent.on('agentfootprint.integrity.context_error', (e) => events.push(e.payload));
     const r = await run(agent, () => agent.run({ message: 'go' }));
@@ -481,6 +482,7 @@ describe('BOUNDARY — not armed, nothing moves', () => {
     })
       .outputSchema({ parse: (v: unknown) => v })
       .claims({ other: { entity: 'screen9', field: 'nothing' } })
+      .answerLayer(false)
       .build();
     const r = await run(agent, () => agent.run({ message: 'go' }));
     expect(r.state.findingsLedger).toBeUndefined();
@@ -490,13 +492,12 @@ describe('BOUNDARY — not armed, nothing moves', () => {
   it('the events are the same bytes with the layer armed or not', async () => {
     const eventsOf = async (armed: boolean) => {
       const events: unknown[] = [];
-      let builder = Agent.create({
+      const builder = Agent.create({
         provider: mock({ replies: [call('c1', 'lun_map'), answered()] }),
         model: 'mock',
         checkColumnTypes: 'warn',
       }).tool(lunMap([{ other: 1 }]));
-      if (armed) builder = builder.answerLayer();
-      const agent = builder.build();
+      const agent = (armed ? builder.answerLayer() : builder.answerLayer(false)).build();
       agent.on('agentfootprint.integrity.context_error', (e) => events.push(e.payload));
       await agent.run({ message: 'go' });
       return events;

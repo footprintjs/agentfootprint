@@ -465,6 +465,7 @@ describe('PermissionChecker — no regression on existing results', () => {
       },
     });
     const agent = Agent.create({
+      answerLayer: false,
       provider: llm,
       model: 'mock',
       maxIterations: 5,

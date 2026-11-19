@@ -1627,7 +1627,7 @@ function projection(snapshot: Snapshot): unknown {
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
 const DEFAULT_STANDING = JSON.parse(
-  readFileSync(new URL('default-answer-standing.json', REFERENCE_DIR), 'utf8'),
+  readFileSync(new URL('./default-answer-standing.json', import.meta.url), 'utf8'),
 ) as {
   readonly projections: Readonly<Record<string, string | undefined>>;
   readonly answers: Readonly<Record<string, { before: string; after: string } | undefined>>;

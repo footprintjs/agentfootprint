@@ -105,6 +105,8 @@ function fixture(
     provider,
     model: 'synthetic',
     reactMode: options.mode ?? 'dynamic',
+    // The observer's bytes, ledger and events are measured in isolation.
+    answerLayer: false,
   }).tool(
     defineTool({
       name: 'read_incidents',

@@ -113,7 +113,12 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         batch(proposal('new-proposal', {})),
         'Done.',
       ]);
-      const agent = Agent.create({ provider: p.provider, model: 'mock', reactMode: mode })
+      const agent = Agent.create({
+        answerLayer: false,
+        provider: p.provider,
+        model: 'mock',
+        reactMode: mode,
+      })
         .toolProvider({
           id: 'current-provider',
           list: (ctx) => [ctx.iteration === 1 ? asked : assumed],
@@ -138,7 +143,12 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         batch(quoted('withdrawn')),
         'Unavailable.',
       ]);
-      const agent = Agent.create({ provider: p.provider, model: 'mock', reactMode: mode })
+      const agent = Agent.create({
+        answerLayer: false,
+        provider: p.provider,
+        model: 'mock',
+        reactMode: mode,
+      })
         .toolProvider({
           id: 'withdrawn-provider',
           list: (ctx) => (ctx.iteration === 1 ? [actual] : []),

@@ -171,6 +171,7 @@ describe('findings current-context result classification', () => {
       ],
     });
     const agent = Agent.create({
+      answerLayer: false,
       model: 'mock',
       provider: mock({
         respond(req) {

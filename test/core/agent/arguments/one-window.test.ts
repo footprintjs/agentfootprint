@@ -105,6 +105,7 @@ const rowFacts = (agent: Agent) =>
 
 async function runOnce(tool: Tool, args: object, time: boolean) {
   const b = Agent.create({
+    answerLayer: false,
     provider: scripted([call('c1', 'client_activity', args), answer('done')]) as never,
     model: 'm',
   }).tool(tool);

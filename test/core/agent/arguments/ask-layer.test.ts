@@ -160,7 +160,12 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
         ),
         answer('No errors on either.'),
       ]);
-      const agent = Agent.create({ provider: m.provider as never, model: 'm', reactMode })
+      const agent = Agent.create({
+        answerLayer: false,
+        provider: m.provider as never,
+        model: 'm',
+        reactMode,
+      })
         .tool(searchLogs(ran))
         .build();
       const seen = events(agent);
@@ -268,7 +273,7 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout', window: '7d' } }),
       answer('ok'),
     ]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .build();
     const out = await agent.run({ message: 'errors this week?' });
@@ -318,13 +323,18 @@ describe('resume — a fresh agent, a serialized checkpoint', () => {
       batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
       answer('Done.'),
     ];
-    const first = Agent.create({ provider: scripted(script).provider as never, model: 'm' })
+    const first = Agent.create({
+      answerLayer: false,
+      provider: scripted(script).provider as never,
+      model: 'm',
+    })
       .tool(searchLogs(ran))
       .build();
     const paused = await first.run({ message: 'errors?' });
     const cp = stored(paused);
     const reply = replyTo(paused, { f1: '7d' });
     const second = Agent.create({
+      answerLayer: false,
       provider: scripted(script.slice(1)).provider as never,
       model: 'm',
     })
@@ -366,7 +376,7 @@ describe('the hosted path — render, answer, cancel', () => {
       batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
       answer('No errors.'),
     ]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .build();
     const sessions = memorySessions();
@@ -488,7 +498,7 @@ describe('one human question per resume — a later pause in the SAME batch is r
       ),
       answer('ok'),
     ]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
       .tools([searchLogs([]), collect])
       .build();
     const paused = await agent.run({ message: 'go' });
@@ -517,7 +527,7 @@ describe('one human question per resume — a later pause in the SAME batch is r
       batch({ id: 'c2', name: 'collect_window', args: {} }),
       answer('Got the year.'),
     ]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
       .tools([searchLogs([]), collect])
       .build();
     const first = await agent.run({ message: 'go' });
@@ -580,7 +590,7 @@ describe('the readers of a pause', () => {
       batch({ id: 'c2', name: 'search_logs', args: { service: 'payments', window: '1h' } }),
       answer('done'),
     ]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .window(slidingWindow({ keepRecentTurns: 1 }))
       .build();
@@ -645,6 +655,7 @@ describe('a composition — Sequence(agent) resumes the ask with a raw reply', (
   it('the ask pauses one subflow deep and the sequence resumes it', async () => {
     const ran: Record<string, unknown>[] = [];
     const inner = Agent.create({
+      answerLayer: false,
       provider: scripted([
         batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
         answer('No errors.'),
@@ -751,7 +762,7 @@ describe('PROPERTY — every answer inside the declared choices', () => {
       batch({ id: 'c1', name: 'top_talkers', args: {} }),
       answer('could not run it'),
     ]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
       .tool(tool)
       .build();
     let out: AgentOutput | RunnerPauseOutcome = await agent.run({ message: 'go' });

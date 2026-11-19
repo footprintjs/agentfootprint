@@ -38,7 +38,7 @@ async function run(final: string, parser: { parse: (v: unknown) => unknown }, ar
     .tool(lookup())
     .outputSchema(parser)
     .claims(CONTRACT);
-  if (armed) builder = builder.answerLayer();
+  builder = armed ? builder.answerLayer() : builder.answerLayer(false);
   const agent = builder.build();
   const assessed: unknown[] = [];
   agent.on('agentfootprint.answer.assessed', (e) => {

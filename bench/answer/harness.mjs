@@ -104,6 +104,9 @@ export function buildAgent(doors, { provider, model, arm, tools, temperature }) 
     model,
     maxIterations: MAX_ITERATIONS,
     maxTokens: MAX_TOKENS,
+    // The answer-layer benchmark's off arm stays off across library versions.
+    // The other arms override this option through the builder.
+    answerLayer: false,
     ...(temperature !== undefined && { temperature }),
   })
     .system(SYSTEM_PROMPT)

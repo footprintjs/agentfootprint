@@ -73,6 +73,7 @@ const buildAgent = (args: {
   replies: readonly unknown[];
   tools?: readonly unknown[];
   travel?: boolean;
+  standingLine?: false;
   reactMode?: 'dynamic' | 'dynamic-grouped' | 'classic';
 }) => {
   const caps = capture();
@@ -84,6 +85,7 @@ const buildAgent = (args: {
   }).system('You are a storage engineer.');
   for (const t of args.tools ?? [healthTool]) builder = builder.tool(t as never);
   if (args.travel) builder = builder.limitsTravelWithTheAnswer();
+  if (args.standingLine === false) builder.answerLayer({ standingLine: false });
   return { agent: builder.watch(caps.recorder).build(), ...caps };
 };
 
@@ -162,7 +164,9 @@ describe('integration: recording is unconditional', () => {
   it('files tools.coverage_declared and tracks the ledger even with the option OFF', async () => {
     const t = buildAgent({ replies: [call('replication_health'), final(CONFIDENT)] });
     const out = await t.agent.run('is replication healthy?');
-    expect(out).toBe(CONFIDENT);
+    expect(out).toBe(
+      `${CONFIDENT}\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover.`,
+    );
     expect(t.declared).toHaveLength(1);
     expect(t.declared[0]).toMatchObject({
       toolName: 'replication_health',
@@ -312,8 +316,11 @@ describe('regression: the survival guarantee does not depend on the model', () =
     expect(out).toContain('host-side multipathing');
   });
 
-  it('with the option OFF the answer is exactly the model’s own words — the append is opt-in', async () => {
-    const t = buildAgent({ replies: [call('replication_health'), final(CONFIDENT)] });
+  it('with coverage delivery and the standing line off, the answer is exactly the model’s words', async () => {
+    const t = buildAgent({
+      replies: [call('replication_health'), final(CONFIDENT)],
+      standingLine: false,
+    });
     const out = await t.agent.run('is replication healthy?');
     expect(out).toBe(CONFIDENT);
   });

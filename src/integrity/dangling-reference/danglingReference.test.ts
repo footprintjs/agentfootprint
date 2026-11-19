@@ -185,7 +185,7 @@ function scriptedProvider(rounds: number): LLMProvider {
   };
 }
 
-function trapAgent(withGrounding: boolean) {
+function trapAgent(withGrounding: boolean, options: { answerLayer?: false } = {}) {
   const events: Array<Record<string, unknown>> = [];
   // The last-tool-result pin (9.57.0) is the shipped FIRST line of defense —
   // with it on, each tool's most recent result refuses to leave, and this
@@ -197,6 +197,7 @@ function trapAgent(withGrounding: boolean) {
     model: 'm',
     maxIterations: 12,
     keepLastToolResults: false,
+    ...options,
   })
     .tool(bigGround())
     .tool(firesAtIds(withGrounding))
@@ -265,7 +266,7 @@ const NATIVE_NARRATIVE_REFERENCE = resolve(
 
 describe('regression: the check adds no step to the narrative', () => {
   it('the trap retains the exact native14 narrative, including every tracked read', async () => {
-    const { agent, events } = trapAgent(true);
+    const { agent, events } = trapAgent(true, { answerLayer: false });
     await agent.run({ message: TASK });
     // The trap is armed: compositions after the drop ran the check.
     expect(events.filter((e) => e.kind === 'dangling-reference')).toHaveLength(1);

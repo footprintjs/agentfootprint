@@ -173,7 +173,10 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
     expect(lastToolMessage(m.requests).content).toBe('[]');
     expect(committedToolMessage(agent)).not.toHaveProperty('toolChars');
     // The person's answer names no value the call did not run with.
-    expect(String(out)).toBe('No errors.');
+    expect(String(out)).toBe(
+      'No errors.\n\n---\n\nNot sure — a before-tool rule set a value a call ran with and did not say where it came from; ' +
+        'a lookup came back empty without saying what it searched; a tool did not say what time its result covers.',
+    );
     // The row stays the layer's verdict; the standing reads the rewrite (no
     // declared origin → assumed) AND the empty result the rewrite ran on.
     expect(argumentRows(agent)).toMatchObject([{ source: 'default', value: '2h' }]);
@@ -209,6 +212,7 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
       .tool(searchLogs(ran))
       .toolMiddleware(rewrite((a) => ({ ...a, service: String(a.service).toLowerCase() })))
       .limitsTravelWithTheAnswer()
+      .answerLayer({ standingLine: false })
       .build();
     const out = await agent.run({ message: 'any errors on Checkout?' });
     expect(ran).toEqual([{ service: 'checkout', window: '2h' }]);
@@ -225,6 +229,7 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
       .tool(searchLogs([]))
       .toolMiddleware(rewrite((a) => ({ ...a, window: '2h' })))
       .limitsTravelWithTheAnswer()
+      .answerLayer({ standingLine: false })
       .build();
     const out = await agent.run({ message: 'any errors on checkout?' });
     expect(lastToolMessage(m.requests).content).toBe(`[]${NOTE_2H}`);
@@ -561,6 +566,7 @@ describe('an entry applies to its own batch; the "Assumed" block to its own turn
     })
       .tool(searchLogs([]))
       .limitsTravelWithTheAnswer()
+      .answerLayer({ standingLine: false })
       .build();
     expect(String(await first.run({ message: 'errors?' }))).toContain(
       '- window = "2h" (search_logs)',

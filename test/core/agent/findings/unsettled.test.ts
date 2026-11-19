@@ -240,6 +240,8 @@ async function run(
       model: 'mock',
       maxIterations: 8,
       reactMode,
+      // This harness compares isolated findings rows to the historical writer.
+      answerLayer: false,
       ...options,
     }),
   ).build();

@@ -162,7 +162,9 @@ describe('C3b — the run’s signal is released with the run', () => {
         return { ...ANSWER };
       },
     };
-    const agent = Agent.create({ provider, model: 'm' }).build();
+    // Exercise deadline retirement on the original path, without mounting
+    // the assessment stage inside the 30ms fixture budget.
+    const agent = Agent.create({ provider, model: 'm', answerLayer: false }).build();
     await agent.run('hello', { timeoutMs: 30 });
     expect(seen[0]).toBeDefined();
     await new Promise<void>((r) => setTimeout(r, 60));

@@ -200,6 +200,7 @@ function proseAgent(
 ) {
   const b = Agent.create({ provider: replies('No errors.'), model: 'mock' })
     .tool(tool)
+    .answerLayer({ standingLine: false })
     .limitsTravelWithTheAnswer();
   return (extra ? extra(b) : b).build();
 }

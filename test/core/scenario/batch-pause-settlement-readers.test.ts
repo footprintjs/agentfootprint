@@ -115,6 +115,8 @@ async function settledRun(): Promise<SettledRun> {
       ],
     }),
     model: 'mock',
+    // Keep the historical settlement event and answer witness focused on its readers.
+    answerLayer: false,
   })
     .tools(['first', 'second', 'third', 'broken'].map(tool))
     .watch(thinking)

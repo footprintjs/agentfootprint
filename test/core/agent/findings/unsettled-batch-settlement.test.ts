@@ -179,7 +179,13 @@ async function settledRun(
       return inner.complete(req);
     },
   };
-  let builder = Agent.create({ provider, model: 'mock', maxIterations: 8, reactMode })
+  let builder = Agent.create({
+    answerLayer: false,
+    provider,
+    model: 'mock',
+    maxIterations: 8,
+    reactMode,
+  })
     .tools([hostHbas(ran), collect])
     .findings();
   if (script === AT_ANSWER) {

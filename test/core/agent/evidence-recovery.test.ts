@@ -243,6 +243,7 @@ describe('evidence recovery at the tool-argument boundary', () => {
       { content: 'No records were found.' },
     ];
     const agent = Agent.create({
+      answerLayer: false,
       provider: {
         name: 'recorded-mock',
         complete: async (request: LLMRequest): Promise<LLMResponse> => {

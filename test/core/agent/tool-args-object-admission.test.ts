@@ -130,7 +130,7 @@ async function dispatch(
         onToolCall: () => ask({ question: 'Approve this call?' }),
       });
     }
-    const agent = builder.build();
+    const agent = builder.answerLayer({ standingLine: false }).build();
     agent.on('*', (event) => events.push(event));
     return agent;
   };

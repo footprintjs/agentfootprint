@@ -264,6 +264,7 @@ describe('dataset adapter at native Agent boundaries', () => {
       const requests: string[] = [];
       const refused: unknown[] = [];
       const reader = Agent.create({
+        answerLayer: false,
         artifacts: store,
         model: 'mock',
         provider: mock({

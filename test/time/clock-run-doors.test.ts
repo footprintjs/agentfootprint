@@ -152,7 +152,7 @@ describe("a resume's differing time is recorded through BOTH pause shapes", () =
 
   async function askedThenResumed(time?: { now?: string; zone?: string }) {
     const agent = agentWith(script, (b) =>
-      b.tool(searchLogs()).inputsLayer().time({ zone: 'UTC' }),
+      b.tool(searchLogs()).inputsLayer().time({ zone: 'UTC' }).answerLayer(false),
     );
     const paused = await agent.run({ message: 'errors?', time: { now: NOW } });
     if (!isInputPause(paused)) throw new Error('expected the argument ask');

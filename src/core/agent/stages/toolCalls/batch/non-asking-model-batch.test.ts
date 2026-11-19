@@ -43,7 +43,7 @@ for (const armed of [false, true]) {
           },
         }),
       );
-      const agent = builder.build();
+      const agent = builder.answerLayer({ standingLine: false }).build();
       await expect(agent.run('go')).resolves.toBe('done');
       expect(ran).toBe(expected);
       expect(JSON.stringify(requests[1]!.messages)).not.toContain('Tool batch refusal');

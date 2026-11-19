@@ -154,7 +154,10 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
       const recorder = recordRun(agent);
       try {
         const result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
-        if (windowed) expect(result).toBe('Read the shelf.');
+        if (windowed)
+          expect(result).toBe(
+            'Read the shelf.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
+          );
         else expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;

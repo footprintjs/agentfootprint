@@ -999,6 +999,7 @@ describe('BOUNDARY — the limits block marks an item’s calls the same way', (
         }),
       )
       .limitsTravelWithTheAnswer()
+      .answerLayer({ standingLine: false })
       .build();
 
   it('a named call’s items carry its words; an unnamed call’s items stay as they were', async () => {

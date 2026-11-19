@@ -67,6 +67,7 @@ function makeAgent(
     },
   });
   const agent = Agent.create({
+    answerLayer: false,
     provider: mock({
       respond: (request) => {
         const results = request.messages.filter((message) => message.role === 'tool').length;

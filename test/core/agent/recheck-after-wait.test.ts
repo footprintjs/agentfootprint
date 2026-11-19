@@ -109,7 +109,7 @@ describe('a check-in is approved, and the permission checker now says no', () =>
     recorder.stop();
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     expect(toolResultOf(after)).toContain('permission denied');
     // The checker's answer after the wait is on the record, marked as a second asking.
@@ -181,7 +181,7 @@ describe('a middleware ask is approved, and the same link now says no', () => {
     recorder.stop();
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     expect(toolResultOf(agent)).toContain('the policy changed');
     // In order: the link's question, the person's yes, the link's no on the second asking.
@@ -219,7 +219,7 @@ describe('a middleware ask is approved, and the same link now asks something els
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     );
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     expect(toolResultOf(after)).toContain("the current policy requires a person's answer again");
     expect(

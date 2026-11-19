@@ -39,7 +39,9 @@ async function runReadSkill(args: Record<string, unknown>, options: RunOptions =
     model: 'mock',
     maxIterations: 3,
     ...(options.mode !== undefined && { toolArgValidation: options.mode }),
-  }).system('Follow the selected procedure.');
+  })
+    .system('Follow the selected procedure.')
+    .answerLayer({ standingLine: false });
   if (options.graph) {
     const [alpha, billing, delta] = catalog();
     builder.skillGraph(

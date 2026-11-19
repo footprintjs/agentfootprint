@@ -192,6 +192,7 @@ describe('integration: through the real loop', () => {
     const statuses: unknown[] = [];
     let calls = 0;
     const agent = Agent.create({
+      answerLayer: false,
       provider: mock({
         respond: (req) => {
           requests.push(req);

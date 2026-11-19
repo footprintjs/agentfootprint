@@ -156,6 +156,8 @@ function build(
   let builder = Agent.create({
     provider,
     model: 'mock',
+    // The pinned settlement record is the control with the answer layer off.
+    answerLayer: false,
     ...(kind === 'consent' && { credentials }),
   }).tools(tools);
   if (kind === 'ask') {
@@ -992,6 +994,7 @@ function precondition(opts: {
       ],
     }),
     model: 'mock',
+    answerLayer: false,
     ...(opts.checker !== undefined && { permissionChecker: opts.checker }),
   })
     .tools(['collect_input', 'verify_identity', 'transfer_funds'].map(tool))
@@ -1181,7 +1184,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       },
     };
     const processWith = (provider: ReturnType<typeof perInstance>) =>
-      Agent.create({ provider, model: 'mock', permissionChecker: checker })
+      Agent.create({ provider, model: 'mock', permissionChecker: checker, answerLayer: false })
         .tools(
           ['collect_input', 'verify_identity', 'lookup', 'transfer_funds'].map((name) =>
             defineTool({
@@ -1326,6 +1329,8 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
       provider,
       model: 'mock',
       maxIterations: 8,
+      // Compare the findings offer and window record without the answer layer.
+      answerLayer: false,
       ...(window === 'evicting' && { keepLastToolResults: false as const }),
     })
       .tools([look, collect])

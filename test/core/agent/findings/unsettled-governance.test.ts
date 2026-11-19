@@ -217,6 +217,7 @@ describe('unsettled by absence — the review’s leak probe: after-tool governa
         cannotCover: HBA_MISS.cannotCover,
         tryInstead: HBA_MISS.tryInstead,
         iteration: 2,
+        turn: 1,
       });
       expect(JSON.stringify(wire)).not.toContain(WITHHELD);
     });

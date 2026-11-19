@@ -183,7 +183,12 @@ describe('a result that declares its period — one verdict per call', () => {
         call('c1', 'backup_runs', { host: 'stale' }),
         answer('No failed backups in the last hour.'),
       ]);
-      const agent = Agent.create({ provider: m.provider as never, model: 'm', reactMode })
+      const agent = Agent.create({
+        answerLayer: false,
+        provider: m.provider as never,
+        model: 'm',
+        reactMode,
+      })
         .tool(backupRuns())
         .resultsLayer()
         .build();
@@ -348,6 +353,7 @@ describe('a result that declares its period — one verdict per call', () => {
 describe('a tool that declares a period argument (ToolPeriod) — silence is recorded as silence', () => {
   it('a bare result: `undeclared`, joined to the inputs layer’s row for the same call', async () => {
     const agent = Agent.create({
+      answerLayer: false,
       provider: scripted([call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')])
         .provider as never,
       model: 'm',
@@ -413,6 +419,7 @@ describe('without the layer — a declared period is recorded, never judged in s
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       const agent = Agent.create({
+        answerLayer: false,
         provider: scripted([
           call('c1', 'backup_runs', { host: 'stale' }),
           call('c2', 'backup_runs', { host: 'stale' }),
@@ -447,6 +454,7 @@ describe('without the layer — a declared period is recorded, never judged in s
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       const agent = Agent.create({
+        answerLayer: false,
         provider: scripted([
           call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
           call('c2', 'search_logs', { service: 'payments', window: '1h' }),
@@ -710,6 +718,7 @@ describe('a call id is not a call — each batch is judged once per run, whateve
 describe('the person reads it — only under .limitsTravelWithTheAnswer()', () => {
   it('a prose answer: one Period line per declaring call, as declared', async () => {
     const agent = Agent.create({
+      answerLayer: false,
       provider: scripted([call('c1', 'backup_runs', { host: 'stale' }), answer('No failures.')])
         .provider as never,
       model: 'm',
@@ -753,6 +762,7 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
 
   it('nothing declared a period: the block is the bytes it always was', async () => {
     const agent = Agent.create({
+      answerLayer: false,
       provider: scripted([call('c1', 'backup_runs', { host: 'silent' }), answer('No failures.')])
         .provider as never,
       model: 'm',
@@ -889,6 +899,7 @@ describe('security: the verdict travels as a word, never as the instants', () =>
 describe('byte identity: nothing declared, nothing mounted', () => {
   it('no ToolPeriod and no .resultsLayer(): no sf-results, no run constant, no row', async () => {
     const agent = Agent.create({
+      answerLayer: false,
       provider: scripted([call('c1', 'backup_runs', { host: 'silent' }), answer('none')])
         .provider as never,
       model: 'm',

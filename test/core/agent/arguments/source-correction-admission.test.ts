@@ -198,7 +198,9 @@ describe('source correction settles only at the actual native batch barrier', ()
       { findings: true },
     );
     try {
-      expect(await f.agent.run(QUESTION)).toBe('Finished synthetic fixture.');
+      expect(await f.agent.run(QUESTION)).toBe(
+        'Finished synthetic fixture.\n\n---\n\nNot sure — a call was refused.',
+      );
       expect(f.requests).toHaveLength(2);
       expect(f.ran).toEqual([]);
       expect(argumentsOf(f.agent, 'malformed')).toEqual([

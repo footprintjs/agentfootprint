@@ -192,7 +192,12 @@ describe('mounted retained-source recovery after strict findings refusal', () =>
           );
         },
       });
-      const builder = Agent.create({ provider, model: 'mock', artifacts: store })
+      const builder = Agent.create({
+        answerLayer: false,
+        provider,
+        model: 'mock',
+        artifacts: store,
+      })
         .tools([source, consumer])
         .findings()
         .window(slidingWindow({ keepRecentTurns: 1 }));

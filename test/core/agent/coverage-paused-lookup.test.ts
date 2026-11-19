@@ -162,6 +162,7 @@ function build(
     },
   };
   let builder = Agent.create({
+    answerLayer: false,
     provider,
     model: 'mock',
     maxIterations: 6,
@@ -435,6 +436,7 @@ describe('integration: a raising lookup files what a returning lookup files', ()
 /** One tool, one call, then the answer — and every `tools.absent` it emits. */
 function oneTool(tool: ReturnType<typeof defineTool>) {
   const agent = Agent.create({
+    answerLayer: false,
     provider: mock({ replies: [call('c1', tool.schema.name), answer] }),
     model: 'mock',
     maxIterations: 6,
@@ -571,6 +573,7 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       execute: async (_args, ctx) => ctx.tools?.call('inner_lookup', {}),
     });
     const agent = Agent.create({
+      answerLayer: false,
       provider: mock({ replies: [call('c1', 'outer_proc'), answer] }),
       model: 'mock',
       maxIterations: 6,
@@ -643,6 +646,7 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
     ],
   ])('%s: filed once, under the outer call', async (_label, toolsOf) => {
     const agent = Agent.create({
+      answerLayer: false,
       provider: mock({ replies: [call('c1', 'outer'), answer] }),
       model: 'mock',
       maxIterations: 6,
@@ -721,6 +725,7 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         execute: () => requestInput({ ...QUESTION, absence: absent(DECL) }),
       });
       const agent = Agent.create({
+        answerLayer: false,
         provider: mock({ replies: [...BATCH_SCRIPT] }),
         model: 'mock',
         maxIterations: 8,
@@ -918,6 +923,7 @@ async function failedRaiseRecord(
 ): Promise<Record<string, unknown>> {
   const eventTypes: string[] = [];
   const agent = Agent.create({
+    answerLayer: false,
     provider: mock({ replies: [...replies] }),
     model: 'mock',
     maxIterations: 6,

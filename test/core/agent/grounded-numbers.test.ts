@@ -138,6 +138,7 @@ const build = (
     gate?: { posture?: 'assist' | 'guard' | 'rails'; nudge?: boolean };
     tools?: readonly (typeof exportRows)[];
     placement?: boolean;
+    standingLine?: false;
     reactMode?: 'classic' | 'dynamic' | 'dynamic-grouped';
   } = {},
 ) => {
@@ -155,6 +156,7 @@ const build = (
   }).system('You are a storage engineer.');
   for (const tool of opts.tools ?? [exportRows, getSizes, compute]) builder = builder.tool(tool);
   if (opts.gate !== undefined) builder = builder.namesAndNumbersFromEvidence(opts.gate);
+  if (opts.standingLine === false) builder.answerLayer({ standingLine: false });
   const agent = builder.watch(caps.recorder).build();
   return { agent, requests, ...caps };
 };
@@ -207,7 +209,9 @@ describe('functional: the staged-refs nudge', () => {
     });
     const out = await agent.run({ message: 'total?' }, { sessionId: 'observe' });
 
-    expect(out).toBe(HEAD_MATH_ANSWER);
+    expect(out).toBe(
+      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`,
+    );
     expect(of('agentfootprint.agent.grounding_nudged')).toHaveLength(1);
     const checks = of('agentfootprint.agent.evidence_checked');
     expect(checks.map((c) => c.action)).toEqual(['flagged']);
@@ -678,7 +682,9 @@ describe('integration: revise teaches the compute route', () => {
 
     // Revise is not refuse: the answer ships, with the record showing both
     // attempts and the same values surviving each.
-    expect(out).toBe(HEAD_MATH_ANSWER);
+    expect(out).toBe(
+      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result, even after one revision.`,
+    );
     const checks = of('agentfootprint.agent.evidence_checked');
     expect(checks.map((c) => c.action)).toEqual(['revision-asked', 'flagged']);
     expect(checks[0]!.afterRevision).toBe(false);
@@ -751,7 +757,7 @@ describe('regression: absent means today, proven on prompts AND records', () => 
   const SCRIPT: Script = [callTool('t1', 'export_rows'), answer(HEAD_MATH_ANSWER)];
 
   const runWith = async (gate?: { posture?: 'assist'; nudge?: boolean }) => {
-    const { agent, requests, all } = build(SCRIPT, gate === undefined ? {} : { gate });
+    const { agent, requests, all } = build(SCRIPT, { gate, standingLine: false });
     const out = await agent.run({ message: 'total?' }, { sessionId: 'zero-delta' });
     return { out, requests, all, history: historyOf(agent) };
   };
