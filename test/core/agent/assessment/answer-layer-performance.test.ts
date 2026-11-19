@@ -100,7 +100,7 @@ describe('performance — the answer layer, measured', () => {
   it.each([5, 20])(
     'folds the committed record once per answer after %i dispatching iterations',
     async (calls) => {
-      const fold = vi.spyOn(assessment, 'assessAnswer');
+      const fold = vi.spyOn(assessment, 'assessLive');
       const stage = STAGE_IDS.ASSESS_ANSWER;
       try {
         const unarmed = await run(false, calls);

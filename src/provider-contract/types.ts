@@ -10,7 +10,10 @@
  */
 
 import type { ContextRole, ContextSource } from '../events/types.js';
+import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+import type { ToolCallEntry } from './innerCalls.js';
+export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
@@ -46,6 +49,8 @@ export interface LLMMessage {
    * Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
    */
   readonly outcome?: 'refused' | 'failed';
+  /** Tool-only status of an admitted return. Never derived from `content` or sent to a provider. */
+  readonly reportedStatus?: ReportedToolStatus;
   /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -785,29 +790,6 @@ export interface LLMProvider {
 }
 
 // ─── Permission Engine ──────────────────────────────────────────────
-
-/**
- * One entry in the in-flight tool-call sequence delivered to
- * `PermissionChecker.check()` since v2.12. Lets sequence-aware
- * policies (exfil chain detection, idempotency limits, cost guards)
- * inspect what has already been dispatched: the model's calls, and each
- * call a tool made through `ctx.tools.call` right after its outer call.
- *
- * Derived from `scope.history` at check time — single source of truth,
- * survives `agent.resumeOnError(checkpoint)` correctly.
- */
-export interface ToolCallEntry {
-  /** Tool name dispatched. */
-  readonly name: string;
-  /** Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view. */
-  readonly args: Readonly<Record<string, unknown>> | undefined;
-  /** ReAct iteration the call was dispatched on. */
-  readonly iteration: number;
-  /** `'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin. */
-  readonly providerId?: string;
-  /** `true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own. */
-  readonly inner?: true;
-}
 
 /**
  * What a tool DECLARES it touches (9.11.0).

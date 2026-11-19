@@ -1049,7 +1049,7 @@ type in `events/payloads.ts`, emitted once per row by the Record stage and by th
 
 ### 5.4 The checkpoint door, the restore, and who reads the rows
 
-- **Door.** `core/runCheckpoint.ts` · `ledgerRowIsWellFormed` gains `case 'argument'` in the same
+- **Door.** `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` gains `case 'argument'` in the same
   change: identity strings (`toolCallId`, `toolName`, `argument`), numeric `iteration` and `turn`,
   either a `source` or an `asked` in its vocabulary, and every enum field checked. It accepts `turn`
   on every kind. The judge rows were refused until 9.110.0 — the precedent for never shipping a row

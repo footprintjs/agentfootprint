@@ -122,6 +122,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'core/agent/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
       'core/agent/placedTickets.ts', // issuedTicketsOf reads the native placement receipt
+      'core/agent/recordedCalls.ts', // recorded call addresses and attribution across the two readers
       'core/agent/scripts/attachment.ts', // scriptsBlock + recordedScripts — the ONE composer of the attached scripts, and the ONE reader of `turn_end.scripts`
       'core/agent/scripts/match.ts', // recordedBlocks — the ONE reader of `evidence_checked.scripts`, the checkpoint door's rule
       'core/agent/scripts/rows.ts', // scriptRowsOfTurn + scriptRowIsWellFormed — the ONE reader of a turn's script rows, and the row rule
@@ -132,6 +133,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'redaction/marker.ts', // servedUnderPolicy / isPlaceholder — the ONE sign a record was served under a policy, a leaf
       'semantics/coverage/answer.ts', // COVERAGE_BLOCK_HEADING / ASSUMED_BLOCK_HEADING — the appended section's headings
       'semantics/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
+      'semantics/toolOutcome.ts', // reportedStatusOf and callOutcomeOf share the zero-import settlement vocabulary
       'semantics/toolRan.ts', // toolRanOf — the ONE reader of "did this call's tool run"
     ]);
   });

@@ -7,7 +7,7 @@
  *
  * Second named migration (tool-outcome marker): a committed tool message whose
  * call did not run carries `outcome: 'refused'` as its last field
- * (`execution/callOutcome.ts`). In this scenario that is the unknown tool
+ * (`semantics/toolOutcome.ts`). In this scenario that is the unknown tool
  * (`c2`) and the call refused for invalid arguments (`c3`), wherever a history
  * carries them. Nothing else changes.
  */

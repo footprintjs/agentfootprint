@@ -38,6 +38,7 @@ import type {
   ClaimUnsettledRow,
   GroundedRow,
   ScriptShownRow,
+  StepSkippedRow,
   StepsUnfinishedRow,
 } from '../assessment/witness.js';
 import type { IntegrityFindingRow } from '../../../integrity/finding/row.js';
@@ -483,12 +484,13 @@ export type FindingsRow =
   // The results layer's verdict on one call's period (honesty layer 3, step
   // 7b) — filed by the `sf-results` subflow at the loop head, not by the model.
   | PeriodRow
-  // The answer layer's committed witnesses (honesty layer 4) — two verdicts
-  // the Route decider computes that were events only: the evidence gate's
-  // clean pass, and an answer given before its declared steps finished.
+  // The answer layer's committed witnesses (honesty layer 4): the evidence
+  // gate's clean pass, an answer before its declared steps finished, and an
+  // accepted skip that moved past a declared step.
   // Filed only while the answer layer is armed (`assessment/witness.ts`).
   | GroundedRow
   | StepsUnfinishedRow
+  | StepSkippedRow
   // One filed integrity finding, and a `.claims()` field no tool settled — filed
   // only while the answer layer is armed, so the answer's standing can read them.
   | IntegrityFindingRow

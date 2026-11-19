@@ -126,6 +126,7 @@ export interface ScopeRun {
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
   /** Whether the run's rule keeps `name` out of its records. */
   keepsOut(name: string): boolean;
+  retainStateValue(name: string, value: unknown): unknown;
 }
 
 /** Every scope a run's executor made → that run, and the stage it was made for. Weak: a scope dies with its stage. */
@@ -241,6 +242,7 @@ export function createRunRedaction(args: {
     captureLate(stageId) {
       return lateEmitter(dispatcher, serving, Object.freeze({ ...getRunContext() }), stageId);
     },
+    retainStateValue: (name, value) => decided.rule.retain([name], value),
     keepsOut(name) {
       return privateRun.hasRecordPolicy(decided.rule) && decided.rule.isKeyRedacted(name);
     },
@@ -413,6 +415,7 @@ export function outsideRunFor(declaration: RedactionCoverage): OutsideRun {
         real: () => undefined,
         noteWrite: () => undefined,
         keepsOut: () => true,
+        retainStateValue: () => undefined,
       },
     });
   }
@@ -426,6 +429,7 @@ export function outsideRunFor(declaration: RedactionCoverage): OutsideRun {
       real: () => undefined,
       noteWrite: () => undefined,
       keepsOut: (name: string) => rule.isKeyRedacted(name),
+      retainStateValue: (name: string, value: unknown) => rule.retain([name], value),
     },
   });
 }
@@ -557,6 +561,11 @@ export function setEventSource(scope: SetValueScope, key: string, value: unknown
  */
 export function runKeepsOut(scope: object, name: string): boolean {
   return scopeRuns.get(scope)?.serving?.run.keepsOut(name) ?? true;
+}
+
+/** The native rule’s retained form of a state key on this exact scope. */
+export function retainedStateValue(scope: object, name: string, value: unknown): unknown {
+  return scopeRuns.get(scope)?.serving?.run.retainStateValue(name, value);
 }
 
 /**

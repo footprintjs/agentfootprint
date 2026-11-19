@@ -288,17 +288,24 @@ export function accountPointers(account: AnswerAccount): RecordPointer[] {
 function emptinessLeaf(
   account: AnswerAccount,
   declarations: AnswerAccountDeclarations,
-  toolCallId: unknown,
-  where: 'event' | 'history',
+  pointer: Extract<RecordPointer, { kind: 'event' | 'history' }>,
 ): AnswerAccountShownLeaf {
+  // The count belongs to this result address. The fact may point to a status
+  // or tool name at that address, so compare the record position, not the leaf path.
+  const ownsAddress = (candidate: RecordPointer): boolean =>
+    pointer.kind === 'event'
+      ? candidate.kind === 'event' &&
+        candidate.type === pointer.type &&
+        candidate.index === pointer.index
+      : candidate.kind === 'history' && candidate.index === pointer.index;
   const call =
-    where === 'event'
-      ? account.facts.calls.find((c) => c.toolCallId === toolCallId)
-      : account.facts.inView.find((c) => c.toolCallId === toolCallId) ??
-        account.facts.beforePause.find((c) => c.toolCallId === toolCallId);
+    pointer.kind === 'event'
+      ? account.facts.calls.find((c) => c.pointers.some(ownsAddress))
+      : account.facts.inView.find((c) => c.pointers.some(ownsAddress)) ??
+        account.facts.beforePause.find((c) => c.pointers?.some(ownsAddress));
   if (call === undefined || call.rows === undefined) return { withheld: 'not-shown-here' };
   const base =
-    where === 'history'
+    pointer.kind === 'history'
       ? '/content'
       : 'view' in call && call.view !== undefined && call.view !== 'result'
       ? '/modelResult'
@@ -363,8 +370,7 @@ export function showLeaves(
             } as Parameters<typeof eventBelongsToRun>[1],
           );
         if (!own) out = { withheld: 'foreign' };
-        else if (p.path === '#emptiness')
-          out = emptinessLeaf(account, declarations, event.payload.toolCallId, 'event');
+        else if (p.path === '#emptiness') out = emptinessLeaf(account, declarations, p);
         else if (p.path.startsWith('#meta/')) out = leaf(meta[p.path.slice('#meta/'.length)]);
         else out = leaf(resolvePointer(event.payload, p.path));
       }
@@ -375,7 +381,7 @@ export function showLeaves(
       out = !isRecord(message)
         ? { withheld: 'not-found' }
         : p.path === '#emptiness'
-        ? emptinessLeaf(account, declarations, message.toolCallId, 'history')
+        ? emptinessLeaf(account, declarations, p)
         : leaf(resolvePointer(message, p.path));
     } else {
       out = leaf(declarationValue(declarations, p.field));

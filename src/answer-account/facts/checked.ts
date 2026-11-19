@@ -7,8 +7,7 @@
  * A resumed leg never says "did not run any tools": the calls answered before
  * the pause are read from the committed state this record holds
  * (`pausedLeg.ts` · `readPausedLeg`) — each with what its tool declared, from
- * its `coverageDeclared` rows — and, when the record holds no committed
- * history, said to be out of this record.
+ * its `coverageDeclared` rows. A mismatched history is reported as unreadable.
  */
 
 import { chip, MAX_VAR_CHARS, n, v } from '../render.js';
@@ -24,7 +23,7 @@ import {
   type CoverageSectionKey,
 } from './calls.js';
 import { at, FACT_TEXT_CHARS, historyAt, takeItem, type ReadContext } from './common.js';
-import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
+import { unmatchedBeforePause, type BeforePauseCall, type PausedLegRead } from './pausedLeg.js';
 
 /** Calls listed per row before folding. */
 export const MAX_LISTED_CALLS = 5;
@@ -460,7 +459,11 @@ export function readCheckedRows(
         ]
       : notCheckedBlock(ctx, declaredOf(c)),
   );
-  if (ctx.resumedLeg && pausedLeg.stateHeld) {
+  if (pausedLeg.historyUnmatched) {
+    const unmatched = unmatchedBeforePause(ctx);
+    checked.push(unmatched);
+    notChecked.push(unmatched);
+  } else if (ctx.resumedLeg && pausedLeg.stateHeld) {
     // The part before the pause, read from the committed state this record holds.
     const before = pausedLeg.calls;
     const shown = before.slice(0, MAX_LISTED_CALLS);

@@ -1,7 +1,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { StepPointer, StepPlan } from '../../../../../../injection-engine/skillSteps.js';
-import type { DispatchSettlement } from '../../execution/callOutcome.js';
+import type { DispatchSettlement } from '../../../../../../semantics/toolOutcome.js';
 
 /** Explicit callback contract for existing steps operations. */
 export interface ToolStepsOperations {

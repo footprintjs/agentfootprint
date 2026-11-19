@@ -42,8 +42,11 @@
  * A row that names no call, a call whose tool's name the record does not
  * hold, and every entry of a list (a conflict's readings, a contingent value's
  * carriers, an answer check's tools) that names no call — beside the entries
- * that do — is COUNTED in `unnamed`, never dropped and never guessed. Only a
- * known call id is said once.
+ * that do — is COUNTED in `unnamed`, never dropped and never guessed. A
+ * result is identified by its place in history, even when a provider id
+ * recurs. A committed row may only be joined when it identifies a single
+ * compatible occurrence. Unplaced evidence keeps its pointer independently
+ * of the calls the record establishes.
  *
  * ## A list is read by index, never through its own code
  *
@@ -60,6 +63,16 @@
  */
 
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
+import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
+import {
+  historyCallResolver,
+  readHistoryCalls,
+  uniqueHistoryProposal,
+  unlandedCallKey,
+  type HistoryCall,
+} from '../recordedCalls.js';
+import { resolveArgumentHistory, waitingArgumentIteration } from './argumentRows.js';
+import { unfinishedCallStatus } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -89,7 +102,14 @@ export function rowList(value: unknown): OwnList | undefined {
 interface CallRef {
   readonly id?: string;
   readonly name?: string;
+  readonly index?: number;
+  readonly thisTurn?: true;
+  readonly argumentRow?: true;
+  readonly predispatch?: true;
+  readonly unlandedKey?: string;
   readonly count?: number;
+  readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;
+  readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
 }
 
 /** The entries of a list past the bound, as one counted anonymous reference — or none. */
@@ -98,14 +118,24 @@ const unreadRefs = (list: OwnList): CallRef[] => (list.unread > 0 ? [{ count: li
 /** What the projection reads: the committed state, and this turn's results (for a tool-name join). */
 export interface SourceRead {
   readonly state: Readonly<Record<string, unknown>>;
-  readonly turnResults: readonly { readonly toolCallId?: string; readonly toolName?: string }[];
+  readonly turnResults: readonly {
+    readonly index: number;
+    readonly toolCallId?: string;
+    readonly toolName?: string;
+  }[];
+  readonly historyCalls?: readonly HistoryCall[];
+  readonly turnBegins?: number;
+  readonly declarationAddresses?: ReadonlyMap<number, number> | undefined;
 }
+
+const arrayEntry = (rows: unknown, index: number): unknown =>
+  Array.isArray(rows) && Number.isSafeInteger(index) && index >= 0
+    ? Object.getOwnPropertyDescriptor(rows, String(index))?.value
+    : undefined;
 
 /** The row an RFC 6901 pointer's first segment indexes, in an array-valued key. */
 function rowAt(state: Readonly<Record<string, unknown>>, key: string, path: string): unknown {
-  const rows = state[key];
-  const index = Number(path.split('/')[1]);
-  return Array.isArray(rows) && Number.isInteger(index) ? rows[index] : undefined;
+  return arrayEntry(state[key], Number(path.split('/')[1]));
 }
 
 /**
@@ -120,8 +150,10 @@ function refsIn(value: unknown): CallRef[] {
   const list = rowList(value);
   if (list === undefined) return [];
   const refs = list.entries.map((entry): CallRef => {
-    const id = isRecord(entry) ? str(entry.toolCallId) : undefined;
-    return id === undefined ? {} : { id };
+    if (!isRecord(entry)) return {};
+    const id = str(Object.getOwnPropertyDescriptor(entry, 'toolCallId')?.value);
+    const name = str(Object.getOwnPropertyDescriptor(entry, 'toolName')?.value);
+    return id === undefined ? {} : { id, ...(name !== undefined && { name }) };
   });
   return [...refs, ...unreadRefs(list)];
 }
@@ -138,9 +170,18 @@ function callsOfRow(reason: AssessmentReason, row: unknown, read: SourceRead): C
   }
   const id = str(row.toolCallId);
   const name = str(row.toolName);
+  const waiting = row.kind === 'argument' ? waitingArgumentIteration(read.state) : undefined;
   return id === undefined && name === undefined
     ? []
-    : [{ ...(id !== undefined && { id }), ...(name !== undefined && { name }) }];
+    : [
+        {
+          ...(id !== undefined && { id, unlandedKey: unlandedCallKey(row) }),
+          ...(name !== undefined && { name }),
+          thisTurn: true,
+          ...(row.kind === 'argument' && { argumentRow: true }),
+          ...(waiting !== undefined && row.iteration === waiting && { predispatch: true }),
+        },
+      ];
 }
 
 /**
@@ -160,7 +201,11 @@ function callsOfCheck(check: unknown, read: SourceRead): CallRef[] {
     const calls = read.turnResults.filter((r) => r.toolName === name);
     return calls.length === 0
       ? [{ name }]
-      : calls.map((r) => ({ ...(r.toolCallId !== undefined && { id: r.toolCallId }), name }));
+      : calls.map((r) => ({
+          index: r.index,
+          ...(r.toolCallId !== undefined && { id: r.toolCallId }),
+          name,
+        }));
   });
   return [...matched, ...malformed, ...unreadRefs(list)];
 }
@@ -170,53 +215,43 @@ function callsOfWitness(
   reason: AssessmentReason,
   w: AssessmentPointer,
   read: SourceRead,
+  callAt: (index: number) => HistoryCall | undefined,
 ): CallRef[] {
   if (w.kind === 'history') {
-    const message = Array.isArray(read.state.history) ? read.state.history[w.index] : undefined;
-    const name = isRecord(message) ? str(message.toolName) : undefined;
-    return w.toolCallId === undefined && name === undefined
-      ? []
-      : [
-          {
-            ...(w.toolCallId !== undefined && { id: w.toolCallId }),
-            ...(name !== undefined && { name }),
-          },
-        ];
+    const call = callAt(w.index);
+    if (call === undefined) return [];
+    const outcome = reason === 'call-not-completed' ? recordedCallOutcome(call.message) : undefined;
+    const reportedStatus =
+      reason === 'work-not-finished' ? unfinishedCallStatus(call.message) : undefined;
+    const id = str(call.providerId);
+    const name =
+      str(call.toolName) ??
+      (outcome === undefined && reportedStatus === undefined
+        ? str(call.proposal?.call.name)
+        : undefined);
+    return [
+      {
+        index: call.index,
+        ...(id !== undefined && { id }),
+        ...(name !== undefined && { name }),
+        ...(outcome !== undefined && { outcome }),
+        ...(reportedStatus !== undefined && { reportedStatus }),
+      },
+    ];
   }
   if (w.key === 'answerValidation') {
     // `/checks/<index>` — the check row the reason fired on.
     const [, list, at] = w.path.split('/');
     const report = read.state.answerValidation;
     const checks = isRecord(report) && list === 'checks' ? report.checks : undefined;
-    return Array.isArray(checks) ? callsOfCheck(checks[Number(at)], read) : [];
+    return callsOfCheck(arrayEntry(checks, Number(at)), read);
   }
-  return callsOfRow(reason, rowAt(read.state, w.key, w.path), read);
-}
-
-/**
- * Every call id → its tool's registered name, as `history` holds it (a result,
- * else the call). `history` is read by index over its own length — never
- * through its iterator, like every reader of it in the fold — and a request's
- * `toolCalls` through `rowList`.
- */
-function toolNamesOf(state: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
-  const names = new Map<string, string>();
-  const history: readonly unknown[] = Array.isArray(state.history) ? state.history : [];
-  for (let index = 0; index < history.length; index++) {
-    const m = history[index];
-    if (!isRecord(m)) continue;
-    const id = str(m.toolCallId);
-    const name = str(m.toolName);
-    if (m.role === 'tool' && id !== undefined && name !== undefined) names.set(id, name);
-    for (const call of rowList(m.toolCalls)?.entries ?? []) {
-      const callId = isRecord(call) ? str(call.id) : undefined;
-      const callName = isRecord(call) ? str(call.name) : undefined;
-      if (callId !== undefined && callName !== undefined && !names.has(callId)) {
-        names.set(callId, callName);
-      }
-    }
-  }
-  return names;
+  const refs = callsOfRow(reason, rowAt(read.state, w.key, w.path), read);
+  const index =
+    w.key === 'coverageDeclared'
+      ? read.declarationAddresses?.get(Number(w.path.split('/')[1]))
+      : undefined;
+  return index !== undefined ? refs.map((ref) => ({ ...ref, index })) : refs;
 }
 
 /**
@@ -238,34 +273,98 @@ export function reasonSourceOf(
   read: SourceRead,
 ): AssessmentReasonSource {
   if (kind !== 'calls') return { kind };
-  let names: ReadonlyMap<string, string> | undefined;
-  const nameOf = (id: string): string | undefined => (names ??= toolNamesOf(read.state)).get(id);
-  const calls: { toolCallId: string; toolName: string }[] = [];
-  const listed = new Set<string>();
-  // A call the record names by id but not by tool — counted once per id.
-  const nameless = new Set<string>();
-  // A reference that names no call — a row that names none, or a list entry with no
-  // call id beside entries that have one — counted once each, never merged (the
-  // entries of a list past the bound, `count` of them).
-  let anonymous = 0;
+  const history: readonly unknown[] = Array.isArray(read.state.history) ? read.state.history : [];
+  const occurrences = read.historyCalls ?? readHistoryCalls(history);
+  const begins = read.turnBegins ?? -1;
+  let byIndex: ReadonlyMap<number, HistoryCall> | undefined;
+  const callAt = (index: number): HistoryCall | undefined =>
+    (byIndex ??= new Map(occurrences.map((call) => [call.index, call]))).get(index);
+  let whole: ReturnType<typeof historyCallResolver> | undefined;
+  let current: ReturnType<typeof historyCallResolver> | undefined;
+  let argument: ReturnType<typeof resolveArgumentHistory> | undefined;
+  const currentCalls = () => occurrences.filter((call) => call.index > begins);
+  const resolve = (id: string, ref: CallRef) => {
+    if (ref.argumentRow) {
+      return (argument ??= resolveArgumentHistory(read.state, currentCalls(), history, begins))(
+        id,
+        ref.name,
+      );
+    }
+    return (
+      ref.thisTurn && begins >= 0
+        ? (current ??= historyCallResolver(currentCalls()))
+        : (whole ??= historyCallResolver(occurrences))
+    )(id, ref.name);
+  };
+  const calls: Extract<AssessmentReasonSource, { kind: 'calls' }>['calls'][number][] = [];
+  const seen = new Set<number | string>();
+  const unplaced: AssessmentPointer[] = [];
+  let unnamed = 0;
   for (const w of witness) {
-    const refs = callsOfWitness(reason, w, read);
-    if (refs.length === 0) anonymous += 1;
+    const refs = callsOfWitness(reason, w, read, callAt);
+    const declaration = w.kind === 'state' && w.key === 'coverageDeclared';
+    if (declaration && refs.length === 0) {
+      unplaced.push(w);
+      continue;
+    }
+    if (refs.length === 0) unnamed += 1;
     for (const ref of refs) {
-      if (ref.id === undefined) {
-        anonymous += ref.count ?? 1;
+      const found =
+        ref.index === undefined && ref.id !== undefined && (!ref.predispatch || ref.argumentRow)
+          ? resolve(ref.id, ref)
+          : undefined;
+      if (
+        (declaration && ref.index === undefined && found?.kind !== 'matched') ||
+        (ref.thisTurn && found?.kind === 'ambiguous')
+      ) {
+        unplaced.push(w);
         continue;
       }
-      if (listed.has(ref.id) || nameless.has(ref.id)) continue;
-      const toolName = ref.name ?? nameOf(ref.id);
-      if (toolName === undefined) {
-        nameless.add(ref.id);
+      if (found?.kind === 'ambiguous') {
+        unnamed += 1;
         continue;
       }
-      listed.add(ref.id);
-      calls.push({ toolCallId: ref.id, toolName });
+      const call = !ref.predispatch && found?.kind === 'matched' ? found.call : undefined;
+      const key =
+        ref.index ??
+        call?.index ??
+        (ref.id === undefined
+          ? undefined
+          : ref.unlandedKey ?? unlandedCallKey({ toolCallId: ref.id }));
+      if (key !== undefined) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      const proposal =
+        !ref.predispatch &&
+        found?.kind === 'missing' &&
+        ref.id !== undefined &&
+        ref.name === undefined
+          ? uniqueHistoryProposal(history, ref.id)
+          : undefined;
+      const toolName =
+        ref.name ??
+        str(call?.toolName) ??
+        str(call?.proposal?.call.name) ??
+        (proposal !== undefined && (!ref.thisTurn || proposal.index > begins)
+          ? str(proposal.call.name)
+          : undefined);
+      if (ref.id === undefined || toolName === undefined) {
+        unnamed += ref.count ?? 1;
+        continue;
+      }
+      calls.push({
+        toolCallId: ref.id,
+        toolName,
+        ...(ref.outcome !== undefined && { outcome: ref.outcome }),
+        ...(ref.reportedStatus !== undefined && { reportedStatus: ref.reportedStatus }),
+      });
     }
   }
-  const unnamed = nameless.size + anonymous;
-  return { kind: 'calls', calls, ...(unnamed > 0 && { unnamed }) };
+  return {
+    kind: 'calls',
+    calls,
+    ...(unnamed > 0 && { unnamed }),
+    ...(unplaced.length > 0 && { unplaced }),
+  };
 }

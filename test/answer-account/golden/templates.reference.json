@@ -974,6 +974,15 @@
   ],
   "source": "library"
  },
+ "beforePause.unmatched@1": {
+  "text": "This record cannot match tool results from before the pause to its final history.",
+  "parts": [
+   {
+    "text": "This record cannot match tool results from before the pause to its final history."
+   }
+  ],
+  "source": "library"
+ },
  "beforePause.keptOut@1": {
   "text": "This record keeps the run's history out, so what came back before the pause cannot be told.",
   "parts": [
@@ -1765,11 +1774,56 @@
   ],
   "source": "library"
  },
+ "howSure.reason.unplacedEvidence@1": {
+  "text": "2 evidence rows could not be matched to a call.",
+  "parts": [
+   {
+    "text": "2 evidence rows could not be matched to a call."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.emptyUndeclared@1": {
   "text": "2 calls returned nothing and did not say what they searched.",
   "parts": [
    {
     "text": "2 calls returned nothing and did not say what they searched."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callNotCompleted@1": {
+  "text": "2 calls did not complete.",
+  "parts": [
+   {
+    "text": "2 calls did not complete."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callRefused@1": {
+  "text": "2 calls were refused.",
+  "parts": [
+   {
+    "text": "2 calls were refused."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callFailed@1": {
+  "text": "2 calls failed.",
+  "parts": [
+   {
+    "text": "2 calls failed."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.workNotFinished@1": {
+  "text": "2 calls reported unfinished work.",
+  "parts": [
+   {
+    "text": "2 calls reported unfinished work."
    }
   ],
   "source": "library"
@@ -1887,6 +1941,15 @@
   "parts": [
    {
     "text": "The answer came before the active skill's declared steps finished."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.stepSkipped@1": {
+  "text": "2 declared steps were skipped.",
+  "parts": [
+   {
+    "text": "2 declared steps were skipped."
    }
   ],
   "source": "library"
@@ -2127,6 +2190,39 @@
    },
    {
     "text": " ended in an error, not a result."
+   }
+  ],
+  "source": "library"
+ },
+ "found.reportedStatus@1": {
+  "text": "lookup_volumes ran. The tool reported a status of status value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran. The tool reported a status of status value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.invalidStatus@1": {
+  "text": "lookup_volumes ran. The result was recorded as invalid.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran. The result was recorded as invalid."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.reportedStatus@1": {
+  "text": "2 calls ran and had a reported result status other than success.",
+  "parts": [
+   {
+    "text": "2 calls ran and had a reported result status other than success."
    }
   ],
   "source": "library"

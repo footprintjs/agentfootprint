@@ -2537,7 +2537,10 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'the assistant turn a continued conversation carries (`agent.checkpoint()` keeps the ' +
       'answer) and every later call of that conversation re-reads it — it says what the ' +
       'record held when this answer was given, never what is true of the world',
-    drivenBy: ['test/core/agent/assessment/answer-layer.test.ts'],
+    drivenBy: [
+      'test/core/agent/assessment/answer-layer.test.ts',
+      'src/core/agent/assessment/callOutcomes.test.ts',
+    ],
     reaches: [
       /^Not sure — window = "2h" was assumed by search_logs's rule, not given by you/m,
       /its value is hidden by the tool's view/,
@@ -2551,6 +2554,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^Consistent with the run's record — 1 check ran and did not fire: argument rules\./m,
       /^Known — the app's answer checks passed this exact answer\.$/m,
       /^Not assessed — no check applied to this answer\.$/m,
+      /Catalog search did not complete \(refused\) and a call failed/,
       /a tool's data does not reach the time the question asked about/,
       /^Consistent with the run's record — 1 check ran and did not fire: the time each result covered\./m,
       /^Ask — the run stopped to ask a question before it could answer\.$/m,
@@ -2558,6 +2562,26 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => {
       const base = { assessment: 'unknown' as const, checked: [] };
       return [
+        standingLineOf(
+          { ...base, standing: 'not-sure', reasons: ['call-not-completed'] },
+          [],
+          false,
+          {
+            sources: new Map([
+              [
+                'call-not-completed',
+                {
+                  kind: 'calls',
+                  calls: [
+                    { toolCallId: 'c1', toolName: 'search_catalog', outcome: 'refused' },
+                    { toolCallId: 'c2', toolName: 'list_items', outcome: 'failed' },
+                  ],
+                },
+              ],
+            ]),
+            displayNames: new Map([['search_catalog', 'Catalog search']]),
+          },
+        ),
         standingLineOf(
           { ...base, standing: 'not-sure', reasons: ['argument-assumed', 'empty-undeclared'] },
           [

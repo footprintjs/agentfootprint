@@ -380,13 +380,11 @@ describe('UNIT — a conflict row stamped with its turn counts in that turn only
     expect(run({ turnNumber: 2, history, findingsLedger: [conflict(1)] }).reasons).toEqual([]);
   });
 
-  it('stamped with this turn: fires; unstamped: the call-id rule (it may over-report)', () => {
+  it('keeps a current stamp and leaves an unstamped repeated reference unresolved', () => {
     expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict(2)] }))).toEqual([
       'sources-conflict',
     ]);
-    expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict()] }))).toEqual([
-      'sources-conflict',
-    ]);
+    expect(reasonsOf(run({ turnNumber: 2, history, findingsLedger: [conflict()] }))).toEqual([]);
   });
 });
 
@@ -686,6 +684,8 @@ describe('UNIT — the reason table', () => {
       'declared-absent',
       'coverage-gap',
       'empty-undeclared',
+      'call-not-completed',
+      'work-not-finished',
       // Honesty layer 3 (the results layer's period verdicts, step 7b).
       'period-not-held',
       'period-partly-held',
@@ -702,8 +702,9 @@ describe('UNIT — the reason table', () => {
       // Code in an answer (`code: 'match'`): a shown block matches no submission of the turn.
       'script-unmatched',
       'stopped-early',
-      // Honesty layer 4 (the answer layer's witness row, step 6).
+      // Honesty layer 4 (the answer layer's procedure witness rows, step 6).
       'steps-unfinished',
+      'step-skipped',
       'answer-check-failed',
       'check-unreachable',
       'negative-prose-unverified',
@@ -722,6 +723,8 @@ describe('UNIT — the reason table', () => {
       'asked',
       'argument-asked',
     ]);
+    expect(reasonEntry('work-not-finished').class).toBe('not-sure');
+    expect(reasonEntry('step-skipped').class).toBe('not-sure');
     expect(Object.isFrozen(REASONS)).toBe(true);
     expect(() => reasonEntry('nope' as AssessmentReason)).toThrow(/no table entry/);
   });

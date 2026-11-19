@@ -141,12 +141,17 @@ describe('PERFORMANCE / LOAD — linear, and the same bytes every time', () => {
       const record = big(size);
       const counts = { history: 0, coverage: 0 };
       const counted = <T>(rows: T[], key: keyof typeof counts): T[] => {
+        const read = (property: string | symbol) => {
+          if (typeof property === 'string' && /^(0|[1-9][0-9]*)$/.test(property)) counts[key]++;
+        };
         return new Proxy(rows, {
           get(target, property, receiver) {
-            if (typeof property === 'string' && /^(0|[1-9][0-9]*)$/.test(property)) {
-              counts[key] += 1;
-            }
+            read(property);
             return Reflect.get(target, property, receiver);
+          },
+          getOwnPropertyDescriptor(target, property) {
+            read(property);
+            return Reflect.getOwnPropertyDescriptor(target, property);
           },
         });
       };
