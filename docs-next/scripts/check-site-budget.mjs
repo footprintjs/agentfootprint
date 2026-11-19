@@ -787,6 +787,115 @@ function analyzeReplayDemos() {
   }
 }
 
+function analyzeContextWalkthrough() {
+  const guidePath = 'context-engineering/';
+  const fallbackPath = 'demo/quick-start/';
+  const view = 'context-walkthrough';
+  const guideFile = requiredOutputAsset(`${guidePath}index.html`, 'Context Engineering');
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Context walkthrough fallback');
+  if (!guideFile || !fallbackFile) return;
+  const guide = readFileSync(guideFile, 'utf8');
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const recorded = JSON.parse(
+    readFileSync(new URL('../lib/context-walkthrough-figure.json', import.meta.url)),
+  );
+  // Bind each exported claim to its stop independently of the generated excerpts.
+  const answerSteps = {
+    question: ['Run start', 'Start with the question.', [], ['is empty']],
+    selection: ['Route 1', 'The model requests scoped summaries.',
+      ['userMessage', 'llmLatestToolCalls'], ['mock model requests node_summaries']],
+    reference: ['Tool call 1', 'The tool returns the source and rows.',
+      ['lastToolResult'], ['nodes@v1 source metadata', 'all four rows']],
+    prepare: ['Iteration 2', 'The next iteration carries the tool result.',
+      ['iteration', 'lastToolResult'], ['carries forward', 'all four rows']],
+    model: ['Route 2', 'The mock model proposes a finding.',
+      ['llmLatestContent'], ['mock provider supplies a structured finding']],
+    finding: ['Answer 1', 'The proposed finding passes three checks.',
+      ['answerValidation'],
+      ['source reference matches', 'maximum appears in a retained row', 'selection revision matches']],
+    answer: ['Run end', 'The run ends with the checked finding.',
+      ['finalContent'], ['structured finding proposed at Route 2']],
+  };
+  const stories = {
+    answer: Object.keys(answerSteps),
+    conflict: ['same-claim', 'conflict', 'pause', 'repair', 'check-output', 'checked-answer'],
+  };
+  const version = manifest.dependencies.agentfootprint;
+  if (recorded.agentFootprintVersion !== version ||
+    Object.keys(recorded.steps).length !== stories.answer.length) {
+    fail('Context Engineering: outdated cohort version or incomplete recorded steps');
+  }
+  for (const anchor of ['cx-layers-title', 'cx-boundary-title', 'context-answer-story', 'context-conflict-story']) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Context Engineering: missing #${anchor}`);
+  }
+  const answerHeader = guide.match(/<h2 id="context-answer-story-title">Build an answer<\/h2>([\s\S]*?)<\/header>/i)?.[1] ?? '';
+  if (!answerHeader.includes('production design in which a backend ranks the rows and a host renders the answer') ||
+    !answerHeader.includes('In the saved mock run, the tool returns all four rows and the mock model supplies the two-node finding')) {
+    fail('Context Engineering: the answer story must identify the production design and the saved mock run');
+  }
+  const source = /<p class="cx-source">Recorded with (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.<\/p>/i.exec(answerHeader);
+  if (!source || source[1] !== recorded.cohort.join(', ') ||
+    source[3] !== recorded.commit.slice(0, 12) ||
+    !attribute(source[2], 'href')?.endsWith(`/commit/${recorded.commit}`)) {
+    fail('Context Engineering: missing visible recorded cohort or commit link');
+  }
+  const listItems = new Map([...guide.matchAll(/(<li\b[^>]*>)([\s\S]*?)<\/li>/gi)]
+    .map(([, tag, body]) => [attribute(tag, 'id'), body]));
+  const answerAnchors = [...listItems.keys()].filter((id) => id?.startsWith('context-answer-'));
+  if (answerAnchors.join(' ') !== stories.answer.map((id) => `context-answer-${id}`).join(' ')) {
+    fail('Context Engineering: the answer steps must appear in recorded order');
+  }
+  const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' };
+  let previousStop = -1;
+  for (const [story, ids] of Object.entries(stories)) {
+    for (const step of ids) {
+      const anchor = `context-${story}-${step}`;
+      const item = listItems.get(anchor);
+      const summary = story === 'answer' ? 'Recorded context excerpt' : 'Illustrative context JSON';
+      const code = item?.match(/<pre\b[^>]*><code>([\s\S]*?)<\/code><\/pre>/i)?.[1];
+      if (!item?.includes('class="cx-visual"') || !item.includes('cx-scene') ||
+        !item.includes(`<summary>${summary}</summary>`) || !code ||
+        !guide.includes(`href="#${anchor}"`)) {
+        fail(`Context Engineering: #${anchor} needs navigation, an illustration and its context`);
+        continue;
+      }
+      if (story === 'answer') {
+        const excerpt = recorded.steps[step];
+        const [label, title, keys, claims] = answerSteps[step];
+        const description = item.match(/<p class="cx-description">([\s\S]*?)<\/p>/i)?.[1];
+        if (!item.includes(`<h3 id="${anchor}-title">${title}</h3>`) ||
+          !claims.every((claim) => description?.includes(claim)) ||
+          !item.includes('<figcaption class="cx-caption">Illustrative production design</figcaption>')) {
+          fail(`Context Engineering: #${anchor} needs the ${label} claim and an illustration marked as production design`);
+        }
+        if (excerpt?.label !== label || !Number.isInteger(excerpt.index) || excerpt.index <= previousStop ||
+          JSON.stringify(Object.keys(excerpt.values ?? {}).sort()) !== JSON.stringify([...keys].sort()) ||
+          !item.includes(`<p>Stop ${excerpt.index + 1} · ${label}</p>`)) {
+          fail(`Context Engineering: #${anchor} needs the chronological ${label} stop and its recorded fields`);
+        }
+        previousStop = excerpt?.index ?? previousStop;
+        const query = new URLSearchParams({ view, agentfootprint: version, step });
+        const expected = excerpt && JSON.stringify(excerpt.values, null, 2)
+          .replace(/[&<>"']/g, (character) => entities[character]);
+        if (!hasLocalLink(item, `${fallbackPath}?${query}#${view}`) || !expected || code !== expected) {
+          fail(`Context Engineering: #${anchor} needs the recorded values and versioned inspector link`);
+        }
+      }
+    }
+  }
+  const section = staticFallbackSection(fallback, view);
+  if (!section?.includes('The interactive viewer is unavailable') ||
+    !hasLocalLink(section, `${guidePath}#context-answer-story`)) {
+    fail('Context Engineering: missing static fallback text or return link');
+  }
+  if (hasEagerDemoAssets(guide, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+    fail('Context Engineering: lesson or fallback eagerly references the separate viewer assets');
+  }
+}
+
 function countSearchRecords(index) {
   if (Array.isArray(index)) return index.length;
   if (Array.isArray(index?.internalDocumentIDStore?.internalIdToId)) {
@@ -884,6 +993,7 @@ analyzeQuickStartFlowchart();
 analyzeSkillGraphFigures();
 analyzeDynamicReact();
 analyzeReplayDemos();
+analyzeContextWalkthrough();
 analyzeSearch();
 analyzeOutput();
 

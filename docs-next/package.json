@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "gen:api": "node ../scripts/gen-fumadocs-api.mjs",
-    "gen:context-walkthrough": "node scripts/gen-context-walkthrough.mjs",
     "check:api": "node ../scripts/gen-fumadocs-api.mjs && git -C .. diff --exit-code -- docs-next/content/docs/api",
     "check:links": "node ../scripts/check-doc-links.mjs --strict",
     "check:site-budget": "node scripts/check-site-budget.mjs out",
@@ -16,12 +15,12 @@
     "prune:export": "node scripts/prune-export.mjs out",
     "predev": "node ../scripts/gen-fumadocs-api.mjs",
     "dev": "next dev",
-    "prebuild": "npm run check:page-tree && npm run check:export-prune && npm run check:search-index && npm run check:browser-demos && node ../scripts/gen-fumadocs-api.mjs && node scripts/gen-context-walkthrough.mjs",
+    "prebuild": "npm run check:page-tree && npm run check:export-prune && npm run check:search-index && npm run check:browser-demos && node ../scripts/gen-fumadocs-api.mjs",
     "build": "next build --webpack",
     "postbuild": "npm run prune:export && node scripts/api-redirects.mjs out",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
-    "check:browser-demos": "tsx --test lib/browser-library-aliases.test.mjs scripts/test/stand-film.test.mts scripts/test/site-samples.test.mts scripts/test/browser-highlighter.test.mts scripts/test/browser-library-aliases.test.mjs scripts/test/answer-check-demo.test.mts"
+    "check:browser-demos": "tsx --test lib/browser-library-aliases.test.mjs scripts/test/stand-film.test.mts scripts/test/site-samples.test.mts scripts/test/browser-highlighter.test.mts scripts/test/browser-library-aliases.test.mjs scripts/test/answer-check-demo.test.mts scripts/test/demo-package-boundary.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.1",
@@ -29,10 +28,7 @@
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@xyflow/react": "^12.11.0",
     "agentfootprint": "file:..",
-    "agentfootprint-lens": "0.84.0",
-    "footprint-explainable-ui": "^2.0.0",
     "footprintjs": "^14.0.0",
     "fumadocs-core": "^16.10.5",
     "fumadocs-mdx": "^15.0.12",
@@ -41,7 +37,6 @@
     "next": "^16.3.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "storydeck": "file:vendor/storydeck/storydeck-0.2.0.tgz",
     "tailwindcss": "^4.3.1",
     "twoslash": "^0.3.8",
     "typescript": "^6.0.3",

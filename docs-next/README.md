@@ -25,17 +25,17 @@ npm run dev      # http://localhost:3000 → /docs
 npm run build    # static/server build
 ```
 
-The site builds against the AgentFootprint source beside it. The published Lens
-declares a peer range that accepts that source. The docs build, Try-it and type
-checks verify the locked packages together.
+The site builds against the AgentFootprint source beside it. The docs build,
+Try-it and type checks verify that source and its locked dependencies.
+The separate `docs-demo` app builds its viewer examples from published packages.
 The docs use npm's `install-links` setting to pack the built `file:..` dependency into
 the docs install, where the site and AgentFootprint share one FootPrint and
 Foottrace package. Run `npm ci` again in the docs after rebuilding the root source.
 
 The browser demos share AgentFootprint's installed FootPrint engine and Foottrace record
 implementation. `next.config.mjs` derives exact aliases from both packages' public
-exports, so the AgentFootprint runtime and the installed Lens cannot load
-different physical copies. Webpack applies these aliases only to the client,
+exports so code in the site's browser examples and the AgentFootprint runtime
+resolve the same physical copies. Webpack applies these aliases only to the client,
 leaving its server resolution unchanged. Turbopack's existing global alias policy
 also covers Foottrace, using relative paths to the same files. `check:browser-demos`
 checks every public door and Webpack's unchanged server resolution. With
@@ -45,23 +45,17 @@ bundle contents.
 ## Visual context walkthrough
 
 `/context-engineering/` teaches context preparation and conflict handling through
-two illustrated stories. It uses the real StoryDeck `LiveSlideDeck` component:
-the page owns its step index, and StoryDeck owns its live slide shells and scoped
-keyboard navigation. The source is split into `components/context-story/story.ts`
-(authored teaching steps), `ContextStory.tsx` (visuals and controls), and scoped CSS.
-The Visual / JSON toggle preserves the current step and stays selected when
-advancing. The JSON panel has a bounded scroll area so it cannot clip the
-presentation. No model API is called; all data and model proposals are
-synthetic. The JSON is a teaching projection, not executable API configuration.
+two illustrated, ordered stories. The answer story includes selected context
+values from a recorded synthetic run and links each step to the native Lens
+inspector in the versioned demo. The conflict story shows its authored JSON as
+illustrative data. Both stories are readable without scripting.
 
-The StoryDeck dependency is an exact local archive, not an npm release; see
-[`vendor/storydeck/README.md`](vendor/storydeck/README.md) for provenance and
-reproducible installation. Ordinary `npm ci` needs no checkout outside this repo.
-
-For this route, verify both stories, step switching, the JSON inspector, focused
-left/right keyboard navigation, and light/dark rendering at desktop and phone
-widths. `EXPORT=true npm run build`, `npm run check:links`, and
-`npm run check:site-budget` include the page in the normal static-site checks.
+Run `npm run gen:context-walkthrough` from `docs-demo` to update the selected
+values from the pinned mock run. The site's current-library Try-it check runs
+the same fixture and verifies its tool result and answer check. The demo checks
+verify the native milestone selector and return links. `EXPORT=true npm run
+build`, `npm run check:links`, and `npm run check:site-budget` include the
+page in the normal static-site checks.
 
 ## Layout
 

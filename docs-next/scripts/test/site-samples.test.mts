@@ -26,7 +26,6 @@ test('every name a sample imports exists on that door', async () => {
       /import\s+\{([^}]*)\}\s+from\s+'((?:agentfootprint|footprintjs)[^']*)'/g,
     )) {
       const door = match[2]!;
-      if (door === 'agentfootprint-lens') continue; // a React package, checked by tsc
       const exported = await doorOf(door);
       for (const raw of match[1]!.split(',')) {
         const name = raw.trim();

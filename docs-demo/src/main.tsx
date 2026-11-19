@@ -110,6 +110,13 @@ const lazyViews = {
     fallback: 'How to Build has the sample code.',
     load: () => import('./HowToBuildLens'),
   },
+  'context-walkthrough': {
+    title: 'Recorded context walkthrough',
+    guideTitle: 'Context Engineering',
+    guideHref: '../../context-engineering/#context-answer-story',
+    fallback: 'The guide has the illustrated steps and recorded context excerpts.',
+    load: () => import('./ContextWalkthrough'),
+  },
 };
 
 const root = createRoot(document.getElementById('root')!);

@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/gen-agent-flowchart.mjs && node scripts/gen-skill-graphs.mjs && node scripts/gen-dynamic-react.mjs && node scripts/gen-offline-replay.mjs && tsc --noEmit && vite build --base=./",
-    "check": "npm run build && node scripts/gen-agent-flowchart.mjs --check && node scripts/gen-skill-graphs.mjs --check && node scripts/gen-dynamic-react.mjs --check && node scripts/gen-offline-replay.mjs --check && node --test scripts/check-*.test.mjs",
+    "build": "node scripts/gen-agent-flowchart.mjs && node scripts/gen-skill-graphs.mjs && node scripts/gen-dynamic-react.mjs && node scripts/gen-offline-replay.mjs && node scripts/gen-context-walkthrough.mjs && tsc --noEmit && vite build --base=./",
+    "check": "npm run build && node scripts/gen-agent-flowchart.mjs --check && node scripts/gen-skill-graphs.mjs --check && node scripts/gen-dynamic-react.mjs --check && node scripts/gen-offline-replay.mjs --check && node scripts/gen-context-walkthrough.mjs --check && node --test scripts/check-*.test.mjs",
     "gen:flowchart": "node scripts/gen-agent-flowchart.mjs --write",
     "gen:skill-graphs": "node scripts/gen-skill-graphs.mjs --write",
     "gen:dynamic-react": "node scripts/gen-dynamic-react.mjs --write",
-    "gen:offline-replay": "node scripts/gen-offline-replay.mjs --write"
+    "gen:offline-replay": "node scripts/gen-offline-replay.mjs --write",
+    "gen:context-walkthrough": "node scripts/gen-context-walkthrough.mjs --write"
   },
   "dependencies": {
     "@xyflow/react": "12.11.0",
