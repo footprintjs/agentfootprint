@@ -525,6 +525,34 @@ Gotchas:
 - **Off by default.** Without `.answerLayer()` the chart, the committed rows, the
   events and the answer are exactly what they were.
 
+## Read the completed turn before filing
+
+Attach `recordRun(agent)` for the invocation, then stop it after the run settles
+and before returning a pooled agent. Read its recording in memory or load the
+same recording later. Both readers take the exact run ID from the turn or its
+recording envelope. Import the readers from `agentfootprint/observe`.
+
+<CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="completed-turn" title="Keep the finished turn's record" />
+
+### Coverage declarations per call
+
+`readTurnCoverage` counts committed declarations and their checked, not-checked
+and cannot-cover items before merging. It reads the current leg after a resume.
+It works with prose and typed answers independently of the limits block. An
+empty result means the readable leg declared nothing. An unreadable leg returns
+`undefined`. A row without a definite call association omits the call ID.
+
+<CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="coverage" title="Read unmerged coverage counts" />
+
+### The final evidence verdict
+
+`readTurnEvidenceVerdict` reads the finished turn's final served check, including
+the check after a revision. Its status is `clean`, `disabled`, `not-checked`, or
+`unsupported`. Unsupported items carry the recorded value and shape. If the
+verdict is visible but its item list is unavailable, `items` is `null`.
+
+<CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="verdict" title="Read the served evidence verdict" />
+
 ## Next steps
 
 - [Replay a saved run](doc:offline-replay) — record a run, then render it in Why Lens or Flow Lens

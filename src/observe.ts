@@ -167,6 +167,14 @@ export {
 export { assessAnswer } from './core/agent/assessment/assess.js';
 export type { AnswerAssessment } from './core/agent/assessment/types.js';
 
+export {
+  readTurnCoverage,
+  readTurnEvidenceVerdict,
+  type TurnCallCoverage,
+  type TurnEvidenceSource,
+  type TurnEvidenceVerdict,
+} from './core/agent/turnEvidence.js';
+
 // The recording ENVELOPE — the versioned contract that makes a recording
 // archivable. `recordRun` freezes a run; this states which run it is, how much
 // of it this is, who produced it and under what privacy policy, so a saved run
