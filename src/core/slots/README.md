@@ -33,15 +33,15 @@ The three slot subflow builders — one per context slot an LLM API receives.
 ```
 slots/
 ├── buildSystemPromptSlot.ts    Resolves the system-prompt content.
-├── buildMessagesSlot.ts        Resolves the conversation history.
+├── buildMessagesSlot.ts        Records the conversation for observability.
 ├── buildToolsSlot.ts           Resolves the tool schemas.
 └── helpers.ts                  Shared utils (fnv1a, truncate, breakdown, composeSlot).
 ```
 
 ## The 3-slot abstraction
 
-An LLM API call carries three kinds of payload, and the agent composes each
-in one slot:
+The system-prompt and tools slots compose request inputs. The messages slot records
+the conversation for observability. CallLLM assembles the request's messages from history.
 
 | Slot | Role | Example source |
 |---|---|---|

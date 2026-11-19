@@ -124,17 +124,10 @@ export interface DeliveryState {
   findingsLayout?: 'late-v1' | 'late-v2';
   findingsContextBytes?: number;
   /**
-   * The answer-turn ask on this run (9.103.0) — present ONLY when
-   * `AgentOptions.findings.answerAsk` is `'quote-facts'`, seeded by
-   * `stages/seed.ts` beside `findingsServe` under the same arm, and absent
-   * for every other agent — including an armed one on the default `'none'`,
-   * so the dial's default writes no key and an armed record is the bytes
-   * it was before the dial existed (the `forcedOutputToolName` shape:
-   * absent means the default). It exists for the same reason as
-   * `findingsServe`: the rebuild (`servedView.ts` · `viewOf`) appends
-   * `FINDINGS_ANSWER_ASK` to the piece the way the wire did, and the dial
-   * is a build-time constant it must read from the RECORD, not from the
-   * receipt it is checking.
+   * Run constant seeded beside `findingsServe` only for `answerAsk: 'quote-facts'`.
+   * Live calls put the quote-facts sentence in the findings instruction. Replay
+   * reads this run constant to append `FINDINGS_ANSWER_ASK` to the legacy
+   * findings system piece for older records.
    */
   findingsAnswerAsk?: 'quote-facts';
   /**
