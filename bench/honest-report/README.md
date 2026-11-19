@@ -50,10 +50,10 @@ node --permission --allow-fs-read="$PWD" run.mjs --rehearse \
 Before importing candidate code the runner verifies the archive hash, checks
 that the local npm lock identifies that archive and its integrity, checks the
 installed versions and resolution paths, and hashes the installed candidate
-tree. Keep that clean installation for the paid run. After reviewing the
-completed rehearsal report, the coordinator saves its `rehearsal` object as
-`rehearsal-lock.json` in the private working copy. The checked-in receipt is
-for the placeholder and cannot authorize a paid run.
+tree. Keep that clean installation for the paid run. Use the candidate manifest and lock from the matching review handoff for the
+paid run. The checked-in `rehearsal-lock.json` identifies the exact archive
+and resolved lock that passed rehearsal. A placeholder or changed candidate
+requires a new rehearsal and a fresh receipt before the paid runner opens.
 
 ## Coordinator's paid batch
 

@@ -29,9 +29,14 @@
       "footprintjs": "14.0.0",
       "foottrace": "2.1.0",
       "contextfootprint": "0.1.1",
-      "lockDigest": "ee8399db739cfcf554e4aa01a8565abbd44a86aaf1577e8f27174167b9cb8fea",
-      "placeholder": "published-15.0.0"
+      "lockDigest": "c5ce7b60fc16b24a000c55b87494b76bf53f07ca923d7696a35833e202053ebf",
+      "archive": {
+        "archive": "cohorts/candidate/candidate.tgz",
+        "sha256": "7eec9b93dd9b1d1ceab8ba80eee12666813d98a7f2d407ed7c4024b90541866a",
+        "version": "15.0.0"
+      },
+      "packageSha256": "757eea4ad1bfc91960ef3f8133c77849d19017521c9c2cc4ce45c309ce82ced7"
     }
   },
-  "transcriptSha256": "728e232cf192f517023c60110bbfd715a6ce7c3bcd212d8eabd82e42382d6fc8"
+  "transcriptSha256": "c36db63e1cbd3e09c0aa189ef69f990473d2d6da11e3b9869384cca7ba1f6b08"
 }
