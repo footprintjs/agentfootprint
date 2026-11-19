@@ -211,15 +211,19 @@ function callsOfCheck(check: unknown): CallRef[] {
 /** The single producer address carried by an integrity or declaration row. */
 export function callAddressOf(
   row: Readonly<Record<string, unknown>>,
-): { id: string; name?: string } | undefined {
+): Pick<CallRef, 'id' | 'name' | 'occurrenceKey'> | undefined {
   const id = str(Object.getOwnPropertyDescriptor(row, 'toolCallId')?.value);
-  if (id === undefined) return undefined;
+  const occurrenceKey = readCallOccurrenceKey(row);
+  if (id === undefined && occurrenceKey === undefined) return undefined;
   const toolName = str(Object.getOwnPropertyDescriptor(row, 'toolName')?.value);
-  if (toolName !== undefined) return { id, name: toolName };
-  const tools = rowList(Object.getOwnPropertyDescriptor(row, 'tools')?.value);
+  const tools =
+    toolName === undefined
+      ? rowList(Object.getOwnPropertyDescriptor(row, 'tools')?.value)
+      : undefined;
   const name =
-    tools?.unread === 0 && tools.entries.length === 1 ? str(tools.entries[0]) : undefined;
-  return name === undefined ? { id } : { id, name };
+    toolName ??
+    (tools?.unread === 0 && tools.entries.length === 1 ? str(tools.entries[0]) : undefined);
+  return { id, name, occurrenceKey };
 }
 
 /** The calls one witness names. */

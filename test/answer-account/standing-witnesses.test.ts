@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, isInputPause, requestInput, slidingWindow } from '../../src/index.js';
+import {
+  Agent,
+  checkInApproved,
+  defineTool,
+  isCheckInPause,
+  isInputPause,
+  requestInput,
+  slidingWindow,
+} from '../../src/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
@@ -85,6 +93,7 @@ interface MutableSnapshot {
     history: Record<string, unknown>[];
     findingsLedger: Record<string, unknown>[] | string;
     compactions?: readonly unknown[];
+    enteredToolCalls?: { readonly entries: readonly unknown[]; readonly complete: boolean };
   };
   recorders: { id: string }[];
 }
@@ -109,6 +118,8 @@ const SAME_ID_WITNESS_MODES = [
   'sliding window',
   'sliding window after both results left',
   'complete history',
+  'sliding window with standing',
+  'sliding window, pausing before the second call',
 ] as const;
 
 describe('standing reasons rebuilt from their committed witnesses', () => {
@@ -119,6 +130,9 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
       const bothRetained = mode === 'complete history';
       const windowed = !paused && !bothRetained;
       const bothEvicted = mode === 'sliding window after both results left';
+      const pausedBeforeBeta = mode === 'sliding window, pausing before the second call';
+      const rendersStanding =
+        bothRetained || pausedBeforeBeta || mode === 'sliding window with standing';
       const name = 'read_shelf';
       const read = (shelf: string, quote: string, id = 'reused') =>
         call(id, name, {
@@ -144,6 +158,9 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             description: 'Read an inert fixture shelf.',
             inputSchema: { type: 'object', properties: { shelf: { type: 'string' } } },
             askOrAssume: { shelf: { assume: 'fallback' } },
+            ...(pausedBeforeBeta && {
+              checkIn: (args: Readonly<Record<string, unknown>>) => args.shelf === 'beta',
+            }),
             execute({ shelf }) {
               entered.push(String(shelf));
               if (paused && shelf === 'beta') {
@@ -159,16 +176,30 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         )
         .inputsLayer({ argumentSources: true });
       if (windowed) builder.window(slidingWindow({ keepRecentTurns: 1 }));
-      if (bothRetained) builder.answerLayer({ standingLine: true });
+      if (rendersStanding) builder.answerLayer({ standingLine: true });
       const agent = builder.build();
       const recorder = recordRun(agent);
       try {
-        const result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
-        if (windowed) expect(result).toBe('Read the shelf.');
+        let result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
+        if (pausedBeforeBeta) {
+          if (!isCheckInPause(result))
+            throw new Error('Expected a check-in before the second call.');
+          expect(entered).toEqual(['alpha']);
+          expect(result.checkpoint.sharedState.enteredToolCalls).toMatchObject({
+            entries: [{ callOccurrenceKey: expect.any(Array), entered: true }],
+            complete: true,
+          });
+          result = await agent.resume(
+            result.checkpoint,
+            checkInApproved({ request: result.checkIn, by: 'fixture' }),
+          );
+        }
+        if (windowed && !rendersStanding) expect(result).toBe('Read the shelf.');
         else if (paused) expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
-        const { history, findingsLedger, compactions } = snapshotOf(recording).sharedState;
+        const { history, findingsLedger, compactions, enteredToolCalls } =
+          snapshotOf(recording).sharedState;
         const results = history.filter((message) => message.role === 'tool');
         expect(results).toHaveLength(bothRetained ? 2 : 1);
         if (bothRetained) {
@@ -220,6 +251,15 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
               ]
             : []),
         ]);
+        if (rendersStanding) {
+          expect(enteredToolCalls).toEqual({
+            entries: (findingsLedger as Record<string, unknown>[]).map(({ callOccurrenceKey }) => ({
+              callOccurrenceKey,
+              entered: true,
+            })),
+            complete: true,
+          });
+        }
         const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
         const assessment = assessAnswer(recording);
         const argumentReason = assessment.reasons.find(
@@ -229,14 +269,14 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         const unplaced = { kind: 'calls', calls: [], unplaced: [pointer] };
         expect(argumentReason?.witness).toEqual([pointer]);
         expect(argumentReason?.source).toEqual(windowed ? unplaced : named);
-        if (bothRetained) {
-          expect((await agent.assessment())?.reasons).toEqual(assessment.reasons);
-          expect(result).toBe(
-            'Read the shelf.\n\n---\n\n' +
-              'Not sure — a value a call ran with came from the model, with no source on the record.',
-          );
-        }
         const account = accountForAnswer(recording);
+        if (rendersStanding) {
+          expect((await agent.assessment())?.reasons).toEqual(assessment.reasons);
+          const line =
+            'Not sure — a value a call ran with came from the model, with no source on the record.';
+          expect(result).toBe(`Read the shelf.\n\n---\n\n${line}`);
+          expect(account.facts.limitsBlock.value).toBe(line);
+        }
         const standing = account.rows.find((row) => row.id === 'how-sure')?.lines;
         const reason = standing?.find(
           (line) => line.template.id === 'howSure.reason.argumentUnverified',
@@ -252,14 +292,25 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
 
         const legacy = JSON.parse(
           JSON.stringify(recording, (field, value: unknown) =>
-            field === 'callOccurrenceKey' ? undefined : value,
+            field === 'callOccurrenceKey' ||
+            field === 'enteredToolCalls' ||
+            field === 'toolResultExecution'
+              ? undefined
+              : value,
           ),
         ) as Recording;
-        const legacyReason = assessAnswer(legacy).reasons.find(
-          (row) => row.reason === 'argument-unverified',
+        const legacyAssessment = assessAnswer(legacy);
+        expect(legacyAssessment.reasons.map(({ reason }) => reason)).toEqual(
+          paused ? ['asked', 'check-unreachable'] : ['check-unreachable'],
         );
-        expect(legacyReason?.witness).toEqual([pointer]);
-        expect(legacyReason?.source).toEqual(bothEvicted ? named : unplaced);
+        const oldStanding = accountForAnswer(legacy).rows.find(
+          (row) => row.id === 'how-sure',
+        )?.lines;
+        expect(oldStanding).toContainEqual(
+          expect.objectContaining({
+            text: 'The record could not establish tool entry for every checked call.',
+          }),
+        );
       } finally {
         recorder.stop();
         await agent.shutdown();

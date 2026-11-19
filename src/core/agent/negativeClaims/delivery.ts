@@ -21,6 +21,7 @@ import type {
 } from '../../../integrity/negative-claim/types.js';
 import type { AnswerCheck, AnswerValidationReport } from '../../../answer-validation/types.js';
 import { copyJson } from '../../../lib/boundedJson.js';
+import { storedCallOccurrenceField } from '../../../lib/callOccurrence.js';
 import {
   DECLARATION_CHECK_PREFIX,
   overclaimCheckOf,
@@ -355,9 +356,14 @@ export function reportWithNegatives(
   const rows = answer.checks
     .filter((row) => declarations.length === 0 || !row.id.startsWith(DECLARATION_CHECK_PREFIX))
     .map(reportCheck);
-  const declarationRows = declarations.map(({ tool, toolCallId, iteration }, index) => ({
-    ...reportCheck(overclaimCheckOf(tool, index)),
-    ...(toolCallId !== undefined && iteration !== undefined && { toolCallId, iteration }),
+  const declarationRows = declarations.map((row, index) => ({
+    ...reportCheck(overclaimCheckOf(row.tool, index)),
+    ...(row.toolCallId !== undefined &&
+      row.iteration !== undefined && {
+        toolCallId: row.toolCallId,
+        iteration: row.iteration,
+        ...storedCallOccurrenceField(row),
+      }),
   }));
   const checks = [...report.checks, ...rows, ...declarationRows];
   const failed = checks.filter((row) => row.disposition === 'checked-fail').length;

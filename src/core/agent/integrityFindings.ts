@@ -29,7 +29,11 @@
  */
 
 import { typedEmit } from '../../recorders/core/typedEmit.js';
-import { integrityFindingRowOf, type IntegrityFindingRow } from '../../integrity/finding/row.js';
+import {
+  integrityFindingRowOf,
+  type IntegrityCallWitness,
+  type IntegrityFindingRow,
+} from '../../integrity/finding/row.js';
 import { contextErrorIdentity, type ContextError } from '../../integrity/finding/types.js';
 
 /** The run's integrity holder as a seam has it: `answerLayer` says rows are wanted. */
@@ -51,7 +55,7 @@ export function fileIntegrityFindings(
   findings: readonly ContextError[],
   iteration: number,
   run?: IntegrityRun,
-  callIdOf?: (finding: ContextError) => string | undefined,
+  callOf?: (finding: ContextError) => IntegrityCallWitness | undefined,
 ): void {
   if (findings.length === 0) return;
   const seenIds =
@@ -64,11 +68,11 @@ export function fileIntegrityFindings(
     const id = contextErrorIdentity({ ...finding, epoch: undefined });
     const newFinding = !newIds.includes(id);
     if (run?.answerLayer === true) {
-      const candidate = callIdOf?.(finding);
-      const toolCallId = typeof candidate === 'string' && candidate !== '' ? candidate : undefined;
+      const candidate = callOf?.(finding);
+      const call = candidate?.toolCallId ? candidate : undefined;
       // Preserve call witnesses even when the host event already filed the same defect.
-      if (toolCallId !== undefined || newFinding) {
-        rows.push(integrityFindingRowOf(finding, iteration, toolCallId));
+      if (call !== undefined || newFinding) {
+        rows.push(integrityFindingRowOf(finding, iteration, call));
       }
     }
     if (newFinding) {

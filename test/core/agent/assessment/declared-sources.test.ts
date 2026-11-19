@@ -86,7 +86,7 @@ describe('UNIT — the declared-sources rows, reason by reason', () => {
     const entered = state(row({ source: 'said', reading: true, claimed: 'user', value: '7d' }));
     const history = entered.history as readonly object[];
     const unentered = run({ ...entered, history: history.slice(0, -1) });
-    expect(unentered.reasons).toEqual([]);
+    expect(unentered.reasons.map(({ reason }) => reason)).toEqual(['check-unreachable']);
     expect(unentered.checked.some(({ check }) => check === 'argument-sources')).toBe(false);
 
     const threw = run({

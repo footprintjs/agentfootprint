@@ -67,7 +67,12 @@ export function buildCallDispatch(
     execution.resultFinalizer = nativeResultFinalizer(
       scope,
       tool,
-      { toolName: tc.name, toolCallId: tc.id, iteration: batch.iteration },
+      {
+        toolName: tc.name,
+        toolCallId: tc.id,
+        iteration: batch.iteration,
+        ...callOccurrenceField(tc.callOccurrenceKey),
+      },
       deps,
       operations.runFactsOf(scope)?.runId,
       resolved.party,

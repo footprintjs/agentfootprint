@@ -50,7 +50,7 @@
 
 import { callIndexOf, isRecord, str } from './recordValues.js';
 import { recoveredCallOutcomes, turnResults } from './turnResults.js';
-import { argumentRows, type ArgumentRowRead } from './argumentRows.js';
+import { argumentRows, waitingArgumentIteration, type ArgumentRowRead } from './argumentRows.js';
 import { rowsAtProblem } from '../emptiness.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
@@ -73,6 +73,7 @@ import {
   readTurnCalls,
 } from './resultEvidence.js';
 import { standingAdmission } from './standingAdmission.js';
+import { ENTRY_EVIDENCE_KEY } from './entryEvidence.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -681,7 +682,14 @@ export function assessAnswer(
   checkInputs(record, declarations);
   // A placeholder is a kept-out value only in a snapshot served under a policy
   // (`redaction/marker.ts`); a checkpoint is never served.
-  return foldState(stateOf(record), declarations, servedUnderPolicy(record.snapshot));
+  return foldState(
+    stateOf(record),
+    declarations,
+    servedUnderPolicy(record.snapshot),
+    undefined,
+    undefined,
+    record.events,
+  );
 }
 
 /**
@@ -715,6 +723,7 @@ export function foldState(
   served: boolean,
   retainedHistory?: (history: readonly unknown[]) => unknown,
   declarationAddresses?: ReadonlyMap<number, number>,
+  legacyEvents?: unknown,
 ): AnswerAssessment {
   const { state, asked } = served
     ? keptOutGuard(recorded)
@@ -731,10 +740,13 @@ export function foldState(
     current,
     argumentVerdicts,
     declarationAddresses,
+    history,
+    legacyEvents,
   );
   const g: Gathered = { admit: admission.admit, fired: new Map(), checked: [] };
-  const nativeFacts = (_row: Readonly<Record<string, unknown>>, address?: number) =>
-    admission.returned(address, true);
+  const nativeFacts = admission.nativeResult;
+  if (admission.entryIncomplete)
+    fire(g, 'check-unreachable', statePointer(ENTRY_EVIDENCE_KEY, 'complete'));
   const { results, withheld, periods } = deliveredResults(recordedResults, admission.dispositions);
   // An occurrence witness would reveal how many results the host withheld.
   if (withheld) g.fired.set('result-withheld', []);
@@ -754,15 +766,43 @@ export function foldState(
     coverage,
   );
 
+  // A throw kept a declared check from running. Count the opportunity
+  // without admitting its error notice as a result or as a witness.
+  const resultOpportunities =
+    reads.length + results.filter((result) => admission.threw(result.index)).length;
   readPause(state, g);
   readArgumentAsk(state, argumentVerdicts, g);
-  const enteredArguments = argumentVerdicts.filter((row) => admission.entered(row.historyIndex));
+  const enteredArguments = argumentVerdicts.filter((row) =>
+    admission.entered(row.historyIndex, row.occurrenceKey),
+  );
   readArgumentVerdicts(state, enteredArguments, resolveCurrent, g);
+  if (!admission.hasEntryEvidence && waitingArgumentIteration(state) === undefined) {
+    const entered = new Set(enteredArguments.map((row) => row.index));
+    // A keyless ambiguous observation cannot establish a call. Say the
+    // check was unavailable instead of treating a missing reason as clearance.
+    for (const row of argumentVerdicts) {
+      if (
+        row.historyIndex !== undefined ||
+        entered.has(row.index) ||
+        row.asked ||
+        row.withheld ||
+        (!row.failed && !row.ruled)
+      )
+        continue;
+      fire(g, 'check-unreachable', statePointer('findingsLedger', row.index, 'argument'));
+    }
+  }
   readCoverageRows(coverage, g);
-  readTurnCalls(reads, coverage, g);
+  readTurnCalls(reads, coverage, resultOpportunities, g);
   readContingentRows(state, places, g);
   readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
-  readTurnResults(reads, declarations, issuedTicketsOf(recorded.placedTickets), g);
+  readTurnResults(
+    reads,
+    declarations,
+    issuedTicketsOf(recorded.placedTickets),
+    resultOpportunities,
+    g,
+  );
   readPeriodVerdicts(
     periodRows(state, (row) => callIndexOf(row, resolveCurrent), nativeFacts),
     enteredArguments,

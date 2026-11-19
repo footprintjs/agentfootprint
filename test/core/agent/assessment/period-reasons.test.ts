@@ -18,9 +18,26 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, describedResult } from '../../../../src/index.js';
+import {
+  Agent,
+  allow,
+  defineTool,
+  deny,
+  describedResult,
+  isInputPause,
+  requestInput,
+  slidingWindow,
+} from '../../../../src/index.js';
 import { mock } from '../../../../src/llm-providers.js';
+import { recordRun, type Recording } from '../../../../src/observe.js';
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
+import {
+  assessmentDataOf,
+  standingFactsOf,
+  standingLineOf,
+} from '../../../../src/core/agent/assessment/compose.js';
+import type { AnswerAssessedPayload } from '../../../../src/events/payloads/answer.js';
+import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
 
 type State = Record<string, unknown>;
 const run = (state: State) => assessAnswer({ snapshot: { sharedState: state } });
@@ -28,6 +45,8 @@ const periodChecks = (a: ReturnType<typeof run>) =>
   a.checked.filter(({ check }) => check === 'result-period');
 
 const person = { role: 'user', content: 'How far back do the backups go?' };
+const queried = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
+const earlier = { from: '2026-09-25T09:00:00Z', to: '2026-09-25T10:00:00Z' };
 function callHistory(toolCallId: string, toolName = 'backup_runs', record: State = {}) {
   return [
     {
@@ -158,54 +177,184 @@ describe('UNIT — which rows the fold reads', () => {
     ]);
   });
 
-  it('REGRESSION — two returned calls to one tool retain their period verdicts when the provider reuses an ID', async () => {
-    const name = 'backup_runs';
-    const call = (host: string) => ({ toolCalls: [{ id: 'reused', name, args: { host } }] });
-    const queried = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
-    const agent = Agent.create({
-      provider: mock({ replies: [call('archive'), call('live'), 'The lookup is complete.'] }),
-      model: 'mock',
-      reactMode: 'dynamic',
-    })
-      .tool(
-        defineTool({
-          name,
-          description: 'Read backup runs from one host.',
-          inputSchema: { type: 'object', properties: { host: { type: 'string' } } },
-          execute: ({ host }) =>
-            describedResult({
-              facts: [{ entity: String(host), backups: 1 }],
-              provenance: { measuredAt: queried.to, source: 'fixture' },
-              period: {
-                queried,
-                held:
-                  host === 'archive'
-                    ? { from: '2026-09-25T09:00:00Z', to: '2026-09-25T10:00:00Z' }
-                    : queried,
-              },
-            }),
+  it.each([
+    { evicts: false, pauses: false },
+    { evicts: true, pauses: false },
+    { evicts: false, pauses: true },
+    { evicts: true, pauses: true },
+  ])(
+    'REGRESSION — two returned calls to one tool retain their period verdicts when the provider reuses an ID (evicts=$evicts, pauses=$pauses)',
+    async ({ evicts, pauses }) => {
+      const name = 'backup_runs';
+      const call = (host: string) => ({ toolCalls: [{ id: 'reused', name, args: { host } }] });
+      const ask = { toolCalls: [{ id: 'pause', name: 'confirm_fixture', args: {} }] };
+      const builder = Agent.create({
+        provider: mock({
+          replies: [
+            call('archive'),
+            ...(pauses ? [ask] : []),
+            call('live'),
+            'The lookup is complete.',
+          ],
         }),
-      )
-      .resultsLayer()
-      .answerLayer({ standingLine: true })
-      .build();
+        model: 'mock',
+        reactMode: 'dynamic',
+        ...(evicts && { keepLastToolResults: false as const }),
+      })
+        .tool(
+          defineTool({
+            name,
+            description: 'Read backup runs from one host.',
+            inputSchema: { type: 'object', properties: { host: { type: 'string' } } },
+            execute: ({ host }) =>
+              describedResult({
+                facts: [{ entity: String(host), backups: 1 }],
+                provenance: { measuredAt: queried.to, source: 'fixture' },
+                period: { queried, held: host === 'archive' ? earlier : queried },
+              }),
+          }),
+        )
+        .resultsLayer()
+        .answerLayer({ standingLine: true });
+      if (evicts) builder.window(slidingWindow({ keepRecentTurns: 1 }));
+      if (pauses)
+        builder.tool(
+          defineTool({
+            name: 'confirm_fixture',
+            description: 'Ask how many fixture runs to check next.',
+            inputSchema: { type: 'object' },
+            execute: () =>
+              requestInput({
+                id: 'confirm-backup-period',
+                question: 'How many more runs should I check?',
+                fields: [{ id: 'count', type: 'number', required: true }],
+              }),
+          }),
+        );
+      const agent = builder.build();
+      const assessments: AnswerAssessedPayload[] = [];
+      const recorder = recordRun(agent);
+      const off = agent.on('agentfootprint.answer.assessed', ({ payload }) =>
+        assessments.push(payload),
+      );
+      try {
+        let answer = await agent.run({ message: person.content });
+        if (pauses) {
+          if (!isInputPause(answer)) throw new Error('Expected the fixture input pause.');
+          expect(agent.findings()?.find(({ kind }) => kind === 'period')).toMatchObject({
+            nativePeriodServed: true,
+            verdict: 'not-held',
+          });
+          answer = await agent.resume(JSON.parse(JSON.stringify(answer.checkpoint)), {
+            requestId: answer.awaitingInput.requestId,
+            values: { count: 1 },
+          });
+        }
+        const rows = agent.findings()?.filter(({ kind }) => kind === 'period') ?? [];
+        expect(rows).toMatchObject([
+          {
+            toolCallId: 'reused',
+            toolName: name,
+            iteration: 1,
+            verdict: 'not-held',
+            nativePeriodServed: true,
+          },
+          {
+            toolCallId: 'reused',
+            toolName: name,
+            iteration: pauses ? 3 : 2,
+            verdict: 'covered',
+            nativePeriodServed: true,
+          },
+        ]);
+        const keys = rows.map(readCallOccurrenceKey);
+        expect(keys).toEqual([expect.any(String), expect.any(String)]);
+        expect(keys[0]).not.toBe(keys[1]);
+        const results =
+          agent
+            .getLastSnapshot()
+            ?.sharedState.history.filter(
+              ({ role, toolName }) => role === 'tool' && toolName === name,
+            ) ?? [];
+        expect(results.map(({ toolResultExecution }) => toolResultExecution)).toEqual(
+          evicts ? ['returned'] : ['returned', 'returned'],
+        );
+        expect(results.map(readCallOccurrenceKey)).toEqual(evicts ? keys.slice(1) : keys);
 
-    const answer = await agent.run({ message: person.content });
-    const snapshot = agent.getLastSnapshot();
-    const state = snapshot?.sharedState;
-    expect(agent.findings()?.filter(({ kind }) => kind === 'period')).toMatchObject([
-      { toolCallId: 'reused', toolName: name, iteration: 1, verdict: 'not-held' },
-      { toolCallId: 'reused', toolName: name, iteration: 2, verdict: 'covered' },
-    ]);
-    expect(state?.history.filter(({ role }) => role === 'tool')).toMatchObject([
-      { toolCallId: 'reused', toolName: name, toolResultExecution: 'returned' },
-      { toolCallId: 'reused', toolName: name, toolResultExecution: 'returned' },
-    ]);
-    const saved = assessAnswer({ snapshot });
-    expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(['period-not-held']);
-    expect.soft(periodChecks(saved)).toMatchObject([{ ran: 2, of: 2 }]);
-    expect.soft(answer).toContain("a tool's data does not reach the time the question asked about");
-  });
+        const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+        const saved = assessAnswer(recording);
+        const { iteration, turn, ...eventAssessment } = assessments.at(-1)!;
+        expect(iteration).toBeGreaterThan(1);
+        expect(turn).toBe(1);
+        expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(['period-not-held']);
+        expect.soft(periodChecks(saved)).toMatchObject([{ ran: 2, of: 2 }]);
+        expect.soft(assessmentDataOf(saved)).toEqual(eventAssessment);
+        expect
+          .soft(answer)
+          .toContain("a tool's data does not reach the time the question asked about");
+        const savedLine = standingLineOf(
+          assessmentDataOf(saved),
+          [],
+          false,
+          standingFactsOf(saved, new Map()),
+        );
+        expect(answer).toBe(`The lookup is complete.\n\n---\n\n${savedLine}`);
+      } finally {
+        recorder.stop();
+        off();
+      }
+    },
+  );
+
+  it.each(['denied', 'rewritten', 'threw', 'capped'] as const)(
+    'only native delivered period evidence can attest delivery (%s)',
+    async (outcome) => {
+      const name = 'backup_runs';
+      const builder = Agent.create({
+        provider: mock({ replies: [{ toolCalls: [{ id: 'c1', name, args: {} }] }, 'Done.'] }),
+        model: 'mock',
+        ...(outcome === 'capped' && { maxToolResultChars: 200 }),
+      })
+        .tool(
+          defineTool({
+            name,
+            description: 'Read backup runs.',
+            inputSchema: { type: 'object' },
+            execute: () => {
+              if (outcome === 'threw') throw new Error('The fixture failed.');
+              return describedResult({
+                facts: [
+                  { entity: 'archive', body: outcome === 'capped' ? 'x'.repeat(1000) : 'none' },
+                ],
+                provenance: { measuredAt: queried.to, source: 'fixture' },
+                period: { queried, held: earlier },
+              });
+            },
+          }),
+        )
+        .resultsLayer()
+        .answerLayer({ standingLine: true });
+      if (outcome === 'denied')
+        builder.toolMiddleware({ name: 'withhold', onToolResult: () => deny('Unavailable.') });
+      if (outcome === 'rewritten')
+        builder.toolMiddleware({
+          name: 'replace',
+          onToolResult: () => allow('Public backup summary.', 'Serve only the summary.'),
+        });
+      const agent = builder.build();
+      await agent.run({ message: person.content });
+      const rows = agent.findings()?.filter(({ kind }) => kind === 'period') ?? [];
+      if (outcome === 'threw') {
+        expect(rows).toEqual([]);
+      } else {
+        expect(rows).toMatchObject([{ verdict: 'not-held' }]);
+        expect(rows[0]).not.toHaveProperty('nativePeriodServed');
+      }
+      const saved = assessAnswer({ snapshot: agent.getLastSnapshot() });
+      expect(saved.reasons.map(({ reason }) => reason)).not.toContain('period-not-held');
+      expect(periodChecks(saved)).toEqual([]);
+    },
+  );
 
   it('a verdict word the fold does not know is skipped, never guessed — and still counted as filed', () => {
     const a = run({

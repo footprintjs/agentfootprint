@@ -7,9 +7,10 @@
  *          the arguments and the rows it is about, and a `predicate` names an
  *          argument path or a column. The event channel carries those. The row
  *          carries the finding kind, seam, iteration, advisory flag and tool
- *          identities. Call-bound rows keep the provider's call ID.
+ *          identities. Call-bound rows keep the recorded occurrence address.
  */
 
+import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import type { IntegritySeam } from '../disposition/types.js';
 import type { ContextError, ContextErrorKind } from './types.js';
 
@@ -18,7 +19,12 @@ const MAX_ROW_TOOLS = 32;
 /** A subject longer than this is no registered tool name, so it is left off, never shortened. */
 const MAX_TOOL_NAME_CHARS = 256;
 
-export interface IntegrityFindingRow {
+export interface IntegrityCallWitness {
+  readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
+}
+
+export interface IntegrityFindingRow extends Partial<IntegrityCallWitness> {
   readonly kind: 'integrity-finding';
   /** The conversation turn; the one writer stamps it when the row is filed. */
   readonly turn?: number;
@@ -27,8 +33,6 @@ export interface IntegrityFindingRow {
   readonly seam: IntegritySeam;
   /** The tools among the finding's subjects, by registered name. */
   readonly tools?: readonly string[];
-  /** The provider's call ID when the check has a specific occurrence. */
-  readonly toolCallId?: string;
   /** Copied from the finding: it reports doubt rather than contradiction. */
   readonly advisory?: true;
 }
@@ -45,7 +49,7 @@ export interface IntegrityFindingRow {
 export function integrityFindingRowOf(
   f: ContextError,
   iteration: number,
-  toolCallId?: string,
+  call?: IntegrityCallWitness,
 ): IntegrityFindingRow {
   const tools = f.subjects
     .filter((s) => s.kind === 'tool' && s.id.length <= MAX_TOOL_NAME_CHARS)
@@ -57,7 +61,10 @@ export function integrityFindingRowOf(
     finding: f.kind,
     seam: f.seam,
     ...(tools.length > 0 && { tools }),
-    ...(toolCallId !== undefined && { toolCallId }),
+    ...(call !== undefined && {
+      toolCallId: call.toolCallId,
+      ...callOccurrenceField(call.callOccurrenceKey),
+    }),
     ...(f.advisory === true && { advisory: true as const }),
   };
 }

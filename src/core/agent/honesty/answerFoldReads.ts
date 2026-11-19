@@ -5,6 +5,7 @@ export type AnswerFoldKey =
   | 'pausedToolCallId'
   | 'findingsLedger'
   | 'coverageDeclared'
+  | 'enteredToolCalls'
   | 'stoppedEarly'
   | 'unsupportedValues'
   | 'answerValidation'
@@ -27,7 +28,7 @@ export type AnswerFoldKey =
  *   whenever the model asked for calls, whether or not this agent registered
  *   a tool that could answer them;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
- *   coverage);
+ *   coverage), and `enteredToolCalls` (the bounded per-turn entry witness);
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`;
@@ -41,7 +42,7 @@ export type AnswerFoldKey =
  * @example
  * ```ts
  * answerFoldReads({ tools: true, evidenceGate: false, answerValidation: false, inputs: false, toolMiddleware: false });
- * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'stoppedEarly', 'coverageDeclared']
+ * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'stoppedEarly', 'coverageDeclared', 'enteredToolCalls']
  * ```
  */
 export function answerFoldReads(arms: {
@@ -57,7 +58,7 @@ export function answerFoldReads(arms: {
     'pausedToolCallId',
     'findingsLedger',
     'stoppedEarly',
-    ...(arms.tools ? (['coverageDeclared'] as const) : []),
+    ...(arms.tools ? (['coverageDeclared', 'enteredToolCalls'] as const) : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),

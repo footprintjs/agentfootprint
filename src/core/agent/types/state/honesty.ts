@@ -10,6 +10,8 @@ export interface HonestyState {
    * of the record tells "armed, filed nothing" from "never armed" by it.
    */
   honestyLayers?: import('../../honesty/armed.js').HonestyLayers;
+  /** This Agent turn's bounded tool entry proofs, retained independently of history eviction. */
+  enteredToolCalls?: import('../../honesty/enteredToolCalls.js').EnteredToolCalls;
   /**
    * The answer's standing, as data — written by the answer layer's stage at
    * the head of the Final branch (honesty layer 4, `assessment/stage.ts` ·

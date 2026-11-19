@@ -287,34 +287,31 @@ describe('negative runtime evidence capture', () => {
     expect(JSON.stringify(scope.negativeClaimState)).not.toContain('does not exist');
   });
 
-  it('records exact call and iteration only for a native returned declaration', () => {
+  it('records each native declaration even when the provider call ID and iteration recur', () => {
     const scope = scopeOf();
     const tool = scopedTool();
     const content = 'ITEM-A does not exist.';
+    const keys = [
+      [1, 2, 3, 4, 0],
+      [1, 2, 3, 4, 1],
+    ] as const;
     captureNegativeRefusal(scope, 'lookup', content, { item: 'ITEM-A' });
-    for (const [toolCallId, iteration] of [
-      ['first-read', 1],
-      ['second-read', 2],
-    ] as const) {
-      const started = dispatch(scope, tool, { toolCallId, iteration });
-      captureNegativeResult(scope, started, { content, effects: [], status: 'invalid' }, tool);
+    for (const key of keys) {
+      const started = dispatch(scope, tool, { callOccurrenceKey: key });
+      const native = { content, effects: [], status: 'invalid' };
+      captureNegativeResult(scope, started, native, tool);
+      captureNegativeResult(scope, started, native, tool);
     }
     expect(scope.negativeClaimState?.overclaims).toEqual([
       { tool: 'lookup', code: 'refusal-asserts-absence', turn: 1 },
-      {
+      ...keys.map((callOccurrenceKey) => ({
         tool: 'lookup',
         code: 'refusal-asserts-absence',
         turn: 1,
-        toolCallId: 'first-read',
+        toolCallId: 'call-1',
         iteration: 1,
-      },
-      {
-        tool: 'lookup',
-        code: 'refusal-asserts-absence',
-        turn: 1,
-        toolCallId: 'second-read',
-        iteration: 2,
-      },
+        callOccurrenceKey,
+      })),
     ]);
     expect(JSON.stringify(scope.negativeClaimState?.overclaims)).not.toContain(content);
   });

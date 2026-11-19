@@ -167,6 +167,7 @@ export async function assessAnswerStage(
     displayNames.size > 0 ||
       data.reasons.some(
         (reason) =>
+          reason === 'check-unreachable' ||
           reason === 'call-not-completed' ||
           reason === 'work-not-finished' ||
           reason === 'value-contingent' ||

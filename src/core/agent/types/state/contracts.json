@@ -75,7 +75,7 @@
       "activeInjections": ["d97f9567d10ad0aae3017430ae2a70ac9532821a23de9c56d1ac4dac188252af",false,false],
       "activatedInjectionIds": ["26f04b6835b8379045bca1450279d1ec0adc718fdd8e01696bf955d9a6ada14b",false,false],
       "lastToolResult": ["3c5d52d844ec48db27e5571adfcb64625e9ec1c1daa3a7297c5efcda493a88f8",true,false],
-      "toolResults": ["75232f87f2ebb966b41d26bcf7ff264832197fed97d062bb5793a9bc3388c08f",true,false],
+      "toolResults": ["0ef229b5a9c13246b06c2627ca5a4d16649a8c9e8be9f5123e6c3508c39d0888",true,false],
       "toolResultsIteration": ["3bcfecfc4e8c46bb5b797fbbb08a483b2fadafa1fd42497405eb961515590163",true,false],
       "messagesDelivery": ["c1573334cfd711a3436686df97a8396330c3baa6ba2ce871339128ecdd89db14",true,false],
       "deliveredMessageKeys": ["26f04b6835b8379045bca1450279d1ec0adc718fdd8e01696bf955d9a6ada14b",false,false],
@@ -152,7 +152,8 @@
       "reliabilityFailPayload": ["dfd6815a72e7976efe47793dee22cd4365597165629bd70f6f25c1ee5344ee2a",true,false],
       "reliabilityFailReason": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
       "reliabilityFailCauseMessage": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
-      "reliabilityFailCauseName": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false]
+      "reliabilityFailCauseName": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
+      "enteredToolCalls": ["51ad462b305508a07ac7410ce7cd2087a2e51fd3bbf6d2def74cf0739e12032b",true,false]
     },
     "comments": {
       "17d11825d5659977a2ee73f621f22f39cd2a8dbfa56ca030c155301abf764168": 1,
@@ -367,7 +368,8 @@
       "ed80665585a52941b1e3787e53ae35e2e9780dcb71adc9873201423582382c0c": 1,
       "66bb407173f5dd72e96c7075b0ec19cf60858e417d670b946a29d3e4ea55b63e": 1,
       "f177c1b76999e89e1ba16c7bf7c79c3c922915f56e99cdbd0a806eda44115585": 1,
-      "dc798679b2e7c2296f9c03f50118cd312726dcb089d0dfc6cf447ad3e3860be6": 1
+      "dc798679b2e7c2296f9c03f50118cd312726dcb089d0dfc6cf447ad3e3860be6": 1,
+      "3dd04bd67362ed8e9ef33c65ff52daa029d51655e045c225642d943fa20d146a": 1
     }
   }
 }

@@ -1,3 +1,4 @@
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import {
   callEntered,
   historyCallResolver,
@@ -6,6 +7,7 @@ import {
   type HistoryCall,
 } from '../recordedCalls.js';
 import type { ArgumentRowRead } from './argumentRows.js';
+import { ENTRY_EVIDENCE_KEY, entryEvidenceOf, legacyEntryKeys } from './entryEvidence.js';
 import { reasonClassOf, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
 import { callAddressOf, rowList } from './sources.js';
@@ -42,7 +44,7 @@ function indexOf(ref: unknown, resolve: Resolve): number | undefined {
   if (!isRecord(ref)) return undefined;
   const address = callAddressOf(ref);
   if (address === undefined) return undefined;
-  const call = resolve(address.id, address.name);
+  const call = resolve(address.id, address.name, address.occurrenceKey);
   return call.kind === 'matched' ? call.call.index : undefined;
 }
 
@@ -53,28 +55,57 @@ export function standingAdmission(
   current: readonly HistoryCall[],
   argumentsOfTurn: readonly ArgumentRowRead[],
   declarationAddresses?: ReadonlyMap<number, number>,
+  historyBytes: readonly unknown[] = [],
+  legacyEvents?: unknown,
 ) {
   const resolve = historyCallResolver(current);
   const resolveAll = historyCallResolver(history);
   const dispositions = resultDispositions(history, state.middlewareDecisions);
-  const argumentIndices = new Map(argumentsOfTurn.map((row) => [row.index, row.historyIndex]));
+  const argumentByIndex = new Map(argumentsOfTurn.map((row) => [row.index, row]));
+  const entryEvidence = entryEvidenceOf(state[ENTRY_EVIDENCE_KEY]);
+  let legacyEntered: ReadonlySet<string> | undefined;
   const calls = new Map(
-    history.map(({ index, message }) => [
+    history.map(({ index, message, occurrenceKey }) => [
       index,
       {
         execution: recordedToolExecution(message),
+        occurrenceKey,
         disposition: dispositions.get(index),
       },
     ]),
   );
-  const entered = (index: number | undefined): boolean =>
-    index !== undefined && callEntered(calls.get(index)?.execution);
+  const entered = (index: number | undefined, occurrenceKey?: string | null): boolean => {
+    const call = index === undefined ? undefined : calls.get(index);
+    const key = occurrenceKey ?? call?.occurrenceKey;
+    if (occurrenceKey === null || key === null) return false;
+    if (typeof key !== 'string') return callEntered(call?.execution);
+    if (entryEvidence !== undefined) return entryEvidence.keys.has(key);
+    if (resolveAll(undefined, undefined, key).kind === 'ambiguous') return false;
+    if (callEntered(call?.execution)) return true;
+    return (legacyEntered ??= legacyEntryKeys(legacyEvents, historyBytes)).has(key);
+  };
   const returned = (index: number | undefined, native = false): boolean => {
     const call = index === undefined ? undefined : calls.get(index);
     return (
       call?.execution === 'returned' &&
+      (call.occurrenceKey === undefined ||
+        (typeof call.occurrenceKey === 'string' &&
+          resolveAll(undefined, undefined, call.occurrenceKey).kind === 'matched')) &&
       call.disposition !== 'withheld' &&
       (!native || call.disposition !== 'rewritten')
+    );
+  };
+
+  const nativeResult = (row: Row, address?: number): boolean => {
+    if (address !== undefined) return returned(address, true);
+    if (row.kind !== 'period' || row.nativePeriodServed !== true) return false;
+    const key = readCallOccurrenceKey(row);
+    // The period writer attested that this occurrence's native result was
+    // served. Keep that fact after the owning result leaves history.
+    return (
+      typeof key === 'string' &&
+      resolve(undefined, undefined, key).kind === 'missing' &&
+      entered(undefined, key)
     );
   };
 
@@ -96,15 +127,25 @@ export function standingAdmission(
       );
     }
     const index = Number(pointer.path.split('/')[1]);
+    const argument = pointer.key === 'findingsLedger' ? argumentByIndex.get(index) : undefined;
+    if (argument !== undefined) {
+      return kind === 'input'
+        ? entered(argument.historyIndex, argument.occurrenceKey)
+        : returned(argument.historyIndex, true);
+    }
     const occurrence =
-      row.kind === 'argument' || (pointer.key === 'findingsLedger' && argumentIndices.has(index))
-        ? argumentIndices.get(index)
+      row.kind === 'argument'
+        ? undefined
         : row.kind === 'contingent'
         ? indexOf(row.declaredOn, resolve)
         : pointer.key === 'coverageDeclared'
-        ? declarationAddresses?.get(index) ?? indexOf(row, resolve)
+        ? indexOf(row, resolve) ??
+          (readCallOccurrenceKey(row) === undefined ? declarationAddresses?.get(index) : undefined)
         : indexOf(row, resolve);
-    return kind === 'input' ? entered(occurrence) : returned(occurrence, true);
+    const key = readCallOccurrenceKey(
+      row.kind === 'contingent' && isRecord(row.declaredOn) ? row.declaredOn : row,
+    );
+    return kind === 'input' ? entered(occurrence, key) : nativeResult(row, occurrence);
   };
   // A rule can reject an error notice, even when there is no returned result.
   // Such notices leave their recorded settlement and make no withheld-result claim.
@@ -113,5 +154,14 @@ export function standingAdmission(
       dispositions.delete(index);
     }
   }
-  return { admit, dispositions, entered, returned };
+  return {
+    admit,
+    dispositions,
+    entered,
+    returned,
+    threw: (index: number) => calls.get(index)?.execution === 'threw',
+    nativeResult,
+    entryIncomplete: entryEvidence?.complete === false,
+    hasEntryEvidence: entryEvidence !== undefined,
+  };
 }

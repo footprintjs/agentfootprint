@@ -1,18 +1,22 @@
 import { refusalIssues } from '../../../semantics/overclaim.js';
-import type { TurnCall } from '../../../integrity/negative-claim/types.js';
+import {
+  readCallOccurrenceKey,
+  storedCallOccurrenceField,
+  type CallOccurrenceKey,
+} from '../../../lib/callOccurrence.js';
+import type { NegativeRuntimeCall } from './capture.js';
 
 /** Occurrence evidence kept with the application's validation report. */
 export interface NegativeDeclarationOccurrence {
   readonly toolCallId: string;
   readonly iteration: number;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
 }
 
-export interface NegativeOverclaim {
+export interface NegativeOverclaim extends Partial<NegativeDeclarationOccurrence> {
   readonly tool: string;
   readonly code: 'refusal-asserts-absence';
   readonly turn: number;
-  readonly toolCallId?: string;
-  readonly iteration?: number;
 }
 
 export function hasOverclaim(
@@ -21,18 +25,19 @@ export function hasOverclaim(
   turn: number,
   occurrence?: NegativeDeclarationOccurrence,
 ): boolean {
-  return rows.some(
-    (row) =>
-      row.turn === turn &&
-      row.tool === tool &&
-      (occurrence === undefined ||
-        (row.toolCallId === occurrence.toolCallId && row.iteration === occurrence.iteration)),
-  );
+  const key = occurrence === undefined ? undefined : readCallOccurrenceKey(occurrence);
+  return rows.some((row) => {
+    if (row.turn !== turn || row.tool !== tool) return false;
+    if (occurrence === undefined) return true;
+    const rowKey = readCallOccurrenceKey(row);
+    if (key !== undefined || rowKey !== undefined) return typeof key === 'string' && rowKey === key;
+    return row.toolCallId === occurrence.toolCallId && row.iteration === occurrence.iteration;
+  });
 }
 
 /** Use only the call whose native return supplied the declaration. */
 export function returnedDeclarationOf(
-  calls: readonly TurnCall[],
+  calls: readonly NegativeRuntimeCall[],
   resultId: string | undefined,
   tool: string,
   turn: number,
@@ -48,7 +53,11 @@ export function returnedDeclarationOf(
     call.toolCallId === ''
   )
     return undefined;
-  return { toolCallId: call.toolCallId, iteration: call.batch };
+  return {
+    toolCallId: call.toolCallId,
+    iteration: call.batch,
+    ...storedCallOccurrenceField(call),
+  };
 }
 
 export function refusalOverclaims(

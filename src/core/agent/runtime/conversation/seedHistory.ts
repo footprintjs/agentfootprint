@@ -1,6 +1,35 @@
 import type { FindingsLedger } from '../../findings/types.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { NegativeCheckpoint } from '../../negativeClaims/checkpoint.js';
+import type { AgentState } from '../../types.js';
+import type { TypedScope } from 'footprintjs';
+import type { MemoryStore } from '../../../../memory/store/index.js';
+import { resolveTurnNumber } from '../../../../memory/turn/index.js';
+
+/**
+ * Raise `scope.turnNumber` to what the conversation's own stores know.
+ *
+ * The turn number is the KEY memory writes stamp on their entries, so two
+ * turns of one conversation must never share it. In-process counting cannot
+ * provide that: the shape seen in a production field deployment builds a
+ * fresh `Agent` per turn against a stable `conversationId`, so every run
+ * starts counting from scratch while the store holds the whole history.
+ *
+ * Runs after `seedFrom`, because it needs the identity that stage resolves.
+ * A store that throws is not swallowed — a memory whose store is unreachable
+ * fails at its next read anyway, and a guessed turn number is how a
+ * conversation quietly overwrites itself.
+ */
+export async function anchorTurnNumber(
+  scope: TypedScope<AgentState>,
+  stores: readonly MemoryStore[],
+): Promise<void> {
+  scope.turnNumber = await resolveTurnNumber({
+    stores,
+    identity: scope.runIdentity,
+    hostTurn: scope.turnNumber,
+  });
+}
 
 /**
  * A stored conversation handed to the next run — what

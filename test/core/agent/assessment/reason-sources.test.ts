@@ -754,9 +754,10 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
     expect(sourceOf(assessAnswer(r.recording), 'value-unsupported')).toEqual({ kind: 'answer' });
   });
 
-  it.each(['throw', 'native return', 'framework refusal'] as const)(
-    'an absence assertion on a %s uses only native returned evidence for standing',
+  it.each(['throw', 'native return', 'framework refusal', 'withheld native return'] as const)(
+    'an absence assertion on a %s uses only delivered native evidence for standing',
     async (kind) => {
+      const native = kind === 'native return' || kind === 'withheld native return';
       const message = 'Service payments does not exist.';
       const execute = vi.fn(({ service }: Record<string, unknown>) => {
         if (service === 'billing') return [{ incident: 'incident-1' }];
@@ -801,21 +802,32 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
           onToolCall: (call) => (call.args.service === 'payments' ? deny(message) : allow()),
         });
       }
+      if (kind === 'withheld native return') {
+        builder.toolMiddleware({
+          name: 'keep-payments-out',
+          onToolResult: (call) =>
+            call.args.service === 'payments' ? deny('Payment incidents are internal.') : allow(),
+        });
+      }
       const agent = builder.build();
       const r = await runOnce(agent, 'Any open incidents for billing and payments?');
       expect(execute).toHaveBeenCalledTimes(kind === 'framework refusal' ? 1 : 2);
       for (const a of [r.live, assessAnswer(r.recording)]) {
         expect(a.standing).toBe('not-sure');
-        expect(sourceOf(a, 'call-not-completed')).toEqual({
-          kind: 'calls',
-          calls: [
-            {
-              toolCallId: 'c2',
-              toolName: 'read_incidents',
-              outcome: kind === 'throw' ? 'failed' : 'refused',
-            },
-          ],
-        });
+        if (kind === 'withheld native return') {
+          expect(sourceOf(a, 'result-withheld')).toEqual({ kind: 'run' });
+        } else {
+          expect(sourceOf(a, 'call-not-completed')).toEqual({
+            kind: 'calls',
+            calls: [
+              {
+                toolCallId: 'c2',
+                toolName: 'read_incidents',
+                outcome: kind === 'throw' ? 'failed' : 'refused',
+              },
+            ],
+          });
+        }
         expect(sourceOf(a, 'declaration-overclaimed')).toEqual(
           kind === 'native return'
             ? { kind: 'calls', calls: [{ toolCallId: 'c2', toolName: 'read_incidents' }] }
@@ -825,6 +837,13 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
 
       if (kind !== 'framework refusal') {
         const rows = agent.answerValidation()?.checks.filter((c) => c.id.includes(':declaration:'));
+        const snapshot = r.recording.snapshot as {
+          sharedState: { history: Record<string, unknown>[] };
+        };
+        const landedKey = snapshot.sharedState.history.find(
+          (row) => row.role === 'tool' && row.toolCallId === 'c2',
+        )?.callOccurrenceKey;
+        expect(landedKey).toEqual(Array(5).fill(expect.any(Number)));
         expect(rows).toEqual([
           {
             id: 'agent:negative-claims:declaration:0',
@@ -832,7 +851,11 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
             disposition: 'not-applicable',
             reason: 'declaration-overclaimed',
             tools: ['read_incidents'],
-            ...(kind === 'native return' && { toolCallId: 'c2', iteration: 2 }),
+            ...(native && {
+              toolCallId: 'c2',
+              iteration: 2,
+              callOccurrenceKey: landedKey,
+            }),
           },
         ]);
       }

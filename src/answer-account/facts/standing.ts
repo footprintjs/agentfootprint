@@ -8,7 +8,11 @@ import {
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
 import { foldState } from '../../core/agent/assessment/assess.js';
-import { standingNamesFrom } from '../../core/agent/assessment/compose.js';
+import {
+  dispatchProofWitness,
+  settledSiblingWitness,
+  standingNamesFrom,
+} from '../../core/agent/assessment/compose.js';
 import { unplacedEvidenceKind } from '../../core/agent/assessment/sources.js';
 import type {
   AnswerAssessment,
@@ -27,6 +31,7 @@ import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.j
 export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'argument-assumed',
   'value-contingent',
+  'check-unreachable',
   'call-not-completed',
   'work-not-finished',
   'step-skipped',
@@ -57,7 +62,14 @@ export function recordedStandingWitnesses(
 ): AnswerAssessment | undefined {
   const state = view.stateAsRecorded;
   if (state === undefined) return undefined;
-  const assessed = foldState(state, undefined, view.servedUnderPolicy);
+  const assessed = foldState(
+    state,
+    undefined,
+    view.servedUnderPolicy,
+    undefined,
+    undefined,
+    view.events,
+  );
   if (assessed.keptOut !== undefined) return undefined;
   const complete = reasons.every(
     (reason) =>
@@ -180,6 +192,7 @@ function callsBehind(r: AnswerAssessment['reasons'][number]): number {
 const CALL_OUTCOME_LINES = {
   refused: 'howSure.reason.callRefused',
   failed: 'howSure.reason.callFailed',
+  'not-dispatched': 'howSure.reason.callNotDispatched',
   unknown: REASON_LINES['call-not-completed'],
 } as const;
 
@@ -189,9 +202,14 @@ function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][numbe
   const groups: Record<keyof typeof CALL_OUTCOME_LINES, AssessmentPointer[]> = {
     refused: [],
     failed: [],
+    'not-dispatched': [],
     unknown: [],
   };
   for (const w of r.witness) {
+    if (settledSiblingWitness(w)) {
+      groups['not-dispatched'].push(w);
+      continue;
+    }
     const row = w.kind === 'history' ? historyCallAt(history, w.index)?.message : undefined;
     const message =
       w.kind === 'history'
@@ -205,7 +223,7 @@ function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][numbe
         : undefined;
     groups[outcome ?? 'unknown'].push(w);
   }
-  return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {
+  return (['refused', 'failed', 'not-dispatched', 'unknown'] as const).flatMap((outcome) => {
     const witnesses = groups[outcome];
     if (witnesses.length === 0) return [];
     return ctx.say(CALL_OUTCOME_LINES[outcome], {
@@ -278,6 +296,7 @@ export function standingLines(
     ctx.view.servedUnderPolicy,
     undefined,
     declarationAddresses,
+    ctx.view.events,
   );
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
@@ -323,13 +342,18 @@ export function standingLines(
             unplaced.length > 0 && count === 0
               ? []
               : [
-                  ctx.say(REASON_LINES[r.reason], {
-                    ...(COUNTED.has(r.reason) && {
-                      vars: { n: n(count) },
-                    }),
-                    ...recordedAt(pointersOf(r.witness)),
-                    item: true,
-                  }),
+                  ctx.say(
+                    r.reason === 'check-unreachable' && r.witness.some(dispatchProofWitness)
+                      ? 'howSure.reason.dispatchProofUnavailable'
+                      : REASON_LINES[r.reason],
+                    {
+                      ...(COUNTED.has(r.reason) && {
+                        vars: { n: n(count) },
+                      }),
+                      ...recordedAt(pointersOf(r.witness)),
+                      item: true,
+                    },
+                  ),
                 ];
           if (unplaced.length === 0) return line;
           resolve ??= historyCallResolver(readHistoryCalls(historyOf(ctx.view)));

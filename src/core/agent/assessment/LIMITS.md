@@ -39,9 +39,17 @@
   is still read from the envelope in `history` — `fold-real-record.test.ts` pins
   the account's reduced fixture reading the same standing as the full record. A
   record that dropped the history too has nothing left to read.
+- **Tool entry after eviction.** The turn keeps up to 1,024 occurrence keys
+  with a true entry fact. The standing reports `check-unreachable` if it
+  cannot retain every fact. An older saved keyed tool-end can prove entry.
+  An unbound legacy record can report that entry could not be established
+  and leaves the input assertion unread.
 - **Evicted results.** Under `.window()`, a window strategy can remove this
-  turn's early results from `history`; the commit log still has them, but the
-  fold reads the final state, so an evicted undeclared `[]` fires nothing.
+  turn's early results from `history`. The commit log still has them. A
+  native period finding survives only when the period row carries proof
+  that the exact native return was served. The assessment can read a
+  rewritten result's period while its served bytes remain in history.
+  An evicted undeclared `[]` supplies no finding.
 - **A correction after an evicted call with the same ID.** When a call's result
   is evicted and a later proposal with the same turn, tool and ID gets a
   library correction or another pre-dispatch row, the remaining rows can look

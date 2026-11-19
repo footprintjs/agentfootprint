@@ -233,6 +233,25 @@ describe('standing reason admission by witness', () => {
     },
   );
 
+  it('an incomplete entry record says which check could not reach a verdict', () => {
+    const assessment = assessmentOf(
+      { state: { enteredToolCalls: { complete: false, entries: [] } } },
+      RETURNED,
+    );
+    const witness = assessment.reasons.find(({ reason }) => reason === 'check-unreachable');
+    expect(witness?.witness).toEqual([
+      { kind: 'state', key: 'enteredToolCalls', path: '/complete' },
+    ]);
+    expect(
+      standingLineOf(
+        assessmentDataOf(assessment),
+        [],
+        false,
+        standingFactsOf(assessment, new Map()),
+      ),
+    ).toContain('the record could not establish tool entry for every checked call');
+  });
+
   it('describes the answer when the answer used a set-aside result', () => {
     const assessment = assessmentOf(ANSWER_CONTINGENT, NOT_ENTERED);
     const line = standingLineOf(

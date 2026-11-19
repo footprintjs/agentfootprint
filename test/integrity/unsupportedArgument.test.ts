@@ -28,6 +28,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { recordRun } from '../../src/observe.js';
 import {
   declaredEnumValuesOf,
   unsupportedArgumentsOf,
@@ -65,15 +66,23 @@ const corpus = (grounded: string[], assistant: string[] = []): ChoiceCorpus => (
 });
 
 describe('unit: unsupportedArgumentsOf — the rule', () => {
-  it('keeps per-call provenance separate from same-tool incident payloads', () => {
+  it('keeps repeated provider IDs distinct without changing the incident payloads', () => {
+    const first = [1, 2, 3, 4, 0] as const;
+    const second = [1, 2, 3, 4, 1] as const;
     const calls = [
-      chose({ machine: 'unserved-first-machine' }, { toolCallId: 'first-call' }),
-      chose({ machine: 'unserved-second-machine' }, { toolCallId: 'second-call' }),
+      chose({ machine: 'unserved-first-machine' }, { callOccurrenceKey: first }),
+      chose({ machine: 'unserved-second-machine' }, { callOccurrenceKey: second }),
     ];
-    const { findings, callIds } = unsupportedArgumentsOf(calls, corpus(['Nothing served.']), 2);
+    const { findings, occurrences } = unsupportedArgumentsOf(calls, corpus(['Nothing served.']), 2);
     expect(findings).toHaveLength(2);
-    expect(findings.map((finding) => callIds.get(finding))).toEqual(['first-call', 'second-call']);
-    expect(findings.every((finding) => !Object.hasOwn(finding, 'toolCallId'))).toBe(true);
+    expect(findings.map((finding) => occurrences.get(finding))).toEqual([
+      { toolCallId: 'call-2', callOccurrenceKey: first },
+      { toolCallId: 'call-2', callOccurrenceKey: second },
+    ]);
+    for (const finding of findings) {
+      expect(finding).not.toHaveProperty('toolCallId');
+      expect(finding).not.toHaveProperty('callOccurrenceKey');
+    }
   });
 
   it('a value whose only ground is the model’s own earlier prose files a finding', () => {
@@ -309,13 +318,14 @@ function triageAgent(opts: {
   machine: string;
   /** Repeat the offending call, to exercise identity dedup. */
   repeat?: boolean;
+  answerLayer?: true;
 }): { agent: Agent; captured: Captured } {
   const bad = {
     content: '',
     toolCalls: [{ id: 'c2', name: 'backup_status', args: { machine: opts.machine } }],
     stopReason: 'tool_use' as const,
   };
-  const agent = Agent.create({
+  const builder = Agent.create({
     provider: mock({
       replies: [
         // Turn 1: the model both renders prose AND calls the grounding tool,
@@ -335,8 +345,8 @@ function triageAgent(opts: {
   })
     .system('You are a fleet triage assistant.')
     .tool(fleetReport())
-    .tool(backupStatus(opts.armed))
-    .build();
+    .tool(backupStatus(opts.armed));
+  const agent = (opts.answerLayer ? builder.answerLayer() : builder).build();
   const captured: Captured = { findings: [], dispositions: [] };
   agent.on('agentfootprint.integrity.context_error', (e) => {
     captured.findings.push(e.payload as unknown as Record<string, unknown>);
@@ -376,14 +386,35 @@ describe('functional: the choice seam through the real loop', () => {
 });
 
 describe('regression: one defect, one event — and zero-delta without the declaration', () => {
-  it('the same bad argument re-chosen on a later iteration stays ONE finding', async () => {
+  it('the same defect keeps each keyed witness and still emits one host incident', async () => {
     const { agent, captured } = triageAgent({
       armed: true,
       machine: '4417-ganymede',
       repeat: true,
+      answerLayer: true,
     });
+    const recorder = recordRun(agent);
     await agent.run({ message: TASK });
+    const snapshot = recorder.toRecording().snapshot as {
+      sharedState: {
+        history: Record<string, unknown>[];
+        findingsLedger: Record<string, unknown>[];
+      };
+    };
+    recorder.stop();
+    const calls = snapshot.sharedState.history.filter(
+      (row) => row.role === 'tool' && row.toolCallId === 'c2',
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.callOccurrenceKey).not.toEqual(calls[1]?.callOccurrenceKey);
+    const rows = snapshot.sharedState.findingsLedger.filter(
+      (row) => row.kind === 'integrity-finding' && row.finding === 'unsupported-argument',
+    );
+    expect(rows.map(({ callOccurrenceKey }) => callOccurrenceKey)).toEqual(
+      calls.map(({ callOccurrenceKey }) => callOccurrenceKey),
+    );
     expect(argumentFindings(captured)).toHaveLength(1);
+    expect(argumentFindings(captured)[0]).not.toHaveProperty('callOccurrenceKey');
   });
 
   it('a tool that declares no argumentsFrom is never this check’s subject', async () => {

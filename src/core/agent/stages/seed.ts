@@ -26,7 +26,6 @@ import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 import type { TypedScope } from 'footprintjs';
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import type { MemoryStore } from '../../../memory/store/index.js';
-import { resolveTurnNumber } from '../../../memory/turn/index.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
 import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from '../../runCheckpoint.js';
@@ -36,6 +35,7 @@ import { runMessageChain } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
 import type { HonestyLayers } from '../honesty/armed.js';
+import { seedEnteredToolCalls } from '../honesty/enteredToolCalls.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../../tools/tools.js';
@@ -47,7 +47,11 @@ import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../m
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
 import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
-import { historyForTurn, turnNumberFor } from '../runtime/conversation/seedHistory.js';
+import {
+  anchorTurnNumber,
+  historyForTurn,
+  turnNumberFor,
+} from '../runtime/conversation/seedHistory.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
 
@@ -338,31 +342,6 @@ export interface SeedStageDeps {
   readonly toolWantsByName?: Readonly<Record<string, readonly string[]>>;
 }
 
-/**
- * Raise `scope.turnNumber` to what the conversation's own stores know.
- *
- * The turn number is the KEY memory writes stamp on their entries, so two
- * turns of one conversation must never share it. In-process counting cannot
- * provide that: the shape seen in a production field deployment builds a
- * fresh `Agent` per turn against a stable `conversationId`, so every run
- * starts counting from scratch while the store holds the whole history.
- *
- * Runs after `seedFrom`, because it needs the identity that stage resolves.
- * A store that throws is not swallowed — a memory whose store is unreachable
- * fails at its next read anyway, and a guessed turn number is how a
- * conversation quietly overwrites itself.
- */
-async function anchorTurnNumber(
-  scope: TypedScope<AgentState>,
-  stores: readonly MemoryStore[],
-): Promise<void> {
-  scope.turnNumber = await resolveTurnNumber({
-    stores,
-    identity: scope.runIdentity,
-    hostTurn: scope.turnNumber,
-  });
-}
-
 /** The inputs layer's schema decoration (`arguments/serve/schema.ts` · `withArgumentRules`). */
 type RuleDecoration = typeof import('../arguments/serve.js').withArgumentRules;
 
@@ -529,6 +508,7 @@ function seedFrom(
     scope.sourceDeclarationCorrectionSpent = true;
   const history = historyForTurn(resume, message);
   scope.history = history;
+  seedEnteredToolCalls(scope, deps, resume !== undefined && !resume.appendsUserTurn);
   restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means

@@ -77,9 +77,11 @@ import {
 } from '../../../time/check.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
 
-/** One call of the batch ToolCalls just ran — identities only. */
+/** One call of the batch ToolCalls just ran. */
 export interface RanCall {
   readonly callOccurrenceKey?: CallOccurrenceKey;
+  /** The keyed landing committed a native result before the window could evict it. */
+  readonly nativePeriodServed?: true;
   readonly toolCallId: string;
   readonly toolName: string;
 }
@@ -94,6 +96,7 @@ export interface CallPeriod {
 /** A call the layer will judge: the periods its result declared, and the argument its tool's `ToolPeriod` names. */
 export interface PlannedPeriod {
   readonly callOccurrenceKey?: CallOccurrenceKey;
+  readonly nativePeriodServed?: true;
   readonly toolCallId: string;
   readonly toolName: string;
   /** Every period the call's result declared — empty when it declared none. */
@@ -107,6 +110,7 @@ export interface PlannedPeriod {
 /** A judged call — the verdict and, under `.time()`, the time layer's checks that hold. */
 export interface CheckedPeriod {
   readonly callOccurrenceKey?: CallOccurrenceKey;
+  readonly nativePeriodServed?: true;
   readonly toolCallId: string;
   readonly toolName: string;
   readonly verdict: PeriodRow['verdict'];
@@ -214,6 +218,7 @@ export function planPeriods(
     plan.push({
       toolCallId: call.toolCallId,
       ...callOccurrenceField(call.callOccurrenceKey),
+      ...(call.nativePeriodServed === true && { nativePeriodServed: true as const }),
       toolName: call.toolName,
       declared,
       ...(argument !== undefined && { argument }),
@@ -285,6 +290,7 @@ export function checkPeriods(plan: readonly PlannedPeriod[]): CheckedPeriod[] {
     return {
       toolCallId: p.toolCallId,
       ...callOccurrenceField(p.callOccurrenceKey),
+      ...(p.nativePeriodServed === true && { nativePeriodServed: true as const }),
       toolName: p.toolName,
       verdict,
       ...(p.argument !== undefined && { argument: p.argument }),
@@ -304,6 +310,7 @@ export function periodRowsOf(
     turn: stamp.turn,
     toolCallId: c.toolCallId,
     ...callOccurrenceField(c.callOccurrenceKey),
+    ...(c.nativePeriodServed === true && { nativePeriodServed: true as const }),
     toolName: c.toolName,
     iteration: stamp.iteration,
     verdict: c.verdict,
@@ -320,6 +327,7 @@ function callsOf(scope: TypedScope<ResultsLayerState>): RanCall[] {
   return [...((scope.calls as readonly RanCall[] | undefined) ?? [])].map((c) => ({
     toolCallId: c.toolCallId,
     ...callOccurrenceField(c.callOccurrenceKey),
+    ...(c.nativePeriodServed === true && { nativePeriodServed: true as const }),
     toolName: c.toolName,
   }));
 }

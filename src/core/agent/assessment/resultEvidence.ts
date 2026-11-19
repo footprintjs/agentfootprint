@@ -57,6 +57,7 @@ export function readTurnResults(
   reads: readonly ResultRead[],
   declarations: AssessmentDeclarations | undefined,
   issued: IssuedPairs,
+  opportunities: number,
   g: Gathered,
 ): void {
   const readable: AssessmentPointer[] = [];
@@ -82,12 +83,12 @@ export function readTurnResults(
     // A gap the result's own envelope lists, when no row holds it.
     if (own?.gap === true) fire(g, 'coverage-gap', at);
   }
-  if (reads.length > 0) {
+  if (opportunities > 0) {
     g.checked.push({
       layer: 3,
       check: 'result-shape',
       ran: readable.length,
-      of: reads.length,
+      of: opportunities,
       witness: readable,
     });
   }
@@ -100,6 +101,7 @@ export function readTurnResults(
 export function readTurnCalls(
   reads: readonly ResultRead[],
   coverage: readonly CoverageRow[],
+  opportunities: number,
   g: Gathered,
 ): void {
   const witness = coverage
@@ -110,7 +112,7 @@ export function readTurnCalls(
     if (rows.length > 0 || own !== undefined) declared += 1;
     if (own !== undefined) witness.push(at);
   }
-  const of = reads.length;
+  const of = opportunities;
   if (of > 0) {
     g.checked.push({
       layer: 3,

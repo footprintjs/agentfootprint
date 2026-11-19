@@ -350,6 +350,8 @@ export interface AnswerAssessment {
 export interface AssessmentRecord {
   /** The run's snapshot — `recording.snapshot`, `agent.getLastSnapshot()`. Its `sharedState` is read. */
   readonly snapshot?: unknown;
+  /** Earlier recordings can use a scoped tool-end as proof of tool entry. */
+  readonly events?: unknown;
   /**
    * A paused run's checkpoint (`RunnerPauseOutcome.checkpoint`) — for a host
    * that kept only that: its `sharedState` is read when no snapshot is given.

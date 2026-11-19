@@ -38,7 +38,12 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
-import { callNotCompletedClause, unfinishedWorkClause } from './callStandingWords.js';
+import { dispatchProofWitness } from './entryEvidence.js';
+import {
+  callNotCompletedClause,
+  settledSiblingWitness,
+  unfinishedWorkClause,
+} from './callStandingWords.js';
 import type {
   AnswerAssessment,
   AssessmentCheck,
@@ -47,6 +52,8 @@ import type {
 } from './types.js';
 
 export { assumedValuesSourceOf } from './assumedValues.js';
+export { dispatchProofWitness } from './entryEvidence.js';
+export { settledSiblingWitness } from './callStandingWords.js';
 
 /**
  * Bumped whenever any word of the tables below changes. 2: the named clauses
@@ -334,6 +341,8 @@ export interface StandingNames {
   readonly displayNames: ReadonlyMap<string, string>;
   readonly skippedSteps?: number;
   readonly batchRefused?: true;
+  readonly settledSiblings?: number;
+  readonly dispatchProofGap?: true;
 }
 
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
@@ -369,19 +378,24 @@ export function standingFactsOf(
   displayNames: ReadonlyMap<string, string>,
 ): StandingNames {
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
-  const batchRefused = assessment.reasons
-    .find((r) => r.reason === 'call-not-completed')
-    ?.witness.some(
-      (pointer) =>
-        pointer.kind === 'history' &&
-        pointer.path === '/toolResultExecution' &&
-        pointer.toolCallId === undefined,
-    );
+  const settlements = assessment.reasons.find((r) => r.reason === 'call-not-completed')?.witness;
+  const settledSiblings = settlements?.filter(settledSiblingWitness).length;
+  const batchRefused = settlements?.some(
+    (pointer) =>
+      pointer.kind === 'history' &&
+      pointer.path === '/toolResultExecution' &&
+      pointer.toolCallId === undefined,
+  );
+  const dispatchProofGap = assessment.reasons
+    .find((r) => r.reason === 'check-unreachable')
+    ?.witness.some(dispatchProofWitness);
   return {
     sources: sourcesByReason(assessment),
     displayNames,
     ...(skippedSteps !== undefined && { skippedSteps }),
     ...(batchRefused && { batchRefused: true as const }),
+    ...(settledSiblings !== undefined && { settledSiblings }),
+    ...(dispatchProofGap && { dispatchProofGap: true as const }),
   };
 }
 
@@ -447,6 +461,9 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  if (reason === 'check-unreachable' && names?.dispatchProofGap) {
+    return 'the record could not establish tool entry for every checked call';
+  }
   if (reason === 'value-contingent' && source?.kind === 'answer') {
     return 'a value in the answer came from a result the model had set aside';
   }
@@ -456,6 +473,7 @@ function reasonClause(
         source,
         names.displayNames,
         names.batchRefused ? 'a call was refused' : REASON_WORDS[reason],
+        names.settledSiblings,
       );
     }
     if (reason === 'work-not-finished') {

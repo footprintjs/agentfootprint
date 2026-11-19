@@ -7,6 +7,7 @@ import { isDevMode, type TypedScope } from 'footprintjs';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { SearchTool, TurnCall, TurnRecord } from '../../../integrity/negative-claim/types.js';
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { sameName } from '../../../lib/normalize.js';
 import { isJsonFaithful } from '../../../lib/jsonFaithful.js';
 import { stableJson } from '../../../lib/stableJson.js';
@@ -45,6 +46,7 @@ import type { SearchDispatch } from '../stages/searchCoverage.js';
 import type { AgentState } from '../types.js';
 
 export interface NegativeRuntimeCall extends TurnCall {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly trustedContext: boolean;
 }
 
@@ -196,6 +198,7 @@ export function startNegativeCall(
     party?: ToolParty;
     args: Readonly<Record<string, unknown>>;
     toolCallId: string;
+    callOccurrenceKey?: CallOccurrenceKey;
     iteration: number;
     runId?: string;
     dispatch?: SearchDispatch;
@@ -265,6 +268,7 @@ export function startNegativeCall(
   const call: NegativeRuntimeCall = {
     resultId: dispatch.resultId,
     toolCallId: input.toolCallId,
+    ...callOccurrenceField(input.callOccurrenceKey),
     toolName: tool.schema.name,
     turn: scope.turnNumber,
     batch: input.iteration,

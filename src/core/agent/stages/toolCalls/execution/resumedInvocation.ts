@@ -5,6 +5,7 @@ import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
 import { isPauseRequest } from '../../../../pause.js';
@@ -318,6 +319,7 @@ export function buildResumedInvocation(
               party: resolved.party,
               args,
               toolCallId,
+              ...occurrence,
               iteration,
               runId: links.runFactsOf(scope)?.runId,
               dispatch: searchDispatch,
@@ -339,6 +341,7 @@ export function buildResumedInvocation(
       let result: unknown;
       let returned = false;
       try {
+        recordToolEntry(scope, seen?.callOccurrenceKey);
         result = await tool.execute(args, executionContext);
         returned = true;
       } finally {
