@@ -122,8 +122,8 @@ export function requireVerificationOnResume(
   }
   if (state !== undefined && !enabled)
     throw new TypeError(
-      'This saved run carries findings verification evidence. Continue it with findings ' +
-        'verification enabled; disabling it would silently discard saved checks.',
+      'This saved run carries findings verification evidence, so this version cannot resume or ' +
+        'continue it. Start a new run with agent.run({ message }).',
     );
   return state;
 }
