@@ -14,6 +14,7 @@
  * rest) · Redaction (the real answer, never the served one).
  */
 
+import { flowChart } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -24,7 +25,15 @@ import {
   Parallel,
   pauseHere,
   Sequence,
+  type AgentOptions,
 } from '../../src/index.js';
+import {
+  defineMemory,
+  InMemoryStore,
+  MEMORY_STRATEGIES,
+  MEMORY_TYPES,
+  type MemoryDefinition,
+} from '../../src/doors/memory.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
 import { toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
@@ -51,7 +60,37 @@ const archive = defineTool({
     }),
 });
 
-const call = (name: string) => ({ content: '', toolCalls: [{ id: 'c1', name, args: {} }] });
+const approval = defineTool({
+  name: 'ask_approval',
+  description: 'Wait for approval.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () => pauseHere({ question: 'Approve?' }),
+});
+
+const pendingReport = defineTool({
+  name: 'pending_report',
+  description: 'Check whether the report is ready.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () => ({ content: 'Queued.', effects: [], status: 'pending' }),
+});
+
+const call = (name: string, id = 'c1') => ({ content: '', toolCalls: [{ id, name, args: {} }] });
+
+const REPORT = 'The report is ready.';
+const WARNING = '\n\n---\n\nNot sure — a tool reported unfinished work.';
+const REPORT_CHUNKS = ['The ', 'report ', 'is ', 'ready.', WARNING];
+
+function reportBuilder(
+  answer: string,
+  pause: boolean,
+  options: Pick<AgentOptions, 'redact' | 'observerDelivery'> = {},
+) {
+  const replies = [call('pending_report'), ...(pause ? [call('ask_approval', 'c2')] : []), answer];
+  return Agent.create({ provider: mock({ replies, chunkDelayMs: 0 }), model: 'm', ...options })
+    .tool(pendingReport)
+    .tool(approval)
+    .answerLayer({ standingLine: true });
+}
 
 type Runnable = {
   run(input: { message: string }): Promise<unknown>;
@@ -134,9 +173,18 @@ describe('toSSE text — the appended text reaches the reader', () => {
     expect(chunks).toHaveLength(1);
   });
 
-  it('a filter that drops the root turn start still gets the whole answer', async () => {
+  it('an older record still gets the whole answer when its root start is filtered out', async () => {
     const agent = Agent.create({ provider: completeOnly('Root answer.'), model: 'm' }).build();
-    const { reply } = await textReply(agent, { filter: noTurnStarts });
+    const runner: Runnable = {
+      run: (input) => agent.run(input),
+      on: (_pattern, listener) =>
+        agent.on('*', (event) => {
+          const meta = { ...event.meta };
+          delete meta.rootTurn;
+          listener({ ...event, meta });
+        }),
+    };
+    const { reply } = await textReply(runner, { filter: noTurnStarts });
     expect(reply).toBe('Root answer.');
   });
 
@@ -323,21 +371,28 @@ describe('toSSE text — composition: only the outermost turn writes the rest', 
 });
 
 describe('toSSE text — resume', () => {
+  it('a text stream opened after the question delivers the same chunks as a fresh turn', async () => {
+    const fresh = await textReply(reportBuilder(REPORT, false).build());
+    expect(fresh.answer).toBe(REPORT + WARNING);
+    expect(fresh.chunks).toEqual(REPORT_CHUNKS);
+
+    const agent = reportBuilder(REPORT, true).build();
+    const paused = await agent.run({ message: 'Is the report ready?' });
+    if (!isPaused(paused)) throw new Error('Expected the approval tool to pause the run');
+
+    const reading = readText(agent);
+    expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(fresh.answer);
+    expect(await reading).toEqual(fresh.chunks);
+  });
+
   it.each(['a two-agent Sequence', 'a lone agent'] as const)(
-    'resuming %s writes no answer when the stream missed its turn start',
+    'resuming %s writes only an owning Agent answer if no tokens streamed',
     async (shape) => {
       const first = Agent.create({
         provider: completeOnly(call('ask_approval'), 'Approved.'),
         model: 'm',
       })
-        .tool(
-          defineTool({
-            name: 'ask_approval',
-            description: 'Wait for approval.',
-            inputSchema: { type: 'object', properties: {} },
-            execute: () => pauseHere({ question: 'Approve?' }),
-          }),
-        )
+        .tool(approval)
         .build();
       const composed = shape === 'a two-agent Sequence';
       const runner = composed
@@ -345,7 +400,10 @@ describe('toSSE text — resume', () => {
             .step('approve', first)
             .step(
               'report',
-              Agent.create({ provider: completeOnly('Report complete.'), model: 'm' }).build(),
+              Agent.create({
+                provider: mock({ chunkDelayMs: 0, replies: ['Report complete.'] }),
+                model: 'm',
+              }).build(),
             )
             .build()
         : first;
@@ -361,10 +419,110 @@ describe('toSSE text — resume', () => {
         const answer = await runner.resume(paused.checkpoint, { approved: true });
         expect(answer).toBe(composed ? 'Report complete.' : 'Approved.');
         expect(turnAnswers[0]).toBe('Approved.');
-        expect(await reading).toEqual([]);
+        expect(await reading).toEqual(composed ? [] : ['Approved.']);
       } finally {
         off();
       }
+    },
+  );
+
+  it('continues through a resumed child end and appends the root warning once', async () => {
+    const child = reportBuilder('The draft is ready.', true).build();
+    const read = flowChart('Seed', () => undefined, 'seed')
+      .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
+        inputMapper: () => ({
+          message: 'Check the draft.',
+          identity: { conversationId: 'specialist' },
+        }),
+        outputMapper: () => ({ formatted: 'The specialist finished.' }),
+      })
+      .build();
+    const memory = defineMemory({
+      id: 'nested',
+      type: MEMORY_TYPES.EPISODIC,
+      strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
+      store: new InMemoryStore(),
+      readOnly: true,
+    });
+    const agent = reportBuilder(REPORT, false)
+      .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
+      .build();
+    const paused = await agent.run({ message: 'Is the report ready?' });
+    if (!isPaused(paused)) throw new Error('Expected the specialist to pause the run');
+
+    const ends: unknown[] = [];
+    const off = agent.on('agentfootprint.agent.turn_end', ({ meta, payload }) => {
+      ends.push({ root: meta.rootTurn, answer: payload.finalContent });
+    });
+    try {
+      const reading = readText(agent);
+      expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
+      expect(ends).toEqual([
+        { root: undefined, answer: 'The draft is ready.' + WARNING },
+        { root: true, answer: REPORT + WARNING },
+      ]);
+      expect(await reading).toEqual(['The ', 'draft ', 'is ', 'ready.', ...REPORT_CHUNKS]);
+    } finally {
+      off();
+    }
+  });
+
+  it('does not append a refused answer after the question', async () => {
+    const draft = 'Order 77 is 4242.';
+    const agent = Agent.create({
+      provider: mock({
+        chunkDelayMs: 0,
+        replies: [call('archive_lookup'), call('ask_approval', 'c2'), draft, draft],
+      }),
+      model: 'm',
+    })
+      .tool(archive)
+      .tool(approval)
+      .namesAndNumbersFromEvidence({ posture: 'rails' })
+      .limitsTravelWithTheAnswer()
+      .build();
+    const paused = await agent.run({ message: 'Where is order 77?' });
+    if (!isPaused(paused)) throw new Error('Expected the approval tool to pause the run');
+
+    const reading = readText(agent);
+    await expect(agent.resume(paused.checkpoint, { approved: true })).rejects.toThrow();
+    expect((await reading).join('')).toBe(draft + draft);
+  });
+
+  it.each(['inline', 'deferred'] as const)(
+    'uses the real value for the resumed text and serves the record under redaction (%s)',
+    async (observerDelivery) => {
+      const agent = reportBuilder(REPORT, true, {
+        observerDelivery,
+        redact: conversationRedaction(),
+      }).build();
+      const paused = await agent.run({ message: 'Is the report ready?' });
+      if (!isPaused(paused)) throw new Error('Expected the approval tool to pause the run');
+
+      const seen: AgentfootprintEvent[] = [];
+      const reading = readText(agent, {
+        filter: (event) => {
+          seen.push(event);
+          return true;
+        },
+      });
+      const record = readText(agent, { format: 'full' });
+      expect(await agent.resume(paused.checkpoint, { approved: true })).toBe(REPORT + WARNING);
+      expect(await reading).toEqual(REPORT_CHUNKS);
+      expect(seen.filter((event) => event.type === 'agentfootprint.stream.token')).toEqual(
+        REPORT_CHUNKS.slice(0, -1).map(() =>
+          expect.objectContaining({ payload: expect.objectContaining({ content: '[REDACTED]' }) }),
+        ),
+      );
+      const end = seen.find((event) => event.type === 'agentfootprint.agent.turn_end');
+      expect(end).toMatchObject({
+        meta: { rootTurn: true },
+        payload: { finalContent: '[REDACTED]' },
+      });
+      const recordText = (await record).join('');
+      expect(recordText).toContain('"finalContent":"[REDACTED]"');
+      expect(recordText).not.toContain(REPORT);
+      expect(recordText).not.toContain(WARNING);
     },
   );
 });

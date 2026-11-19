@@ -9,7 +9,10 @@
  * call did not run carries `outcome: 'refused'` as its last field
  * (`semantics/toolOutcome.ts`). In this scenario that is the unknown tool
  * (`c2`) and the call refused for invalid arguments (`c3`), wherever a history
- * carries them. Nothing else changes.
+ * carries them.
+ *
+ * The owning Agent's end also gains `meta.rootTurn`. The Sequence member's
+ * end remains unchanged.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,13 +21,18 @@ import { describe, expect, it } from 'vitest';
 import { noPolicyStream } from './noPolicyStream.scenario.js';
 
 describe('no policy preserves the whole stream with native run identity', () => {
-  it('changes only the exact metadata aliases and one named restoration observation', async () => {
+  it('changes only the named native record fields and restoration observation', async () => {
     const golden = readFileSync(join(__dirname, 'fixtures/no-policy-stream.main.json'), 'utf8');
     expect(createHash('sha256').update(golden).digest('hex')).toBe(
       '9cb03cd5de896e574fcf35262ec1954205a6c9f1330412565216166f0cd4d241',
     );
     const events = JSON.parse(golden) as {
-      meta: { runId: string; sourcePosition?: { engineRunId?: string; logRunId?: string } };
+      type: string;
+      meta: {
+        runId: string;
+        rootTurn?: true;
+        sourcePosition?: { engineRunId?: string; logRunId?: string };
+      };
     }[];
     // The first two aliases named one execution, and so on. This fixture's
     // resume is FRESH. SAME resumes retain their original native log identity.
@@ -47,6 +55,10 @@ describe('no policy preserves the whole stream with native run identity', () => 
       if (source?.engineRunId !== undefined) source.engineRunId = nativeAlias(source.engineRunId);
       if (source?.logRunId !== undefined) source.logRunId = nativeAlias(source.logRunId);
     }
+    // The fixture ends its resumed Agent first and its Sequence member second.
+    const turnEnds = events.filter((event) => event.type === 'agentfootprint.agent.turn_end');
+    expect(turnEnds).toHaveLength(2);
+    turnEnds[0]!.meta.rootTurn = true;
     // A decided record change: `stream.tool_end` says whether the tool's function was
     // entered (`entered`). The two calls that never reached a tool — an unknown name
     // (`c2`) and rejected arguments (`c3`) — carry `entered: false`. The two

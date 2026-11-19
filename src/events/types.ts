@@ -123,6 +123,8 @@ export interface EventMeta {
   readonly compositionPath: readonly string[];
   /** Turn index (Agent context only). */
   readonly turnIndex?: number;
+  /** Present on the owning Agent's `agent.turn_end`, on either a fresh or resumed turn. */
+  readonly rootTurn?: true;
   /** Iteration index (Agent context only). */
   readonly iterIndex?: number;
   /** OTEL trace id (when env.traceId is set). */
