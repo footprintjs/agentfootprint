@@ -13,6 +13,15 @@
  *
  *   Run:  npm run check:tryit   (from docs-next/; needs the library dist built)
  */
+import { deepStrictEqual, ok } from 'node:assert/strict';
+import { Agent } from 'agentfootprint';
+import { mock } from 'agentfootprint/providers';
+import type { StructureRecorder } from 'footprintjs';
+import {
+  buildWeatherAgent,
+  weatherAnswer,
+  weatherInput,
+} from '../../docs-demo/scripts/quick-start-weather.mjs';
 import { buildDynamicReactAgent } from '../components/demos/dynamicReactDemo';
 import { buildSupportSkillGraph } from '../components/demos/skillGraphDemo';
 
@@ -126,3 +135,28 @@ if (!qs.toMermaid().includes('charge, invoice')) {
 }
 
 console.log('[check:tryit] OK — the quickstart graph routes by data, scopes tools, and captions its edges');
+
+// The guide and published demo share the weather fixture. Exercise it against
+// the current library and its native structure events, with no Explainable UI.
+const mounted = new Set<string>();
+const loops: Array<[string, string]> = [];
+const recorder: StructureRecorder = {
+  id: 'quick-start-weather',
+  onSubflowMounted: ({ subflowId }) => mounted.add(subflowId),
+  onLoopEdgeAdded: ({ from, to }) => { loops.push([from, to]); },
+};
+const weather: ReturnType<ReturnType<typeof Agent.create>['build']> =
+  buildWeatherAgent({ Agent, mock }, [recorder]);
+const weatherTools: Array<[string, unknown, boolean]> = [];
+weather.on('agentfootprint.stream.tool_end', ({ payload }) => {
+  weatherTools.push([payload.toolCallId, payload.result, payload.error === true]);
+});
+deepStrictEqual(await weather.run({ message: weatherInput }), weatherAnswer);
+deepStrictEqual(weatherTools, [['call-weather-1', 'San Francisco: sunny, 72°F', false]]);
+ok(weather.getLastSnapshot()?.executionTree, 'the weather run keeps its execution tree');
+ok(weather.getLastNarrativeEntries().length, 'the weather run keeps narrative entries');
+for (const mount of ['sf-llm-call', 'sf-system-prompt', 'sf-messages', 'sf-tools']) {
+  ok(mounted.has(mount), `the weather run exposes ${mount}`);
+}
+ok(loops.some(([from, to]) => from === 'tool-calls' && to === 'sf-llm-call'));
+console.log('[check:tryit] OK — the weather agent ran its tool and exposed the grouped LLM flow');

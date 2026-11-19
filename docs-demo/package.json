@@ -1,0 +1,29 @@
+{
+  "name": "agentfootprint-docs-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/gen-agent-flowchart.mjs && tsc --noEmit && vite build --base=./",
+    "check": "npm run build && node scripts/gen-agent-flowchart.mjs --check && node --test scripts/check-*.test.mjs",
+    "gen:flowchart": "node scripts/gen-agent-flowchart.mjs --write"
+  },
+  "dependencies": {
+    "@xyflow/react": "12.11.0",
+    "agentfootprint": "15.0.0",
+    "agentfootprint-lens": "0.84.0",
+    "footprint-explainable-ui": "2.0.0",
+    "footprintjs": "14.0.0",
+    "foottrace": "2.1.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@hpcc-js/wasm-graphviz": "1.30.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "playwright-core": "1.63.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.8"
+  }
+}

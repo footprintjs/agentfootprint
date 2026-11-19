@@ -1,31 +1,37 @@
-'use client';
+import { Diagram } from './Diagram';
+import provenance from '@/lib/quick-start-flowchart.json';
+import { SITE, asset } from '@/lib/site';
 
-import dynamic from 'next/dynamic';
+export const quickStartDemoPath = '/demo/quick-start/';
+export const quickStartFlowchartPath = '/docs/getting-started/quick-start/#the-run-as-a-flowchart';
 
-// Load the explainable shell client-side only — @xyflow/react touches the DOM, so it
-// must not server-render. JSON snapshot is bundled at build (real run, not hand-authored).
-const Inner = dynamic(() => import('./AgentFlowchartInner'), {
-  ssr: false,
-  loading: () => (
-    <div
-      style={{
-        height: 560,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 12,
-        border: '1px solid var(--af-border, #2a2a32)',
-        color: 'var(--af-fg-muted, #8c887e)',
-        fontSize: 14,
-      }}
-    >
-      Loading the run…
-    </div>
-  ),
-});
-
-export function AgentFlowchart() {
-  return <Inner />;
+export function WeatherRunDiagram() {
+  return (
+    <Diagram
+      name="quick-start-flowchart"
+      alt="Mock weather agent flowchart. The LLM uses system, messages and tools slots, calls the weather tool, then loops back and produces a final answer."
+      width={provenance.width}
+      height={provenance.height}
+      caption={
+        <>
+          Recorded with {provenance.cohort.join(', ')} from AgentFootprint commit{' '}
+          <a href={`${SITE.repo}/commit/${provenance.commit}`}>
+            <code>{provenance.commit.slice(0, 12)}</code>
+          </a>
+          .
+        </>
+      }
+    />
+  );
 }
 
-export default AgentFlowchart;
+export function AgentFlowchart() {
+  return (
+    <>
+      <WeatherRunDiagram />
+      <p>
+        <a href={asset(quickStartDemoPath)}>Zoom and drill into the interactive weather trace</a>
+      </p>
+    </>
+  );
+}

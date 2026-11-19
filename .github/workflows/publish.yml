@@ -457,9 +457,7 @@ jobs:
         run: npm run docs:truth
       - name: Doc links
         if: needs.verdict.outputs.tested != 'true'
-        run: |
-          npm install --no-save github-slugger
-          node scripts/check-doc-links.mjs --strict
+        run: node scripts/check-doc-links.mjs --strict
 
       # Packaging correctness — ALWAYS, whatever `verdict` said: these check
       # the package this job is about to stage, as built here. The registry

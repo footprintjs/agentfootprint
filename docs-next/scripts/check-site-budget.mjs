@@ -732,6 +732,46 @@ function analyzeRoute(route) {
   }
 }
 
+function analyzeQuickStartFlowchart() {
+  const guidePath = 'docs/getting-started/quick-start/';
+  const fallbackPath = 'demo/quick-start/';
+  const anchor = 'the-run-as-a-flowchart';
+  const routes = [
+    { path: guidePath, href: fallbackPath },
+    { path: fallbackPath, href: `${guidePath}#${anchor}` },
+  ];
+  for (const route of routes) {
+    const file = requiredOutputAsset(`${route.path}index.html`, 'Quick Start');
+    if (!file) continue;
+    const html = readFileSync(file, 'utf8');
+    const links = [...html.matchAll(/<a\b[^>]*>/gi)].map(([tag]) => attribute(tag, 'href'));
+    if (!links.some((url) => url?.endsWith(`/${route.href}`))) {
+      fail(`Quick Start: missing link from ${route.path} to ${route.href}`);
+    }
+    if (route.path === guidePath && !html.includes(`id="${anchor}"`)) {
+      fail('Quick Start: missing flowchart anchor');
+    }
+    if (route.path === fallbackPath && !html.includes('The interactive viewer is unavailable')) {
+      fail('Quick Start: missing static fallback explanation');
+    }
+    const diagramImages = [...html.matchAll(/<img\b[^>]*>/gi)]
+      .map(([tag]) => tag)
+      .filter((tag) => attribute(tag, 'src')?.includes('/assets/quick-start-flowchart-'));
+    if (diagramImages.length !== 2 || diagramImages.some((tag) =>
+      !attribute(tag, 'alt') || !attribute(tag, 'width') || !attribute(tag, 'height'),
+    )) {
+      fail(`Quick Start: ${route.path} needs both static diagrams with alt text and dimensions`);
+    }
+    if (html.includes(`/${fallbackPath}assets/`)) {
+      fail(`Quick Start: ${route.path} eagerly references the separate viewer assets`);
+    }
+  }
+  const figures = ['light', 'dark'].map((theme) => `/assets/quick-start-flowchart-${theme}.svg`);
+  const bytes = uniqueAssetBytes(figures, 'Quick Start diagram');
+  console.log(`Quick Start diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+  assertAtMost('Quick Start diagrams gzip', bytes, 15_000);
+}
+
 function countSearchRecords(index) {
   if (Array.isArray(index)) return index.length;
   if (Array.isArray(index?.internalDocumentIDStore?.internalIdToId)) {
@@ -857,6 +897,7 @@ if (!existsSync(outputRoot)) {
 
 console.log(`Checking static-site budgets in ${outputRoot}`);
 for (const route of ROUTES) analyzeRoute(route);
+analyzeQuickStartFlowchart();
 analyzeSearch();
 analyzeOutput();
 analyzeDeferredDemo();
