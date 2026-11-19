@@ -188,16 +188,16 @@ export async function* toSSE<TIn, TOut>(
   // `runnerLive`) — matched to its served event by the token's address (its
   // stage, iteration and index, none of which a policy selects), so a served
   // token that never arrives cannot shift the ones after it — and never
-  // handed to consumer code. The turn's answer, whose unstreamed rest is
-  // written at `turn_end`, comes from the same path, paired by the stage that
-  // ended the turn. A runner that is not a RunnerBase has no redaction and no
-  // live taps: its events are the record and the reply at once.
+  // handed to consumer code. The answer and refusal status come from the
+  // same `turn_end` event, paired by the stage that ended the turn. A runner
+  // that is not a RunnerBase has no redaction and no live taps: its events
+  // are the record and the reply at once.
   const live = format === 'text' ? runnerLive(runner) : undefined;
   const replies = new Map<string, string[]>();
-  const answers = new Map<string, unknown>();
+  const answers = new Map<string, string | undefined>();
   const offReplies = live?.onRealEvent((event) => {
     if (event.type === 'agentfootprint.agent.turn_end') {
-      answers.set(event.meta?.runtimeStageId ?? '', finalContentOf(event));
+      answers.set(event.meta?.runtimeStageId ?? '', unrefusedAnswerOf(event));
       return;
     }
     if (event.type !== 'agentfootprint.stream.token') return;
@@ -224,13 +224,12 @@ export async function* toSSE<TIn, TOut>(
    */
   const answerFor = (event: AgentfootprintEvent): string | undefined => {
     const key = event.meta?.runtimeStageId ?? '';
-    const answer = live === undefined ? finalContentOf(event) : answers.get(key);
+    const answer = live === undefined ? unrefusedAnswerOf(event) : answers.get(key);
     answers.delete(key);
     if (event.meta !== undefined && !rootTurnOpen) return undefined;
     if (innerTurns.some((mount) => leads(mount, pathOf(event)))) return undefined;
     rootTurnOpen = false;
-    const refused = (event.payload as { refused?: unknown } | undefined)?.refused !== undefined;
-    return !refused && typeof answer === 'string' ? answer : undefined;
+    return answer;
   };
   let rootTurnOpen = false;
   const innerTurns: (readonly string[])[] = [];
@@ -310,8 +309,8 @@ export async function* toSSE<TIn, TOut>(
               yield payload.content;
             }
           } else if (event.type === 'agentfootprint.agent.turn_end') {
-            const answer = finalContentOf(event);
-            const rest = typeof answer === 'string' ? unstreamedText(streamed, answer) : undefined;
+            const answer = unrefusedAnswerOf(event);
+            const rest = answer === undefined ? undefined : unstreamedText(streamed, answer);
             streamed = undefined;
             if (rest !== undefined) yield rest;
           }
@@ -404,9 +403,12 @@ function leads(mount: readonly string[], path: readonly string[]): boolean {
   return mount.length <= path.length && mount.every((segment, i) => segment === path[i]);
 }
 
-/** A `turn_end` event's `finalContent`, as it stands on that event. */
-function finalContentOf(event: AgentfootprintEvent): unknown {
-  return (event.payload as { finalContent?: unknown } | undefined)?.finalContent;
+/** A turn's answer, if the event carrying it did not mark it refused. */
+function unrefusedAnswerOf(event: AgentfootprintEvent): string | undefined {
+  const payload = event.payload as { finalContent?: unknown; refused?: unknown } | undefined;
+  return payload?.refused === undefined && typeof payload?.finalContent === 'string'
+    ? payload.finalContent
+    : undefined;
 }
 
 /**
