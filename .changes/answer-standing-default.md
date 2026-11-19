@@ -15,6 +15,9 @@ rows, events and answer. To keep the standing data and omit the line, use
 `.answerLayer({ standingLine: false })`. The same values work in
 `AgentOptions.answerLayer`.
 
+The first assessed turn loads the assessment code on demand, so that work
+counts against the turn's deadline before final delivery.
+
 When the line appears, it is part of the delivered assistant message. If the
 conversation retains that message, the next request can carry the line within
 its assistant history.

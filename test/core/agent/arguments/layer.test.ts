@@ -385,10 +385,9 @@ describe('assume — across turns (the turn stamp and the widened restore)', () 
   });
 });
 
-describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', () => {
-  it('appends one line per assumed value; the answer is unchanged with nothing assumed', async () => {
+describe('assume — the standing line under .limitsTravelWithTheAnswer()', () => {
+  it('names the assumed value in the line and does not repeat it in an Assumed block', async () => {
     const withFill = Agent.create({
-      answerLayer: false,
       provider: scripted([call('c1', 'search_logs', { service: 'a' }), answer('No errors.')])
         .provider as never,
       model: 'm',
@@ -398,11 +397,11 @@ describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', ()
       .build();
     const out = (await withFill.run({ message: 'go' })) as AgentRunResult;
     expect(String(out)).toBe(
-      'No errors.\n\n---\n\nAssumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
+      'No errors.\n\n---\n\n' +
+        'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you; a tool did not say what time its result covers.',
     );
 
     const noFill = Agent.create({
-      answerLayer: false,
       provider: scripted([
         call('c1', 'search_logs', { service: 'a', window: '24h' }),
         answer('No errors.'),
@@ -412,7 +411,10 @@ describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', ()
       .tool(searchLogs([]))
       .limitsTravelWithTheAnswer()
       .build();
-    expect(String(await noFill.run({ message: 'go' }))).toBe('No errors.');
+    expect(String(await noFill.run({ message: 'go' }))).toBe(
+      'No errors.\n\n---\n\n' +
+        'Not sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
   });
 });
 

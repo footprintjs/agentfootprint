@@ -156,7 +156,7 @@ function build(
   let builder = Agent.create({
     provider,
     model: 'mock',
-    // The pinned settlement record is the control with the answer layer off.
+    // Preserve the historical settlement record comparison.
     answerLayer: false,
     ...(kind === 'consent' && { credentials }),
   }).tools(tools);
@@ -994,7 +994,6 @@ function precondition(opts: {
       ],
     }),
     model: 'mock',
-    answerLayer: false,
     ...(opts.checker !== undefined && { permissionChecker: opts.checker }),
   })
     .tools(['collect_input', 'verify_identity', 'transfer_funds'].map(tool))
@@ -1032,7 +1031,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       },
     };
     const { agent, ran } = precondition({ checker });
-    expect(await answerTheInput(agent)).toBe('done');
+    expect(await answerTheInput(agent)).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(sequences.transfer_funds).toEqual(['collect_input']);
     // So the transfer was refused: nothing but the input door ever executed.
     expect(ran).toEqual([]);
@@ -1184,7 +1183,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       },
     };
     const processWith = (provider: ReturnType<typeof perInstance>) =>
-      Agent.create({ provider, model: 'mock', permissionChecker: checker, answerLayer: false })
+      Agent.create({ provider, model: 'mock', permissionChecker: checker })
         .tools(
           ['collect_input', 'verify_identity', 'lookup', 'transfer_funds'].map((name) =>
             defineTool({
@@ -1219,7 +1218,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       requestId: paused.awaitingInput.requestId,
       values: { acct: 7 },
     });
-    expect(answer).toBe('transfer refused');
+    expect(answer).toBe('transfer refused\n\n---\n\nNot sure — a call was refused.');
 
     // The precondition: the verify was settled, and the fresh process minted
     // its id again for a lookup that really ran.
@@ -1329,8 +1328,6 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
       provider,
       model: 'mock',
       maxIterations: 8,
-      // Compare the findings offer and window record without the answer layer.
-      answerLayer: false,
       ...(window === 'evicting' && { keepLastToolResults: false as const }),
     })
       .tools([look, collect])
@@ -1354,7 +1351,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it('the offer after the resume lists calls that ran, excluding settled and refused notices', async () => {
     const { agent, answer, requests } = await judgedRun();
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(requests).toHaveLength(4);
     // Request 3 (the first after the resume) carries all three results on
     // the wire — one per tool_use — and offers only the two that are results.
@@ -1435,7 +1432,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it("the window's record never lists it among the dropped results", async () => {
     const { answer, state } = await judgedRun('evicting');
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     const dropped = (state.compactions ?? []).flatMap((r) => r.droppedStandings ?? []);
     // The batch turn left: its results are listed with the standing the model
     // declared (or none) — and the settled call, which had no result, is not.

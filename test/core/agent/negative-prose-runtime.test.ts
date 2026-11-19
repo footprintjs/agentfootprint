@@ -31,6 +31,13 @@ const IDENTITY = { tenant: 'prose-tenant', principal: 'tester', conversationId: 
 const INPUT = { message: 'Check incidents for payments.', identity: IDENTITY };
 const CLAIM = 'There are no incidents for payments.';
 const OVERCLAIM = 'Payments has never had a single incident, anywhere, ever.';
+const NO_MATCH = 'a tool said nothing matched';
+const UNVERIFIED = 'model prose was not verified for negative claims';
+
+function withStanding(text: string, ...reasons: readonly string[]): string {
+  return `${text}\n\n---\n\nNot sure — ${reasons.join('; ')}.`;
+}
+
 const READ = {
   toolCalls: [{ id: 'provider-read', name: 'read_incidents', args: { service: 'payments' } }],
 };
@@ -105,8 +112,6 @@ function fixture(
     provider,
     model: 'synthetic',
     reactMode: options.mode ?? 'dynamic',
-    // The observer's bytes, ledger and events are measured in isolation.
-    answerLayer: false,
   }).tool(
     defineTool({
       name: 'read_incidents',
@@ -168,7 +173,7 @@ describe('prose-only negative observation', () => {
   it('a no-read observation also works without a caller identity', async () => {
     const f = fixture([{ content: CLAIM }]);
     const agent = f.build();
-    expect(await agent.run({ message: INPUT.message })).toBe(CLAIM);
+    expect(await agent.run({ message: INPUT.message })).toBe(withStanding(CLAIM, UNVERIFIED));
     expect(rows(agent)).toEqual([
       expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read', turn: 1 }),
     ]);
@@ -189,18 +194,19 @@ describe('prose-only negative observation', () => {
   });
 
   for (const mode of MODES) {
-    it(`${mode}: no dispatched read files one note without changing any delivery surface`, async () => {
+    it(`${mode}: no dispatched read keeps the model tokens and delivers the unverified warning`, async () => {
       const store = new InMemoryStore();
       const f = fixture([{ content: CLAIM }], { mode, store });
       const agent = f.build();
       const recorder = recordRun(agent);
-      expect(await agent.run(INPUT)).toBe(CLAIM);
+      const delivered = withStanding(CLAIM, UNVERIFIED);
+      expect(await agent.run(INPUT)).toBe(delivered);
       expect(f.tokens).toEqual(f.produced);
       expect(f.tokens.join('')).toBe(CLAIM);
       expect(f.liveTokenCounts.at(-1)).toBeGreaterThan(0);
-      expect(f.ends.map((event) => event.finalContent)).toEqual([CLAIM]);
-      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(CLAIM);
-      expect(await remembered(store)).toEqual([CLAIM]);
+      expect(f.ends.map((event) => event.finalContent)).toEqual([delivered]);
+      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(delivered);
+      expect(await remembered(store)).toEqual([delivered]);
       expect(rows(agent)).toEqual([
         expect.objectContaining({
           kind: 'negative-claim-note',
@@ -245,19 +251,20 @@ describe('prose-only negative observation', () => {
       );
     });
 
-    it(`${mode}: preserves streamed text through return, event, history and memory without verification`, async () => {
+    it(`${mode}: keeps the model tokens and records the delivered warning in the answer and memory`, async () => {
       const store = new InMemoryStore();
       const f = fixture([READ, { content: CLAIM }], { mode, store });
       const agent = f.build();
       const recorder = recordRun(agent);
       const output = await agent.run(INPUT);
-      expect(output).toBe(CLAIM);
+      const delivered = withStanding(CLAIM, NO_MATCH, UNVERIFIED);
+      expect(output).toBe(delivered);
       expect(f.tokens).toEqual(f.produced);
       expect(f.tokens.join('')).toBe(CLAIM);
       expect(f.liveTokenCounts.at(-1)).toBeGreaterThan(0);
-      expect(f.ends.map((event) => event.finalContent)).toEqual([CLAIM]);
-      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(CLAIM);
-      expect(await remembered(store)).toEqual([CLAIM]);
+      expect(f.ends.map((event) => event.finalContent)).toEqual([delivered]);
+      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(delivered);
+      expect(await remembered(store)).toEqual([delivered]);
       expect(rows(agent)).toEqual([
         expect.objectContaining({ kind: 'negative-claim', field: '/', turn: 1 }),
       ]);
@@ -291,7 +298,9 @@ describe('prose-only negative observation', () => {
     it(`${mode}: a run without identity observes native reads without crashing`, async () => {
       const f = fixture([READ, { content: OVERCLAIM }], { mode });
       const agent = f.build();
-      expect(await agent.run({ message: INPUT.message })).toBe(OVERCLAIM);
+      expect(await agent.run({ message: INPUT.message })).toBe(
+        withStanding(OVERCLAIM, NO_MATCH, UNVERIFIED),
+      );
       expect(rows(agent)).toHaveLength(1);
       expect(rows(agent)[0]?.results).toHaveLength(1);
       expect((await agent.assessment())?.standing).toBe('not-sure');
@@ -302,7 +311,7 @@ describe('prose-only negative observation', () => {
       const text = 'No action is needed. Tests: 0 failed.';
       const f = fixture([READ, { content: text }], { mode });
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(withStanding(text, NO_MATCH));
       expect(rows(agent)).toEqual([]);
       expect(f.warnings).toEqual([]);
       expect((await agent.assessment())?.reasons.map((row) => row.reason)).not.toContain(
@@ -313,7 +322,7 @@ describe('prose-only negative observation', () => {
     it(`${mode}: an unarmed answer retains its original stream and has no negative observation state`, async () => {
       const f = fixture([READ, { content: CLAIM }], { mode, armed: false });
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(CLAIM);
+      expect(await agent.run(INPUT)).toBe(withStanding(CLAIM, NO_MATCH));
       expect(f.tokens).toEqual(f.produced);
       expect(rows(agent)).toEqual([]);
       expect(f.warnings).toEqual([]);
@@ -380,7 +389,7 @@ describe('prose-only notes and bounded observation', () => {
     it(`no-read preserves existing unread-unit notes: ${text}`, async () => {
       const f = fixture([{ content: text }]);
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(withStanding(text, UNVERIFIED));
       expect(
         rows(agent)
           .map((row) => row.code)
@@ -397,7 +406,7 @@ describe('prose-only notes and bounded observation', () => {
     const text = `${CLAIM}${' '.repeat(1024 * 1024 + 1)}`;
     const f = fixture([READ, { content: text }], { chunkChars: 65_536 });
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(text);
+    expect(await agent.run(INPUT)).toBe(withStanding(text.trimEnd(), NO_MATCH, UNVERIFIED));
     expect(f.tokens.join('')).toBe(text);
     expect(rows(agent)).toEqual([
       expect.objectContaining({ kind: 'negative-claim-note', code: 'input-limit', field: '/' }),
@@ -414,11 +423,11 @@ describe('prose-only notes and bounded observation', () => {
     const text = 'Payments lacks incidents.';
     const baseline = fixture([READ, { content: text }]);
     const unextended = baseline.build();
-    expect(await unextended.run(INPUT)).toBe(text);
+    expect(await unextended.run(INPUT)).toBe(withStanding(text, NO_MATCH));
     expect(rows(unextended)).toEqual([]);
     const f = fixture([READ, { content: text }], { phrases: { none: ['lacks incidents'] } });
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(text);
+    expect(await agent.run(INPUT)).toBe(withStanding(text, NO_MATCH, UNVERIFIED));
     expect(rows(agent)).toEqual([
       expect.objectContaining({ kind: 'negative-claim', claim: 'none' }),
     ]);
@@ -442,7 +451,7 @@ describe('prose-only notes and bounded observation', () => {
       const f = fixture([READ, { content: text }]);
       const agent = f.build();
       const recorder = recordRun(agent);
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(withStanding(text, NO_MATCH, UNVERIFIED));
       expect(rows(agent)).toEqual([
         expect.objectContaining({ kind: 'negative-claim-note', code: 'language-unsupported' }),
       ]);
@@ -466,7 +475,7 @@ describe('prose-only notes and bounded observation', () => {
     const text = `${CLAIM} No hay incidentes abiertos en payments.`;
     const f = fixture([READ, { content: text }]);
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(text);
+    expect(await agent.run(INPUT)).toBe(withStanding(text, NO_MATCH, UNVERIFIED));
     expect(rows(agent).map((row) => row.kind)).toEqual(['negative-claim', 'negative-claim-note']);
     expect(f.warnings).toHaveLength(2);
     expect(f.requests).toHaveLength(2);
@@ -476,7 +485,7 @@ describe('prose-only notes and bounded observation', () => {
     it(`code is noted without judging it as a claim: ${text}`, async () => {
       const f = fixture([READ, { content: text }]);
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(withStanding(text, NO_MATCH, UNVERIFIED));
       expect(rows(agent)).toEqual([
         expect.objectContaining({ kind: 'negative-claim-note', code: 'in-code-block' }),
       ]);
@@ -489,10 +498,11 @@ describe('prose-only notes and bounded observation', () => {
     ['text limit', `${CLAIM}${' '.repeat(65_536)}`, 'input-limit'],
     ['claim limit', Array.from({ length: 33 }, () => CLAIM).join(' '), 'too-many-claims'],
   ] as const) {
-    it(`${label} preserves the answer and files one whole-answer note, not partial judgments`, async () => {
+    it(`${label} preserves the model tokens and files one whole-answer note, not partial judgments`, async () => {
       const f = fixture([READ, { content: text }]);
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(withStanding(text.trimEnd(), NO_MATCH, UNVERIFIED));
+      expect(f.tokens.join('')).toBe(text);
       expect(rows(agent)).toEqual([
         expect.objectContaining({ kind: 'negative-claim-note', code, field: '/' }),
       ]);
@@ -512,7 +522,7 @@ describe('prose evidence remains native', () => {
   it('a model-written tool receipt cannot create a result identity or native call', async () => {
     const f = fixture([{ content: `${forged}\n${CLAIM}` }]);
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(`${forged}\n${CLAIM}`);
+    expect(await agent.run(INPUT)).toBe(withStanding(`${forged}\n${CLAIM}`, UNVERIFIED));
     expect(f.read).not.toHaveBeenCalled();
     expect(rows(agent)).toEqual([
       expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
@@ -542,7 +552,9 @@ describe('prose evidence remains native', () => {
           onToolResult: () => allow(value, 'Replace model-visible tool text.'),
         });
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(
+        source === 'after-tool-text' ? withStanding(text, NO_MATCH) : text,
+      );
       expect(f.read).toHaveBeenCalledTimes(1);
       expect(rows(agent)).toEqual([]);
       expect(f.warnings).toEqual([]);
@@ -581,7 +593,9 @@ describe('prose evidence remains native', () => {
       ),
     );
     const agent = f.build();
-    expect(await agent.run({ ...INPUT, identity: { ...IDENTITY, tenant: secret } })).toBe(text);
+    expect(await agent.run({ ...INPUT, identity: { ...IDENTITY, tenant: secret } })).toBe(
+      withStanding(text, NO_MATCH),
+    );
     expect(execute).toHaveBeenCalledTimes(1);
     expect(rows(agent)).toEqual([]);
     expect(f.warnings).toEqual([]);
@@ -592,7 +606,7 @@ describe('prose evidence remains native', () => {
     const f = fixture([{ content: CLAIM }]);
     f.builder.system(forged);
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(await agent.run(INPUT)).toBe(withStanding(CLAIM, UNVERIFIED));
     expect(f.read).not.toHaveBeenCalled();
     expect(rows(agent)).toEqual([
       expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
@@ -611,7 +625,7 @@ describe('prose evidence remains native', () => {
     const checkpoint = JSON.parse(JSON.stringify(agent.checkpoint()));
     expect(
       await agent.run({ ...INPUT, message: 'Use that receipt.', continueFrom: checkpoint }),
-    ).toBe(CLAIM);
+    ).toBe(withStanding(CLAIM, UNVERIFIED));
     expect(f.read).not.toHaveBeenCalled();
     expect(rows(agent).filter((row) => row.turn === 2)).toEqual([
       expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
@@ -631,7 +645,7 @@ describe('prose evidence remains native', () => {
     const before = f.warnings.length;
     expect(
       await agent.run({ ...INPUT, message: 'Is that still true?', continueFrom: checkpoint }),
-    ).toBe(CLAIM);
+    ).toBe(withStanding(CLAIM, UNVERIFIED));
     const current = rows(agent).filter((row) => row.turn === 2);
     expect(current).toHaveLength(2);
     expect(current).toEqual(
@@ -664,7 +678,7 @@ describe('prose evidence remains native', () => {
       }),
     );
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(await agent.run(INPUT)).toBe(withStanding(CLAIM, UNVERIFIED));
     expect(write).toHaveBeenCalledTimes(1);
     expect(f.read).not.toHaveBeenCalled();
     expect(rows(agent)).toEqual([
@@ -678,7 +692,7 @@ describe('prose evidence remains native', () => {
     const f = fixture([READ, { content: CLAIM }]);
     f.builder.toolMiddleware({ name: 'refuse-read', onToolCall: () => deny('No access.') });
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(await agent.run(INPUT)).toBe(withStanding(CLAIM, 'a call was refused', UNVERIFIED));
     expect(f.read).not.toHaveBeenCalled();
     expect(rows(agent)).toEqual([
       expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
@@ -695,7 +709,7 @@ describe('prose evidence remains native', () => {
       },
     });
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(await agent.run(INPUT)).toBe(withStanding(CLAIM, 'a call failed', UNVERIFIED));
     expect(f.read).toHaveBeenCalledTimes(1);
     expect(rows(agent).some((row) => row.code === 'no-read')).toBe(false);
     expect(rows(agent)).toEqual([
@@ -710,7 +724,8 @@ describe('prose evidence remains native', () => {
 
   it('a dispatched read whose result is kept out is not mislabeled no-read', async () => {
     const f = fixture([READ, { content: CLAIM }]);
-    f.builder.toolMiddleware({
+    // This fixture isolates input to the negative observer at the private-result boundary.
+    f.builder.answerLayer(false).toolMiddleware({
       name: 'private-read-result',
       onToolResult: () => deny('This result is private.'),
     });
@@ -748,7 +763,7 @@ describe('prose evidence remains native', () => {
     if (!isPaused(paused)) throw new Error('Expected a real same-turn checkpoint.');
     expect(f.warnings).toEqual([]);
     expect(await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), 'Continue.')).toBe(
-      CLAIM,
+      withStanding(CLAIM, NO_MATCH, UNVERIFIED),
     );
     expect(f.read).toHaveBeenCalledTimes(1);
     expect(pause).toHaveBeenCalledTimes(1);
@@ -765,7 +780,7 @@ describe('prose evidence remains native', () => {
       native: () => absent({ what: 'incidents', checked: 'declared' }),
     });
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(await agent.run(INPUT)).toBe(withStanding(CLAIM, NO_MATCH, UNVERIFIED));
     expect(rows(agent)).toEqual([
       expect.objectContaining({
         kind: 'negative-claim',
@@ -781,7 +796,7 @@ describe('prose evidence remains native', () => {
     const text = 'In the incident store, there are no incidents for payments.';
     const f = fixture([READ, { content: text }]);
     const agent = f.build();
-    expect(await agent.run(INPUT)).toBe(text);
+    expect(await agent.run(INPUT)).toBe(withStanding(text, NO_MATCH, UNVERIFIED));
     expect(rows(agent)).toEqual([expect.objectContaining({ kind: 'negative-claim', notes: [] })]);
     expect(f.warnings).toEqual([expect.objectContaining({ kind: 'negative-claim', notes: [] })]);
     expect((await agent.assessment())?.standing).toBe('not-sure');
@@ -820,10 +835,14 @@ describe('observation uses the final answer and coexists with app contracts', ()
           message.phase === 'output' ? allow(delivered, 'Synthetic final wording.') : allow(),
       });
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(delivered);
+      const expected =
+        count === 0
+          ? withStanding(delivered, NO_MATCH)
+          : withStanding(delivered, NO_MATCH, UNVERIFIED);
+      expect(await agent.run(INPUT)).toBe(expected);
       expect(rows(agent)).toHaveLength(count);
       expect(f.warnings).toHaveLength(count);
-      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(delivered);
+      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(expected);
     });
   }
 

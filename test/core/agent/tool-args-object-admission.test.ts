@@ -81,7 +81,14 @@ async function dispatch(
         isError?: boolean;
       };
       results.push(result.content[0]?.text ?? '');
-      return { execute, getCredential, events, results, isError: result.isError };
+      return {
+        execute,
+        getCredential,
+        events,
+        results,
+        isError: result.isError,
+        answer: undefined,
+      };
     } finally {
       await handle.close();
     }
@@ -130,29 +137,26 @@ async function dispatch(
         onToolCall: () => ask({ question: 'Approve this call?' }),
       });
     }
-    const agent = builder.answerLayer({ standingLine: false }).build();
+    const agent = builder.build();
     agent.on('*', (event) => events.push(event));
     return agent;
   };
   const agent = build();
-  const initial = await agent.run({ message: 'Read the requested item' });
+  let answer = await agent.run({ message: 'Read the requested item' });
   if (resume) {
-    if (!isPaused(initial)) throw new Error('Expected a middleware pause');
+    if (!isPaused(answer)) throw new Error('Expected a middleware pause');
+    const paused = answer;
     expect(execute).not.toHaveBeenCalled();
     expect(getCredential).not.toHaveBeenCalled();
     const resumed = door === 'fresh-agent resume' ? build() : agent;
     // JSON-owned keys survive persistence; inherited properties are not a transport contract.
-    const checkpoint = JSON.parse(JSON.stringify(initial.checkpoint));
-    await expect(
-      resumed.resume(
-        checkpoint,
-        checkInApproved({ request: pausedRequest(initial), by: 'reviewer' }),
-      ),
-    ).resolves.toBe('done');
-  } else {
-    expect(initial).toBe('done');
+    const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
+    answer = await resumed.resume(
+      checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+    );
   }
-  return { execute, getCredential, events, results, isError: undefined };
+  return { execute, getCredential, events, results, isError: undefined, answer };
 }
 
 describe.each(doors)('%s — own-property object admission', (door) => {
@@ -167,7 +171,12 @@ describe.each(doors)('%s — own-property object admission', (door) => {
     expect(state.events.some((event) => event.type === 'agentfootprint.credential.requested')).toBe(
       false,
     );
-    if (door === 'MCP serve') expect(state.isError).toBe(true);
+    if (door === 'MCP serve') {
+      expect(state.isError).toBe(true);
+    } else {
+      const reason = door === 'ctx.tools.call' ? 'a call failed' : 'a call was refused';
+      expect(state.answer).toBe(`done\n\n---\n\nNot sure — ${reason}.`);
+    }
     if (door !== 'MCP serve' && door !== 'ctx.tools.call') {
       expect(
         state.events.filter((event) => event.type === 'agentfootprint.validation.args_invalid'),
@@ -195,6 +204,7 @@ describe.each(doors)('%s — own-property object admission', (door) => {
     expect(Object.prototype.hasOwnProperty.call(received, 'constructor')).toBe(true);
     expect(state.getCredential).toHaveBeenCalledOnce();
     expect(state.results).toEqual([RESULT]);
+    if (door !== 'MCP serve') expect(state.answer).toBe('done');
     expect(state.isError).toBeUndefined();
     expect(
       state.events.filter((event) => event.type === 'agentfootprint.validation.args_invalid'),

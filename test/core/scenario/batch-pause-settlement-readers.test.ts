@@ -115,8 +115,6 @@ async function settledRun(): Promise<SettledRun> {
       ],
     }),
     model: 'mock',
-    // Keep the historical settlement event and answer witness focused on its readers.
-    answerLayer: false,
   })
     .tools(['first', 'second', 'third', 'broken'].map(tool))
     .watch(thinking)
@@ -140,7 +138,7 @@ async function settledRun(): Promise<SettledRun> {
     requestId: paused.awaitingInput.requestId,
     values: { year: 2026 },
   });
-  expect(answer).toBe('done');
+  expect(answer).toBe('done\n\n---\n\nNot sure — a call failed.');
   const domain = recorder.boundary.getEvents();
   recorder.stop();
   // Offline reader fixture for the actual resumed leg only. The checkpoint

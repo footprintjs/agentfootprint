@@ -779,6 +779,7 @@ interface SentenceFormReference {
 
 describe('regression: the sentence form is byte-identical', () => {
   it('byte-identical to the 9.112.2 reference — the event gains `tryInstead`, and nothing else moves', async () => {
+    // This witness pins the complete pre-default answer, including the legacy limits block.
     const t = await runOnce(() => absent(SENTENCE_DECL), { limits: true, answerLayer: false });
     const observed: SentenceFormReference = {
       envelope: JSON.stringify(absent(SENTENCE_DECL)),

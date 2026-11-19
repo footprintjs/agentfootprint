@@ -72,13 +72,11 @@ const buildAgent = (args: {
   tools: readonly unknown[];
   reactMode?: 'dynamic' | 'dynamic-grouped' | 'classic';
   evidence?: boolean;
-  answerLayer?: false;
 }) => {
   const caps = capture();
   let builder = Agent.create({
     provider: mock({ replies: args.replies as never }),
     model: 'mock',
-    answerLayer: args.answerLayer,
     maxIterations: 6,
     ...(args.reactMode && { reactMode: args.reactMode }),
   }).system('You are a SAN engineer.');
@@ -416,14 +414,15 @@ describe('edge: absences that carry less', () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('regression: an absence is not retried, refused or re-asked by anything', () => {
-  it('the loop does not spend an extra iteration on it, and the answer ships unchanged', async () => {
+  it('the loop does not spend an extra iteration on it, and the answer carries its coverage warning', async () => {
     const t = buildAgent({
-      answerLayer: false,
       replies: [call('flogi_for_port'), final('Nothing on fc1/3.')],
       tools: [absentTool],
     });
     const out = await t.agent.run('any FLOGI on fc1/3?');
-    expect(out).toBe('Nothing on fc1/3.');
+    expect(out).toBe(
+      'Nothing on fc1/3.\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
     const iterationEnds = t.all.filter(
       (e) => e.name === 'agentfootprint.agent.iteration_end',
     ).length;

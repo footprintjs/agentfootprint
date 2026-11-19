@@ -243,7 +243,6 @@ describe('evidence recovery at the tool-argument boundary', () => {
       { content: 'No records were found.' },
     ];
     const agent = Agent.create({
-      answerLayer: false,
       provider: {
         name: 'recorded-mock',
         complete: async (request: LLMRequest): Promise<LLMResponse> => {
@@ -290,7 +289,9 @@ describe('evidence recovery at the tool-argument boundary', () => {
       }
     });
 
-    expect(await agent.run({ message: 'Inspect callisto-02.' })).toBe('No records were found.');
+    expect(await agent.run({ message: 'Inspect callisto-02.' })).toBe(
+      'No records were found.\n\n---\n\nNot sure — a value a call ran with appears nowhere the run served the model.',
+    );
     expect(requests).toHaveLength(3);
     expect(executed).toEqual([{ machine: 'ghost-9917', peer: 'callisto-02' }]);
     expect(findings).toHaveLength(1);

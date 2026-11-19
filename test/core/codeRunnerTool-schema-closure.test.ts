@@ -91,11 +91,13 @@ async function dispatch(options: {
     ...(options.mode !== undefined && { toolArgValidation: options.mode }),
   }).tool(tool);
   if (options.findings) builder.findings();
-  const agent = builder.answerLayer({ standingLine: false }).build();
+  const agent = builder.build();
   agent.on('*', (event) => events.push(event));
-  expect(await agent.run({ message: 'Compute the requested result', identity })).toBe('done');
-  return { ...recording, tool, offered, results, events, getCredential, args };
+  const answer = await agent.run({ message: 'Compute the requested result', identity });
+  return { ...recording, tool, offered, results, events, getCredential, args, answer };
 }
+
+const REFUSED = 'done\n\n---\n\nNot sure — a call was refused.';
 
 describe('codeRunnerTool — closed owned schema', () => {
   it.each([
@@ -116,6 +118,7 @@ describe('codeRunnerTool — closed owned schema', () => {
         wants: { dataset: 'dataset/rows' },
         args: (ref) => ({ code: CODE, dataset: ref, [extra]: CANARY }),
       });
+      expect(state.answer).toBe(REFUSED);
       expect(state.getCredential).not.toHaveBeenCalled();
       expect(state.start).not.toHaveBeenCalled();
       expect(state.stageInputs).not.toHaveBeenCalled();
@@ -144,6 +147,7 @@ describe('codeRunnerTool — closed owned schema', () => {
 
   it('executes code with no artifact inputs and closes the session', async () => {
     const state = await dispatch({ args: () => ({ code: CODE }) });
+    expect(state.answer).toBe('done');
     expect(state.getCredential).toHaveBeenCalledOnce();
     expect(state.start).toHaveBeenCalledOnce();
     expect(state.execute).toHaveBeenCalledWith(expect.objectContaining({ code: CODE }));
@@ -164,6 +168,7 @@ describe('codeRunnerTool — closed owned schema', () => {
         wants: { dataset: 'dataset/rows', comparison: 'dataset/rows' },
         args: (ref) => ({ code: CODE, ...Object.fromEntries(provided.map((key) => [key, ref])) }),
       });
+      expect(state.answer).toBe('done');
       expect(state.getCredential).toHaveBeenCalledOnce();
       expect(state.start).toHaveBeenCalledOnce();
       expect(state.execute).toHaveBeenCalledWith(expect.objectContaining({ code: CODE }));
@@ -189,6 +194,7 @@ describe('codeRunnerTool — closed owned schema', () => {
 
   it.each(['enforce', 'warn', 'off'] as const)('preserves the %s validation mode', async (mode) => {
     const state = await dispatch({ mode, args: () => ({ code: CODE, unexpected: CANARY }) });
+    expect(state.answer).toBe(mode === 'enforce' ? REFUSED : 'done');
     const executions = mode === 'enforce' ? 0 : 1;
     expect(state.getCredential).toHaveBeenCalledTimes(executions);
     expect(state.start).toHaveBeenCalledTimes(executions);
@@ -214,6 +220,7 @@ describe('codeRunnerTool — closed owned schema', () => {
         _findings: { basis: 'direct', expect: 'high' },
       }),
     });
+    expect(state.answer).toBe('done');
     expect(state.execute).toHaveBeenCalledOnce();
     expect(state.staged.flat().map((input) => input.name)).toEqual(['dataset']);
     expect(
@@ -238,6 +245,7 @@ describe('codeRunnerTool — closed owned schema', () => {
       findings: true,
       args: () => ({ code: CODE, unexpected: CANARY, _findings: { basis: 'direct' } }),
     });
+    expect(state.answer).toBe(REFUSED);
     expect(state.start).not.toHaveBeenCalled();
     expect(state.execute).not.toHaveBeenCalled();
     expect(state.results[0]).toContain("'unexpected': expected no additional properties");

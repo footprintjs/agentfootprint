@@ -266,6 +266,7 @@ const NATIVE_NARRATIVE_REFERENCE = resolve(
 
 describe('regression: the check adds no step to the narrative', () => {
   it('the trap retains the exact native14 narrative, including every tracked read', async () => {
+    // This fixture pins the native14 narrative, so the answer layer stays off.
     const { agent, events } = trapAgent(true, { answerLayer: false });
     await agent.run({ message: TASK });
     // The trap is armed: compositions after the drop ran the check.

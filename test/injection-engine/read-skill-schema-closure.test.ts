@@ -13,6 +13,7 @@ import { splitFindings, withFindingsArgument } from '../../src/core/agent/findin
 const BODY = 'BILLING_BODY_DELIVERY_CANARY';
 const CALL_ID = 'read-skill-schema-call';
 const EXTRA_VALUE = 'private-extra-canary';
+const REFUSED_ANSWER = 'done\n\n---\n\nNot sure — a call was refused.';
 const skill = (id: string, body = `${id.toUpperCase()}_BODY`) =>
   defineSkill({ id, description: `The ${id} procedure`, body, surfaceMode: 'both' });
 const catalog = () => [skill('alpha'), skill('billing', BODY), skill('delta')];
@@ -21,6 +22,7 @@ type RunOptions = {
   mode?: 'enforce' | 'warn' | 'off';
   findings?: boolean;
   graph?: boolean;
+  expectedAnswer?: string;
 };
 
 async function runReadSkill(args: Record<string, unknown>, options: RunOptions = {}) {
@@ -39,9 +41,7 @@ async function runReadSkill(args: Record<string, unknown>, options: RunOptions =
     model: 'mock',
     maxIterations: 3,
     ...(options.mode !== undefined && { toolArgValidation: options.mode }),
-  })
-    .system('Follow the selected procedure.')
-    .answerLayer({ standingLine: false });
+  }).system('Follow the selected procedure.');
   if (options.graph) {
     const [alpha, billing, delta] = catalog();
     builder.skillGraph(
@@ -57,7 +57,9 @@ async function runReadSkill(args: Record<string, unknown>, options: RunOptions =
   if (options.findings) builder.findings();
   const agent = builder.build();
   agent.on('*', (event) => events.push(event));
-  expect(await agent.run({ message: 'Read the billing procedure.' })).toBe('done');
+  expect(await agent.run({ message: 'Read the billing procedure.' })).toBe(
+    options.expectedAnswer ?? 'done',
+  );
   expect(wire).toHaveLength(2);
   const result =
     wire[1]?.messages.find((message) => message.role === 'tool' && message.toolCallId === CALL_ID)
@@ -149,7 +151,7 @@ describe('real Agent read_skill — schema admission precedes activation', () =>
     'refuses %s without activating or delivering the body',
     async (key) => {
       const args = JSON.parse(`{"id":"billing","${key}":"${EXTRA_VALUE}"}`);
-      const state = await runReadSkill(args);
+      const state = await runReadSkill(args, { expectedAnswer: REFUSED_ANSWER });
       expect(state.result).toContain("Invalid arguments for tool 'read_skill'");
       expect(state.result).toContain(`'${key}': expected no additional properties`);
       expect(state.result).not.toContain(EXTRA_VALUE);
@@ -241,7 +243,7 @@ describe('real Agent read_skill — schema admission precedes activation', () =>
   it('findings peeling does not hide a genuine extra argument', async () => {
     const state = await runReadSkill(
       { id: 'billing', extra: EXTRA_VALUE, _findings: { basis: 'direct' } },
-      { findings: true },
+      { findings: true, expectedAnswer: REFUSED_ANSWER },
     );
     expect(state.result).toContain("'extra': expected no additional properties");
     expect(state.result).not.toContain("'_findings': expected no additional properties");

@@ -447,6 +447,7 @@ describe('REGRESSION — a second finding in a later pass of the grouped chart',
   });
 });
 
+// These controls pin the record and its integrity events with the answer layer off.
 describe('BOUNDARY — not armed, nothing moves', () => {
   it.each(MODES)('no row and no key, whatever the checks filed (%s)', async (reactMode) => {
     const events: unknown[] = [];

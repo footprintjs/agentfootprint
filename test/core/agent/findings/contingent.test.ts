@@ -389,6 +389,7 @@ describe('contingent — the last standing per result is the current one', () =>
 
 describe('contingent — the arms', () => {
   const findingsOnly: Build = (a) => a.system('bot').tool(probe()).findings();
+  // These controls pin the ledger and state keys before the answer layer files witnesses.
   const gateOnly: Build = (a) =>
     a
       .system('bot')

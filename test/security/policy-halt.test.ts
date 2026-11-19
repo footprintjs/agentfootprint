@@ -465,7 +465,6 @@ describe('PermissionChecker — no regression on existing results', () => {
       },
     });
     const agent = Agent.create({
-      answerLayer: false,
       provider: llm,
       model: 'mock',
       maxIterations: 5,
@@ -476,7 +475,9 @@ describe('PermissionChecker — no regression on existing results', () => {
       /* moved to create */
       .build();
     const out = await agent.run({ message: 'go' });
-    expect(typeof out === 'string' ? out : (out as { content: string }).content).toBe('recovered');
+    expect(typeof out === 'string' ? out : (out as { content: string }).content).toBe(
+      'recovered\n\n---\n\nNot sure — a call was refused.',
+    );
     expect(lastToolMessage).toContain('denied — try other approach');
   });
 });

@@ -118,6 +118,9 @@ function searchLogs(ran: Record<string, unknown>[], result: unknown = []): Tool 
 const NOTE_2H =
   '\n\n[window was not in the search_logs call this result answers; the call ran with "2h", ' +
   "the value the tool's rule assumes — recorded as assumed, not as the person's.]";
+const ASSUMED_2H_STANDING =
+  'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you; ' +
+  'a lookup came back empty without saying what it searched; a tool did not say what time its result covers.';
 
 const UNMOUNTED_REFUSAL =
   'search_logs was not run on that call: it declares argument rules this agent was not built to apply.';
@@ -212,15 +215,12 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
       .tool(searchLogs(ran))
       .toolMiddleware(rewrite((a) => ({ ...a, service: String(a.service).toLowerCase() })))
       .limitsTravelWithTheAnswer()
-      .answerLayer({ standingLine: false })
       .build();
     const out = await agent.run({ message: 'any errors on Checkout?' });
     expect(ran).toEqual([{ service: 'checkout', window: '2h' }]);
     expect(lastToolMessage(m.requests).content).toBe(`[]${NOTE_2H}`);
     expect(committedToolMessage(agent).toolChars).toBe(2);
-    expect(String(out)).toBe(
-      'No errors.\n\n---\n\nAssumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
-    );
+    expect(String(out)).toBe('No errors.\n\n---\n\n' + ASSUMED_2H_STANDING);
   });
 
   it('a rewrite to the SAME value keeps the clause — the call ran with the fill', async () => {
@@ -229,11 +229,10 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
       .tool(searchLogs([]))
       .toolMiddleware(rewrite((a) => ({ ...a, window: '2h' })))
       .limitsTravelWithTheAnswer()
-      .answerLayer({ standingLine: false })
       .build();
     const out = await agent.run({ message: 'any errors on checkout?' });
     expect(lastToolMessage(m.requests).content).toBe(`[]${NOTE_2H}`);
-    expect(String(out)).toContain('- window = "2h" (search_logs)');
+    expect(out).toBe(`No errors.\n\n---\n\n${ASSUMED_2H_STANDING}`);
   });
 });
 
@@ -558,7 +557,7 @@ describe('an entry applies to its own batch; the "Assumed" block to its own turn
     ]);
   });
 
-  it('turn 2 that calls nothing carries no "Assumed" block from turn 1', async () => {
+  it('turn 2 that calls nothing carries no assumed-value warning from turn 1', async () => {
     const first = Agent.create({
       provider: scripted([call('c1', 'search_logs', { service: 'a' }), answer('none')])
         .provider as never,
@@ -566,11 +565,8 @@ describe('an entry applies to its own batch; the "Assumed" block to its own turn
     })
       .tool(searchLogs([]))
       .limitsTravelWithTheAnswer()
-      .answerLayer({ standingLine: false })
       .build();
-    expect(String(await first.run({ message: 'errors?' }))).toContain(
-      '- window = "2h" (search_logs)',
-    );
+    expect(await first.run({ message: 'errors?' })).toBe(`none\n\n---\n\n${ASSUMED_2H_STANDING}`);
     const second = Agent.create({
       provider: scripted([answer('hello again')]).provider as never,
       model: 'm',

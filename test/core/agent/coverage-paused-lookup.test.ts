@@ -149,6 +149,7 @@ function build(
     /** A tool middleware that rewrites the lookup's `wwpn` to `DEVICE`, so
      *  the args the tool runs with are not the args the model sent. */
     readonly rewriteWwpn?: boolean;
+    readonly answerLayer?: false;
   } = {},
 ): Leg {
   const events: Leg['events'] = [];
@@ -162,10 +163,10 @@ function build(
     },
   };
   let builder = Agent.create({
-    answerLayer: false,
     provider,
     model: 'mock',
     maxIterations: 6,
+    answerLayer: extra.answerLayer,
     noticeEmptyLookups: true,
     ...(reactMode !== undefined && { reactMode }),
   })
@@ -418,7 +419,10 @@ describe('integration: a raising lookup files what a returning lookup files', ()
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe(answer.content);
+      expect(done).toBe(
+        answer.content +
+          '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+      );
       expect(payloadsOf(raised, 'agentfootprint.tools.absent')).toHaveLength(1);
       expect(JSON.stringify(stateOf(raised.agent).coverageDeclared)).toBe(rowsAtRaise);
       // The paused call's served result is the person's answer — never the envelope.
@@ -436,7 +440,6 @@ describe('integration: a raising lookup files what a returning lookup files', ()
 /** One tool, one call, then the answer — and every `tools.absent` it emits. */
 function oneTool(tool: ReturnType<typeof defineTool>) {
   const agent = Agent.create({
-    answerLayer: false,
     provider: mock({ replies: [call('c1', tool.schema.name), answer] }),
     model: 'mock',
     maxIterations: 6,
@@ -511,7 +514,7 @@ describe('integration: a raise that does not pause files nothing', () => {
 
       expect(isPaused(raisedOut)).toBe(false);
       expect(raisedOut).toBe(returnedOut);
-      expect(raisedOut).toBe(answer.content);
+      expect(raisedOut).toBe(answer.content + '\n\n---\n\nNot sure — a call failed.');
       // The call errored with the text the returned path serves — parity.
       expect(returnsIt.served()).toBeDefined();
       expect(raisesIt.served()).toBe(returnsIt.served());
@@ -549,7 +552,7 @@ describe('integration: a raise that does not pause files nothing', () => {
       paused.checkpoint,
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     );
-    expect(done).toBe(answer.content);
+    expect(done).toBe(answer.content + '\n\n---\n\nNot sure — a call failed.');
     expect(absentIds).toEqual([]);
     expect(stateOf(agent).coverageDeclared).toBeUndefined();
     expect(served()).toContain('requested a pause while resuming an approved check-in');
@@ -573,7 +576,6 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       execute: async (_args, ctx) => ctx.tools?.call('inner_lookup', {}),
     });
     const agent = Agent.create({
-      answerLayer: false,
       provider: mock({ replies: [call('c1', 'outer_proc'), answer] }),
       model: 'mock',
       maxIterations: 6,
@@ -597,7 +599,10 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(answer.content);
+    expect(done).toBe(
+      answer.content +
+        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
     expect(filedUnder).toEqual(['outer_proc/c1']);
   });
 
@@ -646,7 +651,6 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
     ],
   ])('%s: filed once, under the outer call', async (_label, toolsOf) => {
     const agent = Agent.create({
-      answerLayer: false,
       provider: mock({ replies: [call('c1', 'outer'), answer] }),
       model: 'mock',
       maxIterations: 6,
@@ -670,7 +674,10 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(answer.content);
+    expect(done).toBe(
+      answer.content +
+        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
     expect(filedUnder).toEqual(['outer/c1']);
   });
 });
@@ -725,7 +732,6 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         execute: () => requestInput({ ...QUESTION, absence: absent(DECL) }),
       });
       const agent = Agent.create({
-        answerLayer: false,
         provider: mock({ replies: [...BATCH_SCRIPT] }),
         model: 'mock',
         maxIterations: 8,
@@ -744,7 +750,9 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe('done');
+      expect(done).toBe(
+        'done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+      );
 
       // The settlement is unchanged: c3 never ran, and its result is the sentence.
       expect(ran).toEqual(['c1', 'd1']);
@@ -799,7 +807,8 @@ describe('regression: a raise WITHOUT `absence` records what 9.113.0 recorded', 
   it.each(['raise-bare', 'raise-null'] as const)(
     '%s: grounded lookup, raise, resume — the record matches the reference captured before this release',
     async (shape) => {
-      const leg = build(shape);
+      // This witness pins the full record captured before answer standing defaulted on.
+      const leg = build(shape, undefined, false, undefined, { answerLayer: false });
       const paused = await leg.agent.run({ message: 'which port is the first device on?' });
       if (!isInputPause(paused)) throw new Error('expected an input pause');
       const keysAtPause = Object.keys(leg.agent.getSnapshot()?.sharedState ?? {}).sort();
@@ -922,6 +931,7 @@ async function failedRaiseRecord(
   raise: () => never,
 ): Promise<Record<string, unknown>> {
   const eventTypes: string[] = [];
+  // This witness pins the complete failed run captured before the default.
   const agent = Agent.create({
     answerLayer: false,
     provider: mock({ replies: [...replies] }),

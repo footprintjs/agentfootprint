@@ -223,7 +223,6 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
 
   it('files the basis row before tool_start, and the standing off the next call', async () => {
     const agent = Agent.create({
-      answerLayer: false,
       provider: scripted([], CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
@@ -267,6 +266,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing', 'basis']);
     expect(ledger[0]).toEqual({
       kind: 'basis',
+      turn: 1,
       toolCallId: 'c1',
       toolName: 'look',
       iteration: 1,
@@ -275,6 +275,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     });
     expect(ledger[1]).toEqual({
       kind: 'standing',
+      turn: 1,
       toolCallId: 'c1',
       toolName: 'look',
       standing: 'fact',
@@ -466,11 +467,7 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
   });
 
   it('files declaredOn: answer, judges the peeled content (no retry), and runTyped returns the peeled object', async () => {
-    const agent = Agent.create({
-      answerLayer: false,
-      provider: scripted([], CALL_ONE, ANSWER),
-      model: 'm',
-    })
+    const agent = Agent.create({ provider: scripted([], CALL_ONE, ANSWER), model: 'm' })
       .tool(recordingTool('look', []) as never)
       .findings()
       .outputSchema(strict, { retries: 0 })
@@ -487,6 +484,7 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
     expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
     expect(ledger[1]).toEqual({
       kind: 'standing',
+      turn: 1,
       toolCallId: 'c1',
       toolName: 'look',
       standing: 'ruled-out',
@@ -533,6 +531,7 @@ describe(".findings() without an output schema — every decider peels the answe
   const PEELED = JSON.stringify({ down: 'p1' });
   const STANDING: StandingRow = {
     kind: 'standing',
+    turn: 1,
     toolCallId: 'c1',
     toolName: 'look',
     standing: 'ruled-out',
@@ -553,6 +552,7 @@ describe(".findings() without an output schema — every decider peels the answe
     string,
     (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
     { wrapUpAtMaxIterations?: false },
+    boolean?,
   ])[] = [
     ['the plain decider (WrapUp mounted)', (b) => b, {}],
     [
@@ -565,18 +565,14 @@ describe(".findings() without an output schema — every decider peels the answe
       (b) => b.messageMiddleware({ name: 'pass', onMessage: () => allow() }),
       {},
     ],
-    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}],
+    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}, true],
   ];
 
-  describe.each(SHAPES)('%s', (_label, arm, opts) => {
+  describe.each(SHAPES)('%s', (_label, arm, opts, evidenceGate) => {
+    const witnessKinds = evidenceGate ? ['grounded'] : [];
     const build = (answer: string): Agent =>
       arm(
-        Agent.create({
-          answerLayer: false,
-          provider: scripted([], CALL_ONE, answer),
-          model: 'm',
-          ...opts,
-        })
+        Agent.create({ provider: scripted([], CALL_ONE, answer), model: 'm', ...opts })
           .tool(look as never)
           .findings(),
       ).build();
@@ -591,7 +587,7 @@ describe(".findings() without an output schema — every decider peels the answe
 
       expect(answer).toBe(PEELED);
       const ledger = ledgerOf(agent)!;
-      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
+      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing', ...witnessKinds]);
       expect(ledger[1]).toEqual(STANDING);
       expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toEqual({
         toolCallId: 'c1',
@@ -616,10 +612,10 @@ describe(".findings() without an output schema — every decider peels the answe
       ).toEqual(['tool-calls', 'final']);
     });
 
-    it('a plain-text answer is untouched and files nothing', async () => {
+    it('a plain-text answer is untouched and files no declared standing', async () => {
       const agent = build('p1 is down');
       expect(await agent.run({ message: 'which port is down?' })).toBe('p1 is down');
-      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', ...witnessKinds]);
     });
 
     it('a prose answer that ends in a code block of notes: the block goes, its standings are filed (9.114.2)', async () => {
@@ -635,7 +631,7 @@ describe(".findings() without an output schema — every decider peels the answe
       const spaced = '{ "down": "p1" }';
       const agent = build(spaced);
       expect(await agent.run({ message: 'which port is down?' })).toBe(spaced);
-      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', ...witnessKinds]);
     });
   });
 
@@ -716,7 +712,6 @@ describe(".findings() without an output schema — every decider peels the answe
     });
     // Tools on the wire → keep asking; the wrap-up call withholds them.
     const agent = Agent.create({
-      answerLayer: false,
       provider: mock({
         respond: (req: LLMRequest): string | Partial<LLMResponse> => {
           if ((req.tools?.length ?? 0) === 0) return WRAPPED;
@@ -746,7 +741,10 @@ describe(".findings() without an output schema — every decider peels the answe
     );
     const answer = await agent.run({ message: 'which port is down?' });
 
-    expect(answer).toBe(JSON.stringify({ summary: 'p1 is down; the second look never ran' }));
+    expect(answer).toBe(
+      JSON.stringify({ summary: 'p1 is down; the second look never ran' }) +
+        '\n\n---\n\nNot sure — the run stopped before the model finished.',
+    );
     expect(
       rows
         .filter((r) => r.type === 'agentfootprint.agent.route_decided')
@@ -774,7 +772,7 @@ describe(".findings() without an output schema — every decider peels the answe
       (b: ReturnType<typeof Agent.create>) => b.namesAndNumbersFromEvidence(),
     ]) {
       const agent = arm(
-        Agent.create({ answerLayer: false, provider: scripted([], CALL_ONE, PEELED), model: 'm' })
+        Agent.create({ provider: scripted([], CALL_ONE, PEELED), model: 'm' })
           .tool(look as never)
           .findings()
           .messageMiddleware(annotate as never),
@@ -1542,11 +1540,7 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
       ],
     };
     const seen: Shot[] = [];
-    const agent = Agent.create({
-      answerLayer: false,
-      provider: scripted(seen, BATCH, 'done'),
-      model: 'm',
-    })
+    const agent = Agent.create({ provider: scripted(seen, BATCH, 'done'), model: 'm' })
       .toolProvider(staticTools([owning, plain]))
       .findings()
       .build();
@@ -1572,7 +1566,14 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
     ).toEqual([{ q: 'a', _findings: 'mine' }, { q: 'b' }]);
     // The record: one basis row, the plain call's; nothing for the owner's.
     expect(ledgerOf(agent)).toEqual([
-      { kind: 'basis', toolCallId: 'p1', toolName: 'plain', iteration: 1, basis: 'direct' },
+      {
+        kind: 'basis',
+        toolCallId: 'p1',
+        toolName: 'plain',
+        turn: 1,
+        iteration: 1,
+        basis: 'direct',
+      },
     ]);
     expect(
       rows

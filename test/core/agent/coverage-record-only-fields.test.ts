@@ -116,7 +116,13 @@ interface Harness {
   readonly vault: { granted: boolean };
 }
 
-function build(path: Path, shape: Shape, declare: boolean, withLink: boolean): Harness {
+function build(
+  path: Path,
+  shape: Shape,
+  declare: boolean,
+  withLink: boolean,
+  answerLayer?: false,
+): Harness {
   const requests: LLMRequest[] = [];
   const events: { type: string; payload: Record<string, unknown> }[] = [];
   const linkSaw: unknown[] = [];
@@ -154,7 +160,7 @@ function build(path: Path, shape: Shape, declare: boolean, withLink: boolean): H
     },
   });
   let builder = Agent.create({
-    answerLayer: false,
+    answerLayer,
     provider,
     model: 'mock',
     ...(path === 'consent' && { credentials }),
@@ -233,7 +239,8 @@ const REFERENCE = resolve(__dirname, 'reference/coverage-record-only-bytes.json'
 describe('record-only fields — the pinned record when a run declares neither field', () => {
   const cases = PATHS.flatMap((path) => SHAPES.map((shape) => [path, shape] as const));
   it.each(cases)('%s × %s', async (path, shape) => {
-    const h = build(path, shape, false, false);
+    // The historical fixture pins the record before answer standing defaulted on.
+    const h = build(path, shape, false, false, false);
     expect(await drive(h, path, shape, false)).toBe('done');
     const record = recordOf(h);
     const key = `${path}/${shape}`;
@@ -266,8 +273,10 @@ describe('record-only fields — a declaring tool changes the record, never the 
   it.each(cases)('%s × %s: the model’s requests are byte-identical', async (path, shape) => {
     const plain = build(path, shape, false, true);
     const declaring = build(path, shape, true, true);
-    expect(await drive(plain, path, shape, false)).toBe('done');
-    expect(await drive(declaring, path, shape, true)).toBe('done');
+    const detail = shape === 'ledger' ? '' : '; a tool said nothing matched';
+    const expected = `done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover${detail}.`;
+    expect(await drive(plain, path, shape, false)).toBe(expected);
+    expect(await drive(declaring, path, shape, true)).toBe(expected);
     expect(declaring.requests.map(text)).toEqual(plain.requests.map(text));
     // History (what every later request is composed from) agrees too.
     const historyOf = (h: Harness) =>

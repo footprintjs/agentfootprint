@@ -29,7 +29,6 @@ function setup(
   const events: AgentfootprintEvent[] = [];
   const results: string[] = [];
   const agent = Agent.create({
-    answerLayer: false,
     provider: mock({
       respond: (request) => {
         const result = request.messages.find((message) => message.role === 'tool');
@@ -87,7 +86,7 @@ describe.each(['same', 'fresh'] as const)(
           checkpoint,
           checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
         ),
-      ).resolves.toBe('done');
+      ).resolves.toBe('done\n\n---\n\nNot sure — a call was refused.');
 
       expect(resumed.execute).not.toHaveBeenCalled();
       expect(resumed.getCredential).not.toHaveBeenCalled();
@@ -118,7 +117,7 @@ describe.each(['same', 'fresh'] as const)(
           checkpoint,
           checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
         ),
-      ).resolves.toBe('done');
+      ).resolves.toBe('done\n\n---\n\nNot sure — a call was refused.');
 
       expect(resumed.execute).not.toHaveBeenCalled();
       expect(resumed.getCredential).not.toHaveBeenCalled();

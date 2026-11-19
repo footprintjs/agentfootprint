@@ -160,12 +160,7 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
         ),
         answer('No errors on either.'),
       ]);
-      const agent = Agent.create({
-        answerLayer: false,
-        provider: m.provider as never,
-        model: 'm',
-        reactMode,
-      })
+      const agent = Agent.create({ provider: m.provider as never, model: 'm', reactMode })
         .tool(searchLogs(ran))
         .build();
       const seen = events(agent);
@@ -211,7 +206,9 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       ]);
 
       const done = await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
-      expect(done).toBe('No errors on either.');
+      expect(done).toBe(
+        'No errors on either.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([
         { service: 'checkout', window: '24h' },
         { service: 'payments', window: '24h' },
@@ -273,11 +270,13 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout', window: '7d' } }),
       answer('ok'),
     ]);
-    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .build();
     const out = await agent.run({ message: 'errors this week?' });
-    expect(out).toBe('ok');
+    expect(out).toBe(
+      'ok\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(argumentRows(agent)).toEqual([
       expect.objectContaining({ argument: 'window', rule: 'ask', source: 'model', value: '7d' }),
@@ -323,24 +322,21 @@ describe('resume — a fresh agent, a serialized checkpoint', () => {
       batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
       answer('Done.'),
     ];
-    const first = Agent.create({
-      answerLayer: false,
-      provider: scripted(script).provider as never,
-      model: 'm',
-    })
+    const first = Agent.create({ provider: scripted(script).provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .build();
     const paused = await first.run({ message: 'errors?' });
     const cp = stored(paused);
     const reply = replyTo(paused, { f1: '7d' });
     const second = Agent.create({
-      answerLayer: false,
       provider: scripted(script.slice(1)).provider as never,
       model: 'm',
     })
       .tool(searchLogs(ran))
       .build();
-    expect(await second.resume(cp, reply)).toBe('Done.');
+    expect(await second.resume(cp, reply)).toBe(
+      'Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
   });
 });
@@ -376,7 +372,7 @@ describe('the hosted path — render, answer, cancel', () => {
       batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
       answer('No errors.'),
     ]);
-    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .build();
     const sessions = memorySessions();
@@ -398,7 +394,9 @@ describe('the hosted path — render, answer, cancel', () => {
         sessionId: 's',
         decision: { requestId: pending!.requestId, values: { f1: '1h' } },
       });
-      expect(done.output).toBe('No errors.');
+      expect(done.output).toBe(
+        'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
     } finally {
       await handle.close();
@@ -498,12 +496,14 @@ describe('one human question per resume — a later pause in the SAME batch is r
       ),
       answer('ok'),
     ]);
-    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tools([searchLogs([]), collect])
       .build();
     const paused = await agent.run({ message: 'go' });
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('ok');
+    expect(done).toBe(
+      'ok\n\n---\n\nNot sure — a call failed; a tool did not say what time its result covers.',
+    );
     const result = m.requests[1]!.messages.find(
       (msg) => msg.role === 'tool' && msg.toolCallId === 'c2',
     );
@@ -527,7 +527,7 @@ describe('one human question per resume — a later pause in the SAME batch is r
       batch({ id: 'c2', name: 'collect_window', args: {} }),
       answer('Got the year.'),
     ]);
-    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tools([searchLogs([]), collect])
       .build();
     const first = await agent.run({ message: 'go' });
@@ -538,7 +538,9 @@ describe('one human question per resume — a later pause in the SAME batch is r
       requestId: second.awaitingInput.requestId,
       values: { year: 2026 },
     });
-    expect(done).toBe('Got the year.');
+    expect(done).toBe(
+      'Got the year.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
   });
 });
 
@@ -590,7 +592,7 @@ describe('the readers of a pause', () => {
       batch({ id: 'c2', name: 'search_logs', args: { service: 'payments', window: '1h' } }),
       answer('done'),
     ]);
-    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(searchLogs(ran))
       .window(slidingWindow({ keepRecentTurns: 1 }))
       .build();
@@ -599,7 +601,9 @@ describe('the readers of a pause', () => {
       (agent.getSnapshot()?.sharedState as { pausedToolCallId?: string }).pausedToolCallId,
     ).toBe('');
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '7d' }));
-    expect(done).toBe('done');
+    expect(done).toBe(
+      'done\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '7d' },
       { service: 'payments', window: '1h' },
@@ -655,7 +659,6 @@ describe('a composition — Sequence(agent) resumes the ask with a raw reply', (
   it('the ask pauses one subflow deep and the sequence resumes it', async () => {
     const ran: Record<string, unknown>[] = [];
     const inner = Agent.create({
-      answerLayer: false,
       provider: scripted([
         batch({ id: 'c1', name: 'search_logs', args: { service: 'checkout' } }),
         answer('No errors.'),
@@ -671,7 +674,9 @@ describe('a composition — Sequence(agent) resumes the ask with a raw reply', (
       requestId: paused.awaitingInput.requestId,
       values: { f1: '24h' },
     });
-    expect(done).toBe('No errors.');
+    expect(done).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '24h' }]);
   });
 });
@@ -762,7 +767,7 @@ describe('PROPERTY — every answer inside the declared choices', () => {
       batch({ id: 'c1', name: 'top_talkers', args: {} }),
       answer('could not run it'),
     ]);
-    const agent = Agent.create({ answerLayer: false, provider: m.provider as never, model: 'm' })
+    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(tool)
       .build();
     let out: AgentOutput | RunnerPauseOutcome = await agent.run({ message: 'go' });
@@ -777,7 +782,7 @@ describe('PROPERTY — every answer inside the declared choices', () => {
       ARGUMENT_REASK_QUESTION,
       ARGUMENT_REASK_QUESTION,
     ]);
-    expect(out).toBe('could not run it');
+    expect(out).toBe('could not run it\n\n---\n\nNot sure — a call was refused.');
     expect(ran).toEqual([]);
     expect(argumentRows(agent).map((r) => r.asked ?? r.source)).toEqual([
       'missing',

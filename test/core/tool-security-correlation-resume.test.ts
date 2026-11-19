@@ -67,7 +67,6 @@ function makeAgent(
     },
   });
   const agent = Agent.create({
-    answerLayer: false,
     provider: mock({
       respond: (request) => {
         const results = request.messages.filter((message) => message.role === 'tool').length;
@@ -155,7 +154,9 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
           CredentialConsentRequiredError,
         );
       } else {
-        await expect(resumed.agent.resume(paused.checkpoint, undefined)).resolves.toBe('done');
+        await expect(resumed.agent.resume(paused.checkpoint, undefined)).resolves.toBe(
+          'done\n\n---\n\nNot sure — a call was refused.',
+        );
       }
       expect(resumed.executed).toEqual([]);
       expect(payloads(resumed.events, 'agentfootprint.credential.requested')).toEqual([
@@ -183,7 +184,7 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
         paused.checkpoint,
         checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
       ),
-    ).resolves.toBe('done');
+    ).resolves.toBe('done\n\n---\n\nNot sure — a call failed.');
     expect(resumed.executed).toEqual([FIRST]);
     expect(payloads(resumed.events, 'agentfootprint.credential.failed')).toEqual([
       expect.objectContaining({ toolCallId: FIRST, iteration: 1, tool: 'pay_invoice' }),

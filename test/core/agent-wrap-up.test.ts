@@ -109,6 +109,7 @@ function agentThatRunsOut(seen: Shot[], opts: { wrapUp?: false } = {}): Agent {
   return Agent.create({
     provider: neverFinishes(seen),
     model: 'm',
+    // The legacy no-wrap-up fixture pins the historical fragment byte for byte.
     ...(opts.wrapUp === false && {
       wrapUpAtMaxIterations: false as const,
       answerLayer: false as const,

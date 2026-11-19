@@ -113,12 +113,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         batch(proposal('new-proposal', {})),
         'Done.',
       ]);
-      const agent = Agent.create({
-        answerLayer: false,
-        provider: p.provider,
-        model: 'mock',
-        reactMode: mode,
-      })
+      const agent = Agent.create({ provider: p.provider, model: 'mock', reactMode: mode })
         .toolProvider({
           id: 'current-provider',
           list: (ctx) => [ctx.iteration === 1 ? asked : assumed],
@@ -126,7 +121,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
         .build();
       try {
-        expect(await agent.run(QUESTION)).toBe('Done.');
+        expect(await agent.run(QUESTION)).toBe(
+          'Done.\n\n---\n\nNot sure — vm = "new-native-default" was assumed by read_correction_fixture\'s rule, not given by you.',
+        );
         expect(old).toEqual([]);
         expect(current).toEqual([{ vm: 'new-native-default' }]);
         expect(argumentsOf(agent, 'new-proposal')[0]).toMatchObject({ source: 'default' });
@@ -143,12 +140,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         batch(quoted('withdrawn')),
         'Unavailable.',
       ]);
-      const agent = Agent.create({
-        answerLayer: false,
-        provider: p.provider,
-        model: 'mock',
-        reactMode: mode,
-      })
+      const agent = Agent.create({ provider: p.provider, model: 'mock', reactMode: mode })
         .toolProvider({
           id: 'withdrawn-provider',
           list: (ctx) => (ctx.iteration === 1 ? [actual] : []),
@@ -156,7 +148,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
         .build();
       try {
-        expect(await agent.run(QUESTION)).toBe('Unavailable.');
+        expect(await agent.run(QUESTION)).toBe(
+          'Unavailable.\n\n---\n\nNot sure — a call was refused.',
+        );
         expect(ran).toEqual([]);
         expect(p.requests[1]?.tools?.some((entry) => entry.name === TOOL) ?? false).toBe(false);
         expect(argumentsOf(agent, 'held')[0]).toHaveProperty(

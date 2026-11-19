@@ -49,7 +49,6 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           'Done.',
         ];
         const agent = Agent.create({
-          answerLayer: false,
           model: 'mock',
           reactMode: mode,
           checkColumnTypes: 'warn',
@@ -72,7 +71,11 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         agent.on('*', (event) => events.push(jsonCopy(event)));
         try {
           const outcome: unknown = await agent.run(QUESTION).catch((error: unknown) => error);
-          expect(outcome).toBe('Done.');
+          expect(outcome).toBe(
+            earlier
+              ? "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares."
+              : 'Done.',
+          );
           expect(executions).toEqual(Array.from({ length: earlier ? 2 : 1 }, () => ({ vm: VM })));
           expect(beforeRequest).toEqual([
             ...(earlier ? [{ executions: 0, rowsetChecks: 0 }] : []),

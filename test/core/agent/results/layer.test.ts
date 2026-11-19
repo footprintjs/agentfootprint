@@ -183,12 +183,7 @@ describe('a result that declares its period — one verdict per call', () => {
         call('c1', 'backup_runs', { host: 'stale' }),
         answer('No failed backups in the last hour.'),
       ]);
-      const agent = Agent.create({
-        answerLayer: false,
-        provider: m.provider as never,
-        model: 'm',
-        reactMode,
-      })
+      const agent = Agent.create({ provider: m.provider as never, model: 'm', reactMode })
         .tool(backupRuns())
         .resultsLayer()
         .build();
@@ -197,7 +192,7 @@ describe('a result that declares its period — one verdict per call', () => {
       const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
 
       // The run constant says the layer was armed.
-      expect(state.honestyLayers).toEqual({ results: true });
+      expect(state.honestyLayers).toEqual({ results: true, answer: true });
 
       // The coverage channel carries the declared period — the tool's own words.
       const coverageRows = state.coverageDeclared as { period?: DeclaredPeriod }[];
@@ -353,7 +348,6 @@ describe('a result that declares its period — one verdict per call', () => {
 describe('a tool that declares a period argument (ToolPeriod) — silence is recorded as silence', () => {
   it('a bare result: `undeclared`, joined to the inputs layer’s row for the same call', async () => {
     const agent = Agent.create({
-      answerLayer: false,
       provider: scripted([call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')])
         .provider as never,
       model: 'm',
@@ -362,7 +356,7 @@ describe('a tool that declares a period argument (ToolPeriod) — silence is rec
       .build(); // no .resultsLayer(): a registered ToolPeriod arms it by itself
     await agent.run({ message: 'any errors on checkout?' });
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-    expect(state.honestyLayers).toEqual({ inputs: true, results: true });
+    expect(state.honestyLayers).toEqual({ inputs: true, results: true, answer: true });
     expect(periodRows(agent)).toEqual([
       {
         kind: 'period',
@@ -419,7 +413,6 @@ describe('without the layer — a declared period is recorded, never judged in s
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       const agent = Agent.create({
-        answerLayer: false,
         provider: scripted([
           call('c1', 'backup_runs', { host: 'stale' }),
           call('c2', 'backup_runs', { host: 'stale' }),
@@ -431,7 +424,7 @@ describe('without the layer — a declared period is recorded, never judged in s
         .build();
       await agent.run({ message: 'twice' });
       const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-      expect(state).not.toHaveProperty('honestyLayers');
+      expect(state.honestyLayers).toEqual({ answer: true });
       expect((state.coverageDeclared as { period?: unknown }[]).map((r) => r.period)).toEqual([
         PERIODS.stale,
         PERIODS.stale,
@@ -454,7 +447,6 @@ describe('without the layer — a declared period is recorded, never judged in s
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       const agent = Agent.create({
-        answerLayer: false,
         provider: scripted([
           call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
           call('c2', 'search_logs', { service: 'payments', window: '1h' }),
@@ -467,7 +459,7 @@ describe('without the layer — a declared period is recorded, never judged in s
         .build();
       await agent.run({ message: 'any errors?' });
       const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-      expect(state.honestyLayers).toEqual({ inputs: true });
+      expect(state.honestyLayers).toEqual({ inputs: true, answer: true });
       expect(state).not.toHaveProperty('toolResultsIteration');
       expect(periodRows(agent)).toEqual([]);
       const warnings = warn.mock.calls
@@ -718,7 +710,6 @@ describe('a call id is not a call — each batch is judged once per run, whateve
 describe('the person reads it — only under .limitsTravelWithTheAnswer()', () => {
   it('a prose answer: one Period line per declaring call, as declared', async () => {
     const agent = Agent.create({
-      answerLayer: false,
       provider: scripted([call('c1', 'backup_runs', { host: 'stale' }), answer('No failures.')])
         .provider as never,
       model: 'm',
@@ -730,6 +721,7 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
     const out = String(await agent.run({ message: 'any failures in the last hour?' }));
     expect(out).toBe(
       'No failures.\n\n---\n\n' +
+        "Not sure — a tool said nothing matched; a tool's data does not reach the time the question asked about.\n\n" +
         'Coverage of this answer — declared by the tools that produced it, not by the model:\n\n' +
         'Checked:\n- every job in the 02:00 export\n\n' +
         'Period:\n- backup_runs queried 2026-09-26T09:00:00Z to 2026-09-26T10:00:00Z; the store ' +
@@ -760,9 +752,8 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
     );
   });
 
-  it('nothing declared a period: the block is the bytes it always was', async () => {
+  it('nothing declared a period: the coverage block has its checked items and no Period line', async () => {
     const agent = Agent.create({
-      answerLayer: false,
       provider: scripted([call('c1', 'backup_runs', { host: 'silent' }), answer('No failures.')])
         .provider as never,
       model: 'm',
@@ -773,6 +764,7 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
     const out = String(await agent.run({ message: 'any failures?' }));
     expect(out).toBe(
       'No failures.\n\n---\n\n' +
+        'Not sure — a tool said nothing matched.\n\n' +
         'Coverage of this answer — declared by the tools that produced it, not by the model:\n\n' +
         'Checked:\n- every job in the 02:00 export',
     );
@@ -897,9 +889,8 @@ describe('security: the verdict travels as a word, never as the instants', () =>
 // ─── BYTE IDENTITY ───────────────────────────────────────────────────
 
 describe('byte identity: nothing declared, nothing mounted', () => {
-  it('no ToolPeriod and no .resultsLayer(): no sf-results, no run constant, no row', async () => {
+  it('no ToolPeriod and no .resultsLayer(): no results stage, run constant or finding', async () => {
     const agent = Agent.create({
-      answerLayer: false,
       provider: scripted([call('c1', 'backup_runs', { host: 'silent' }), answer('none')])
         .provider as never,
       model: 'm',
@@ -909,7 +900,7 @@ describe('byte identity: nothing declared, nothing mounted', () => {
     await agent.run({ message: 'x' });
     const snapshot = agent.getSnapshot()!;
     expect(snapshot.commitLog.some((b) => b.stageId === 'sf-results')).toBe(false);
-    expect(snapshot.sharedState).not.toHaveProperty('honestyLayers');
+    expect(snapshot.sharedState.honestyLayers).toEqual({ answer: true });
     expect(snapshot.sharedState).not.toHaveProperty('toolResultsIteration');
     expect(agent.findings()).toBeUndefined();
   });

@@ -155,20 +155,27 @@ describe('C3 — the run’s deadline cancels the call in flight', () => {
 describe('C3b — the run’s signal is released with the run', () => {
   it('a deadline never fires on a run that already finished', async () => {
     const seen: (AbortSignal | undefined)[] = [];
+    let deadlinePending = false;
     const provider: LLMProvider = {
       name: 'quick',
       complete: async (req) => {
         seen.push(req.signal);
+        deadlinePending = vi.getTimerCount() > 0;
         return { ...ANSWER };
       },
     };
-    // Exercise deadline retirement on the original path, without mounting
-    // the assessment stage inside the 30ms fixture budget.
-    const agent = Agent.create({ provider, model: 'm', answerLayer: false }).build();
-    await agent.run('hello', { timeoutMs: 30 });
-    expect(seen[0]).toBeDefined();
-    await new Promise<void>((r) => setTimeout(r, 60));
-    expect(seen[0]!.aborted).toBe(false);
+    // Advance the deadline clock after the complete default turn, including cold assessment.
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    try {
+      const agent = Agent.create({ provider, model: 'm' }).build();
+      await agent.run('hello', { timeoutMs: 30 });
+      expect(seen[0]).toBeDefined();
+      expect(deadlinePending).toBe(true);
+      await vi.advanceTimersByTimeAsync(60);
+      expect(seen[0]!.aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

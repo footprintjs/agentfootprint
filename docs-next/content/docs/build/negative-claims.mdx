@@ -14,20 +14,21 @@ usefulness remain **unmeasured**.
 
 No output schema, citation field, tool-name list or answer validator is required.
 Native tool dispatch records supply the observations; assistant messages and
-summaries never become evidence. The example's local search declares a source gap,
-then the mock model makes a broader claim. The example keeps standing as data
-and switches off the standing line to show the observer's effect on its own.
+summaries never become evidence. The example's search finds no matches in the
+incident store and declares that it cannot check reports filed by email. The
+mock model makes a broader claim. The observer records a finding and the default
+standing line explains the gap, the absence and the unverified prose.
 
 <CodeFile
   path="examples/features/111-negative-prose-observe.ts"
   region="observe"
-  title="Observe a warning and deliver the unchanged answer"
+  title="Observe a negative claim and show the default standing line"
 />
 
 The prose-only arm adds no correction request or delivery buffer. It preserves
-normal streaming, and the returned answer, final event, history and memory use
-the same delivered text. It observes the terminal answer after output middleware;
-it does not rewrite the answer, call a tool again or turn a warning into a veto.
+normal streaming. It observes the terminal answer after output middleware.
+The answer layer appends the warning after the model's text. The returned answer,
+final event, history and memory carry the same delivered text.
 An independent `.outputSchema()` or `.answerValidation()` retains its own behavior,
 including retries, buffering and refusal. `.outputFallback()` is refused with
 the prose-only arm because a fallback can replace an answer after observation.

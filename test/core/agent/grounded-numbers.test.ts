@@ -138,7 +138,6 @@ const build = (
     gate?: { posture?: 'assist' | 'guard' | 'rails'; nudge?: boolean };
     tools?: readonly (typeof exportRows)[];
     placement?: boolean;
-    standingLine?: false;
     reactMode?: 'classic' | 'dynamic' | 'dynamic-grouped';
   } = {},
 ) => {
@@ -156,7 +155,6 @@ const build = (
   }).system('You are a storage engineer.');
   for (const tool of opts.tools ?? [exportRows, getSizes, compute]) builder = builder.tool(tool);
   if (opts.gate !== undefined) builder = builder.namesAndNumbersFromEvidence(opts.gate);
-  if (opts.standingLine === false) builder.answerLayer({ standingLine: false });
   const agent = builder.watch(caps.recorder).build();
   return { agent, requests, ...caps };
 };
@@ -757,7 +755,7 @@ describe('regression: absent means today, proven on prompts AND records', () => 
   const SCRIPT: Script = [callTool('t1', 'export_rows'), answer(HEAD_MATH_ANSWER)];
 
   const runWith = async (gate?: { posture?: 'assist'; nudge?: boolean }) => {
-    const { agent, requests, all } = build(SCRIPT, { gate, standingLine: false });
+    const { agent, requests, all } = build(SCRIPT, gate === undefined ? {} : { gate });
     const out = await agent.run({ message: 'total?' }, { sessionId: 'zero-delta' });
     return { out, requests, all, history: historyOf(agent) };
   };
@@ -783,8 +781,11 @@ describe('regression: absent means today, proven on prompts AND records', () => 
       expect(JSON.stringify(r.history).replace(/art_[A-Za-z0-9]+/g, 'art_REF')).toBe(
         JSON.stringify(bare.history).replace(/art_[A-Za-z0-9]+/g, 'art_REF'),
       );
-      expect(r.out).toBe(HEAD_MATH_ANSWER);
     }
+    expect(bare.out).toBe(HEAD_MATH_ANSWER);
+    const flaggedAnswer = `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`;
+    expect(gateOnly.out).toBe(flaggedAnswer);
+    expect(nudgeOff.out).toBe(flaggedAnswer);
 
     // The gate itself still records under its default posture — the 9.35.0
     // behavior, untouched.

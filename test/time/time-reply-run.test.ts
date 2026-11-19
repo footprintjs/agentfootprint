@@ -93,7 +93,6 @@ function make(
         }
       : tool;
   const agent = Agent.create({
-    answerLayer: false,
     provider: provider.provider as never,
     model: 'mock',
     maxIterations: 5,
@@ -209,7 +208,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)('%s native time reply', (
         rule: 'zone-corrected',
       });
       const done = await reply(resumed.agent, second, { [corrected.id]: choice(second) });
-      expect(done).toBe('Done.');
+      expect(done).toBe(
+        'Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(firstRun.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
       expect(replies(resumed.agent).at(-1)).toMatchObject({
         decision: 'range',
@@ -230,7 +231,7 @@ describe('native correction meanings', () => {
     const made = make();
     const first = await start(made);
     const done = await reply(made.agent, first, { [pair(first).correction.id]: choice(first) });
-    expect(done).toBe('Done.');
+    expect(done).toBe('Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.');
     expect(made.seen).toEqual([{ from: FROM, to: TO }]);
     expect((made.agent.findings() ?? []).find((row) => row.kind === 'time-answer')).toMatchObject({
       how: 'edited',
@@ -261,7 +262,9 @@ describe('native correction meanings', () => {
       );
       expect(made.seen).toEqual([]);
       const done = await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
-      expect(done).toBe('Done.');
+      expect(done).toBe(
+        'Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(made.seen).toEqual([
         { from: FROM - 60 * 60 * 1000, to: TOOL_TO },
         { from: FROM - 60 * 60 * 1000, to: TOOL_TO },

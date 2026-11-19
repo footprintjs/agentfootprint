@@ -92,7 +92,6 @@ function fixture(
     },
   });
   const builder = Agent.create({
-    answerLayer: false,
     provider,
     model: 'mock',
     maxIterations: 6,
@@ -291,7 +290,9 @@ describe('failure-first: native source declaration correction is an explicit inp
       { badFirstResult: true },
     );
     try {
-      expect(await f.agent.run({ message: QUESTION })).toBe('Done.');
+      expect(await f.agent.run({ message: QUESTION })).toBe(
+        "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.",
+      );
       expect(f.atRequest).toEqual([0, 1, 1, 2]);
       expect(f.executions).toHaveLength(2);
       const disposition = f.events.findLast(

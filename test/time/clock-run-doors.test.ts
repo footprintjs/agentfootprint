@@ -152,7 +152,7 @@ describe("a resume's differing time is recorded through BOTH pause shapes", () =
 
   async function askedThenResumed(time?: { now?: string; zone?: string }) {
     const agent = agentWith(script, (b) =>
-      b.tool(searchLogs()).inputsLayer().time({ zone: 'UTC' }).answerLayer(false),
+      b.tool(searchLogs()).inputsLayer().time({ zone: 'UTC' }),
     );
     const paused = await agent.run({ message: 'errors?', time: { now: NOW } });
     if (!isInputPause(paused)) throw new Error('expected the argument ask');
@@ -168,7 +168,9 @@ describe("a resume's differing time is recorded through BOTH pause shapes", () =
   it('the argument ask (an interrupt() pause) files clock-on-resume, once, and keeps the clock', async () => {
     const later = '2026-10-09T16:40:00Z';
     const { agent, done } = await askedThenResumed({ now: later, zone: 'Asia/Tokyo' });
-    expect(done).toBe('No errors.');
+    expect(done).toBe(
+      'No errors.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers; a tool read a different stretch of time than the one asked about.',
+    );
     expect(ofKind<ClockRow>(agent, 'clock')).toMatchObject([{ now: NOW, zone: 'UTC' }]);
     expect(ofKind<ClockOnResumeRow>(agent, 'clock-on-resume')).toEqual([
       {
