@@ -27,10 +27,14 @@ export const system = [
 export function createDesk(library, task) {
   const { defineTool, defineSkill, skillGraph, allow, deny, ask } = library;
   const enteredCalls = [];
-  let reached = false;
+  const hasTargetList = task.targets !== undefined;
+  const targets = task.targets ?? [task.target];
+  const recordedTargets = new Set();
+  let retryRequested = false;
   const toolName = task.id === 'unavailable-tool' ? 'read_desk_status' : task.tool;
   const tool = defineTool({
     name: toolName,
+    ...(hasTargetList ? { displayName: 'File catalog card' } : {}),
     description: task.id === 'empty-search'
       ? 'Find a catalog card by title and return its code.'
       : task.id === 'unavailable-tool'
@@ -45,14 +49,27 @@ export function createDesk(library, task) {
     ...(task.id === 'empty-search' || task.id === 'unavailable-tool' ? { effects: 'read' } : {}),
     execute({ target }) {
       enteredCalls.push({ toolName, target });
-      if (target !== task.target) return { content: 'Unknown target.', effects: [], status: 'failure' };
+      if (!targets.includes(target)) return { content: 'Unknown target.', effects: [], status: 'failure' };
       if (task.id === 'empty-search') return [];
       if (task.id === 'failed-step') {
         return { content: 'No matching label stock.', effects: [], status: 'failure' };
       }
       if (task.id === 'unavailable-tool') return 'The desk is open.';
-      reached = true;
-      return { content: 'The catalog change is recorded.', effects: [], status: 'success' };
+      if (target === task.target && ['hidden-failure', 'partial-failure'].includes(task.id)) {
+        return { content: 'Request received.', effects: [], status: 'failure' };
+      }
+      if (task.id === 'pending-acceptance') {
+        return { content: 'Request received.', effects: [], status: 'pending' };
+      }
+      if (task.id === 'recovered-retry' && !retryRequested) {
+        retryRequested = true;
+        return { content: 'Please try again.', effects: [], status: 'failure' };
+      }
+      recordedTargets.add(target);
+      const content = hasTargetList
+        ? `The ${target} card is filed in the desk catalog.`
+        : 'The catalog change is recorded.';
+      return { content, effects: [], status: 'success' };
     },
   });
   return {
@@ -79,6 +96,11 @@ export function createDesk(library, task) {
         },
       });
     },
-    truth: () => ({ reached, entries: enteredCalls.map(({ target }) => target), enteredCalls: [...enteredCalls] }),
+    truth: () => ({
+      reached: targets.every((target) => recordedTargets.has(target)),
+      entries: enteredCalls.map(({ target }) => target),
+      enteredCalls: [...enteredCalls],
+      ...(hasTargetList ? { recordedTargets: targets.filter((target) => recordedTargets.has(target)) } : {}),
+    }),
   };
 }
