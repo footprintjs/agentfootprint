@@ -236,6 +236,9 @@
   color: var(--cx-muted);
   margin-bottom: 8px;
 }
+.cx-scene > figcaption {
+  margin-bottom: 0;
+}
 .cx-card > div {
   font-size: 16px;
   line-height: 1.5;

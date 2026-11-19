@@ -802,8 +802,25 @@ function analyzeContextWalkthrough() {
   const recorded = JSON.parse(
     readFileSync(new URL('../lib/context-walkthrough-figure.json', import.meta.url)),
   );
+  // Bind each exported claim to its stop independently of the generated excerpts.
+  const answerSteps = {
+    question: ['Run start', 'Start with the question.', [], ['is empty']],
+    selection: ['Route 1', 'The model requests scoped summaries.',
+      ['userMessage', 'llmLatestToolCalls'], ['mock model requests node_summaries']],
+    reference: ['Tool call 1', 'The tool returns the source and rows.',
+      ['lastToolResult'], ['nodes@v1 source metadata', 'all four rows']],
+    prepare: ['Iteration 2', 'The next iteration carries the tool result.',
+      ['iteration', 'lastToolResult'], ['carries forward', 'all four rows']],
+    model: ['Route 2', 'The mock model proposes a finding.',
+      ['llmLatestContent'], ['mock provider supplies a structured finding']],
+    finding: ['Answer 1', 'The proposed finding passes three checks.',
+      ['answerValidation'],
+      ['source reference matches', 'maximum appears in a retained row', 'selection revision matches']],
+    answer: ['Run end', 'The run ends with the checked finding.',
+      ['finalContent'], ['structured finding proposed at Route 2']],
+  };
   const stories = {
-    answer: ['question', 'selection', 'reference', 'prepare', 'model', 'finding', 'answer'],
+    answer: Object.keys(answerSteps),
     conflict: ['same-claim', 'conflict', 'pause', 'repair', 'check-output', 'checked-answer'],
   };
   const version = manifest.dependencies.agentfootprint;
@@ -814,7 +831,12 @@ function analyzeContextWalkthrough() {
   for (const anchor of ['cx-layers-title', 'cx-boundary-title', 'context-answer-story', 'context-conflict-story']) {
     if (!guide.includes(`id="${anchor}"`)) fail(`Context Engineering: missing #${anchor}`);
   }
-  const source = /<p class="cx-source">Recorded with (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.<\/p>/i.exec(guide);
+  const answerHeader = guide.match(/<h2 id="context-answer-story-title">Build an answer<\/h2>([\s\S]*?)<\/header>/i)?.[1] ?? '';
+  if (!answerHeader.includes('production design in which a backend ranks the rows and a host renders the answer') ||
+    !answerHeader.includes('In the saved mock run, the tool returns all four rows and the mock model supplies the two-node finding')) {
+    fail('Context Engineering: the answer story must identify the production design and the saved mock run');
+  }
+  const source = /<p class="cx-source">Recorded with (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.<\/p>/i.exec(answerHeader);
   if (!source || source[1] !== recorded.cohort.join(', ') ||
     source[3] !== recorded.commit.slice(0, 12) ||
     !attribute(source[2], 'href')?.endsWith(`/commit/${recorded.commit}`)) {
@@ -822,7 +844,12 @@ function analyzeContextWalkthrough() {
   }
   const listItems = new Map([...guide.matchAll(/(<li\b[^>]*>)([\s\S]*?)<\/li>/gi)]
     .map(([, tag, body]) => [attribute(tag, 'id'), body]));
+  const answerAnchors = [...listItems.keys()].filter((id) => id?.startsWith('context-answer-'));
+  if (answerAnchors.join(' ') !== stories.answer.map((id) => `context-answer-${id}`).join(' ')) {
+    fail('Context Engineering: the answer steps must appear in recorded order');
+  }
   const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' };
+  let previousStop = -1;
   for (const [story, ids] of Object.entries(stories)) {
     for (const step of ids) {
       const anchor = `context-${story}-${step}`;
@@ -837,6 +864,19 @@ function analyzeContextWalkthrough() {
       }
       if (story === 'answer') {
         const excerpt = recorded.steps[step];
+        const [label, title, keys, claims] = answerSteps[step];
+        const description = item.match(/<p class="cx-description">([\s\S]*?)<\/p>/i)?.[1];
+        if (!item.includes(`<h3 id="${anchor}-title">${title}</h3>`) ||
+          !claims.every((claim) => description?.includes(claim)) ||
+          !item.includes('<figcaption class="cx-caption">Illustrative production design</figcaption>')) {
+          fail(`Context Engineering: #${anchor} needs the ${label} claim and an illustration marked as production design`);
+        }
+        if (excerpt?.label !== label || !Number.isInteger(excerpt.index) || excerpt.index <= previousStop ||
+          JSON.stringify(Object.keys(excerpt.values ?? {}).sort()) !== JSON.stringify([...keys].sort()) ||
+          !item.includes(`<p>Stop ${excerpt.index + 1} · ${label}</p>`)) {
+          fail(`Context Engineering: #${anchor} needs the chronological ${label} stop and its recorded fields`);
+        }
+        previousStop = excerpt?.index ?? previousStop;
         const query = new URLSearchParams({ view, agentfootprint: version, step });
         const expected = excerpt && JSON.stringify(excerpt.values, null, 2)
           .replace(/[&<>"']/g, (character) => entities[character]);

@@ -33,14 +33,16 @@ function walkthroughPath(step, version = appVersion) {
 }
 
 async function checkRecordedValues(panel, id) {
-  const { index, values } = steps[id];
-  await panel.locator(`[data-testid="context-view"][data-step="${index}"]`).waitFor();
-  const json = panel.getByTestId('context-json');
+  const { index, label, values } = steps[id];
+  const inspector = panel.locator(`[data-testid="context-view"][data-step="${index}"]`);
+  await inspector.getByText(`${label} · ${index + 1}/`, { exact: false }).waitFor();
+  const json = inspector.getByTestId('context-json');
   await json.waitFor();
   const actual = JSON.parse(await json.textContent());
   for (const [key, value] of Object.entries(values)) {
     deepStrictEqual(actual[key], value, `${id}: ${key} matches the recorded excerpt`);
   }
+  return actual;
 }
 
 test('the built context inspector reads recorded stops with the Agent runtime blocked', { timeout: 30_000 }, async (t) => {
@@ -88,24 +90,51 @@ test('the built context inspector reads recorded stops with the Agent runtime bl
   await menu.waitFor();
   equal(await menu.inputValue(), 'finding');
   deepStrictEqual(await menu.locator('option').evaluateAll((options) => options.map((option) => option.value)), answerSteps);
+  equal(await menu.locator('option[value="finding"]').textContent(), 'Checks');
   const panel = page.getByRole('region', { name: 'Recorded context' });
   const inspector = panel.getByTestId('context-view');
-  await inspector.getByText(/Answer 1/).first().waitFor();
-  const findingCommit = await inspector.getAttribute('data-commit');
+  await panel.getByRole('heading', { name: 'The proposed finding passes three checks.', exact: true }).waitFor();
   await inspector.getByTestId('context-mode-json').press('Enter');
-  await checkRecordedValues(panel, 'finding');
+  const validation = (await checkRecordedValues(panel, 'finding')).answerValidation;
+  const findingCommit = await inspector.getAttribute('data-commit');
+  equal(validation.status, 'passed');
+  equal(validation.checked, 3);
+  deepStrictEqual(validation.checks, [
+    { id: 'source-ref', disposition: 'checked-pass', path: 'sourceRef' },
+    { id: 'maximum-is-a-retained-value', disposition: 'checked-pass', path: 'maximum' },
+    { id: 'selection-revision', disposition: 'checked-pass', path: 'selectionRevision' },
+  ]);
 
   await releaseSource.focus();
   await page.keyboard.press('Tab');
   ok(await menu.evaluate((element) => document.activeElement === element), 'the step select is reachable by keyboard');
-  await menu.selectOption('answer');
-  await page.waitForURL(origin + prefix + walkthroughPath('answer'));
-  await inspector.getByText(/Run end/).first().waitFor();
-  await checkRecordedValues(panel, 'answer');
+  const context = {};
+  for (const id of answerSteps.filter((step) => step !== 'finding')) {
+    await menu.selectOption(id);
+    await page.waitForURL(origin + prefix + walkthroughPath(id));
+    context[id] = await checkRecordedValues(panel, id);
+  }
   notEqual(await inspector.getAttribute('data-commit'), findingCommit);
-  await menu.selectOption('reference');
-  await page.waitForURL(origin + prefix + walkthroughPath('reference'));
-  await checkRecordedValues(panel, 'reference');
+
+  deepStrictEqual(context.question, {});
+  const calls = context.selection.llmLatestToolCalls;
+  equal(calls.length, 1);
+  equal(calls[0].name, 'node_summaries');
+  equal(context.selection.llmLatestContent, '', 'Route 1 requests the summaries');
+  const result = JSON.parse(context.reference.lastToolResult.result);
+  deepStrictEqual(result.selection, calls[0].args);
+  equal(result.source.ref, 'nodes@v1');
+  deepStrictEqual(result.rows.map(({ node }) => node), ['11', '12', '13', '14']);
+  equal(result.rows[3].p95_us, null);
+  equal(context.prepare.iteration, 2);
+  deepStrictEqual(context.prepare.lastToolResult, context.reference.lastToolResult);
+  deepStrictEqual(context.model.llmLatestToolCalls, [], 'Route 2 supplies the finding');
+  const proposal = JSON.parse(context.model.llmLatestContent);
+  deepStrictEqual(proposal.nodeIds, ['11', '13']);
+  equal(proposal.maximum, 1500);
+  equal(proposal.sourceRef, result.source.ref);
+  equal(proposal.selectionRevision, result.selection.revision);
+  equal(context.answer.finalContent, context.model.llmLatestContent);
 
   const theme = page.getByRole('button', { name: 'Dark theme' });
   const before = await panel.evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -162,12 +191,12 @@ if (process.env.DOCS_DEMO_EXPORT) {
     page.on('request', (request) => {
       if (new URL(request.url()).pathname.startsWith(demoPath)) appRequests.push(request);
     });
-    const anchor = '#context-answer-finding';
+    const anchor = '#context-answer-model';
     equal((await page.goto(overlay + guide + anchor))?.status(), 200);
     const launch = page.locator(anchor).getByRole('link', { name: /Inspect this step in the demo/ });
     await launch.scrollIntoViewIfNeeded();
     const url = new URL(await launch.getAttribute('href'), page.url());
-    equal(url.href, overlay + walkthroughPath('finding'));
+    equal(url.href, overlay + walkthroughPath('model'));
     deepStrictEqual(appRequests, [], 'the static lesson makes no eager demo requests');
     url.hash = '';
     const [navigation] = await Promise.all([
@@ -177,8 +206,11 @@ if (process.env.DOCS_DEMO_EXPORT) {
     ]);
     equal(navigation.status(), 200);
     equal(appRequests[0], navigation.request());
-    await page.getByRole('region', { name: 'Recorded context' }).waitFor();
-    equal(await page.getByRole('combobox', { name: 'Answer step' }).inputValue(), 'finding');
+    const panel = page.getByRole('region', { name: 'Recorded context' });
+    await panel.getByRole('heading', { name: 'The mock model proposes a finding.', exact: true }).waitFor();
+    equal(await page.getByRole('combobox', { name: 'Answer step' }).inputValue(), 'model');
+    await panel.getByTestId('context-mode-json').press('Enter');
+    await checkRecordedValues(panel, 'model');
     await page.getByRole('link', { name: /Back to Context Engineering/ }).click();
     equal(page.url(), overlay + returnPath);
     await page.close();
@@ -186,7 +218,7 @@ if (process.env.DOCS_DEMO_EXPORT) {
     const fallback = await openPage(browser, { javaScriptEnabled: false });
     equal((await fallback.goto(staticSite + guide + anchor))?.status(), 200);
     await fallback.locator(anchor).getByRole('link', { name: /Inspect this step in the demo/ }).click();
-    equal(fallback.url(), staticSite + walkthroughPath('finding'));
+    equal(fallback.url(), staticSite + walkthroughPath('model'));
     const section = fallback.locator(`#${view}`);
     await section.getByText('The interactive viewer is unavailable', { exact: false }).waitFor();
     await section.getByRole('link', { name: 'See the recorded context in the lesson' }).click();
@@ -200,8 +232,14 @@ if (process.env.DOCS_DEMO_EXPORT) {
         const code = step.locator('pre code');
         await code.waitFor();
         const values = JSON.parse(await code.textContent());
-        if (story === 'answer') deepStrictEqual(values, steps[id].values);
-        else ok(Object.keys(values).length > 0, `${id} retains its authored example`);
+        if (story === 'answer') {
+          deepStrictEqual(values, steps[id].values);
+          await step.getByText('Illustrative production design', { exact: true }).waitFor();
+          const link = step.getByRole('link', { name: /Inspect this step in the demo/ });
+          equal(new URL(await link.getAttribute('href'), fallback.url()).href, staticSite + walkthroughPath(id));
+        } else {
+          ok(Object.keys(values).length > 0, `${id} retains its authored example`);
+        }
       }
     }
   });

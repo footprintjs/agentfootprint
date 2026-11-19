@@ -99,10 +99,19 @@ function Packet({ step }: { step: number }) {
   );
 }
 
+function AnswerIllustration({ children }: { children: ReactNode }) {
+  return (
+    <figure className="cx-scene">
+      <figcaption className="cx-caption">Illustrative production design</figcaption>
+      {children}
+    </figure>
+  );
+}
+
 function AnswerVisual({ index }: { index: number }) {
   if (index <= 3)
     return (
-      <div className="cx-scene">
+      <AnswerIllustration>
         <Card
           label={
             index === 0
@@ -136,17 +145,17 @@ function AnswerVisual({ index }: { index: number }) {
             [
               'Begin with an empty context',
               'Attach the saved scope',
-              'Attach a reference, not the rows',
+              'Attach a scoped data reference',
               'Prepare the first model call',
             ][index]
           }
         />
         <Packet step={index} />
-      </div>
+      </AnswerIllustration>
     );
   if (index === 4)
     return (
-      <div className="cx-scene">
+      <AnswerIllustration>
         <Packet step={3} />
         <Arrow label="First model call" />
         <Card label="Model’s next action" tone="cx-accent">
@@ -156,12 +165,11 @@ function AnswerVisual({ index }: { index: number }) {
         <p className="cx-scene-note">
           The tool resolves the reference within the authorized scope.
         </p>
-      </div>
+      </AnswerIllustration>
     );
   if (index === 5)
     return (
-      <div className="cx-scene">
-        <div className="cx-caption">Illustrated finding · two tied nodes</div>
+      <AnswerIllustration>
         <div className="cx-metrics">
           <Card label="Node 11" tone="cx-accent">
             <strong className="cx-number">
@@ -183,14 +191,14 @@ function AnswerVisual({ index }: { index: number }) {
         </div>
         <Arrow label="Next model call gets the finding" />
         <Card label="Finding + source + coverage">
-          <strong>Highest P95: a tie</strong>
+          <strong>Two nodes share the highest P95</strong>
           <p>finding:highest-p95@3 → nodes@v1</p>
           <p>Comparison supported · causal explanation unavailable</p>
         </Card>
-      </div>
+      </AnswerIllustration>
     );
   return (
-    <div className="cx-scene">
+    <AnswerIllustration>
       <div className="cx-check-icon" aria-hidden="true">
         ✓
       </div>
@@ -208,7 +216,7 @@ function AnswerVisual({ index }: { index: number }) {
       <p className="cx-scene-note">
         The model selects the finding. The renderer supplies its factual value.
       </p>
-    </div>
+    </AnswerIllustration>
   );
 }
 
@@ -430,7 +438,11 @@ export function ContextStory() {
             <h2 id={`context-${id}-story-title`}>{title}</h2>
             {id === 'answer' ? (
               <>
-                <p>The illustrations explain the design. Each excerpt comes from a saved mock run.</p>
+                <p>
+                  The diagrams show a production design in which a backend ranks the rows and a host
+                  renders the answer. In the saved mock run, the tool returns all four rows and the
+                  mock model supplies the two-node finding.
+                </p>
                 <p className="cx-source">
                   Recorded with {evidence.cohort.join(', ')} from AgentFootprint commit{' '}
                   <a href={`${SITE.repo}/commit/${evidence.commit}`}><code>{evidence.commit.slice(0, 12)}</code></a>.

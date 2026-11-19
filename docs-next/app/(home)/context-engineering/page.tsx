@@ -47,8 +47,9 @@ export default function ContextEngineeringPage() {
           <em>less to guess.</em>
         </h1>
         <p>
-          A question becomes a clear task, a scoped data reference, and a checked finding.
-          <br className="cx-wide-break" /> Follow what changes—one step at a time.
+          Follow a saved mock run from a scoped question to a checked finding.
+          <br className="cx-wide-break" /> See how a production application can prepare context
+          and render an answer.
         </p>
       </header>
       <ContextStory />
@@ -135,8 +136,8 @@ export default function ContextEngineeringPage() {
             <summary>Where do the context examples come from?</summary>
             <p>
               The answer excerpts come from a saved run on a deterministic mock provider. Both
-              lessons use synthetic data. The conflict illustrations show how a host could handle
-              disagreeing values.
+              lessons use synthetic data. The diagrams illustrate how a production host can prepare
+              and check an answer or handle disagreeing values.
             </p>
           </details>
         </div>
