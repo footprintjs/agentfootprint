@@ -15,7 +15,7 @@
  * left out of the count (`reachable + unreachable + notApplicable = 3`).
  */
 
-import { callOutcomeOf } from '../core/agent/stages/toolCalls/execution/callOutcome.js';
+import { callOutcomeOf } from '../semantics/toolOutcome.js';
 import { chip, dedupePointers, joinSentences, n, v } from './render.js';
 import type {
   CheckId,

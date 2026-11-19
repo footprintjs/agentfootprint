@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_RESULT_STATUSES } from '../../../../../semantics/toolOutcome.js';
-import { callOutcomeOf } from '../execution/callOutcome.js';
+import { callOutcomeOf, TOOL_RESULT_STATUSES } from '../../../../../semantics/toolOutcome.js';
 import { stepOutcomeOf } from './stepOutcome.js';
 
 describe('stepOutcomeOf — a step is done only when its tool says so', () => {

@@ -16,7 +16,7 @@
  * manifest and fixture contract pin the three deltas; earlier captures remain.
  *
  * TOOL OUTCOME MARKER: a committed tool message whose call did not complete
- * now carries `outcome` (`execution/callOutcome.ts` · `callOutcomeOf`), the
+ * now carries `outcome` (`semantics/toolOutcome.ts` · `callOutcomeOf`), the
  * fact the check-in trail reads first. The retained `agent-scoped-provider`
  * capture under reference/tool-outcome-marker/ adds one refused history entry field.
  * The earlier capture and its manifest remain under v14-native-components/.

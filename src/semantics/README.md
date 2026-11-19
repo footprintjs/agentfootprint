@@ -9,7 +9,8 @@ it imports only `lib/` leaves and `time/`): `coverage/` (the two field-invented
 result primitives, `absent()` and `coverage()`, and the period a result
 declares — its own README), `toolEffects.ts` (the tool-result envelope grammar:
 the two effect kinds and `unknownStatusOf`), `toolOutcome.ts` (the outcome
-words a route edge keys on and `readToolResultStatus`, the shared status reader),
+words a route edge keys on, the shared status reader `readToolResultStatus`, and
+the settlement rule `callOutcomeOf` shared by dispatch and answer accounts),
 and `toolRan.ts` (the writer of `tool_end.entered` and its reader, `toolRanOf`).
 `readToolResultEnvelope({ content: 'x', effects: [], status: 'Denied' })?.status`
 is `'denied'`, and `unknownStatusOf({ content: 'x', effects: [], status: 'queued' })`

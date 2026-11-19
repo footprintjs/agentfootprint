@@ -21,7 +21,8 @@ import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
-import { type DispatchSettlement, outcomeField } from './callOutcome.js';
+import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
+import { outcomeField } from './outcomeField.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
