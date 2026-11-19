@@ -1,7 +1,7 @@
 /**
  * The answer account's "How sure" reason lines — one part of the closed table
  * (`templates.ts`, which holds its laws and its version), one line per reason
- * of the fold (`facts/howSure.ts` · `REASON_LINES`).
+ * of the fold (`facts/standing.ts` · `REASON_LINES`).
  */
 
 import { t, type AccountTemplate } from './templateEntry.js';

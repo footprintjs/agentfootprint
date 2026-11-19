@@ -187,6 +187,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'asked',
         'check-unreachable',
         'invariant-violation',
+        'step-skipped',
         'steps-unfinished',
         'stopped-early',
       ].sort(),
@@ -225,6 +226,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'sources-conflict',
         'unsupported-argument',
         'value-contingent',
+        'work-not-finished',
       ].sort(),
     );
   });

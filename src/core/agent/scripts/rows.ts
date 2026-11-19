@@ -247,7 +247,7 @@ const isCount = (v: unknown): boolean => typeof v === 'number' && Number.isInteg
 
 /**
  * Whether a value read from a stored checkpoint is a `script` row this library
- * could have written — the checkpoint door's arm (`core/runCheckpoint.ts`).
+ * could have written. The `script` arm of `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` calls this.
  * An older runtime refuses a checkpoint carrying one.
  */
 export function scriptRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {

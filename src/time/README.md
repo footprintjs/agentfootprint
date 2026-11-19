@@ -69,8 +69,9 @@ before the turn starts); `stages/seed.ts` · `stampClock` files the turn's `cloc
 shape: the `resume` door, or `execute` re-run after the argument ask's `interrupt()`),
 `clock-on-resume`;
 `stages/seed.ts` · `readTimeWords` reads the person's message through the armed reader, right
-after the clock, and files the `time-reading` rows;
-`core/runCheckpoint.ts` · `ledgerRowIsWellFormed` routes the four kinds to `rows.ts`; `tools/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
+after the clock, and files the `time-reading` rows.
+`core/checkpointLedger.ts` · `ledgerRowIsWellFormed` routes time rows to `rows.ts`.
+`tools/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and
 an `iso-range` through `range.ts` · `splitRange` in the strict profile; `artifacts/minting.ts` ·
 `prepareArtifact` and `artifacts/datasetResult.ts` · `stageDatasetArtifacts` judge a dataset's
 axis through `axis.ts` · `timeAxisIssues`. From the package: `axis.ts` (through

@@ -11,7 +11,7 @@
  *          `recordFindings`) by the Route decider and ToolCalls, and ONLY while
  *          the answer layer is armed.
  * Role:    core/ layer leaf of the answer layer. Static on purpose: the
- *          checkpoint door (`core/runCheckpoint.ts` · `validateCheckpoint`,
+ *          checkpoint ledger (`core/checkpointLedger.ts` · `ledgerRowIsWellFormed`,
  *          a synchronous door) asks `witnessRowIsWellFormed`, so this module
  *          keeps its imports static and few: the finding table
  *          (`integrityReasons.ts`, data), the integrity-finding row type, the
@@ -279,9 +279,9 @@ const isCount = (value: unknown): boolean =>
 /**
  * Whether a value read from a stored checkpoint is a witness row this library
  * could have written: the kind, a numeric `turn` and `iteration`, and every
- * other field in its own shape. The checkpoint door's two arms
- * (`core/runCheckpoint.ts`). An older runtime refuses a checkpoint that
- * carries either kind.
+ * other field in its own shape. The witness arms of `core/checkpointLedger.ts` ·
+ * `ledgerRowIsWellFormed` call this. An older runtime refuses a checkpoint
+ * carrying an unfamiliar kind.
  */
 export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {
   if (typeof r.turn !== 'number' || typeof r.iteration !== 'number') return false;

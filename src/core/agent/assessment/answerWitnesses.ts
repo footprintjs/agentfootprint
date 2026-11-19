@@ -13,9 +13,10 @@ interface WitnessRead {
  * ledger's `grounded`, `steps-unfinished` and `step-skipped` rows whose `turn` is the run's
  * `turnNumber` — the ledger crosses turns on a continued conversation, and an
  * earlier turn's verdict is about an answer this fold is not reading. A record
- * with no `turnNumber` reads every witness row (it may over-report; it never
- * hides). Filed only while the answer layer is armed, so an unarmed record
- * holds none and this reads nothing.
+ * with no `turnNumber` reads every `grounded` and `steps-unfinished` witness
+ * (it may over-report), but leaves `step-skipped` unread because it cannot
+ * place that skip in this turn. Filed only while the answer layer is armed,
+ * so an unarmed record holds none and this reads nothing.
  */
 export function witnessRows(state: Readonly<Record<string, unknown>>): readonly WitnessRead[] {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
