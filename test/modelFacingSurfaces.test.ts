@@ -722,16 +722,12 @@ const stepNudges = (): readonly string[] => {
 };
 
 /**
- * The findings ledger's two model-facing strings (9.101.0, `.findings()`).
- *
- * Both ride the REQUEST, never `history`: the `_findings` property is rebuilt
- * onto every served schema by `withFindingsArgument` at the committed tool
- * list (`buildToolsSlot`, the seed fallback), and the instruction is a
- * system piece registered through `defineInstruction` — recomposed by the
- * injection engine on every pass. Neither is written into a `role: 'tool'`
- * or `role: 'user'` message, so a later call re-reads a fresh copy, not a
- * stale one. `test/core/agent/findings/reserved.test.ts` judges the same two
- * strings at the STRICTEST lifetime as well; the rows here name the real one.
+ * Live findings guidance rides the stable `_findings` tool schema and the
+ * system instruction recomposed by the injection engine. The changing offer
+ * and folded ledger ride a request-only user-role DATA frame from
+ * `findings/context.ts` after committed history and cache breakpoints.
+ * `test/core/agent/findings/reserved.test.ts` also checks the guidance
+ * strings under the persistent-history rules.
  */
 const RESERVED_ARGUMENT_DESCRIPTION: Surface = {
   channel: 'tool-description',
@@ -741,9 +737,8 @@ const ALWAYS_ON_INSTRUCTION: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
 };
-/** The SERVED piece (step 3): composed per request from the committed
- *  `findingsLedger` key and joined into `systemPieces` only — never an
- *  injection, never a `history` turn. */
+/** Request-only system text for live ontology and the legacy findings piece
+ *  reconstructed from compatible saved requests. */
 const LEDGER_PIECE: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
@@ -1105,7 +1100,7 @@ function ruledRefusals(): string[] {
 }
 
 /**
- * A ledger that reaches EVERY arm of the piece's grammar: a conflict (two
+ * A ledger that reaches EVERY arm of the legacy piece's grammar: a conflict (two
  * facts on one key), a placed fact, an open row with `settles`, a ruled-out
  * row, noise, an undeclared served result, a bucket past its cap (`+K more`)
  * and a line past its width (`…[clipped N chars]`).
@@ -1152,9 +1147,8 @@ function findingsPieces(): string[] {
   return [findingsLedgerPiece(ledger, served)!.rawContent];
 }
 
-/** The piece under `findings({ answerAsk: 'quote-facts' })` (9.103.0): the
- *  same ledger with `FINDINGS_ANSWER_ASK` as its last section — composed by
- *  the real function, so the row reads the ask where the model reads it. */
+/** The legacy piece with `FINDINGS_ANSWER_ASK` as its last section. The live
+ *  `quote-facts` option puts its sentence in the findings instruction. */
 function findingsAskPieces(): string[] {
   const ledger: FindingsLedger = [
     {
@@ -1178,7 +1172,7 @@ function findingsAskPieces(): string[] {
   return [findingsLedgerPiece(ledger, ['call_1', 'call_2'], 'quote-facts')!.rawContent];
 }
 
-/** The piece with a `contingent:` section (9.110.0): a ledger holding one
+/** The legacy piece's `contingent:` section: a ledger holding one
  *  set-aside standing and two contingent rows — one filed at the answer, one
  *  at a dispatch with two carriers — composed by the real function. */
 function findingsContingentPieces(): string[] {
@@ -1223,7 +1217,7 @@ function findingsContingentPieces(): string[] {
   return [findingsLedgerPiece(ledger, ['call_1', 'call_4', 'call_7'])!.rawContent];
 }
 
-/** The piece with an `unsettled by absence:` section (9.113.0): two
+/** The legacy piece's `unsettled by absence:` section: two
  *  ruled-out standings, each with the row the rule files beside it — an
  *  absence quoting every part of its envelope, and an absence that declared
  *  no boundary and no way out — composed by the real function. */
@@ -1789,15 +1783,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => [FINDINGS_INSTRUCTION],
   },
   {
-    id: 'findings ledger — the SERVED piece (step 3)',
+    id: 'findings ledger — the legacy system piece for replay',
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      '`callLLM · buildCallLLMStage` composes it per request by `findingsLedgerPiece` from the ' +
-      'committed `findingsLedger` key and joins it into `systemPieces` ONLY (after the recovery ' +
-      'piece) — never pushed into `systemPromptInjections`, never written into `history`; the ' +
-      'model reads a fresh composition on each call, `servedView/findings.ts · findingsAt` recomposes the ' +
-      'same one from the record, and the receipt hashes it per request',
+      '`servedView/findings.ts · findingsAt` recomposes the original request-only system piece ' +
+      'with `findingsLedgerPiece` from the committed ledger and served result IDs for compatible ' +
+      'records without a layout discriminator. Live requests carry findings in the request-only DATA frame.',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1825,15 +1817,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => findingsPieces(),
   },
   {
-    id: 'findings ledger — the answer-turn ASK appended to the served piece (9.103.0)',
+    id: 'findings ledger — the answer-turn ask appended in legacy replay',
     module: 'src/core/agent/findings/reserved.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      "a constant (`FINDINGS_ANSWER_ASK`) that `findingsLedgerPiece` appends as the piece's last " +
-      "section ONLY under `findings({ answerAsk: 'quote-facts' })` — the same request-only " +
-      'system piece as the row above, composed per request, joined into `systemPieces` only, ' +
-      'never an injection and never a `history` turn; `servedView/findings.ts · findingsAt` re-appends it ' +
-      'from the run constant `findingsAnswerAsk`',
+      '`servedView/findings.ts · findingsAt` reads the legacy run constant `findingsAnswerAsk`. ' +
+      'For `quote-facts`, `findingsLedgerPiece` appends `FINDINGS_ANSWER_ASK` as the final section ' +
+      'of the request-only system piece. Live runs put the ask in the findings instruction.',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1879,16 +1869,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => [findingsInstructionFor({ contingent: true })],
   },
   {
-    id: 'findings ledger — the served `contingent:` section (9.110.0)',
+    id: 'findings ledger — the legacy `contingent:` section for replay',
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      'the same request-only system piece as the SERVED piece row: `findingsLedgerPiece` quotes ' +
-      'every `ContingentRow` of the committed `findingsLedger` under the heading `contingent (read ' +
-      'off the record):` — the one section the header\'s "what the model itself declared" does not ' +
-      "cover, named as the library's join so the header stays true — " +
-      'composed per request, joined into `systemPieces` only, never an injection and never a ' +
-      '`history` turn; `servedView/findings.ts · findingsAt` recomposes it from the record',
+      'in the legacy request-only system piece, `findingsLedgerPiece` quotes the committed ' +
+      '`ContingentRow` entries as library observations under `contingent (read off the record):`. ' +
+      '`servedView/findings.ts · findingsAt` recomposes that piece from compatible saved records.',
     drivenBy: [
       'test/core/agent/findings/contingent.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1906,16 +1893,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => findingsContingentPieces(),
   },
   {
-    id: 'findings ledger — the served `unsettled by absence:` section (9.113.0)',
+    id: 'findings ledger — the legacy `unsettled by absence:` section for replay',
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      'the same request-only system piece as the SERVED piece row: `findingsLedgerPiece` quotes ' +
-      'the `UnsettledByAbsenceRow`s the ledger fold keeps (`foldLedger(...).unsettled`) under the ' +
-      "heading `unsettled by absence (read off the record):` — the library's reading of the " +
-      'result a ruled-out standing rests on, named as such so the header stays true — composed ' +
-      'per request, joined into `systemPieces` only, never an injection and never a `history` ' +
-      'turn; `servedView/findings.ts · findingsAt` recomposes it from the record',
+      'in the legacy request-only system piece, `findingsLedgerPiece` quotes the retained ' +
+      '`UnsettledByAbsenceRow` entries under `unsettled by absence (read off the record):`. ' +
+      '`servedView/findings.ts · findingsAt` recomposes that piece from compatible saved records.',
     drivenBy: [
       'test/core/agent/findings/unsettled.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -2696,15 +2680,14 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => [ONTOLOGY_INSTRUCTION],
   },
   {
-    id: 'ontology — the SERVED piece (9.106.0)',
+    id: 'ontology — the final live system piece',
     module: 'src/ontology/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      '`callLLM · buildCallLLMStage` composes it per request by `ontologyPiece` from the run ' +
-      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece, ' +
-      'before the findings piece) — never pushed into `systemPromptInjections`, never written ' +
-      'into `history`; `servedView/ontology.ts · ontologyAt` recomposes the same one from the record and the ' +
-      'receipt hashes it per request',
+      '`callLLM · buildCallLLMStage` composes it by `ontologyPiece` from the run constant ' +
+      '`ontology` and that request’s hidden skills, after the optional recovery piece. Live ' +
+      'findings DATA rides in the request messages. `servedView/ontology.ts · ontologyAt` ' +
+      'recomposes the ontology piece from the record, and the receipt hashes it per request.',
     drivenBy: [
       'test/core/agent/ontology.test.ts',
       'test/ontology/serve.test.ts',
