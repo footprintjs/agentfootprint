@@ -14,6 +14,15 @@ import { freezeNativeOutputFormat } from '../../nativeOutputFormat.js';
 
 type OutputFormat = LLMRequest['outputFormat'];
 
+/** Keep the library's dispatch decision before an adapter can edit its request. */
+export function describeProviderDispatch(provider: LLMProvider, request: LLMRequest) {
+  return {
+    provider: provider.name,
+    model: request.model,
+    native: request.outputFormat !== undefined,
+  };
+}
+
 /** One capability rule at both request boundaries, before cache or model I/O. */
 export function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
   if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {

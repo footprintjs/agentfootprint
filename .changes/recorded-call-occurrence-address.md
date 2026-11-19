@@ -17,3 +17,7 @@ A cache strategy or a provider adapter can no longer change the saved record.
 Each model call hands the `CacheStrategy` its own copy of the request and
 passes what the strategy returns to the provider as it is. Before, an edit
 made in place to that request could reach the history the run saved.
+
+Automatic native output keeps the format requirement selected for each call
+when an adapter adds or removes a format in place, including runs without a
+signal and streams that fall through to a completion.

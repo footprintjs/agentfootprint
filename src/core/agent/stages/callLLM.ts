@@ -52,6 +52,7 @@ import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../compos
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
 import {
   assertForcedRequestSupported,
+  describeProviderDispatch,
   detachProviderInput,
   providerDispatchFor,
   receiptProviderRequest,
@@ -661,6 +662,7 @@ export function buildCallLLMStage(
       assertForcedRequestSupported(selectedProvider, req);
       throwIfAborted(runSignal);
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
+      let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
       const attemptHooks =
         deps.findings === true
@@ -758,10 +760,11 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        if (deps.findings === true) candidate = capture(attempts.request);
         const completion = selectedProvider.stream
           ? dispatchFor.select(attempts.request, selectedProvider)
           : attempts.request;
+        dispatch = describeProviderDispatch(selectedProvider, completion);
+        if (deps.findings === true) candidate = capture(completion);
         resp = await untilAborted(selectedProvider.complete(completion, attemptHooks), runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
@@ -790,11 +793,7 @@ export function buildCallLLMStage(
         hooks.providerIndex === undefined
           ? resp
           : tagThinkingResponse(resp, String(hooks.providerIndex));
-      answeredBy = {
-        provider: selectedProvider.name,
-        model: req.model,
-        native: req.outputFormat !== undefined,
-      };
+      answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
       return attempts.response(answered);
     };

@@ -47,7 +47,7 @@
     "src/core/agent/honesty/mounts.ts": 607,
     "src/core/agent/negativeClaims/capture.ts": 630,
     "src/core/agent/receipt/receipt.ts": 1019,
-    "src/core/agent/stages/callLLM.ts": 1183,
+    "src/core/agent/stages/callLLM.ts": 1182,
     "src/core/agent/stages/prepareFinal.ts": 741,
     "src/core/agent/stages/reliabilityExecution.ts": 710,
     "src/core/agent/stages/route.ts": 1845,
