@@ -26,6 +26,11 @@ When the line appears, it is part of the delivered assistant message. If the
 conversation retains that message, the next request can carry the line within
 its assistant history.
 
+In a composition, a member Agent's standing line travels with its answer into
+the next step's input and any mapper that reads the member's text, so use
+`.outputSchema()` or `.answerLayer({ standingLine: false })` for a member whose
+answer is parsed.
+
 Ordinary streaming sends the model's text in `stream.token`. If output admission
 holds the provider's chunks, the released token contains the composed answer.
 Output middleware formats the model's text first. The standing line is appended
