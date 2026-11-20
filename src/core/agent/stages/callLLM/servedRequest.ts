@@ -1,15 +1,21 @@
 import type { TypedScope } from 'footprintjs';
 import { abortableIterable, untilAborted } from '../../../../lib/abort.js';
+import { readCallOccurrenceKey } from '../../../../lib/callOccurrence.js';
 import { matchesPreparedData } from '../../../../lib/matchesPreparedData.js';
 import type {
   LLMCallHooks,
   LLMMessage,
   LLMProvider,
   LLMRequest,
+  LLMResponse,
 } from '../../../../provider-contract/types.js';
 import { observeRequests, requestAttempt } from '../../../../provider-contract/requestObserver.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
+import type { SourceLinkConsumer } from '../../types/state/records.js';
+import { identifyAcceptedToolCalls } from './acceptedCalls.js';
+
+const historyPositionLimit = 256;
 
 /** Record only entries that kept their retained bodies through the known,
  * position-preserving history projection. Request-only messages follow it. */
@@ -22,7 +28,16 @@ export function servedRequestRecorder(
 ) {
   const consumer = scope.$attempt?.().series;
   if (!consumer) return undefined;
+  const positions = new Map<string, number | undefined>();
+  let bounded = false;
   const whole = Array.from(history, (entry, index) => {
+    const occurrence = entry.role === 'tool' ? readCallOccurrenceKey(entry) : undefined;
+    if (typeof occurrence === 'string') {
+      // A repeated occurrence cannot identify either index, even past the cap.
+      if (positions.has(occurrence)) positions.set(occurrence, undefined);
+      else if (positions.size < historyPositionLimit) positions.set(occurrence, index);
+      else bounded = true;
+    }
     const message = projected[index];
     return message?.role === entry.role && message.content === entry.content;
   });
@@ -46,6 +61,13 @@ export function servedRequestRecorder(
 
   return {
     discard,
+    consumerFor(runId: string | undefined): SourceLinkConsumer | undefined {
+      if (!runId || first === undefined) return undefined;
+      const historyPositions = [...positions].flatMap(([occurrence, element]) =>
+        element === undefined ? [] : [{ occurrence, element }],
+      );
+      return { runId, consumer, historyPositions, ...(bounded && { bounded: true as const }) };
+    },
     beforeRequest(request: LLMRequest): void {
       if (discarded) return;
       const signature = requestHead(request);
@@ -73,6 +95,20 @@ export function servedRequestRecorder(
       first = signature;
     },
   };
+}
+
+/** Commit the output and the consumer proved for it in the same native scope. */
+export function commitAcceptedModelResponse(
+  scope: TypedScope<AgentState>,
+  response: Pick<LLMResponse, 'content' | 'toolCalls'>,
+  serving: ReturnType<typeof servedRequestRecorder>,
+  runId: string | undefined,
+): void {
+  const consumer = serving?.consumerFor(runId);
+  if (consumer !== undefined) scope.sourceLinkConsumer = consumer;
+  else if ('sourceLinkConsumer' in scope) scope.$delete('sourceLinkConsumer');
+  scope.llmLatestContent = response.content;
+  scope.llmLatestToolCalls = identifyAcceptedToolCalls(response.toolCalls);
 }
 
 /** Compare readonly port requests without serializing values or invoking

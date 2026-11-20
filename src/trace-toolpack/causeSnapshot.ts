@@ -7,5 +7,8 @@ export function snapshotCauseArtifacts(
   artifacts: TraceToolpackArtifacts,
   nodes: ReadonlyMap<string, StageSnapshot>,
 ) {
-  return projectCauseBasis(artifacts.snapshot, nodes, () => artifacts.controlDeps);
+  const sourceLinkPolicy = Object.getOwnPropertyDescriptor(artifacts, 'sourceLinkPolicy')?.value;
+  return projectCauseBasis(artifacts.snapshot, nodes, () => artifacts.controlDeps, {
+    ...(typeof sourceLinkPolicy === 'function' && { sourceLinkPolicy }),
+  });
 }

@@ -27,6 +27,7 @@ export { openRecording, type OpenableRecording } from './openRecording.js';
 export type { TraceCauseArtifacts, TraceCauseOptions, TraceCauseOperation } from './causeTypes.js';
 export { traceCauseTools } from './causeTools.js';
 export { readStoredCauseArtifacts } from './storedCause.js';
+export { sourceLinksOf } from './sourceLinks.js';
 export type {
   ReadStoredCauseOptions,
   StoredCauseUnknown,

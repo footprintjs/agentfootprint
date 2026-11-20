@@ -108,6 +108,7 @@
       "acceptedSkillPicks": ["26f04b6835b8379045bca1450279d1ec0adc718fdd8e01696bf955d9a6ada14b",true,false],
       "mapEngagement": ["132cd057c474fa1fedd6ddac250da2b048b890010d40e01df84f06fc8075cef9",true,false],
       "sourceLinkServedRows": ["54362579910e8ecc857d4822cb3c46985ec78042851a6443f5dd4c410e202a48",true,false],
+      "sourceLinkConsumer": ["f5bfd0396c2cce963ece3f408ad353608d00c965e3cc186f20e2a8eafdffc61d",true,false],
       "coverageDeclared": ["dce5d55803f1873e1c10041913ca0b71c5a81642f3cdb48c1d87d59e172a4ba0",true,false],
       "resultIdentities": ["33aabb3f9980e27559a3b90b340b3507b64a68a98555d66fc67795606677bd74",true,false],
       "negativeClaimState": ["284587e93f786b79daf89c1645e54adfe14fe8f273eaf503342fd45be324d144",true,false],
@@ -156,6 +157,7 @@
       "reliabilityFailCauseName": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false]
     },
     "comments": {
+      "ca6f55d417fcb35eff55f0c115070f422caa7cf925f48d9ec778530ac6237028": 1,
       "17d11825d5659977a2ee73f621f22f39cd2a8dbfa56ca030c155301abf764168": 1,
       "16e9dda0484effe708854280ee440bf6552b136d319859833e70010902a1ee60": 1,
       "509f1b3c0f7a6bdd4af417e600065c4a26c1b828af2b75ab1347c8cfe0d752dc": 1,

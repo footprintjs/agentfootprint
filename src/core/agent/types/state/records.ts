@@ -2,9 +2,18 @@ import type { FindingsLedger } from '../../findings/types.js';
 import type { DeclaredCoverage } from '../../../../semantics/coverage/index.js';
 import type { ClaimLedgerRow } from '../../../../integrity/unsupported-claim/check.js';
 
+export interface SourceLinkConsumer {
+  readonly runId: string;
+  readonly consumer: string;
+  readonly historyPositions: readonly { readonly occurrence: string; readonly element: number }[];
+  readonly bounded?: true;
+}
+
 export interface RecordsState {
   /** Whole retained history entries sent by a model-call stage in this scope. */
   sourceLinkServedRows?: readonly import('../../receipt/servedRow.js').ServedRow[];
+  /** The exact served consumer for this scope's latest accepted model response. */
+  sourceLinkConsumer?: SourceLinkConsumer;
 
   /**
    * Every coverage statement the run's tools declared, in the order they

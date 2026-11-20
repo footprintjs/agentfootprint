@@ -2,6 +2,9 @@
 
 ## Not covered
 
+- Source links are produced in the flat chart only. A grouped run's record
+  carries no source-link channel.
+
 - **A host-built record's top-level lists.** The lists ON a row go through
   `rowList`. The record's own keys — `history`, `findingsLedger`,
   `coverageDeclared`, `answerValidation.checks`, `middlewareDecisions` (and the
