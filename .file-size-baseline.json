@@ -46,7 +46,7 @@
     "src/core/agent/findings/reserved.ts": 704,
     "src/core/agent/negativeClaims/capture.ts": 630,
     "src/core/agent/receipt/receipt.ts": 1019,
-    "src/core/agent/stages/callLLM.ts": 1163,
+    "src/core/agent/stages/callLLM.ts": 1161,
     "src/core/agent/stages/prepareFinal.ts": 741,
     "src/core/agent/stages/reliabilityExecution.ts": 710,
     "src/core/agent/stages/route.ts": 1845,
