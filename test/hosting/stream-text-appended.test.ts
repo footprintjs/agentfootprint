@@ -14,7 +14,6 @@
  * rest) · Redaction (the real answer, never the served one).
  */
 
-import { flowChart } from 'footprintjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -27,13 +26,6 @@ import {
   Sequence,
   type AgentOptions,
 } from '../../src/index.js';
-import {
-  defineMemory,
-  InMemoryStore,
-  MEMORY_STRATEGIES,
-  MEMORY_TYPES,
-  type MemoryDefinition,
-} from '../../src/doors/memory.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
 import { encodeSSE, toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
@@ -41,6 +33,7 @@ import { runnerLive } from '../../src/core/runnerLive.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { MockReply } from '../../src/adapters/llm/MockProvider.js';
+import { readWithHeartbeat, specialistMemory } from '../helpers/hostingStreams.js';
 
 const lookup = defineTool({
   name: 'lookup',
@@ -98,24 +91,8 @@ function reportBuilder(
 
 function nestedReport(pause: boolean, observerDelivery?: AgentOptions['observerDelivery']) {
   const child = reportBuilder(DRAFT, pause).build();
-  const read = flowChart('Seed', () => undefined, 'seed')
-    .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
-      inputMapper: () => ({
-        message: 'Check the draft.',
-        identity: { conversationId: 'specialist' },
-      }),
-      outputMapper: () => ({ formatted: 'The specialist finished.' }),
-    })
-    .build();
-  const memory = defineMemory({
-    id: 'nested',
-    type: MEMORY_TYPES.EPISODIC,
-    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
-    store: new InMemoryStore(),
-    readOnly: true,
-  });
   const agent = reportBuilder(REPORT, false, { observerDelivery })
-    .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
+    .memory(specialistMemory(child))
     .build();
   return { agent, child };
 }
@@ -132,24 +109,6 @@ async function readText(
   const chunks: string[] = [];
   for await (const chunk of toSSE(agent, { format: 'text', ...options })) chunks.push(chunk);
   return chunks;
-}
-
-/** Start reading now. Once the run's observers have drained, the next heartbeat bounds the wait. */
-function readWithHeartbeat(runner: Pick<Runnable, 'on'>, options: ToSSEOptions) {
-  let drained = false;
-  const reading = (async () => {
-    const chunks: string[] = [];
-    for await (const chunk of toSSE(runner, { ...options, heartbeatMs: 50 })) {
-      if (chunk !== ': ping\n\n') chunks.push(chunk);
-      // Returning releases the iterator even when the stream failed to close.
-      else if (drained) return { closed: false, chunks };
-    }
-    return { closed: true, chunks };
-  })();
-  return () => {
-    drained = true;
-    return reading;
-  };
 }
 
 /** Run once, reading the text reply; returns the reply and the run's answer. */
