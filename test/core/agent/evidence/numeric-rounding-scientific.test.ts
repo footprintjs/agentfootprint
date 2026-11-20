@@ -13,6 +13,7 @@
  * decimals by `numeric-rounding-scientific.property.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
+import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 import { Agent, defineTool } from '../../../../src/index.js';
 import { mock } from '../../../../src/providers.js';
 import type {
@@ -527,10 +528,10 @@ describe('one fold at both moments', () => {
   }
 
   it('dispatch reads the same corpus: an argument carried only by a ruled-out result files a row', async () => {
-    expect(await contingentRowsOf(enabled)).toEqual([
+    expect(normalizeCallOccurrences(await contingentRowsOf(enabled))).toEqual([
       {
         kind: 'contingent',
-        declaredOn: { toolCallId: 'c2' },
+        declaredOn: { toolCallId: 'c2', callOccurrenceKey: [0, 0, 0, 1, 0] },
         value: '0.0112',
         carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }],
         iteration: 2,

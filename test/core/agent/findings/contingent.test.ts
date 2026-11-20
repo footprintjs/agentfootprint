@@ -302,10 +302,14 @@ describe('contingent — the dispatch moment', () => {
   for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
     it(`${reactMode}: a call whose arguments carry a value it just ruled out files a row on that call, and the next call is served the line`, async () => {
       const r = await run(reactMode, DISPATCH_MOMENT, both);
+      const call = r.agent
+        .checkpoint()
+        ?.history.find((message) => message.role === 'tool' && message.toolCallId === 'c2');
+      expect(call?.callOccurrenceKey).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
       expect(r.rows).toEqual([
         {
           kind: 'contingent',
-          declaredOn: { toolCallId: 'c2' },
+          declaredOn: { toolCallId: 'c2', callOccurrenceKey: call?.callOccurrenceKey },
           value: 'fc1/7',
           carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }],
           iteration: 2,
@@ -316,6 +320,7 @@ describe('contingent — the dispatch moment', () => {
           iteration: 2,
           declaredOn: 'tool-call',
           toolCallId: 'c2',
+          callOccurrenceKey: call?.callOccurrenceKey,
           carriers: 1,
           standings: ['ruled-out'],
           valueChars: 5,

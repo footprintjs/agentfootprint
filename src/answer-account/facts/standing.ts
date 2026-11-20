@@ -1,8 +1,13 @@
-import { historyCallAt } from '../../core/agent/recordedCalls.js';
+import {
+  historyCallAt,
+  historyCallResolver,
+  readHistoryCalls,
+} from '../../core/agent/recordedCalls.js';
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
 import { foldState } from '../../core/agent/assessment/assess.js';
 import { standingNamesFrom } from '../../core/agent/assessment/compose.js';
+import { unplacedEvidenceKind } from '../../core/agent/assessment/sources.js';
 import type {
   AnswerAssessment,
   AssessmentCheck,
@@ -150,6 +155,12 @@ const COUNTS_CALLS: ReadonlySet<AssessmentReason> = new Set([
   'period-beyond-retention',
 ]);
 
+const UNPLACED_LINES = {
+  legacy: 'howSure.reason.unplacedEvidence',
+  'result-unavailable': 'howSure.reason.resultUnavailable',
+  'call-unreadable': 'howSure.reason.callAddressUnreadable',
+} as const;
+
 /**
  * How many calls a reason rests on — read off the reason's own `source`, the
  * fold's one answer to "which calls" (`assessment/sources.ts` ·
@@ -263,6 +274,7 @@ export function standingLines(
   const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
   const ran = a.checked.filter((c) => c.ran > 0);
   const lines: Sentence[] = [];
+  let resolve: ReturnType<typeof historyCallResolver> | undefined;
   switch (a.standing) {
     case 'known':
       lines.push(
@@ -308,13 +320,24 @@ export function standingLines(
                   }),
                 ];
           if (unplaced.length === 0) return line;
+          resolve ??= historyCallResolver(readHistoryCalls(historyOf(ctx.view)));
+          const groups = new Map<TemplateId, AssessmentPointer[]>();
+          for (const pointer of unplaced) {
+            const template =
+              UNPLACED_LINES[unplacedEvidenceKind(r.reason, pointer, state, resolve)];
+            const group = groups.get(template) ?? [];
+            group.push(pointer);
+            groups.set(template, group);
+          }
           return [
             ...line,
-            ctx.say('howSure.reason.unplacedEvidence', {
-              vars: { n: n(unplaced.length) },
-              ...recordedAt(pointersOf(unplaced)),
-              item: true,
-            }),
+            ...[...groups].map(([template, group]) =>
+              ctx.say(template, {
+                vars: { n: n(group.length) },
+                ...recordedAt(pointersOf(group)),
+                item: true,
+              }),
+            ),
           ];
         }),
       );

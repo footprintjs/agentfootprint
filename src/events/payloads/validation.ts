@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 // validation.* (1)
 /**
  * Emitted when LLM-produced tool args fail validation against the tool's
@@ -9,6 +10,7 @@
  * supplied values (they can carry PII / injection payloads).
  */
 export interface ValidationArgsInvalidPayload {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly toolCallId: string;
   readonly iteration: number;

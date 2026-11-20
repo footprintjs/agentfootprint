@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import { type DecisionLedger, spendDecision } from '../../../../consentRequest.js';
@@ -78,6 +79,7 @@ export function buildResumeAsk(
     frame: ResumeConsentFrame,
   ): Promise<void> => {
     const { consentDecision, runSignal, toolName, toolCallId, startMs } = frame;
+    const occurrence = callOccurrenceField(frame.callOccurrenceKey);
 
     const iteration = scope.iteration as number;
     // What the rest of the chain is handed: a detached copy of the
@@ -111,12 +113,13 @@ export function buildResumeAsk(
     let negativeResultId: string | undefined;
     let resumedHalt: ResumedPolicyHalt | undefined;
     /** What the approved call's `execute` saw — its script row reads it. */
-    const scriptSeen: ResumedCallFacts = {};
+    const scriptSeen: ResumedCallFacts = { ...occurrence };
     try {
       if (!decision.approved) {
         result = declinedResult(decision.note);
         recordDecisions(scope, [
           {
+            ...occurrence,
             middleware: askedBy,
             moment: 'before-tool',
             at: 'tool',
@@ -133,6 +136,7 @@ export function buildResumeAsk(
       } else {
         recordDecisions(scope, [
           {
+            ...occurrence,
             middleware: askedBy,
             moment: 'before-tool',
             at: 'tool',
@@ -192,6 +196,7 @@ export function buildResumeAsk(
         // is an errored call here too.
         if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
           const presented = await links.applyPresent(scope, {
+            ...occurrence,
             args: runArgs,
             toolCallId,
             iteration,
@@ -207,6 +212,7 @@ export function buildResumeAsk(
         // routing a call through a human.
         if (dispatched.executed === true) {
           modelResult = await links.afterMoment(scope, {
+            ...occurrence,
             ...(tool && { tool }),
             toolName,
             toolCallId,
@@ -233,7 +239,7 @@ export function buildResumeAsk(
       // one; `stepToolRan` is exactly "ran clean").
       const askPlaced = await links.placeResults(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         { result, modelResult },
         stepToolRan,
       );
@@ -283,7 +289,7 @@ export function buildResumeAsk(
       if (deps.stepPlanFor) {
         askResultStr = links.applyStepReturn(
           scope,
-          { toolName, toolCallId, iteration, settled: askSettled },
+          { toolName, toolCallId, iteration, ...occurrence, settled: askSettled },
           askResultStr,
         );
       }
@@ -293,7 +299,7 @@ export function buildResumeAsk(
         const askTransition: TransitionBatchState = { losers: [] };
         askResultStr += links.applyToolEffects(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           resumeEnvelope,
           askTransition,
         );
@@ -310,6 +316,7 @@ export function buildResumeAsk(
             ...(deps.negativeClaimsArmed === true && { toolChars: askToolChars }),
             toolCallId,
             toolName,
+            ...occurrence,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A declined ask ran nothing → 'refused'; read by the check-in trail.
@@ -317,7 +324,7 @@ export function buildResumeAsk(
             ...reportedStatusField(askSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const askHistory = askSettlement.history;
       scope.history = askHistory;
@@ -330,13 +337,14 @@ export function buildResumeAsk(
         toolName,
         result: askResultStr,
         toolCallId,
+        ...occurrence,
         ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
       });
       await judgeLanded(
         scope,
         deps.findingsJudge,
         toolRan,
-        { toolName, result: askResultStr, toolCallId },
+        { toolName, result: askResultStr, toolCallId, ...occurrence },
         iteration,
         links.turnStampOf(scope),
       );
@@ -353,6 +361,7 @@ export function buildResumeAsk(
         toolName,
         {
           toolCallId,
+          ...occurrence,
           result: askCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),

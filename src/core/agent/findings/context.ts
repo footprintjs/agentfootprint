@@ -85,7 +85,8 @@ function bucketsOf(
       row.kind === 'contingent'
         ? [
             {
-              declaredOn: row.declaredOn,
+              declaredOn:
+                row.declaredOn === 'answer' ? 'answer' : { toolCallId: row.declaredOn.toolCallId },
               value: row.value,
               carriers: row.carriers.map((carrier) => ({
                 toolCallId: carrier.toolCallId,

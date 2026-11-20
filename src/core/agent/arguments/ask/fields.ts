@@ -19,6 +19,8 @@ import {
   type PeriodSpelling,
   type RuledArgument,
 } from '../../../../tools/declare.js';
+import { batchAddress } from '../batchAddress.js';
+import { addressOf, callsByAddress } from '../askAddresses.js';
 import type { PartialOrigin } from '../partialWindow.js';
 import type { BatchCall, ToolOf } from '../resolve.js';
 import { WINDOW_FORM_EXPECTATION } from './constants.js';
@@ -166,8 +168,8 @@ export function periodsShareField(a: AskField, b: AskField): boolean {
 /** A field being gathered: its shape, its one member, the calls that need it. */
 interface PendingField {
   readonly field: Omit<AskField, 'members'>;
-  readonly member: Omit<AskMember, 'toolCallIds' | 'quoted'>;
-  readonly ids: string[];
+  readonly member: Omit<AskMember, 'toolCallIds' | 'callAddresses' | 'quoted'>;
+  readonly calls: BatchCall[];
   /** The first reading's words among the calls that need it. */
   quoted?: string;
 }
@@ -176,7 +178,7 @@ function pendingFieldOf(
   toolName: string,
   argument: string,
   read: { readonly rule: RuledArgument; readonly spelling?: PeriodSpelling },
-  toolCallId: string,
+  call: BatchCall,
 ): PendingField {
   const ask = read.rule.ask as NonNullable<RuledArgument['ask']>;
   return {
@@ -192,7 +194,7 @@ function pendingFieldOf(
       ...(read.rule.period === true && { period: true as const }),
       ...(read.spelling !== undefined && { spelling: read.spelling }),
     },
-    ids: [toolCallId],
+    calls: [call],
   };
 }
 
@@ -220,15 +222,16 @@ export function planAskFields(
   toolOf: ToolOf,
   windowPlan?: WindowAskPlan,
 ): AskField[] {
-  const nameOf = new Map(calls.map((c) => [c.id, c.name]));
+  const byAddress = callsByAddress(calls);
   // Keyed by tool, then argument — a map of maps, never a joined key.
   const byTool = new Map<string, Map<string, PendingField>>();
   const order: PendingField[] = [];
   // The lazy word-driven ask: a call's PERIOD arguments join the one window field.
-  const windowMembers = new Map<string, Map<string, string[]>>();
+  const windowMembers = new Map<string, Map<string, BatchCall[]>>();
   for (const entry of asks) {
-    const toolName = nameOf.get(entry.toolCallId);
-    if (toolName === undefined) continue;
+    const call = byAddress.get(batchAddress(entry.toolCallId, entry.callOccurrenceKey));
+    if (call === undefined) continue;
+    const toolName = call.name;
     const forTool = byTool.get(toolName) ?? new Map<string, PendingField>();
     byTool.set(toolName, forTool);
     const periodArguments =
@@ -237,23 +240,23 @@ export function planAskFields(
         : new Set<string>();
     for (const argument of entry.ask) {
       if (periodArguments.has(argument)) {
-        const forWindow = windowMembers.get(toolName) ?? new Map<string, string[]>();
+        const forWindow = windowMembers.get(toolName) ?? new Map<string, BatchCall[]>();
         windowMembers.set(toolName, forWindow);
-        const ids = forWindow.get(argument) ?? [];
-        if (!ids.includes(entry.toolCallId)) ids.push(entry.toolCallId);
-        forWindow.set(argument, ids);
+        const targets = forWindow.get(argument) ?? [];
+        if (!targets.includes(call)) targets.push(call);
+        forWindow.set(argument, targets);
         continue;
       }
       const quote = entry.quoted?.find((q) => q.argument === argument)?.quote;
       const seen = forTool.get(argument);
       if (seen !== undefined) {
-        if (!seen.ids.includes(entry.toolCallId)) seen.ids.push(entry.toolCallId);
+        if (!seen.calls.includes(call)) seen.calls.push(call);
         if (seen.quoted === undefined && quote !== undefined) seen.quoted = quote;
         continue;
       }
       const read = askRuleOf(toolOf, toolName, argument);
       if (read === undefined) continue;
-      const pending = pendingFieldOf(toolName, argument, read, entry.toolCallId);
+      const pending = pendingFieldOf(toolName, argument, read, call);
       if (quote !== undefined) pending.quoted = quote;
       forTool.set(argument, pending);
       order.push(pending);
@@ -265,7 +268,7 @@ export function planAskFields(
       members: [
         {
           ...p.member,
-          toolCallIds: [...p.ids],
+          ...membership(p.calls),
           ...(p.quoted !== undefined && { quoted: p.quoted }),
         },
       ],
@@ -286,21 +289,30 @@ export function planAskFields(
   return [narrowed(window, kept), ...fields];
 }
 
+function membership(calls: readonly BatchCall[]): Pick<AskMember, 'toolCallIds' | 'callAddresses'> {
+  return {
+    toolCallIds: calls.map((call) => call.id),
+    ...(calls.some((call) => call.callOccurrenceKey !== undefined) && {
+      callAddresses: calls.map(addressOf),
+    }),
+  };
+}
+
 /** The ONE window field: the open mention's question, bound to every call's period arguments. */
 function windowFieldOf(
   plan: WindowAskPlan,
-  members: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>,
+  members: ReadonlyMap<string, ReadonlyMap<string, readonly BatchCall[]>>,
 ): AskField {
   return {
     type: 'string',
     question: plan.question,
     ...(plan.choices !== undefined && { choices: plan.choices }),
     members: [...members].flatMap(([toolName, byArgument]) =>
-      [...byArgument].map(([argument, ids]) => ({
+      [...byArgument].map(([argument, targets]) => ({
         toolName,
         argument,
         period: true as const,
-        toolCallIds: [...ids],
+        ...membership(targets),
       })),
     ),
     window: {
@@ -321,22 +333,22 @@ export function confirmationField(
   calls: readonly BatchCall[],
   toolOf: ToolOf,
 ): AskField {
-  const members = new Map<string, Map<string, string[]>>();
-  const add = (name: string, argument: string, id: string) => {
-    const args = members.get(name) ?? new Map<string, string[]>();
-    members.set(name, args);
-    const ids = args.get(argument) ?? [];
-    if (!ids.includes(id)) ids.push(id);
-    args.set(argument, ids);
+  const members = new Map<string, Map<string, BatchCall[]>>();
+  const byAddress = callsByAddress(calls);
+  const add = (call: BatchCall, argument: string) => {
+    const args = members.get(call.name) ?? new Map<string, BatchCall[]>();
+    members.set(call.name, args);
+    const targets = args.get(argument) ?? [];
+    if (!targets.some((target) => addressOf(target) === addressOf(call))) targets.push(call);
+    args.set(argument, targets);
   };
   for (const origin of origins) {
-    for (const argument of origin.arguments) add(origin.call.name, argument, origin.call.id);
+    for (const argument of origin.arguments) add(origin.call, argument);
   }
   for (const ask of fillAsks) {
-    const call = calls.find((c) => c.id === ask.toolCallId);
+    const call = byAddress.get(batchAddress(ask.toolCallId, ask.callOccurrenceKey));
     if (call === undefined) continue;
-    for (const argument of formArgumentsOfTool(toolOf, call.name))
-      add(call.name, argument, call.id);
+    for (const argument of formArgumentsOfTool(toolOf, call.name)) add(call, argument);
   }
   const field = windowFieldOf(plan, members);
   return {
@@ -348,6 +360,9 @@ export function confirmationField(
       ...field.window!,
       role: 'confirm-meaning',
       confirmOnlyIds: origins.map((o) => o.call.id),
+      ...(origins.some((origin) => origin.call.callOccurrenceKey !== undefined) && {
+        confirmOnlyAddresses: origins.map((origin) => addressOf(origin.call)),
+      }),
     },
   };
 }

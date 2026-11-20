@@ -9,7 +9,7 @@
  * these contracts. `core/` and `core-flow/` depend only on them, never on an adapter.
  */
 
-import type { ContextRole, ContextSource } from '../events/types.js';
+import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../events/types.js';
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
@@ -23,6 +23,8 @@ export interface LLMMessage {
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */
   readonly toolCallId?: string;
+  /** Recording-only address of a library-observed tool call. Omitted from provider requests. */
+  readonly callOccurrenceKey?: NonNullable<ToolCallEventIdentity['callOccurrenceKey']>;
   /** For `role: 'tool'` — the tool name this result corresponds to. */
   readonly toolName?: string;
   /**
@@ -62,17 +64,13 @@ export interface LLMMessage {
    * `providerMeta` (9.29.0) rides back UNCHANGED — it is the same bag the
    * response put there, and for Gemini it holds the `thoughtSignature` without
    * which the model refuses the turn after a tool call. See
-   * {@link LLMResponse}'s `toolCalls[].providerMeta`. Unlike `injectedBy`, it
-   * is NOT stripped on the way to a provider: it exists to be sent.
+   * {@link LLMResponse}'s `toolCalls[].providerMeta`, sent unchanged. The recording
+   * address survives native pause and resume and is stripped before transport.
    */
-  readonly toolCalls?: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly args: Readonly<Record<string, unknown>>;
-    /** Stream integrity evidence retained with the attempted call; never tool input. */
-    readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
-    readonly providerMeta?: Readonly<Record<string, unknown>>;
-  }[];
+  readonly toolCalls?: readonly (Omit<LLMResponse['toolCalls'][number], 'argumentsFailure'> &
+    Pick<LLMMessage, 'callOccurrenceKey'> & {
+      readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
+    })[];
   /**
    * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
    *

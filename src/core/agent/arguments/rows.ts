@@ -26,6 +26,7 @@
  */
 
 import { clipValue } from '../../../integrity/argumentLeaves.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 /** Where a ruled argument's value came from, as the library's checks placed it. */
 export type ArgumentSource = 'said' | 'answered' | 'result' | 'app' | 'default' | 'model';
@@ -82,6 +83,7 @@ export interface ArgumentRow {
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
   readonly turn: number;
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly iteration: number;
   /** The top-level argument name — schema vocabulary, like `toolName`. */

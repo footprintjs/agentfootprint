@@ -149,10 +149,14 @@ secrets").
   (`assessment/assess.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
   block (`arguments/serve/assumed.ts` · `assumedBlockOf`), so the two cannot disagree
   about which value a call ran with. Both readers load through `import()`, so
-  a plain agent never carries this module.
+  a plain agent never carries this module. The call's recorded occurrence
+  takes precedence. Older rows without an occurrence use their provider ID.
 
   ```ts
-  argumentRewritesOf(state.middlewareDecisions).get('c1')?.get('window');
+  const address = rewriteCallAddress(argumentRow);
+  if (address !== undefined) {
+    argumentRewritesOf(state.middlewareDecisions, rewriteCallAddress).get(address)?.get('window');
+  }
   // { index: 0, origin: 'person' } — the call ran with the rewrite's value
   ```
 - `types.ts`, `errors.ts`, `index.ts` — shape, refusal, barrel.

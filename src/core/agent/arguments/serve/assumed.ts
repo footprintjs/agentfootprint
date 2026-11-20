@@ -1,6 +1,10 @@
 /** Lens: the unchanged Assumed block and its one record fold. */
 import { ASSUMED_BLOCK_HEADING } from '../../../../semantics/coverage/answer.js';
-import { argumentRewritesOf, type ArgumentRewrite } from '../../middleware/rewrites.js';
+import {
+  argumentRewritesOf,
+  rewriteCallAddress,
+  type ArgumentRewrite,
+} from '../../middleware/rewrites.js';
 import { HIDDEN_VALUE, type ArgumentRow } from '../rows.js';
 
 // ─── The "Assumed" block (under `.limitsTravelWithTheAnswer()`) ───────────
@@ -99,7 +103,7 @@ export function assumedLinesFor(
   const rows = defaultRowsOf(ledger, turn);
   const rewrites =
     readDecisions !== undefined && rows.length > 0
-      ? argumentRewritesOf(readDecisions())
+      ? argumentRewritesOf(readDecisions(), rewriteCallAddress)
       : undefined;
   return assumedLinesOf(rows, rewrites);
 }
@@ -127,7 +131,10 @@ function assumedLinesOf(
 ): AssumedLine[] {
   const lines: AssumedLine[] = [];
   for (const row of rows) {
-    if (rewrites?.get(row.toolCallId)?.has(row.argument) === true) continue;
+    if (rewrites !== undefined) {
+      const address = rewriteCallAddress(row);
+      if (address !== undefined && rewrites.get(address)?.has(row.argument) === true) continue;
+    }
     const value = row.value ?? '';
     lines.push({
       toolName: row.toolName,

@@ -11,6 +11,7 @@ import type { SplitFindings } from '../../../findings/reserved.js';
 import { recordFindings, basisRowFrom } from '../../../findings/ledger.js';
 import { contingentRowsOf, groundedArgumentValues } from '../../../findings/contingent.js';
 import { frozenView, isSealed } from '../../../../../lib/frozenCopy.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
@@ -43,7 +44,11 @@ export function buildCallStart(
     inputsCanFill: boolean,
   ) => {
     const { resolveTool, peelCall, programOfCall, turnStampOf, emitToolStart } = links;
-    const emitSecurity = bindToolSecurityEvents(scope, { toolCallId: tc.id, iteration });
+    const call = {
+      toolCallId: tc.id,
+      ...callOccurrenceField(tc.callOccurrenceKey),
+    };
+    const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
     const resolved = resolveTool(tc.name);
     const tool = resolved.tool;
     // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`
@@ -83,7 +88,7 @@ export function buildCallStart(
           groundedArgumentValues(args, towers.gate, towers.corpus, towers.exempt),
           towers.corpus,
           towers.standingOf,
-          { toolCallId: tc.id },
+          call,
           iteration,
         ),
         turnStampOf(scope),
@@ -126,7 +131,7 @@ export function buildCallStart(
       scope,
       {
         toolName: tc.name,
-        toolCallId: tc.id,
+        ...call,
         args: viewOf(args) ?? args,
         ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
       },

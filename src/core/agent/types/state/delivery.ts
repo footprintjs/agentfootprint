@@ -36,6 +36,7 @@ export interface DeliveryState {
     toolName: string;
     result: string;
     toolCallId: string;
+    callOccurrenceKey?: import('../../../../lib/callOccurrence.js').CallOccurrenceKey;
     /** The tool's OWN declared outcome (9.19.0) — present only when the tool
      *  returned a result envelope carrying `status`. `onToolStatus` route
      *  edges key on it. */

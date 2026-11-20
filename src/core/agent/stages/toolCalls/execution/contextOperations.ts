@@ -36,6 +36,7 @@ import { createSourceEvidenceAccess } from '../../../sourceEvidence/access.js';
 import { sourcePublicationSink } from '../../../sourceEvidence/publications.js';
 import { permitSourceEvidence } from '../../../sourceEvidence/permissions.js';
 import { bindSourceEvidenceAccess } from '../../../../../tools/sourceEvidenceAccess.js';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 
 interface ToolContextOperationsLinks {
   readonly runFactsOf: ToolResourcesOperations['runFactsOf'];
@@ -129,8 +130,10 @@ export function buildToolContextOperations(
     toolName: string,
     toolCallId: string,
     capturePublications = false,
+    callOccurrenceKey?: CallOccurrenceKey,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
     const bindRun = links.runFactsOf(scope);
+    const occurrence = callOccurrenceField(callOccurrenceKey);
     let retainPublication:
       | ((meta: import('../../../../../artifacts/types.js').ArtifactMeta) => void)
       | undefined;
@@ -179,7 +182,7 @@ export function buildToolContextOperations(
             !deps.isRunRetired() &&
             (madeInRun(bindRun) === undefined || madeInRun(bindRun) === deps.currentRun?.().runId)
           ) {
-            recordSourceClock(scope, { toolCallId, toolName }, zone);
+            recordSourceClock(scope, { toolCallId, toolName, ...occurrence }, zone);
           }
           return;
         }

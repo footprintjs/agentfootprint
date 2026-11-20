@@ -343,6 +343,7 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
         period: true,
         source: 'said',
         value: '7d',
+        callOccurrenceKey: expect.any(Array),
         claimed: 'user',
         matched: 'phrase',
         quote: 'over the last week',

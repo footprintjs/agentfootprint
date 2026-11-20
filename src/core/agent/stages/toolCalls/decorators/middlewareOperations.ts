@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -46,6 +47,7 @@ export function buildToolMiddlewareOperations(
       readonly tool?: Tool;
       readonly toolName: string;
       readonly toolCallId: string;
+      readonly callOccurrenceKey?: CallOccurrenceKey;
       readonly iteration: number;
       readonly args: ToolArgs;
       readonly result: unknown;
@@ -86,7 +88,7 @@ export function buildToolMiddlewareOperations(
       ...(call.identity && { identity: call.identity }),
       ...(call.signal && { signal: call.signal }),
     });
-    recordDecisions(scope, verdict.decisions);
+    recordDecisions(scope, verdict.decisions, call.callOccurrenceKey);
     const delivered = verdict.kind === 'deny' ? verdict.reason : verdict.result;
     if (verdict.kind === 'deny') call.onSourceWithheld?.();
     // An explicit policy denial withdraws access to the native observation.

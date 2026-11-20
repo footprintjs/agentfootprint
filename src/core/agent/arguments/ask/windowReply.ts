@@ -5,6 +5,7 @@ import { timeReplyOf } from '../../../../time/reply.js';
 import type { TimeReplyEvidence } from '../../../../time/replyRecord.js';
 import { parseRange, spellRange } from '../../../../time/range.js';
 import { offeredLookback } from '../../../../time/windows.js';
+import type { BatchAddress } from '../batchAddress.js';
 import type { BatchCall, ToolOf } from '../resolve.js';
 import type { AskField, AskTime } from './types.js';
 import { bindWindowAnswer, windowQuestion, type WindowBinding } from './windowBinding.js';
@@ -15,7 +16,7 @@ export function bindWindowReply(
   values: Readonly<Record<string, InputValue>>,
   id: string,
   awaiting: AwaitingInput,
-  byId: ReadonlyMap<string, BatchCall>,
+  byAddress: ReadonlyMap<BatchAddress, BatchCall>,
   toolOf: ToolOf,
   time: AskTime | undefined,
 ): WindowBinding & {
@@ -28,7 +29,7 @@ export function bindWindowReply(
   if (window.reply === undefined || window.format !== 'time-range') {
     return answer === undefined
       ? { expected: WINDOW_FORM_EXPECTATION }
-      : { ...bindWindowAnswer(field, answer, byId, toolOf, time), value: answer };
+      : { ...bindWindowAnswer(field, answer, byAddress, toolOf, time), value: answer };
   }
   const pair = timeReplyPairs(awaiting).find((item) => item.range === id);
   if (pair === undefined || window.reply.version !== 1)
@@ -65,7 +66,7 @@ export function bindWindowReply(
       : { ...next, reply };
   }
   const value = spellRange(decision.range);
-  const bound = bindWindowAnswer(field, value, byId, toolOf, time, decision.how);
+  const bound = bindWindowAnswer(field, value, byAddress, toolOf, time, decision.how);
   const corrected = window.corrected === true || decision.rule === 'interval-corrected';
   const lookback =
     decision.how === 'confirmed' ? offeredLookback(reading, decision.range) : undefined;

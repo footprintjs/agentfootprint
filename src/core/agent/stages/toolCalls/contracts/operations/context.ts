@@ -4,6 +4,7 @@ import type { LLMMessage } from '../../../../../../provider-contract/types.js';
 import type { ToolExecutionContext } from '../../../../../../tools/tools.js';
 import type { ArtifactScope } from '../../../../../../artifacts/types.js';
 import type { OuterCallBinding } from '../../../../innerCallOuter.js';
+import type { CallOccurrenceKey } from '../../../../../../lib/callOccurrence.js';
 
 /** Explicit callback contract for existing context operations. */
 export interface ToolContextOperations {
@@ -12,6 +13,7 @@ export interface ToolContextOperations {
     toolName: string,
     toolCallId: string,
     capturePublications?: boolean,
+    callOccurrenceKey?: CallOccurrenceKey,
   ) => Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'>;
   readonly toolDispatchCtx: (
     scope: TypedScope<AgentState>,

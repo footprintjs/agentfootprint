@@ -1,7 +1,7 @@
 import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
-import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
+import { groundedTextOf } from './callLLM/groundedText.js';
 import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
@@ -32,20 +32,10 @@ import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
   LLMCallHooks,
-  LLMProvider,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
 } from '../../../provider-contract/types.js';
-import {
-  forcedToolChoiceFor,
-  UnsupportedToolChoiceError,
-} from '../../../provider-contract/forcedToolChoice.js';
-import {
-  autoNativeOutputSchemaFor,
-  nativeOutputSchemaFor,
-  UnsupportedNativeOutputError,
-} from '../../../provider-contract/nativeOutputSchema.js';
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -59,19 +49,22 @@ import {
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
-import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
+import {
+  assertForcedRequestSupported,
+  describeProviderDispatch,
+  detachProviderInput,
+  providerDispatchFor,
+  receiptProviderRequest,
+  selectOutputFormat,
+} from './callLLM/providerRequest.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
 import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
-import {
-  abortableIterable,
-  throwIfAborted,
-  untilAborted,
-  withRequestSignal,
-} from '../../../lib/abort.js';
+import { abortableIterable, throwIfAborted, untilAborted } from '../../../lib/abort.js';
 import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
@@ -100,18 +93,6 @@ import type { AgentState } from '../types.js';
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
 
-/** One capability rule at both request boundaries, before cache or model I/O. */
-function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
-  if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {
-    throw new UnsupportedToolChoiceError({ provider: provider.name, model: request.model });
-  }
-  // The structured-output twin (`strategy: 'native'`), judged on the same
-  // effective model — a configured or per-skill model included.
-  if (request.outputFormat !== undefined && !nativeOutputSchemaFor(provider, request.model)) {
-    throw new UnsupportedNativeOutputError({ provider: provider.name, model: request.model });
-  }
-}
-
 /**
  * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
  * provider that throws, or returns anything but an array, contributes
@@ -131,39 +112,6 @@ function readExternalGrounds(
   } catch {
     return [];
   }
-}
-
-/**
- * The frame's non-assistant messages as GROUNDS for the unsupported-argument
- * seam — each tool result read as the TOOL's own bytes (`lib/toolBytes.ts` ·
- * `toolBytesOf`), so a value only the inputs layer's note carries ("the call
- * ran with "production", the value the tool's rule assumes") grounds nothing:
- * library-authored text is never evidence for a value (honesty law 4).
- *
- * The frame is the wire copy, which has lost the boundary field
- * (`composeRequest.ts` · `stripFrameworkFields` removes it and keeps every
- * message, in order), so the cut is read off the COMMITTED twin at the same
- * index — and applied only while the frame still holds that twin's text byte
- * for byte. A result the findings collapse turned into a ticket, or a cache
- * strategy rewrote, is read as it was sent; the staged-refs nudge after the
- * last committed message has no twin and is read as sent.
- */
-function groundedTextOf(frame: readonly LLMMessage[], committed: readonly LLMMessage[]): string[] {
-  const grounds: string[] = [];
-  frame.forEach((message, i) => {
-    if (
-      message.role === 'assistant' ||
-      (message.role === 'user' && message.content.startsWith(FINDINGS_DATA_FRAME_PREFIX))
-    )
-      return;
-    const twin = committed[i];
-    grounds.push(
-      twin !== undefined && twin.role === 'tool' && twin.content === message.content
-        ? toolBytesOf(twin)
-        : message.content,
-    );
-  });
-  return grounds;
 }
 
 // LENS · system-text + tool-list · request-ephemeral
@@ -269,7 +217,9 @@ export function buildCallLLMStage(
     // so `messages[i]` is still the message the cache marker's index names.
     // `committed` keeps both markers for the readers below that must see them.
     const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
-    const history = stripFrameworkFields(committed);
+    const projected = stripFrameworkFields(committed, true);
+    // Receipt assembly keeps a stable list even when stripping returns a live array.
+    const history = projected === committed ? [...projected] : projected;
 
     // ── the findings ledger, served (9.101.0, step 3) ──────────────────
     // ONE gated read of the committed key, used twice. The COLLAPSE rewrites,
@@ -294,7 +244,7 @@ export function buildCallLLMStage(
       deps.hasFindingsLedger === true
         ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
         : committed;
-    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed);
+    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
@@ -472,15 +422,6 @@ export function buildCallLLMStage(
     const startMs = Date.now();
     // Auto follows the actual provider/model, including cache-selected models
     // and each reliability fallback. Explicit strategies retain their refusals.
-    const selectOutputFormat = (request: LLMRequest, selected: LLMProvider): LLMRequest => {
-      if (deps.nativeOutputAuto !== true || deps.outputFormat === undefined) return request;
-      if (autoNativeOutputSchemaFor(selected, request.model)) {
-        return { ...request, outputFormat: deps.outputFormat };
-      }
-      const { outputFormat: _unused, ...ordinary } = request;
-      void _unused;
-      return ordinary;
-    };
     const baseRequest = selectOutputFormat(
       {
         ...(systemPrompt.length > 0 && { systemPrompt }),
@@ -498,6 +439,8 @@ export function buildCallLLMStage(
         ...(deps.outputFormat !== undefined && { outputFormat: deps.outputFormat }),
       },
       provider,
+      deps.nativeOutputAuto === true,
+      deps.outputFormat,
     );
     // v2.6+ — call cache strategy to attach provider-specific cache
     // hints. CacheGate has already routed (apply-markers / no-markers)
@@ -507,13 +450,19 @@ export function buildCallLLMStage(
     // unsupported effective request before even that preparation does I/O.
     assertForcedRequestSupported(provider, baseRequest);
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
-    const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
+    const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const cachePrepared = await cacheStrategy.prepareRequest(detached.request, detached.markers, {
       iteration,
       iterationsRemaining: iterationsRemainingOf(deps.maxIterations, iteration),
       recentHitRate: scope.recentHitRate,
       cachingDisabled: scope.cachingDisabled ?? false,
     });
-    const llmRequest = selectOutputFormat(cachePrepared.request, provider);
+    const llmRequest = selectOutputFormat(
+      cachePrepared.request,
+      provider,
+      deps.nativeOutputAuto === true,
+      detached.outputFormat,
+    );
     // Judge the final request on the effective brain/configured model, not
     // the agent's build-time default. This is before provider I/O and outside
     // the reliability loop: retrying cannot repair an unsupported contract.
@@ -542,6 +491,8 @@ export function buildCallLLMStage(
     // nothing.
     if (deps.recordReceipt !== false) {
       const evictedForAttention = deps.evictedTurns?.read(iteration) ?? [];
+      const hostStrategy =
+        deps.cacheStrategyIsOverride === true && cacheStrategy === deps.cacheStrategy;
       scope[RECEIPT_KEY] = buildReceipt(
         {
           runId: deps.getRunId?.() ?? '',
@@ -557,7 +508,12 @@ export function buildCallLLMStage(
           // Read as it always was; the revision's rule rides `withheld`.
           withheld: scope.wrapUpAsked === true ? 'wrap-up' : withheld,
           baseRequest,
-          preparedRequest: llmRequest,
+          preparedRequest: receiptProviderRequest(
+            llmRequest,
+            detached.request,
+            baseRequest,
+            hostStrategy,
+          ),
           // The breakpoints the strategy really APPLIED, not the candidates it
           // was offered. `scope.cacheMarkers` already records the offer; which of
           // them survived the provider's clamp is the half that decides the bill,
@@ -573,7 +529,8 @@ export function buildCallLLMStage(
           strategy: typeof cacheStrategy.name === 'string' ? cacheStrategy.name : '',
           ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
         },
-        deps.receiptDigests,
+        // Host strategies can reissue their own objects with nested edits.
+        hostStrategy ? undefined : deps.receiptDigests,
       );
     }
 
@@ -694,15 +651,18 @@ export function buildCallLLMStage(
     // answer that lands after it is refused before anything records or bills
     // it (`lib/abort.ts`, law 4).
     const runSignal = scope.$getEnv?.()?.signal;
+    const dispatchFor = providerDispatchFor(
+      runSignal,
+      deps.nativeOutputAuto === true,
+      detached.outputFormat,
+    );
     const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
       const selectedProvider = hooks.provider ?? provider;
-      req = selectOutputFormat(req, selectedProvider);
+      req = dispatchFor.forAttempt(req, selectedProvider);
       assertForcedRequestSupported(selectedProvider, req);
       throwIfAborted(runSignal);
-      const attempts = replayAttempts(
-        withRequestSignal(req, runSignal),
-        hooks.providerHooks ?? providerHooks,
-      );
+      const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
+      let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
       const attemptHooks =
         deps.findings === true
@@ -800,11 +760,12 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        if (deps.findings === true) candidate = capture(attempts.request);
-        resp = await untilAborted(
-          selectedProvider.complete(attempts.request, attemptHooks),
-          runSignal,
-        );
+        const completion = selectedProvider.stream
+          ? dispatchFor.select(attempts.request, selectedProvider)
+          : attempts.request;
+        dispatch = describeProviderDispatch(selectedProvider, completion);
+        if (deps.findings === true) candidate = capture(completion);
+        resp = await untilAborted(selectedProvider.complete(completion, attemptHooks), runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
@@ -832,11 +793,7 @@ export function buildCallLLMStage(
         hooks.providerIndex === undefined
           ? resp
           : tagThinkingResponse(resp, String(hooks.providerIndex));
-      answeredBy = {
-        provider: selectedProvider.name,
-        model: req.model,
-        native: req.outputFormat !== undefined,
-      };
+      answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
       return attempts.response(answered);
     };
@@ -972,7 +929,7 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
-    scope.llmLatestToolCalls = response.toolCalls;
+    scope.llmLatestToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     // Native candidates only, every call (so it is never stale): the stop reason the
     // Route decider judges a constrained answer by — a 'refusal' or
     // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·

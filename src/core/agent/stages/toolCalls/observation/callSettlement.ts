@@ -7,6 +7,7 @@ import type { changedArgKeys } from '../../../../toolShownArgs.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 
@@ -57,6 +58,7 @@ export function recordCallSettlement(
     frame.tc.name,
     {
       toolCallId: frame.tc.id,
+      ...callOccurrenceField(frame.tc.callOccurrenceKey),
       result: frame.capped.result,
       durationMs: frame.durationMs,
       ...(frame.outcome.error === true && { error: true }),

@@ -455,30 +455,38 @@ const keysOf = (agent: Agent): string[] =>
         .join(',')}`,
   );
 
-/** The commit log with clocks, run ids and digests masked — `test/core/tools/byte-identity.test.ts`'s rule. */
+/** Compare independent commit logs after accounting for clocks and generated identities. */
 const VOLATILE_KEYS = new Set(['runId', 'traceId', 'timestamp', 'at', 'conversationId']);
 const CLOCK_KEY = /(?:Ms|At)$/;
 const DIGEST = /^(?:[0-9a-f]{16}|[0-9a-f]{64})$/;
 const RUN_ID = /^run_[0-9a-z_-]+$/i;
-function normalise(value: unknown, key?: string): unknown {
+function normalise(value: unknown, batches: Map<string, number>, key?: string): unknown {
   if (key !== undefined && (VOLATILE_KEYS.has(key) || CLOCK_KEY.test(key))) return '<volatile>';
   if (typeof value === 'string') {
     if (DIGEST.test(value)) return '<digest>';
     if (RUN_ID.test(value)) return '<run-id>';
     return value;
   }
-  if (Array.isArray(value)) return value.map((v) => normalise(v));
+  if (Array.isArray(value)) {
+    if (key === 'callOccurrenceKey' && value.length === 5 && value.every(Number.isSafeInteger)) {
+      const batch = value.slice(0, 4).join('.');
+      const ordinal = batches.get(batch) ?? batches.size;
+      batches.set(batch, ordinal);
+      return [ordinal, 0, 0, 0, value[4]];
+    }
+    return value.map((v) => normalise(v, batches));
+  }
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(value as Record<string, unknown>).sort()) {
-      out[k] = normalise((value as Record<string, unknown>)[k], k);
+      out[k] = normalise((value as Record<string, unknown>)[k], batches, k);
     }
     return out;
   }
   return value;
 }
 const normalisedLog = (agent: Agent): unknown =>
-  normalise(JSON.parse(JSON.stringify(agent.getLastSnapshot()?.commitLog ?? [])));
+  normalise(JSON.parse(JSON.stringify(agent.getLastSnapshot()?.commitLog ?? [])), new Map());
 
 describe('edge: nothing extra when there is nothing to carry', () => {
   const plain = defineTool({
