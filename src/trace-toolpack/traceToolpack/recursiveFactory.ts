@@ -166,7 +166,7 @@ function buildTraceTools(
   const calls = buildToolCallReader(artifacts, index);
 
   const tools: Tool[] = [
-    buildRunOverview(artifacts, index),
+    buildRunOverview(artifacts, index, restricted),
     buildFindContextErrors(artifacts, index, calls, opts),
     buildFindInTrace(artifacts, index, restricted),
     buildTraceNode(artifacts, index, opts),
