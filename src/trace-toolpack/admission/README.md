@@ -1,4 +1,4 @@
-# Model-facing trace admission
+**Lens** — admitted evidence for model-facing trace tools.
 
 `traceToolpack` checks for after-tool result decisions before creating an index. Ordinary recordings keep their existing view. A restricted recording exposes two state keys across the fold base, final state and replay log.
 
