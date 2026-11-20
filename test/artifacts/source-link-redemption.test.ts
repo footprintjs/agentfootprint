@@ -172,7 +172,11 @@ async function run({
       const checkpoint = JSON.parse(JSON.stringify(result.checkpoint)) as typeof result.checkpoint;
       expect(await agent.resume(checkpoint, 'report label')).toBe('done');
     } else {
-      expect(result).toBe(ruled ? '4417 records consumed.' : 'done');
+      expect(result).toBe(
+        ruled
+          ? '4417 records consumed.\n\n---\n\nNot sure — window = "7722" was assumed by consume_report\'s rule, not given by you.'
+          : 'done',
+      );
     }
     expect(consume).toHaveBeenCalledOnce();
     expect(redeem).toHaveBeenCalledOnce();
