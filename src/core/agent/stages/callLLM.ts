@@ -6,7 +6,7 @@ import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findi
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
-  commitAcceptedModelResponse,
+  commitAcceptedResponse,
   completeObserved,
   observeCallRequests,
   servedRequestRecorder,
@@ -34,6 +34,7 @@ import {
  */
 
 import type { TypedScope } from 'footprintjs';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
@@ -49,11 +50,11 @@ import { danglingReferencesOf } from '../../../integrity/dangling-reference/chec
 import {
   declaredEnumValuesOf,
   unsupportedArgumentsOf,
-  type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
+import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import {
   assertForcedRequestSupported,
   describeProviderDispatch,
@@ -96,27 +97,6 @@ import type { AgentState } from '../types.js';
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
-
-/**
- * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
- * provider that throws, or returns anything but an array, contributes
- * nothing — the check then runs on exactly what the run itself served, as if
- * the door were closed. An accounting door must never change a run's
- * outcome (the fileIntegrityDisposition rule, one tier down). Entry-level
- * hygiene — dropping blank values and unlabeled sources — lives in the
- * check itself, beside the fences it joins.
- */
-function readExternalGrounds(
-  provider: (() => readonly ExternalGround[]) | undefined,
-): readonly ExternalGround[] {
-  if (provider === undefined) return [];
-  try {
-    const entries = provider();
-    return Array.isArray(entries) ? entries : [];
-  } catch {
-    return [];
-  }
-}
 
 // LENS · system-text + tool-list · request-ephemeral
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
@@ -926,7 +906,7 @@ export function buildCallLLMStage(
     if (deps.findings === true)
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-    commitAcceptedModelResponse(scope, response, serving, deps.getRunId?.());
+    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps.getRunId?.());
     // Native candidates only, every call (so it is never stale): the stop reason the
     // Route decider judges a constrained answer by — a 'refusal' or
     // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
@@ -1022,7 +1002,7 @@ export function buildCallLLMStage(
     // what the model actually saw, never against scope history it did not.
     if (deps.toolGrounding !== undefined && deps.toolGrounding.size > 0) {
       const grounding = deps.toolGrounding;
-      const armedCalls = response.toolCalls.filter((c) => grounding.has(c.name));
+      const armedCalls = acceptedToolCalls.filter((c) => grounding.has(c.name));
       if (armedCalls.length > 0) {
         const schemaOf = new Map(
           (llmRequest.tools ?? []).map((t) => [t.name, t.inputSchema] as const),
@@ -1036,20 +1016,18 @@ export function buildCallLLMStage(
         // library records what the app asserts; the source label rides every
         // excusal so a reader can audit the chain.
         const external = readExternalGrounds(deps.externalGrounds);
-        const { findings: argumentFindings, externalGroundings } = unsupportedArgumentsOf(
+        const {
+          findings: argumentFindings,
+          externalGroundings,
+          occurrences,
+        } = unsupportedArgumentsOf(
           armedCalls.map((c) => ({
             toolName: c.name,
             toolCallId: c.id,
-            // Peeled under the arm (9.101.0): `_findings` carries the model's
-            // own assertion subjects and values, and `stringLeaves` walks
-            // every nested leaf — an unpeeled declaration would file that
-            // family's unrecoverable false finding. Unconditional by
-            // construction: `toolGrounding` is harvested from the REGISTRY
-            // alone (`Agent.build`), and an armed registry tool never owns
-            // the name (`buildToolRegistry · assertReservedArgument`), so
-            // the value here is always the model's. Unarmed: `c.args` itself.
-            // Declared sources without the ledger decorate RULED tools only:
-            // peeled where the served schema carries the decoration.
+            ...callOccurrenceField(c.callOccurrenceKey),
+            // Peel the model's `_findings` metadata before reading argument
+            // leaves. Grounded registry tools reserve that key. With sources
+            // alone, only ruled tools advertise it in their served schemas.
             args:
               deps.findings === true ||
               (deps.argumentSources === true && carriesFindingsDecoration(schemaOf.get(c.name)))
@@ -1096,7 +1074,9 @@ export function buildCallLLMStage(
           argumentFindings.length > 0 ? 'checked-fail' : 'checked-pass',
           argumentFindings.length > 0 ? Date.now() : undefined,
         );
-        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger);
+        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger, (finding) =>
+          occurrences.get(finding),
+        );
         // Each excusal is a per-attempt fact and rides the emit channel —
         // deliberately NOT deduplicated the way findings are: a repeated call
         // is a fresh choice, and each excusal names the assertion that stood

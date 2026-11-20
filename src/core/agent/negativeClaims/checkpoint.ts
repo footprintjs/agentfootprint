@@ -1,5 +1,6 @@
 /** Private operational carrier admission. The host authenticates checkpoint
  * storage; structural validation never turns caller-supplied JSON into proof. */
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { copyJson, ownData } from '../../../lib/boundedJson.js';
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
 import {
@@ -50,6 +51,7 @@ export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | u
       !identities.evidence.runIds.includes(id.runId) ||
       id.ordinal >= identities.nextResultOrdinal ||
       seen.has(call.resultId) ||
+      readCallOccurrenceKey(call) === null ||
       !Number.isSafeInteger(call.turn) ||
       call.turn < 1 ||
       call.turn > raw.turn ||
@@ -91,7 +93,16 @@ export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | u
         row.code !== 'refusal-asserts-absence' ||
         !Number.isSafeInteger(row.turn) ||
         row.turn < 1 ||
-        row.turn > raw.turn,
+        row.turn > raw.turn ||
+        readCallOccurrenceKey(row) === null ||
+        ((row.toolCallId !== undefined ||
+          row.iteration !== undefined ||
+          row.callOccurrenceKey !== undefined) &&
+          (typeof row.toolCallId !== 'string' ||
+            row.toolCallId.length === 0 ||
+            typeof row.iteration !== 'number' ||
+            !Number.isSafeInteger(row.iteration) ||
+            row.iteration < 1)),
     )
   )
     throw new TypeError('Invalid negative-claims declaration diagnostics.');

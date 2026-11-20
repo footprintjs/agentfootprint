@@ -23,7 +23,8 @@ import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from './outcomeField.js';
+import { outcomeField, reportedStatusField, toolResultExecutionField } from './outcomeField.js';
+import { missingResultFields } from '../batch/settle.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -60,7 +61,12 @@ export function landCallResult(
   scope: TypedScope<AgentState>,
   deps: Pick<
     ToolCallsHandlerDeps,
-    'negativeClaimsArmed' | 'stepPlanFor' | 'repeatedCallNudge' | 'findings'
+    | 'negativeClaimsArmed'
+    | 'stepPlanFor'
+    | 'repeatedCallNudge'
+    | 'findings'
+    | 'resultsLayer'
+    | 'answerLayer'
   >,
   frame: LandCallResultFrame,
 ): void {
@@ -237,6 +243,19 @@ export function landCallResult(
     ...occurrence,
     ...(deps.findings === true &&
       !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
+    ...toolResultExecutionField(
+      deps.answerLayer,
+      frame.execution.toolResultExecution,
+      frame.outcome.error === true ||
+        frame.execution.denied ||
+        frame.execution.ceilingRefused ||
+        frame.execution.haltContext !== undefined ||
+        frame.skillRoute.skillRejected ||
+        frame.delivery.modelResultCapped,
+    ),
+    ...(frame.delivery.toolResultDisposition !== undefined && {
+      toolResultDisposition: frame.delivery.toolResultDisposition,
+    }),
     ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },
@@ -266,6 +285,8 @@ export function landCallResult(
     result: frame.delivery.resultStr,
     toolCallId: frame.tc.id,
     ...occurrence,
+    ...(deps.resultsLayer === true &&
+      missingResultFields(frame.execution.executed, frame.execution.executeThrew)),
     ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
   });
   scope.toolResults = [...frame.batchResults];

@@ -535,6 +535,7 @@ describe('one fold at both moments', () => {
         value: '0.0112',
         carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }],
         iteration: 2,
+        turn: 1,
       },
     ]);
     // Off, the decimal is in no result, so nothing was carried and nothing is filed.

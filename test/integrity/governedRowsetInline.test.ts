@@ -2,12 +2,14 @@ import type { AgentfootprintEvent } from '../../src/events.js';
 import { describe, expect, it } from 'vitest';
 import { Agent, defineTool, type ToolResultColumns } from '../../src/index.js';
 import { mock } from '../../src/providers.js';
+import { recordRun } from '../../src/observe.js';
 import { inlineRowset, RowsetUnavailable } from '../../src/core/agent/resultRowsets/inlineRows.js';
 
 async function inspect(
   value: unknown,
   columns: ToolResultColumns,
   mode: 'warn' | 'enforce' = 'warn',
+  captureStanding = false,
 ) {
   const events: AgentfootprintEvent[] = [];
   let calls = 0;
@@ -21,7 +23,7 @@ async function inspect(
       return value;
     },
   });
-  const agent = Agent.create({
+  const builder = Agent.create({
     model: 'mock',
     checkColumnTypes: mode,
     integrityPosture: 'dev',
@@ -36,15 +38,16 @@ async function inspect(
         return { toolCalls: [{ id: 'inline-call', name: 'inline_contract', args: {} }] };
       },
     }),
-  })
-    .tool(tool)
-    .build();
+  }).tool(tool);
+  const agent = (captureStanding ? builder.answerLayer() : builder).build();
   agent.on('*', (event) => events.push(event));
-  {
+  const recorder = captureStanding ? recordRun(agent) : undefined;
+  try {
     await agent.run({ message: 'Read synthetic rows.' });
     return {
       calls,
       served,
+      snapshot: recorder?.toRecording().snapshot,
       findings: events
         .filter((event) => event.type === 'agentfootprint.integrity.context_error')
         .map((event) => event.payload),
@@ -52,6 +55,8 @@ async function inspect(
         .filter((event) => event.type === 'agentfootprint.tools.rowset_checked')
         .map((event) => event.payload),
     };
+  } finally {
+    recorder?.stop();
   }
 }
 
@@ -89,6 +94,30 @@ describe('the final inline binding preserves native column semantics', () => {
     expect(valid.checks).toMatchObject([{ disposition: 'checked-pass' }]);
     const wrong = await inspect([{}], { amount: { type: 'number', nullable: true } });
     expect(wrong.findings).toMatchObject([{ kind: 'missing-column' }]);
+  });
+
+  it('carries the native occurrence on the private finding without changing the audit events', async () => {
+    const result = await inspect([{ port: 1 }], { amount: 'number' }, 'warn', true);
+    const { sharedState } = result.snapshot as {
+      sharedState: {
+        history: Record<string, unknown>[];
+        findingsLedger: Record<string, unknown>[];
+      };
+    };
+    const call = sharedState.history.find((row) => row.role === 'tool');
+    expect(call?.callOccurrenceKey).toEqual(Array(5).fill(expect.any(Number)));
+    expect(sharedState.findingsLedger).toContainEqual(
+      expect.objectContaining({
+        kind: 'integrity-finding',
+        finding: 'missing-column',
+        toolCallId: 'inline-call',
+        callOccurrenceKey: call?.callOccurrenceKey,
+      }),
+    );
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).not.toHaveProperty('callOccurrenceKey');
+    expect(result.checks).toHaveLength(1);
+    expect(result.checks[0]).not.toHaveProperty('callOccurrenceKey');
   });
 
   it('judges exactly1000 rows, and refuses1001 without a fake type finding', async () => {

@@ -33,7 +33,7 @@ describe('source correction settles only at the actual native batch barrier', ()
       },
     });
     try {
-      expect(await f.agent.run(QUESTION)).toBe('Held.');
+      expect(await f.agent.run(QUESTION)).toBe('Held.\n\n---\n\nNot sure — a call was refused.');
       expect(permissions).toBe(0);
       expect(humanContexts).toBe(0);
       expect(f.ran).toEqual([]);
@@ -103,7 +103,7 @@ describe('source correction settles only at the actual native batch barrier', ()
         { mode },
       );
       try {
-        expect(await f.agent.run(QUESTION)).toBe('Done.');
+        expect(await f.agent.run(QUESTION)).toBe('Done.\n\n---\n\nNot sure — a call was refused.');
         expect(f.ran).toEqual([{ vm: VM }]);
         expect(argumentsOf(f.agent, 'omitted')).toHaveLength(1);
         expect(argumentsOf(f.agent, 'omitted')[0]).toMatchObject({
@@ -139,7 +139,7 @@ describe('source correction settles only at the actual native batch barrier', ()
       'Refused.',
     ]);
     try {
-      expect(await f.agent.run(QUESTION)).toBe('Refused.');
+      expect(await f.agent.run(QUESTION)).toBe('Refused.\n\n---\n\nNot sure — a call was refused.');
       expect(f.ran).toEqual([]);
       expect(argumentsOf(f.agent, 'candidate')).toEqual([
         expect.objectContaining({ withheld: 'batch-preempted', claimed: 'none' }),
@@ -156,7 +156,7 @@ describe('source correction settles only at the actual native batch barrier', ()
     const calls = [proposal(id, { vm: VM }), ...(id ? [proposal(id, { vm: VM })] : [])];
     const f = correctionFixture([batch(...calls), 'Refused.']);
     try {
-      expect(await f.agent.run(QUESTION)).toBe('Refused.');
+      expect(await f.agent.run(QUESTION)).toBe('Refused.\n\n---\n\nNot sure — a call was refused.');
       expect(f.ran).toEqual([]);
       expect(
         argumentsOf(f.agent).some((row) => row.correction !== undefined || row.asked !== undefined),
@@ -198,7 +198,9 @@ describe('source correction settles only at the actual native batch barrier', ()
       { findings: true },
     );
     try {
-      expect(await f.agent.run(QUESTION)).toBe('Finished synthetic fixture.');
+      expect(await f.agent.run(QUESTION)).toBe(
+        'Finished synthetic fixture.\n\n---\n\nNot sure — a call was refused.',
+      );
       expect(f.requests).toHaveLength(2);
       expect(f.ran).toEqual([]);
       expect(argumentsOf(f.agent, 'malformed')).toEqual([

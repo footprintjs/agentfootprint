@@ -1,7 +1,11 @@
 # The reasons, and the row each is read from
 
 `reasons.ts` · `REASONS` is the owner; this is its table for a reader. The narrative around it is
-in [README.md](./README.md).
+in [README.md](./README.md). The standing admits a reason about an input when
+the tool was entered, even if it threw. It admits a reason about a result
+when the tool returned and the result reached the model. Call settlement and
+whole-turn witnesses are read without those gates. The test matrix uses the
+complete witness table in `reasonClasses.ts`.
 
 | Reason | Layer | Read from |
 |---|---|---|
@@ -11,7 +15,8 @@ in [README.md](./README.md).
 | `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
 | `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
 | `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `assess.ts` · `firstRowOfTurn`) |
-| `call-not-completed` | 3 | `history`: a tool message of this turn whose `outcome` is `refused` or `failed`. A later completed call of the same tool with equal recorded arguments clears the reason for that call. If the arguments are absent or kept out of the record, the reason fires. |
+| `call-not-completed` | 3 | `history`: a recorded refusal, failure or settled call of this turn. A malformed batch carries a refusal frame with no fabricated tool-result correlation. A later completed call of the same tool with equal recorded arguments clears the reason for that call. If the arguments are absent or kept out of the record, the reason fires. |
+| `result-withheld` | 3 | This turn's record proves a host rule denied a returned result. The standing gives no number, call name, witness or result facts. |
 | `work-not-finished` | 3 | `history`: a tool message of this turn records `partial` or `pending` without an `outcome`. The same completed-retry rule applies. |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
@@ -21,7 +26,7 @@ in [README.md](./README.md).
 | `period-unknown` | 3 | `findingsLedger`: a `period` row of this turn with verdict `unknown` — the tool declared `held: 'unknown'`, on a non-empty result too (adopted Q33) |
 | `period-undeclared` | 3 | `findingsLedger`: a `period` row of this turn with verdict `undeclared` — the tool declares a `ToolPeriod` and its result declared no period |
 | `period-differs-from-asked` | 3 | `findingsLedger`: a `period` row of this turn with `differs` (the time layer, step T8 — `time/check.ts` · `periodTimeCheck`): what the call read is not the range it asked for — `missing` (asked, not read) or `extra` (read, not asked; TQ8: "not sure" too) — or, for a window the model chose, not the person's window. Witnesses: the row and the call's `argument` row |
-| `period-beyond-retention` | 3 | `findingsLedger`: a `period` row of this turn with `beyondRetention` (step T8): the window was wholly older than the tool declares its source keeps — refused before dispatch, or read that way |
+| `period-beyond-retention` | 3 | `findingsLedger`: a pre-dispatch `call-window` refused for `beyond-retention` or a `period` row of this turn with `beyondRetention` (step T8). The window was wholly older than the tool declares its source keeps. |
 | `sources-conflict` | 3 | `findingsLedger`: a conflict row of this turn — one whose witnesses name a call of this turn, or one stamped with this turn whose witnesses the record does not all place in earlier turns (the incomplete-record policy, below) |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
@@ -32,9 +37,9 @@ in [README.md](./README.md).
 | `step-skipped` | 4 | `findingsLedger`: one witness of this turn for each accepted skip that advanced past a declared step while the answer layer was armed. |
 | `negative-prose-unverified` | 4 | `findingsLedger`: a `negative-claim` or `negative-claim-note` row of this turn. Model prose is observe-only; detected negatives and skipped scans remain not-sure, never verified or blocking. |
 | `claim-exceeds-search` | 4 | `answerValidation.checks`: an `agent:negative-claims:` row with `disposition: 'checked-fail'` — a typed negative claimed more than the admitted search |
-| `declaration-overclaimed` | 3 | `answerValidation.checks`: an `agent:negative-claims:` row with `reason: 'declaration-overclaimed'` — a tool's refusal said more than it read (`.negativeClaims()`); the row's `tools` name the tool |
+| `declaration-overclaimed` | 3 | `answerValidation.checks`: an `agent:negative-claims:` row with `reason: 'declaration-overclaimed'` — a native declaration overstates what the entered tool checked (`.negativeClaims()`); the row must identify a unique served return |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
-| `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict — or a `failed` report that also counts `unreachable` checks or names a `reason` (a contradiction found beside them, or beside a validator that did not finish; both reasons fire) |
+| `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict — or a `failed` report that also counts `unreachable` checks or names a `reason` (a contradiction found beside them, or beside a validator that did not finish; both reasons fire). Incomplete entry or settlement proof, or an input witness whose call cannot be established |
 | `invariant-violation` | 1 | `findingsLedger`: an `integrity-finding` row of this turn (`integrityReasons.ts`, filed while the answer layer is armed) — the tools offered to the model contradict what the run composed or parked, at the write that served them (`seam: 'compose'`) or on the wire (`seam: 'wire'`) |
 | `unsupported-argument` | 2 | `findingsLedger`: an `integrity-finding` row of this turn — a call chose an argument value nothing served it; the row names the tool, never the value |
 | `column-type-mismatch` | 3 | `findingsLedger`: an `integrity-finding` row of this turn — a column holds something other than the type its tool declares |

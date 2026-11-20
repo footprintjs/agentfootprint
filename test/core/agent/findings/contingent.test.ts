@@ -256,6 +256,7 @@ describe('contingent — the answer moment', () => {
           value: 'fc1/7',
           carriers: [{ toolCallId: 'c1', standing: 'noise' }],
           iteration: 4,
+          turn: 1,
         },
       ]);
       // fc2/9 — its one carrier c2 is a fact; sw-01 — carried by c1 (noise)
@@ -313,6 +314,7 @@ describe('contingent — the dispatch moment', () => {
           value: 'fc1/7',
           carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }],
           iteration: 2,
+          turn: 1,
         },
       ]);
       expect(r.events).toEqual([
@@ -392,9 +394,14 @@ describe('contingent — the last standing per result is the current one', () =>
 
 describe('contingent — the arms', () => {
   const findingsOnly: Build = (a) => a.system('bot').tool(probe()).findings();
+  // These controls pin the ledger and state keys before the answer layer files witnesses.
   const gateOnly: Build = (a) =>
-    a.system('bot').tool(probe()).namesAndNumbersFromEvidence({ posture: 'assist' });
-  const neither: Build = (a) => a.system('bot').tool(probe());
+    a
+      .system('bot')
+      .tool(probe())
+      .namesAndNumbersFromEvidence({ posture: 'assist' })
+      .answerLayer(false);
+  const neither: Build = (a) => a.system('bot').tool(probe()).answerLayer(false);
 
   it('`.findings()` without the gate: no row, no event, the instruction as it was, the keys the both-armed run commits', async () => {
     const r = await run('dynamic', DISPATCH_MOMENT, findingsOnly);

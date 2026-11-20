@@ -107,7 +107,7 @@ export function servedRequestRecorder(
 }
 
 /** Commit the output and the consumer proved for it in the same native scope. */
-export function commitAcceptedModelResponse(
+export function commitAcceptedResponse(
   scope: TypedScope<AgentState>,
   response: Pick<LLMResponse, 'content' | 'toolCalls'>,
   serving: ReturnType<typeof servedRequestRecorder>,
@@ -117,7 +117,9 @@ export function commitAcceptedModelResponse(
   if (consumer !== undefined) scope.sourceLinkConsumer = consumer;
   else if ('sourceLinkConsumer' in scope) scope.$delete('sourceLinkConsumer');
   scope.llmLatestContent = response.content;
-  scope.llmLatestToolCalls = identifyAcceptedToolCalls(response.toolCalls);
+  const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
+  scope.llmLatestToolCalls = acceptedToolCalls;
+  return acceptedToolCalls;
 }
 
 /** Compare readonly port requests without serializing values or invoking

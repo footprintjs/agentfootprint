@@ -14,11 +14,8 @@ import { assistantReplayFields } from '../../assistantReplay.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { MemoryIdentity } from '../../../../memory/identity/types.js';
-import {
-  assertContinuable,
-  checkpointReplayHistory,
-  type AgentRunCheckpoint,
-} from '../../../runCheckpoint.js';
+import { assertContinuable, type AgentRunCheckpoint } from '../../../runCheckpoint.js';
+import { checkpointReplayHistory } from '../../../checkpointHistory.js';
 import { requireVerificationOnResume } from '../../findings/verificationCheckpoint.js';
 import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
@@ -339,6 +336,8 @@ export function applyContinuation(
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
     ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
+    ...(!appendsUserTurn &&
+      cp.toolTurnEvidence !== undefined && { toolTurnEvidence: cp.toolTurnEvidence }),
     // The tickets the library placed in earlier turns (`placedTickets.ts`):
     // still the library's, so the staged-refs nudge still names them.
     ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),

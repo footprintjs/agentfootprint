@@ -2,6 +2,7 @@ import type { buildDispatchContext } from './dispatchContext.js';
 import type { buildToolEffectsOperations } from '../routing/effectsOperations.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 
@@ -26,7 +27,7 @@ export function completeToolBatch(
   scope: TypedScope<AgentState>,
   frame: CompleteToolBatchFrame,
 ): void {
-  scope.history = frame.newHistory;
+  commitSettledToolHistory(scope, frame.newHistory);
   if (frame.inputsLayer === true && frame.askAnswered !== true && scope.argumentAsk !== undefined)
     scope.argumentAsk = undefined;
 

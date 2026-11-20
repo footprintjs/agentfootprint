@@ -18,7 +18,13 @@ function proposal(callOccurrenceKey: readonly number[]) {
 }
 
 function result(callOccurrenceKey: readonly number[], shelf: string) {
-  return { role: 'tool', ...tool, content: JSON.stringify([shelf]), callOccurrenceKey };
+  return {
+    role: 'tool',
+    ...tool,
+    content: JSON.stringify([shelf]),
+    callOccurrenceKey,
+    toolResultExecution: 'returned',
+  };
 }
 
 function observation(iteration: number, callOccurrenceKey: readonly number[], extra: object) {
@@ -63,9 +69,10 @@ interface Case {
   readonly checked: readonly number[];
   readonly keyed: Source;
   readonly legacy: Source;
+  readonly legacyUnchecked?: readonly number[];
 }
 
-// The nine cases named in the review. The old record drops only the key field.
+// The nine cases named in the review, with current entry facts and keyless legacy recordings.
 const cases: readonly Case[] = [
   {
     name: '1 · one call landed with a failed check',
@@ -82,9 +89,10 @@ const cases: readonly Case[] = [
     ledger: [failed, clean],
     legs: ['landed', 'open'],
     paused: true,
-    checked: [0, 1],
+    checked: [0],
     keyed: 'named',
-    legacy: 'unplaced',
+    legacy: 'none',
+    legacyUnchecked: [0, 1],
   },
   {
     name: '3 · both calls landed',
@@ -93,7 +101,8 @@ const cases: readonly Case[] = [
     legs: ['landed', 'landed'],
     checked: [0, 1],
     keyed: 'named',
-    legacy: 'unplaced',
+    legacy: 'none',
+    legacyUnchecked: [0, 1],
   },
   {
     name: '4 · the first landed and the second was withheld for correction',
@@ -102,7 +111,8 @@ const cases: readonly Case[] = [
     legs: ['landed', 'undispatched'],
     checked: [0],
     keyed: 'named',
-    legacy: 'unplaced',
+    legacy: 'none',
+    legacyUnchecked: [0],
   },
   {
     name: '5 · neither landed and the first check was corrected',
@@ -121,15 +131,17 @@ const cases: readonly Case[] = [
     checked: [1],
     keyed: 'none',
     legacy: 'none',
+    legacyUnchecked: [1],
   },
   {
     name: '7 · the first check failed without a result and the second landed clean',
     history: [firstProposal, secondProposal, secondResult],
     ledger: [failed, clean],
     legs: ['open', 'landed'],
-    checked: [0, 1],
-    keyed: 'named',
-    legacy: 'unplaced',
+    checked: [1],
+    keyed: 'none',
+    legacy: 'none',
+    legacyUnchecked: [0, 1],
   },
   {
     name: '8 · two observations of one landed call',
@@ -147,7 +159,8 @@ const cases: readonly Case[] = [
     legs: ['landed', 'landed'],
     checked: [0, 1],
     keyed: 'unplaced',
-    legacy: 'unplaced',
+    legacy: 'none',
+    legacyUnchecked: [0, 1],
   },
 ];
 
@@ -155,7 +168,7 @@ function event(type: AgentfootprintEvent['type'], payload: object, step: string)
   return { type, payload, meta: { runId: 'fixture', runtimeStageId: step } };
 }
 
-function load(fixture: Case, keyed: boolean): Recording {
+function load(fixture: Case, keyed: boolean, recordedEntry = keyed): Recording {
   const message = 'Read the shelf.';
   const history = [{ role: 'user', content: message }, ...fixture.history];
   const brackets = fixture.legs.flatMap((leg, i) => {
@@ -186,6 +199,14 @@ function load(fixture: Case, keyed: boolean): Recording {
         turnNumber: 1,
         history,
         findingsLedger: fixture.ledger,
+        ...(recordedEntry && {
+          enteredToolCalls: {
+            entries: fixture.legs.flatMap((leg, i) =>
+              leg === 'landed' ? [{ callOccurrenceKey: [first, second][i], entered: true }] : [],
+            ),
+            complete: true,
+          },
+        }),
         ...(fixture.paused && { pausedToolCallId: toolCallId }),
       },
     },
@@ -199,9 +220,11 @@ function load(fixture: Case, keyed: boolean): Recording {
     structure: {},
   };
   return JSON.parse(
-    JSON.stringify(recording, (key, value: unknown) =>
-      !keyed && key === 'callOccurrenceKey' ? undefined : value,
-    ),
+    JSON.stringify(recording, (key, value: unknown) => {
+      if (!keyed && key === 'callOccurrenceKey') return undefined;
+      if (!recordedEntry && key === 'toolResultExecution') return undefined;
+      return value;
+    }),
   ) as Recording;
 }
 
@@ -214,18 +237,20 @@ describe('argument occurrences in loaded recordings', () => {
     for (const keyed of [true, false]) {
       const recording = load(fixture, keyed);
       const expected = keyed ? fixture.keyed : fixture.legacy;
+      const unchecked = keyed ? undefined : fixture.legacyUnchecked;
+      const checked = unchecked === undefined ? fixture.checked : [];
       const stateOnly = assessment.assessAnswer(recording);
       const failure = sourceOf(stateOnly);
       const check = (name: 'argument-rules' | 'argument-sources', field: string) =>
         expect(stateOnly.checked.find(({ check }) => check === name)).toEqual(
-          fixture.checked.length === 0
+          checked.length === 0
             ? undefined
             : {
                 check: name,
                 layer: 2,
-                ran: fixture.checked.length,
-                of: fixture.checked.length,
-                witness: fixture.checked.map((index) => ({
+                ran: checked.length,
+                of: checked.length,
+                witness: checked.map((index) => ({
                   ...witness,
                   path: `/${index}/${field}`,
                 })),
@@ -233,6 +258,12 @@ describe('argument occurrences in loaded recordings', () => {
         );
       check('argument-rules', 'argument');
       check('argument-sources', 'claimed');
+      const unavailable = unchecked?.map((index) => ({ ...witness, path: `/${index}/argument` }));
+      expect(stateOnly.reasons.find(({ reason }) => reason === 'check-unreachable')).toEqual(
+        unavailable === undefined
+          ? undefined
+          : { reason: 'check-unreachable', source: { kind: 'run' }, witness: unavailable },
+      );
       expect(failure?.witness).toEqual(expected === 'none' ? undefined : [witness]);
       expect(failure?.source).toEqual(
         expected === 'none'
@@ -255,8 +286,12 @@ describe('argument occurrences in loaded recordings', () => {
             ?.pointers,
         ).toEqual(expected === 'none' ? undefined : [witness]);
         expect(
+          lines.find(({ template }) => template.id === 'howSure.reason.dispatchProofUnavailable')
+            ?.pointers,
+        ).toEqual(unavailable);
+        expect(
           lines.some(({ template }) => template.id === 'howSure.reason.unplacedEvidence'),
-        ).toBe(!keyed && expected === 'unplaced');
+        ).toBe(false);
         expect(
           lines.some(({ template }) => template.id === 'howSure.reason.resultUnavailable'),
         ).toBe(keyed && expected === 'unplaced');
@@ -264,6 +299,14 @@ describe('argument occurrences in loaded recordings', () => {
         fold.mockRestore();
       }
     }
+  });
+
+  it('an older keyed record can prove an evicted call entered from its exact tool-end', () => {
+    const fixture = cases[8]!;
+    const exact = assessment.assessAnswer(load(fixture, true));
+    const older = assessment.assessAnswer(load(fixture, true, false));
+    expect(older).toEqual(exact);
+    expect(sourceOf(older)?.source).toEqual({ kind: 'calls', calls: [], unplaced: [witness] });
   });
 
   it('reports a damaged duplicate result as unreadable', () => {

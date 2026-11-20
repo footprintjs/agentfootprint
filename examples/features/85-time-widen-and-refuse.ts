@@ -171,6 +171,7 @@ const shortDesk = Agent.create({
 })
   .tool(shortSearch)
   .time({ zone: 'America/Los_Angeles', reader })
+  .answerLayer({ standingLine: true })
   .build();
 // #endregion no-form-holds
 
@@ -238,7 +239,9 @@ export async function run(input: string): Promise<string> {
       'the preview sends what the run sent',
     );
     check(
-      read !== undefined && 'sent' in read && JSON.stringify(read.sent) === JSON.stringify(asker.sent),
+      read !== undefined &&
+        'sent' in read &&
+        JSON.stringify(read.sent) === JSON.stringify(asker.sent),
       'the preview reads what the row says the tool read',
     );
     console.log('\nthe same answer outside a run:', JSON.stringify(preview));
@@ -250,6 +253,10 @@ export async function run(input: string): Promise<string> {
   const shortRows = (shortDesk.findings() ?? []) as readonly WindowRow[];
   check(!isInputPause(short), 'nothing asked: no reading of "yesterday" is readable');
   check(latest(shortRows, 's1')?.refused === 'no-form-holds', 'refused, not run on its 1h');
+  check(
+    typeof short === 'string' && short.endsWith('Not sure — a call was refused.'),
+    'the standing reports the refusal only',
+  );
   check(handed.length === 2, 'the one-day tool never ran');
   // The app's preview of the one-day tool names the same refusal — its `maxRange` included.
   if (asker?.asked !== undefined) {

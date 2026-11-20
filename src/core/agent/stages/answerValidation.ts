@@ -23,6 +23,7 @@ import {
 import { observeNegativeProse } from '../negativeClaims/prose.js';
 import { recordFindings } from '../findings/ledger.js';
 import { negativeRecordOf } from '../negativeClaims/capture.js';
+import { overclaimCheckOf, type NegativeOverclaim } from '../negativeClaims/overclaims.js';
 import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
 import type { ResolvedNegativeClaimPhrases } from '../../../integrity/negative-claim/phrases.js';
 import { takeAnswerEvidence } from './answerEvidence.js';
@@ -111,6 +112,7 @@ export function withAnswerValidation(
     let raw = scope.llmLatestContent;
     let candidateParser = parser;
     let prepared: ReturnType<typeof renderNegativeCandidate> | undefined;
+    let declarations: readonly NegativeOverclaim[] | undefined;
     if (negatives !== undefined) {
       const record = negativeRecordOf(scope, negatives.runId());
       try {
@@ -125,23 +127,15 @@ export function withAnswerValidation(
         );
         const overclaims =
           scope.negativeClaimState?.overclaims.filter((row) => row.turn === record.turn) ?? [];
-        if (overclaims.length > 0)
+        if (overclaims.length > 0) {
+          declarations = overclaims;
+          // The body and event keep the established one diagnostic per tool.
+          const tools = [...new Set(overclaims.map((row) => row.tool))];
           prepared.answer = {
             ...prepared.answer,
-            checks: [
-              ...prepared.answer.checks,
-              ...overclaims.map((row, index) => ({
-                id: `agent:negative-claims:declaration:${index}`,
-                path: '/',
-                index,
-                kind: 'unknown' as const,
-                code: 'declaration-overclaimed',
-                disposition: 'not-applicable' as const,
-                tools: [row.tool],
-                results: [],
-              })),
-            ],
+            checks: [...prepared.answer.checks, ...tools.map(overclaimCheckOf)],
           };
+        }
         if (
           prepared.correction &&
           prepareNegativeCorrection(scope, record, negatives.config.field)
@@ -213,7 +207,7 @@ export function withAnswerValidation(
       scope.answerValidation =
         prepared === undefined
           ? { ...result.report, delivery: 'fallback' }
-          : reportWithNegatives(result.report, prepared.answer, allowed);
+          : reportWithNegatives(result.report, prepared.answer, allowed, declarations);
       if (!allowed) scope.answerValidationBlocked = true;
       else scope.llmLatestContent = result.content ?? raw;
       return 'final';

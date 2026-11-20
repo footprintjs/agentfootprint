@@ -134,6 +134,13 @@ const occurrenceOf = (agent: Agent, id: string) =>
 const keysOf = (agent: Agent): string[] =>
   Object.keys(agent.getLastSnapshot()?.sharedState ?? {}).sort();
 
+const enteredOf = (agent: Agent) =>
+  (agent.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)?.enteredToolCalls;
+
+const entryCompleteOf = (agent: Agent) =>
+  (agent.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+    ?.enteredToolCallsComplete;
+
 /** The two-iteration script every dispatch scenario shares: a basis on call 1,
  *  a basis + the previous result's standing on call 2, then a text answer. */
 const FACT_ASSERTION = { subject: { kind: 'port', id: 'p1' }, predicate: 'status', value: 'down' };
@@ -292,6 +299,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing', 'basis']);
     expect(ledger[0]).toEqual({
       kind: 'basis',
+      turn: 1,
       toolCallId: 'c1',
       callOccurrenceKey: first,
       toolName: 'look',
@@ -301,6 +309,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     });
     expect(ledger[1]).toEqual({
       kind: 'standing',
+      turn: 1,
       toolCallId: 'c1',
       callOccurrenceKey: first,
       toolName: 'look',
@@ -414,23 +423,24 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
 // ─── 3. the unarmed twin ────────────────────────────────────────────────
 
 describe('.findings() — the unarmed agent is the agent it always was', () => {
-  it('armed-but-silent: request witness and serve constant only, no ledger or events', async () => {
+  it('armed-but-silent: keep request and entry evidence without model findings or events', async () => {
     const script: (string | Partial<LLMResponse>)[] = [
       { content: '', toolCalls: [{ id: 'c1', name: 'look', args: { q: 'a' } }] },
       'done',
     ];
+    // Isolate entry evidence written by the findings layer.
     const on = Agent.create({ provider: scripted([], ...script), model: 'm' })
       .tool(recordingTool('look', []) as never)
       .findings()
+      .answerLayer(false)
       .build();
     const off = Agent.create({ provider: scripted([], ...script), model: 'm' })
       .tool(recordingTool('look', []) as never)
+      .answerLayer(false)
       .build();
     const rowsOn = await runCollecting(on);
     const rowsOff = await runCollecting(off);
-    // The arm IS one visible thing: the always-on instruction piece, injected
-    // on every call (`context.injected`, source id `findings-ledger`). Every
-    // other event, and every committed key, is the unarmed agent's.
+    // The arm changes only the injected instruction in the event stream.
     const injected = 'agentfootprint.context.injected';
     expect(rowsOn.filter((r) => r.type !== injected).map((r) => r.type)).toEqual(
       rowsOff.filter((r) => r.type !== injected).map((r) => r.type),
@@ -442,18 +452,23 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
     expect(
       rowsOn.filter((r) => r.type === injected && r.payload.sourceId === 'findings-ledger'),
     ).toHaveLength(extraInjected);
-    // …plus the ONE run constant the arm seeds on every run (`findingsServe`,
-    // step 3 — `seed.ts · seedFrom`): the serve mode the rebuild reads. No
-    // ledger, because the model declared nothing.
+    // The tool entered, so there is one entry fact. The model declared no findings.
     expect(keysOf(on)).toEqual(
       [
         ...keysOf(off),
+        'enteredToolCalls',
+        'enteredToolCallsComplete',
         'findingsRequest',
         'findingsServe',
         'findingsLayout',
         'findingsContextBytes',
       ].sort(),
     );
+    const callOccurrenceKey = occurrenceOf(on, 'c1');
+    expect(callOccurrenceKey).toBeDefined();
+    expect(enteredOf(on)).toEqual([{ callOccurrenceKey, entered: true }]);
+    expect(entryCompleteOf(on)).toBe(true);
+    expect(enteredOf(off)).toBeUndefined();
     expect(keysOf(on)).not.toContain('findingsLedger');
     expect(on.findings()).toBeUndefined();
     expect(rowsOn.filter((r) => r.type.startsWith('agentfootprint.findings.'))).toEqual([]);
@@ -511,6 +526,7 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
     const callOccurrenceKey = occurrenceOf(agent, 'c1');
     expect(ledger[1]).toEqual({
       kind: 'standing',
+      turn: 1,
       toolCallId: 'c1',
       callOccurrenceKey,
       toolName: 'look',
@@ -559,6 +575,7 @@ describe(".findings() without an output schema — every decider peels the answe
   const PEELED = JSON.stringify({ down: 'p1' });
   const STANDING: StandingRow = {
     kind: 'standing',
+    turn: 1,
     toolCallId: 'c1',
     toolName: 'look',
     standing: 'ruled-out',
@@ -579,6 +596,7 @@ describe(".findings() without an output schema — every decider peels the answe
     string,
     (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
     { wrapUpAtMaxIterations?: false },
+    boolean?,
   ])[] = [
     ['the plain decider (WrapUp mounted)', (b) => b, {}],
     [
@@ -591,10 +609,11 @@ describe(".findings() without an output schema — every decider peels the answe
       (b) => b.messageMiddleware({ name: 'pass', onMessage: () => allow() }),
       {},
     ],
-    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}],
+    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}, true],
   ];
 
-  describe.each(SHAPES)('%s', (_label, arm, opts) => {
+  describe.each(SHAPES)('%s', (_label, arm, opts, evidenceGate) => {
+    const witnessKinds = evidenceGate ? ['grounded'] : [];
     const build = (answer: string): Agent =>
       arm(
         Agent.create({ provider: scripted([], CALL_ONE, answer), model: 'm', ...opts })
@@ -612,7 +631,7 @@ describe(".findings() without an output schema — every decider peels the answe
 
       expect(answer).toBe(PEELED);
       const ledger = ledgerOf(agent)!;
-      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
+      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing', ...witnessKinds]);
       const callOccurrenceKey = occurrenceOf(agent, 'c1');
       expect(ledger[1]).toEqual({ ...STANDING, callOccurrenceKey });
       expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toEqual({
@@ -639,10 +658,10 @@ describe(".findings() without an output schema — every decider peels the answe
       ).toEqual(['tool-calls', 'final']);
     });
 
-    it('a plain-text answer is untouched and files nothing', async () => {
+    it('a plain-text answer is untouched and files no declared standing', async () => {
       const agent = build('p1 is down');
       expect(await agent.run({ message: 'which port is down?' })).toBe('p1 is down');
-      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', ...witnessKinds]);
     });
 
     it('a prose answer that ends in a code block of notes: the block goes, its standings are filed (9.114.2)', async () => {
@@ -661,7 +680,7 @@ describe(".findings() without an output schema — every decider peels the answe
       const spaced = '{ "down": "p1" }';
       const agent = build(spaced);
       expect(await agent.run({ message: 'which port is down?' })).toBe(spaced);
-      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', ...witnessKinds]);
     });
   });
 
@@ -771,7 +790,10 @@ describe(".findings() without an output schema — every decider peels the answe
     );
     const answer = await agent.run({ message: 'which port is down?' });
 
-    expect(answer).toBe(JSON.stringify({ summary: 'p1 is down; the second look never ran' }));
+    expect(answer).toBe(
+      JSON.stringify({ summary: 'p1 is down; the second look never ran' }) +
+        '\n\n---\n\nNot sure — the run stopped before the model finished.',
+    );
     expect(
       rows
         .filter((r) => r.type === 'agentfootprint.agent.route_decided')
@@ -1290,33 +1312,36 @@ describe('.findings() — the same record under both chart shapes', () => {
 // ─── 9. the unarmed twin of a DECLARING model ────────────────────────────
 
 describe('.findings() — the unarmed twin of a declaring model', () => {
-  it('keys(on) is keys(off) plus findingsLedger; off passes the key through, decorates nothing, fires nothing', async () => {
+  it('records findings and entry on the armed twin and leaves the unarmed call untouched', async () => {
     const seenOn: Shot[] = [];
     const seenOff: Shot[] = [];
     const ranOn: Record<string, unknown>[] = [];
     const ranOff: Record<string, unknown>[] = [];
+    // Isolate entry evidence written by the findings layer.
     const on = Agent.create({
       provider: scripted(seenOn, CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
       .tool(recordingTool('look', ranOn) as never)
       .findings()
+      .answerLayer(false)
       .build();
     const off = Agent.create({
       provider: scripted(seenOff, CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
       .tool(recordingTool('look', ranOff) as never)
+      .answerLayer(false)
       .build();
     const rowsOn = await runCollecting(on);
     const rowsOff = await runCollecting(off);
 
-    // The agent-wrap-up.test.ts pattern: the committed key set differs by
-    // exactly the keys the feature owns — the ledger the model wrote, and the
-    // serve-mode run constant seed writes on every armed run (step 3).
+    // The armed twin keeps both native entry evidence and the model's findings.
     expect(keysOf(on)).toEqual(
       [
         ...keysOf(off),
+        'enteredToolCalls',
+        'enteredToolCallsComplete',
         'findingsBatchRecordedAt',
         'findingsLedger',
         'findingsRequest',
@@ -1325,6 +1350,14 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
         'findingsContextBytes',
       ].sort(),
     );
+    const entries = ['c1', 'c2'].map((id) => {
+      const callOccurrenceKey = occurrenceOf(on, id);
+      expect(callOccurrenceKey).toBeDefined();
+      return { callOccurrenceKey, entered: true };
+    });
+    expect(enteredOf(on)).toEqual(entries);
+    expect(entryCompleteOf(on)).toBe(true);
+    expect(enteredOf(off)).toBeUndefined();
     expect(keysOf(off)).not.toContain('findingsLedger');
     expect(off.findings()).toBeUndefined();
 
@@ -1603,6 +1636,7 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
         toolCallId: 'p1',
         callOccurrenceKey: occurrenceOf(agent, 'p1'),
         toolName: 'plain',
+        turn: 1,
         iteration: 1,
         basis: 'direct',
       },

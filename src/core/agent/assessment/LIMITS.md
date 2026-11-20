@@ -47,9 +47,16 @@
   is still read from the envelope in `history` — `fold-real-record.test.ts` pins
   the account's reduced fixture reading the same standing as the full record. A
   record that dropped the history too has nothing left to read.
-- **Evicted results.** Under `.window()`, a window strategy can remove this
-  turn's early results from `history`; the commit log still has them, but the
-  fold reads the final state, so an evicted undeclared `[]` fires nothing.
+- **Tool entry and settlement after eviction.** The turn keeps up to 1,024
+  entries in each occurrence-keyed list. The standing reports `check-unreachable`
+  when a list could not retain every fact or an argument observation cannot be
+  bound in a keyed record. An older saved keyed tool-end can prove entry.
+- **Evicted results.** The recorded settlement keeps the delivery, the call's
+  outcome and selected result declarations after `.window()` evicts the model's
+  copy. Checks that need the original text or app-provided row paths can say
+  less. A later completion clears a failure only when recorded arguments
+  establish that it is the same call retried. The failure stays when the
+  arguments are unavailable.
 - **A correction after an evicted call with the same ID.** When a call's result
   is evicted and a later proposal with the same turn, tool and ID gets a
   library correction or another pre-dispatch row, the remaining rows can look
@@ -104,6 +111,9 @@
   `turn_end.answerAssessment` — their fields are pinned and unchanged; read
   `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
   can carry it.
+- **Withheld results.** The standing emits one anonymous reason when this turn's record proves that a returned result was withheld, including after eviction and a same-request resume. Public standing gives no count, tool name or result facts. The raw `accountForAnswer` still reads native declarations for a denied result until card 9.
+- **Integrity findings without a resolved call.** Standing omits a finding when the record cannot resolve it to one call occurrence.
+- **Older recordings.** Without the settlement ledger, the assessment derives delivery and outcomes from retained history, so a warning can go unreported once its message has left the window.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.

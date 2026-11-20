@@ -1,0 +1,69 @@
+{
+  "projections": {
+    "agent-arguments-ask": "ad92c67eb326c6da1b51d5c813d1c60df370ba403e62c235e72cc124fbee5a74",
+    "agent-arguments-ask-resumed": "70a2dd6a149a27f49a83aca6a3282b9a68c4d1b2f548146a6eb860e5f54510aa",
+    "agent-arguments-assume": "0f5b6877407dc628b92414c5757cfa8c5bf5a15d0490e37ca1b325e824c829d8",
+    "agent-arguments-assume-limits": "0f5b6877407dc628b92414c5757cfa8c5bf5a15d0490e37ca1b325e824c829d8",
+    "agent-arguments-sources": "f660b5df51bd704a26b044cc397add1a7633148e121bf9a19b89a7b7f82d3a12",
+    "agent-arguments-sources-only": "6f760a54f40b84a356eca37653b06be2928c354a9e0086a0c27629323e175352",
+    "agent-dynamic-graph-hop": "c20434d60124a0d5e36489375d553ba4a46cdef9c951246dbac36ddf5746fd5a",
+    "agent-dynamic-static-tool": "6640d543d94b257152085b9104104d3851651e960569fcb173cc54de09fd1b2e",
+    "agent-findings": "59a9e3c744ad274c7632ff2e93d6140f245e923c93963077dea250f907639f36",
+    "agent-findings-contingent": "62616b8b363a613e2616261bbe1080ed65846a0b3ce345501414cd5a64e564db",
+    "agent-findings-judge": "e2ea504699d0a77ba35a6a8884d87f09061973da6a6b2ca1a9fe739002e37fd9",
+    "agent-findings-window": "8e564b067d90c6ff276629a44063fc98bb9705435cbef08fae4bf54a8b1cda0e",
+    "agent-from-active-skill": "d3f2a80ee8f8937481dbb5f7ddcf6be0bc14c4664ca6ee5a27787731ad7637e1",
+    "agent-grouped-graph-hop": "391f26fe5279b845cc7b888b7a35e2ffe1b48b93a8775cded7a26d732a02047b",
+    "agent-grouped-static-tool": "7cf2705b91eee9521c6d4c4246b2962f1a725aba63f709662886381c818374cd",
+    "agent-ontology": "5de81b65cb4e0f74d28ca619f570877ed8c0f5a8af1e25aeed2819d2a0dabde0",
+    "agent-parked-map": "a844645cd9cf3c7ada9f40e478182950ab2aa92408897c6dcb98d9bead698093",
+    "agent-provider-three-sources": "aa009161f7b6619c522498b060a939ed601fa0cd22ff3985ccb0f05dd082850c",
+    "agent-results-period": "7b53ecacceb21585f7b74dfe387ddce9412a9bb998a626178e72ae30b1078879",
+    "agent-scoped-provider": "2842a94a3fab151de2c89710a8553ec6bc18c93fc6431c38071da52b590e39fe",
+    "agent-script-artifact": "630cd5a888519f476121715b388132e0e4e85f2e21ad116e24cbae7ad669d24b",
+    "agent-shared-tool-reference": "7a1f7786e9841d318063685e2888919793d30889612fc144a1e37ad9a9c5a560",
+    "agent-stepped-skill": "df860e1f11ac44765924f70a1c4dedddff0c52878685ca2f8b62c1dd7c927b4a",
+    "agent-time-clock": "b499129a3c52858a1488bd3c2e36242169f6c647c02462a38176c930ce2426a4",
+    "agent-tool-choice": "fd5ee0321b349643e3150cc7f4e43d95a1387a43d0b4bff6fc7b935a761f3654",
+    "agent-tool-forced": "8230d78763d7d905a7451f73c872e60655bf5091191758101b4d801c199d6441",
+    "agent-wrap-up": "fdaabba186a4e7dd8c7fddf3a504f8faea261a4cd0e62cf3912c305f1adaa7f9"
+  },
+  "answers": {
+    "agent-arguments-ask-resumed": {
+      "before": "No errors.",
+      "after": "No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers."
+    },
+    "agent-arguments-assume": {
+      "before": "No errors.",
+      "after": "No errors.\n\n---\n\nNot sure — window = \"2h\" was assumed by search_logs's rule, not given by you; a tool did not say what time its result covers."
+    },
+    "agent-arguments-assume-limits": {
+      "before": "No errors.\n\n---\n\nAssumed (a tool's rule, not your words):\n- window = \"2h\" (search_logs)",
+      "after": "No errors.\n\n---\n\nNot sure — window = \"2h\" was assumed by search_logs's rule, not given by you; a tool did not say what time its result covers."
+    },
+    "agent-arguments-sources": {
+      "before": "No errors.",
+      "after": "No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers."
+    },
+    "agent-arguments-sources-only": {
+      "before": "No errors.",
+      "after": "No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers."
+    },
+    "agent-results-period": {
+      "before": "Two failures on host-103; none found for host-999.",
+      "after": "Two failures on host-103; none found for host-999.\n\n---\n\nNot sure — a tool said nothing matched; a tool's data does not reach the time the question asked about."
+    },
+    "agent-stepped-skill": {
+      "before": "done",
+      "after": "done\n\n---\n\nNot sure — the answer came before the skill's declared steps finished."
+    },
+    "agent-time-clock": {
+      "before": "Two failures on host-103; none found for host-999.\n\n---\n\nCoverage of this answer — declared by the tools that produced it, not by the model:\n\nChecked:\n- every job in the 02:00 export\n\nPeriod:\n- backup_runs queried 2026-09-24 17:00 – 2026-09-25 17:00 America/Los_Angeles (UTC-07:00); the store holds 2026-08-26 19:00 – 2026-09-25 19:00 America/Los_Angeles (UTC-07:00)\n- backup_runs queried 2026-09-26 02:00–03:00 America/Los_Angeles (UTC-07:00); the store holds 2026-08-26 19:00 – 2026-09-25 19:00 America/Los_Angeles (UTC-07:00); read at 2026-09-26 03:00:03 America/Los_Angeles (UTC-07:00)",
+      "after": "Two failures on host-103; none found for host-999.\n\n---\n\nNot sure — a tool said nothing matched.\n\nCoverage of this answer — declared by the tools that produced it, not by the model:\n\nChecked:\n- every job in the 02:00 export\n\nPeriod:\n- backup_runs queried 2026-09-24 17:00 – 2026-09-25 17:00 America/Los_Angeles (UTC-07:00); the store holds 2026-08-26 19:00 – 2026-09-25 19:00 America/Los_Angeles (UTC-07:00)\n- backup_runs queried 2026-09-26 02:00–03:00 America/Los_Angeles (UTC-07:00); the store holds 2026-08-26 19:00 – 2026-09-25 19:00 America/Los_Angeles (UTC-07:00); read at 2026-09-26 03:00:03 America/Los_Angeles (UTC-07:00)"
+    },
+    "agent-wrap-up": {
+      "before": "",
+      "after": "Not sure — the run stopped before the model finished."
+    }
+  }
+}

@@ -6,6 +6,9 @@
  * these additions in `reference/call-occurrence/additions.json`; each older capture
  * remains the exact reference for every other field. Only the four random batch
  * words are normalized, by order of appearance, keeping co-reference and slot.
+ * The standing-evidence overlay adds 30 exact entry-ledger writes and their ordered
+ * trace rows across 11 named cases, plus one returned-tool marker. Every served
+ * view and all prior captures are unchanged.
  *
  * The served history writer adds one value-free row and a native set/append
  * trace entry at each proved call. Its own sidecar pins the exact ranges, verb
@@ -20,6 +23,14 @@
  * slots. No actual record is sorted or filtered and the normalizer is unchanged.
  * The following notes describe earlier fixture migrations, not current proof
  * of whole-record equality with pre14 releases.
+ *
+ * DEFAULT ANSWER STANDING: each historical reference still holds with the
+ * answer layer explicitly off at construction. Scenarios with an explicit
+ * builder arm keep that arm. The same scenarios with unmodified construction
+ * are checked against the full projection's SHA-256 when it changed, and
+ * directly against the old reference when it did not. The manifest also
+ * records the delivered answers that changed, including the resumed answer
+ * whose text is absent from the parent projection.
  *
  * V15 ASSEMBLED COHORT: `agent-stepped-skill`, `agent-answer-layer` and
  * `agent-scoped-provider` now read reference/v15-assembled-cohort/. Those
@@ -625,6 +636,7 @@ import {
   assertNativeReadWindowMetadata,
   type NativeWindowAddition,
 } from './native-cohort-metadata.js';
+import { standingEvidenceCases, withStandingEvidence } from './standing-evidence-reference.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -655,6 +667,15 @@ import type {
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
 type Snapshot = NonNullable<ReturnType<Agent['getSnapshot']>>;
+type CreateAgent = typeof Agent.create;
+type Capture = { readonly snapshot: Snapshot; readonly answer?: string };
+
+const createWithStandingOff: CreateAgent = (options) =>
+  Agent.create({ ...options, answerLayer: false });
+
+function capture(snapshot: Snapshot, result?: unknown): Capture {
+  return { snapshot, ...(typeof result === 'string' && { answer: result }) };
+}
 
 function scripted(script: readonly Reply[]) {
   let i = 0;
@@ -790,8 +811,8 @@ const SOURCED_ONLY_THEN_DONE = [
  * quotes — beside the findings ledger (`.findings({ argumentSources: true })`),
  * or without it (`.inputsLayer({ argumentSources: true })`, `ledger: false`).
  */
-async function sourcesRun(ledger = true): Promise<Snapshot> {
-  const builder = Agent.create({
+async function sourcesRun(createAgent: CreateAgent, ledger = true): Promise<Capture> {
+  const builder = createAgent({
     provider: scripted(ledger ? SOURCED_THEN_DONE : SOURCED_ONLY_THEN_DONE) as never,
     model: 'mock',
     maxIterations: 6,
@@ -804,8 +825,8 @@ async function sourcesRun(ledger = true): Promise<Snapshot> {
       ? builder.findings({ argumentSources: true })
       : builder.inputsLayer({ argumentSources: true })
   ).build();
-  await agent.run({ message: 'any errors on checkout in the past day?' });
-  return agent.getSnapshot()!;
+  const result = await agent.run({ message: 'any errors on checkout in the past day?' });
+  return capture(agent.getSnapshot()!, result);
 }
 
 /**
@@ -852,8 +873,8 @@ const PERIOD_THEN_DONE = [
 ];
 
 /** The paused leg of an ask run, or — `resumed` — the leg the answer resumes (a fresh executor). */
-async function askRun(resumed: boolean): Promise<Snapshot> {
-  const agent = Agent.create({
+async function askRun(createAgent: CreateAgent, resumed: boolean): Promise<Capture> {
+  const agent = createAgent({
     provider: scripted(RULED_THEN_DONE) as never,
     model: 'mock',
     maxIterations: 6,
@@ -863,13 +884,13 @@ async function askRun(resumed: boolean): Promise<Snapshot> {
     .tool(askingSearchLogs())
     .build();
   const paused = await agent.run({ message: 'go' });
-  if (!resumed) return agent.getSnapshot()!;
+  if (!resumed) return capture(agent.getSnapshot()!, paused);
   if (!isInputPause(paused)) throw new Error('askRun: expected the library’s ask');
-  await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), {
+  const result = await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), {
     requestId: paused.awaitingInput.requestId,
     values: { f1: '24h' },
   });
-  return agent.getSnapshot()!;
+  return capture(agent.getSnapshot()!, result);
 }
 
 const graphOf = () =>
@@ -896,13 +917,14 @@ const graphOf = () =>
 type Build = (a: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>;
 
 async function agentRun(
+  createAgent: CreateAgent,
   reactMode: 'dynamic' | 'dynamic-grouped',
   script: readonly Reply[],
   build: Build,
   options: { maxIterations?: number; input?: Record<string, unknown> } = {},
-): Promise<Snapshot> {
+): Promise<Capture> {
   const agent = build(
-    Agent.create({
+    createAgent({
       provider: scripted(script) as never,
       model: 'mock',
       maxIterations: options.maxIterations ?? 6,
@@ -910,14 +932,13 @@ async function agentRun(
     }),
   ).build();
   const result: AgentRunResult = await agent.run({ message: 'go', ...options.input });
-  void result;
-  return agent.getSnapshot()!;
+  return capture(agent.getSnapshot()!, result);
 }
 
-async function chartRun(chart: FlowChart, message: string): Promise<Snapshot> {
+async function chartRun(chart: FlowChart, message: string): Promise<Capture> {
   const executor = new FlowChartExecutor(chart);
   await executor.run({ input: { message } });
-  return executor.getSnapshot() as unknown as Snapshot;
+  return capture(executor.getSnapshot() as unknown as Snapshot);
 }
 
 const WEATHER: LLMToolSchema = {
@@ -928,21 +949,25 @@ const WEATHER: LLMToolSchema = {
 
 // ─── the scenarios — every collision-free shape the conformance suite drives ──
 
-const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
-  'agent-dynamic-static-tool': () =>
-    agentRun('dynamic', TOOL_THEN_DONE, (a) => a.system('you are a bot').tool(tool('alpha_tool'))),
-  'agent-grouped-static-tool': () =>
-    agentRun('dynamic-grouped', TOOL_THEN_DONE, (a) =>
+const SCENARIOS: Record<string, (createAgent: CreateAgent) => Promise<Capture>> = {
+  'agent-dynamic-static-tool': (createAgent) =>
+    agentRun(createAgent, 'dynamic', TOOL_THEN_DONE, (a) =>
       a.system('you are a bot').tool(tool('alpha_tool')),
     ),
-  'agent-dynamic-graph-hop': () =>
-    agentRun('dynamic', TOOL_THEN_DONE, (a) => a.system('you are a bot').skillGraph(graphOf())),
-  'agent-grouped-graph-hop': () =>
-    agentRun('dynamic-grouped', TOOL_THEN_DONE, (a) =>
+  'agent-grouped-static-tool': (createAgent) =>
+    agentRun(createAgent, 'dynamic-grouped', TOOL_THEN_DONE, (a) =>
+      a.system('you are a bot').tool(tool('alpha_tool')),
+    ),
+  'agent-dynamic-graph-hop': (createAgent) =>
+    agentRun(createAgent, 'dynamic', TOOL_THEN_DONE, (a) =>
       a.system('you are a bot').skillGraph(graphOf()),
     ),
-  'agent-stepped-skill': () =>
-    agentRun('dynamic', [call('c1', 'lookup'), answer('done'), answer('done')], (a) =>
+  'agent-grouped-graph-hop': (createAgent) =>
+    agentRun(createAgent, 'dynamic-grouped', TOOL_THEN_DONE, (a) =>
+      a.system('you are a bot').skillGraph(graphOf()),
+    ),
+  'agent-stepped-skill': (createAgent) =>
+    agentRun(createAgent, 'dynamic', [call('c1', 'lookup'), answer('done'), answer('done')], (a) =>
       a.system('bot').skillGraph(
         skillGraph({
           skills: [
@@ -963,23 +988,24 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
         }),
       ),
     ),
-  'agent-parked-map': () =>
-    agentRun('dynamic', TOOL_THEN_DONE, (a) =>
+  'agent-parked-map': (createAgent) =>
+    agentRun(createAgent, 'dynamic', TOOL_THEN_DONE, (a) =>
       a.system('bot').skillGraph(graphOf()).maps({ renewalGrace: 1 }),
     ),
-  'agent-wrap-up': () =>
+  'agent-wrap-up': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [call('c1', 'alpha_tool'), call('c2', 'alpha_tool'), call('c3', 'alpha_tool')],
       (a) => a.system('bot').tool(tool('alpha_tool')),
       { maxIterations: 2 },
     ),
-  'agent-tool-forced': async () => {
+  'agent-tool-forced': async (createAgent) => {
     const parse = (value: unknown): { ok: true; value: { ok: boolean } } => ({
       ok: true,
       value: value as { ok: boolean },
     });
-    const agent = Agent.create({
+    const agent = createAgent({
       provider: scripted([
         { content: '', toolCalls: [{ id: '1', name: 'respond_with_schema', args: { ok: true } }] },
       ]) as never,
@@ -991,12 +1017,13 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
         jsonSchema: { type: 'object', properties: { ok: { type: 'boolean' } } },
       })
       .build();
-    await agent.run({ message: 'go' });
-    return agent.getSnapshot()!;
+    const result = await agent.run({ message: 'go' });
+    return capture(agent.getSnapshot()!, result);
   },
   // A provider beside a static tool and a skill — three sources, no shared name.
-  'agent-provider-three-sources': () =>
+  'agent-provider-three-sources': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'probe'),
@@ -1012,8 +1039,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
           .toolProvider(staticTools([tool('probe')])),
     ),
   // The skill-scoped provider: out of the offer, out of dispatch, then in.
-  'agent-scoped-provider': () =>
+  'agent-scoped-provider': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'refund_tool'),
@@ -1029,9 +1057,10 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
     ),
   // Two skills sharing ONE Tool reference (documented-legal): one implementation,
   // two declarations — nothing is contested, nothing may be reported.
-  'agent-shared-tool-reference': async () => {
+  'agent-shared-tool-reference': async (createAgent) => {
     const shared = tool('shared_tool');
     return agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'read_skill', { id: 'desk-a' }),
@@ -1062,8 +1091,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
     );
   },
   // `.toolsFromActiveSkill()` — a scoped tool rides only after activation.
-  'agent-from-active-skill': () =>
+  'agent-from-active-skill': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [call('c1', 'read_skill', { id: 'desk' }), call('c2', 'desk_tool'), answer('done')],
       (a) =>
@@ -1085,8 +1115,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // The parser refuses every key it does not know, so the run passes only
   // because the reserved key was peeled before the judge (the peel is on the
   // record: `llmLatestContent` is the peeled JSON, `history` is the emission).
-  'agent-findings': () =>
+  'agent-findings': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'alpha_tool', {
@@ -1145,8 +1176,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // piece and the wire are the bytes `agent-findings` records (policy A:
   // nothing is served from a judgment). Generated ALONE with the 17 copied
   // aside and `cmp`-equal after.
-  'agent-findings-judge': () =>
+  'agent-findings-judge': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'alpha_tool', {
@@ -1238,8 +1270,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // `'ledger-fact'` past the keep window; the noise and ruled-out turns are
   // collapsed on the wire and then leave oldest-first, each with its
   // standing on the record (`droppedStandings`).
-  'agent-findings-window': () =>
+  'agent-findings-window': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'alpha_tool', { q: 'nodes', _findings: { basis: 'exploratory' } }),
@@ -1309,7 +1342,7 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // (the answer moment: one row `declaredOn: 'answer'`). The instruction
   // carries `FINDINGS_CONTINGENT_LINE` here and on no `.findings()`-only
   // reference. Generated ALONE with the 20 copied aside and `cmp`-equal after.
-  'agent-findings-contingent': () => {
+  'agent-findings-contingent': (createAgent) => {
     const RESULTS: Record<string, string> = {
       p1: 'fc1/7 state=down sw-01',
       'fc1/7': 'fc2/9 state=up sw-01',
@@ -1322,6 +1355,7 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
         RESULTS[String(args.q)] ?? `nothing for ${String(args.q)}`,
     } as never);
     return agentRun(
+      createAgent,
       'dynamic',
       [
         call('c1', 'probe', { q: 'p1', _findings: { basis: 'exploratory', expect: 'low' } }),
@@ -1372,8 +1406,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // narrowed `dynamicToolSchemas` on the calls that narrowed, and the
   // sizes that follow. Generated ALONE with the 18 copied aside and
   // `cmp`-equal after.
-  'agent-tool-choice': () =>
+  'agent-tool-choice': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [call('c1', 'charge'), call('c2', 'lookup'), call('c3', 'ship'), answer('done')],
       (a) =>
@@ -1394,48 +1429,52 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
             serve: { top: 2 },
           }),
     ),
-  'agent-ontology': () =>
-    agentRun('dynamic', [call('c1', 'lookup_port', { q: 'p1' }), answer('p1 is down')], (a) =>
-      a
-        .system('bot')
-        .tool(tool('lookup_port'))
-        .ontology(
-          defineOntology({
-            id: 'fleet',
-            version: '1',
-            sources: {
-              inventory: { meaning: 'the switch inventory export', configured: true },
-              syslog: { meaning: 'the syslog archive' },
-            },
-            nodes: {
-              port: {
-                meaning: 'a physical switch port',
-                aliases: ['interface'],
-                sources: [{ source: 'inventory', via: ['lookup_port'], coverage: 'all ports' }],
+  'agent-ontology': (createAgent) =>
+    agentRun(
+      createAgent,
+      'dynamic',
+      [call('c1', 'lookup_port', { q: 'p1' }), answer('p1 is down')],
+      (a) =>
+        a
+          .system('bot')
+          .tool(tool('lookup_port'))
+          .ontology(
+            defineOntology({
+              id: 'fleet',
+              version: '1',
+              sources: {
+                inventory: { meaning: 'the switch inventory export', configured: true },
+                syslog: { meaning: 'the syslog archive' },
               },
-              port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
-              outage_ticket: {
-                meaning: 'an open incident about a port',
-                sources: [{ source: 'syslog' }],
+              nodes: {
+                port: {
+                  meaning: 'a physical switch port',
+                  aliases: ['interface'],
+                  sources: [{ source: 'inventory', via: ['lookup_port'], coverage: 'all ports' }],
+                },
+                port_error_rate: { meaning: 'CRC errors per minute on a port', unit: 'errors/min' },
+                outage_ticket: {
+                  meaning: 'an open incident about a port',
+                  sources: [{ source: 'syslog' }],
+                },
               },
-            },
-            edges: [
-              {
-                from: 'port_error_rate',
-                to: 'port',
-                relation: 'measured-on',
-                meaning: 'the port it counts',
-              },
-            ],
-          }),
-        ),
+              edges: [
+                {
+                  from: 'port_error_rate',
+                  to: 'port',
+                  relation: 'measured-on',
+                  meaning: 'the port it counts',
+                },
+              ],
+            }),
+          ),
     ),
   llmcall: async () => {
     const one = LLMCall.create({ provider: scripted([answer('done')]) as never, model: 'mock' })
       .system('you are a probe')
       .build();
     await one.run({ message: 'the one turn that went out' });
-    return one.getSnapshot()! as unknown as Snapshot;
+    return capture(one.getSnapshot()! as unknown as Snapshot);
   },
   'message-api-chart': () =>
     chartRun(
@@ -1462,35 +1501,37 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // The inputs layer (honesty layer 2), armed by a REGISTERED tool that
   // declares `askOrAssume` — the model leaves the period out and the library
   // fills the declared default. See the header for what the two hold.
-  'agent-arguments-assume': () =>
-    agentRun('dynamic', RULED_THEN_DONE, (a) => a.system('bot').tool(ruledSearchLogs())),
+  'agent-arguments-assume': (createAgent) =>
+    agentRun(createAgent, 'dynamic', RULED_THEN_DONE, (a) =>
+      a.system('bot').tool(ruledSearchLogs()),
+    ),
   // …and beside `.limitsTravelWithTheAnswer()`, which none of the 21 earlier
   // references arms: the answer carries the "Assumed" block.
-  'agent-arguments-assume-limits': () =>
-    agentRun('dynamic', RULED_THEN_DONE, (a) =>
+  'agent-arguments-assume-limits': (createAgent) =>
+    agentRun(createAgent, 'dynamic', RULED_THEN_DONE, (a) =>
       a.system('bot').tool(ruledSearchLogs()).limitsTravelWithTheAnswer(),
     ),
   // Honesty step 4 — the batch ask: the model leaves an `ask`-ruled period
   // out, the library asks the person before anything runs (the paused leg),
   // and the answer resumes the batch (the resumed leg). See the header.
-  'agent-arguments-ask': () => askRun(false),
-  'agent-arguments-ask-resumed': () => askRun(true),
+  'agent-arguments-ask': (createAgent) => askRun(createAgent, false),
+  'agent-arguments-ask-resumed': (createAgent) => askRun(createAgent, true),
   // Honesty step 5 — declared sources: the model says the period came from the
   // person's words, the declared phrase checks the quote out, the call runs. See
   // the header.
-  'agent-arguments-sources': () => sourcesRun(),
+  'agent-arguments-sources': (createAgent) => sourcesRun(createAgent),
   // …and declared sources WITHOUT the findings ledger (step 5, round 1 of the
   // bench fixes): `_findings` with `from` alone on the ruled tool.
-  'agent-arguments-sources-only': () => sourcesRun(false),
+  'agent-arguments-sources-only': (createAgent) => sourcesRun(createAgent, false),
   // Honesty step 7b — the results layer, armed by `.resultsLayer()` over a tool
   // whose results declare their period (no ToolPeriod). See the header.
-  'agent-results-period': () =>
-    agentRun('dynamic', PERIOD_THEN_DONE, (a) =>
+  'agent-results-period': (createAgent) =>
+    agentRun(createAgent, 'dynamic', PERIOD_THEN_DONE, (a) =>
       a.system('bot').tool(periodDeclaringBackupRuns()).resultsLayer(),
     ),
   // Honesty step 6 (the answer layer): the stepped-skill scenario's twin, armed.
-  'agent-answer-layer': () =>
-    agentRun('dynamic', [call('c1', 'lookup'), answer('done'), answer('done')], (a) =>
+  'agent-answer-layer': (createAgent) =>
+    agentRun(createAgent, 'dynamic', [call('c1', 'lookup'), answer('done'), answer('done')], (a) =>
       a
         .system('bot')
         .skillGraph(
@@ -1516,8 +1557,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
     ),
   // Code in an answer: a code-running call, its program shown back byte for
   // byte under `code: 'match'`, and the attachment armed. See the header.
-  'agent-script-artifact': () =>
+  'agent-script-artifact': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       [
         // `compute`, not `run_code`: the normaliser reads `run_…` as a run id.
@@ -1548,8 +1590,9 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
   // The time layer's clock (step T3): the results-layer scenario's tool under
   // `.time()` and `.limitsTravelWithTheAnswer()`, with the run's `now` passed
   // (a default `now` is a clock nothing can normalise by key). See the header.
-  'agent-time-clock': () =>
+  'agent-time-clock': (createAgent) =>
     agentRun(
+      createAgent,
       'dynamic',
       PERIOD_THEN_DONE,
       (a) =>
@@ -1613,7 +1656,28 @@ function projection(snapshot: Snapshot): unknown {
   );
 }
 
+/** Check the exact served-row envelope before comparing with main's older digest. */
+function withoutServedRows(record: unknown): unknown {
+  const additions = servedRowAdditions(record);
+  const previous = structuredClone(record) as {
+    commitLog: { overwrite: Record<string, unknown>; trace: unknown[] }[];
+  };
+  for (const [commit, trace] of additions) {
+    const bundle = previous.commitLog[commit]!;
+    delete bundle.overwrite.sourceLinkServedRows;
+    bundle.trace.splice(trace, 1);
+  }
+  expect(withServedRowAdditions(structuredClone(previous), additions)).toEqual(record);
+  return previous;
+}
+
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
+const DEFAULT_STANDING = JSON.parse(
+  readFileSync(new URL('./default-answer-standing.json', import.meta.url), 'utf8'),
+) as {
+  readonly projections: Readonly<Record<string, string | undefined>>;
+  readonly answers: Readonly<Record<string, { before: string; after: string } | undefined>>;
+};
 const OCCURRENCE_REFERENCE_DIR = new URL('call-occurrence/', REFERENCE_DIR);
 const OCCURRENCE_REFERENCE = new URL('additions.json', OCCURRENCE_REFERENCE_DIR);
 const SERVED_ROW_REFERENCE = new URL('served-row-writer/served-row-additions.json', REFERENCE_DIR);
@@ -1706,7 +1770,8 @@ const UPDATE_CASES = new Set(
 describe('byte-identity — exact whole-record contract for native component ownership', () => {
   for (const [name, drive] of Object.entries(SCENARIOS)) {
     it(name, async () => {
-      const snapshot = await drive();
+      const off = await drive(createWithStandingOff);
+      const { snapshot } = off;
       const additions = V15_NATIVE_CAPTURES.get(name);
       if (additions) assertNativeReadWindowMetadata(snapshot, additions);
       const observed = projection(snapshot);
@@ -1726,7 +1791,10 @@ describe('byte-identity — exact whole-record contract for native component own
         );
       if (UPDATE_SERVED_ROWS) {
         const additions = servedRowAdditions(observed);
-        const expected = withOccurrenceAdditions(reference, prior[name] ?? []);
+        const expected = withStandingEvidence(
+          withOccurrenceAdditions(reference, prior[name] ?? []),
+          name,
+        );
         expect(observed).toEqual(withServedRowAdditions(expected, additions));
         if (additions.length === 0) delete servedRows[name];
         else servedRows[name] = additions;
@@ -1735,8 +1803,16 @@ describe('byte-identity — exact whole-record contract for native component own
       }
       const servedAdditions = servedRows[name] ?? [];
       if (UPDATE) {
-        const additions = occurrenceAdditions(observed);
-        const expected = withOccurrenceAdditions(reference, additions);
+        // Entry and settlement addresses are owned by the standing-evidence overlay.
+        const additions = occurrenceAdditions(observed).filter(
+          ([path]) =>
+            !(
+              path[0] === 'commitLog' &&
+              path[2] === 'overwrite' &&
+              (path[3] === 'enteredToolCalls' || path[3] === 'settledToolCalls')
+            ),
+        );
+        const expected = withStandingEvidence(withOccurrenceAdditions(reference, additions), name);
         expect(observed).toEqual(withServedRowAdditions(expected, servedAdditions));
         if (additions.length === 0) return;
         const digest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -1748,18 +1824,56 @@ describe('byte-identity — exact whole-record contract for native component own
         );
         return;
       }
-      const expected = withOccurrenceAdditions(reference, prior[name] ?? []);
+      const expected = withStandingEvidence(
+        withOccurrenceAdditions(reference, prior[name] ?? []),
+        name,
+      );
       expect(observed).toEqual(withServedRowAdditions(expected, servedAdditions));
+
+      const current = await drive(Agent.create);
+      if (additions) assertNativeReadWindowMetadata(current.snapshot, additions);
+      const currentProjection = projection(current.snapshot);
+      const fingerprint = DEFAULT_STANDING.projections[name];
+      if (fingerprint === undefined) {
+        expect(currentProjection).toEqual(expected);
+      } else {
+        const currentText = `${JSON.stringify(withoutServedRows(currentProjection), null, 2)}\n`;
+        expect(createHash('sha256').update(currentText).digest('hex')).toBe(fingerprint);
+      }
+
+      const answer = DEFAULT_STANDING.answers[name];
+      if (answer === undefined) expect(current.answer).toBe(off.answer);
+      else expect({ before: off.answer, after: current.answer }).toEqual(answer);
     });
   }
+
+  it('qualifies exactly the named standing-evidence cases', () => {
+    expect(standingEvidenceCases).toEqual([
+      'agent-answer-layer',
+      'agent-arguments-ask',
+      'agent-arguments-ask-resumed',
+      'agent-arguments-assume',
+      'agent-arguments-assume-limits',
+      'agent-arguments-sources',
+      'agent-arguments-sources-only',
+      'agent-findings',
+      'agent-findings-contingent',
+      'agent-findings-judge',
+      'agent-findings-window',
+    ]);
+  });
 
   it('the normalisation is stable: two runs of one configuration project identically', async () => {
     // The guard on the guard. If a run-minted value slipped past the
     // normaliser, every reference would fail on the next machine and the
     // failure would look like a behaviour change. Two live runs of the same
     // shape must agree before any reference is trusted.
-    const a = projection(await SCENARIOS['agent-provider-three-sources']!());
-    const b = projection(await SCENARIOS['agent-provider-three-sources']!());
+    const a = projection(
+      (await SCENARIOS['agent-provider-three-sources']!(createWithStandingOff)).snapshot,
+    );
+    const b = projection(
+      (await SCENARIOS['agent-provider-three-sources']!(createWithStandingOff)).snapshot,
+    );
     expect(a).toEqual(b);
   });
 });

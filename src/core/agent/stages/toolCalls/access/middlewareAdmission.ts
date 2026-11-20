@@ -6,6 +6,7 @@ import type { buildToolArtifactsOperations } from '../execution/artifactsOperati
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { runToolChain } from '../../../../../tools/runChain.js';
 import { pauseGatePolicy } from './resumePolicyRecord.js';
@@ -171,7 +172,7 @@ export async function admitMiddlewareCall(
     // pauseHere / check-in path does the same). The TRANSFORMED args
     // ride the checkpoint — the bound copy: a person approves what the
     // chain produced, not what the model originally proposed.
-    scope.history = frame.newHistory;
+    commitSettledToolHistory(scope, frame.newHistory);
     scope.pausedToolCallId = frame.tc.id;
     scope.pausedToolName = frame.tc.name;
     scope.pausedToolStartMs = frame.startMs;

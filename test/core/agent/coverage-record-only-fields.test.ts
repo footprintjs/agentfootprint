@@ -124,7 +124,13 @@ interface Harness {
   readonly vault: { granted: boolean };
 }
 
-function build(path: Path, shape: Shape, declare: boolean, withLink: boolean): Harness {
+function build(
+  path: Path,
+  shape: Shape,
+  declare: boolean,
+  withLink: boolean,
+  answerLayer?: false,
+): Harness {
   const requests: LLMRequest[] = [];
   const events: { type: string; payload: Record<string, unknown> }[] = [];
   const linkSaw: unknown[] = [];
@@ -162,6 +168,7 @@ function build(path: Path, shape: Shape, declare: boolean, withLink: boolean): H
     },
   });
   let builder = Agent.create({
+    answerLayer,
     provider,
     model: 'mock',
     ...(path === 'consent' && { credentials }),
@@ -245,7 +252,8 @@ const UPDATE = process.env.AF_RECORD_ONLY_REFERENCE === 'update';
 describe('record-only fields — the pinned record when a run declares neither field', () => {
   const cases = PATHS.flatMap((path) => SHAPES.map((shape) => [path, shape] as const));
   it.each(cases)('%s × %s', async (path, shape) => {
-    const h = build(path, shape, false, false);
+    // The historical fixture pins the record before answer standing defaulted on.
+    const h = build(path, shape, false, false, false);
     expect(await drive(h, path, shape, false)).toBe('done');
     const record = normalizeCallOccurrences(recordOf(h));
     const key = `${path}/${shape}`;
@@ -285,8 +293,10 @@ describe('record-only fields — a declaring tool changes the record, never the 
   it.each(cases)('%s × %s: the model’s requests are byte-identical', async (path, shape) => {
     const plain = build(path, shape, false, true);
     const declaring = build(path, shape, true, true);
-    expect(await drive(plain, path, shape, false)).toBe('done');
-    expect(await drive(declaring, path, shape, true)).toBe('done');
+    const detail = shape === 'ledger' ? '' : '; a tool said nothing matched';
+    const expected = `done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover${detail}.`;
+    expect(await drive(plain, path, shape, false)).toBe(expected);
+    expect(await drive(declaring, path, shape, true)).toBe(expected);
     const requests = plain.requests.map(text);
     expect(requests.join('')).not.toContain('"callOccurrenceKey"');
     expect(declaring.requests.map(text)).toEqual(requests);
@@ -395,6 +405,8 @@ describe('record-only fields — every serving path goes through the one strip',
     // `afterMoment`) and be driven by this file.
     const PINNED = [
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
+      // Reads the delivered replacement for its period fact, without serving bytes.
+      'core/agent/recordedCalls/rewrittenResult.ts',
       // Bounded inspection of the final governed/placed/capped surface for
       // canonical absence only; this reader serves no envelope or record-only lists.
       'core/agent/resultRowsets/read.ts',

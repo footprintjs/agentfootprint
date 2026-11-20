@@ -495,7 +495,9 @@ describe("functional: a wrap-up answer from this turn's own result", () => {
       rows = e.payload.rows as CheckReport[];
     });
     const out = await agent.run('what arrays are there?');
-    expect(String(out)).toBe(TURN_1_ANSWER);
+    expect(String(out)).toBe(
+      `${TURN_1_ANSWER}\n\n---\n\nNot sure — the run stopped before the model finished.`,
+    );
     const history = (agent.getLastSnapshot()?.sharedState as { history: LLMMessage[] }).history;
     expect(history.some((m) => m.role === 'user' && m.content === WRAP_UP_INSTRUCTION)).toBe(true);
     expect(mine(findings)).toEqual([]);

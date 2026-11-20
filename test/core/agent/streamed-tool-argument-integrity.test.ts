@@ -148,7 +148,7 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
           const events = observe(agent);
 
           await expect(agent.run({ message: 'Read the saved item.' })).resolves.toBe(
-            'Recovered from the invalid call.',
+            'Recovered from the invalid call.\n\n---\n\nNot sure — a call was refused.',
           );
 
           expect(execute.mock.calls.map(([args]) => args)).toEqual([{}, {}]);
@@ -330,7 +330,7 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
         const events = observe(agent);
 
         await expect(agent.run({ message: 'Read a saved item.' })).resolves.toBe(
-          'Please send a complete tool call.',
+          'Please send a complete tool call.\n\n---\n\nNot sure — a call was refused.',
         );
         expect(execute).not.toHaveBeenCalled();
         expect(before).not.toHaveBeenCalled();
@@ -414,7 +414,9 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
       const fresh = build(second.provider);
       const resumedEvents = observe(fresh);
 
-      await expect(fresh.resume(stored, 'Continue')).resolves.toBe('Recovered after confirmation.');
+      await expect(fresh.resume(stored, 'Continue')).resolves.toBe(
+        'Recovered after confirmation.\n\n---\n\nNot sure — a call was refused.',
+      );
       expectFailureHistory(second.requests[0]?.messages ?? [], refusal);
       expect(
         second.requests[0]?.messages.find((message) => message.toolCallId === 'paused-sibling'),
@@ -477,7 +479,9 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
       const fresh = build(next.provider);
       const resumedEvents = observe(fresh);
 
-      await expect(fresh.resumeOnError(stored)).resolves.toBe('Recovered after the outage.');
+      await expect(fresh.resumeOnError(stored)).resolves.toBe(
+        'Recovered after the outage.\n\n---\n\nNot sure — a call was refused.',
+      );
       expectFailureHistory(next.requests[0]?.messages ?? [], refusal);
       expect(execute.mock.calls.map(([args]) => args)).toEqual([{}]);
       expect(next.requests).toHaveLength(2);
@@ -520,7 +524,7 @@ describe.each(REACT_MODES)('streamed argument integrity — %s', (reactMode) => 
       const recorder = recordRun(agent);
       const events = observe(agent);
       await expect(agent.run({ message: `Read ${canary}.` })).resolves.toBe(
-        'No saved item was read.',
+        'No saved item was read.\n\n---\n\nNot sure — a call was refused.',
       );
 
       expect(execute).not.toHaveBeenCalled();

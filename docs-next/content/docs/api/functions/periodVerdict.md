@@ -6,7 +6,7 @@ title: periodVerdict
 
 > **periodVerdict**(`period`): `"unknown"` \| `"covered"` \| `"partly-held"` \| `"not-held"`
 
-Defined in: [src/semantics/coverage/period.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/period.ts#L430)
+Defined in: [src/semantics/coverage/period.ts:420](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/period.ts#L420)
 
 How far a declared period's READ covered what it asked for — ONE pure rule
 over the instants the tool declared; bounds are inclusive:

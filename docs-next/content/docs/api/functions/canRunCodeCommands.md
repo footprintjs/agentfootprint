@@ -6,7 +6,7 @@ title: canRunCodeCommands
 
 > **canRunCodeCommands**(`session`): `session is CodeSession & Required<Pick<CodeSession, "runCommand">>`
 
-Defined in: [src/provider-contract/types.ts:1259](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1259)
+Defined in: [src/provider-contract/types.ts:1231](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1231)
 
 Can this session run shell commands? Absent unless the runner was built
  with `commands: true`. Read the member, never the adapter's name.
