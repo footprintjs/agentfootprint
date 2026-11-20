@@ -112,7 +112,7 @@ export function commitAcceptedResponse(
   response: Pick<LLMResponse, 'content' | 'toolCalls'>,
   serving: ReturnType<typeof servedRequestRecorder>,
   runId: string | undefined,
-): void {
+) {
   const consumer = serving?.consumerFor(runId);
   if (consumer !== undefined) scope.sourceLinkConsumer = consumer;
   else if ('sourceLinkConsumer' in scope) scope.$delete('sourceLinkConsumer');
