@@ -19,10 +19,11 @@ import { findLastWriter } from 'foottrace';
  * this log, and here is the door. By reference — nothing from inside a
  * subflow is printed until the model asks for it.
  */
-function overviewSubflowLine(index: ToolpackIndex): string | undefined {
+function overviewSubflowLine(index: ToolpackIndex, restricted: boolean): string | undefined {
   if (!index.subflowDoor) return undefined;
   const mounts = index.groups.filter((group) => group.isSubflow).flatMap((group) => group.ids);
   if (mounts.length === 0) return undefined;
+  if (restricted) return '[subflow] nested trace details are unavailable in this view.';
   const results = index.subflowResults;
   const openable = mounts.find((id) => results !== undefined && id in results);
   return openable !== undefined
@@ -30,7 +31,11 @@ function overviewSubflowLine(index: ToolpackIndex): string | undefined {
     : `[subflow] steps kept no own log here — inspect_subflow({ mount }) says why.`;
 }
 
-function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackIndex): Tool {
+function buildRunOverview(
+  artifacts: TraceToolpackArtifacts,
+  index: ToolpackIndex,
+  restricted: boolean,
+): Tool {
   return defineTool<Record<string, never>, string>({
     name: 'run_overview',
     description:
@@ -42,7 +47,9 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
     execute: () => {
       const lines: string[] = ['TRACE RUN OVERVIEW'];
       lines.push(
-        index.errorSteps.length > 0
+        restricted
+          ? 'status: step error details are unavailable in this view'
+          : index.errorSteps.length > 0
           ? `status: ⚠ completed with ${index.errorSteps.length} step error(s) — see ERRORS below`
           : 'status: no step errors recorded',
       );
@@ -68,7 +75,7 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
             ? `: ${truncateText(group.description, OVERVIEW_DESCRIPTION_CAP)}`
             : '';
         const errors =
-          group.errorIds.length > 0
+          !restricted && group.errorIds.length > 0
             ? ` ⚠ errors in ${group.errorIds.slice(0, 3).join(', ')}${
                 group.errorIds.length > 3 ? ', …' : ''
               }`
@@ -80,7 +87,7 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
       if (index.groups.length > OVERVIEW_STAGE_CAP) {
         lines.push(`…and ${index.groups.length - OVERVIEW_STAGE_CAP} more stages (output capped)`);
       }
-      const subflowHint = overviewSubflowLine(index);
+      const subflowHint = overviewSubflowLine(index, restricted);
       if (subflowHint !== undefined) lines.push(subflowHint);
 
       const loops = index.groups.filter((g) => g.ids.length > 1);
@@ -93,7 +100,7 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
         lines.push('', `LOOPS: ${top}`);
       }
 
-      if (index.errorSteps.length > 0) {
+      if (!restricted && index.errorSteps.length > 0) {
         lines.push('', 'ERRORS:');
         for (const step of index.errorSteps.slice(0, OVERVIEW_ERROR_CAP)) {
           lines.push(
@@ -143,13 +150,17 @@ function buildRunOverview(artifacts: TraceToolpackArtifacts, index: ToolpackInde
         );
       }
 
-      if (artifacts.narrative !== undefined) {
+      if (restricted) {
+        lines.push('NARRATIVE: unavailable in this view.');
+      } else if (artifacts.narrative !== undefined) {
         lines.push(
           `NARRATIVE: ${artifacts.narrative.length} line(s) available via read_narrative.`,
         );
       }
       lines.push(
-        `SEARCH: find_in_trace('<text>') locates any phrase in this record and hands back ids.`,
+        restricted
+          ? `SEARCH: find_in_trace('<text>') searches the admitted record and hands back ids.`
+          : `SEARCH: find_in_trace('<text>') locates any phrase in this record and hands back ids.`,
       );
 
       return lines.join('\n');

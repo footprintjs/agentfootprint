@@ -62,9 +62,12 @@ function inspect(events: readonly AgentfootprintEvent[], rows: readonly object[]
     ],
     commitValues: 'full',
   } as unknown as TraceToolpackArtifacts['snapshot'];
-  return callTraceTool(traceToolpack({ snapshot, events }), 'inspect_tool_call', {
-    toolCallId: call.toolCallId,
-  });
+  // This intentionally partial record tests the host journal's policy ordering.
+  return callTraceTool(
+    traceToolpack({ snapshot, events }, { showWithheldResults: true }),
+    'inspect_tool_call',
+    { toolCallId: call.toolCallId },
+  );
 }
 
 const approval = event('agentfootprint.checkin.decision', {
