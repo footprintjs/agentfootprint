@@ -5,6 +5,149 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.0.0] - 2026-11-20
+
+### Breaking
+
+- **Answers warn about doubts by default.** Agents that leave the answer layer
+  unconfigured now attach the answer's standing to `agentfootprint.agent.turn_end`
+  and emit `agentfootprint.answer.assessed`. A prose answer with standing `not-sure`
+  or `ask` carries a line explaining why. With `.answerValidation()` or
+  `.outputSchema()`, the standing travels as data and the answer keeps its
+  validated format.
+
+  The standing keeps recorded tool outcomes when a history window drops their
+  messages, so a turn that previously read as consistent or not assessed may now
+  say why it is not sure.
+
+  **Migration:** Add `.answerLayer(false)` to restore the previous chart, committed
+  rows, events and answer. To keep the standing data and omit the line, use
+  `.answerLayer({ standingLine: false })`. The same values work in
+  `AgentOptions.answerLayer`.
+
+  The first assessed turn loads the assessment code on demand, so that work
+  counts against the turn's deadline before final delivery.
+
+  When the line appears, it is part of the delivered assistant message. If the
+  conversation retains that message, the next request can carry the line within
+  its assistant history.
+
+  Ordinary streaming sends the model's text in `stream.token`. If output admission
+  holds the provider's chunks, the released token contains the composed answer.
+  Output middleware formats the model's text first. The standing line is appended
+  after that formatting, outside any closing marker the formatter added. Use
+  `.answerLayer({ standingLine: false })` if your app needs the formatter's exact
+  text and still wants the standing as data. The built-in text stream sends any
+  remaining text after the tokens, including when opened before a resume. If your
+  app paints its own tokens, use `turn_end.finalContent` for the finished message or render the
+  standing and reason codes from `agentfootprint.answer.assessed` in your own UI.
+
+- **The answer's standing now reports a tool call that was refused or failed.** A later
+  completed call of the same tool with equal recorded arguments clears the earlier
+  reason. Calls whose arguments are unavailable or hidden cannot establish a match.
+  When a tool batch pauses and a sibling never dispatches, the standing says a
+  call did not run.
+  Each recorded result keeps its own outcome even when two calls share an ID.
+  The answer account also shows a recorded non-success status for a tool that ran.
+
+  Migration: Handle the new `call-not-completed` assessment reason in code that
+  switches exhaustively on reason types. Displays that show the standing may now say
+  "not sure" for a turn that previously said "not assessed" or "consistent."
+
+- **The answer's standing reports unfinished tool work and skipped steps.** It
+  reads an admitted partial or pending result and the committed record of a
+  procedure advancing past a declared step.
+  Each reported status belongs to its own recorded result, even when calls share an ID.
+
+  Migration: Handle `work-not-finished` and `step-skipped` in exhaustive
+  assessment reason switches. Tool history can now include the record-only
+  `reportedStatus` field. An inline result that fails validation after the
+  envelope is read now omits the rejected status from its end event, matching
+  the resumed paths.
+
+- **Snapshots and saved recordings include recorded value types and array lengths by default.** Read a path at a replay commit with `contextShapeAt` from `agentfootprint/observe`. Redacted values withhold their type and length. Recursive discovery is opt-in.
+
+  Migration: If you store, hash or compare the JSON from `getSnapshot()`, `getLastSnapshot()` or `recordRun(agent)`, eligible snapshots now contain a `contextShapes` field and their bytes change. Pass `{ contextShapes: false }` to the snapshot getter or as the second argument to `recordRun` to keep the previous bytes.
+
+### Added
+
+- **Read coverage counts and evidence for a completed turn.** Hosts can read
+  per-call declaration counts and the final evidence verdict before filing a
+  recording, and use the same readers when the recording is loaded later.
+
+- **Saved evidence can identify a specific tool call when IDs repeat.** New
+  recordings keep an opaque call address on tool results, events and evidence
+  rows. Readers use that address through a pause and after the history is
+  trimmed. Saved recordings from before this change remain readable.
+
+  The address holds random words. Two runs of the same script record different
+  addresses, so a test that compares the events or records of two runs must
+  leave `callOccurrenceKey` out of the comparison. Nothing sent to a provider
+  changes.
+  Use a complete text marker when checking records for leaked text, since a short
+  run of digits can also occur inside an address.
+
+  A cache strategy or a provider adapter can no longer change the saved record.
+  Each model call hands the `CacheStrategy` its own copy of the request and
+  passes what the strategy returns to the provider as it is. Before, an edit
+  made in place to that request could reach the history the run saved.
+
+  Automatic native output keeps the format requirement selected for each call
+  when an adapter adds or removes a format in place, including runs without a
+  signal and streams that fall through to a completion.
+
+- **Identify the owning Agent's completed turn.** Its `turn_end` event carries
+  `meta.rootTurn: true` on both fresh and resumed runs. Older records can lack
+  the field.
+
+### Changed
+
+- **Keep mounted drafts out of an Agent's text stream.** With
+  `toSSE({ format: 'text' })`, fresh and resumed streams skip tokens from mounted
+  Agents so a chat client sees the owning Agent's text. Mounted tokens are
+  available in full event frames and in scoped record-only AG-UI messages.
+
+### Fixed
+
+- When a host rule denies a tool result, the answer's standing reports
+  `result-withheld` once without naming the tool or exposing its result.
+  The per-call settlement record keeps that warning even after a history window
+  evicts the result.
+  When a rule rewrites a result, the standing assesses the replacement.
+
+- **Tool calls with a shared ID keep their own arguments.** With the inputs
+  layer on, two calls in one provider reply that share an ID now each run
+  with their own arguments and receive only their own fills.
+
+- **Finish SSE streams at the owning Agent's turn end.** Both `toSSE()` formats
+  now continue past a mounted Agent's turn end and deliver the owning Agent's
+  response through its marked turn end. This applies to fresh streams, streams
+  retained across a pause, and streams opened to resume a turn.
+
+  A full-format stream opened to resume a turn now closes at the next pause, as
+  a text stream does. It used to stay open until the turn ended.
+
+- **Keep repeated tool-call IDs separate in answer accounts.** Calls keep their
+  own recorded result, status and evidence when a provider reuses an ID. The
+  account identifies evidence rows it could not match to a call and keeps them
+  out of call totals.
+
+- The answer's standing judges period coverage only for a returned tool result.
+  A refused call or one that throws can still explain why it did not complete.
+  A refusal based on the tool's declared retention still reports that limit.
+  Reasons about proposed tool inputs only appear once the tool was entered.
+
+  Runs with the answer or inputs layer append entry evidence for each entered
+  call. The answer layer also appends how each call ended and how its result
+  was delivered. Each list retains up to 1,024 calls per turn. If a list would
+  exceed that bound, the assessment reports `check-unreachable`.
+
+- **Finish the streamed answer after a pause.** A new text SSE or record-only
+  AG-UI stream can deliver the final answer when it attaches before resuming.
+  Text SSE respects the refusal decision associated with the final answer.
+  An SSE stream now closes when its `filter` drops the final event. It used
+  to stay open.
+
 ## [15.0.1] - 2026-11-19
 
 ### Fixed
