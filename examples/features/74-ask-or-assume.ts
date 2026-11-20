@@ -17,8 +17,8 @@
  *     tool's rule assumes;
  *   - the answer's standing reads NOT SURE, naming the assumption
  *     (`argument-assumed`) — never "consistent" on a value nobody gave;
- *   - with `.limitsTravelWithTheAnswer()`, the answer itself carries an
- *     "Assumed (a tool's rule, not your words)" block.
+ *   - the default line names the assumed window. To show it in its own
+ *     "Assumed" block, use `.limitsTravelWithTheAnswer()` and turn off the line.
  *
  * Run:  npm run example examples/features/74-ask-or-assume.ts
  */
@@ -34,8 +34,8 @@ export const meta: ExampleMeta = {
   description:
     'A tool declares askOrAssume: { window: { assume: "2h" } }. The model leaves the period out; the ' +
     'library fills it, files an argument row (source: default), tells the model in a note, and the ' +
-    'answer’s standing reads "not sure — assumed". With .limitsTravelWithTheAnswer() the answer ' +
-    'carries an "Assumed" block.',
+    'answer’s default warning names the assumption. With the warning line off, ' +
+    '.limitsTravelWithTheAnswer() carries the assumption in its own "Assumed" block.',
   defaultInput: 'Any errors on checkout?',
   // Scripted on purpose: the model's omission is the case, and a live model may not omit.
   providerSlots: [],
@@ -72,7 +72,7 @@ function searchLogsTool(ran: Record<string, unknown>[]) {
 
 async function ask(message: string, limitsTravel: boolean) {
   const ran: Record<string, unknown>[] = [];
-  let builder = Agent.create({
+  const builder = Agent.create({
     provider: mock({
       replies: [
         // The model leaves `window` out — the omission this example is about.
@@ -82,7 +82,7 @@ async function ask(message: string, limitsTravel: boolean) {
     }),
     model: 'small-model',
   }).tool(searchLogsTool(ran));
-  if (limitsTravel) builder = builder.limitsTravelWithTheAnswer();
+  if (limitsTravel) builder.limitsTravelWithTheAnswer().answerLayer({ standingLine: false });
   const agent = builder.build();
   const answer = await agent.run({ message });
   return { agent, answer: String(answer), ran };
@@ -104,15 +104,25 @@ export async function run(input: string): Promise<string> {
 
   check(plain.ran[0]?.window === '2h', 'the library to fill the declared default');
   check(row?.kind === 'argument' && row.source === 'default', 'a default row on the ledger');
-  check(row?.kind === 'argument' && row.proposed === undefined, 'no proposal: the model left it out');
+  check(
+    row?.kind === 'argument' && row.proposed === undefined,
+    'no proposal: the model left it out',
+  );
   check(standing.standing === 'not-sure', 'the answer to read "not sure"');
   check(
     standing.reasons.some((r) => r.reason === 'argument-assumed'),
     'the standing to name the assumption',
   );
+  check(
+    plain.answer.includes('Not sure — window = "2h" was assumed'),
+    'the default warning to name the assumed window',
+  );
+  console.log('\nwith default standing:\n' + plain.answer);
 
   const travelled = await ask(input, true);
-  console.log('\nwith .limitsTravelWithTheAnswer():\n' + travelled.answer);
+  console.log(
+    '\nwith .limitsTravelWithTheAnswer() and the standing line off:\n' + travelled.answer,
+  );
   check(
     travelled.answer.includes("Assumed (a tool's rule, not your words):") &&
       travelled.answer.includes('- window = "2h" (search_logs)'),

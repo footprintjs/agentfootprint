@@ -113,13 +113,16 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * `notDispatched`, the batch settlement's marker (9.113.0 — the model reads the
  * settled call's sentence; the marker is that fact for the library's readers),
  * `toolResultOrigin`, the findings-only producer notice origin,
- * and `toolChars`, the tool-bytes boundary on a result the inputs layer
+ * `toolResultDisposition`, the after-tool rule's disposition,
+ * `toolResultExecution`, the tool's entry and return, and
+ * `toolChars`, the tool-bytes boundary on a result the inputs layer
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
  * `foldedExempt`, a compaction summary's exemption lineage (the exempt corpus
  * reads it; the model reads the summary's text), `answersAsk` for a typed
  * answer, `calls` for the inner permission sequence, and `outcome` and
- * `reportedStatus` for the recorded settlement. The `callOccurrenceKey` on a
+ * `reportedStatus` for the recorded settlement. The result origin, execution,
+ * and disposition stay in the record too. The `callOccurrenceKey` on a
  * result or proposed tool call is also record-only. The provider's call ID,
  * arguments and metadata still travel with the proposed call.
  * Messages without any pass through BY REFERENCE, so an agent that delivers,
@@ -196,6 +199,8 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
     injectedBy: _delivered,
     notDispatched: _settled,
     toolResultOrigin: _resultOrigin,
+    toolResultDisposition: _resultDisposition,
+    toolResultExecution: _resultExecution,
     toolChars: _toolBytes,
     foldedExempt: _lineage,
     answersAsk: _typedAnswer,
@@ -208,6 +213,8 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
   void _delivered;
   void _settled;
   void _resultOrigin;
+  void _resultDisposition;
+  void _resultExecution;
   void _toolBytes;
   void _lineage;
   void _typedAnswer;
@@ -233,6 +240,8 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.injectedBy !== undefined ||
     message.notDispatched !== undefined ||
     message.toolResultOrigin !== undefined ||
+    message.toolResultDisposition !== undefined ||
+    message.toolResultExecution !== undefined ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
     message.answersAsk !== undefined ||

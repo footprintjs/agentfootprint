@@ -349,7 +349,7 @@ describe('check-in — decision', () => {
       out.checkpoint,
       checkInDeclined({ request: pausedRequest(out), by: 'alice', note: 'amount too high' }),
     );
-    expect(final).toBe('understood, cancelling');
+    expect(final).toBe('understood, cancelling\n\n---\n\nNot sure — a call was refused.');
     expect(exec).not.toHaveBeenCalled();
     expect(toolMessages).toHaveLength(1);
     expect(toolMessages[0]).toBe('declined by human: amount too high');

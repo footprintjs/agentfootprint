@@ -299,6 +299,7 @@ describe('unsettled by absence × typed suggestion — the row carries `try_inst
       expect(result?.callOccurrenceKey).toHaveLength(5);
       expect(next).toEqual({
         kind: 'unsettled-by-absence',
+        turn: 1,
         toolCallId: 'c1',
         callOccurrenceKey: result?.callOccurrenceKey,
         notChecked: [

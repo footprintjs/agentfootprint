@@ -230,10 +230,18 @@ export function configureAgent(
   const inputsLayer = readInputsLayerOption(opts.inputsLayer);
   if (inputsLayer !== undefined) config.inputsLayerOption = true;
   if (opts.resultsLayer === true) config.resultsLayerOption = true;
-  if (opts.answerLayer === true) config.answerLayerOption = {};
-  else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
+  const answerLayer = opts.answerLayer;
+  if (answerLayer === undefined) {
+    // Resolve the default without enumerating the caller's options. Checked
+    // and typed answers use the assessment data beside their exact output.
+    config.answerLayerOption =
+      answerValidationConfig !== undefined || outputSchemaParser !== undefined
+        ? {}
+        : { standingLine: 'not-sure-or-ask' };
+  } else if (answerLayer === true) config.answerLayerOption = {};
+  else if (typeof answerLayer === 'object' && answerLayer !== null) {
     // The builder judged the option (`assessment/answerLayerOptions.ts` · `answerLayerArm`); `true` is 'always'.
-    const line = opts.answerLayer.standingLine;
+    const line = answerLayer.standingLine;
     config.answerLayerOption =
       line === true
         ? { standingLine: 'always' }

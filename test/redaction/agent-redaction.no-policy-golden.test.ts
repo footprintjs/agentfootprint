@@ -126,7 +126,15 @@ describe('no policy preserves the whole stream with native run identity', () => 
         runId: 'run#2',
       },
     });
-    const observed = normalizeCallOccurrences(JSON.parse(await noPolicyStream()));
+    const observed = normalizeCallOccurrences(JSON.parse(await noPolicyStream(true)));
     expect(JSON.stringify(observed, null, 1)).toBe(JSON.stringify(events, null, 1));
+  });
+
+  it('pins the whole stream with the default answer assessment', async () => {
+    const observed = normalizeCallOccurrences(JSON.parse(await noPolicyStream(false)));
+    const stream = JSON.stringify(observed, null, 1);
+    expect(createHash('sha256').update(stream).digest('hex')).toBe(
+      '52790733eb179248e127f9bcbbada41383547db955d6216d6b83a56b1cb414da',
+    );
   });
 });

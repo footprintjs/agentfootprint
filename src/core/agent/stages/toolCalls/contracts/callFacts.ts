@@ -13,6 +13,8 @@ export interface ResumedCallFacts {
   resultFinalizer?: NativeResultFinalizer;
   /** Set once `execute` was about to be handed the call (the program values below were read then). */
   entered?: true;
+  /** Settlement at the tool boundary, before the framework reads or delivers the result. */
+  toolResultExecution?: LLMMessage['toolResultExecution'];
   /** The declared argument's value as the model proposed it — read before `execute`. */
   proposed?: unknown;
   /** The declared argument's value handed to `execute` — read just before it ran. */

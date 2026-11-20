@@ -477,11 +477,16 @@ Gotchas:
   projection can carry it). `turn_end` carries `standingLineNames` — the words the
   line used — only when it named a call.
 
-### The standing, in the run — `.answerLayer()`
+### The standing during a run
 
-`.answerLayer()` runs the same fold INSIDE the run — as the first stage of the
-final branch, after every check has filed its verdict — and serves the result the
-moment the answer exists:
+Every agent folds the standing from the committed record by default. The fold
+runs at the start of the final branch, after the checks have filed their verdicts.
+When the answer's standing is `not-sure` or `ask`, a prose answer includes a line
+explaining why. The standing travels as data for every delivered answer.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-standing-default" title="A tool reports pending work" />
+
+The answer layer serves the standing in these places:
 
 - `turn_end.answerAssessment` and one `agentfootprint.answer.assessed` event carry
   the value, its word, the reason kinds and the checks that ran — never a value
@@ -491,14 +496,15 @@ moment the answer exists:
   and a `StepsUnfinishedRow`, members of `FindingsRow` that `agent.findings()`
   returns, each stamped with its conversation turn (the gate's pass is the check
   having RUN — it lifts "not assessed" to "consistent", never to "known");
-- `{ standingLine: true }` appends one line to a prose answer, after the
-  separator. It is refused beside `.answerValidation()` (the checks judge the
-  exact bytes) and beside `.outputSchema()` (a typed answer is JSON) — the
-  standing still travels as data there.
+- With `.answerValidation()` or `.outputSchema()`, the default supplies the
+  standing as data and preserves the answer's format. Those configurations
+  reject an explicit request for a standing line at build time.
 - `{ standingLine: { when } }` says the line only when it matters:
-  `'always'` (what `true` means), `'unless-consistent'` (not for "consistent with
-  the run's record"), or `'not-sure-or-ask'` (only "not sure" and "ask"). `ask` is
-  said in every mode.
+  `'always'` (also `true`), `'unless-consistent'`, or `'not-sure-or-ask'`
+  (the default, covering "not sure" and "ask"). `ask` is included in every mode.
+- Call `.answerLayer()` or `.answerLayer({ standingLine: false })` for data only.
+  Call `.answerLayer(false)` to turn the layer off. You can also set these
+  options through `AgentOptions.answerLayer`.
 
 <CodeFile path="examples/features/117-standing-line-modes.ts" region="standing-line-modes" title="examples/features/117-standing-line-modes.ts (region: standing-line-modes)" />
 
@@ -521,12 +527,13 @@ Gotchas:
   the turn it ended on (`turnNumber`), and the next run continues from it — so a
   continued conversation never folds an earlier turn's rows as its own, even when
   a window strategy trims the stored history.
-- **The line is not streamed.** Like the limits block, it is appended to the
-  answer the run returns; `stream.token` carries the model's text. A UI that
-  shows only tokens must render the rest of `turn_end.finalContent` (what the
-  tokens did not carry) when the turn ends. Record-only AG-UI writes that rest
-  as its own message. `toSSE({ format: 'text' })` writes it as one more chunk
-  for a turn the stream saw open at the root.
+- **Streaming.** In an ordinary stream, `stream.token` carries the model's text
+  as it arrives. The returned answer and `turn_end.finalContent` carry the
+  completed text, including the line. If output admission holds the provider's
+  chunks, it delivers the composed answer as a single token, including the line.
+  Update your final message from `turn_end.finalContent` if you render tokens
+  yourself. The `agentfootprint.answer.assessed` event supplies the standing and
+  reason codes for a separate display.
 - **A mode changes the line, nothing else.** The standing travels as data in every
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With
@@ -536,8 +543,6 @@ Gotchas:
   tells the two apart (`standing`, `checked`). If your app hides both the line and
   the data, the person cannot tell "checked" from "not assessed"; the limits block,
   the answer's material limitations, stays visible in every mode.
-- **Off by default.** Without `.answerLayer()` the chart, the committed rows, the
-  events and the answer are exactly what they were.
 
 ## Read the completed turn before filing
 

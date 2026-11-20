@@ -45,6 +45,8 @@ const Verdict = z.object({ healthy: z.boolean(), summary: z.string() }).strict()
 type Verdict = z.infer<typeof Verdict>;
 const VERDICT: Verdict = { healthy: true, summary: 'Replication is healthy.' };
 const JSON_ANSWER = JSON.stringify(VERDICT);
+const COVERAGE_STANDING =
+  'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.';
 
 const LEDGER = {
   checked: ['SRDF pair state on all 4 arrays (live query)'],
@@ -402,7 +404,9 @@ describe('integration: one value, three readers — the accessor, the state and 
       typed: false,
     });
     const answer = await prose.agent.run('is replication healthy?');
-    expect(answer).toBe(`All fine.\n\n---\n\n${asBlock(typed.agent.answerCoverage()!)}`);
+    expect(answer).toBe(
+      `All fine.\n\n---\n\n${COVERAGE_STANDING}\n\n${asBlock(typed.agent.answerCoverage()!)}`,
+    );
   });
 
   it('a valid typed answer is no longer handed to .outputFallback() — the appended block used to fail it', async () => {
@@ -563,11 +567,11 @@ describe('edge: nothing extra when there is nothing to carry', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Regression — the prose answer is untouched
+// Regression — the prose coverage block and default warning
 // ─────────────────────────────────────────────────────────────────────────
 
-describe('regression: a prose answer is byte-identical', () => {
-  it('the appended block, character for character (captured before the typed path existed)', async () => {
+describe('regression: exact prose delivery', () => {
+  it('the default warning and the original coverage block, character for character', async () => {
     const t = build({
       replies: [
         call('replication_health', 'c1'),
@@ -579,14 +583,15 @@ describe('regression: a prose answer is byte-identical', () => {
     });
     const out = await t.agent.run('go');
     expect(out).toBe(
-      'Replication is healthy. Everything looks fine.\n\n---\n\n' +
+      `Replication is healthy. Everything looks fine.\n\n---\n\n${COVERAGE_STANDING}\n\n` +
         'Coverage of this answer — declared by the tools that produced it, not by the model:\n\n' +
         'Checked:\n- SRDF pair state on all 4 arrays (live query)\n- the migration collector\n\n' +
         'Not checked:\n- NDM migration sessions — the API timed out — ask again\n\n' +
         'Cannot cover:\n- host-side multipathing — no collector runs on the ESX hosts',
     );
-    // …and nothing of the data path leaks into it: no state key, no turn_end field.
+    // The event carries the standing. The typed coverage field is absent.
     expect(Object.keys(t.turnEnds[0]!).sort()).toEqual([
+      'answerAssessment',
       'durationMs',
       'finalContent',
       'iterationCount',

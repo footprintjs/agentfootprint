@@ -425,6 +425,8 @@ export async function runCase(opts) {
     model,
     maxIterations: MAX_ITERATIONS,
     maxTokens: MAX_TOKENS,
+    // Keep the original inputs-layer cohort independent of answer delivery.
+    answerLayer: false,
     ...(opts.temperature !== undefined && { temperature: opts.temperature }),
   })
     .system(SYSTEM_PROMPT)

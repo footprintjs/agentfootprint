@@ -60,7 +60,7 @@ period argument but whose result says nothing reads `period-undeclared`.
 not read is `missing`, read but not asked is `extra`, and either makes the answer "not sure"
 (TQ8: a wider read too — unless the result declares that it read exactly what was asked).
 
-With `.time()` armed, the mount also hands the layer each call's time rows (`honesty/mounts.ts` ·
+With `.time()` armed, the mount also hands the layer each returned result's time rows (`honesty/resultsInput.ts` ·
 `timeOfBatch`: its `call-window` row and its `call` row's `drift`) and the clock's `now`; Verify
 asks `time/check.ts` · `periodTimeCheck` and Record files what holds on the call's `period`
 row — `differs { against, asked, read, source, stepMs?, missing, extra }`, `shifted { byMs }`,
@@ -68,7 +68,9 @@ row — `differs { against, asked, read, source, stepMs?, missing, extra }`, `sh
 `findings.period` event's `timeChecks`. What was read: the result's declared `queried` (inclusive,
 read back as `[from, to + step)`, `step` the tool's `granularity`, else 1 ms), else a widened fill's
 `sent`, else a look-back shifted by its drift, else the asked range. A window the model chose is
-judged against the person's window.
+judged against the person's window. A refusal before dispatch is recorded on the
+`call-window` row. When the source's declared retention caused a refusal, the
+limits and standing read that row directly.
 
 ```ts
 const clientActivity = defineTool({
@@ -116,7 +118,7 @@ wrap-up — leaves the batch in place and loops back here. ToolCalls stamps the 
 dispatches with its iteration (`AgentState.toolResultsIteration`, under the arm only) and
 advances the iteration by one; every other way back advances it again. So the batch is new
 exactly when the loop head is one iteration past the stamp, and only then is it handed to the
-layer (`honesty/mounts.ts` · `batchToJudge`). A batch paused before anything stamped it — a
+layer (`honesty/resultsInput.ts` · `batchToJudge`). A batch paused before anything stamped it — a
 checkpoint from an older build, or from an agent without the layer — is stamped as it completes
 on resume, so it is still judged once. A call id cannot say it: a provider's synthetic
 ids restart with each provider instance (`<prefix>-call-${++toolCallSeq}`), so a leg resumed

@@ -280,7 +280,7 @@ describe('dataset adapter at native Agent boundaries', () => {
       reader.on('agentfootprint.artifacts.refused', (event) => refused.push(event.payload));
       expect(
         await reader.run({ message: 'Total the earlier dataset.', identity: otherScope }),
-      ).toBe('Dataset unavailable.');
+      ).toBe('Dataset unavailable.\n\n---\n\nNot sure — a call was refused.');
       expect(seen.calls).toBe(0);
       expect(fixture.collected).toHaveBeenCalledTimes(1);
       expect(refused).toEqual(

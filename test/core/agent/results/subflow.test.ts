@@ -20,7 +20,7 @@ import {
   type CallPeriod,
 } from '../../../../src/core/agent/results/subflow.js';
 import type { DeclaredPeriod } from '../../../../src/semantics/coverage/period.js';
-import { batchToJudge } from '../../../../src/core/agent/honesty/mounts.js';
+import { batchToJudge } from '../../../../src/core/agent/honesty/resultsInput.js';
 
 const Q = { from: '2026-09-26T09:00:00Z', to: '2026-09-26T10:00:00Z' };
 const STALE: DeclaredPeriod = {

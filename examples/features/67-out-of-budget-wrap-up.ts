@@ -23,9 +23,9 @@
  *      `wrappedUp: true`), the `agentfootprint.agent.budget_exhausted` event,
  *      and a `stoppedEarly` field on `turn_end`, which is the event a
  *      dashboard already reads to draw an outcome chip.
- *   3. `wrapUpAtMaxIterations: false` reproduces the old behaviour exactly:
- *      no extra call, the fragment as the answer, and the same fact filed as
- *      `action: 'cut-short'` so a consumer can still tell what happened.
+ *   3. `wrapUpAtMaxIterations: false` skips the extra call and files
+ *      `action: 'cut-short'`. Turn off the answer layer too to reproduce the
+ *      historical output, which consisted of the fragment alone.
  *
  * …and one thing it proves by absence: an agent that finishes inside its
  * budget files no `budget_exhausted`, stamps nothing on `turn_end`, and
@@ -155,6 +155,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     wrapUpAtMaxIterations: false,
   })
     .tool(inspect as never)
+    .answerLayer(false)
     .build();
 
   let cutShortEvent: Record<string, unknown> | undefined;
@@ -166,10 +167,10 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   check(seenOff.length === 2, 'no extra call was spent');
   check(fragment === FRAGMENT, 'the answer is the fragment, as it was before 9.56.0');
   check(cutShortEvent?.action === 'cut-short', 'the fact is still filed, as cut-short');
-  console.log('4. With `wrapUpAtMaxIterations: false` — the old behaviour, exactly:');
+  console.log('4. Historical output with wrap-up and the answer layer disabled:');
   console.log(`   answer   → "${String(fragment)}"`);
   console.log(`   the fact → ${JSON.stringify(cutShortEvent)}`);
-  console.log('   Still recorded, still routable. Only the extra call is gone.\n');
+  console.log('   The budget event still records the cut-short outcome.\n');
 
   // ── 3. Proof by absence: a turn that finishes costs nothing ───────────
   const finishes = Agent.create({
@@ -186,7 +187,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   check(anyEvent === 0, 'a turn inside its budget files no budget_exhausted');
   check(finishes.stoppedEarly() === undefined, 'and commits no stoppedEarly record');
   console.log('5. A turn that finishes inside its budget files ZERO of this —');
-  console.log('   same calls, same events, same committed keys as every earlier release.');
+  console.log('   no budget-exhausted event and no stopped-early record.');
 
   return answer;
 }

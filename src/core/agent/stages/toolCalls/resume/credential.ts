@@ -5,15 +5,20 @@ import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
-import { appendBatchResult } from '../batch/settle.js';
+import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -53,6 +58,8 @@ export function buildResumeCredential(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
+    | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -97,8 +104,13 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
+      let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        modelResult = await links.afterMoment(scope, {
+        ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+          returned:
+            scriptSeen.toolResultExecution === 'returned' &&
+            error !== true &&
+            dispatched.ceilingRefused !== true,
           ...occurrence,
           ...(tool && { tool }),
           toolName,
@@ -114,7 +126,7 @@ export function buildResumeCredential(
           history: [...(scope.history as readonly LLMMessage[])],
           ...(scope.runIdentity && { identity: scope.runIdentity }),
           ...(env.signal && { signal: env.signal }),
-        });
+        }));
       }
       if (modelResult === undefined) modelResult = result;
       // Placement then the truncation net — the batch loop's precedence.
@@ -214,6 +226,15 @@ export function buildResumeCredential(
             ...occurrence,
             ...(deps.findings === true &&
               dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !consentSettled.clean ||
+                dispatched.halt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, consentPlaced.modelResult),
+            ),
+            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A blocked credential ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(consentSettled),
@@ -223,7 +244,7 @@ export function buildResumeCredential(
         { toolName, toolCallId, ...occurrence },
       );
       const consentHistory = consentSettlement.history;
-      scope.history = consentHistory;
+      commitSettledToolHistory(scope, consentHistory);
       scope.lastToolResult = {
         toolName,
         result: consentResultStr,
@@ -234,6 +255,8 @@ export function buildResumeCredential(
         result: consentResultStr,
         toolCallId,
         ...occurrence,
+        ...(deps.resultsLayer === true &&
+          missingResultFields(dispatched.executed === true, scriptSeen.threw)),
         ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
       });
       await judgeLanded(

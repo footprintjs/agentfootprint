@@ -19,6 +19,20 @@ const readShelf = defineTool({
   },
 });
 
+function asLegacy(recording: Recording): Recording {
+  const modernFields = new Set([
+    'callOccurrenceKey',
+    'enteredToolCalls',
+    'enteredToolCallsComplete',
+    'settledToolCalls',
+    'settledToolCallsComplete',
+    'toolResultExecution',
+  ]);
+  return JSON.parse(
+    JSON.stringify(recording, (key, value: unknown) => (modernFields.has(key) ? undefined : value)),
+  ) as Recording;
+}
+
 it.each([
   {
     label: 'absent then gap in one reply',
@@ -92,25 +106,35 @@ it.each([
 
     expect.soft(standingLines(withoutDeclarationEvents)).not.toContain(unmatched);
 
-    // Exercise the historical shape by removing only the library field from
-    // this closed fixture. With no declaration event it still has no address.
-    const legacy = JSON.parse(
-      JSON.stringify(withoutDeclarationEvents, (key, value: unknown) =>
-        key === 'callOccurrenceKey' ? undefined : value,
-      ),
-    ) as Recording;
+    // Exercise the historical shape without keys or the newer turn evidence.
+    // Without a declaration event the historical row still has no address.
+    const legacyFull = asLegacy(recording);
+    expect.soft(accountForAnswer(legacyFull).facts.standing).toEqual(account.facts.standing);
+    expect.soft(standingLines(legacyFull)).toEqual(lines);
+
+    // With the absence events missing the older recording has no exact owner
+    // for those native rows. A retained result can still testify for its own
+    // bytes. The repeat-call note makes the second identical result unreadable
+    // as bare JSON, so only its first absence can be read on this path.
+    const legacy = asLegacy(withoutDeclarationEvents);
+    const legacyAssessment = assessAnswer(legacy);
+    const absence = legacyAssessment.reasons.find((r) => r.reason === 'declared-absent');
+    expect.soft(absence?.source).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'dup', toolName: 'lookup' }],
+    });
     expect
-      .soft(assessAnswer(legacy).reasons.find((r) => r.reason === 'declared-absent')?.source)
-      .toEqual({
-        kind: 'calls',
-        calls: [{ toolCallId: 'dup', toolName: 'lookup' }],
-        unplaced: Array.from({ length: absentRows }, (_, index) => ({
-          kind: 'state',
-          key: 'coverageDeclared',
-          path: `/${index}/kind`,
-        })),
-      });
-    expect.soft(standingLines(legacy)).toContain(unmatched);
+      .soft(absence?.witness)
+      .toEqual([expect.objectContaining({ kind: 'history', toolCallId: 'dup' })]);
+    expect
+      .soft(legacyAssessment.reasons.map(({ reason }) => reason))
+      .toEqual([...(gap ? ['coverage-gap'] : []), 'declared-absent']);
+    expect
+      .soft(legacyAssessment.checked.find((c) => c.check === 'tool-coverage'))
+      .toMatchObject({ ran: covered - absentRows + 1, of: 2 });
+    const legacyLines = standingLines(legacy);
+    expect.soft(legacyLines).toContain('1 call declared that nothing matched.');
+    expect.soft(legacyLines).not.toContain(unmatched);
   } finally {
     recorder.stop();
   }

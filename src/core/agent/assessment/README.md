@@ -27,7 +27,7 @@ answer one question — a bare `[]` reads "not sure" (`empty-undeclared`), an
 (`coverage-gap`, `declared-absent`), and rows with nothing declared read
 "consistent with the record" — never "known".
 
-## In the run — the answer layer (`.answerLayer()`)
+## In the run — the answer layer
 
 The same fold, run INSIDE the run, as the first stage of the final branch — after
 the Route decider's checks filed their verdicts, before the turn is captured — and
@@ -37,7 +37,6 @@ served as data the moment the answer exists:
 const agent = Agent.create({ provider, model })
   .tool(listDownPorts)
   .namesAndNumbersFromEvidence({ posture: 'assist' })
-  .answerLayer({ standingLine: true }) // `{}` / no argument: the data only
   .build();
 
 agent.on('agentfootprint.answer.assessed', (e) => e.payload.standing); // 'not-sure'
@@ -49,7 +48,7 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **One stage** — `stage.ts` · `assessAnswerStage`, mounted by `honesty/mounts.ts` ·
   `startFinalBranch` (the one helper both chart builders call) and loaded through
   `import()` on the first armed answer. It reads ONLY the committed keys the fold
-  reads that this agent's arms can write (`honesty/mounts.ts` · `answerFoldReads`),
+  reads that this agent's arms can write (`honesty/answerFoldReads.ts` · `answerFoldReads`),
   folds them, files the projection for PrepareFinal (`answerAssessment`, committed in
   the final branch's own state — its subflow result keeps that copy — never in the
   run's state; the copy is a hand-off, not a source: every reader re-folds) and fires
@@ -69,14 +68,18 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **The turn stamp never repeats** — "this turn" is read by `turn`, so seed continues
   the stamp from the turn the stored conversation ended on
   (`AgentRunCheckpoint.turnNumber`, carried while a layer is armed) and from the
-  restored ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`): a window
+  restored ledger's latest stamp (`runtime/conversation/seedHistory.ts` · `turnNumberFor`): a window
   strategy trims the stored history, and its count of user messages repeats.
-- **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` (or a
-  mode, below) only, on a PROSE answer only (refused beside `.answerValidation()` and
-  `.outputSchema()` at build, in every mode). Appended after the limits separator by
-  the one composer; beside `.limitsTravelWithTheAnswer()` it names the assumed values
-  itself and the "Assumed" block is not appended too — the block is appended whenever
-  no line was. An assumed value is printed only in the tool's own view.
+- **The line** — `compose.ts` · `standingLineOf` renders the line for eligible prose
+  answers. The default selects `'not-sure-or-ask'` and serves data alone beside
+  `.answerValidation()` or `.outputSchema()`. An explicit line still fails to
+  build beside either. The composer puts the line after the limits separator.
+  Beside `.limitsTravelWithTheAnswer()`, the line names assumed values when it
+  appears. The "Assumed" block supplies them when the line is absent. Values
+  appear only in the tool's own view.
+- **Delivery** — ordinary tokens carry the model's text. When output admission
+  holds provider chunks, PrepareFinal emits the composed answer in one token.
+  In either case, `turn_end.finalContent` carries the completed answer.
 - **THE EQUALITY LAW** — the in-run standing equals `assessAnswer()` over the same
   recording read afterwards: one pure function over the same committed rows, at the one
   moment nothing after it can change them. Pinned by
@@ -85,11 +88,15 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   cut the turn short, an agent mounted in a composition, and 40 generated
   configurations.
 
-The runnable example is `examples/features/76-answer-layer.ts`.
+See `examples/features/123-answer-standing-default.ts` for the default and the
+opt-out, and `examples/features/76-answer-layer.ts` for an explicit line.
 
 ### When the line is said — `standingLine: { when }`
 
-**The rule.** `standingLine` is `true` (= `{ when: 'always' }`) or `{ when }`:
+**The rule.** Omit `.answerLayer()` to use the default. Call `.answerLayer()` or
+`.answerLayer({ standingLine: false })` to serve data only, or `.answerLayer(false)`
+to remove the layer. Set `standingLine` to `true` (equivalent to
+`{ when: 'always' }`) or `{ when }` to select a mode explicitly.
 
 | `when` | The line is appended for | Left off for |
 |---|---|---|
@@ -269,21 +276,21 @@ it never hides.
 
 **The rule.** Every reason carries `source`, one of `{ kind: 'calls', calls: {
 toolCallId, toolName }[], unnamed? }`, `{ kind: 'answer' }` or `{ kind: 'run' }`. The
-KIND is declared once per reason in `REASONS` (`reasons.ts`), never decided per run; the
-calls of a `calls` reason are read off the very rows its witnesses point at
-(`sources.ts` · `reasonSourceOf`) — a result's own call, a coverage, argument, period or
-middleware row's own call, a conflict's readings, the results a contingent value came
-from, every call this turn of a tool an answer check names (`declaration-overclaimed`:
-it may over-report, it never hides). A call the record does not name in full — no id, or
-no tool name for it — is counted in `unnamed`, never dropped and never guessed. Names
-and ids only, with the recorded outcome when the reason is `call-not-completed`. Each
-outcome belongs to its own result in `history`; a reused id can appear more than once.
+KIND comes from `REASONS` (`reasons.ts`). When the model's value came from a
+result it had set aside, the witness says whether the value reached a call's
+inputs or the answer itself. The fold reads the calls off the admitted witness
+rows (`sources.ts` · `reasonSourceOf`): a result's own call, a coverage,
+argument, period or middleware row's call, a conflict's readings, or the
+exact call a native declaration check names. A call the record does not name
+in full is counted in `unnamed`. Names and IDs only, with the recorded outcome
+when one is available for `call-not-completed`. Each outcome belongs to one
+history occurrence. The provider can use the same ID again.
 
 | Rests on | Reasons |
 |---|---|
 | `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
-| `answer` | `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
-| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
+| `answer` | `value-contingent` (answer witness), `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
+| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `step-skipped`, `result-withheld`, `check-unreachable` |
 
 **Why.** "Not sure — a tool said nothing matched" did not say which tool: when an
 answer rested on one call's rows and another call reported no matching results, a reader could not
@@ -292,26 +299,14 @@ which claim depends on which call is NOT on the record, so naming a source never
 says the rest of the answer is unaffected, and it never moves the standing. An
 empty list of calls never stands for "the run": that is a kind of its own.
 
-**Every field the fold reads is on the row the run commits — one name, one
-row.** A `.negativeClaims()` verdict reaches the record twice: whole on
-`answerNegatives.checks` (its `code`, its `tools`), and as a check row on the
-answer-check report, `answerValidation.checks` — the row the fold reads: for
-`declaration-overclaimed`, its `reason` and its `tools`. The ONE projection
-between them (`negativeClaims/delivery.ts` · `reportWithNegatives`) writes the
-code as `reason` and keeps `tools` under that name, so the fold reads one field
-for each fact, off one row. A field the projection dropped would read as "a
-call the record cannot name" on every real run, so the source is pinned on a
-real run, never only on a hand-built row (`reason-sources.test.ts`):
-
-```ts
-// .negativeClaims({ field: 'negatives', tools: ['read_incidents'] }) — read_incidents threw
-// "Service payments does not exist.": a refused call read nothing, so its refusal overclaims.
-agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaimed');
-// { id: 'agent:negative-claims:declaration:0', path: '/', disposition: 'not-applicable',
-//   reason: 'declaration-overclaimed', tools: ['read_incidents'] }
-(await agent.assessment())?.reasons.find((r) => r.reason === 'declaration-overclaimed')?.source;
-// { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
-```
+**A declaration check identifies its exact return.** `.negativeClaims()`
+records its audit checks. A check on the native result also carries the ID,
+name and iteration of that call in the host's validation report
+(`negativeClaims/delivery.ts` · `reportWithNegatives`). The public standing
+reads the check only when the record binds it to an occurrence and establishes
+that the tool's return reached the model. A throw or a framework refusal
+can still be reported in the audit. A host rewrite is assessed from what it
+served to the model.
 
 **A list on a row is read by index — never through its own iterator or index
 getters.** Every list the fold reads off a row — a conflict's readings, a
@@ -389,6 +384,7 @@ column changes, so this table can lag it but the code cannot:
 | `coverage-gap` | a tool said there is ground it did not check or cannot cover | {who} declared ground that was not checked or cannot be covered |
 | `empty-undeclared` | a lookup came back empty without saying what it searched | {who} came back empty without saying what was searched |
 | `call-not-completed` | a call was refused / a call failed | {who} did not complete (refused) / {who} did not complete (failed) |
+| `result-withheld` | a result was kept out by a rule | Same wording for every tool |
 | `period-not-held` | a tool's data does not reach the time the question asked about | {who} read data that does not reach the time the question asked about |
 | `period-partly-held` | a tool's data covers only part of the time the question asked about | {who} read data that covers only part of the time the question asked about |
 | `period-unknown` | a tool could not say what time its data covers | {who} could not say what time the data covers |
@@ -463,13 +459,13 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 
 | Clause | Here |
 |---|---|
-| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; the layer's own arm, `.answerLayer()` |
+| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; `.answerLayer()` configures the default layer |
 | VERIFY | existing: the Route decider's checks (`core/agent/stages/route.ts` · `judgeClaims`), `core/agent/evidence/gate.ts` · `checkAnswer`, `answer-validation/validate.ts` · `executeAnswerValidation` |
 | RECORD | the existing committed keys, and — under the layer's arm — the two witness rows (`witness.ts`), filed by the Route decider (`core/agent/stages/route.ts` · `judgeEvidence`, `judgeUnfinishedSteps`) |
-| RESOLVE | label only: the fold never asks, refuses or rewrites; the one opt-in line is appended after the answer, never into it |
+| RESOLVE | the fold labels the answer and appends a line for the selected standings |
 | FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader, in the run and after it |
-| SERVE | after the run: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`, the answer account's "How sure" row (`answer-account/facts/howSure.ts` · `readHowSure`); in the run (armed): `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and the line under `{ standingLine: true }` |
-| ARM + MEASURE | `.answerLayer()`; off → byte-identical (every reference under `test/core/tools/reference/` unchanged; `agent-answer-layer` is the armed one); this README's last section |
+| SERVE | after the run: `agent.assessment()`, `assessAnswer` on `agentfootprint/observe`, and the answer account's "How sure" row. In the run: `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and a line for selected standings |
+| ARM + MEASURE | enabled by default; `.answerLayer(false)` restores the prior off behavior |
 
 ## Parity with the study's RQ3 rule
 

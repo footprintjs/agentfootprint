@@ -3,17 +3,29 @@ import { canonicalJson } from '../../../lib/canonicalJson.js';
 import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { isPlaceholder } from '../../../redaction/marker.js';
-import { recordedCallOutcome } from '../../../semantics/toolOutcome.js';
-import { readHistoryCalls, type HistoryCall } from '../recordedCalls.js';
+import { readNotDispatched } from '../../../semantics/toolRan.js';
+import {
+  assessmentCallOutcome,
+  isRecordedBatchRefusal,
+  readHistoryCalls,
+  type HistoryCall,
+} from '../recordedCalls.js';
 import { isRecord, unfinishedCallStatus } from './recordValues.js';
 import type { AnswerAssessment } from './types.js';
 
 /** One tool result of this turn, where it sits in `history`. */
 export interface TurnResult {
   readonly index: number;
+  readonly rewritten?: true;
+  readonly batchRefusal?: true;
   readonly toolCallId?: string;
   readonly toolName?: string;
-  readonly outcome?: NonNullable<ReturnType<typeof recordedCallOutcome>>;
+  readonly outcome?: NonNullable<ReturnType<typeof assessmentCallOutcome>>;
+  readonly outcomePath?:
+    | '/outcome'
+    | '/notDispatched/pausedCall/toolCallId'
+    | '/toolResultOrigin'
+    | '/toolResultExecution';
   readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
   /**
    * The TOOL's own bytes — `content` cut at the tool-bytes boundary
@@ -53,17 +65,36 @@ export function turnResults(
   for (const occurrence of occurrences) {
     const { index: i, message: m, providerId: toolCallId, toolName } = occurrence;
     if (i <= start) continue;
-    const outcome = recordedCallOutcome(m);
+    const outcome = assessmentCallOutcome(m);
     const reportedStatus = unfinishedCallStatus(m);
+    const outcomePath =
+      outcome === undefined
+        ? readNotDispatched(m.notDispatched) === 'settled'
+          ? '/notDispatched/pausedCall/toolCallId'
+          : undefined
+        : m.outcome !== undefined
+        ? '/outcome'
+        : m.toolResultOrigin !== undefined
+        ? '/toolResultOrigin'
+        : '/toolResultExecution';
     results.push({
       index: i,
       ...(toolCallId !== undefined && { toolCallId }),
       ...(toolName !== undefined && { toolName }),
       ...(outcome !== undefined && { outcome }),
+      ...(outcomePath !== undefined && { outcomePath }),
       ...(reportedStatus !== undefined && { reportedStatus }),
       content: toolBytesOf({ content: m.content, toolChars: m.toolChars }),
     });
   }
+  const beforeBatches = results.length;
+  for (let index = start + 1; index < history.length; index++) {
+    const message = Object.getOwnPropertyDescriptor(history, String(index))?.value;
+    if (isRecordedBatchRefusal(message)) {
+      results.push({ index, batchRefusal: true, outcome: 'refused', content: undefined });
+    }
+  }
+  if (results.length > beforeBatches) results.sort((a, b) => a.index - b.index);
   return { results, from: start >= 0 ? 'person' : 'whole-history', begins: start };
 }
 
@@ -122,10 +153,13 @@ export function recoveredCallOutcomes(
   history: readonly unknown[],
   begins: number,
   retainedHistory?: (history: readonly unknown[]) => unknown,
+  provedCompletion?: (index: number) => boolean,
 ): ReadonlySet<number> {
   const recovered = new Set<number>();
   const needsRetry = (result: TurnResult): boolean =>
-    result.outcome !== undefined || result.reportedStatus !== undefined;
+    result.outcome !== undefined ||
+    result.outcomePath !== undefined ||
+    result.reportedStatus !== undefined;
   if (!results.some(needsRetry)) return recovered;
   const recordedHistory = retainedHistory === undefined ? history : retainedHistory(history);
   if (!Array.isArray(recordedHistory)) return recovered;
@@ -140,13 +174,15 @@ export function recoveredCallOutcomes(
       continue;
     }
     const recorded = history[result.index];
-    if (
-      isRecord(recorded) &&
-      recorded.outcome === undefined &&
-      recorded.reportedStatus === undefined &&
-      recorded.notDispatched === undefined &&
-      recorded.toolResultOrigin === undefined
-    ) {
+    const complete =
+      provedCompletion === undefined
+        ? isRecord(recorded) &&
+          recorded.outcome === undefined &&
+          recorded.reportedStatus === undefined &&
+          recorded.notDispatched === undefined &&
+          recorded.toolResultOrigin === undefined
+        : provedCompletion(result.index);
+    if (complete) {
       completed.set(args.signature, Math.max(latestRetry, args.proposedAt));
     }
   }

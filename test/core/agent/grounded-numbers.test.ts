@@ -219,7 +219,9 @@ describe('functional: the staged-refs nudge', () => {
     });
     const out = await agent.run({ message: 'total?' }, { sessionId: 'observe' });
 
-    expect(out).toBe(HEAD_MATH_ANSWER);
+    expect(out).toBe(
+      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`,
+    );
     expect(of('agentfootprint.agent.grounding_nudged')).toHaveLength(1);
     const checks = of('agentfootprint.agent.evidence_checked');
     expect(checks.map((c) => c.action)).toEqual(['flagged']);
@@ -742,7 +744,9 @@ describe('integration: revise teaches the compute route', () => {
 
     // Revise is not refuse: the answer ships, with the record showing both
     // attempts and the same values surviving each.
-    expect(out).toBe(HEAD_MATH_ANSWER);
+    expect(out).toBe(
+      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result, even after one revision.`,
+    );
     const checks = of('agentfootprint.agent.evidence_checked');
     expect(checks.map((c) => c.action)).toEqual(['revision-asked', 'flagged']);
     expect(checks[0]!.afterRevision).toBe(false);
@@ -859,8 +863,11 @@ describe('regression: absent means today, proven on prompts AND records', () => 
     for (const r of [bare, gateOnly, nudgeOff]) {
       expect(r.all.some((e) => e.name === 'agentfootprint.agent.grounding_nudged')).toBe(false);
       expect(stableHistory(r.history)).toBe(baseline);
-      expect(r.out).toBe(HEAD_MATH_ANSWER);
     }
+    expect(bare.out).toBe(HEAD_MATH_ANSWER);
+    const flaggedAnswer = `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`;
+    expect(gateOnly.out).toBe(flaggedAnswer);
+    expect(nudgeOff.out).toBe(flaggedAnswer);
 
     // The gate itself still records under its default posture — the 9.35.0
     // behavior, untouched.

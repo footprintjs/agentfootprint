@@ -3,13 +3,14 @@ import {
   readCallOccurrenceKey,
   storedCallOccurrenceField,
 } from '../../../lib/callOccurrence.js';
+import { copyPeriod, type DeclaredPeriod } from '../../../semantics/coverage/period.js';
+import { toolRanOf } from '../../../semantics/toolRan.js';
 import {
   callRowOfCall,
   callWindowOfCall,
   clockOf,
   type CallWindowRow,
 } from '../../../time/rows.js';
-import { copyPeriod, type DeclaredPeriod } from '../../../semantics/coverage/period.js';
 import type { CallPeriod, CallTime, RanCall, ResultsLayerState } from '../results/subflow.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -53,7 +54,9 @@ export function resultsLayerInput(parent: Record<string, unknown>): ResultsLayer
   const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
   const calls: RanCall[] = [];
   for (const entry of batch) {
-    if (!isRecord(entry) || readCallOccurrenceKey(entry) === null) continue;
+    if (!isRecord(entry) || toolRanOf(entry) === 'not-run' || entry.threw === true) continue;
+    const key = readCallOccurrenceKey(entry);
+    if (key === null) continue;
     if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
     calls.push({
       toolCallId: entry.toolCallId,

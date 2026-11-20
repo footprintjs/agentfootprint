@@ -388,13 +388,13 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         providerExecute: replacement,
         ...(registryOnly && { registryExecute: registry }),
       });
+      const same = kind === 'same named party' || anonymous;
       await expect(
         fresh.resume(structuredClone(pause.checkpoint), {
           requestId: pause.awaitingInput.requestId,
           values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
         }),
-      ).resolves.toBe('done');
-      const same = kind === 'same named party' || anonymous;
+      ).resolves.toBe(same ? 'done' : 'done\n\n---\n\nNot sure — calls were refused.');
       if (same) {
         expect(replacement.mock.calls.map(([args]) => args)).toEqual([
           { service: 'one', window: '24h' },

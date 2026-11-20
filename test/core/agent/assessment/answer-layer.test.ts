@@ -61,7 +61,7 @@ import {
   STANDING_LINE_OPENINGS,
   type AnswerAssessmentData,
 } from '../../../../src/core/agent/assessment/compose.js';
-import { answerFoldReads } from '../../../../src/core/agent/honesty/mounts.js';
+import { answerFoldReads } from '../../../../src/core/agent/honesty/answerFoldReads.js';
 import { honestyLayersOf } from '../../../../src/core/agent/honesty/armed.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import { TOOL_RESULTS } from '../fixtures/sanEvidence.js';
@@ -246,13 +246,21 @@ describe('UNIT — the read list and the run constant', () => {
       'findingsLedger',
       'stoppedEarly',
       'coverageDeclared',
+      'enteredToolCalls',
+      'enteredToolCallsComplete',
+      'settledToolCalls',
+      'settledToolCallsComplete',
       'unsupportedValues',
       'answerValidation',
       'argumentAsk',
       'middlewareDecisions',
     ]);
-    // A rewrite needs a ruled argument to rewrite: no inputs layer, no read.
+    // A tool result has an after-tool decision even when inputs are unarmed.
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('middlewareDecisions');
+    expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('settledToolCalls');
+    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toEqual(
+      expect.arrayContaining(['middlewareDecisions', 'settledToolCalls']),
+    );
   });
 
   it('names every armed layer and nothing else — absent when none is armed', () => {
@@ -706,7 +714,7 @@ describe('SCENARIO — the standing as data, from a real run', () => {
       const b = Agent.create({ provider: mock({ reply: 'x' }), model: 'mock' }).tool(
         lookup('find_vm', () => []),
       );
-      return (armed ? b.answerLayer() : b).build();
+      return (armed ? b : b.answerLayer(false)).build();
     };
     const armed = JSON.stringify(build(true).getSpec());
     const unarmed = JSON.stringify(build(false).getSpec());
@@ -737,6 +745,7 @@ describe('SCENARIO — the standing as data, from a real run', () => {
         }),
       )
       .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .answerLayer(false)
       .build();
     const { assessed, turnEnds } = await runOnce(agent, 'which ports?');
     expect(assessed).toEqual([]);
@@ -1272,12 +1281,12 @@ describe('BOUNDARY — the turn stamp never repeats in a conversation', () => {
   });
 
   it('only while a layer is armed does the carrier hold the turn — an unarmed checkpoint keeps its bytes', async () => {
-    const plain = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' }).build();
+    const plain = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' })
+      .answerLayer(false)
+      .build();
     await plain.run({ message: 'hello' });
     expect('turnNumber' in plain.checkpoint()!).toBe(false);
-    const armed = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' })
-      .answerLayer()
-      .build();
+    const armed = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' }).build();
     await armed.run({ message: 'hello' });
     expect(armed.checkpoint()!.turnNumber).toBe(1);
   });

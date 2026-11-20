@@ -59,7 +59,7 @@ person's block keeps its two ranges) and a source that holds none or only part o
 reaches it as what the call asked about and what the source holds, both in the person's zone
 (`timeLimits.ts` · `heldLine`, off the `period` row's `held`; the person's `Period:` line already
 prints both); the results layer (`results/subflow.ts` · `checkPeriods`, handed each call's
-`call-window` and `call` rows by `honesty/mounts.ts` · `timeOfBatch`) asks `check.ts` ·
+`call-window` and `call` rows by `honesty/resultsInput.ts` · `timeOfBatch`) asks `check.ts` ·
 `periodTimeCheck` and files the answer on the call's `period` row, which the answer's standing folds
 (`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls/evidence/sourceClock.ts` files a
 `source-clock` row when a dataset it mints declares an axis zone;

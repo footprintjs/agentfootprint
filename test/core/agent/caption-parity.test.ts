@@ -66,7 +66,9 @@ describe('the argument view of a model call and an inner call', () => {
           args: { label: caption },
         },
       ]);
-      expect(await agent.resume(paused.checkpoint, 'Finish.')).toBe('done');
+      expect(await agent.resume(paused.checkpoint, 'Finish.')).toBe(
+        'done\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
+      );
       expect(received).toEqual([label, label]);
       expect(
         checker.requests

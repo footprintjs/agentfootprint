@@ -67,7 +67,7 @@ describe('answer event — the payload law, and the bridge', () => {
           execute: () => [],
         }),
       );
-      return (armed ? b.answerLayer() : b).build();
+      return (armed ? b : b.answerLayer(false)).build();
     };
     const armed = build(true);
     const heard: string[] = [];

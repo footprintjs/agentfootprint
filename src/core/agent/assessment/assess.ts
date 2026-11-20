@@ -49,28 +49,32 @@
  */
 
 import { callIndexOf, isRecord, str } from './recordValues.js';
-import { recoveredCallOutcomes, turnResults, type TurnResult } from './turnResults.js';
-import { argumentRows, type ArgumentRowRead } from './argumentRows.js';
-import {
-  declaredByValue,
-  readEmptiness,
-  rowsAtProblem,
-  type ValueDeclaration,
-} from '../emptiness.js';
-import { issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
-import {
-  groupOccurrenceEvidence,
-  historyCallResolver,
-  readHistoryCalls,
-  uniqueHistoryProposal,
-} from '../recordedCalls.js';
+import { recoveredCallOutcomes, turnResults } from './turnResults.js';
+import { argumentRows, waitingArgumentIteration, type ArgumentRowRead } from './argumentRows.js';
+import { rowsAtProblem } from '../emptiness.js';
+import { issuedTicketsOf } from '../placedTickets.js';
+import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
-import { statePointer } from './pointer.js';
+import { historyPointer, statePointer } from './pointer.js';
+import { periodRows, PERIOD_REASONS, readPeriodVerdicts } from './periodRows.js';
+import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
+import { deliveredResults } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import { rewritesByOccurrence } from './rewrittenArguments.js';
-import { coverageRows, type CoverageRow } from './coverageRows.js';
+import { coverageRows } from './coverageRows.js';
+import { fire, type Gathered } from './gathered.js';
+import {
+  readCallOutcomes,
+  readCoverageRows,
+  readResults,
+  readTurnResults,
+  readTurnCalls,
+} from './resultEvidence.js';
+import { standingAdmission } from './standingAdmission.js';
+import { ENTRY_EVIDENCE_COMPLETE_KEY, ENTRY_EVIDENCE_KEY } from './entryEvidence.js';
+import { placeSettledResults, readSettledResults } from './settledResults.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -143,31 +147,6 @@ function keptOutGuard(state: Readonly<Record<string, unknown>>): {
 }
 
 type ResolveCall = ReturnType<typeof historyCallResolver>;
-
-const historyPointer = (result: TurnResult): AssessmentPointer => ({
-  kind: 'history',
-  index: result.index,
-  path: result.toolCallId !== undefined ? '/toolCallId' : '/role',
-  ...(result.toolCallId !== undefined && { toolCallId: result.toolCallId }),
-});
-
-// ── the fold, as small steps over one accumulator ───────────────────────────
-
-/** One check whose verdict the record holds. */
-type CheckRan = AnswerAssessment['checked'][number];
-
-/** What the steps gather as they read: the reasons with their rows, the checks that ran, the support. */
-interface Gathered {
-  readonly fired: Map<AssessmentReason, AssessmentPointer[]>;
-  readonly checked: CheckRan[];
-  support?: AnswerAssessment['support'];
-}
-
-function fire(g: Gathered, reason: AssessmentReason, witness: AssessmentPointer): void {
-  const list = g.fired.get(reason) ?? [];
-  list.push(witness);
-  g.fired.set(reason, list);
-}
 
 /**
  * Every layer: the turn ENDED in a pause still waiting for a person — read from
@@ -335,7 +314,11 @@ function readContingentRows(
     } else if (since < 0 || index < since) {
       return;
     }
-    fire(g, 'value-contingent', statePointer('findingsLedger', index, 'value'));
+    fire(
+      g,
+      'value-contingent',
+      statePointer('findingsLedger', index, row.declaredOn === 'answer' ? 'declaredOn' : 'value'),
+    );
   });
 }
 
@@ -359,248 +342,6 @@ function readArgumentAsk(
   fire(g, 'argument-asked', statePointer('argumentAsk', 'waiting', 'requestId'));
   for (const row of rows) {
     if (row.asked) fire(g, 'argument-asked', statePointer('findingsLedger', row.index, 'asked'));
-  }
-}
-
-/** One `period` row of this turn — one judged call. */
-interface PeriodRowRead {
-  readonly index: number;
-  readonly historyIndex?: number;
-  readonly verdict: string;
-  /** The argument the tool's `ToolPeriod` names — the join key to the call's argument row. */
-  readonly argument?: string;
-  /** The time layer's checks on the row (step T8) — filed only under `.time()`. */
-  readonly differs: boolean;
-  readonly beyondRetention: boolean;
-}
-
-/**
- * This turn's period verdicts (honesty layer 3): EVERY `period` row whose
- * `turn` is the run's `turnNumber`, in ledger order. A record with no
- * `turnNumber` reads every period row (it may over-report; it never hides).
- *
- * Never collapsed by call id. The layer files one row per judged call — each
- * batch judged once (`honesty/mounts.ts` · `batchToJudge`) — so a second row
- * under an id is ANOTHER call: a provider's synthetic counter restarts with
- * each provider instance, so a resumed leg repeats the ids of the leg that
- * failed (whose rows ride the checkpoint, under the same turn), and a provider
- * may reuse an id across batches. "The last per call" would let a later
- * `covered` hide an earlier `not-held` the answer can still rest on.
- */
-function periodRows(
-  state: Readonly<Record<string, unknown>>,
-  resolve: ResolveCall,
-): readonly PeriodRowRead[] {
-  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
-  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  const rows: PeriodRowRead[] = [];
-  ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'period') return;
-    if (turn !== undefined && row.turn !== turn) return;
-    const verdict = str(row.verdict);
-    if (
-      verdict === undefined ||
-      (str(row.toolCallId) === undefined && readCallOccurrenceKey(row) === undefined)
-    )
-      return;
-    const argument = str(row.argument);
-    const historyIndex = callIndexOf(row, resolve);
-    rows.push({
-      index,
-      ...(historyIndex !== undefined && { historyIndex }),
-      verdict,
-      ...(argument !== undefined && { argument }),
-      differs: isRecord(row.differs),
-      beyondRetention: row.beyondRetention === true,
-    });
-  });
-  return rows;
-}
-
-/** The reason each period verdict fires — `covered` fires none. */
-const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
-  'not-held': 'period-not-held',
-  'partly-held': 'period-partly-held',
-  unknown: 'period-unknown',
-  undeclared: 'period-undeclared',
-};
-
-/**
- * Layer 3, the results layer's verdicts: each period row of this turn — the
- * store did not hold the period the read asked for (`not-held`), held only
- * part of it (`partly-held`), could not say (`unknown`, adopted Q33: "not
- * sure" by default, on a non-empty result too), or the result said nothing
- * about its period though its tool declares a period argument (`undeclared`).
- * `covered` fires nothing — and supports nothing: a period the store held
- * keeps a reason from firing, never more.
- *
- * THE JOIN (results.md § 3.7): the inputs layer owns WHO chose the period
- * (the call's `argument` row for the argument its `ToolPeriod` names), this
- * layer owns WHAT the read covered. A period reason can witness both rows
- * when the occurrence and the argument name match. Neither parses the other's
- * words, so a reader can say "the hour you asked about" or "the 2 hours the
- * tool's rule assumed". Files the `result-period` check when the layer filed
- * any verdict this turn.
- */
-function readPeriodVerdicts(
-  rows: readonly PeriodRowRead[],
-  argumentVerdicts: readonly ArgumentRowRead[],
-  g: Gathered,
-): void {
-  if (rows.length === 0) return;
-  const witness: AssessmentPointer[] = [];
-  for (const row of rows) {
-    const at = statePointer('findingsLedger', row.index, 'verdict');
-    witness.push(at);
-    const chosenBy =
-      row.historyIndex === undefined || row.argument === undefined
-        ? undefined
-        : argumentVerdicts.find(
-            (a) => a.historyIndex === row.historyIndex && a.argument === row.argument,
-          );
-    const fireJoined = (reason: AssessmentReason, pointer: AssessmentPointer): void => {
-      fire(g, reason, pointer);
-      if (chosenBy !== undefined) {
-        fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
-      }
-    };
-    // The time layer's result checks (step T8), under `.time()` only: the
-    // read is not what was asked (TQ8 — `extra` alone too), or the window was
-    // older than the source keeps.
-    if (row.differs) {
-      fireJoined('period-differs-from-asked', statePointer('findingsLedger', row.index, 'differs'));
-    }
-    if (row.beyondRetention) {
-      fireJoined(
-        'period-beyond-retention',
-        statePointer('findingsLedger', row.index, 'beyondRetention'),
-      );
-    }
-    const reason = PERIOD_REASONS[row.verdict];
-    if (reason === undefined) continue;
-    fireJoined(reason, at);
-  }
-  g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
-}
-
-/** Layer 3, the tools' own declarations: every absence and every declared gap. */
-function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
-  for (const row of coverage) {
-    const at = statePointer('coverageDeclared', row.index, 'kind');
-    if (row.kind === 'absence') fire(g, 'declared-absent', at);
-    if (row.gap) fire(g, 'coverage-gap', at);
-  }
-}
-
-/**
- * One result of the turn, with what the record holds about its call: the
- * committed coverage rows, and — only when there are none — the envelope in
- * the result itself (`agent/emptiness.ts` · `declaredByValue`).
- */
-interface ResultRead {
-  readonly result: TurnResult;
-  readonly at: AssessmentPointer;
-  readonly rows: readonly CoverageRow[];
-  /**
-   * The result's OWN envelope, read when its call has no committed row: the run
-   * filed none (an envelope it never recognized, such as JSON text), or the row
-   * was lost on the way here (a history restored by `resumeOnError` carries no
-   * `coverageDeclared`; a trimmed recording drops it). Never read as silence.
-   */
-  readonly own?: ValueDeclaration;
-}
-
-function readResults(
-  results: readonly TurnResult[],
-  coverage: readonly CoverageRow[],
-): readonly ResultRead[] {
-  const { byOccurrence } = groupOccurrenceEvidence(coverage, (row) => row.historyIndex);
-  return results.map((result) => {
-    const rows = byOccurrence.get(result.index) ?? [];
-    const own = rows.length === 0 ? declaredByValue(result.content) : undefined;
-    return { result, at: historyPointer(result), rows, ...(own !== undefined && { own }) };
-  });
-}
-
-/**
- * Layer 3, what came back: every result of the turn through the ONE emptiness
- * reader. A call with committed coverage rows is read through the door those
- * rows are; a call with none is handed NO door, so the reader reads the
- * envelope in the bytes by the rule the run's recognizer files rows — and a gap
- * that envelope lists is a reason too.
- */
-function readTurnResults(
-  reads: readonly ResultRead[],
-  recovered: ReadonlySet<number>,
-  declarations: AssessmentDeclarations | undefined,
-  issued: IssuedPairs,
-  g: Gathered,
-): void {
-  const readable: AssessmentPointer[] = [];
-  for (const { result, at, rows, own } of reads) {
-    if (result.outcome !== undefined && !recovered.has(result.index)) {
-      fire(g, 'call-not-completed', { ...at, path: '/outcome' });
-    } else if (result.reportedStatus !== undefined && !recovered.has(result.index)) {
-      fire(g, 'work-not-finished', { ...at, path: '/reportedStatus' });
-    }
-    const absenceRow = rows.some((c) => c.kind === 'absence');
-    const door =
-      rows.length > 0
-        ? { absent: absenceRow, bounded: rows.some((c) => c.kind === 'ledger') }
-        : undefined;
-    const rowsAt =
-      result.toolName !== undefined ? declarations?.tools?.[result.toolName]?.rowsAt : undefined;
-    const reading = readEmptiness(result.content, {
-      placement: { toolCallId: result.toolCallId, issued },
-      ...(door !== undefined && { door }),
-      ...(rowsAt !== undefined && { rowsAt }),
-    });
-    if (reading.emptiness !== 'unknown') readable.push(at);
-    // An empty rowset inside a declared boundary, or an absence no row holds; an absence row fired for itself.
-    if (reading.emptiness === 'declared-absent' && !absenceRow) fire(g, 'declared-absent', at);
-    if (reading.emptiness === 'undeclared-empty' && rows.length === 0) {
-      fire(g, 'empty-undeclared', at);
-    }
-    // A gap the result's own envelope lists, when no row holds it.
-    if (own?.gap === true) fire(g, 'coverage-gap', at);
-  }
-  if (reads.length > 0) {
-    g.checked.push({
-      layer: 3,
-      check: 'result-shape',
-      ran: readable.length,
-      of: reads.length,
-      witness: readable,
-    });
-  }
-}
-
-/**
- * A call declared coverage when its rows or its own envelope say so.
- * Unplaced coverage rows remain evidence. They add no call to either count.
- */
-function readTurnCalls(
-  reads: readonly ResultRead[],
-  coverage: readonly CoverageRow[],
-  g: Gathered,
-): void {
-  const witness = coverage
-    .filter((row) => row.historyIndex !== undefined)
-    .map((c) => statePointer('coverageDeclared', c.index, 'kind'));
-  let declared = 0;
-  for (const { at, rows, own } of reads) {
-    if (rows.length > 0 || own !== undefined) declared += 1;
-    if (own !== undefined) witness.push(at);
-  }
-  const of = reads.length;
-  if (of > 0) {
-    g.checked.push({
-      layer: 3,
-      check: 'tool-coverage',
-      ran: declared,
-      of,
-      witness,
-    });
   }
 }
 
@@ -720,7 +461,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   // By index over the list's own length — never its iterator or its own `entries`.
   const checks: readonly unknown[] = Array.isArray(report.checks) ? report.checks : [];
   for (let index = 0; index < checks.length; index++) {
-    const check = checks[index];
+    const check: unknown = Object.getOwnPropertyDescriptor(checks, String(index))?.value;
     if (!isRecord(check) || typeof check.id !== 'string') continue;
     if (!check.id.startsWith('agent:negative-claims:')) continue;
     if (check.disposition === 'checked-fail')
@@ -808,12 +549,17 @@ function valueOf(g: Gathered, read: SourceRead): Pick<AnswerAssessment, 'assessm
   const reasons = REASONS.flatMap((entry) => {
     const witness = g.fired.get(entry.reason);
     if (witness === undefined) return [];
+    const source =
+      entry.reason === 'value-contingent' &&
+      witness.some((w) => w.kind === 'state' && w.path.endsWith('/declaredOn'))
+        ? 'answer'
+        : entry.source;
     return [
       {
         reason: entry.reason,
         ...(entry.layer !== undefined && { layer: entry.layer }),
         witness,
-        source: reasonSourceOf(entry.reason, entry.source, witness, read),
+        source: reasonSourceOf(entry.reason, source, witness, read),
       },
     ];
   });
@@ -871,7 +617,14 @@ export function assessAnswer(
   checkInputs(record, declarations);
   // A placeholder is a kept-out value only in a snapshot served under a policy
   // (`redaction/marker.ts`); a checkpoint is never served.
-  return foldState(stateOf(record), declarations, servedUnderPolicy(record.snapshot));
+  return foldState(
+    stateOf(record),
+    declarations,
+    servedUnderPolicy(record.snapshot),
+    undefined,
+    undefined,
+    record.events,
+  );
 }
 
 /**
@@ -905,39 +658,121 @@ export function foldState(
   served: boolean,
   retainedHistory?: (history: readonly unknown[]) => unknown,
   declarationAddresses?: ReadonlyMap<number, number>,
+  legacyEvents?: unknown,
 ): AnswerAssessment {
   const { state, asked } = served
     ? keptOutGuard(recorded)
     : { state: recorded, asked: new Set<string>() };
-  const g: Gathered = { fired: new Map(), checked: [] };
   const history = Array.isArray(state.history) ? (state.history as readonly unknown[]) : [];
   const historyCalls = readHistoryCalls(history);
-  const { results, from, begins } = turnResults(history, historyCalls);
+  const { results: recordedResults, from, begins } = turnResults(history, historyCalls);
   const current = historyCalls.filter((call) => call.index > begins);
   const resolveCurrent = historyCallResolver(current);
+  const argumentVerdicts = argumentRows(state, current, history, begins);
+  const admission = standingAdmission(
+    state,
+    historyCalls,
+    current,
+    argumentVerdicts,
+    declarationAddresses,
+    history,
+    legacyEvents,
+  );
+  const g: Gathered = { admit: admission.admit, fired: new Map(), checked: [] };
+  const nativeFacts = admission.nativeResult;
+  if (admission.entryIncomplete)
+    fire(
+      g,
+      'check-unreachable',
+      admission.legacyEntry
+        ? statePointer(ENTRY_EVIDENCE_KEY, 'complete')
+        : statePointer(ENTRY_EVIDENCE_COMPLETE_KEY),
+    );
+  if (admission.settlements?.complete === false)
+    fire(g, 'check-unreachable', statePointer('settledToolCallsComplete'));
+  const { results, periods } = deliveredResults(recordedResults, admission.dispositions);
+  // An occurrence witness would reveal how many results the host withheld.
+  if (admission.withheldReturn) g.fired.set('result-withheld', []);
+  for (const { result, verdict } of admission.settlements === undefined ? periods : []) {
+    const reason = PERIOD_REASONS[verdict];
+    if (reason !== undefined) fire(g, reason, historyPointer(result));
+  }
   const places = { history, resolve: historyCallResolver(historyCalls), begins };
   const coverage = coverageRows(
     state.coverageDeclared,
     (row) => callIndexOf(row, resolveCurrent),
     declarationAddresses,
+    nativeFacts,
   );
-  const reads = readResults(results, coverage);
+  const reads = readResults(
+    results.filter((result) => admission.returned(result.index)),
+    coverage,
+  );
 
+  // A throw kept a declared check from running. Count the opportunity
+  // without admitting its error notice as a result or as a witness.
+  const resultOpportunities =
+    reads.length + results.filter((result) => admission.threw(result.index)).length;
   readPause(state, g);
-  const argumentVerdicts = argumentRows(state, current, history, begins);
   readArgumentAsk(state, argumentVerdicts, g);
-  readArgumentVerdicts(state, argumentVerdicts, resolveCurrent, g);
+  const enteredArguments = argumentVerdicts.filter(
+    (row) =>
+      !(admission.keyed && row.occurrenceKey === undefined) &&
+      admission.entered(row.historyIndex, row.occurrenceKey),
+  );
+  readArgumentVerdicts(state, enteredArguments, resolveCurrent, g);
+  if (waitingArgumentIteration(state) === undefined) {
+    const entered = new Set(enteredArguments.map((row) => row.index));
+    // A keyless ambiguous observation cannot establish a call. Say the
+    // check was unavailable instead of treating a missing reason as clearance.
+    for (const row of argumentVerdicts) {
+      if (
+        (row.historyIndex !== undefined && !(admission.keyed && row.occurrenceKey === undefined)) ||
+        (row.occurrenceKey !== undefined && !admission.entryIncomplete) ||
+        entered.has(row.index) ||
+        row.asked ||
+        row.withheld ||
+        (!row.failed && !row.ruled)
+      )
+        continue;
+      fire(g, 'check-unreachable', statePointer('findingsLedger', row.index, 'argument'));
+    }
+  }
   readCoverageRows(coverage, g);
-  readTurnCalls(reads, coverage, g);
+  readTurnCalls(reads, coverage, resultOpportunities, g);
   readContingentRows(state, places, g);
+  if (admission.settlements === undefined) {
+    readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
+  } else {
+    const placed = placeSettledResults(admission.settlements, results, current);
+    const recovered = recoveredCallOutcomes(
+      placed.retained,
+      history,
+      begins,
+      retainedHistory,
+      (index) => placed.byIndex.get(index)?.execution === 'returned',
+    );
+    readSettledResults(admission.settlements, placed, coverage, recovered, PERIOD_REASONS, g);
+  }
   readTurnResults(
     reads,
-    recoveredCallOutcomes(results, history, begins, retainedHistory),
     declarations,
     issuedTicketsOf(recorded.placedTickets),
+    resultOpportunities,
+    g,
+    admission.settlements === undefined,
+  );
+  readPeriodVerdicts(
+    periodRows(state, (row) => callIndexOf(row, resolveCurrent), nativeFacts),
+    enteredArguments,
     g,
   );
-  readPeriodVerdicts(periodRows(state, resolveCurrent), argumentVerdicts, g);
+  if (Array.isArray(state.findingsLedger)) {
+    const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+    for (const { index } of retentionRefusalsOf(state.findingsLedger, turn)) {
+      fire(g, 'period-beyond-retention', statePointer('findingsLedger', index, 'refused'));
+    }
+  }
   readConflicts(state, places, g);
   readAnswerRows(state, g);
   const integrity = readIntegrityRows(state);

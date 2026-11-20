@@ -331,8 +331,9 @@ host supplies the final answer after the run completes.
 
 | agentfootprint event | AG-UI events |
 |---|---|
-| `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |
-| `agent.turn_end` | the answer as one text message when nothing streamed; after a streamed answer, the text the library appended to it — the limits block, the standing line — as its own message |
+| `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` for streamed model text. When output admission holds provider chunks, the released token carries the complete admitted answer, including any standing line. |
+| `agent.turn_end` | The whole answer as one text message when nothing streamed. When the tokens already formed the answer's prefix, any remaining limits block or standing line appears as its own text message. |
+| `answer.assessed` | A `CUSTOM` event with standing, reason codes and check counts. The answer text follows the delivery rules above. |
 | `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message. For a tool whose argument view hides values (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`), `TOOL_CALL_ARGS` carries the view's output, never the real values, and `TOOL_CALL_START` and a check-in's interrupt carry the hidden names as `metadata.agentfootprint.hiddenArgs` |
 | `stream.tool_end` | `TOOL_CALL_RESULT` |
 | `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` — only with `reasoning: true` |
