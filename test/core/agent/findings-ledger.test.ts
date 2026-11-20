@@ -428,12 +428,15 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
       { content: '', toolCalls: [{ id: 'c1', name: 'look', args: { q: 'a' } }] },
       'done',
     ];
+    // Isolate entry evidence written by the findings layer.
     const on = Agent.create({ provider: scripted([], ...script), model: 'm' })
       .tool(recordingTool('look', []) as never)
       .findings()
+      .answerLayer(false)
       .build();
     const off = Agent.create({ provider: scripted([], ...script), model: 'm' })
       .tool(recordingTool('look', []) as never)
+      .answerLayer(false)
       .build();
     const rowsOn = await runCollecting(on);
     const rowsOff = await runCollecting(off);
@@ -1314,18 +1317,21 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
     const seenOff: Shot[] = [];
     const ranOn: Record<string, unknown>[] = [];
     const ranOff: Record<string, unknown>[] = [];
+    // Isolate entry evidence written by the findings layer.
     const on = Agent.create({
       provider: scripted(seenOn, CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
       .tool(recordingTool('look', ranOn) as never)
       .findings()
+      .answerLayer(false)
       .build();
     const off = Agent.create({
       provider: scripted(seenOff, CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
       .tool(recordingTool('look', ranOff) as never)
+      .answerLayer(false)
       .build();
     const rowsOn = await runCollecting(on);
     const rowsOff = await runCollecting(off);

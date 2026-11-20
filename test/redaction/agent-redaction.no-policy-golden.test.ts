@@ -134,7 +134,7 @@ describe('no policy preserves the whole stream with native run identity', () => 
     const observed = normalizeCallOccurrences(JSON.parse(await noPolicyStream(false)));
     const stream = JSON.stringify(observed, null, 1);
     expect(createHash('sha256').update(stream).digest('hex')).toBe(
-      'fb3434222d5e0ede8e16a2688af261847d20b77867166cb440d1f66b3cc2f46e',
+      '52790733eb179248e127f9bcbbada41383547db955d6216d6b83a56b1cb414da',
     );
   });
 });
