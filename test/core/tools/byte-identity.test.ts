@@ -623,6 +623,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
+import { removeVerifiedSourceLinkConsumers } from './source-link-consumer-reference.js';
 import {
   occurrenceAdditions,
   occurrenceReferenceText,
@@ -661,8 +662,6 @@ import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { skillScopedTools, staticTools } from '../../../src/tool-providers/index.js';
 import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
 import { defineOntology } from '../../../src/ontology/index.js';
-import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
-import { readAtCall } from '../../../src/time-travel/index.js';
 import type {
   LLMMessage,
   LLMRequest,
@@ -1661,48 +1660,10 @@ function projection(snapshot: Snapshot): unknown {
       })),
     }),
   );
-  // Keep the historical captures exact after checking the added field at its
-  // native call. Comparing against an arbitrary exclusion would hide drift.
   const prior = record as {
     commitLog: { overwrite: Record<string, unknown>; trace: unknown[] }[];
   };
-  const key = 'sourceLinkConsumer';
-  for (const [index, bundle] of snapshot.commitLog.entries()) {
-    const servedIndex = bundle.trace.findIndex(({ path }) => path === 'sourceLinkServedRows');
-    const writes = bundle.trace.filter(({ path }) => path === key);
-    if (servedIndex === -1) {
-      expect(writes).toEqual([]);
-      expect(Object.hasOwn(bundle.overwrite, key)).toBe(false);
-      expect(Object.hasOwn(bundle.updates, key)).toBe(false);
-      continue;
-    }
-    const location = epochs.find(
-      ({ callRuntimeStageId, callIdx }) =>
-        callRuntimeStageId === bundle.runtimeStageId && callIdx === index,
-    );
-    if (!location) throw new Error('Expected a native model call for the served row.');
-    expect(bundle.stageId).toBe('call-llm');
-    expect(writes).toEqual([{ path: key, verb: 'set' }]);
-    const consumerIndex = bundle.trace.findIndex(({ path }) => path === key);
-    expect(consumerIndex).toBeGreaterThan(servedIndex);
-    for (const output of ['llmLatestContent', 'llmLatestToolCalls']) {
-      const outputIndex = bundle.trace.findIndex(({ path }) => path === output);
-      if (outputIndex !== -1) expect(consumerIndex).toBeLessThan(outputIndex);
-    }
-    expect(Object.hasOwn(bundle.updates, key)).toBe(false);
-    const history = readAtCall(location, 'history') as readonly LLMMessage[];
-    const positions = history.flatMap((message, element) => {
-      const occurrence = message.role === 'tool' ? readCallOccurrenceKey(message) : undefined;
-      return typeof occurrence === 'string' ? [{ occurrence, element }] : [];
-    });
-    expect(bundle.overwrite[key]).toEqual({
-      consumer: bundle.runtimeStageId,
-      historyPositions: positions,
-      runId: snapshot.runId,
-    });
-    delete prior.commitLog[index]!.overwrite[key];
-    prior.commitLog[index]!.trace.splice(consumerIndex, 1);
-  }
+  removeVerifiedSourceLinkConsumers(snapshot, prior.commitLog, epochs);
   return prior;
 }
 

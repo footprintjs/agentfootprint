@@ -6,6 +6,7 @@ import { mock } from '../../../../src/llm-providers.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 import { servedRowAdditions, withoutServedRows } from '../../tools/served-row-reference.js';
+import { removeVerifiedSourceLinkConsumers } from '../../tools/source-link-consumer-reference.js';
 import { captureDigests } from './fixtures/answer-standing-af-15.0.1/capture.js';
 import {
   askingBuilder,
@@ -46,7 +47,10 @@ it.each(['builder', 'options'] as const)(
       [15, 1, 'set', [[0, 1]]],
       [34, 1, 'append', [[0, 3]]],
     ]);
-    const { commitLog } = withoutServedRows({ commitLog: observed.commitLog });
+    const snapshot = agent.getLastSnapshot()!;
+    const historicalLog = structuredClone(observed.commitLog);
+    removeVerifiedSourceLinkConsumers(snapshot, historicalLog);
+    const { commitLog } = withoutServedRows({ commitLog: historicalLog });
     const current = normalizeCallOccurrences({ ...observed, commitLog }) as typeof observed;
     expect(captureDigests(current)).toEqual({ ...published.capture, ...main.capture });
 
