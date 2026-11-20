@@ -43,6 +43,24 @@ const withheld = { ...clean, correction: 'source-declaration-required' };
 const failedWitness = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
 
 describe('argument standing from a recorded call key', () => {
+  it('reports the unavailable proof when a keyed record loses an argument finding key', () => {
+    const { callOccurrenceKey: _missing, ...unbound } = failed;
+    const state = {
+      turnNumber: 1,
+      history: [request, firstProposal, firstResult],
+      findingsLedger: [unbound],
+      enteredToolCalls: [{ callOccurrenceKey: firstKey, entered: true }],
+      enteredToolCallsComplete: true,
+      settledToolCalls: [
+        { callOccurrenceKey: firstKey, execution: 'returned', delivery: 'native' },
+      ],
+      settledToolCallsComplete: true,
+    };
+    const assessment = foldState(state, undefined, false);
+    expect(assessment.standing).toBe('not-sure');
+    expect(assessment.reasons.map(({ reason }) => reason)).toEqual(['check-unreachable']);
+  });
+
   it.each([
     {
       label: 'one landed',

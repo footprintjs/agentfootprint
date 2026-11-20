@@ -1,6 +1,7 @@
 import type { TypedScope } from 'footprintjs';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { TOOL_BATCH_FRAME_PREFIX } from '../../../../../lib/saidByPerson.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
@@ -68,7 +69,7 @@ export function refuseSourceDeclarationBatch(
       toolResultOrigin: 'not-entered',
     });
   }
-  scope.history = history;
+  commitSettledToolHistory(scope, history);
   scope.toolResults = [];
   scope.lastToolResult = undefined;
   const payload = {

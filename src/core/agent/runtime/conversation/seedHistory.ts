@@ -5,6 +5,7 @@ import type { AgentState } from '../../types.js';
 import type { TypedScope } from 'footprintjs';
 import type { MemoryStore } from '../../../../memory/store/index.js';
 import { resolveTurnNumber } from '../../../../memory/turn/index.js';
+import type { ToolTurnEvidence } from '../../recordedCalls/toolTurnCheckpoint.js';
 
 /**
  * Raise `scope.turnNumber` to what the conversation's own stores know.
@@ -24,19 +25,11 @@ export async function anchorTurnNumber(
   scope: TypedScope<AgentState>,
   stores: readonly MemoryStore[],
 ): Promise<void> {
-  const previous = scope.turnNumber;
   scope.turnNumber = await resolveTurnNumber({
     stores,
     identity: scope.runIdentity,
-    hostTurn: previous,
+    hostTurn: scope.turnNumber,
   });
-  if (
-    previous !== undefined &&
-    scope.turnNumber !== previous &&
-    scope.withheldToolResultTurn === previous
-  ) {
-    scope.withheldToolResultTurn = scope.turnNumber;
-  }
 }
 
 /**
@@ -68,7 +61,7 @@ export interface PendingResumeHistory {
    * history's count, and the restored ledger's stamps, are all it has.
    */
   readonly turn?: number;
-  readonly withheldToolResult?: true;
+  readonly toolTurnEvidence?: ToolTurnEvidence;
   readonly negatives?: NegativeCheckpoint;
   readonly innerCallPolicyArgs?: import('../../../../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
   /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */
@@ -156,7 +149,7 @@ export function turnNumberFor(
   return turn;
 }
 
-/** Start the numbered turn, carrying withholding only from the same failed request. */
+/** Start the numbered turn. */
 export function seedConversationTurn(
   scope: TypedScope<AgentState>,
   history: readonly LLMMessage[],
@@ -166,6 +159,5 @@ export function seedConversationTurn(
 ): number {
   const turn = turnNumberFor(history, resume, ledger, stamped);
   scope.turnNumber = turn;
-  if (resume?.withheldToolResult === true) scope.withheldToolResultTurn = turn;
   return turn;
 }

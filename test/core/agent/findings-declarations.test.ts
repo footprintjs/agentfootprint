@@ -137,6 +137,7 @@ describe('findings declarations — the run constant `findingsServe` (seed, arme
       [
         ...keysOf(off),
         'enteredToolCalls',
+        'enteredToolCallsComplete',
         'findingsRequest',
         'findingsServe',
         'findingsLayout',
@@ -144,7 +145,8 @@ describe('findings declarations — the run constant `findingsServe` (seed, arme
       ].sort(),
     );
     const state = on.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined;
-    expect(state?.enteredToolCalls).toEqual({ entries: [], complete: true });
+    expect(state?.enteredToolCalls).toEqual([]);
+    expect(state?.enteredToolCallsComplete).toBe(true);
     expect(keysOf(on)).not.toContain('findingsLedger');
   });
 });
@@ -193,6 +195,7 @@ describe('findings declarations — AgentOptions.findings.answerAsk and the run 
       [
         ...keysOf(off),
         'enteredToolCalls',
+        'enteredToolCallsComplete',
         'findingsRequest',
         'findingsServe',
         'findingsLayout',

@@ -86,10 +86,6 @@ export function buildToolMiddlewareOperations(
     }
     if (verdict.kind === 'deny') {
       if (!call.returned) return { modelResult: delivered };
-      // The standing retains one anonymous fact when the result leaves history.
-      const turn = scope.turnNumber;
-      if (typeof turn === 'number' && scope.withheldToolResultTurn !== turn)
-        scope.withheldToolResultTurn = turn;
       return { modelResult: delivered, toolResultDisposition: 'withheld' };
     }
     return {

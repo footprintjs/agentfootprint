@@ -1,5 +1,9 @@
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { isRecord, str } from './recordValues.js';
+import type { ArgumentRowRead } from './argumentRows.js';
+import { fire, type Gathered } from './gathered.js';
+import { statePointer } from './pointer.js';
+import type { AssessmentPointer, AssessmentReason } from './types.js';
 
 /** One `period` row of this turn — one judged call. */
 export interface PeriodRowRead {
@@ -56,4 +60,70 @@ export function periodRows(
     });
   });
   return rows;
+}
+
+/** The reason each period verdict fires — `covered` fires none. */
+export const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
+  'not-held': 'period-not-held',
+  'partly-held': 'period-partly-held',
+  unknown: 'period-unknown',
+  undeclared: 'period-undeclared',
+};
+
+/**
+ * Layer 3, the results layer's verdicts: each period row of this turn — the
+ * store did not hold the period the read asked for (`not-held`), held only
+ * part of it (`partly-held`), could not say (`unknown`, adopted Q33: "not
+ * sure" by default, on a non-empty result too), or the result said nothing
+ * about its period though its tool declares a period argument (`undeclared`).
+ * `covered` fires nothing — and supports nothing: a period the store held
+ * keeps a reason from firing, never more.
+ *
+ * THE JOIN (results.md § 3.7): the inputs layer owns WHO chose the period
+ * (the call's `argument` row for the argument its `ToolPeriod` names), this
+ * layer owns WHAT the read covered. A period reason can witness both rows
+ * when the occurrence and the argument name match. Neither parses the other's
+ * words, so a reader can say "the hour you asked about" or "the 2 hours the
+ * tool's rule assumed". Files the `result-period` check when the layer filed
+ * any verdict this turn.
+ */
+export function readPeriodVerdicts(
+  rows: readonly PeriodRowRead[],
+  argumentVerdicts: readonly ArgumentRowRead[],
+  g: Gathered,
+): void {
+  if (rows.length === 0) return;
+  const witness: AssessmentPointer[] = [];
+  for (const row of rows) {
+    const at = statePointer('findingsLedger', row.index, 'verdict');
+    witness.push(at);
+    const chosenBy =
+      row.historyIndex === undefined || row.argument === undefined
+        ? undefined
+        : argumentVerdicts.find(
+            (a) => a.historyIndex === row.historyIndex && a.argument === row.argument,
+          );
+    const fireJoined = (reason: AssessmentReason, pointer: AssessmentPointer): void => {
+      fire(g, reason, pointer);
+      if (chosenBy !== undefined) {
+        fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
+      }
+    };
+    // The time layer's result checks (step T8), under `.time()` only: the
+    // read is not what was asked (TQ8 — `extra` alone too), or the window was
+    // older than the source keeps.
+    if (row.differs) {
+      fireJoined('period-differs-from-asked', statePointer('findingsLedger', row.index, 'differs'));
+    }
+    if (row.beyondRetention) {
+      fireJoined(
+        'period-beyond-retention',
+        statePointer('findingsLedger', row.index, 'beyondRetention'),
+      );
+    }
+    const reason = PERIOD_REASONS[row.verdict];
+    if (reason === undefined) continue;
+    fireJoined(reason, at);
+  }
+  g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
 }

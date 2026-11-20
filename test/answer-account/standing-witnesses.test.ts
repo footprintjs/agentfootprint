@@ -93,7 +93,9 @@ interface MutableSnapshot {
     history: Record<string, unknown>[];
     findingsLedger: Record<string, unknown>[] | string;
     compactions?: readonly unknown[];
-    enteredToolCalls?: { readonly entries: readonly unknown[]; readonly complete: boolean };
+    enteredToolCalls?: readonly unknown[];
+    enteredToolCallsComplete?: boolean;
+    settledToolCalls?: Record<string, unknown>[];
   };
   recorders: { id: string }[];
 }
@@ -185,10 +187,10 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
           if (!isCheckInPause(result))
             throw new Error('Expected a check-in before the second call.');
           expect(entered).toEqual(['alpha']);
-          expect(result.checkpoint.sharedState.enteredToolCalls).toMatchObject({
-            entries: [{ callOccurrenceKey: expect.any(Array), entered: true }],
-            complete: true,
-          });
+          expect(result.checkpoint.sharedState.enteredToolCalls).toEqual([
+            { callOccurrenceKey: expect.any(Array), entered: true },
+          ]);
+          expect(result.checkpoint.sharedState.enteredToolCallsComplete).toBe(true);
           result = await agent.resume(
             result.checkpoint,
             checkInApproved({ request: result.checkIn, by: 'fixture' }),
@@ -198,7 +200,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         else if (paused) expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
-        const { history, findingsLedger, compactions, enteredToolCalls } =
+        const { history, findingsLedger, compactions, enteredToolCalls, enteredToolCallsComplete } =
           snapshotOf(recording).sharedState;
         const results = history.filter((message) => message.role === 'tool');
         expect(results).toHaveLength(bothRetained ? 2 : 1);
@@ -252,13 +254,13 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             : []),
         ]);
         if (rendersStanding) {
-          expect(enteredToolCalls).toEqual({
-            entries: (findingsLedger as Record<string, unknown>[]).map(({ callOccurrenceKey }) => ({
+          expect(enteredToolCalls).toEqual(
+            (findingsLedger as Record<string, unknown>[]).map(({ callOccurrenceKey }) => ({
               callOccurrenceKey,
               entered: true,
             })),
-            complete: true,
-          });
+          );
+          expect(enteredToolCallsComplete).toBe(true);
         }
         const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
         const assessment = assessAnswer(recording);
@@ -294,6 +296,9 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
           JSON.stringify(recording, (field, value: unknown) =>
             field === 'callOccurrenceKey' ||
             field === 'enteredToolCalls' ||
+            field === 'enteredToolCallsComplete' ||
+            field === 'settledToolCalls' ||
+            field === 'settledToolCallsComplete' ||
             field === 'toolResultExecution'
               ? undefined
               : value,
@@ -436,7 +441,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
   });
 
   it.each(['missing', 'hidden'] as const)(
-    'leaves the line unclaimed when a status is %s',
+    'keeps a settled status when the history status is %s and leaves it unclaimed without proof',
     async (condition) => {
       const recording = await pending();
       const snapshot = snapshotOf(recording);
@@ -446,6 +451,14 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         snapshot.recorders.push({ id: REDACTION_MARKER_ID });
         message.reportedStatus = 'REDACTED';
       }
+      const retained = accountForAnswer(recording);
+      expect(retained.answer.value).toBe(REPLY);
+      expect(retained.facts.limitsBlock.value).toBe('Not sure — a tool reported unfinished work.');
+
+      const settlement = snapshot.sharedState.settledToolCalls?.[0];
+      expect(settlement?.reportedStatus).toBe('pending');
+      if (condition === 'missing') delete settlement!.reportedStatus;
+      else settlement!.reportedStatus = 'REDACTED';
       assertUnclaimed(recording);
     },
   );

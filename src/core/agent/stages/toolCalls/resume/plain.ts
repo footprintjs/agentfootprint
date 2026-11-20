@@ -4,6 +4,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { toolResultExecutionField } from '../execution/outcomeField.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { PauseAnswerRequiredError } from '../../../../pause.js';
 import { argsForPausedCall } from '../batch/paused.js';
 import { pausedNegativeResultId } from '../../../negativeClaims/capture.js';
@@ -185,7 +186,7 @@ export function buildResumePlain(
       { toolName, toolCallId, ...occurrence },
     );
     const newHistory = pauseSettlement.history;
-    scope.history = newHistory;
+    commitSettledToolHistory(scope, newHistory);
     // Drives `on-tool-return` triggers, same as every other dispatch path.
     scope.lastToolResult = { toolName, result: resultStr };
     appendBatchResult(scope, { toolName, result: resultStr, toolCallId, ...occurrence });

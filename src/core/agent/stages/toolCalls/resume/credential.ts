@@ -5,6 +5,7 @@ import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
@@ -243,7 +244,7 @@ export function buildResumeCredential(
         { toolName, toolCallId, ...occurrence },
       );
       const consentHistory = consentSettlement.history;
-      scope.history = consentHistory;
+      commitSettledToolHistory(scope, consentHistory);
       scope.lastToolResult = {
         toolName,
         result: consentResultStr,

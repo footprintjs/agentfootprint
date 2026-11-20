@@ -4,6 +4,10 @@
       [0,3,[]],
       [18,0,[[0,0,0,1,0]]]
     ],
+    "settlementCommits": [
+      [0,5,[]],
+      [18,5,[{"callOccurrenceKey":[0,0,0,1,0],"delivery":"native","execution":"returned"}]]
+    ],
     "returned": [18, 1]
   },
   "agent-arguments-ask": {

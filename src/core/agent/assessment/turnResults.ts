@@ -153,6 +153,7 @@ export function recoveredCallOutcomes(
   history: readonly unknown[],
   begins: number,
   retainedHistory?: (history: readonly unknown[]) => unknown,
+  provedCompletion?: (index: number) => boolean,
 ): ReadonlySet<number> {
   const recovered = new Set<number>();
   const needsRetry = (result: TurnResult): boolean =>
@@ -173,13 +174,15 @@ export function recoveredCallOutcomes(
       continue;
     }
     const recorded = history[result.index];
-    if (
-      isRecord(recorded) &&
-      recorded.outcome === undefined &&
-      recorded.reportedStatus === undefined &&
-      recorded.notDispatched === undefined &&
-      recorded.toolResultOrigin === undefined
-    ) {
+    const complete =
+      provedCompletion === undefined
+        ? isRecord(recorded) &&
+          recorded.outcome === undefined &&
+          recorded.reportedStatus === undefined &&
+          recorded.notDispatched === undefined &&
+          recorded.toolResultOrigin === undefined
+        : provedCompletion(result.index);
+    if (complete) {
       completed.set(args.signature, Math.max(latestRetry, args.proposedAt));
     }
   }

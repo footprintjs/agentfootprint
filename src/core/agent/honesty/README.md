@@ -18,14 +18,17 @@ confidence. Four decision points, one layer each:
 | 3 · results | read a result | `sf-results`, at the loop head — the loop target, before the window strategy (`mounts.ts` · `mountResultsLayer`) | **shipped: the period verdict** (step 7b) — one `period` row per call whose result declared its period or whose tool declares a `ToolPeriod` — `core/agent/results/README.md`; the reading checks and outcome rows are step 8 |
 | 4 · answer | give the answer | the first stage of the final branch (`mounts.ts` · `startFinalBranch`), `assess-answer` | **shipped** (`.answerLayer()`): the standing folded in the run and served as data (`turn_end.answerAssessment`, `agentfootprint.answer.assessed`), two witness rows filed by Route, an opt-in line — `core/agent/assessment/README.md` |
 
-## Tool entry
+## Tool entry and settlement
 
-On inputs, findings or answer runs, ToolCalls retains at most 1024 entry facts
+On inputs, findings or answer runs, ToolCalls retains at most 1,024 entry facts
 for the turn (`enteredToolCalls.ts`). Each contains the recorded occurrence key
-and `entered: true`, written immediately before the tool executes. A native
-pause carries the facts into resume. A new turn or mounted Agent starts its own
-record. Overflow, a missing key at entry, or a same-turn error restart without
-the earlier state marks the record incomplete.
+and `entered: true`, written immediately before the tool executes. On an answer
+run, the matching settlement list records the outcome and served result facts
+without its bytes (`settledToolCalls.ts`). The writers append individual rows
+and record completeness beside each list. A native pause or same-request error
+resume carries the proofs forward. A new turn or mounted Agent starts its own
+record. Overflow, an unbound occurrence or a same-turn retry without its prior
+proof marks the record incomplete.
 
 ## How a layer mounts
 

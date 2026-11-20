@@ -1,24 +1,12 @@
-import { readCoverageResult } from '../../../semantics/coverage/read.js';
-import { periodVerdict, leastHeld } from '../../../semantics/coverage/period.js';
-import { readToolResultEnvelope } from '../../../semantics/toolEffects.js';
-import { callOutcomeOf } from '../../../semantics/toolOutcome.js';
-import { parseMaybeJson } from '../emptiness.js';
+import { readRewrittenToolResult } from '../recordedCalls.js';
 import type { TurnResult } from './turnResults.js';
 
 /** Read a rewrite's declarations from its served bytes, without reading the native rows. */
 function rewrittenResult(result: TurnResult): {
   readonly result: TurnResult;
-  readonly period: ReturnType<typeof leastHeld>;
+  readonly period: ReturnType<typeof readRewrittenToolResult>['period'];
 } {
-  const envelope = readToolResultEnvelope(parseMaybeJson(result.content));
-  const content = envelope === undefined ? result.content : envelope.content;
-  const coverage = readCoverageResult(parseMaybeJson(content));
-  const periods = coverage?.declared.flatMap(({ period }) =>
-    period === undefined ? [] : [periodVerdict(period)],
-  );
-  const status = envelope?.status;
-  const outcome = callOutcomeOf({ ran: true, clean: true, status });
-  const reportedStatus = status === 'partial' || status === 'pending' ? status : undefined;
+  const { content, outcome, reportedStatus, period } = readRewrittenToolResult(result.content);
   return {
     result: {
       index: result.index,
@@ -29,7 +17,7 @@ function rewrittenResult(result: TurnResult): {
       ...(outcome !== undefined && { outcome }),
       ...(reportedStatus !== undefined && { reportedStatus }),
     },
-    period: periods === undefined ? undefined : leastHeld(periods),
+    period,
   };
 }
 
@@ -37,7 +25,10 @@ export function deliveredResults(
   recorded: readonly TurnResult[],
   dispositions: ReadonlyMap<number, 'withheld' | 'rewritten'>,
 ) {
-  const periods: { result: TurnResult; verdict: NonNullable<ReturnType<typeof leastHeld>> }[] = [];
+  const periods: {
+    result: TurnResult;
+    verdict: NonNullable<ReturnType<typeof readRewrittenToolResult>['period']>;
+  }[] = [];
   const results = recorded.flatMap((result) => {
     const disposition = dispositions.get(result.index);
     if (disposition === 'withheld') return [];

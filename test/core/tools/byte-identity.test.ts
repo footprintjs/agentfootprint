@@ -1712,10 +1712,14 @@ describe('byte-identity — exact whole-record contract for native component own
           throw new Error(
             `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
           );
-        // Entry ledger addresses are owned by the standing-evidence overlay.
+        // Entry and settlement addresses are owned by the standing-evidence overlay.
         const additions = occurrenceAdditions(observed).filter(
           ([path]) =>
-            !(path[0] === 'commitLog' && path[2] === 'overwrite' && path[3] === 'enteredToolCalls'),
+            !(
+              path[0] === 'commitLog' &&
+              path[2] === 'overwrite' &&
+              (path[3] === 'enteredToolCalls' || path[3] === 'settledToolCalls')
+            ),
         );
         expect(observed).toEqual(
           withStandingEvidence(withOccurrenceAdditions(reference, additions), name),

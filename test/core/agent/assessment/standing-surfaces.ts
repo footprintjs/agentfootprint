@@ -12,6 +12,8 @@ type ResultRecording = Recording & {
       history: Record<string, unknown>[];
       middlewareDecisions?: unknown;
       withheldToolResultTurn?: number;
+      settledToolCalls?: unknown;
+      settledToolCallsComplete?: boolean;
       coverageDeclared?: unknown;
       findingsLedger?: unknown;
     };
@@ -19,7 +21,11 @@ type ResultRecording = Recording & {
 };
 
 /** Observe the same turn through the answer doors, including AG-UI assistant text. */
-export async function observeStanding(agent: Agent, input: AgentInput) {
+export async function observeStanding(
+  agent: Agent,
+  input: AgentInput,
+  options?: Parameters<typeof runAsAgUi>[2],
+) {
   const turnEnds: AgentTurnEndPayload[] = [];
   const assessed: AnswerAssessedPayload[] = [];
   const offTurn = agent.on('agentfootprint.agent.turn_end', ({ payload }) =>
@@ -33,7 +39,7 @@ export async function observeStanding(agent: Agent, input: AgentInput) {
   const stream = toSSE(agent, { format: 'text', heartbeatMs: 50 });
   const first = stream.next();
   try {
-    const agui = await runAsAgUi(agent, input);
+    const agui = await runAsAgUi(agent, input, options);
     if (agui.error !== undefined) throw agui.error;
     expect(
       agui.served.some(
@@ -62,6 +68,7 @@ export async function observeStanding(agent: Agent, input: AgentInput) {
       aguiText,
       turnEnd: turnEnds[0]!,
       eventAssessment,
+      turn,
       iteration,
       saved,
       recording,

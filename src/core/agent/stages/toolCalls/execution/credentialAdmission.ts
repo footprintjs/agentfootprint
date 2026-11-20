@@ -13,6 +13,7 @@ import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.j
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { errorClassOf } from '../decorators/reportingCredentials.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
@@ -106,7 +107,7 @@ export async function admitToolCredential(
         // ride. Commit partial state so resume() finds history
         // intact; the proposed args ride the checkpoint so the tool
         // can run once the person has consented.
-        scope.history = frame.newHistory;
+        commitSettledToolHistory(scope, frame.newHistory);
         scope.pausedToolCallId = frame.tc.id;
         scope.pausedToolName = frame.tc.name;
         scope.pausedToolStartMs = frame.startMs;

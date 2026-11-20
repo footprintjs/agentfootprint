@@ -56,7 +56,7 @@ import { issuedTicketsOf } from '../placedTickets.js';
 import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
 import { historyPointer, statePointer } from './pointer.js';
-import { periodRows, type PeriodRowRead } from './periodRows.js';
+import { periodRows, PERIOD_REASONS, readPeriodVerdicts } from './periodRows.js';
 import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
 import { deliveredResults } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
@@ -73,7 +73,8 @@ import {
   readTurnCalls,
 } from './resultEvidence.js';
 import { standingAdmission } from './standingAdmission.js';
-import { ENTRY_EVIDENCE_KEY } from './entryEvidence.js';
+import { ENTRY_EVIDENCE_COMPLETE_KEY, ENTRY_EVIDENCE_KEY } from './entryEvidence.js';
+import { placeSettledResults, readSettledResults } from './settledResults.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -342,72 +343,6 @@ function readArgumentAsk(
   for (const row of rows) {
     if (row.asked) fire(g, 'argument-asked', statePointer('findingsLedger', row.index, 'asked'));
   }
-}
-
-/** The reason each period verdict fires — `covered` fires none. */
-const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
-  'not-held': 'period-not-held',
-  'partly-held': 'period-partly-held',
-  unknown: 'period-unknown',
-  undeclared: 'period-undeclared',
-};
-
-/**
- * Layer 3, the results layer's verdicts: each period row of this turn — the
- * store did not hold the period the read asked for (`not-held`), held only
- * part of it (`partly-held`), could not say (`unknown`, adopted Q33: "not
- * sure" by default, on a non-empty result too), or the result said nothing
- * about its period though its tool declares a period argument (`undeclared`).
- * `covered` fires nothing — and supports nothing: a period the store held
- * keeps a reason from firing, never more.
- *
- * THE JOIN (results.md § 3.7): the inputs layer owns WHO chose the period
- * (the call's `argument` row for the argument its `ToolPeriod` names), this
- * layer owns WHAT the read covered. A period reason can witness both rows
- * when the occurrence and the argument name match. Neither parses the other's
- * words, so a reader can say "the hour you asked about" or "the 2 hours the
- * tool's rule assumed". Files the `result-period` check when the layer filed
- * any verdict this turn.
- */
-function readPeriodVerdicts(
-  rows: readonly PeriodRowRead[],
-  argumentVerdicts: readonly ArgumentRowRead[],
-  g: Gathered,
-): void {
-  if (rows.length === 0) return;
-  const witness: AssessmentPointer[] = [];
-  for (const row of rows) {
-    const at = statePointer('findingsLedger', row.index, 'verdict');
-    witness.push(at);
-    const chosenBy =
-      row.historyIndex === undefined || row.argument === undefined
-        ? undefined
-        : argumentVerdicts.find(
-            (a) => a.historyIndex === row.historyIndex && a.argument === row.argument,
-          );
-    const fireJoined = (reason: AssessmentReason, pointer: AssessmentPointer): void => {
-      fire(g, reason, pointer);
-      if (chosenBy !== undefined) {
-        fire(g, reason, statePointer('findingsLedger', chosenBy.index, 'argument'));
-      }
-    };
-    // The time layer's result checks (step T8), under `.time()` only: the
-    // read is not what was asked (TQ8 — `extra` alone too), or the window was
-    // older than the source keeps.
-    if (row.differs) {
-      fireJoined('period-differs-from-asked', statePointer('findingsLedger', row.index, 'differs'));
-    }
-    if (row.beyondRetention) {
-      fireJoined(
-        'period-beyond-retention',
-        statePointer('findingsLedger', row.index, 'beyondRetention'),
-      );
-    }
-    const reason = PERIOD_REASONS[row.verdict];
-    if (reason === undefined) continue;
-    fireJoined(reason, at);
-  }
-  g.checked.push({ layer: 3, check: 'result-period', ran: rows.length, of: rows.length, witness });
 }
 
 /**
@@ -746,11 +681,19 @@ export function foldState(
   const g: Gathered = { admit: admission.admit, fired: new Map(), checked: [] };
   const nativeFacts = admission.nativeResult;
   if (admission.entryIncomplete)
-    fire(g, 'check-unreachable', statePointer(ENTRY_EVIDENCE_KEY, 'complete'));
+    fire(
+      g,
+      'check-unreachable',
+      admission.legacyEntry
+        ? statePointer(ENTRY_EVIDENCE_KEY, 'complete')
+        : statePointer(ENTRY_EVIDENCE_COMPLETE_KEY),
+    );
+  if (admission.settlements?.complete === false)
+    fire(g, 'check-unreachable', statePointer('settledToolCallsComplete'));
   const { results, periods } = deliveredResults(recordedResults, admission.dispositions);
   // An occurrence witness would reveal how many results the host withheld.
   if (admission.withheldReturn) g.fired.set('result-withheld', []);
-  for (const { result, verdict } of periods) {
+  for (const { result, verdict } of admission.settlements === undefined ? periods : []) {
     const reason = PERIOD_REASONS[verdict];
     if (reason !== undefined) fire(g, reason, historyPointer(result));
   }
@@ -772,17 +715,20 @@ export function foldState(
     reads.length + results.filter((result) => admission.threw(result.index)).length;
   readPause(state, g);
   readArgumentAsk(state, argumentVerdicts, g);
-  const enteredArguments = argumentVerdicts.filter((row) =>
-    admission.entered(row.historyIndex, row.occurrenceKey),
+  const enteredArguments = argumentVerdicts.filter(
+    (row) =>
+      !(admission.keyed && row.occurrenceKey === undefined) &&
+      admission.entered(row.historyIndex, row.occurrenceKey),
   );
   readArgumentVerdicts(state, enteredArguments, resolveCurrent, g);
-  if (!admission.hasEntryEvidence && waitingArgumentIteration(state) === undefined) {
+  if (waitingArgumentIteration(state) === undefined) {
     const entered = new Set(enteredArguments.map((row) => row.index));
     // A keyless ambiguous observation cannot establish a call. Say the
     // check was unavailable instead of treating a missing reason as clearance.
     for (const row of argumentVerdicts) {
       if (
-        row.historyIndex !== undefined ||
+        (row.historyIndex !== undefined && !(admission.keyed && row.occurrenceKey === undefined)) ||
+        (row.occurrenceKey !== undefined && !admission.entryIncomplete) ||
         entered.has(row.index) ||
         row.asked ||
         row.withheld ||
@@ -795,13 +741,26 @@ export function foldState(
   readCoverageRows(coverage, g);
   readTurnCalls(reads, coverage, resultOpportunities, g);
   readContingentRows(state, places, g);
-  readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
+  if (admission.settlements === undefined) {
+    readCallOutcomes(results, recoveredCallOutcomes(results, history, begins, retainedHistory), g);
+  } else {
+    const placed = placeSettledResults(admission.settlements, results, current);
+    const recovered = recoveredCallOutcomes(
+      placed.retained,
+      history,
+      begins,
+      retainedHistory,
+      (index) => placed.byIndex.get(index)?.execution === 'returned',
+    );
+    readSettledResults(admission.settlements, placed, coverage, recovered, PERIOD_REASONS, g);
+  }
   readTurnResults(
     reads,
     declarations,
     issuedTicketsOf(recorded.placedTickets),
     resultOpportunities,
     g,
+    admission.settlements === undefined,
   );
   readPeriodVerdicts(
     periodRows(state, (row) => callIndexOf(row, resolveCurrent), nativeFacts),

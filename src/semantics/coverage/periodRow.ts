@@ -34,7 +34,7 @@ export type PeriodVerdict = 'covered' | 'partly-held' | 'not-held' | 'unknown';
  */
 export interface PeriodRow {
   readonly callOccurrenceKey?: CallOccurrenceKey;
-  /** The exact native result was served. The proof survives history compaction. */
+  /** Legacy draft proof that a native result was served, before the settlement ledger. */
   readonly nativePeriodServed?: true;
   readonly kind: 'period';
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */

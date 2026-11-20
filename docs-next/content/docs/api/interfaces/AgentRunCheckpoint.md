@@ -342,6 +342,16 @@ Host-kept native source index. It contains refs only and does not authenticate a
 
 ***
 
+### toolTurnEvidence?
+
+> `readonly` `optional` **toolTurnEvidence?**: `ToolTurnEvidence`
+
+Defined in: [src/core/runCheckpointTypes.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L70)
+
+Bounded, private tool proof from the failed request, used only by `resumeOnError`.
+
+***
+
 ### turnNumber?
 
 > `readonly` `optional` **turnNumber?**: `number`
@@ -375,13 +385,3 @@ runtime that has never heard of it continues the conversation correctly.
 Defined in: [src/core/runCheckpointTypes.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L40)
 
 Schema version. v1 = conversation-history-based.
-
-***
-
-### withheldToolResult?
-
-> `readonly` `optional` **withheldToolResult?**: `true`
-
-Defined in: [src/core/runCheckpointTypes.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L70)
-
-At least one returned result was withheld by a rule in the failed request.

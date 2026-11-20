@@ -76,7 +76,10 @@ import type { ClaimVerificationState } from './agent/findings/verificationState.
 import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
 import { admitStoredHistory, checkpointReplayHistory } from './checkpointHistory.js';
 import { validateCheckpointLedger } from './checkpointLedger.js';
-import { withheldToolResultOnTurn } from './agent/middleware/withheldResult.js';
+import {
+  admitToolTurnEvidence,
+  toolTurnEvidenceFrom,
+} from './agent/recordedCalls/toolTurnCheckpoint.js';
 import {
   admitFoldedInnerCallPolicy,
   innerCallPolicyFor,
@@ -411,6 +414,7 @@ export function buildCheckpoint(
   const history = checkpointReplayHistory(tracker.history, tracker);
   const placedTickets = ticketsStillServed(placed, history);
   const innerCallPolicyArgs = innerCallPolicyFor(state, history);
+  const toolTurnEvidence = toolTurnEvidenceFrom(state);
   return {
     version: 1,
     runId: tracker.runId,
@@ -420,7 +424,7 @@ export function buildCheckpoint(
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
-    ...(withheldToolResultOnTurn(state) && { withheldToolResult: true as const }),
+    ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
     ...(folded !== undefined && folded.length > 0 && { folded }),
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
@@ -477,9 +481,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
     );
   }
-  if (c.withheldToolResult !== undefined && c.withheldToolResult !== true) {
-    throw new TypeError('[resumeOnError] checkpoint withheldToolResult must be true when present.');
-  }
+  const toolTurnEvidence = admitToolTurnEvidence(c);
   const sourceEvidence = sourceEvidenceOf(c);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(c);
   // Optional fields are validated only when PRESENT — absence is the ordinary
@@ -546,12 +548,15 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   negativeCheckpointOf(c);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
-  return sourceDeclarationCorrection === undefined && innerCallPolicyArgs === undefined
+  return sourceDeclarationCorrection === undefined &&
+    innerCallPolicyArgs === undefined &&
+    toolTurnEvidence === undefined
     ? checkpoint
     : {
         ...checkpoint,
         ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
         ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
+        ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
       };
 }
 

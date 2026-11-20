@@ -6,12 +6,14 @@ export type AnswerFoldKey =
   | 'findingsLedger'
   | 'coverageDeclared'
   | 'enteredToolCalls'
+  | 'enteredToolCallsComplete'
+  | 'settledToolCalls'
+  | 'settledToolCallsComplete'
   | 'stoppedEarly'
   | 'unsupportedValues'
   | 'answerValidation'
   | 'argumentAsk'
-  | 'middlewareDecisions'
-  | 'withheldToolResultTurn';
+  | 'middlewareDecisions';
 
 /**
  * THE READ LIST — which committed keys the answer layer's fold reads, from
@@ -29,13 +31,12 @@ export type AnswerFoldKey =
  *   whenever the model asked for calls, whether or not this agent registered
  *   a tool that could answer them;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
- *   coverage), and `enteredToolCalls` (the bounded per-turn entry witness);
+ *   coverage), bounded per-turn entry and settlement facts, and their completeness;
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`;
  * - tool middleware: `middlewareDecisions` holds argument rewrites and
- *   after-tool decisions on older records kept across a pause. `withheldToolResultTurn`
- *   records when a tool rule withheld a returned value, even after history eviction.
+ *   after-tool decisions on older records kept across a pause.
  *
  * Every key's writers were checked against this list: a writer that no arm
  * gates puts its key in the always group — decide by the writer, never by the
@@ -44,7 +45,8 @@ export type AnswerFoldKey =
  * @example
  * ```ts
  * answerFoldReads({ tools: true, evidenceGate: false, answerValidation: false, inputs: false, toolMiddleware: false });
- * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'stoppedEarly', 'coverageDeclared', 'enteredToolCalls']
+ * // Includes 'coverageDeclared', 'enteredToolCalls', 'enteredToolCallsComplete',
+ * // 'settledToolCalls' and 'settledToolCallsComplete' for the tool surface.
  * ```
  */
 export function answerFoldReads(arms: {
@@ -60,13 +62,20 @@ export function answerFoldReads(arms: {
     'pausedToolCallId',
     'findingsLedger',
     'stoppedEarly',
-    ...(arms.tools ? (['coverageDeclared', 'enteredToolCalls'] as const) : []),
+    ...(arms.tools
+      ? ([
+          'coverageDeclared',
+          'enteredToolCalls',
+          'enteredToolCallsComplete',
+          'settledToolCalls',
+          'settledToolCallsComplete',
+        ] as const)
+      : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),
     ...(arms.toolMiddleware && (arms.tools || arms.inputs)
       ? (['middlewareDecisions'] as const)
       : []),
-    ...(arms.toolMiddleware && arms.tools ? (['withheldToolResultTurn'] as const) : []),
   ];
 }

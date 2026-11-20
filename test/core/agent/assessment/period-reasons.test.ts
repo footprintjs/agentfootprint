@@ -36,6 +36,7 @@ import {
   standingFactsOf,
   standingLineOf,
 } from '../../../../src/core/agent/assessment/compose.js';
+import type { AgentState } from '../../../../src/core/agent/types.js';
 import type { AnswerAssessedPayload } from '../../../../src/events/payloads/answer.js';
 import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
 
@@ -241,11 +242,24 @@ describe('UNIT — which rows the fold reads', () => {
         let answer = await agent.run({ message: person.content });
         if (pauses) {
           if (!isInputPause(answer)) throw new Error('Expected the fixture input pause.');
-          expect(agent.findings()?.find(({ kind }) => kind === 'period')).toMatchObject({
-            nativePeriodServed: true,
-            verdict: 'not-held',
-          });
-          answer = await agent.resume(JSON.parse(JSON.stringify(answer.checkpoint)), {
+          const period = agent.findings()?.find(({ kind }) => kind === 'period');
+          if (period === undefined)
+            throw new Error('Expected the archive period before the pause.');
+          expect(period).toMatchObject({ verdict: 'not-held' });
+          expect(period).not.toHaveProperty('nativePeriodServed');
+          const checkpoint: typeof answer.checkpoint = JSON.parse(
+            JSON.stringify(answer.checkpoint),
+          );
+          const before = checkpoint.sharedState as Partial<AgentState>;
+          expect(before.settledToolCallsComplete).toBe(true);
+          expect(before.settledToolCalls).toContainEqual(
+            expect.objectContaining({
+              callOccurrenceKey: period.callOccurrenceKey,
+              execution: 'returned',
+              delivery: 'native',
+            }),
+          );
+          answer = await agent.resume(checkpoint, {
             requestId: answer.awaitingInput.requestId,
             values: { count: 1 },
           });
@@ -257,25 +271,31 @@ describe('UNIT — which rows the fold reads', () => {
             toolName: name,
             iteration: 1,
             verdict: 'not-held',
-            nativePeriodServed: true,
           },
           {
             toolCallId: 'reused',
             toolName: name,
             iteration: pauses ? 3 : 2,
             verdict: 'covered',
-            nativePeriodServed: true,
           },
         ]);
+        for (const row of rows) expect(row).not.toHaveProperty('nativePeriodServed');
         const keys = rows.map(readCallOccurrenceKey);
         expect(keys).toEqual([expect.any(String), expect.any(String)]);
         expect(keys[0]).not.toBe(keys[1]);
-        const results =
-          agent
-            .getLastSnapshot()
-            ?.sharedState.history.filter(
-              ({ role, toolName }) => role === 'tool' && toolName === name,
-            ) ?? [];
+        const { sharedState } = agent.getLastSnapshot()!;
+        const resultProofs = sharedState.settledToolCalls?.filter((entry) =>
+          keys.includes(readCallOccurrenceKey(entry)),
+        );
+        expect(sharedState.settledToolCallsComplete).toBe(true);
+        expect(resultProofs?.map(readCallOccurrenceKey)).toEqual(keys);
+        expect(resultProofs).toMatchObject([
+          { execution: 'returned', delivery: 'native' },
+          { execution: 'returned', delivery: 'native' },
+        ]);
+        const results = sharedState.history.filter(
+          ({ role, toolName }) => role === 'tool' && toolName === name,
+        );
         expect(results.map(({ toolResultExecution }) => toolResultExecution)).toEqual(
           evicts ? ['returned'] : ['returned', 'returned'],
         );
@@ -283,6 +303,18 @@ describe('UNIT — which rows the fold reads', () => {
 
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
         const saved = assessAnswer(recording);
+        if (evicts) {
+          const withoutArchiveProof = structuredClone(recording) as Recording & {
+            snapshot: { sharedState: Partial<AgentState> };
+          };
+          const state = withoutArchiveProof.snapshot.sharedState;
+          state.settledToolCalls = state.settledToolCalls?.filter(
+            (entry) => readCallOccurrenceKey(entry) !== keys[0],
+          );
+          expect(
+            assessAnswer(withoutArchiveProof).reasons.map(({ reason }) => reason),
+          ).not.toContain('period-not-held');
+        }
         const { iteration, turn, ...eventAssessment } = assessments.at(-1)!;
         expect(iteration).toBeGreaterThan(1);
         expect(turn).toBe(1);
@@ -350,7 +382,21 @@ describe('UNIT — which rows the fold reads', () => {
         expect(rows).toMatchObject([{ verdict: 'not-held' }]);
         expect(rows[0]).not.toHaveProperty('nativePeriodServed');
       }
-      const saved = assessAnswer({ snapshot: agent.getLastSnapshot() });
+      const snapshot = agent.getLastSnapshot()!;
+      const evidence = {
+        denied: { execution: 'returned', delivery: 'withheld' },
+        rewritten: { execution: 'returned', delivery: 'rewritten' },
+        threw: { execution: 'threw', outcome: 'failed' },
+        capped: { execution: 'returned-unserved' },
+      }[outcome];
+      expect(snapshot.sharedState.settledToolCallsComplete).toBe(true);
+      expect(snapshot.sharedState.settledToolCalls).toMatchObject([evidence]);
+      expect(snapshot.sharedState.settledToolCalls?.map(readCallOccurrenceKey)).toEqual(
+        snapshot.sharedState.history
+          .filter(({ role }) => role === 'tool')
+          .map(readCallOccurrenceKey),
+      );
+      const saved = assessAnswer({ snapshot });
       expect(saved.reasons.map(({ reason }) => reason)).not.toContain('period-not-held');
       expect(periodChecks(saved)).toEqual([]);
     },

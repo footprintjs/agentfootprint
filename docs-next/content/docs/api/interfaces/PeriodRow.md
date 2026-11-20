@@ -128,7 +128,7 @@ Defined in: [src/semantics/coverage/periodRow.ts:39](https://github.com/footprin
 
 Defined in: [src/semantics/coverage/periodRow.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L38)
 
-The exact native result was served. The proof survives history compaction.
+Legacy draft proof that a native result was served, before the settlement ledger.
 
 ***
 

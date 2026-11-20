@@ -6,6 +6,7 @@ import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { boundArgsOf } from '../access/bindings.js';
 import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
@@ -295,7 +296,7 @@ export function buildResumeCheckIn(
         { toolName, toolCallId, ...occurrence },
       );
       const decisionHistory = decisionSettlement.history;
-      scope.history = decisionHistory;
+      commitSettledToolHistory(scope, decisionHistory);
       // Drives `on-tool-return` triggers, same as the execute path.
       scope.lastToolResult = {
         toolName,

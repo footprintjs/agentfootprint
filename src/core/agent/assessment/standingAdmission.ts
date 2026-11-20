@@ -2,13 +2,18 @@ import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import {
   callEntered,
   historyCallResolver,
+  readToolSettlements,
   recordedToolExecution,
   resultDispositions,
   type HistoryCall,
 } from '../recordedCalls.js';
 import type { ArgumentRowRead } from './argumentRows.js';
-import { withheldToolResultOnTurn } from '../middleware/withheldResult.js';
-import { ENTRY_EVIDENCE_KEY, entryEvidenceOf, legacyEntryKeys } from './entryEvidence.js';
+import {
+  ENTRY_EVIDENCE_COMPLETE_KEY,
+  ENTRY_EVIDENCE_KEY,
+  entryEvidenceOf,
+  legacyEntryKeys,
+} from './entryEvidence.js';
 import { reasonClassOf, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
 import { callAddressOf, rowList } from './sources.js';
@@ -61,9 +66,20 @@ export function standingAdmission(
 ) {
   const resolve = historyCallResolver(current);
   const resolveAll = historyCallResolver(history);
-  const dispositions = resultDispositions(history, state.middlewareDecisions);
+  const settlements = readToolSettlements(state.settledToolCalls, state.settledToolCallsComplete);
+  const dispositions =
+    settlements === undefined
+      ? resultDispositions(history, state.middlewareDecisions)
+      : new Map<number, 'withheld' | 'rewritten'>();
   const argumentByIndex = new Map(argumentsOfTurn.map((row) => [row.index, row]));
-  const entryEvidence = entryEvidenceOf(state[ENTRY_EVIDENCE_KEY]);
+  const entryEvidence = entryEvidenceOf(
+    state[ENTRY_EVIDENCE_KEY],
+    state[ENTRY_EVIDENCE_COMPLETE_KEY],
+  );
+  const keyed =
+    history.some((call) => typeof call.occurrenceKey === 'string') ||
+    (entryEvidence?.keys.size ?? 0) > 0 ||
+    (settlements?.byKey.size ?? 0) > 0;
   let legacyEntered: ReadonlySet<string> | undefined;
   const calls = new Map(
     history.map(({ index, message, occurrenceKey }) => [
@@ -86,7 +102,25 @@ export function standingAdmission(
     if (callEntered(call?.execution)) return true;
     return (legacyEntered ??= legacyEntryKeys(legacyEvents, historyBytes)).has(key);
   };
-  const returned = (index: number | undefined, native = false): boolean => {
+  const settlementOf = (index: number | undefined, occurrenceKey?: string | null) => {
+    const key =
+      occurrenceKey === undefined && index !== undefined
+        ? calls.get(index)?.occurrenceKey
+        : occurrenceKey;
+    return typeof key === 'string' ? settlements?.byKey.get(key)?.fact : undefined;
+  };
+  const returned = (
+    index: number | undefined,
+    native = false,
+    occurrenceKey?: string | null,
+  ): boolean => {
+    if (settlements !== undefined) {
+      const fact = settlementOf(index, occurrenceKey);
+      return (
+        fact?.execution === 'returned' &&
+        (fact.delivery === 'native' || (!native && fact.delivery === 'rewritten'))
+      );
+    }
     const call = index === undefined ? undefined : calls.get(index);
     return (
       call?.execution === 'returned' &&
@@ -99,6 +133,7 @@ export function standingAdmission(
   };
 
   const nativeResult = (row: Row, address?: number): boolean => {
+    if (settlements !== undefined) return returned(address, true, readCallOccurrenceKey(row));
     if (address !== undefined) return returned(address, true);
     if (row.kind !== 'period' || row.nativePeriodServed !== true) return false;
     const key = readCallOccurrenceKey(row);
@@ -119,21 +154,30 @@ export function standingAdmission(
       return kind === 'input' ? entered(pointer.index) : returned(pointer.index);
     }
     if (pointer.kind !== 'state' || row === undefined) return false;
+    if (pointer.key === 'settledToolCalls')
+      return returned(undefined, false, readCallOccurrenceKey(row));
     if (row.kind === 'conflict') {
       const refs = rowList(row.witnesses);
       return (
         refs !== undefined &&
         refs.unread === 0 &&
         refs.entries.length > 0 &&
-        refs.entries.every((ref) => returned(indexOf(ref, resolveAll)))
+        refs.entries.every((ref) =>
+          returned(
+            indexOf(ref, resolveAll),
+            false,
+            isRecord(ref) ? readCallOccurrenceKey(ref) : undefined,
+          ),
+        )
       );
     }
     const index = Number(pointer.path.split('/')[1]);
     const argument = pointer.key === 'findingsLedger' ? argumentByIndex.get(index) : undefined;
     if (argument !== undefined) {
       return kind === 'input'
-        ? entered(argument.historyIndex, argument.occurrenceKey)
-        : returned(argument.historyIndex, true);
+        ? !(keyed && argument.occurrenceKey === undefined) &&
+            entered(argument.historyIndex, argument.occurrenceKey)
+        : returned(argument.historyIndex, true, argument.occurrenceKey);
     }
     const occurrence =
       row.kind === 'argument'
@@ -147,11 +191,20 @@ export function standingAdmission(
     const key = readCallOccurrenceKey(
       row.kind === 'contingent' && isRecord(row.declaredOn) ? row.declaredOn : row,
     );
-    return kind === 'input' ? entered(occurrence, key) : nativeResult(row, occurrence);
+    return kind === 'input'
+      ? entered(occurrence, key)
+      : row.kind === 'contingent' && settlements !== undefined
+      ? returned(occurrence, false, key)
+      : nativeResult(row, occurrence);
   };
   // A rule can reject an error notice, even when there is no returned result.
   // Such notices leave their recorded settlement and make no withheld-result claim.
   for (const [index, call] of calls) {
+    if (settlements !== undefined) {
+      const delivery = settlementOf(index)?.delivery;
+      if (delivery === 'withheld' || delivery === 'rewritten') dispositions.set(index, delivery);
+      continue;
+    }
     const deniedNotice =
       call.execution === 'returned-unserved' &&
       call.disposition === 'withheld' &&
@@ -163,17 +216,21 @@ export function standingAdmission(
   return {
     admit,
     dispositions,
+    settlements,
+    keyed,
     entered,
     returned,
-    threw: (index: number) => calls.get(index)?.execution === 'threw',
+    threw: (index: number) =>
+      (settlements === undefined ? calls.get(index)?.execution : settlementOf(index)?.execution) ===
+      'threw',
     withheldReturn:
-      withheldToolResultOnTurn(state) ||
+      settlements?.rows.some((fact) => fact.delivery === 'withheld') ??
       current.some(
         ({ index }) =>
           dispositions.get(index) === 'withheld' && calls.get(index)?.execution === 'returned',
       ),
     nativeResult,
     entryIncomplete: entryEvidence?.complete === false,
-    hasEntryEvidence: entryEvidence !== undefined,
+    legacyEntry: entryEvidence?.legacy === true,
   };
 }

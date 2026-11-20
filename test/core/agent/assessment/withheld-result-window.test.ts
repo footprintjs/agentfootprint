@@ -169,7 +169,7 @@ describe('standing when a previously withheld result leaves history', () => {
         const denials = (snapshot.middlewareDecisions ?? []).filter(
           (decision) => decision.toolName === TOOL && decision.outcome === 'deny',
         );
-        const entries = snapshot.enteredToolCalls?.entries.map(readCallOccurrenceKey) ?? [];
+        const entries = snapshot.enteredToolCalls?.map(readCallOccurrenceKey) ?? [];
         const [firstKey] = entries;
         const laterKey = entries.at(-1);
         expect(firstKey).toEqual(expect.any(String));
@@ -263,8 +263,8 @@ describe('standing when a previously withheld result leaves history', () => {
       evicts: true,
       nativeValue: OVERSIZED_RESULT,
       ruleValue: expect.stringContaining('over its declared 100-char ceiling'),
-      reasons: [],
-      expectedAnswer: CONSISTENT,
+      reasons: ['call-not-completed'],
+      expectedAnswer: undefined,
     },
     {
       archiveResult: 'over-ceiling',
@@ -286,7 +286,7 @@ describe('standing when a previously withheld result leaves history', () => {
       const observation = observe(agent);
       try {
         const answer = await agent.run({ message: PROMPT });
-        const { turn, liveData, snapshot, saved } = observation.read();
+        const { liveData, snapshot, saved } = observation.read();
         expect(execute.mock.results[0]).toEqual({ type: 'return', value: nativeValue });
         expect(onToolResult.mock.calls[0]?.[0]).toMatchObject({
           args: { host: 'archive' },
@@ -309,13 +309,12 @@ describe('standing when a previously withheld result leaves history', () => {
                 liveResult,
               ],
         );
-        expect(snapshot.withheldToolResultTurn).toBe(
-          archiveResult === 'undefined' ? turn : undefined,
-        );
         expect.soft(liveData.reasons).toEqual(reasons);
         expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
         expect.soft(assessmentDataOf(saved)).toEqual(liveData);
-        expect.soft(answer).toBe(expectedAnswer);
+        if (expectedAnswer === undefined) {
+          expect.soft(answer).toMatch(/^The lookup is complete\.\n\n---\n\nNot sure — /);
+        } else expect.soft(answer).toBe(expectedAnswer);
       } finally {
         observation.stop();
         await agent.shutdown();
@@ -376,13 +375,12 @@ describe('standing when a previously withheld result leaves history', () => {
       expect(
         checkpointResults.some(({ toolResultDisposition }) => toolResultDisposition === 'withheld'),
       ).toBe(false);
-      expect.soft(checkpoint).toHaveProperty('withheldToolResult', true);
 
       const answer = await retry.agent.resumeOnError(checkpoint);
       const sameTurn = resumed.read();
       expect(sameTurn.turn).toBe(1);
       expect(retry.execute).not.toHaveBeenCalled();
-      const reasons = ['result-withheld', 'check-unreachable'];
+      const reasons = ['result-withheld'];
       expect.soft(sameTurn.liveData.reasons).toEqual(reasons);
       expect.soft(sameTurn.saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
       expect.soft(sameTurn.saved.reasons[0]).toMatchObject({
@@ -391,14 +389,13 @@ describe('standing when a previously withheld result leaves history', () => {
         witness: [],
       });
       expect.soft(assessmentDataOf(sameTurn.saved)).toEqual(sameTurn.liveData);
-      expect.soft(answer).toContain('a result was kept out by a rule');
+      expect.soft(answer).toBe(WITHHELD);
 
       expect(
         await next.agent.run({ message: 'Read the follow-up index.', continueFrom: checkpoint }),
       ).toBe(CONSISTENT);
       const newTurn = continued.read();
       expect(newTurn.turn).toBe(2);
-      expect(newTurn.snapshot.withheldToolResultTurn).toBeUndefined();
       expect(newTurn.liveData.reasons).toEqual([]);
       expect(assessmentDataOf(newTurn.saved)).toEqual(newTurn.liveData);
     } finally {
@@ -424,7 +421,6 @@ describe('standing when a previously withheld result leaves history', () => {
         expect(execute.mock.calls.map(([{ host }]) => host)).toEqual(['archive', 'live']);
         expect(execute.mock.results.map(({ type }) => type)).toEqual(['throw', 'return']);
         expect(onToolResult.mock.results[0]?.value).toEqual(deny(NOTICE));
-        expect(snapshot.withheldToolResultTurn).toBeUndefined();
         const rows = snapshot.history.filter(
           ({ role, toolName }) => role === 'tool' && toolName === TOOL,
         );
@@ -434,9 +430,10 @@ describe('standing when a previously withheld result leaves history', () => {
             ? [liveResult]
             : [expect.objectContaining({ toolResultExecution: 'threw' }), liveResult],
         );
-        expect(liveData.reasons).toEqual(evicts ? [] : ['call-not-completed']);
+        expect(liveData.reasons).toEqual(['call-not-completed']);
         expect(assessmentDataOf(saved)).toEqual(liveData);
-        expect(answer).toBe(evicts ? CONSISTENT : FAILED);
+        if (evicts) expect(answer).toMatch(/^The lookup is complete\.\n\n---\n\nNot sure — /);
+        else expect(answer).toBe(FAILED);
       } finally {
         observation.stop();
         await agent.shutdown();

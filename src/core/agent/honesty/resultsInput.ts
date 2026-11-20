@@ -11,7 +11,6 @@ import {
   clockOf,
   type CallWindowRow,
 } from '../../../time/rows.js';
-import { historyCallResolver, readHistoryCalls, recordedToolExecution } from '../recordedCalls.js';
 import type { CallPeriod, CallTime, RanCall, ResultsLayerState } from '../results/subflow.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -53,32 +52,16 @@ export function resultsLayerInput(parent: Record<string, unknown>): ResultsLayer
   const batchIteration = batchToJudge(parent.iteration as number, parent.toolResultsIteration);
   if (batchIteration === undefined) return { calls: [] };
   const batch = (parent.toolResults as readonly unknown[] | undefined) ?? [];
-  const resolve =
-    isRecord(parent.honestyLayers) &&
-    parent.honestyLayers.answer === true &&
-    Array.isArray(parent.history)
-      ? historyCallResolver(readHistoryCalls(parent.history))
-      : undefined;
   const calls: RanCall[] = [];
   for (const entry of batch) {
     if (!isRecord(entry) || toolRanOf(entry) === 'not-run' || entry.threw === true) continue;
     const key = readCallOccurrenceKey(entry);
     if (key === null) continue;
     if (typeof entry.toolCallId !== 'string' || typeof entry.toolName !== 'string') continue;
-    // The loop head still holds the exact landed tool message before Compact can
-    // evict it. An unstamped history result is not proof of native delivery.
-    const landed = typeof key === 'string' ? resolve?.(undefined, undefined, key) : undefined;
-    const message = landed?.kind === 'matched' ? landed.call.message : undefined;
-    const nativePeriodServed =
-      message !== undefined &&
-      message.toolResultExecution !== undefined &&
-      recordedToolExecution(message) === 'returned' &&
-      message.toolResultDisposition === undefined;
     calls.push({
       toolCallId: entry.toolCallId,
       toolName: entry.toolName,
       ...storedCallOccurrenceField(entry),
-      ...(nativePeriodServed && { nativePeriodServed: true as const }),
     });
   }
   if (calls.length === 0) return { calls };

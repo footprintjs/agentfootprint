@@ -18,6 +18,7 @@ import type { buildToolArtifactsOperations } from './artifactsOperations.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -434,7 +435,7 @@ export async function invokeInitialTool(
       const writePause = (): void => {
         if (frame.execution.negativeDispatch !== undefined)
           pauseNegativeCall(scope, frame.execution.negativeDispatch.resultId);
-        scope.history = frame.newHistory;
+        commitSettledToolHistory(scope, frame.newHistory);
         scope.pausedToolCallId = frame.tc.id;
         scope.pausedToolName = frame.tc.name;
         scope.pausedToolStartMs = frame.startMs;

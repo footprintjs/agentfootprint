@@ -9,8 +9,6 @@ export interface MiddlewareState {
    *  taken later can find the moment the text changed and who changed it.
    *  Written only by an agent that configured a chain; absent otherwise. */
   middlewareDecisions?: readonly MiddlewareDecision[];
-  /** The turn in this Agent where a result last returned and was withheld by a tool rule. */
-  withheldToolResultTurn?: number;
   /** Set by the seed / prepare-final stage when a `messageMiddleware` returned
    *  `deny`. Read at the API boundary, where it becomes a `MessageDeniedError`.
    *  Never carries the refused content — see MessageDeniedError. */

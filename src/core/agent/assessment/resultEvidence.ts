@@ -59,6 +59,7 @@ export function readTurnResults(
   issued: IssuedPairs,
   opportunities: number,
   g: Gathered,
+  legacyReasons = true,
 ): void {
   const readable: AssessmentPointer[] = [];
   for (const { result, at, rows, own } of reads) {
@@ -76,12 +77,14 @@ export function readTurnResults(
     });
     if (reading.emptiness !== 'unknown') readable.push(at);
     // An empty rowset inside a declared boundary, or an absence no row holds; an absence row fired for itself.
-    if (reading.emptiness === 'declared-absent' && !absenceRow) fire(g, 'declared-absent', at);
-    if (reading.emptiness === 'undeclared-empty' && rows.length === 0) {
+    const fromBytes = legacyReasons || reading.source === 'app';
+    if (fromBytes && reading.emptiness === 'declared-absent' && !absenceRow)
+      fire(g, 'declared-absent', at);
+    if (fromBytes && reading.emptiness === 'undeclared-empty' && rows.length === 0) {
       fire(g, 'empty-undeclared', at);
     }
     // A gap the result's own envelope lists, when no row holds it.
-    if (own?.gap === true) fire(g, 'coverage-gap', at);
+    if (legacyReasons && own?.gap === true) fire(g, 'coverage-gap', at);
   }
   if (opportunities > 0) {
     g.checked.push({

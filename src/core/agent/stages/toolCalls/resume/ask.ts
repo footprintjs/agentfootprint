@@ -6,6 +6,7 @@ import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { boundArgsOf } from '../access/bindings.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
@@ -344,7 +345,7 @@ export function buildResumeAsk(
         { toolName, toolCallId, ...occurrence },
       );
       const askHistory = askSettlement.history;
-      scope.history = askHistory;
+      commitSettledToolHistory(scope, askHistory);
       scope.lastToolResult = {
         toolName,
         result: askResultStr,

@@ -35,7 +35,7 @@ import { runMessageChain } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
 import type { HonestyLayers } from '../honesty/armed.js';
-import { seedEnteredToolCalls } from '../honesty/enteredToolCalls.js';
+import { seedToolEvidence } from '../honesty/settledToolCalls.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../../tools/tools.js';
@@ -508,7 +508,7 @@ function seedFrom(
     scope.sourceDeclarationCorrectionSpent = true;
   const history = historyForTurn(resume, message);
   scope.history = history;
-  seedEnteredToolCalls(scope, deps, resume !== undefined && !resume.appendsUserTurn);
+  seedToolEvidence(scope, deps, resume);
   restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means

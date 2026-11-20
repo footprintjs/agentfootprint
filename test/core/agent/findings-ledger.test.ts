@@ -137,6 +137,10 @@ const keysOf = (agent: Agent): string[] =>
 const enteredOf = (agent: Agent) =>
   (agent.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)?.enteredToolCalls;
 
+const entryCompleteOf = (agent: Agent) =>
+  (agent.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined)
+    ?.enteredToolCallsComplete;
+
 /** The two-iteration script every dispatch scenario shares: a basis on call 1,
  *  a basis + the previous result's standing on call 2, then a text answer. */
 const FACT_ASSERTION = { subject: { kind: 'port', id: 'p1' }, predicate: 'status', value: 'down' };
@@ -448,6 +452,7 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
       [
         ...keysOf(off),
         'enteredToolCalls',
+        'enteredToolCallsComplete',
         'findingsRequest',
         'findingsServe',
         'findingsLayout',
@@ -456,10 +461,8 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
     );
     const callOccurrenceKey = occurrenceOf(on, 'c1');
     expect(callOccurrenceKey).toBeDefined();
-    expect(enteredOf(on)).toEqual({
-      entries: [{ callOccurrenceKey, entered: true }],
-      complete: true,
-    });
+    expect(enteredOf(on)).toEqual([{ callOccurrenceKey, entered: true }]);
+    expect(entryCompleteOf(on)).toBe(true);
     expect(enteredOf(off)).toBeUndefined();
     expect(keysOf(on)).not.toContain('findingsLedger');
     expect(on.findings()).toBeUndefined();
@@ -1323,6 +1326,7 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
       [
         ...keysOf(off),
         'enteredToolCalls',
+        'enteredToolCallsComplete',
         'findingsBatchRecordedAt',
         'findingsLedger',
         'findingsRequest',
@@ -1336,7 +1340,8 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
       expect(callOccurrenceKey).toBeDefined();
       return { callOccurrenceKey, entered: true };
     });
-    expect(enteredOf(on)).toEqual({ entries, complete: true });
+    expect(enteredOf(on)).toEqual(entries);
+    expect(entryCompleteOf(on)).toBe(true);
     expect(enteredOf(off)).toBeUndefined();
     expect(keysOf(off)).not.toContain('findingsLedger');
     expect(off.findings()).toBeUndefined();
