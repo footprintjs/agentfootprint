@@ -404,9 +404,13 @@ describe('inspect_tool_call — the rung appears only when a record exists', () 
   });
 
   it('without an inner record: the boundary marker stands', async () => {
-    const out = await callTraceTool(traceToolpack(outerBag()), 'inspect_tool_call', {
-      toolCallId: 'c1',
-    });
+    const out = await callTraceTool(
+      traceToolpack(outerBag(), { showWithheldResults: true }),
+      'inspect_tool_call',
+      {
+        toolCallId: 'c1',
+      },
+    );
     expect(out).toContain('⚠ boundary: what happened INSIDE the tool is not traced');
     expect(out).not.toContain('inside:');
   });
@@ -414,9 +418,13 @@ describe('inspect_tool_call — the rung appears only when a record exists', () 
   it('with an inner record: keeps the descent link even when entry is unrecorded', async () => {
     const store = innerRunStore();
     store.keep(recordFor('c1'));
-    const out = await callTraceTool(traceToolpack(outerBag(store)), 'inspect_tool_call', {
-      toolCallId: 'c1',
-    });
+    const out = await callTraceTool(
+      traceToolpack(outerBag(store), { showWithheldResults: true }),
+      'inspect_tool_call',
+      {
+        toolCallId: 'c1',
+      },
+    );
     expect(out).toContain('inside: a retained record for this call contains 4 step(s), ok.');
     expect(out).toContain("Descend with inspect_tool_run({ toolCallId: 'c1' })");
     expect(out).toContain('This record does not say whether the tool ran.');
@@ -440,9 +448,13 @@ describe('inspect_tool_run — honest absence', () => {
   it('records exist but not this id: lists the ones that CAN be opened', async () => {
     const store = innerRunStore();
     store.keep(recordFor('c1'));
-    const out = await callTraceTool(traceToolpack(bagWith(store)), 'inspect_tool_run', {
-      toolCallId: 'c9',
-    });
+    const out = await callTraceTool(
+      traceToolpack(bagWith(store), { showWithheldResults: true }),
+      'inspect_tool_run',
+      {
+        toolCallId: 'c9',
+      },
+    );
     expect(out).toContain("no retained inner run for tool call 'c9'");
     expect(out).toContain('Inner runs you CAN open (1): c1 (weather_advice, 4 step(s), ok)');
   });
@@ -469,9 +481,13 @@ describe('inspect_tool_run — honest absence', () => {
   it('a capture that failed is FILED with its reason, not silently missing', async () => {
     const store = innerRunStore();
     store.keep({ ...recordFor('c1'), steps: 0, problem: 'snapshot unavailable' });
-    const out = await callTraceTool(traceToolpack(bagWith(store)), 'inspect_tool_run', {
-      toolCallId: 'c1',
-    });
+    const out = await callTraceTool(
+      traceToolpack(bagWith(store), { showWithheldResults: true }),
+      'inspect_tool_run',
+      {
+        toolCallId: 'c1',
+      },
+    );
     expect(out).toContain('could not be captured: snapshot unavailable');
     expect(out).toContain("inspect_tool_call('c1') still has the envelope");
   });

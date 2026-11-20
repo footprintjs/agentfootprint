@@ -33,6 +33,10 @@ import { mountChain, innerCommitCount, opensWithSeed } from '../subflowRecords.j
 import { unconfiguredCredentialProvider } from '../../identity/types.js';
 import { unconfiguredArtifacts } from '../../artifacts/capability.js';
 import { validateToolArgs, formatToolArgIssues } from '../../tools/toolArgsValidation.js';
+import { requiresTraceAdmission } from '../admission/disposition.js';
+import { projectTraceArtifacts } from '../admission/project.js';
+import { TRACE_WITHHELD } from '../admission/marker.js';
+import { admitInnerRuns } from '../admission/innerRuns.js';
 
 // ── The factory ────────────────────────────────────────────────────────────
 
@@ -90,6 +94,65 @@ export function traceToolpack(
     // An accessor or hostile object cannot supply evidence for a mixed bag.
   }
   if (savedClaim) throw new TypeError('Stored capture evidence requires traceCauseTools.');
+  if (options?.showWithheldResults !== true && requiresTraceAdmission(artifacts)) {
+    try {
+      return buildTraceTools(projectTraceArtifacts(artifacts), options).map(admittedTraceTool);
+    } catch {
+      // Unreadable or oversized recordings get a fixed answer, never the host bag.
+      const admitted: TraceToolpackArtifacts = {
+        snapshot: {
+          runId: '',
+          commitValues: 'full',
+          writeProvenance: 'off',
+          sharedState: {},
+          commitLog: [],
+          executionTree: { id: '', logs: {}, errors: {}, metrics: {}, evals: {} },
+        },
+        narrative: [TRACE_WITHHELD],
+      };
+      return buildTraceTools(admitted, options).map((tool) => ({
+        ...tool,
+        execute: () => TRACE_WITHHELD,
+      }));
+    }
+  }
+  return buildTraceTools(artifacts, options);
+}
+
+// These views need evidence removed from the affected bag. Use a single answer
+// before entering their readers, without describing what the raw record held.
+const WITHHELD_TRACE_TOOLS = new Set([
+  'find_context_errors',
+  'inspect_tool_call',
+  'inspect_tool_run',
+  'inspect_subflow',
+  'read_narrative',
+  'attention_list',
+  'root_cause',
+  'impact',
+]);
+
+function admittedTraceTool(tool: Tool): Tool {
+  if (WITHHELD_TRACE_TOOLS.has(tool.schema.name)) {
+    return { ...tool, execute: () => TRACE_WITHHELD };
+  }
+  return {
+    ...tool,
+    execute: async (args, ctx) => {
+      const reply = await tool.execute(args, ctx);
+      return typeof reply === 'string' ? `${TRACE_WITHHELD}\n${reply}` : TRACE_WITHHELD;
+    },
+  };
+}
+
+function buildTraceTools(
+  artifacts: TraceToolpackArtifacts,
+  options?: TraceToolpackOptions,
+): Tool[] {
+  const traceArtifacts =
+    options?.showWithheldResults !== true && artifacts.innerRuns !== undefined
+      ? { ...artifacts, innerRuns: admitInnerRuns(artifacts.innerRuns) }
+      : artifacts;
   const opts = resolveToolpackOptions(options);
   const index = buildIndex(artifacts);
   // ONE reader over the scattered tool-call evidence, shared by the two
@@ -108,8 +171,8 @@ export function traceToolpack(
     buildBacktrack(artifacts, index, opts),
     buildWhoWrote(index, opts),
     buildGetValue(index, opts),
-    buildInspectToolCall(artifacts, calls),
-    buildInspectToolRun(artifacts, calls, options),
+    buildInspectToolCall(traceArtifacts, calls),
+    buildInspectToolRun(traceArtifacts, calls, options),
     buildInspectSubflow(artifacts, index, options),
     ...buildCauseTools(artifacts, index.nodes, options?.cause),
   ];
@@ -175,7 +238,7 @@ function buildInspectToolRun(
         ...(record.narrative !== undefined && { narrative: record.narrative }),
       };
       WITHOUT_SUBFLOW_DOOR.add(inner);
-      return inner;
+      return admittedChild(inner, options);
     } catch (e) {
       return (
         `the retained record for '${record.toolCallId}' could not be opened: ` +
@@ -310,6 +373,10 @@ function buildInspectSubflow(
   options: TraceToolpackOptions | undefined,
 ): Tool {
   const slot = innerPackSlot((inner) => traceToolpack(inner, options));
+  const openMount = (mount: string) => {
+    const inner = openSubflowArtifacts(artifacts, mount);
+    return typeof inner === 'string' ? inner : admittedChild(inner, options);
+  };
   const isStep = (id: string): boolean => index.nodes.has(id) || index.firstIdxOf.has(id);
   const mountIds = (): string[] => index.orderedIds.filter((id) => index.nodes.get(id)?.subflowId);
 
@@ -383,7 +450,7 @@ function buildInspectSubflow(
         const chain = mountChain(results, mount, isStep);
         if (chain !== undefined && chain.length > 1) {
           const parent = chain[0] as string;
-          const pack = slot(parent, () => openSubflowArtifacts(artifacts, parent));
+          const pack = slot(parent, () => openMount(parent));
           if (typeof pack === 'string') return pack;
           return callTraceTool(pack, 'inspect_subflow', { mount, ...definedOf(question) }, ctx);
         }
@@ -402,7 +469,7 @@ function buildInspectSubflow(
         );
       }
 
-      const inner = slot(mount, () => openSubflowArtifacts(artifacts, mount));
+      const inner = slot(mount, () => openMount(mount));
       if (typeof inner === 'string') return inner;
 
       const body = await askInner(inner, question, callTraceTool, ctx);
@@ -429,6 +496,15 @@ function buildInspectSubflow(
       );
     },
   });
+}
+
+function admittedChild(
+  artifacts: TraceToolpackArtifacts,
+  options?: TraceToolpackOptions,
+): TraceToolpackArtifacts | string {
+  return options?.showWithheldResults !== true && requiresTraceAdmission(artifacts)
+    ? TRACE_WITHHELD
+    : artifacts;
 }
 
 // ── Scripted/offline invocation (the auditor pattern) ─────────────────────

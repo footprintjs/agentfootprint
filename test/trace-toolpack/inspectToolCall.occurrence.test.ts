@@ -60,6 +60,7 @@ function inspect(
   history: readonly object[],
   events: readonly AgentfootprintEvent[] | undefined,
   middlewareDecisions: readonly object[] = [],
+  showWithheldResults = false,
 ) {
   const snapshot = {
     commitLog: [
@@ -82,7 +83,9 @@ function inspect(
   const saved = JSON.parse(
     JSON.stringify({ snapshot, ...(events !== undefined && { events }) }),
   ) as TraceToolpackArtifacts;
-  return callTraceTool(traceToolpack(saved), 'inspect_tool_call', { toolCallId: id });
+  return callTraceTool(traceToolpack(saved, { showWithheldResults }), 'inspect_tool_call', {
+    toolCallId: id,
+  });
 }
 
 describe('inspect_tool_call from keyed saved recordings', () => {
@@ -126,12 +129,12 @@ describe('inspect_tool_call from keyed saved recordings', () => {
     expect(out).not.toContain('older');
   });
 
-  it('says the selected result is missing when only a same-ID neighbour remains', async () => {
-    const out = await inspect(
-      [proposal('neighbour', first), result('neighbour', first)],
-      [end('5', 17, second)],
-      [rewrite('neighbour', first)],
-    );
+  it('keeps the selected result separate when only a same-ID neighbour remains', async () => {
+    const history = [proposal('neighbour', first), result('neighbour', first)];
+    const events = [end('5', 17, second)];
+    const decisions = [rewrite('neighbour', first)];
+    expect(await inspect(history, events, decisions)).toBe('A result was kept out by a rule.');
+    const out = await inspect(history, events, decisions, true);
     expect(out).toContain("no result for call 'reused' remains in the retained history");
     expect(out).toContain('the tool ran, but its result is not in the kept history');
     expect(out).not.toContain('neighbour');
