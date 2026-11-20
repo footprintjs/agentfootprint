@@ -14,11 +14,8 @@ import { assistantReplayFields } from '../../assistantReplay.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { MemoryIdentity } from '../../../../memory/identity/types.js';
-import {
-  assertContinuable,
-  checkpointReplayHistory,
-  type AgentRunCheckpoint,
-} from '../../../runCheckpoint.js';
+import { assertContinuable, type AgentRunCheckpoint } from '../../../runCheckpoint.js';
+import { checkpointReplayHistory } from '../../../checkpointHistory.js';
 import { requireVerificationOnResume } from '../../findings/verificationCheckpoint.js';
 import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';

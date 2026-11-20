@@ -57,11 +57,7 @@
 import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from '../thinking/replay.js';
-import {
-  applyReplayRetirements,
-  replayRetirements,
-  type ReplayRetirement,
-} from '../thinking/replayHistory.js';
+import { replayRetirements, type ReplayRetirement } from '../thinking/replayHistory.js';
 import {
   isContextWindowExceeded,
   looksLikeContextWindowExceeded,
@@ -78,7 +74,7 @@ import {
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
-import { admitStoredHistory } from './checkpointHistory.js';
+import { admitStoredHistory, checkpointReplayHistory } from './checkpointHistory.js';
 import { validateCheckpointLedger } from './checkpointLedger.js';
 import { withheldToolResultOnTurn } from './agent/middleware/withheldResult.js';
 import {
@@ -386,14 +382,6 @@ export function retainReplayRetirements(
   const edits = replayRetirements(preparation);
   if (edits.length === 0) return;
   tracker.replayRetirements = [...(tracker.replayRetirements ?? []), ...structuredClone(edits)];
-}
-
-/** Read only approved replay edits onto the history each checkpoint already owns. */
-export function checkpointReplayHistory(
-  history: readonly LLMMessage[],
-  tracker?: RunCheckpointTracker,
-): readonly LLMMessage[] {
-  return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
 }
 
 /** Build a storage checkpoint from committed history and failure observations. @internal */

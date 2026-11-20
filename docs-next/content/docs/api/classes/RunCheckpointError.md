@@ -4,7 +4,7 @@ title: RunCheckpointError
 
 # Class: RunCheckpointError
 
-Defined in: [src/core/runCheckpoint.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L124)
+Defined in: [src/core/runCheckpoint.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L120)
 
 Thrown by `agent.run()` when a fault occurs mid-run. Carries the
 underlying error AND the last-known-good checkpoint. Catch this
@@ -40,7 +40,7 @@ try {
 
 > **new RunCheckpointError**(`cause`, `checkpoint`): `RunCheckpointError`
 
-Defined in: [src/core/runCheckpoint.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L134)
+Defined in: [src/core/runCheckpoint.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L130)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/core/runCheckpoint.ts:134](https://github.com/footprintjs/agent
 
 > `readonly` **cause**: `Error`
 
-Defined in: [src/core/runCheckpoint.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L129)
+Defined in: [src/core/runCheckpoint.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L125)
 
 The error that triggered the checkpoint. Inspect for retry
  decisions ("if cause is CircuitOpenError, wait for cooldown
@@ -82,7 +82,7 @@ The error that triggered the checkpoint. Inspect for retry
 
 > `readonly` **checkpoint**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
 
-Defined in: [src/core/runCheckpoint.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L132)
+Defined in: [src/core/runCheckpoint.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L128)
 
 The last-known-good checkpoint. Persist + pass back to
  `agent.resumeOnError(checkpoint)` to continue from here.
@@ -93,7 +93,7 @@ The last-known-good checkpoint. Persist + pass back to
 
 > `readonly` **code**: `"ERR_RUN_CHECKPOINT"`
 
-Defined in: [src/core/runCheckpoint.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L125)
+Defined in: [src/core/runCheckpoint.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L121)
 
 ***
 

@@ -155,3 +155,17 @@ export function turnNumberFor(
   }
   return turn;
 }
+
+/** Start the numbered turn, carrying withholding only from the same failed request. */
+export function seedConversationTurn(
+  scope: TypedScope<AgentState>,
+  history: readonly LLMMessage[],
+  resume: PendingResumeHistory | undefined,
+  ledger: FindingsLedger | undefined,
+  stamped: boolean,
+): number {
+  const turn = turnNumberFor(history, resume, ledger, stamped);
+  scope.turnNumber = turn;
+  if (resume?.withheldToolResult === true) scope.withheldToolResultTurn = turn;
+  return turn;
+}

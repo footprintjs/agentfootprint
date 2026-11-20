@@ -18,6 +18,17 @@
  */
 
 import { assertStoredTypedAnswerMark } from '../tools/typedAnswer.js';
+import type { LLMMessage } from '../provider-contract/types.js';
+import { applyReplayRetirements } from '../thinking/replayHistory.js';
+import type { RunCheckpointTracker } from './runCheckpoint.js';
+
+/** Read only approved replay edits onto the history each checkpoint already owns. */
+export function checkpointReplayHistory(
+  history: readonly LLMMessage[],
+  tracker?: RunCheckpointTracker,
+): readonly LLMMessage[] {
+  return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
+}
 
 /** Admit stored conversation messages and any marks on their retained folded originals. */
 export function admitStoredHistory(history: readonly unknown[], folded: unknown): void {

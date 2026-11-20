@@ -50,7 +50,7 @@ import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
 import {
   anchorTurnNumber,
   historyForTurn,
-  turnNumberFor,
+  seedConversationTurn,
 } from '../runtime/conversation/seedHistory.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
@@ -629,14 +629,13 @@ function seedFrom(
   // honesty layer is armed the count is raised to what the stored
   // conversation already stamped (`turnNumberFor`): a window strategy trims
   // the stored history, and the count alone repeats.
-  const turnNumber = turnNumberFor(
+  const turnNumber = seedConversationTurn(
+    scope,
     history,
     resume,
     resumeLedger,
     deps.honestyLayers !== undefined || deps.negativeClaimsArmed === true,
   );
-  scope.turnNumber = turnNumber;
-  if (resume?.withheldToolResult === true) scope.withheldToolResultTurn = turnNumber;
   // THE SCRIPT RECORD'S BOUND, at the turn boundary: a restored `script` row
   // of an EARLIER turn keeps its facts — ids, counts, outcome — and loses its
   // text (`scripts/rows.ts` · `withoutEarlierScriptText`), so the eligible
