@@ -8,17 +8,19 @@ import { createBudget, PROJECTED_LIMIT_UNITS, SPEND_LIMIT_UNITS } from './budget
 import { loadCohort } from './cohorts.mjs';
 import { hiddenScripted, hiddenTasks } from './hiddenTasks.mjs';
 import { literalClaims } from './literalClaims.mjs';
-import { cells, cellKey, limits, paidSchedule, projectPreflight } from './plan.mjs';
+import { cells, cellKey, limits, paidSchedule, projectPreflight, released16Cells } from './plan.mjs';
 import { repeatedHiddenScripted } from './repeatPlay.mjs';
 import { summarize } from './score.mjs';
 import { tasks } from './tasks.mjs';
 
-function rehearsalInputs() {
+function rehearsalInputs(release16) {
   const files = [
-    'RULE.md', 'PLAN.md', 'PREDICTIONS.md', 'tasks.mjs', 'hiddenTasks.mjs', 'benchmark.mjs',
+    'RULE.md', 'tasks.mjs', 'hiddenTasks.mjs', 'benchmark.mjs',
     'budget.mjs', 'candidate.mjs', 'cohorts.mjs', 'plan.mjs', 'run.mjs', 'score.mjs',
     'terminalAnswer.mjs', 'repeatPlay.mjs', 'replyBoundary.mjs', 'literalClaims.mjs',
-    'cohorts/after/package-lock.json', 'cohorts/candidate-source.json',
+    ...(release16
+      ? ['RELEASE16-PLAN.md', 'cohorts/released16/package-lock.json']
+      : ['PLAN.md', 'PREDICTIONS.md', 'cohorts/after/package-lock.json', 'cohorts/candidate-source.json']),
   ];
   return Object.fromEntries(files.map((name) => [
     name, createHash('sha256').update(readFileSync(new URL(name, import.meta.url))).digest('hex'),
@@ -49,17 +51,23 @@ const taskPlays = [
   })),
 ];
 
-async function rehearse(installed, inputs) {
+async function rehearse(installed, inputs, selectedCells, parser) {
   const rows = [];
-  const applyOutputSchema = installed.published.library.applyOutputSchema;
+  const { applyOutputSchema } = parser.library;
   for (const { task, variant, play } of taskPlays) {
-    for (const { label, arm } of cells) {
+    for (const { label, arm } of selectedCells) {
       const run = { label, arm, taskId: task.id, variant };
       const result = await runOne(installed[label].library, task, play(task, variant), { arm, applyOutputSchema, limits, run });
       rows.push({ ...run, ...result });
     }
   }
-  assertRehearsal(rows, { packedCandidate: installed.candidate.stamp.archive !== undefined });
+  assertRehearsal(rows, { packedCandidate: installed.candidate?.stamp.archive !== undefined });
+  if (installed.released16 !== undefined) {
+    for (let i = 0; i < rows.length; i += 2) {
+      assert.deepEqual(rows[i].requests[0].request, rows[i + 1].requests[0].request,
+        `Paired first request: ${rows[i].taskId}/${rows[i].variant}`);
+    }
+  }
   const rehearsal = { scriptedRows: rows.length, inputs, cohorts: recordedCohorts(installed),
     transcriptSha256: createHash('sha256').update(JSON.stringify(rows)).digest('hex') };
   return { rows, rehearsal };
@@ -78,22 +86,24 @@ function readHostedCandidate(sha256) {
   return source;
 }
 
-function verifyRehearsal(installed, inputs) {
-  const receiptData = JSON.parse(readFileSync(new URL('./rehearsal-lock.json', import.meta.url)));
+function verifyRehearsal(installed, inputs, selectedCells, release16) {
+  const receiptName = release16 ? 'rehearsal-release16-lock.json' : 'rehearsal-lock.json';
+  const receiptData = JSON.parse(readFileSync(new URL(receiptName, import.meta.url)));
   assert.deepEqual(receiptData.inputs, inputs, 'Harness inputs changed after rehearsal');
-  assert.deepEqual(receiptData.cohorts, recordedCohorts(installed), 'Rehearse against the exact packed candidate first');
-  assert.equal(receiptData.scriptedRows, taskPlays.length * cells.length, 'The two-cell rehearsal must be complete');
+  assert.deepEqual(receiptData.cohorts, recordedCohorts(installed), 'Rehearse against the exact installed package first');
+  assert.equal(receiptData.scriptedRows, taskPlays.length * selectedCells.length, 'The two-cell rehearsal must be complete');
   assert.match(receiptData.transcriptSha256, /^[a-f0-9]{64}$/, 'Rehearsal transcript digest required');
   return receiptData;
 }
 
-async function coordinatorRun(installed, inputs) {
+async function coordinatorRun(installed, inputs, selectedCells, parser, release16) {
   const createProvider = await createPaidFactory();
-  const receipt = openSync(new URL('./paid-attempts.jsonl', import.meta.url), 'wx', 0o600);
+  const receiptName = release16 ? 'paid-attempts-release16.jsonl' : 'paid-attempts.jsonl';
+  const receipt = openSync(new URL(receiptName, import.meta.url), 'wx', 0o600);
   const append = (value) => { writeSync(receipt, `${JSON.stringify(value)}\n`); };
   const budget = createBudget(append);
-  const applyOutputSchema = installed.published.library.applyOutputSchema;
-  const { preflight, remaining } = paidSchedule();
+  const { applyOutputSchema } = parser.library;
+  const { preflight, remaining } = paidSchedule(selectedCells);
   const rows = [];
   let projection;
   let stop;
@@ -128,7 +138,7 @@ async function coordinatorRun(installed, inputs) {
       await execute(item, 'preflight');
       if (stop) break;
     }
-    projection = projectPreflight(rows, remaining, budget.snapshot().chargedUnits);
+    projection = projectPreflight(rows, remaining, budget.snapshot().chargedUnits, selectedCells);
     append({ type: 'preflight', projection });
     process.stderr.write(`${JSON.stringify({ type: 'preflight', projection })}\n`);
     if (!stop && !projection.canContinue) stop = 'preflight-projection';
@@ -151,28 +161,41 @@ async function main() {
     throw new Error('Run with filesystem read restricted to the benchmark directory');
   }
   const [mode = '--rehearse', flag, path, sha256, ...rest] = process.argv.slice(2);
+  const release16 = flag === '--release16' && path === undefined && sha256 === undefined;
+  const candidateRequested = flag === '--candidate' && path !== undefined && sha256 !== undefined;
   if (!['--rehearse', '--verify-receipt', '--coordinator-run'].includes(mode) || rest.length ||
-      flag !== '--candidate' || path === undefined || sha256 === undefined) {
-    throw new Error('Use --rehearse, --verify-receipt, or --coordinator-run with --candidate <archive> <sha256>');
+      (!release16 && !candidateRequested)) {
+    throw new Error('Use --rehearse, --verify-receipt, or --coordinator-run with --release16 or --candidate <archive> <sha256>');
   }
-  const source = readHostedCandidate(sha256);
-  const inputs = rehearsalInputs();
-  const published = loadCohort('published');
-  const candidate = loadCohort('candidate', { path, sha256 });
-  const installed = { published, candidate: { ...candidate, stamp: { ...candidate.stamp, source } } };
-  const verified = mode === '--rehearse' ? undefined : verifyRehearsal(installed, inputs);
+  const inputs = rehearsalInputs(release16);
+  const selectedCells = release16 ? released16Cells : cells;
+  let installed;
+  if (release16) {
+    installed = { released16: loadCohort('released16') };
+  } else {
+    const source = readHostedCandidate(sha256);
+    const candidate = loadCohort('candidate', { path, sha256 });
+    installed = {
+      published: loadCohort('published'),
+      candidate: { ...candidate, stamp: { ...candidate.stamp, source } },
+    };
+  }
+  const parser = release16 ? installed.released16 : installed.published;
+  const verified = mode === '--rehearse' ? undefined
+    : verifyRehearsal(installed, inputs, selectedCells, release16);
   if (mode === '--verify-receipt') {
     process.stdout.write(`${JSON.stringify({ mode, rehearsal: verified }, null, 2)}\n`);
     return;
   }
-  const result = mode === '--rehearse' ? await rehearse(installed, inputs) : await coordinatorRun(installed, inputs);
+  const result = mode === '--rehearse' ? await rehearse(installed, inputs, selectedCells, parser)
+    : await coordinatorRun(installed, inputs, selectedCells, parser, release16);
   const summarizeCells = (rows, allowTerminalObject = false) => {
-    const applyOutputSchema = published.library.applyOutputSchema;
+    const { applyOutputSchema } = parser.library;
     const summarizeSelection = (selected) => ({
       ...summarize(allowTerminalObject ? selected.map((row) => ({ ...row, score: row.supplementalScore })) : selected),
       literalClaims: literalClaims(selected, applyOutputSchema, { allowTerminalObject }),
     });
-    return Object.fromEntries(cells.map(({ label, arm }) => {
+    return Object.fromEntries(selectedCells.map(({ label, arm }) => {
       const selected = rows.filter((row) => row.label === label && row.arm === arm);
       const byTask = Object.fromEntries([...tasks, ...hiddenTasks].map(({ id }) => [
         id, summarizeSelection(selected.filter(({ task }) => task.id === id)),

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { PROJECTED_LIMIT_UNITS } from './budget.mjs';
-import { cellKey, cells, limits, paidSchedule, projectPreflight } from './plan.mjs';
+import { cellKey, cells, limits, paidSchedule, projectPreflight, released16Cells } from './plan.mjs';
 
 const schedule = paidSchedule();
 
@@ -84,6 +84,22 @@ test('the projection requires one measured row for each exact cell', () => {
   assert.equal(continues([published, { ...candidate, arm: 'defaults' }]), false);
   assert.equal(continues([published, { ...candidate, requests: [{}] }]), false);
   assert.equal(continues([published, candidate, candidate]), false);
+});
+
+test('release 16 schedules both arms of one package and prices their preflights separately', () => {
+  const schedule16 = paidSchedule(released16Cells);
+  const all = [...schedule16.preflight, ...schedule16.remaining];
+  assert.equal(all.length, 280);
+  for (const arm of ['default', 'label-off']) {
+    assert.equal(all.filter((run) => run.label === 'released16' && run.arm === arm).length, 140);
+  }
+  const measured = schedule16.preflight.map((run) => ({
+    ...run,
+    requests: [{ accounting: { inputTokens: 1000, outputTokens: 200, usageKnown: true } }],
+  }));
+  assert.equal(projectPreflight(measured, schedule16.remaining, 0, released16Cells).canContinue, true);
+  const [first] = measured;
+  assert.equal(projectPreflight([first, first], schedule16.remaining, 0, released16Cells).canContinue, false);
 });
 
 test('missing usage enters the projection with the settlement fallback, including the output cap', () => {

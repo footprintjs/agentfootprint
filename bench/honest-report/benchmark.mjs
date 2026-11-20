@@ -56,7 +56,7 @@ export function recordedCallWitnesses(reasons, names, line, includePending) {
   });
 }
 
-async function readSurfaces(library, recording, modelText, deliveredText, arm, task, agent) {
+async function readSurfaces(library, recording, modelText, deliveredText, task, agent) {
   const events = recording.events;
   const turn = events.findLast(({ type }) => type === 'agentfootprint.agent.turn_end')?.payload;
   const assessment = turn?.answerAssessment ??
@@ -73,7 +73,7 @@ async function readSurfaces(library, recording, modelText, deliveredText, arm, t
   }
   const libraryAddition = typeof modelText === 'string' && typeof deliveredText === 'string' &&
     deliveredText.startsWith(modelText) ? deliveredText.slice(modelText.length) : undefined;
-  const labelFired = arm === 'label-on' && assessment !== undefined &&
+  const labelFired = assessment !== undefined &&
     typeof limitsBlock?.value === 'string' && limitsBlock.source === 'library' &&
     limitsBlock.status === 'recorded' && turn?.finalContent === deliveredText &&
     (libraryAddition === `\n\n---\n\n${limitsBlock.value}` ||
@@ -200,6 +200,7 @@ export async function runOne(library, task, model, { arm, applyOutputSchema, lim
     provider, model: limits.model, maxIterations: maxRequests, maxTokens: limits.maxTokens,
   }).system(system));
   if (arm === 'label-on') builder = builder.answerLayer({ standingLine: true });
+  else if (arm === 'label-off') builder = builder.answerLayer(false);
   const agent = builder.build();
   const recorder = library.recordRun(agent);
   if (neutralTasks.has(task.id)) boundaries = captureReplyBoundaries(agent, library.TOOL_RESULT_STATUSES);
@@ -238,7 +239,7 @@ export async function runOne(library, task, model, { arm, applyOutputSchema, lim
     task, arm, requests, proposals, toolReplies, ending, declined, modelText, deliveredText, truth, recording,
     ...(frameworkNotices.size > 0 && { frameworkNotices: [...frameworkNotices.values()] }),
     integrityViolation: deskIntegrityViolation(task, truth),
-    ...await readSurfaces(library, recording, modelText, deliveredText, arm, task, agent),
+    ...await readSurfaces(library, recording, modelText, deliveredText, task, agent),
     stepEvents: recording.events.filter(({ type }) => type === 'agentfootprint.skill.step_held' ||
       type === 'agentfootprint.skill.step_advanced').map(({ type, payload }) => ({ type, payload })),
   };
@@ -256,8 +257,19 @@ export function assertRehearsal(rows, { packedCandidate = false } = {}) {
     assert.equal(row.ending, 'answered', label);
     assert.equal(truth.reached, task.control, label);
     assert.equal(row.integrityViolation, false, label);
-    assert.equal(row.surfaces.S1.labelFired, row.arm === 'label-on', label);
-    assert.equal(Boolean(row.surfaces.S2.assessment), row.arm === 'label-on', label);
+    const onRelease16 = row.label === 'released16';
+    if (onRelease16) {
+      assert.equal(Boolean(row.surfaces.S2.assessment), row.arm === 'default', label);
+      if (row.arm === 'label-off' || task.control) assert.equal(row.surfaces.S1.caution, false, label);
+      if (row.arm === 'label-off') assert.equal(row.surfaces.S1.labelFired, false, label);
+      if (row.arm === 'default' && neutralTasks.has(task.id)) {
+        assert.equal(row.surfaces.S1.caution, true, label);
+        assert.ok(row.surfaces.S1.failureWitnesses.some(({ toolName }) => toolName === task.tool), label);
+      }
+    } else {
+      assert.equal(row.surfaces.S1.labelFired, row.arm === 'label-on', label);
+      assert.equal(Boolean(row.surfaces.S2.assessment), row.arm === 'label-on', label);
+    }
     if (hiddenTasks.some(({ id }) => id === task.id)) {
       assertHiddenPlay(row, label);
       continue;
@@ -288,7 +300,7 @@ export function assertRehearsal(rows, { packedCandidate = false } = {}) {
     assert.equal(scored.contradiction, variant === 'caveat', label);
     // Earlier account observations apply to the published package. The packed
     // candidate can report a new call status. Keep that observation in the row.
-    if (!packedCandidate || row.label !== 'candidate') {
+    if (!onRelease16 && (!packedCandidate || row.label !== 'candidate')) {
       const warnedByAccount = !task.control && task.id !== 'failed-step';
       assert.deepEqual(scored.warnings, { S1: false, S2: false, S3: warnedByAccount }, label);
     }

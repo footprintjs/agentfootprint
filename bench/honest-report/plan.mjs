@@ -9,6 +9,10 @@ export const cells = Object.freeze([
   Object.freeze({ label: 'published', arm: 'label-on' }),
   Object.freeze({ label: 'candidate', arm: 'label-on' }),
 ]);
+export const released16Cells = Object.freeze([
+  Object.freeze({ label: 'released16', arm: 'default' }),
+  Object.freeze({ label: 'released16', arm: 'label-off' }),
+]);
 
 export const limits = Object.freeze({
   model: 'claude-haiku-5-5',
@@ -22,8 +26,8 @@ export const limits = Object.freeze({
 
 export const cellKey = (label, arm) => `${label}/${arm}`;
 
-export function paidSchedule() {
-  const runs = (task, repeat) => cells.map((cell) => ({ ...cell, task, repeat }));
+export function paidSchedule(selectedCells = cells) {
+  const runs = (task, repeat) => selectedCells.map((cell) => ({ ...cell, task, repeat }));
   const preflight = runs(preflightTask, 1);
   const allTasks = [...tasks, ...hiddenTasks];
   const remaining = Array.from({ length: repeats }, (_, index) => index + 1).flatMap((repeat) => {
@@ -34,7 +38,7 @@ export function paidSchedule() {
   return { preflight, remaining };
 }
 
-export function projectPreflight(preflightRows, remaining, chargedUnits) {
+export function projectPreflight(preflightRows, remaining, chargedUnits, selectedCells = cells) {
   const cellProjections = preflightRows.map((row) => {
     const peaks = { input: 0, output: 0 };
     const requests = row.requests.filter(({ accounting }) => accounting !== undefined);
@@ -55,8 +59,8 @@ export function projectPreflight(preflightRows, remaining, chargedUnits) {
   const projectedUnits = chargedUnits + cellProjections.reduce((n, { remainingUnits }) => n + remainingUnits, 0);
   const measurableKeys = new Set(cellProjections.filter(({ measuredRequests }) => measuredRequests.length > 0)
     .map(({ cell }) => cell));
-  const measurable = preflightRows.length === cells.length &&
-    cells.every(({ label, arm }) => measurableKeys.has(cellKey(label, arm)));
+  const measurable = preflightRows.length === selectedCells.length &&
+    selectedCells.every(({ label, arm }) => measurableKeys.has(cellKey(label, arm)));
   return {
     cells: cellProjections, chargedUnits, projectedUnits,
     projectedUsd: toDollars(projectedUnits),

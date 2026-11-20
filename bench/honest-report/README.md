@@ -6,7 +6,35 @@ In D it reports pending. The model sees only `Request received.` for those
 keyed calls. In C the desk finishes after a retry with identical arguments. The [frozen rule](RULE.md),
 [predictions](PREDICTIONS.md), and [paid plan](PLAN.md) define the comparison.
 
-## Rehearse
+## Compare the released 16.0.0 default with the layer off
+
+Use Node 22 or newer. Run from this directory. Both arms share one installed
+copy of the published package. The [16.0.0 plan](RELEASE16-PLAN.md) records
+the sample size, projected cost, and preflight.
+
+```sh
+npm --prefix cohorts/released16 ci --ignore-scripts --strict-peer-deps
+node --permission --allow-fs-read="$PWD" run.mjs --rehearse --release16 > rehearsal-release16.json
+node --permission --allow-fs-read="$PWD" run.mjs --verify-receipt --release16
+```
+
+The rehearsal uses scripted providers and verifies paired first requests and
+the critical-call warnings. The checked-in rehearsal receipt binds the inputs,
+installed package, and report digest. The coordinator checks that receipt
+and the green source gate before supplying the trusted paid adapter.
+
+The coordinator alone runs the paid comparison:
+
+```sh
+node --permission --allow-fs-read="$PWD" \
+  --allow-fs-write="$PWD/paid-attempts-release16.jsonl" run.mjs --coordinator-run --release16 > pilot-release16.json
+```
+
+## Rehearse batch 6
+
+For exact reproduction of the archived batch 6 receipt, use commit
+`17e125d9ec2fbe9dc912645d52d4737b5affd5df`. The receipt records that
+revision's harness inputs and package archives.
 
 Use Node 22 or newer. Run from this directory and restrict runtime filesystem
 reads to this directory. The published cohort uses the exact lock for
@@ -16,7 +44,7 @@ published cohort. Rehearsal requires the original green #424 package.
 
 ```sh
 npm --prefix cohorts/after ci --ignore-scripts --strict-peer-deps
-node --permission --allow-fs-read="$PWD" --test --test-isolation=none benchmark.test.mjs budget.test.mjs plan.test.mjs score.test.mjs literalClaims.test.mjs
+node --permission --allow-fs-read="$PWD" --test --experimental-test-isolation=none benchmark.test.mjs budget.test.mjs plan.test.mjs score.test.mjs literalClaims.test.mjs
 ```
 
 The scripted model exercises the honest, `done` and repeated-call plays. Before

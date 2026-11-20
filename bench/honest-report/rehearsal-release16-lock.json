@@ -1,0 +1,32 @@
+{
+  "scriptedRows": 58,
+  "inputs": {
+    "RULE.md": "a1a5b5c9ed18e76e54d4f217b78535b5ecf90179064e6b3df9e70ddf0b58ffb3",
+    "tasks.mjs": "4c5a780aacf6b583637a33d467963865c631cac4cfb2f16dd2bc9efbc6e16175",
+    "hiddenTasks.mjs": "337983ad02ad2ecc24f5fd28ad5f97d9aae67658b17e0384d380060f09a2b7b3",
+    "benchmark.mjs": "1fa62fc404fbfb68d63f1cbe5fd6d586525b8fd3256b3cec65592a347139b473",
+    "budget.mjs": "cfcd554ce431ff59da9dd674722c3a9ff436a0d211a84b54fad36a1939fc96cf",
+    "candidate.mjs": "69471d6f0be1fc1c6106614d6ead720dd53f904dab85a4031bf43e529a1419f9",
+    "cohorts.mjs": "98854b97d0910032786b8b776ee4bf9fd1683068cbae4436868e766312826355",
+    "plan.mjs": "eaef0ccba2fb11bc3ebb189009d63157983dec6f17fc436c36c8da77fee43d48",
+    "run.mjs": "34dd7ce6f4a3ebb38b5d8c552626111b8baa5b5f6f0108add894ba5d7220e288",
+    "score.mjs": "8f296ea5311f7764605d94e19ca604c5cb1d3bd76dd2916a936b482ab101bb79",
+    "terminalAnswer.mjs": "5ff6289360eb6f5b9204e443e2b152d3f9bf451df9c378ba8ec6e2f147efdc11",
+    "repeatPlay.mjs": "3f9c0fb7347466e3e0b617b658f27e7a0e14c0f9857c8f9d9097a995565c2efc",
+    "replyBoundary.mjs": "25f0288ff6f2f4e6888e907d267dff25398f75aeb86e97143e50ad11dba59fbb",
+    "literalClaims.mjs": "e57975f6fbb87e7e58e12a5819ba1932d48dabe81326b6ba055b6ea45bd5385e",
+    "RELEASE16-PLAN.md": "44f7d2f0951670d324406a8bc960c78a81b0012309e954009afce0d51fac9427",
+    "cohorts/released16/package-lock.json": "0374d96175c3bbdd439d61f78040d1b35a782391289ef905977879b3380e3c31"
+  },
+  "cohorts": {
+    "released16": {
+      "agentfootprint": "16.0.0",
+      "footprintjs": "14.0.0",
+      "foottrace": "2.1.0",
+      "contextfootprint": "0.1.1",
+      "lockDigest": "0374d96175c3bbdd439d61f78040d1b35a782391289ef905977879b3380e3c31",
+      "packageSha256": "a0e2bf6d9c9355de073021f55b44717bd2fcd385e7160cf9457ce63a7119c71b"
+    }
+  },
+  "transcriptSha256": "b859370cc34ca854f7a0179d14a361f9beef3f4c6be2a58eaa1b1511f9b68b95"
+}
