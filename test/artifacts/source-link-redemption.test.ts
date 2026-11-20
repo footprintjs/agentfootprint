@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { findLastWriter } from 'foottrace';
 import { createRecordGraph } from 'foottrace/cause';
+import type { RuntimeSnapshot } from 'footprintjs';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import { expect, it, vi } from 'vitest';
 import {
@@ -30,6 +31,7 @@ const getReport = defineTool({
 async function run({
   mode,
   redact,
+  redactOutput,
   rewrite,
   rewriteHistory,
   ruled,
@@ -37,6 +39,7 @@ async function run({
 }: {
   mode?: 'dynamic-grouped';
   redact?: boolean;
+  redactOutput?: boolean;
   rewrite?: boolean;
   rewriteHistory?: boolean;
   ruled?: boolean;
@@ -100,7 +103,14 @@ async function run({
     model: 'mock',
     artifacts: { store, placement: { maxInlineChars: 1600 } },
     ...(mode === undefined ? {} : { reactMode: mode }),
-    ...(redact && { redact: { fields: { history: ['2.content'] } } }),
+    ...((redact || redactOutput) && {
+      redact: {
+        fields: {
+          ...(redact && { history: ['2.content'] }),
+          ...(redactOutput && { llmLatestToolCalls: [`0.args.${argument}`] }),
+        },
+      },
+    }),
   })
     .tool(getReport)
     .tool(consumeReport);
@@ -130,6 +140,8 @@ async function run({
     });
   }
   const agent = builder.build();
+  const publicRedemption = vi.fn();
+  agent.on('agentfootprint.artifacts.resolved', publicRedemption);
   try {
     const result = await agent.run({ message: 'Fetch and consume the report' });
     const beforeResume = pause ? agent.getSnapshot() : undefined;
@@ -142,6 +154,7 @@ async function run({
     }
     expect(consume).toHaveBeenCalledOnce();
     expect(redeem).toHaveBeenCalledOnce();
+    expect(publicRedemption).toHaveBeenCalledOnce();
     const snapshot = agent.getLastSnapshot();
     assert(snapshot?.logAddress);
     return { snapshot, address: snapshot.logAddress, beforeResume };
@@ -150,9 +163,9 @@ async function run({
   }
 }
 
-it('records the exact redeemed proposal argument beside its one native check', async () => {
-  const { snapshot, address } = await run();
-  const { commitLog, initialState, sharedState } = snapshot;
+function scopeOf(snapshot: RuntimeSnapshot) {
+  const { logAddress, commitLog, initialState } = snapshot;
+  assert(logAddress);
   const reads: Record<string, readonly string[]> = {};
   function visit(stage: StageSnapshot | undefined): void {
     if (stage === undefined) return;
@@ -162,7 +175,14 @@ it('records the exact redeemed proposal argument beside its one native check', a
     visit(stage.next);
   }
   visit(snapshot.executionTree);
-  const scope = { address, commitLog, initialState, reads };
+  return { address: logAddress, commitLog, initialState, reads };
+}
+
+it('records the exact redeemed proposal argument beside its one native check', async () => {
+  const { snapshot, address } = await run();
+  const { sharedState } = snapshot;
+  const scope = scopeOf(snapshot);
+  const { commitLog, reads } = scope;
   const sourceLinks = sourceLinksOf(scope);
   const [link] = sourceLinks?.links ?? [];
   assert(link);
@@ -234,10 +254,61 @@ it('does not reopen the earlier artifact link from a resumed leg’s seed', asyn
   expect(findLastWriter([...snapshot.commitLog], 'sourceLinkRows')).toBeUndefined();
 });
 
+it('anchors the same withheld row after public redemption with either protected history', async () => {
+  const normal = await run({ redact: true });
+  const changed = await run({ redact: true, rewriteHistory: true });
+  const expected = [
+    {
+      kind: 'source-link',
+      version: 1,
+      linkBasis: 'reference',
+      check: 'redeemed',
+      leafWithheld: true,
+      consumer: expect.any(String),
+      output: {
+        key: 'llmLatestToolCalls',
+        checkedIn: 'read',
+        element: 0,
+        pointer: '/args/report~1key~01',
+      },
+    },
+  ];
+  const channels = [];
+  const pages = [];
+  const { checkedIn: _checkedIn, ...selection } = expected[0]!.output;
+  for (const { snapshot } of [normal, changed]) {
+    expect(snapshot.sharedState.sourceLinkRows).toEqual(expected);
+    // Replace only the run address so the query bytes can be compared across runs.
+    const address = { logRunId: 'protected-redemption-pair', drillPath: [] };
+    const scope = { ...scopeOf(snapshot), address };
+    const sourceLinks = sourceLinksOf(scope);
+    const [link] = sourceLinks?.links ?? [];
+    assert(link);
+    expect(sourceLinks?.limitations).toEqual(['privacy-active']);
+    const authorize = vi.fn(({ key }: { key: string }) => key !== 'history');
+    const graph = createRecordGraph([{ ...scope, sourceLinks }], { sourceLinkPolicy: authorize });
+    const outputNode = graph.nodeId(address, link.output);
+    const page = await graph.parents(outputNode, {
+      signal: new AbortController().signal,
+    });
+    expect(authorize.mock.calls.some(([locator]) => locator.key === 'history')).toBe(false);
+    expect(page.sourceLinks).toBeUndefined();
+    expect(page.sourceLinkGaps).toEqual([
+      { code: 'redacted' },
+      { code: 'redacted', output: { nodeId: outputNode, selection } },
+    ]);
+    channels.push(JSON.stringify(sourceLinks));
+    pages.push(JSON.stringify(page));
+  }
+  expect(channels[0]).toBe(channels[1]);
+  expect(pages[0]).toBe(pages[1]);
+});
+
 it.each([
   { label: 'grouped chart', mode: 'dynamic-grouped' as const },
-  { label: 'protected input', redact: true },
+  { label: 'protected output', redact: true, redactOutput: true },
   { label: 'middleware-supplied reference', rewrite: true },
+  { label: 'middleware-supplied reference with protected history', redact: true, rewrite: true },
   { label: 'rewritten history body', rewriteHistory: true },
 ])(
   'keeps redemption behavior without producing a link for a $label',

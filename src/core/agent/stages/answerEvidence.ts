@@ -55,6 +55,7 @@ const JUDGES = new WeakMap<object, PendingCheck>();
 export function canObserveAnswerSources(scope: Scope): boolean {
   return (
     'sourceLinkConsumer' in scope &&
+    scope.sourceLinkConsumer?.historyProtected !== true &&
     canRecordSourceLinkPath(scope, ['history']) &&
     canRecordSourceLinkPath(scope, ['llmLatestContent'])
   );

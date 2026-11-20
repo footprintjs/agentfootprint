@@ -153,7 +153,7 @@ interface NativePrivateRule {
 }
 interface ScopePrivateBinding {
   canStore(): boolean;
-  permitsPath(path: readonly string[]): boolean;
+  permitsPath(path: readonly string[]): boolean | undefined;
   fields(): PrivateRecordFields | undefined;
   store(scope: SetValueScope, selections: readonly PrivateSelection[]): void;
 }
@@ -165,7 +165,7 @@ function scopePrivateBinding(
 ): ScopePrivateBinding {
   return {
     canStore: () => privateRun.canStore(bound.rule, bound.active),
-    permitsPath: (path) => bound.active && ruleShowsPath(bound.rule, path),
+    permitsPath: (path) => (bound.active ? ruleShowsPath(bound.rule, path) : undefined),
     fields: () => privateRun.fields(bound.rule),
     store: (scope, selections) => privateRun.store(scope, bound.rule, bound.active, selections),
   };
@@ -460,7 +460,12 @@ export function canStorePrivateFields(scope: object): boolean {
 
 /** A selected record location may be named only under this stage's native rule. */
 export function canRecordSourceLinkPath(scope: object, path: readonly string[]): boolean {
-  return scopeRuns.get(scope)?.serving?.privateBinding?.permitsPath(path) ?? false;
+  return sourceLinkPathGrant(scope, path) === true;
+}
+
+/** Distinguish a protected path from a scope without an active native rule. */
+export function sourceLinkPathGrant(scope: object, path: readonly string[]): boolean | undefined {
+  return scopeRuns.get(scope)?.serving?.privateBinding?.permitsPath(path);
 }
 
 /** Immutable admitted selector data only, never the raw working values it protects. */

@@ -10,7 +10,7 @@ import type {
   LLMResponse,
 } from '../../../../provider-contract/types.js';
 import { observeRequests, requestAttempt } from '../../../../provider-contract/requestObserver.js';
-import { canRecordSourceLinkPath } from '../../../../redaction/runRedaction.js';
+import { sourceLinkPathGrant } from '../../../../redaction/runRedaction.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
 import type { SourceLinkConsumer } from '../../types/state/records.js';
@@ -30,11 +30,11 @@ export function servedRequestRecorder(
   const consumer = scope.$attempt?.().series;
   if (!consumer) return undefined;
   const positions = new Map<string, number | undefined>();
-  const capturePositions = canRecordSourceLinkPath(scope, ['history']);
+  const historyGrant = sourceLinkPathGrant(scope, ['history']);
   let bounded = false;
   const whole = Array.from(history, (entry, index) => {
     const occurrence =
-      capturePositions && entry.role === 'tool' ? readCallOccurrenceKey(entry) : undefined;
+      historyGrant === true && entry.role === 'tool' ? readCallOccurrenceKey(entry) : undefined;
     if (typeof occurrence === 'string') {
       // A repeated occurrence cannot identify either index, even past the cap.
       if (positions.has(occurrence)) positions.set(occurrence, undefined);
@@ -69,7 +69,13 @@ export function servedRequestRecorder(
       const historyPositions = [...positions].flatMap(([occurrence, element]) =>
         element === undefined ? [] : [{ occurrence, element }],
       );
-      return { runId, consumer, historyPositions, ...(bounded && { bounded: true as const }) };
+      return {
+        runId,
+        consumer,
+        historyPositions,
+        ...(historyGrant === false && { historyProtected: true as const }),
+        ...(bounded && { bounded: true as const }),
+      };
     },
     beforeRequest(request: LLMRequest): void {
       if (discarded) return;

@@ -6,6 +6,8 @@
   carries no source-link channel.
 - Source links for an argument's declared source wait for cross-scope support
   because its check, default fill, or kept-answer reuse runs in the inputs sub-flow.
+- An Agent chart mounted directly in an engine host records served rows only.
+  Witnesses require AgentFootprint's own run and its native privacy policy.
 
 - **A host-built record's top-level lists.** The lists ON a row go through
   `rowList`. The record's own keys — `history`, `findingsLedger`,

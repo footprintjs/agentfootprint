@@ -176,6 +176,25 @@ describe('the packed source-link contract', () => {
     expect(sourceLinks?.links).toHaveLength(256);
     expect(sourceLinks?.links.at(-1)?.witness.element).toBe(255);
   });
+
+  it('reports a later consumer’s protected history even after the witness budget is spent', () => {
+    const scope = fixtureScope(fixture.witnessRow);
+    const checked = commit(fixture.witness.runtimeStageId, fixture.witness.commitIdx, {
+      answer: 'synthetic value',
+      [witnessKey]: [fixture.witnessRow],
+      sourceLinkRowsBounded: true,
+    });
+    const consumer = 'later-protected-consumer';
+    const protectedCall = commit(consumer, 2, {
+      [servedKey]: [fixture.servedRow, { ...fixture.servedRow, consumer }],
+      sourceLinkConsumer: { consumer, historyProtected: true },
+    });
+    const sourceLinks = sourceLinksOf({
+      ...scope,
+      commitLog: [scope.commitLog[0], checked, protectedCall],
+    });
+    expect(sourceLinks?.limitations).toEqual(['budget-exhausted', 'privacy-active']);
+  });
 });
 
 type HistoryState = {

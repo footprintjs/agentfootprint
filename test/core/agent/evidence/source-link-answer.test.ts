@@ -232,39 +232,67 @@ it.each([
   },
 );
 
-it.each([answer, 'The storage pool has a different capacity.'])(
-  'writes no answer link or gap-count signal when the history is masked',
-  async (result) => {
-    const agent = Agent.create({
-      provider: mock({
-        replies: [
-          { content: '', toolCalls: [{ id: 'c1', name: 'capacity', args: {} }] },
-          { content: answer },
-        ],
-      }),
-      model: 'mock',
-    })
-      .tool(capacity(result))
-      .namesAndNumbersFromEvidence({ posture: 'assist' })
-      .build();
-    try {
-      expect(await agent.run('What is the capacity?', { redact: { keys: ['history'] } })).toBe(
-        answer,
-      );
-      const snapshot = agent.getSnapshot();
-      assert(snapshot?.logAddress);
-      expect(answerRows(snapshot)).toBeUndefined();
-      expect(
-        sourceLinksOf({
-          address: snapshot.logAddress,
+it.each(['full', 'delta'] as const)(
+  'records the same protected-history limitation with or without a hidden match (%s)',
+  async (commitValues) => {
+    const publicResults: string[] = [];
+    const address = { logRunId: 'paired-protected-history', drillPath: [] };
+    for (const result of [answer, `${answer} ${answer} ${answer}`, 'Pool capacity unavailable.']) {
+      const agent = Agent.create({
+        provider: mock({
+          replies: [
+            { content: '', toolCalls: [{ id: 'c1', name: 'capacity', args: {} }] },
+            { content: answer },
+          ],
+        }),
+        model: 'mock',
+        commitValues,
+      })
+        .tool(capacity(result))
+        .namesAndNumbersFromEvidence({ posture: 'assist' })
+        .build();
+      try {
+        expect(await agent.run('What is the capacity?', { redact: { keys: ['history'] } })).toBe(
+          answer,
+        );
+        const snapshot = agent.getSnapshot();
+        assert(snapshot);
+        expect(snapshot.sharedState.history).toBe('REDACTED');
+        expect(answerRows(snapshot)).toBeUndefined();
+        const scope: RecordScope = {
+          address,
           commitLog: snapshot.commitLog,
           initialState: snapshot.initialState,
           reads: trackedReads(snapshot),
-        }),
-      ).toBeUndefined();
-    } finally {
-      await agent.shutdown();
+        };
+        const sourceLinks = sourceLinksOf(scope);
+        expect(sourceLinks).toEqual({
+          version: 1,
+          status: 'partial',
+          links: [],
+          limitations: ['privacy-active'],
+        });
+        const output = epochLocations(snapshot).at(-1);
+        assert(output);
+        const graph = createRecordGraph([{ ...scope, sourceLinks }], {
+          sourceLinkPolicy: ({ key }) => key !== 'history',
+        });
+        const page = await graph.parents(
+          graph.nodeId(address, {
+            key: 'llmLatestContent',
+            commitIdx: output.callIdx,
+            runtimeStageId: output.callRuntimeStageId,
+          }),
+          { signal: new AbortController().signal },
+        );
+        expect(page.sourceLinks).toBeUndefined();
+        expect(page.sourceLinkGaps).toEqual([{ code: 'redacted' }]);
+        publicResults.push(JSON.stringify({ sourceLinks, page }));
+      } finally {
+        await agent.shutdown();
+      }
     }
+    expect(new Set(publicResults).size).toBe(1);
   },
 );
 

@@ -6,6 +6,8 @@ export interface SourceLinkConsumer {
   readonly runId: string;
   readonly consumer: string;
   readonly historyPositions: readonly { readonly occurrence: string; readonly element: number }[];
+  /** The consumer's native policy protects the served history key. */
+  readonly historyProtected?: true;
   readonly bounded?: true;
 }
 

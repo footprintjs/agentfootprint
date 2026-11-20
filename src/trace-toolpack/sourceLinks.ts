@@ -11,6 +11,7 @@ import { keyedFold } from '../time-travel/keyedFold.js';
 import { captureOwn as own } from './causeCapture.js';
 
 const servedKey = 'sourceLinkServedRows';
+const consumerKey = 'sourceLinkConsumer';
 const witnessKey = 'sourceLinkRows';
 const boundKey = 'sourceLinkRowsBounded';
 const maxLinks = 256;
@@ -53,14 +54,21 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
     const paths = trace.entries.map((row) => own(row, 'path'));
     if (paths.some((path) => typeof path !== 'string'))
       throw new TypeError('Invalid source-link trace');
+    const overwrite = own(bundle, 'overwrite');
+    const consumer = paths.includes(consumerKey) ? own(overwrite, consumerKey) : undefined;
     return {
       runtimeStageId,
       served: paths.includes(servedKey),
       witness: paths.includes(witnessKey),
-      bounded: paths.includes(boundKey) && own(own(bundle, 'overwrite'), boundKey) === true,
+      protectedHistory:
+        own(consumer, 'consumer') === runtimeStageId && own(consumer, 'historyProtected') === true,
+      bounded: paths.includes(boundKey) && own(overwrite, boundKey) === true,
     };
   });
-  if (!writes.some(({ served }) => served) || !writes.some(({ witness }) => witness))
+  if (
+    !writes.some(({ served }) => served) ||
+    !writes.some(({ witness, protectedHistory }) => witness || protectedHistory)
+  )
     return undefined;
 
   // Row locations need only these two lists. Foottrace gets the full scope for binding.
@@ -89,7 +97,7 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
   let examined = 0;
   for (const [
     commitIdx,
-    { runtimeStageId, served: wroteServed, witness: wroteWitness, bounded },
+    { runtimeStageId, served: wroteServed, witness: wroteWitness, protectedHistory, bounded },
   ] of writes.entries()) {
     if (!executions.has(runtimeStageId)) {
       executions.add(runtimeStageId);
@@ -100,12 +108,15 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
           readServedRow(served[1][served[0]])?.consumer === runtimeStageId
         ) {
           consumers.add(runtimeStageId);
+          if (protectedHistory) limitations.add('privacy-active');
         }
       }
     }
     if (consumers.size === 0) continue;
+    const exhausted = limitations.has('budget-exhausted');
     if (bounded) limitations.add('budget-exhausted');
-    if (!wroteWitness) continue;
+    // The witness budget does not stop us from reading a later policy fact.
+    if (!wroteWitness || exhausted) continue;
     const witness = appended(witnessKey, commitIdx);
     if (witness === undefined) continue;
     const [start, rows] = witness;
@@ -119,7 +130,6 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
       const where = { runtimeStageId, commitIdx, key: witnessKey, element };
       const write = bindSourceLinkWrite(scope, where);
       if (write === undefined) continue;
-      if (row.leafWithheld) limitations.add('privacy-active');
       links.push({
         linkBasis: row.linkBasis,
         ...(row.namedBy !== undefined && { namedBy: row.namedBy }),
@@ -133,7 +143,6 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
         witness: where,
       });
     }
-    if (limitations.has('budget-exhausted')) break;
   }
   if (consumers.size === 0 || (links.length === 0 && limitations.size === 0)) return undefined;
   return {
