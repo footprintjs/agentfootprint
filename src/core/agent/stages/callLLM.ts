@@ -458,7 +458,7 @@ export function buildCallLLMStage(
     const serving =
       deps.recordReceipt === false
         ? undefined
-        : servedRequestRecorder(scope, committed, messages, detached.request.messages);
+        : servedRequestRecorder(scope, committed, messages, wireMessages, detached);
     const cachePrepared = await cacheStrategy.prepareRequest(detached.request, detached.markers, {
       iteration,
       iterationsRemaining: iterationsRemainingOf(deps.maxIterations, iteration),

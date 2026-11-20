@@ -33,7 +33,7 @@ settles.
 
 ## Dispatch lifetime
 
-Every attempt carries it on its
+Every attempt carries the run’s signal on its
 request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
 provider's own HTTP request — the engine stopping the traversal leaves a
 call in flight running, and billing. It already holds the run's deadline

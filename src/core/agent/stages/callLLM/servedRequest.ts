@@ -1,5 +1,6 @@
 import type { TypedScope } from 'footprintjs';
 import { abortableIterable, untilAborted } from '../../../../lib/abort.js';
+import { matchesPreparedData } from '../../../../lib/matchesPreparedData.js';
 import type {
   LLMCallHooks,
   LLMMessage,
@@ -16,7 +17,8 @@ export function servedRequestRecorder(
   scope: TypedScope<AgentState>,
   history: readonly LLMMessage[],
   projected: readonly LLMMessage[],
-  wire: readonly LLMMessage[],
+  preparedFrom: readonly LLMMessage[],
+  detached: { readonly request: LLMRequest },
 ) {
   const consumer = scope.$attempt?.().series;
   if (!consumer) return undefined;
@@ -25,13 +27,10 @@ export function servedRequestRecorder(
     return message?.role === entry.role && message.content === entry.content;
   });
   const row = servedHistoryRow(consumer, whole);
-  // Keep the positions and text as they were before cache preparation. A
-  // callback can replace an entry inside the same array.
-  const preparedFrom = wire.map((message) => ({
-    message,
-    role: message.role,
-    content: message.content,
-  }));
+  // The port copy is the only one handed to the strategy. Keep its original
+  // position identities and compare against the untouched library messages.
+  const wire = detached.request.messages;
+  const ordered = [...wire];
   let previous: readonly ServedRow[] | undefined;
   let first: PropertyDescriptorMap | undefined;
   let discarded = false;
@@ -55,14 +54,10 @@ export function servedRequestRecorder(
       if (
         signature === undefined ||
         signature.messages?.value !== wire ||
-        preparedFrom.length !== wire.length ||
-        !preparedFrom.every((entry, index) => {
-          const current = wire[index];
-          return (
-            current === entry.message &&
-            current.role === entry.role &&
-            current.content === entry.content
-          );
+        ordered.length !== wire.length ||
+        !ordered.every((message, index) => {
+          const current = Object.getOwnPropertyDescriptor(wire, String(index));
+          return current?.value === message && matchesPreparedData(preparedFrom[index], message);
         })
       ) {
         discard();

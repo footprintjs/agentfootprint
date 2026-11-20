@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Agent } from '../../../../src/index.js';
+import { Agent, defineTool } from '../../../../src/index.js';
 import { NoOpCacheStrategy, type CacheStrategy } from '../../../../src/cache/index.js';
 import { mock } from '../../../../src/llm-providers.js';
 import { recordRun } from '../../../../src/observe.js';
@@ -48,6 +48,126 @@ async function record(
 }
 
 describe('served rows at the provider port', () => {
+  it.each([
+    ['untouched message', true, (request: LLMRequest) => request],
+    ['new request with the same messages', true, (request: LLMRequest) => ({ ...request })],
+    [
+      'new messages array',
+      false,
+      (request: LLMRequest) => ({ ...request, messages: [...request.messages] }),
+    ],
+    [
+      'messages getter',
+      false,
+      (request: LLMRequest) =>
+        Object.defineProperty({ ...request }, 'messages', { get: () => request.messages }),
+    ],
+    [
+      'message appended to the same array',
+      false,
+      (request: LLMRequest) => {
+        (request.messages as LLMMessage[]).push({ role: 'user', content: 'Extra.' });
+        return request;
+      },
+    ],
+    [
+      'same message object with edited content',
+      false,
+      (request: LLMRequest) => {
+        (request.messages[0] as { content: string }).content = 'Edited.';
+        return request;
+      },
+    ],
+    [
+      'same message object with edited tool arguments',
+      false,
+      (request: LLMRequest) => {
+        const call = request.messages.find((message) => message.toolCalls?.length)?.toolCalls?.[0];
+        if (call !== undefined) (call.args as { q: { n: number } }).q.n = 999;
+        return request;
+      },
+    ],
+    [
+      'same message object with edited tool result identity',
+      false,
+      (request: LLMRequest) => {
+        const result = request.messages.find(({ role }) => role === 'tool');
+        if (result !== undefined) (result as { toolCallId?: string }).toolCallId = 'different';
+        return request;
+      },
+    ],
+    ['provider edits a message after the port', true, (request: LLMRequest) => request, true],
+  ] as const)(
+    'records whole history at the port for %s',
+    async (_name, keepsRow, prepare, postPort) => {
+      const fixture = mock({
+        replies: [
+          { content: '', toolCalls: [{ id: 'c1', name: 'lookup', args: { q: { n: 1 } } }] },
+          'The label was recorded.',
+        ],
+      });
+      const agent = Agent.create({
+        provider: {
+          name: fixture.name,
+          complete(request) {
+            if (postPort) (request.messages[0] as { content: string }).content = 'After the port.';
+            return fixture.complete(request);
+          },
+        },
+        model: 'mock',
+        cacheStrategy: {
+          name: 'fixture-cache',
+          extractMetrics: new NoOpCacheStrategy().extractMetrics,
+          async prepareRequest(request, _markers, { iteration }) {
+            return { request: iteration === 2 ? prepare(request) : request, markersApplied: [] };
+          },
+        },
+      })
+        .tool(
+          defineTool({
+            name: 'lookup',
+            description: 'Read the label.',
+            inputSchema: { type: 'object', properties: { q: { type: 'object' } } },
+            execute: () => 'The complete label.',
+          }),
+        )
+        .build();
+      const recorder = recordRun(agent);
+      try {
+        expect(await agent.run(question)).toBe('The label was recorded.');
+        const epochs = epochLocations(recorder.toRecording().snapshot);
+        expect(epochs).toHaveLength(2);
+        const [first, second] = epochs;
+        const initialRows = readAfterCall(first!, key);
+        expect(initialRows).toEqual([
+          {
+            kind: 'served',
+            version: 1,
+            consumer: first!.callRuntimeStageId,
+            served: [{ key: 'history', elements: [[0, 1]] }],
+          },
+        ]);
+        const retained = readAfterCall(second!, key);
+        if (keepsRow) {
+          expect(retained).toEqual([
+            ...(initialRows as readonly unknown[]),
+            {
+              kind: 'served',
+              version: 1,
+              consumer: second!.callRuntimeStageId,
+              served: [{ key: 'history', elements: [[0, 3]] }],
+            },
+          ]);
+        } else {
+          expect(retained).toEqual(initialRows);
+          expect(second!.log[second!.callIdx]!.trace.some(({ path }) => path === key)).toBe(false);
+        }
+      } finally {
+        recorder.stop();
+      }
+    },
+  );
+
   it('writes one row when the same provider retries the same request', async () => {
     const fixture = mock({ reply: 'The label was recorded.' });
     const requests: LLMRequest[] = [];
