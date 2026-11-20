@@ -1,5 +1,5 @@
 /**
- * 123 — Keep an SSE stream open through both steps of a Sequence.
+ * 124 — Keep an SSE stream open through both steps of a Sequence.
  * Run: npm run example examples/features/124-sse-start.ts
  */
 
