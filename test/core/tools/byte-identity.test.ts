@@ -630,6 +630,7 @@ import {
   servedRowAdditions,
   servedRowReferenceText,
   withServedRowAdditions,
+  withoutServedRows,
   type ServedRowAddition,
 } from './served-row-reference.js';
 import {
@@ -1654,21 +1655,6 @@ function projection(snapshot: Snapshot): unknown {
       })),
     }),
   );
-}
-
-/** Check the exact served-row envelope before comparing with main's older digest. */
-function withoutServedRows(record: unknown): unknown {
-  const additions = servedRowAdditions(record);
-  const previous = structuredClone(record) as {
-    commitLog: { overwrite: Record<string, unknown>; trace: unknown[] }[];
-  };
-  for (const [commit, trace] of additions) {
-    const bundle = previous.commitLog[commit]!;
-    delete bundle.overwrite.sourceLinkServedRows;
-    bundle.trace.splice(trace, 1);
-  }
-  expect(withServedRowAdditions(structuredClone(previous), additions)).toEqual(record);
-  return previous;
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
