@@ -92,6 +92,19 @@ A partial channel keeps the links it could bind and reports
 `budget-exhausted`.
 Treat an absent channel, including in older recordings, as uncollected evidence.
 
+## Follow a value checked in an answer
+
+In a flat Agent run with `.namesAndNumbersFromEvidence()`, a successful
+match can link an answer span to the tool result that supplied it. For example,
+if the tool returned “4200 GB” and the answer repeats it, the recording points
+back to the exact history entry that reached the model. A link records what
+the deterministic check matched. The tool's reading can still be wrong.
+
+<CodeFile path="examples/features/answer-source-link.ts" region="record-answer-link" title="Record the source of a checked value" />
+
+Use the same host disclosure policy when presenting answer links from a saved
+run. A protected source or a missing exact match leaves no public answer link.
+
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its

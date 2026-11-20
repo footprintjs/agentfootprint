@@ -26,7 +26,7 @@ import { negativeRecordOf } from '../negativeClaims/capture.js';
 import { overclaimCheckOf, type NegativeOverclaim } from '../negativeClaims/overclaims.js';
 import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
 import type { ResolvedNegativeClaimPhrases } from '../../../integrity/negative-claim/phrases.js';
-import { takeAnswerEvidence } from './answerEvidence.js';
+import { selectDeliveredAnswerEvidence, takeAnswerEvidence } from './answerEvidence.js';
 import { emitRouteDecided, type RouteBranch } from './route.js';
 import { announceHeld, holdRouteAnnouncement } from './routeAnnouncement.js';
 
@@ -109,7 +109,8 @@ export function withAnswerValidation(
       }
       return 'final';
     }
-    let raw = scope.llmLatestContent;
+    const before = scope.llmLatestContent;
+    let raw = before;
     let candidateParser = parser;
     let prepared: ReturnType<typeof renderNegativeCandidate> | undefined;
     let declarations: readonly NegativeOverclaim[] | undefined;
@@ -209,14 +210,20 @@ export function withAnswerValidation(
           ? { ...result.report, delivery: 'fallback' }
           : reportWithNegatives(result.report, prepared.answer, allowed, declarations);
       if (!allowed) scope.answerValidationBlocked = true;
-      else scope.llmLatestContent = result.content ?? raw;
+      else {
+        const output = result.content ?? raw;
+        scope.llmLatestContent = output;
+        selectDeliveredAnswerEvidence(scope, output, before);
+      }
       return 'final';
     }
     scope.answerValidation = result.report;
     if (config.mode === 'enforce' && result.report.status !== 'passed') {
       scope.answerValidationBlocked = true;
     } else {
-      scope.llmLatestContent = result.content ?? scope.llmLatestContent;
+      const output = result.content ?? scope.llmLatestContent;
+      scope.llmLatestContent = output;
+      selectDeliveredAnswerEvidence(scope, output, before);
     }
     return 'final';
   };
