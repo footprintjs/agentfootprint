@@ -49,6 +49,8 @@
 
 import { RedactionRule } from 'footprintjs/advanced';
 import type { CombinedRecorder, RedactionPolicy, ScopeFactory } from 'footprintjs';
+import type { LogAddress } from 'foottrace';
+import type { SourceLinkPolicy } from 'foottrace/cause';
 
 import type { RunContext, TurnEventMeta } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
@@ -64,8 +66,9 @@ import {
 import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
 import { createRunEventRelay } from './runEventRelay.js';
+import { retiredRule, ruleShowsPath, sourceLinkPolicyOfRule } from './sourceLinkPolicy.js';
+export { retiredRule } from './sourceLinkPolicy.js';
 import {
-  carryPrivateRuleNames,
   createPrivateRun,
   PrivateFieldsUnavailableError,
   type PrivateRun,
@@ -81,6 +84,8 @@ export interface RunRedaction {
   readonly policy: RedactionPolicy | undefined;
   /** Caller policy plus private selectors for the one native rule; never caller coverage. */
   readonly recordPolicy: RedactionPolicy | undefined;
+  /** The native authorizing rule, only for the exact root record it served. */
+  sourceLinkPolicy(address: LogAddress): SourceLinkPolicy | undefined;
   /** Aggregate admitted private names on this exact native rule, for raw checkpoints. */
   privateFields(): PrivateRecordFields | undefined;
   /** What this run's events are served as. */
@@ -148,6 +153,7 @@ interface NativePrivateRule {
 }
 interface ScopePrivateBinding {
   canStore(): boolean;
+  permitsPath(path: readonly string[]): boolean | undefined;
   fields(): PrivateRecordFields | undefined;
   store(scope: SetValueScope, selections: readonly PrivateSelection[]): void;
 }
@@ -159,6 +165,7 @@ function scopePrivateBinding(
 ): ScopePrivateBinding {
   return {
     canStore: () => privateRun.canStore(bound.rule, bound.active),
+    permitsPath: (path) => (bound.active ? ruleShowsPath(bound.rule, path) : undefined),
     fields: () => privateRun.fields(bound.rule),
     store: (scope, selections) => privateRun.store(scope, bound.rule, bound.active, selections),
   };
@@ -222,6 +229,7 @@ export function createRunRedaction(args: {
   let nativeBinding:
     | { readonly rule: NativePrivateRule; readonly port: ScopePrivateBinding }
     | undefined;
+  let rootRule: { readonly logRunId: string; readonly binding: NativePrivateRule } | undefined;
   const serving = servingOf(decided, policy, privateRun);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
   // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
@@ -264,6 +272,9 @@ export function createRunRedaction(args: {
       }
       privateRun.bind(own);
       decided.rule = own;
+      const position = context?.captureEmitPosition?.();
+      if (position?.drillPath.length === 0)
+        rootRule = { logRunId: position.logRunId, binding: nativeBinding!.rule };
     }
     if (scope !== null && typeof scope === 'object') {
       scopeRuns.set(scope, {
@@ -293,6 +304,12 @@ export function createRunRedaction(args: {
     get recordPolicy() {
       return privateRun.recordPolicy(decided.rule);
     },
+    sourceLinkPolicy(address) {
+      if (rootRule?.logRunId !== address.logRunId || address.drillPath.length !== 0)
+        return undefined;
+      const rule = rootRule.binding.rule;
+      return sourceLinkPolicyOfRule(address, retiredRule(rule, privateRun.recordPolicy(rule)));
+    },
     privateFields: () => privateRun.fields(decided.rule),
     serving,
     coverage,
@@ -309,27 +326,6 @@ export function createRunRedaction(args: {
       return written;
     },
   };
-}
-
-/**
- * A settled run's rule as its serving keeps it: the policy and the marks —
- * names only — and nothing else of the run. footprintjs's rule also remembers
- * the masked form of every thrown value it served (so `onRunFailed`, the
- * logger and a fork envelope agree); the live run needed that, a late fact
- * does not, and keeping it would keep each run's thrown values reachable for
- * as long as the dispatcher keeps the run's serving.
- *
- * @internal — exported for the test that pins it.
- */
-export function retiredRule(
-  rule: RedactionRule,
-  policy: RedactionPolicy | undefined,
-): RedactionRule {
-  const names = new RedactionRule(policy);
-  const marks = rule.marksForCheckpoint();
-  if (marks !== undefined) names.restoreMarks(marks);
-  carryPrivateRuleNames(rule, names);
-  return names;
 }
 
 /**
@@ -460,6 +456,16 @@ export function captureLateEmitter(
 /** Whether this exact scope has a native rule already able to keep private fields. */
 export function canStorePrivateFields(scope: object): boolean {
   return scopeRuns.get(scope)?.serving?.privateBinding?.canStore() ?? false;
+}
+
+/** A selected record location may be named only under this stage's native rule. */
+export function canRecordSourceLinkPath(scope: object, path: readonly string[]): boolean {
+  return sourceLinkPathGrant(scope, path) === true;
+}
+
+/** Distinguish a protected path from a scope without an active native rule. */
+export function sourceLinkPathGrant(scope: object, path: readonly string[]): boolean | undefined {
+  return scopeRuns.get(scope)?.serving?.privateBinding?.permitsPath(path);
 }
 
 /** Immutable admitted selector data only, never the raw working values it protects. */

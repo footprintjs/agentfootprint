@@ -15,6 +15,9 @@
  * and placement. The prior record and occurrence sidecar remain byte-for-byte.
  * Use AF_TOOLS_REFERENCE=update-served-rows with explicit scenario names in
  * AF_TOOLS_REFERENCE_CASES to capture only this sidecar.
+ * The source-link producer adds an exact consumer record at those same calls.
+ * Its owner and occurrence positions are checked against the native history
+ * before the historical comparisons, whose references stay unchanged.
  *
  * Migration14: native component ownership has a named expected record baseline
  * for28scenarios; three retain direct historical equality. Old JSON is preserved.
@@ -620,6 +623,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
+import { removeVerifiedSourceLinkConsumers } from './source-link-consumer-reference.js';
 import {
   occurrenceAdditions,
   occurrenceReferenceText,
@@ -659,6 +663,7 @@ import { skillScopedTools, staticTools } from '../../../src/tool-providers/index
 import { mockClassifier, type ClassifyResult } from '../../../src/classify/index.js';
 import { defineOntology } from '../../../src/ontology/index.js';
 import type {
+  LLMMessage,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
@@ -1645,16 +1650,21 @@ function normalise(value: unknown, key?: string): unknown {
 
 /** What a scenario is judged by: the whole log, and the served view of every epoch. */
 function projection(snapshot: Snapshot): unknown {
-  const epochs = epochLocations(snapshot).map((l) => l.epoch);
-  return normalizeCallOccurrences(
+  const epochs = epochLocations(snapshot);
+  const record = normalizeCallOccurrences(
     normalise({
       commitLog: JSON.parse(JSON.stringify(snapshot.commitLog)),
-      served: epochs.map((epoch) => ({
+      served: epochs.map(({ epoch }) => ({
         epoch,
         view: JSON.parse(JSON.stringify(servedAt(snapshot, epoch) ?? null)),
       })),
     }),
   );
+  const prior = record as {
+    commitLog: { overwrite: Record<string, unknown>; trace: unknown[] }[];
+  };
+  removeVerifiedSourceLinkConsumers(snapshot, prior.commitLog, epochs);
+  return prior;
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);

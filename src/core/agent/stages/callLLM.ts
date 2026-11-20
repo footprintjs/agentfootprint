@@ -6,6 +6,7 @@ import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findi
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
+  commitAcceptedResponse,
   completeObserved,
   observeCallRequests,
   servedRequestRecorder,
@@ -54,7 +55,6 @@ import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
-import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
 import {
   assertForcedRequestSupported,
   describeProviderDispatch,
@@ -906,9 +906,7 @@ export function buildCallLLMStage(
     if (deps.findings === true)
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-    scope.llmLatestContent = response.content;
-    const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
-    scope.llmLatestToolCalls = acceptedToolCalls;
+    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps.getRunId?.());
     // Native candidates only, every call (so it is never stale): the stop reason the
     // Route decider judges a constrained answer by — a 'refusal' or
     // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
