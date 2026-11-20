@@ -69,7 +69,7 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **The turn stamp never repeats** — "this turn" is read by `turn`, so seed continues
   the stamp from the turn the stored conversation ended on
   (`AgentRunCheckpoint.turnNumber`, carried while a layer is armed) and from the
-  restored ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`): a window
+  restored ledger's latest stamp (`runtime/conversation/seedHistory.ts` · `turnNumberFor`): a window
   strategy trims the stored history, and its count of user messages repeats.
 - **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` (or a
   mode, below) only, on a PROSE answer only (refused beside `.answerValidation()` and
