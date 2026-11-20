@@ -1,10 +1,12 @@
 import type { CommitBundle } from 'foottrace';
 import {
-  bindSourceLinkWrite,
+  bindSourceLinkWrites,
   readServedRow,
   readSourceLinkRow,
   type RecordScope,
   type RecordSourceLinks,
+  type SourceLinkRow,
+  type SourceLinkRowLocation,
 } from 'foottrace/cause';
 import { readOwnList } from '../lib/boundedJson.js';
 import { keyedFold } from '../time-travel/keyedFold.js';
@@ -140,7 +142,7 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
 
   const consumers = new Set<string>();
   const executions = new Set<string>();
-  const links: RecordSourceLinks['links'][number][] = [];
+  const candidates: { row: SourceLinkRow; where: SourceLinkRowLocation }[] = [];
   const limitations = new Set<RecordSourceLinks['limitations'][number]>();
   let examined = 0;
   for (const [
@@ -175,22 +177,30 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
       }
       const row = readSourceLinkRow(rows[element]);
       if (row === undefined || !consumers.has(row.consumer)) continue;
-      const where = { runtimeStageId, commitIdx, key: witnessKey, element };
-      const write = bindSourceLinkWrite(bindingScope, where);
-      if (write === undefined) continue;
-      links.push({
-        linkBasis: row.linkBasis,
-        ...(row.namedBy !== undefined && { namedBy: row.namedBy }),
-        check: row.check,
-        ...(row.bounded && { bounded: true }),
-        ...(row.leafWithheld && { leafWithheld: true }),
-        consumer: { runtimeStageId: row.consumer },
-        output: { ...row.output, ...write },
-        ...(row.input !== undefined && { input: row.input }),
-        served: { key: servedKey },
-        witness: where,
-      });
+      candidates.push({ row, where: { runtimeStageId, commitIdx, key: witnessKey, element } });
     }
+  }
+  const batch = bindSourceLinkWrites(
+    bindingScope,
+    candidates.map(({ where }) => where),
+  );
+  if (!batch.complete) limitations.add('budget-exhausted');
+  const links: RecordSourceLinks['links'][number][] = [];
+  for (const [index, { row, where }] of candidates.entries()) {
+    const write = batch.writes[index];
+    if (write === undefined) continue;
+    links.push({
+      linkBasis: row.linkBasis,
+      ...(row.namedBy !== undefined && { namedBy: row.namedBy }),
+      check: row.check,
+      ...(row.bounded && { bounded: true }),
+      ...(row.leafWithheld && { leafWithheld: true }),
+      consumer: { runtimeStageId: row.consumer },
+      output: { ...row.output, ...write },
+      ...(row.input !== undefined && { input: row.input }),
+      served: { key: servedKey },
+      witness: where,
+    });
   }
   if (limited) limitations.add('budget-exhausted');
   else if (consumers.size === 0 || (links.length === 0 && limitations.size === 0)) return undefined;
