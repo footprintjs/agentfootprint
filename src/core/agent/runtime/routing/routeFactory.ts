@@ -3,6 +3,7 @@ import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { buildRouteDeciderStage } from '../../stages/route.js';
 import { withNegativeProse } from '../../negativeClaims/observe.js';
 import { withAnswerValidation } from '../../stages/answerValidation.js';
+import { finishAnswerEvidence } from '../../stages/answerEvidence.js';
 import { withAnswerCoverage } from '../../stages/answerCoverage.js';
 import { buildToolResolver } from '../../stages/toolResolver.js';
 import { evidenceExemptArm } from './exemptArm.js';
@@ -118,6 +119,16 @@ export function routeFactory(
       : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls/index.ts (v2.11.2).
-    return terminalRouteDecider;
+    if (this.configuration.evidenceGate === undefined) return terminalRouteDecider;
+    return async (scope: Parameters<typeof terminalRouteDecider>[0]) => {
+      let final = false;
+      try {
+        const branch = await terminalRouteDecider(scope);
+        final = branch === 'final';
+        return branch;
+      } finally {
+        finishAnswerEvidence(scope, run.context.runId, final);
+      }
+    };
   };
 }

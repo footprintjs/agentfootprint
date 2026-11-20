@@ -39,7 +39,7 @@ import { anyOf, isRegExpWhitespace, trimTrailing } from './linearText.js';
  */
 const INTRA_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$]+/g;
 /** The answer's range reader keeps an en dash until it knows whether it is numeric. */
-const RANGE_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$–]+/g;
+const RANGE_TOKEN = /[A-Za-z0-9:_\-/.,%+@#$–]+/g;
 
 /**
  * A comma that is NOT flanked by digits on both sides — i.e. a list comma
@@ -129,14 +129,20 @@ const MAX_EXACT_DIGITS = 15;
  *
  * Returns `''` for a token that is nothing but decoration — callers drop those.
  */
-function tokenSpelling(raw: string, preservePercent = false): string {
+function tokenSpelling(
+  raw: string,
+  preservePercent = false,
+  onTrimmed?: (start: number, end: number) => void,
+): string {
   let v = raw.toLowerCase().trim();
   if (v === '') return '';
-  v = trimTrailing(
-    v.replace(LEADING_DECORATION, ''),
-    preservePercent ? ANSWER_TRAILING_DECORATION : TRAILING_DECORATION,
-  );
+  const undecorated = v.replace(LEADING_DECORATION, '');
+  const leading = v.length - undecorated.length;
+  v = trimTrailing(undecorated, preservePercent ? ANSWER_TRAILING_DECORATION : TRAILING_DECORATION);
   if (v === '') return '';
+  // Only the answer's ASCII/en-dash scanner requests coordinates. Its raw
+  // pieces have no whitespace or length-changing Unicode case conversions.
+  onTrimmed?.(leading, leading + v.length);
   // Thousands separators are PRESENTATION. `41,200` in prose and `41200` in
   // JSON are one value, and this is the single most common way a correct
   // answer looks fabricated to a naive matcher.
@@ -191,12 +197,22 @@ export function tokenize(text: string): string[] {
  * evidence and exemption sides. A non-range en-dash token is split normally by
  * the caller after it has declined the range grammar.
  */
-export function answerTokenSpellings(text: string): string[] {
+export function answerTokenSpellings(
+  text: string,
+  onSpan?: (start: number, end: number) => void,
+): string[] {
   const out: string[] = [];
-  for (const rough of withoutKeyColons(text).replace(RANGE_TOKEN, ' ').split(/\s+/)) {
+  // Key colons are replaced with one code unit, keeping source indices.
+  for (const { 0: rough, index } of withoutKeyColons(text).matchAll(RANGE_TOKEN)) {
+    let start = index;
     for (const piece of rough.split(LIST_COMMA)) {
-      const spelling = tokenSpelling(piece, true);
+      const spelling = tokenSpelling(
+        piece,
+        true,
+        onSpan && ((left, right) => onSpan(start + left, start + right)),
+      );
       if (spelling !== '') out.push(spelling);
+      start += piece.length + 1; // every list separator the split consumed is one comma
     }
   }
   return out;
