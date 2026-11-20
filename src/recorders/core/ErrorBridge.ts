@@ -30,17 +30,21 @@ export interface ErrorBridgeOptions {
   /** Recorder id — must be unique among attached recorders. */
   readonly id?: string;
   readonly getRunContext: () => RunContext;
+  /** Use run-level wording when no provider-specific wording matches. */
+  readonly fallback?: 'run';
 }
 
 export class ErrorBridge implements CombinedRecorder {
   readonly id: string;
   private readonly dispatcher: EventDispatcher;
   private readonly getRunContext: () => RunContext;
+  private readonly fallback: ErrorBridgeOptions['fallback'];
 
   constructor(options: ErrorBridgeOptions) {
     this.dispatcher = options.dispatcher;
     this.id = options.id ?? 'agentfootprint.error-bridge';
     this.getRunContext = options.getRunContext;
+    this.fallback = options.fallback;
   }
 
   onRunFailed(event: FlowRunFailedEvent): void {
@@ -61,7 +65,7 @@ export class ErrorBridge implements CombinedRecorder {
     this.dispatcher.dispatch({
       type: 'agentfootprint.error.fatal',
       payload: {
-        error: humanizeLLMError({ message: event.structuredError.message }),
+        error: humanizeLLMError({ message: event.structuredError.message }, this.fallback),
         stage: ctx?.stageName ?? '__root__',
         scope: 'run',
       },

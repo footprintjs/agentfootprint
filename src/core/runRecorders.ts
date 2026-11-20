@@ -24,7 +24,7 @@ export function compositionRecorders(
     streamRecorder({ dispatcher, getRunContext }),
     agentRecorder({ dispatcher, getRunContext }),
     compositionRecorder({ dispatcher, getRunContext }),
-    errorBridge({ dispatcher, getRunContext }),
+    errorBridge({ dispatcher, getRunContext, fallback: 'run' }),
     ...extra,
     ...attached,
   ];
