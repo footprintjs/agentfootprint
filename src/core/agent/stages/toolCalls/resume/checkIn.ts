@@ -175,6 +175,7 @@ export function buildResumeCheckIn(
         // about results move with it.
         if (dispatched.executed === true) {
           ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+            returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
             ...occurrence,
             ...(tool && { tool }),
             toolName,

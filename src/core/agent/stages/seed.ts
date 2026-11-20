@@ -636,6 +636,7 @@ function seedFrom(
     deps.honestyLayers !== undefined || deps.negativeClaimsArmed === true,
   );
   scope.turnNumber = turnNumber;
+  if (resume?.withheldToolResult === true) scope.withheldToolResultTurn = turnNumber;
   // THE SCRIPT RECORD'S BOUND, at the turn boundary: a restored `script` row
   // of an EARLIER turn keeps its facts — ids, counts, outcome — and loses its
   // text (`scripts/rows.ts` · `withoutEarlierScriptText`), so the eligible

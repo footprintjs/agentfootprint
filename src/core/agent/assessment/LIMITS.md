@@ -104,9 +104,9 @@
   `turn_end.answerAssessment` — their fields are pinned and unchanged; read
   `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
   can carry it.
-- **Withheld results.** Public standing can say that at least one result was withheld. It gives no count, tool name or facts from the withheld result. The raw `accountForAnswer` still reads native declarations for a denied result until card 9.
+- **Withheld results.** The turn keeps the anonymous fact that a returned result was withheld, even if history evicts the result or the same request resumes from a checkpoint. Public standing gives no count, tool name or facts from the withheld result. The raw `accountForAnswer` still reads native declarations for a denied result until card 9.
 - **Integrity findings without a resolved call.** Standing omits a finding when the record cannot resolve it to one call occurrence.
-- **Older recordings.** When neither the result disposition mark nor its after-tool denial record is readable, the assessment cannot determine whether a host rule withheld a result.
+- **Older recordings.** Without the turn's withheld-result fact, the assessment needs a retained return and its disposition mark or after-tool denial record to say a result was withheld.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.

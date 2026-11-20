@@ -128,6 +128,7 @@ describe('standing reads results within the host rule', () => {
     async (variant) => {
       const proof = await run({ hook: () => deny('Archive result is unavailable.') });
       const { sharedState } = proof.recording.snapshot;
+      delete sharedState.withheldToolResultTurn;
       if (variant === 'pre-mark history') {
         for (const message of sharedState.history) delete message.toolResultDisposition;
       } else {

@@ -10,7 +10,8 @@ export type AnswerFoldKey =
   | 'unsupportedValues'
   | 'answerValidation'
   | 'argumentAsk'
-  | 'middlewareDecisions';
+  | 'middlewareDecisions'
+  | 'withheldToolResultTurn';
 
 /**
  * THE READ LIST — which committed keys the answer layer's fold reads, from
@@ -33,7 +34,8 @@ export type AnswerFoldKey =
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`;
  * - tool middleware: `middlewareDecisions` holds argument rewrites and
- *   after-tool decisions on older records kept across a pause.
+ *   after-tool decisions on older records kept across a pause. `withheldToolResultTurn`
+ *   records when a tool rule withheld a returned value, even after history eviction.
  *
  * Every key's writers were checked against this list: a writer that no arm
  * gates puts its key in the always group — decide by the writer, never by the
@@ -65,5 +67,6 @@ export function answerFoldReads(arms: {
     ...(arms.toolMiddleware && (arms.tools || arms.inputs)
       ? (['middlewareDecisions'] as const)
       : []),
+    ...(arms.toolMiddleware && arms.tools ? (['withheldToolResultTurn'] as const) : []),
   ];
 }

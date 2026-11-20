@@ -132,7 +132,8 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 3,
     class: 'not-sure',
     source: 'run',
-    reads: 'at least one delivered tool-result notice records an after-tool host denial',
+    reads:
+      'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
   },
   {
     reason: 'work-not-finished',

@@ -11,6 +11,7 @@ type ResultRecording = Recording & {
     sharedState: {
       history: Record<string, unknown>[];
       middlewareDecisions?: unknown;
+      withheldToolResultTurn?: number;
       coverageDeclared?: unknown;
       findingsLedger?: unknown;
     };

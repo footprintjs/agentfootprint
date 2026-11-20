@@ -99,6 +99,7 @@ export function buildResumePlain(
     );
     // No `error` flag: a human's answer is not a tool failure.
     const { modelResult: rawPauseResult, toolResultDisposition } = await links.afterMoment(scope, {
+      returned: true,
       ...occurrence,
       ...(tool && { tool }),
       toolName,

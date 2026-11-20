@@ -747,9 +747,9 @@ export function foldState(
   const nativeFacts = admission.nativeResult;
   if (admission.entryIncomplete)
     fire(g, 'check-unreachable', statePointer(ENTRY_EVIDENCE_KEY, 'complete'));
-  const { results, withheld, periods } = deliveredResults(recordedResults, admission.dispositions);
+  const { results, periods } = deliveredResults(recordedResults, admission.dispositions);
   // An occurrence witness would reveal how many results the host withheld.
-  if (withheld) g.fired.set('result-withheld', []);
+  if (admission.withheldReturn) g.fired.set('result-withheld', []);
   for (const { result, verdict } of periods) {
     const reason = PERIOD_REASONS[verdict];
     if (reason !== undefined) fire(g, reason, historyPointer(result));

@@ -24,11 +24,19 @@ export async function anchorTurnNumber(
   scope: TypedScope<AgentState>,
   stores: readonly MemoryStore[],
 ): Promise<void> {
+  const previous = scope.turnNumber;
   scope.turnNumber = await resolveTurnNumber({
     stores,
     identity: scope.runIdentity,
-    hostTurn: scope.turnNumber,
+    hostTurn: previous,
   });
+  if (
+    previous !== undefined &&
+    scope.turnNumber !== previous &&
+    scope.withheldToolResultTurn === previous
+  ) {
+    scope.withheldToolResultTurn = scope.turnNumber;
+  }
 }
 
 /**
@@ -60,6 +68,7 @@ export interface PendingResumeHistory {
    * history's count, and the restored ledger's stamps, are all it has.
    */
   readonly turn?: number;
+  readonly withheldToolResult?: true;
   readonly negatives?: NegativeCheckpoint;
   readonly innerCallPolicyArgs?: import('../../../../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
   /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */

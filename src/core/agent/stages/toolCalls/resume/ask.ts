@@ -219,6 +219,7 @@ export function buildResumeAsk(
         // routing a call through a human.
         if (dispatched.executed === true) {
           ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+            returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
             ...occurrence,
             ...(tool && { tool }),
             toolName,

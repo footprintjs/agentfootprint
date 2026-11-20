@@ -339,6 +339,8 @@ export function applyContinuation(
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
     ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
+    ...(!appendsUserTurn &&
+      cp.withheldToolResult === true && { withheldToolResult: true as const }),
     // The tickets the library placed in earlier turns (`placedTickets.ts`):
     // still the library's, so the staged-refs nudge still names them.
     ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),

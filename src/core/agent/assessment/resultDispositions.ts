@@ -37,18 +37,14 @@ export function deliveredResults(
   recorded: readonly TurnResult[],
   dispositions: ReadonlyMap<number, 'withheld' | 'rewritten'>,
 ) {
-  let withheld = false;
   const periods: { result: TurnResult; verdict: NonNullable<ReturnType<typeof leastHeld>> }[] = [];
   const results = recorded.flatMap((result) => {
     const disposition = dispositions.get(result.index);
-    if (disposition === 'withheld') {
-      withheld = true;
-      return [];
-    }
+    if (disposition === 'withheld') return [];
     if (disposition !== 'rewritten') return [result];
     const projection = rewrittenResult(result);
     if (projection.period !== undefined) periods.push({ result, verdict: projection.period });
     return [projection.result];
   });
-  return { results, withheld, periods };
+  return { results, periods };
 }

@@ -106,6 +106,10 @@ export function buildResumeCredential(
       let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
         ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+          returned:
+            scriptSeen.toolResultExecution === 'returned' &&
+            error !== true &&
+            dispatched.ceilingRefused !== true,
           ...occurrence,
           ...(tool && { tool }),
           toolName,

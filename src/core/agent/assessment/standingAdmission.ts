@@ -7,6 +7,7 @@ import {
   type HistoryCall,
 } from '../recordedCalls.js';
 import type { ArgumentRowRead } from './argumentRows.js';
+import { withheldToolResultOnTurn } from '../middleware/withheldResult.js';
 import { ENTRY_EVIDENCE_KEY, entryEvidenceOf, legacyEntryKeys } from './entryEvidence.js';
 import { reasonClassOf, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
@@ -71,6 +72,7 @@ export function standingAdmission(
         execution: recordedToolExecution(message),
         occurrenceKey,
         disposition: dispositions.get(index),
+        markedWithheld: message.toolResultDisposition === 'withheld',
       },
     ]),
   );
@@ -150,7 +152,11 @@ export function standingAdmission(
   // A rule can reject an error notice, even when there is no returned result.
   // Such notices leave their recorded settlement and make no withheld-result claim.
   for (const [index, call] of calls) {
-    if (call.execution === 'not-entered' || call.execution === 'threw') {
+    const deniedNotice =
+      call.execution === 'returned-unserved' &&
+      call.disposition === 'withheld' &&
+      !call.markedWithheld;
+    if (call.execution === 'not-entered' || call.execution === 'threw' || deniedNotice) {
       dispositions.delete(index);
     }
   }
@@ -160,6 +166,12 @@ export function standingAdmission(
     entered,
     returned,
     threw: (index: number) => calls.get(index)?.execution === 'threw',
+    withheldReturn:
+      withheldToolResultOnTurn(state) ||
+      current.some(
+        ({ index }) =>
+          dispositions.get(index) === 'withheld' && calls.get(index)?.execution === 'returned',
+      ),
     nativeResult,
     entryIncomplete: entryEvidence?.complete === false,
     hasEntryEvidence: entryEvidence !== undefined,

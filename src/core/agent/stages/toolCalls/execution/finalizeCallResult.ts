@@ -17,6 +17,7 @@ interface FinalizeCallFrame {
   readonly callArguments: CallArguments;
   readonly execution: CallExecution;
   readonly outcome: CallResultCell;
+  readonly skillRejected: boolean;
   readonly sourceEvidenceArmed: boolean;
 }
 
@@ -41,6 +42,12 @@ export async function finalizeCallResult(
         iteration: batch.iteration,
         args: callArguments.callArgs,
         result: outcome.result,
+        returned:
+          execution.toolResultExecution === 'returned' &&
+          !outcome.error &&
+          !execution.denied &&
+          !execution.ceilingRefused &&
+          !frame.skillRejected,
         negativeResultId: execution.negativeDispatch?.resultId,
         ...(execution.resultFinalizer && { onSourceWithheld: execution.resultFinalizer.withheld }),
         ...(outcome.error === true && { error: true }),

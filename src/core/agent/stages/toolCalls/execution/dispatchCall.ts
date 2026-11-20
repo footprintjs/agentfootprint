@@ -447,6 +447,7 @@ export function buildCallDispatch(
           callArguments,
           execution,
           outcome,
+          skillRejected: skillRoute.skillRejected,
           sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
         });
 

@@ -80,6 +80,7 @@ import type { ClaimVerificationState } from './agent/findings/verificationState.
 import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
 import { admitStoredHistory } from './checkpointHistory.js';
 import { validateCheckpointLedger } from './checkpointLedger.js';
+import { withheldToolResultOnTurn } from './agent/middleware/withheldResult.js';
 import {
   admitFoldedInnerCallPolicy,
   innerCallPolicyFor,
@@ -413,7 +414,7 @@ export function buildCheckpoint(
   sourceEvidence?: SourceEvidenceIndex,
   sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
   placed?: unknown,
-  innerPolicyState?: unknown,
+  state?: unknown,
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
@@ -421,7 +422,7 @@ export function buildCheckpoint(
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
   const history = checkpointReplayHistory(tracker.history, tracker);
   const placedTickets = ticketsStillServed(placed, history);
-  const innerCallPolicyArgs = innerCallPolicyFor(innerPolicyState, history);
+  const innerCallPolicyArgs = innerCallPolicyFor(state, history);
   return {
     version: 1,
     runId: tracker.runId,
@@ -431,6 +432,7 @@ export function buildCheckpoint(
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
+    ...(withheldToolResultOnTurn(state) && { withheldToolResult: true as const }),
     ...(folded !== undefined && folded.length > 0 && { folded }),
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
@@ -486,6 +488,9 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
     throw new TypeError(
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
     );
+  }
+  if (c.withheldToolResult !== undefined && c.withheldToolResult !== true) {
+    throw new TypeError('[resumeOnError] checkpoint withheldToolResult must be true when present.');
   }
   const sourceEvidence = sourceEvidenceOf(c);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(c);
