@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.0.1] - 2026-11-20
+
+### Security
+
+- **Model-facing traces respect tool-result middleware.** Earlier versions that support both result middleware and model-facing traces are affected when `.selfExplain()` or a model-facing trace pack is used with an `onToolResult` rule that denies or rewrites a result. Upgrade to this release. Host-owned recordings remain available under their existing redaction policy.
+
 ## [16.0.0] - 2026-11-20
 
 ### Breaking
