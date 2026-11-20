@@ -67,7 +67,7 @@ import type { ToolProvider } from '../tools/toolProvider.js';
 import { SELF_EXPLAIN_BODY, SELF_EXPLAIN_WHEN } from './debugPrompt.js';
 import { innerRunsOfConversation, type InnerRunLookup } from '../core/innerRunRecords.js';
 import { NO_COMPLETED_RUN_MESSAGE } from '../lib/traceToolNames.js';
-import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
+import type { ModelTraceToolpackOptions, TraceToolpackArtifacts } from './types.js';
 
 /**
  * How much of a turn's evidence the binding keeps.
@@ -110,7 +110,7 @@ export interface SelfExplainOptions {
   /** Skill id (activation key for `read_skill`). Default 'self-explain'. */
   readonly id?: string;
   /** Bounding dials forwarded to the toolpack. */
-  readonly toolpack?: TraceToolpackOptions;
+  readonly toolpack?: ModelTraceToolpackOptions;
   /** Which optional parts of a turn's evidence to capture. Both default true. */
   readonly include?: SelfExplainInclude;
   /**
@@ -425,7 +425,7 @@ function ownRuns(
 function buildExplainRunTool(
   binding: SelfExplainBinding,
   delegate: NonNullable<SelfExplainOptions['delegate']>,
-  toolpack?: TraceToolpackOptions,
+  toolpack?: ModelTraceToolpackOptions,
 ): Tool {
   return defineTool<{ question: string }, string>({
     name: 'explain_run',
@@ -559,7 +559,7 @@ function ownRunOnly(tools: readonly Tool[], binding: SelfExplainBinding): readon
 function lazilyMountedTraceTools(
   skillId: string,
   binding: SelfExplainBinding,
-  toolpack: TraceToolpackOptions | undefined,
+  toolpack: ModelTraceToolpackOptions | undefined,
 ): ToolProvider {
   const inactive = skillScopedTools(skillId, []);
   let mounted: Promise<ToolProvider> | undefined;

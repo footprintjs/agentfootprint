@@ -58,6 +58,8 @@ export interface TraceToolpackArtifacts {
  * Cause tools are the exception: their resource controls are host-only ceilings.
  */
 export interface TraceToolpackOptions {
+  /** Direct traceToolpack only. Give a trusted analyst the host's whole record. */
+  readonly showWithheldResults?: boolean;
   /** Host-only cause-tool ceilings, never overridable by model arguments. Snapshot-only capture cannot prove a root without engine attestation. */
   readonly cause?: TraceCauseOptions;
   /** Value-preview length in chars (trace_node / who_wrote). Default 160. */
@@ -69,6 +71,9 @@ export interface TraceToolpackOptions {
   /** Default char budget for get_value. Default 2000 (hard cap 8000). */
   readonly valueMaxChars?: number;
 }
+
+/** Debug agents and self-explain always use model-admitted evidence. */
+export type ModelTraceToolpackOptions = Omit<TraceToolpackOptions, 'showWithheldResults'>;
 
 /** Resolved options with defaults applied (internal). */
 export interface ResolvedToolpackOptions {

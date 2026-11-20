@@ -136,7 +136,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.tools.resource_restore` | `docs-next/content/docs/monitor/observability.mdx` |
 | `agentfootprint.tools.session_close_failed` | `docs-next/content/docs/build/tools.mdx` |
 | `agentfootprint.tools.rowset_checked` | `docs-next/content/docs/monitor/column-types.mdx` |
-| `agentfootprint.tools.absent` | `docs-next/content/docs/build/tools.mdx`, `docs-next/content/docs/infrastructure/observability-sinks.mdx` |
+| `agentfootprint.tools.absent` | `docs-next/content/docs/build/middleware.mdx`, `docs-next/content/docs/build/tools.mdx` |
 | `agentfootprint.tools.request_attempts` | `docs-next/content/docs/infrastructure/tools-and-gateways.mdx` |
 | `agentfootprint.tools.mcp_client` | `docs-next/content/docs/build/mcp-client-pool.mdx` |
 | `agentfootprint.skill.activated` | `docs-next/content/docs/build/skills.mdx` |

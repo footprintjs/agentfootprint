@@ -100,11 +100,21 @@ it('serves explicitly masked occurrence keys as unreadable and leaves ordinary r
   const saved = savedKeys(masked);
   expect(saved.state).toEqual([null, null, null]);
   expect(saved.eventKeys).toEqual([null, null, null, null]);
-  const trace = await callTraceTool(traceToolpack(openRecording(masked)), 'get_value', {
+  const query = {
     runtimeStageId: saved.lastStage,
     key: 'history',
     maxChars: 8000,
-  });
-  expect(trace).toMatch(/"callOccurrenceKey":"(?:\[)?REDACTED(?:\])?"/);
-  expect(trace).not.toContain('"callOccurrenceKey":[');
+  };
+  const artifacts = openRecording(masked);
+  const trace = await callTraceTool(traceToolpack(artifacts), 'get_value', query);
+  expect(trace).toContain('A result was kept out by a rule.');
+  expect(trace).not.toContain('"callOccurrenceKey"');
+
+  const hostTrace = await callTraceTool(
+    traceToolpack(artifacts, { showWithheldResults: true }),
+    'get_value',
+    query,
+  );
+  expect(hostTrace).toMatch(/"callOccurrenceKey":"(?:\[)?REDACTED(?:\])?"/);
+  expect(hostTrace).not.toContain('"callOccurrenceKey":[');
 });

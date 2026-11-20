@@ -79,7 +79,7 @@ dropped events says so in `inspect_tool_call`.
 
 ### toolpack?
 
-> `readonly` `optional` **toolpack?**: `TraceToolpackOptions`
+> `readonly` `optional` **toolpack?**: `ModelTraceToolpackOptions`
 
 Defined in: [src/trace-toolpack/selfExplain.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/trace-toolpack/selfExplain.ts#L113)
 
