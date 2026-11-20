@@ -1,18 +1,24 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
-import { appendBatchResult } from '../batch/settle.js';
+import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField } from '../execution/outcomeField.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -52,6 +58,8 @@ export function buildResumeCredential(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
+    | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -65,6 +73,7 @@ export function buildResumeCredential(
     frame: ResumeCallFrame,
   ): Promise<void> => {
     const { toolName, toolCallId, startMs } = frame;
+    const occurrence = callOccurrenceField(frame.callOccurrenceKey);
     deps.resources?.answer.record();
 
     const iteration = scope.iteration as number;
@@ -76,7 +85,7 @@ export function buildResumeCredential(
     const resolved = links.resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
     const tool = resolved.tool;
     /** What the call's `execute` saw — its script row reads it. */
-    const scriptSeen: ResumedCallFacts = {};
+    const scriptSeen: ResumedCallFacts = { ...occurrence };
     try {
       const dispatched =
         taken?.kind === 'copied'
@@ -95,8 +104,14 @@ export function buildResumeCredential(
       let result = dispatched.result;
       const error = dispatched.error;
       let modelResult: unknown;
+      let toolResultDisposition: LLMMessage['toolResultDisposition'];
       if (dispatched.executed === true) {
-        modelResult = await links.afterMoment(scope, {
+        ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+          returned:
+            scriptSeen.toolResultExecution === 'returned' &&
+            error !== true &&
+            dispatched.ceilingRefused !== true,
+          ...occurrence,
           ...(tool && { tool }),
           toolName,
           toolCallId,
@@ -111,13 +126,13 @@ export function buildResumeCredential(
           history: [...(scope.history as readonly LLMMessage[])],
           ...(scope.runIdentity && { identity: scope.runIdentity }),
           ...(env.signal && { signal: env.signal }),
-        });
+        }));
       }
       if (modelResult === undefined) modelResult = result;
       // Placement then the truncation net — the batch loop's precedence.
       const consentPlaced = await links.placeResults(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         { result, modelResult },
         dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true,
       );
@@ -184,7 +199,7 @@ export function buildResumeCredential(
       if (deps.stepPlanFor) {
         consentResultStr = links.applyStepReturn(
           scope,
-          { toolName, toolCallId, iteration, settled: consentSettled },
+          { toolName, toolCallId, iteration, ...occurrence, settled: consentSettled },
           consentResultStr,
         );
       }
@@ -192,7 +207,7 @@ export function buildResumeCredential(
         const consentTransition: TransitionBatchState = { losers: [] };
         consentResultStr += links.applyToolEffects(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           consentEnvelope,
           consentTransition,
         );
@@ -208,18 +223,28 @@ export function buildResumeCredential(
             ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
             toolCallId,
             toolName,
+            ...occurrence,
             ...(deps.findings === true &&
               dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !consentSettled.clean ||
+                dispatched.halt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, consentPlaced.modelResult),
+            ),
+            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A blocked credential ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(consentSettled),
             ...reportedStatusField(consentSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const consentHistory = consentSettlement.history;
-      scope.history = consentHistory;
+      commitSettledToolHistory(scope, consentHistory);
       scope.lastToolResult = {
         toolName,
         result: consentResultStr,
@@ -229,13 +254,16 @@ export function buildResumeCredential(
         toolName,
         result: consentResultStr,
         toolCallId,
+        ...occurrence,
+        ...(deps.resultsLayer === true &&
+          missingResultFields(dispatched.executed === true, scriptSeen.threw)),
         ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
       });
       await judgeLanded(
         scope,
         deps.findingsJudge,
         dispatched.executed === true,
-        { toolName, result: consentResultStr, toolCallId },
+        { toolName, result: consentResultStr, toolCallId, ...occurrence },
         iteration,
         links.turnStampOf(scope),
       );
@@ -252,6 +280,7 @@ export function buildResumeCredential(
         toolName,
         {
           toolCallId,
+          ...occurrence,
           result: consentCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),

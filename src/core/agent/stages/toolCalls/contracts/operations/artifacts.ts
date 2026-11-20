@@ -4,6 +4,7 @@ import type { Tool } from '../../../../../../tools/tools.js';
 import type { ToolArgs } from '../../../../../../tools/runChain.js';
 import type { ArtifactMeta } from '../../../../../../artifacts/types.js';
 import type { AskComponent } from '../../../../../../tools/askComponent.js';
+import type { ToolCallEventIdentity } from '../../../../../../events/types.js';
 
 /** Explicit callback contract for existing artifacts operations. */
 export interface ToolArtifactsOperations {
@@ -29,15 +30,13 @@ export interface ToolArtifactsOperations {
   ) => Promise<AskComponent>;
   readonly applyPresent: (
     scope: TypedScope<AgentState>,
-    call: {
+    call: ToolCallEventIdentity & {
       readonly args: Readonly<Record<string, unknown>>;
-      readonly toolCallId: string;
-      readonly iteration: number;
     },
   ) => Promise<{ readonly ok: boolean; readonly text: string }>;
   readonly placeResults: (
     scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    call: ToolCallEventIdentity & { readonly toolName: string },
     values: { readonly result: unknown; readonly modelResult: unknown },
     eligible: boolean,
   ) => Promise<{ readonly result: unknown; readonly modelResult: unknown }>;

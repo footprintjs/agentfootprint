@@ -33,6 +33,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
+import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 import { disableDevMode, enableDevMode } from 'footprintjs';
 
 import {
@@ -40,6 +42,7 @@ import {
   absent,
   coverage,
   defineTool,
+  deny,
   describedResult,
   isPaused,
   pauseHere,
@@ -203,8 +206,14 @@ describe('a result that declares its period — one verdict per call', () => {
       expect(absentEvent.payload.provenance).toEqual(SOURCE);
 
       // ONE period row, the verdict, no instants.
-      expect(periodRows(agent)).toEqual([
+      const occurrence = readCallOccurrenceKey(absentEvent.payload);
+      expect(occurrence).toMatch(/\.0$/);
+      expect(readCallOccurrenceKey(coverageRows[0]!)).toBe(occurrence);
+      const rows = periodRows(agent);
+      expect(readCallOccurrenceKey(rows[0]!)).toBe(occurrence);
+      expect(normalizeCallOccurrences(rows)).toEqual([
         {
+          callOccurrenceKey: [0, 0, 0, 1, 0],
           kind: 'period',
           turn: 1,
           toolCallId: 'c1',
@@ -214,8 +223,16 @@ describe('a result that declares its period — one verdict per call', () => {
         },
       ]);
       const verdictEvents = seen.filter((e) => e.type === 'agentfootprint.findings.period');
-      expect(verdictEvents.map((e) => e.payload)).toEqual([
-        { toolCallId: 'c1', toolName: 'backup_runs', iteration: 1, turn: 1, verdict: 'not-held' },
+      expect(verdictEvents.map((e) => readCallOccurrenceKey(e.payload))).toEqual([occurrence]);
+      expect(normalizeCallOccurrences(verdictEvents.map((e) => e.payload))).toEqual([
+        {
+          callOccurrenceKey: [0, 0, 0, 1, 0],
+          toolCallId: 'c1',
+          toolName: 'backup_runs',
+          iteration: 1,
+          turn: 1,
+          verdict: 'not-held',
+        },
       ]);
 
       // The standing: not sure — nothing matched, AND the store does not hold the hour asked about.
@@ -346,6 +363,65 @@ describe('a result that declares its period — one verdict per call', () => {
 });
 
 describe('a tool that declares a period argument (ToolPeriod) — silence is recorded as silence', () => {
+  it.each([false, true])(
+    'judges the period only when the tool entered (blocked: %s)',
+    async (blocked) => {
+      const execute = vi.fn(() => [{ value: 1 }]);
+      const provider = scripted([
+        call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+        answer('Done.'),
+      ]);
+      const builder = Agent.create({ provider: provider.provider as never, model: 'm' })
+        .tool(searchLogs(execute))
+        .answerLayer({ standingLine: true });
+      if (blocked) {
+        builder.toolMiddleware({ name: 'stop-before-read', onToolCall: () => deny('No access.') });
+      }
+      const agent = builder.build();
+      try {
+        const result = await agent.run({ message: 'Read checkout errors in the last hour.' });
+        expect(execute).toHaveBeenCalledTimes(blocked ? 0 : 1);
+        expect(periodRows(agent).map(({ verdict }) => verdict)).toEqual(
+          blocked ? [] : ['undeclared'],
+        );
+        const periodClause = 'a tool did not say what time its result covers';
+        if (blocked) {
+          expect(result).toContain('a call was refused');
+          expect(result).not.toContain(periodClause);
+        } else {
+          expect(result).toContain(periodClause);
+        }
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it('an entered call that throws has no returned period to judge', async () => {
+    const execute = vi.fn(() => {
+      throw new Error('Synthetic read failed.');
+    });
+    const agent = Agent.create({
+      provider: scripted([
+        call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+        answer('Done.'),
+      ]).provider as never,
+      model: 'm',
+    })
+      .tool(searchLogs(execute))
+      .answerLayer({ standingLine: true })
+      .build();
+    try {
+      const result = await agent.run({ message: 'Read checkout errors in the last hour.' });
+      expect(execute).toHaveBeenCalledOnce();
+      expect(periodRows(agent)).toEqual([]);
+      expect(await reasonsOf(agent)).toContain('call-not-completed');
+      expect(result).not.toContain('a tool did not say what time its result covers');
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
   it('a bare result: `undeclared`, joined to the inputs layer’s row for the same call', async () => {
     const agent = Agent.create({
       provider: scripted([call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')])
@@ -357,8 +433,9 @@ describe('a tool that declares a period argument (ToolPeriod) — silence is rec
     await agent.run({ message: 'any errors on checkout?' });
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     expect(state.honestyLayers).toEqual({ inputs: true, results: true, answer: true });
-    expect(periodRows(agent)).toEqual([
+    expect(normalizeCallOccurrences(periodRows(agent))).toEqual([
       {
+        callOccurrenceKey: [0, 0, 0, 1, 0],
         kind: 'period',
         turn: 1,
         toolCallId: 'c1',

@@ -13,11 +13,13 @@
  * reactModes: the composition ends exactly as the standalone agent does. Where
  * a composition hands a child's error on as it is (Sequence, workflow,
  * Conditional, Loop) it raises the SAME error — class, message and payload —
- * and nothing after the child runs; where it reports failed children itself
+ * and nothing after the child runs. Independent runs mint distinct batch addresses;
+ * the comparison keeps their relationships and positions. Where a composition reports failed children itself
  * (Parallel's merge, graph's level join) it reports this child failed with the
  * standalone error's message.
  */
 import { describe, expect, it } from 'vitest';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 import {
   Agent,
   Conditional,
@@ -363,7 +365,9 @@ describe('a composed agent that ends on a terminal verdict fails the composition
             const standalone = shapeOf(await rejection(make(mode).run('hello')));
             expect(standalone).toHaveProperty('errorClass');
             const composition = compose(make(mode));
-            expect(shapeOf(await rejection(composition.run()))).toEqual(standalone);
+            expect(normalizeCallOccurrences(shapeOf(await rejection(composition.run())))).toEqual(
+              normalizeCallOccurrences(standalone),
+            );
             for (const calls of composition.later) expect(calls()).toBe(0);
           });
         }

@@ -14,6 +14,8 @@ import { isRefused, periodFactsOf, periodFormsOf, rulesOf } from '../../../../to
 import { memberValue } from '../answerRows.js';
 import type { BatchCall, ToolOf } from '../resolve.js';
 import { WINDOW_FORM_EXPECTATION } from './constants.js';
+import type { BatchAddress } from '../batchAddress.js';
+import { memberAddresses } from '../askAddresses.js';
 import type { ArgumentAskState, AskField, AskMember, AskTime } from './types.js';
 
 /** The property schema a member's argument is judged against, off the implementation that will run. */
@@ -125,7 +127,7 @@ function declaresFacts(facts: PeriodFacts, forms: readonly PeriodForm[]): boolea
 export function pairsBroken(
   state: ArgumentAskState,
   values: Readonly<Record<string, InputValue>>,
-  byId: ReadonlyMap<string, BatchCall>,
+  byAddress: ReadonlyMap<BatchAddress, BatchCall>,
   toolOf: ToolOf,
   time: AskTime | undefined,
 ): ReadonlyMap<number, string> {
@@ -135,7 +137,7 @@ export function pairsBroken(
   const now = new Map(waiting.fieldIndexes.map((index, k) => [index, values[`f${k + 1}`]]));
   // Per call: its tool, and each period argument's answer with the field it came from.
   const perCall = new Map<
-    string,
+    BatchAddress,
     { toolName: string; answers: Map<string, { value: InputValue; field: number }> }
   >();
   state.fields.forEach((field, index) => {
@@ -146,7 +148,7 @@ export function pairsBroken(
       if (member.period !== true) continue;
       const value = memberValue(field, member, answer);
       if (value === undefined) continue;
-      for (const id of member.toolCallIds) {
+      for (const id of memberAddresses(member)) {
         const entry = perCall.get(id) ?? { toolName: member.toolName, answers: new Map() };
         entry.answers.set(member.argument, { value, field: index });
         perCall.set(id, entry);
@@ -154,7 +156,7 @@ export function pairsBroken(
     }
   });
   for (const [id, { toolName, answers }] of perCall) {
-    const call = byId.get(id);
+    const call = byAddress.get(id);
     const rules = rulesOf(toolOf(toolName));
     if (call === undefined || rules === undefined || isRefused(rules)) continue;
     const declared = periodFactsOf(rules.period);

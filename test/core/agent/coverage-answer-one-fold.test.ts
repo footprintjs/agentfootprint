@@ -121,6 +121,38 @@ describe('PROPERTY — the block prints exactly the items the data holds, in ord
   });
 });
 
+it('names each occurrence that declared a coverage item once, even when IDs are shared', () => {
+  const first = {
+    kind: 'ledger',
+    toolName: 'read_catalog',
+    toolCallId: 'same',
+    iteration: 1,
+    checked: [{ what: 'archived logs' }],
+    notChecked: [],
+    cannotCover: [],
+  } as const satisfies DeclaredCoverage;
+  const second = { ...first, toolName: 'read_events' };
+  const repeated = { ...second, kind: 'absence' } as const;
+  const line = (rows: readonly DeclaredCoverage[]) =>
+    blockSection(
+      composeAnswerWithCoverage('Done.', rows, '', '', undefined, undefined, (tool) =>
+        tool === 'read_catalog' ? 'reading the catalog' : undefined,
+      ),
+      LABELS.checked,
+    );
+
+  const firstKey = [1, 2, 3, 4, 0] as const;
+  const secondKey = [1, 2, 3, 4, 1] as const;
+  expect(
+    line([
+      { ...first, callOccurrenceKey: firstKey },
+      { ...second, callOccurrenceKey: secondKey },
+      { ...repeated, callOccurrenceKey: secondKey },
+    ]),
+  ).toEqual(['archived logs (reading the catalog and 1 other call)']);
+  expect(line([first, second, repeated])).toEqual(['archived logs (reading the catalog)']);
+});
+
 // ─── UNIT ────────────────────────────────────────────────────────────
 
 describe('UNIT — the typed answer’s limits as one value', () => {

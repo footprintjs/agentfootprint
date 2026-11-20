@@ -1,6 +1,15 @@
 /**
  * BYTE-IDENTITY — complete record and served-view fixture contracts.
  *
+ * Occurrence addressing adds `callOccurrenceKey` to recorded calls and their witnesses,
+ * and `callAddresses` to a saved argument pause. The guarded update command records
+ * these additions in `reference/call-occurrence/additions.json`; each older capture
+ * remains the exact reference for every other field. Only the four random batch
+ * words are normalized, by order of appearance, keeping co-reference and slot.
+ * The standing-evidence overlay adds 30 exact entry-ledger writes and their ordered
+ * trace rows across 11 named cases, plus one returned-tool marker. Every served
+ * view and all prior captures are unchanged.
+ *
  * Migration14: native component ownership has a named expected record baseline
  * for28scenarios; three retain direct historical equality. Old JSON is preserved.
  * The explicit delta includes seed identity/transport/owner writes and matching
@@ -604,10 +613,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
+import {
+  occurrenceAdditions,
+  occurrenceReferenceText,
+  withOccurrenceAdditions,
+  type OccurrenceAddition,
+} from '../../helpers/occurrenceReference.js';
 import {
   assertNativeReadWindowMetadata,
   type NativeWindowAddition,
 } from './native-cohort-metadata.js';
+import { standingEvidenceCases, withStandingEvidence } from './standing-evidence-reference.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -1616,13 +1633,15 @@ function normalise(value: unknown, key?: string): unknown {
 /** What a scenario is judged by: the whole log, and the served view of every epoch. */
 function projection(snapshot: Snapshot): unknown {
   const epochs = epochLocations(snapshot).map((l) => l.epoch);
-  return normalise({
-    commitLog: JSON.parse(JSON.stringify(snapshot.commitLog)),
-    served: epochs.map((epoch) => ({
-      epoch,
-      view: JSON.parse(JSON.stringify(servedAt(snapshot, epoch) ?? null)),
-    })),
-  });
+  return normalizeCallOccurrences(
+    normalise({
+      commitLog: JSON.parse(JSON.stringify(snapshot.commitLog)),
+      served: epochs.map((epoch) => ({
+        epoch,
+        view: JSON.parse(JSON.stringify(servedAt(snapshot, epoch) ?? null)),
+      })),
+    }),
+  );
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
@@ -1632,6 +1651,8 @@ const DEFAULT_STANDING = JSON.parse(
   readonly projections: Readonly<Record<string, string | undefined>>;
   readonly answers: Readonly<Record<string, { before: string; after: string } | undefined>>;
 };
+const OCCURRENCE_REFERENCE_DIR = new URL('call-occurrence/', REFERENCE_DIR);
+const OCCURRENCE_REFERENCE = new URL('additions.json', OCCURRENCE_REFERENCE_DIR);
 const V15_NATIVE_REFERENCE_DIR = new URL('./reference/v15-native-cohort/', import.meta.url);
 const V15_NATIVE_CAPTURES = new Map(
   (
@@ -1725,31 +1746,52 @@ describe('byte-identity — exact whole-record contract for native component own
       const additions = V15_NATIVE_CAPTURES.get(name);
       if (additions) assertNativeReadWindowMetadata(snapshot, additions);
       const observed = projection(snapshot);
-      const text = `${JSON.stringify(observed, null, 2)}\n`;
+      const path = referencePath(name);
+      expect(existsSync(path), `no reference for ${name}`).toBe(true);
+      const reference: unknown = JSON.parse(readFileSync(path, 'utf8'));
+      const captured = existsSync(OCCURRENCE_REFERENCE)
+        ? readFileSync(OCCURRENCE_REFERENCE, 'utf8')
+        : '{}';
+      const prior = JSON.parse(captured) as Record<string, OccurrenceAddition[]>;
       if (UPDATE) {
         if (!UPDATE_CASES.has(name))
           throw new Error(
             `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
           );
+        // Entry and settlement addresses are owned by the standing-evidence overlay.
+        const additions = occurrenceAdditions(observed).filter(
+          ([path]) =>
+            !(
+              path[0] === 'commitLog' &&
+              path[2] === 'overwrite' &&
+              (path[3] === 'enteredToolCalls' || path[3] === 'settledToolCalls')
+            ),
+        );
+        expect(observed).toEqual(
+          withStandingEvidence(withOccurrenceAdditions(reference, additions), name),
+        );
+        if (additions.length === 0) return;
         const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-        const before = existsSync(referencePath(name))
-          ? digest(readFileSync(referencePath(name), 'utf8'))
-          : 'absent';
-        mkdirSync(REFERENCE_DIR, { recursive: true });
-        writeFileSync(referencePath(name), text);
-        console.info(`[reference update] ${name}: ${before} -> ${digest(text)}`);
+        mkdirSync(OCCURRENCE_REFERENCE_DIR, { recursive: true });
+        const updated = occurrenceReferenceText({ ...prior, [name]: additions });
+        writeFileSync(OCCURRENCE_REFERENCE, updated);
+        console.info(
+          `[occurrence reference update] ${name}: ${digest(captured)} -> ${digest(updated)}`,
+        );
+        return;
       }
-      expect(existsSync(referencePath(name)), `no reference for ${name}`).toBe(true);
-      const reference = JSON.parse(readFileSync(referencePath(name), 'utf8')) as unknown;
-      expect(observed).toEqual(reference);
-      if (UPDATE) return;
+      const expected = withStandingEvidence(
+        withOccurrenceAdditions(reference, prior[name] ?? []),
+        name,
+      );
+      expect(observed).toEqual(expected);
 
       const current = await drive(Agent.create);
       if (additions) assertNativeReadWindowMetadata(current.snapshot, additions);
       const currentProjection = projection(current.snapshot);
       const fingerprint = DEFAULT_STANDING.projections[name];
       if (fingerprint === undefined) {
-        expect(currentProjection).toEqual(reference);
+        expect(currentProjection).toEqual(expected);
       } else {
         const currentText = `${JSON.stringify(currentProjection, null, 2)}\n`;
         expect(createHash('sha256').update(currentText).digest('hex')).toBe(fingerprint);
@@ -1760,6 +1802,22 @@ describe('byte-identity — exact whole-record contract for native component own
       else expect({ before: off.answer, after: current.answer }).toEqual(answer);
     });
   }
+
+  it('qualifies exactly the named standing-evidence cases', () => {
+    expect(standingEvidenceCases).toEqual([
+      'agent-answer-layer',
+      'agent-arguments-ask',
+      'agent-arguments-ask-resumed',
+      'agent-arguments-assume',
+      'agent-arguments-assume-limits',
+      'agent-arguments-sources',
+      'agent-arguments-sources-only',
+      'agent-findings',
+      'agent-findings-contingent',
+      'agent-findings-judge',
+      'agent-findings-window',
+    ]);
+  });
 
   it('the normalisation is stable: two runs of one configuration project identically', async () => {
     // The guard on the guard. If a run-minted value slipped past the

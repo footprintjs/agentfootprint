@@ -53,6 +53,8 @@ import {
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
+import { callRowOfCall } from '../../src/time/rows.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -271,9 +273,9 @@ describe('refused before the turn starts', () => {
 // ─── call rows ───────────────────────────────────────────────────────
 
 describe('a call row per dispatched call', () => {
-  it('dispatchedAt is the wall clock at dispatch, one row per call, in order', async () => {
+  it('records distinct dispatch clocks for repeated provider IDs', async () => {
     const { agent } = agentWith(
-      [call('c1', 'backup_runs'), call('c2', 'backup_runs'), answer('done')],
+      [call('c1', 'backup_runs'), call('c1', 'backup_runs'), answer('done')],
       (b) => b.tool(backupRuns()).time({ zone: LA }),
     );
     let tick = Date.UTC(2026, 9, 9, 15, 41);
@@ -282,8 +284,15 @@ describe('a call row per dispatched call', () => {
     const calls = ofKind<CallRow>(agent, 'call');
     expect(calls.map((c) => [c.toolCallId, c.toolName, c.iteration, c.turn])).toEqual([
       ['c1', 'backup_runs', 1, 1],
-      ['c2', 'backup_runs', 2, 1],
+      ['c1', 'backup_runs', 2, 1],
     ]);
+    const results = agent.checkpoint()?.history.filter((message) => message.role === 'tool') ?? [];
+    const keys = results.map(readCallOccurrenceKey);
+    expect(keys).toEqual([expect.any(String), expect.any(String)]);
+    expect(keys[0]).not.toBe(keys[1]);
+    expect(calls.map(readCallOccurrenceKey)).toEqual(keys);
+    const { callOccurrenceKey: _key, ...legacy } = calls[0]!;
+    expect(callRowOfCall([legacy], 'c1', 1)).toEqual(legacy);
     for (const c of calls) expect(Date.parse(c.dispatchedAt)).toBeGreaterThan(Date.parse(NOW));
     expect(Date.parse(calls[1]!.dispatchedAt)).toBeGreaterThan(Date.parse(calls[0]!.dispatchedAt));
   });
@@ -484,12 +493,17 @@ describe('the model is served nothing new but the run clock (G16)', () => {
   });
 
   it('no row carries the message', async () => {
-    const secret = 'my card is 4111 1111 1111 1111';
+    const cardText = '4111 1111 1111 1111';
+    const messageMarker = 'private-clock-message-sentinel';
+    const secret = `my card is ${cardText} (${messageMarker})`;
     const { agent } = agentWith([call('c1', 'backup_runs'), answer('done')], (b) =>
       b.tool(backupRuns()).time({ zone: LA }),
     );
     await agent.run({ message: secret, time: { now: NOW } });
-    expect(JSON.stringify(agent.findings())).not.toContain('4111');
+    // A random occurrence address can contain the first four digits by chance.
+    const findings = JSON.stringify(agent.findings());
+    expect(findings).not.toContain(cardText);
+    expect(findings).not.toContain(messageMarker);
   });
 });
 

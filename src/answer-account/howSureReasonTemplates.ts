@@ -34,12 +34,20 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.unplacedEvidence': t(
     "{{count:n,'evidence row','evidence rows'}} could not be matched to a call.",
   ),
+  'howSure.reason.resultUnavailable': t(
+    "The call result is unavailable in the retained history for {{count:n,'evidence row','evidence rows'}}.",
+  ),
+  'howSure.reason.callAddressUnreadable': t(
+    "The recorded call address is unreadable for {{count:n,'evidence row','evidence rows'}}.",
+  ),
   'howSure.reason.emptyUndeclared': t(
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),
+  'howSure.reason.callNotDispatched': t("{{count:n,'call','calls'}} did not run."),
   'howSure.reason.callNotCompleted': t("{{count:n,'call','calls'}} did not complete."),
   'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
   'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
+  'howSure.reason.resultWithheld': t('A result was kept out by a rule.'),
   'howSure.reason.workNotFinished': t(
     "{{count:n,'call reported','calls reported'}} unfinished work.",
   ),
@@ -104,6 +112,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.claimExceedsSearch': t('A negative claim exceeds the recorded search.'),
   'howSure.reason.declarationOverclaimed': t('A tool declaration overstates what was checked.'),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
+  'howSure.reason.dispatchProofUnavailable': t(
+    'The record could not establish tool entry for every checked call.',
+  ),
   'howSure.reason.checkUnreachable': t(
     "The app's answer checks could not reach a verdict on this answer.",
   ),

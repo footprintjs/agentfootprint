@@ -1,4 +1,5 @@
 /** Fold — argument observations with proved replacement before assessment. */
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import {
   argumentHistoryCallResolver,
   unlandedCallKey,
@@ -9,8 +10,8 @@ import { isRecord, str } from './recordValues.js';
 /** One retained `argument` observation of this turn. */
 export interface ArgumentRowRead {
   readonly index: number;
-  readonly toolCallId: string;
   readonly historyIndex?: number;
+  readonly occurrenceKey?: string | null;
   readonly argument: string;
   readonly source?: string;
   /** Set on a row that ASKED the person — no source yet. */
@@ -61,10 +62,10 @@ export function resolveArgumentHistory(
  * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
  * continued conversation, and a row from an earlier turn is about a call this
  * answer does not rest on. A later row replaces an observation of the same
- * argument at the same proved result position. With no retained compatible
- * result, only a later library pre-dispatch row can replace the prior
- * observation of that turn, tool and call ID. A missing result may have been
- * evicted, so ordinary rows remain separate evidence.
+ * argument at the same proved result position. Without a retained result, a
+ * later library pre-dispatch row can replace an observation of the same keyed
+ * call, or of the same turn, tool and call ID in legacy history. A missing
+ * result may have been evicted, so ordinary rows remain separate evidence.
  * A record with no `turnNumber` reads every row.
  */
 export function argumentRows(
@@ -80,27 +81,35 @@ export function argumentRows(
     const toolCallId = str(row.toolCallId);
     const toolName = str(row.toolName);
     const argument = str(row.argument);
-    if (toolCallId === undefined || argument === undefined) continue;
+    const occurrenceKey = readCallOccurrenceKey(row);
+    if ((toolCallId === undefined && occurrenceKey === undefined) || argument === undefined)
+      continue;
     const source = str(row.source);
     const withheld = row.correction !== undefined || row.withheld !== undefined;
     const pending = withheld || (waiting !== undefined && row.iteration === waiting);
     const resolved = (resolve ??= resolveArgumentHistory(state, currentCalls, history, turnBegins))(
       toolCallId,
       toolName,
+      occurrenceKey,
     );
     const historyIndex = !pending && resolved.kind === 'matched' ? resolved.call.index : undefined;
-    const proposalKey =
-      resolved.kind === 'missing' &&
-      toolName !== undefined &&
-      typeof row.turn === 'number' &&
-      Number.isSafeInteger(row.turn)
-        ? unlandedCallKey({ turn: row.turn, toolName, toolCallId })
-        : undefined;
+    let proposalKey: string | undefined;
+    if (resolved.kind === 'missing') {
+      if (typeof occurrenceKey === 'string') proposalKey = occurrenceKey;
+      else if (
+        occurrenceKey === undefined &&
+        toolName !== undefined &&
+        typeof row.turn === 'number' &&
+        Number.isSafeInteger(row.turn)
+      ) {
+        proposalKey = unlandedCallKey({ turn: row.turn, toolName, toolCallId });
+      }
+    }
     const read: ArgumentRowRead = {
       index,
-      toolCallId,
       argument,
       ...(historyIndex !== undefined && { historyIndex }),
+      ...(occurrenceKey !== undefined && { occurrenceKey }),
       ...(source !== undefined && { source }),
       asked: typeof row.asked === 'string' && source === undefined,
       ruled: row.rule !== undefined || row.period === true,

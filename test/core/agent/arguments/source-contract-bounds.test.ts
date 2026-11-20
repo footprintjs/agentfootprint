@@ -103,4 +103,17 @@ describe('bounded source-contract projection', () => {
     expect(contractIn(prepare(['next'])![0]!)?.missingArguments).toEqual(['next']);
     expect(content.map((frame) => contractIn(frame)?.missingArguments)).toEqual([['c'], ['b|c']]);
   });
+
+  it('names only the proposal whose declaration is missing when IDs repeat', () => {
+    const first = { id: 'repeated', callOccurrenceKey: [1, 2, 3, 4, 0] as const };
+    const second = { id: 'repeated', callOccurrenceKey: [1, 2, 3, 4, 1] as const };
+    const messages = prepareSourceContractFeedback(
+      [first, second],
+      [{ toolCallId: second.id, callOccurrenceKey: second.callOccurrenceKey, argument: 'unit' }],
+      true,
+    );
+    expect(messages?.[0]).toContain('another call');
+    expect(contractIn(messages?.[1] ?? '')?.missingArguments).toEqual(['unit']);
+    expect(messages?.join('')).not.toContain('callOccurrenceKey');
+  });
 });

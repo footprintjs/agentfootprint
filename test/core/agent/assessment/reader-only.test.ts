@@ -4,7 +4,7 @@
  *
  * Test types:
  *   - BYTE-IDENTITY — a run whose agent is asked for its standing between turns
- *                     commits the same history, the same keys and the same
+ *                     commits equivalent history, the same keys and the same
  *                     stage path as its twin that is never asked; asking adds no
  *                     commit and leaves the snapshot's bytes as they were. (The
  *                     21 byte references under `test/core/tools/reference/` pin
@@ -21,7 +21,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
 import { Agent, defineTool } from '../../../../src/index.js';
+import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
 import { mock } from '../../../../src/llm-providers.js';
+import type { LLMMessage } from '../../../../src/provider-contract/types.js';
+import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 
 const lookup = defineTool({
   name: 'list_ports',
@@ -51,16 +54,24 @@ function deepFreeze<T>(value: T): T {
 /** What a run committed, minus the values a clock or a counter names. */
 function committed(agent: Agent) {
   const snapshot = agent.getLastSnapshot()!;
-  const state = snapshot.sharedState as Record<string, unknown>;
+  const state = snapshot.sharedState as { history: readonly LLMMessage[] };
+  const results = state.history.filter((message) => message.role === 'tool');
+  const proposals = state.history.flatMap((message) => message.toolCalls ?? []);
+  const keys = proposals.map(readCallOccurrenceKey);
+  expect(proposals.map((call) => call.id)).toEqual(['c1', 'c2']);
+  expect(keys.every((key) => key?.endsWith('.0'))).toBe(true);
+  expect(keys[0]).not.toEqual(keys[1]);
+  expect(results.map((message) => message.toolCallId)).toEqual(['c1', 'c2']);
+  expect(results.map(readCallOccurrenceKey)).toEqual(keys);
   return {
     keys: Object.keys(state).sort(),
-    history: state.history,
+    history: normalizeCallOccurrences(state.history),
     stages: (snapshot.commitLog as { stageId: string }[]).map((b) => b.stageId),
   };
 }
 
 describe('BYTE-IDENTITY — asking never changes a run', () => {
-  it('the asked twin and the unasked twin commit the same turn 2', async () => {
+  it('the asked twin and the unasked twin commit equivalent turn 2 histories', async () => {
     const asked = Agent.create({ provider: script(), model: 'mock' }).tool(lookup).build();
     const quiet = Agent.create({ provider: script(), model: 'mock' }).tool(lookup).build();
     await asked.run({ message: 'down ports?' });

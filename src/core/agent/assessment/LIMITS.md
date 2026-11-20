@@ -39,15 +39,28 @@
   is still read from the envelope in `history` — `fold-real-record.test.ts` pins
   the account's reduced fixture reading the same standing as the full record. A
   record that dropped the history too has nothing left to read.
-- **Evicted results.** Under `.window()`, a window strategy can remove this
-  turn's early results from `history`; the commit log still has them, but the
-  fold reads the final state, so an evicted undeclared `[]` fires nothing.
+- **Tool entry and settlement after eviction.** The turn keeps up to 1,024
+  entries in each occurrence-keyed list. The standing reports `check-unreachable`
+  when a list could not retain every fact or an argument observation cannot be
+  bound in a keyed record. An older saved keyed tool-end can prove entry.
+- **Evicted results.** The recorded settlement keeps the delivery, the call's
+  outcome and selected result declarations after `.window()` evicts the model's
+  copy. Checks that need the original text or app-provided row paths can say
+  less. A later completion clears a failure only when recorded arguments
+  establish that it is the same call retried. The failure stays when the
+  arguments are unavailable.
 - **A correction after an evicted call with the same ID.** When a call's result
   is evicted and a later proposal with the same turn, tool and ID gets a
   library correction or another pre-dispatch row, the remaining rows can look
   exactly like a correction of one proposal that never ran. The earlier
-  argument failure may be replaced in that case. The per-call key in
-  `TASK-Root-19` is the planned record address for distinguishing the two.
+  argument failure may be replaced in an older recording without call
+  addresses. New recordings distinguish the two by their call addresses.
+- **Incomplete rewrite addresses.** A masked address or an address missing on
+  one side prevents matching the rewrite, so the overwritten argument may
+  still be reported as assumed.
+- **Model-declared findings with repeated IDs.** The findings layer treats two
+  calls that share a provider ID in one batch as one call because the model
+  names its subject by that ID.
 - **Rows from an earlier turn that reuse a call id — on an agent without an
   honesty layer.** Without a turn stamp, the fold places a ledger row in this
   turn by the call ids it names, and a provider that reuses ids across turns
@@ -90,6 +103,9 @@
   `turn_end.answerAssessment` — their fields are pinned and unchanged; read
   `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
   can carry it.
+- **Withheld results.** The standing emits one anonymous reason when this turn's record proves that a returned result was withheld, including after eviction and a same-request resume. Public standing gives no count, tool name or result facts. The raw `accountForAnswer` still reads native declarations for a denied result until card 9.
+- **Integrity findings without a resolved call.** Standing omits a finding when the record cannot resolve it to one call occurrence.
+- **Older recordings.** Without the settlement ledger, the assessment derives delivery and outcomes from retained history, so a warning can go unreported once its message has left the window.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.

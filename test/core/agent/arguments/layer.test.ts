@@ -137,6 +137,7 @@ describe('assume — a missing ruled argument is filled by the library', () => {
           kind: 'argument',
           turn: 1,
           toolCallId: 'c1',
+          callOccurrenceKey: expect.any(Array),
           toolName: 'search_logs',
           iteration: 1,
           argument: 'window',
@@ -152,6 +153,7 @@ describe('assume — a missing ruled argument is filled by the library', () => {
       expect(argEvents.map((e) => e.payload)).toEqual([
         {
           toolCallId: 'c1',
+          callOccurrenceKey: expect.any(Array),
           toolName: 'search_logs',
           iteration: 1,
           turn: 1,
@@ -166,6 +168,8 @@ describe('assume — a missing ruled argument is filled by the library', () => {
       // `tool_start` keeps the model's proposal; `tool_end` names the filled key.
       const start = seen.find((e) => e.type === 'agentfootprint.stream.tool_start')!;
       expect(start.payload.args).toEqual({ service: 'checkout' });
+      expect(argumentRows(agent)[0]?.callOccurrenceKey).toEqual(start.payload.callOccurrenceKey);
+      expect(argEvents[0]?.payload.callOccurrenceKey).toEqual(start.payload.callOccurrenceKey);
       const end = seen.find((e) => e.type === 'agentfootprint.stream.tool_end')!;
       expect(end.payload.changedArgKeys).toEqual(['window']);
 

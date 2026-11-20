@@ -26,10 +26,15 @@ import {
   mockEmbedder,
 } from '../../../src/memory/index.js';
 import { mock } from '../../../src/llm-providers.js';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
+import type { AgentIterationEndPayload } from '../../../src/events/payloads/agent.js';
+import type { ContextInjectedPayload } from '../../../src/events/payloads/context.js';
+import type { ToolStartPayload } from '../../../src/events/payloads/stream.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { RunCheckpointError } from '../../../src/core/runCheckpoint.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
 import type { CombinedRecorder, EmitEvent } from 'footprintjs';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
 
 // ─── helpers ──────────────────────────────────────────────────────
 
@@ -153,7 +158,7 @@ describe('observerDelivery — construction', () => {
 // ─── parity: the compatibility bar ────────────────────────────────
 
 describe('observerDelivery — deferred/inline event parity', () => {
-  it('agent.on() listeners receive identical typed events (type+payload+anchor, same order)', async () => {
+  it('agent.on() listeners receive equivalent typed events (type+payload+anchor, same order)', async () => {
     const inlineAgent = buildAgent(); // default 'inline'
     const deferredAgent = buildAgent({ delivery: 'deferred' });
 
@@ -168,8 +173,46 @@ describe('observerDelivery — deferred/inline event parity', () => {
     expect(inlineEvents.length).toBeGreaterThan(20);
     expect(inlineEvents.some((e) => e.type === 'agentfootprint.stream.token')).toBe(true);
     expect(inlineEvents.some((e) => e.type === 'agentfootprint.stream.tool_end')).toBe(true);
-    // Byte-equal after wall-clock normalization — the drop-in-port bar.
-    expect(deferredEvents).toEqual(inlineEvents);
+    for (const events of [inlineEvents, deferredEvents]) {
+      const bracket = (type: string) =>
+        events
+          .filter((e) => e.type === type)
+          .map((e) => {
+            const payload = e.payload as Pick<ToolStartPayload, 'toolCallId'>;
+            return [payload.toolCallId, readCallOccurrenceKey(payload)];
+          });
+      const starts = bracket('agentfootprint.stream.tool_start');
+      expect(starts.map(([id]) => id)).toEqual(['t1', 't2']);
+      expect(starts.every(([, key]) => key?.endsWith('.0'))).toBe(true);
+      expect(starts[0]?.[1]).not.toEqual(starts[1]?.[1]);
+      expect(bracket('agentfootprint.stream.tool_end')).toEqual(starts);
+
+      const history =
+        events
+          .filter((event) => event.type === 'agentfootprint.agent.iteration_end')
+          .map((event) => (event.payload as AgentIterationEndPayload).history)
+          .filter((history) => history !== undefined)
+          .at(-1) ?? [];
+      const proposals = history.flatMap((message) => message.toolCalls ?? []);
+      const results = history.filter((message) => message.role === 'tool');
+      expect(proposals.map((call) => [call.id, readCallOccurrenceKey(call)])).toEqual(starts);
+      expect(results.map((result) => [result.toolCallId, readCallOccurrenceKey(result)])).toEqual(
+        starts,
+      );
+      const toolContext = events
+        .filter((event) => event.type === 'agentfootprint.context.injected')
+        .map((event) => event.payload as ContextInjectedPayload)
+        .filter((payload) => payload.asRole === 'tool');
+      expect(toolContext.map(readCallOccurrenceKey)).toEqual([
+        starts[0]?.[1],
+        starts[0]?.[1],
+        starts[1]?.[1],
+      ]);
+    }
+    // The event sequence and each payload still match across independent runs.
+    expect(normalizeCallOccurrences(deferredEvents)).toEqual(
+      normalizeCallOccurrences(inlineEvents),
+    );
   });
 
   it('narrative entries are identical (the built-in narrative recorder stays inline)', async () => {

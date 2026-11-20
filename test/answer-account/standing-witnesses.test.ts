@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, isInputPause, requestInput, slidingWindow } from '../../src/index.js';
+import {
+  Agent,
+  checkInApproved,
+  defineTool,
+  isCheckInPause,
+  isInputPause,
+  requestInput,
+  slidingWindow,
+} from '../../src/index.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
@@ -85,6 +93,9 @@ interface MutableSnapshot {
     history: Record<string, unknown>[];
     findingsLedger: Record<string, unknown>[] | string;
     compactions?: readonly unknown[];
+    enteredToolCalls?: readonly unknown[];
+    enteredToolCallsComplete?: boolean;
+    settledToolCalls?: Record<string, unknown>[];
   };
   recorders: { id: string }[];
 }
@@ -104,12 +115,26 @@ function assertUnclaimed(recording: Recording) {
   expect(account.facts.limitsBlock.status).toBe('not-applicable');
 }
 
+const SAME_ID_WITNESS_MODES = [
+  'in-tool pause',
+  'sliding window',
+  'sliding window after both results left',
+  'complete history',
+  'sliding window with standing',
+  'sliding window, pausing before the second call',
+] as const;
+
 describe('standing reasons rebuilt from their committed witnesses', () => {
-  it.each(['in-tool pause', 'sliding window', 'sliding window after both results left'] as const)(
+  it.each(SAME_ID_WITNESS_MODES)(
     'keeps the first same-ID argument failure with a %s',
     async (mode) => {
-      const windowed = mode !== 'in-tool pause';
+      const paused = mode === 'in-tool pause';
+      const bothRetained = mode === 'complete history';
+      const windowed = !paused && !bothRetained;
       const bothEvicted = mode === 'sliding window after both results left';
+      const pausedBeforeBeta = mode === 'sliding window, pausing before the second call';
+      const rendersStanding =
+        bothRetained || pausedBeforeBeta || mode === 'sliding window with standing';
       const name = 'read_shelf';
       const read = (shelf: string, quote: string, id = 'reused') =>
         call(id, name, {
@@ -135,9 +160,12 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             description: 'Read an inert fixture shelf.',
             inputSchema: { type: 'object', properties: { shelf: { type: 'string' } } },
             askOrAssume: { shelf: { assume: 'fallback' } },
+            ...(pausedBeforeBeta && {
+              checkIn: (args: Readonly<Record<string, unknown>>) => args.shelf === 'beta',
+            }),
             execute({ shelf }) {
               entered.push(String(shelf));
-              if (!windowed && shelf === 'beta') {
+              if (paused && shelf === 'beta') {
                 return requestInput({
                   id: 'confirm-shelf',
                   question: 'Continue the fixture lookup?',
@@ -150,20 +178,55 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         )
         .inputsLayer({ argumentSources: true });
       if (windowed) builder.window(slidingWindow({ keepRecentTurns: 1 }));
+      if (rendersStanding) builder.answerLayer({ standingLine: true });
       const agent = builder.build();
       const recorder = recordRun(agent);
       try {
-        const result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
-        if (windowed)
+        let result = await agent.run({ message: 'Read the fixture shelves beta and gamma.' });
+        if (pausedBeforeBeta) {
+          if (!isCheckInPause(result))
+            throw new Error('Expected a check-in before the second call.');
+          expect(entered).toEqual(['alpha']);
+          expect(result.checkpoint.sharedState.enteredToolCalls).toEqual([
+            { callOccurrenceKey: expect.any(Array), entered: true },
+          ]);
+          expect(result.checkpoint.sharedState.enteredToolCallsComplete).toBe(true);
+          result = await agent.resume(
+            result.checkpoint,
+            checkInApproved({ request: result.checkIn, by: 'fixture' }),
+          );
+        }
+        if (windowed && !rendersStanding)
           expect(result).toBe(
             'Read the shelf.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
           );
-        else expect(isInputPause(result)).toBe(true);
+        else if (paused) expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
-        const { history, findingsLedger, compactions } = snapshotOf(recording).sharedState;
+        const { history, findingsLedger, compactions, enteredToolCalls, enteredToolCallsComplete } =
+          snapshotOf(recording).sharedState;
         const results = history.filter((message) => message.role === 'tool');
-        expect(results).toHaveLength(1);
+        expect(results).toHaveLength(bothRetained ? 2 : 1);
+        if (bothRetained) {
+          expect(
+            results.map(({ toolCallId, toolResultExecution, content }) => ({
+              toolCallId,
+              toolResultExecution,
+              content,
+            })),
+          ).toEqual([
+            {
+              toolCallId: 'reused',
+              toolResultExecution: 'returned',
+              content: expect.stringContaining('alpha fixture result'),
+            },
+            {
+              toolCallId: 'reused',
+              toolResultExecution: 'returned',
+              content: expect.stringContaining('beta fixture result'),
+            },
+          ]);
+        }
         if (windowed) {
           const retained = bothEvicted ? 'gamma' : 'beta';
           expect(results[0]?.content).toContain(`${retained} fixture result`);
@@ -193,27 +256,69 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
               ]
             : []),
         ]);
+        if (rendersStanding) {
+          expect(enteredToolCalls).toEqual(
+            (findingsLedger as Record<string, unknown>[]).map(({ callOccurrenceKey }) => ({
+              callOccurrenceKey,
+              entered: true,
+            })),
+          );
+          expect(enteredToolCallsComplete).toBe(true);
+        }
         const pointer = { kind: 'state', key: 'findingsLedger', path: '/0/argument' };
         const assessment = assessAnswer(recording);
         const argumentReason = assessment.reasons.find(
           (row) => row.reason === 'argument-unverified',
         );
-        expect(argumentReason).toMatchObject({
-          witness: [pointer],
-          ...(!bothEvicted && { source: { kind: 'calls', calls: [], unplaced: [pointer] } }),
-        });
-        if (bothEvicted) {
-          expect(argumentReason?.source).toEqual({
-            kind: 'calls',
-            calls: [{ toolCallId: 'reused', toolName: name }],
-          });
-        }
+        const named = { kind: 'calls', calls: [{ toolCallId: 'reused', toolName: name }] };
+        const unplaced = { kind: 'calls', calls: [], unplaced: [pointer] };
+        expect(argumentReason?.witness).toEqual([pointer]);
+        expect(argumentReason?.source).toEqual(windowed ? unplaced : named);
         const account = accountForAnswer(recording);
-        const reason = account.rows
-          .find((row) => row.id === 'how-sure')
-          ?.lines.find((line) => line.template.id === 'howSure.reason.argumentUnverified');
+        if (rendersStanding) {
+          expect((await agent.assessment())?.reasons).toEqual(assessment.reasons);
+          const line =
+            'Not sure — a value a call ran with came from the model, with no source on the record.';
+          expect(result).toBe(`Read the shelf.\n\n---\n\n${line}`);
+          expect(account.facts.limitsBlock.value).toBe(line);
+        }
+        const standing = account.rows.find((row) => row.id === 'how-sure')?.lines;
+        const reason = standing?.find(
+          (line) => line.template.id === 'howSure.reason.argumentUnverified',
+        );
         expect(reason).toMatchObject({ pointers: [pointer] });
+        expect(
+          standing?.some((line) => line.template.id === 'howSure.reason.resultUnavailable'),
+        ).toBe(windowed);
+        expect(
+          standing?.some((line) => line.template.id === 'howSure.reason.unplacedEvidence'),
+        ).toBe(false);
         assertP1(account, recording);
+
+        const legacy = JSON.parse(
+          JSON.stringify(recording, (field, value: unknown) =>
+            field === 'callOccurrenceKey' ||
+            field === 'enteredToolCalls' ||
+            field === 'enteredToolCallsComplete' ||
+            field === 'settledToolCalls' ||
+            field === 'settledToolCallsComplete' ||
+            field === 'toolResultExecution'
+              ? undefined
+              : value,
+          ),
+        ) as Recording;
+        const legacyAssessment = assessAnswer(legacy);
+        expect(legacyAssessment.reasons.map(({ reason }) => reason)).toEqual(
+          paused ? ['asked', 'check-unreachable'] : ['check-unreachable'],
+        );
+        const oldStanding = accountForAnswer(legacy).rows.find(
+          (row) => row.id === 'how-sure',
+        )?.lines;
+        expect(oldStanding).toContainEqual(
+          expect.objectContaining({
+            text: 'The record could not establish tool entry for every checked call.',
+          }),
+        );
       } finally {
         recorder.stop();
         await agent.shutdown();
@@ -339,7 +444,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
   });
 
   it.each(['missing', 'hidden'] as const)(
-    'leaves the line unclaimed when a status is %s',
+    'keeps a settled status when the history status is %s and leaves it unclaimed without proof',
     async (condition) => {
       const recording = await pending();
       const snapshot = snapshotOf(recording);
@@ -349,6 +454,14 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         snapshot.recorders.push({ id: REDACTION_MARKER_ID });
         message.reportedStatus = 'REDACTED';
       }
+      const retained = accountForAnswer(recording);
+      expect(retained.answer.value).toBe(REPLY);
+      expect(retained.facts.limitsBlock.value).toBe('Not sure — a tool reported unfinished work.');
+
+      const settlement = snapshot.sharedState.settledToolCalls?.[0];
+      expect(settlement?.reportedStatus).toBe('pending');
+      if (condition === 'missing') delete settlement!.reportedStatus;
+      else settlement!.reportedStatus = 'REDACTED';
       assertUnclaimed(recording);
     },
   );

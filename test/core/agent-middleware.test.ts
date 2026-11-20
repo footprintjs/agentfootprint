@@ -35,6 +35,7 @@ import {
   type MiddlewareDecision,
   type ToolMiddleware,
 } from '../../src/index.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { mock } from '../../src/llm-providers.js';
 import { mockMcpClient } from '../../src/tool-providers/index.js';
 import type {
@@ -42,6 +43,7 @@ import type {
   LLMResponse,
   PermissionChecker,
 } from '../../src/provider-contract/types.js';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -953,7 +955,7 @@ describe('middleware — property', () => {
     }
   });
 
-  it('LAW 10: the same chain on two mock adapters produces identical ledgers', async () => {
+  it('LAW 10: the same chain on two mock adapters records equivalent decisions', async () => {
     const build = () =>
       Agent.create({ provider: mock({ replies: callThen('act', { n: 7 }) }), model: 'm' })
         .tools([recordingTool().tool])
@@ -967,12 +969,21 @@ describe('middleware — property', () => {
         })
         .build();
 
-    const a = build();
-    const b = build();
-    await a.run({ message: 'go' });
-    await b.run({ message: 'go' });
-
-    expect(ledger(a)).toEqual(ledger(b));
+    const run = async (agent: Agent) => {
+      const starts: string[] = [];
+      agent.on('agentfootprint.stream.tool_start', ({ payload }) => {
+        starts.push(readCallOccurrenceKey(payload) ?? '');
+      });
+      await agent.run({ message: 'go' });
+      const decisions = ledger(agent);
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.endsWith('.0')).toBe(true);
+      expect(decisions.filter((row) => row.at === 'tool').map(readCallOccurrenceKey)).toEqual(
+        starts,
+      );
+      return normalizeCallOccurrences(decisions);
+    };
+    expect(await run(build())).toEqual(await run(build()));
   });
 });
 
@@ -1910,8 +1921,19 @@ describe('middleware — the onToolCall chain sees the PEELED args under .findin
     // carries the declaration, and the ledger holds its basis row.
     const assistant = spy.requests[1]?.messages.find((m) => m.role === 'assistant');
     expect(assistant?.toolCalls?.[0]?.args).toEqual(DECLARING);
+    expect(assistant?.toolCalls?.[0]).not.toHaveProperty('callOccurrenceKey');
+    const callOccurrenceKey = row?.callOccurrenceKey;
+    expect(typeof readCallOccurrenceKey({ callOccurrenceKey })).toBe('string');
     expect(agent.findings()).toEqual([
-      { kind: 'basis', toolCallId: 'c1', toolName: 'act', iteration: 1, basis: 'direct', turn: 1 },
+      {
+        kind: 'basis',
+        toolCallId: 'c1',
+        toolName: 'act',
+        iteration: 1,
+        basis: 'direct',
+        callOccurrenceKey,
+        turn: 1,
+      },
     ]);
   });
 

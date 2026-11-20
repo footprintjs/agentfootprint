@@ -12,9 +12,9 @@
  * The laws being pinned:
  *   • An Error is written as `{ name, message, code? }` plus a bounded `cause`
  *     chain — never a custom property, never `stack`.
- *   • Sync and detached delivery write the SAME bytes for payloads holding
- *     Errors — nested, with a cause chain, circular through a cause or a
- *     custom property, and plain circular data (which both refuse alike).
+ *   • Sync and detached delivery write the same Error and result bytes,
+ *     including nested Errors, cause chains and circular Error properties.
+ *     Both refuse plain circular data alike.
  *   • `authorization` is written by no sink, on either path.
  *
  * Test types (Convention 3): security (the axios token, `tok-R4-AXIOS` from
@@ -35,6 +35,7 @@ import { fileObservability } from '../../src/adapters/observability/file.js';
 import { auditExport } from '../../src/adapters/observability/audit.js';
 import { cloudwatchObservability } from '../../src/adapters/observability/cloudwatch.js';
 import { consoleObservability } from '../../src/strategies/defaults/consoleObservability.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { toWireJson, withWireErrors, MAX_CAUSE_DEPTH } from '../../src/lib/wireJson.js';
 import { AxiosLikeError } from './axiosLikeError.js';
 
@@ -115,8 +116,8 @@ interface Delivered {
 
 /**
  * One run whose tool returns `result`, delivered to every sink — synchronously,
- * or through the detached driver. Returns each sink's `tool_end` RESULT, as
- * written: the durations and meta a second run could not reproduce are removed.
+ * or through the detached driver. Returns each sink's `tool_end` RESULT as
+ * written, with the console line normalized for duration and batch identity.
  */
 async function deliver(result: () => unknown, detached: boolean): Promise<Delivered> {
   const dir = mkdtempSync(join(tmpdir(), 'wire-errors-'));
@@ -151,6 +152,10 @@ async function deliver(result: () => unknown, detached: boolean): Promise<Delive
       execute: result,
     })
     .build();
+  let startedKey: string | null | undefined;
+  agent.on('agentfootprint.stream.tool_start', ({ payload }) => {
+    startedKey = readCallOccurrenceKey(payload);
+  });
   const handles = [file, audit, auditBounded, cloudwatch, console].map(
     (strategy) =>
       agent.enable.observability({
@@ -187,7 +192,17 @@ async function deliver(result: () => unknown, detached: boolean): Promise<Delive
     cloudwatch: resultOf(cloud.find(toolEnd)),
     console: printed
       .filter((line) => line.includes('tool_end'))
-      .map((line) => line.replace(/"durationMs":\d+/g, '"durationMs":0'))
+      .map((line) => {
+        const payload = JSON.parse(line) as { callOccurrenceKey?: unknown };
+        expect(startedKey?.endsWith('.0')).toBe(true);
+        expect(readCallOccurrenceKey(payload)).toBe(startedKey);
+        return line
+          .replace(/"durationMs":\d+/g, '"durationMs":0')
+          .replace(
+            `"callOccurrenceKey":${JSON.stringify(payload.callOccurrenceKey)}`,
+            '"callOccurrenceKey":[0,0,0,1,0]',
+          );
+      })
       .join('\n'),
   };
 }
@@ -246,7 +261,7 @@ describe('the wire rule — every sink, both delivery paths', () => {
     }
   });
 
-  it('property: sync and detached delivery write the same bytes for payloads holding Errors', async () => {
+  it('property: sync and detached delivery write the same Error and result bytes', async () => {
     const written: string[] = [];
     for (let seed = 1; seed <= 12; seed++) {
       const sync = await deliver(() => errorPayload(seed), false);

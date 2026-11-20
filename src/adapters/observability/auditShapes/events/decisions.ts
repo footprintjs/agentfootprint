@@ -88,6 +88,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.validation.args_invalid': eventShape<'agentfootprint.validation.args_invalid'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -131,12 +132,14 @@ export function decisionsShapes() {
 
     'agentfootprint.stream.tool_progress': eventShape<'agentfootprint.stream.tool_progress'>({
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       toolName: str,
       iteration: num,
       payload: keysMarker,
     }),
 
     'agentfootprint.checkin.request': eventShape<'agentfootprint.checkin.request'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -144,6 +147,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.checkin.decision': eventShape<'agentfootprint.checkin.decision'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -158,6 +162,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.middleware.decision': eventShape<'agentfootprint.middleware.decision'>({
+      callOccurrenceKey: listOf(num),
       middleware: str,
       moment: oneOf('after-tool', 'before-tool', 'input', 'output', 'window'),
       at: oneOf('message', 'tool'),
@@ -217,6 +222,7 @@ export function decisionsShapes() {
       tool: str,
       errorClass: str,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -367,6 +373,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.artifacts.presented': eventShape<'agentfootprint.artifacts.presented'>({
+      callOccurrenceKey: listOf(num),
       ref: str,
       as: str,
       snapshot: shapeOf<PayloadOf<'agentfootprint.artifacts.presented'>['snapshot']>({
@@ -431,6 +438,7 @@ export function decisionsShapes() {
       rationale: charsMarker,
       reason: policyReasonTag,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -442,6 +450,7 @@ export function decisionsShapes() {
       iteration: num,
       sequenceLength: num,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
     }),
 
     // A router's `{ reason }` is its model's words; `decide()` evidence is the engine's.

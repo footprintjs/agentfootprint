@@ -1,7 +1,15 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
-import type { ToolResultStatus } from '../../../../../semantics/toolEffects.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
+
+/** Carry only the dispatch facts that distinguish a notice from a returned result. */
+export function missingResultFields(
+  entered: boolean,
+  threw: boolean | undefined,
+): Pick<NonNullable<AgentState['toolResults']>[number], 'entered' | 'threw'> {
+  if (!entered) return { entered: false };
+  return threw === true ? { threw: true } : {};
+}
 
 /**
  * Build the pausable tool-call handler for the agent's chart.
@@ -18,7 +26,7 @@ import type { LLMMessage } from '../../../../../provider-contract/types.js';
  */
 export function appendBatchResult(
   scope: TypedScope<AgentState>,
-  entry: { toolName: string; result: string; toolCallId: string; status?: ToolResultStatus },
+  entry: NonNullable<AgentState['toolResults']>[number],
 ): void {
   scope.toolResults = [...(scope.toolResults ?? []), entry];
 }

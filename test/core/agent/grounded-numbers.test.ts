@@ -26,9 +26,12 @@ import {
   servedAt,
   servedViews,
   UnsupportedValuesError,
+  type AgentRunCheckpoint,
 } from '../../../src/index.js';
 import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 import { stagedRefsNudgeLine } from '../../../src/core/agent/stagedRefs.js';
+import { stripFrameworkFields } from '../../../src/core/agent/composeRequest.js';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -161,6 +164,15 @@ const build = (
 
 const historyOf = (agent: Agent): readonly LLMMessage[] =>
   (agent.getLastSnapshot()?.sharedState as { history: LLMMessage[] }).history;
+
+function placedResultOf(checkpoint: AgentRunCheckpoint, ref: string) {
+  const result = checkpoint.history.find(
+    (message) => message.role === 'tool' && message.content.includes(`"ref":"${ref}"`),
+  );
+  if (result === undefined) throw new Error('Expected a placed result in the checkpoint');
+  expect(readCallOccurrenceKey(result)).toEqual(expect.any(String));
+  return result;
+}
 
 const SHAPES = ['classic', 'dynamic', 'dynamic-grouped'] as const;
 const NUDGE_OPEN = '[staged data';
@@ -319,12 +331,19 @@ describe('integration: the receipt belongs to the conversation, not to one run',
     });
     await first.agent.run({ message: 'stage the rows' }, { sessionId: 'stored-1' });
     const issued = refInRequest(first.requests[1]!);
-    const stored = JSON.parse(JSON.stringify(first.agent.checkpoint()));
-    expect(stored.placedTickets).toEqual([{ toolCallId: 't1', ref: issued }]);
+    const stored = JSON.parse(JSON.stringify(first.agent.checkpoint())) as AgentRunCheckpoint;
+    const result = placedResultOf(stored, issued);
+    expect(stored.placedTickets).toEqual([
+      { toolCallId: 't1', ref: issued, callOccurrenceKey: result.callOccurrenceKey },
+    ]);
 
     const later = build([answer(SAFE_ANSWER)], { gate: { nudge: true } });
     await later.agent.run({ message: 'now compute', continueFrom: stored });
     expect(lastLine(later.requests[0]!)).toContain(`'${issued}' (dataset/rows)`);
+    expect(later.agent.checkpoint()?.placedTickets).toEqual(stored.placedTickets);
+    expect(later.requests[0]?.messages.find((message) => message.toolCallId === 't1')).toEqual(
+      stripFrameworkFields([result])[0],
+    );
   });
 
   it('a stored receipt the door cannot read is refused by name', async () => {
@@ -447,10 +466,46 @@ describe('integration: the receipt names what the library placed, and only that'
       const refs = refsIn(requests);
       expect(refs).toHaveLength(2);
       for (const ref of refs) expect(lastLine(requests.at(-1)!)).toContain(`'${ref}'`);
-      expect(agent.checkpoint()!.placedTickets).toEqual(
-        refs.map((ref) => ({ toolCallId: 't1', ref })),
-      );
+      const checkpoint = agent.checkpoint()!;
+      const tickets = refs.map((ref) => ({
+        toolCallId: 't1',
+        ref,
+        callOccurrenceKey: placedResultOf(checkpoint, ref).callOccurrenceKey,
+      }));
+      expect(tickets[0]?.callOccurrenceKey).not.toEqual(tickets[1]?.callOccurrenceKey);
+      expect(checkpoint.placedTickets).toEqual(tickets);
     }
+  });
+
+  it('keeps both placement receipts when siblings share one provider ID', async () => {
+    const { agent, requests } = build(
+      [
+        () => ({
+          content: '',
+          toolCalls: [
+            { id: 'same', name: 'export_rows', args: {} },
+            { id: 'same', name: 'export_rows', args: {} },
+          ],
+        }),
+        answer(SAFE_ANSWER),
+      ],
+      { gate: { nudge: true } },
+    );
+    await agent.run('stage the rows');
+
+    const refs = refsIn(requests);
+    expect(refs).toHaveLength(2);
+    const checkpoint = agent.checkpoint()!;
+    expect(checkpoint.placedTickets).toEqual(
+      refs.map((ref) => ({
+        toolCallId: 'same',
+        ref,
+        callOccurrenceKey: placedResultOf(checkpoint, ref).callOccurrenceKey,
+      })),
+    );
+    expect(checkpoint.placedTickets?.map((ticket) => ticket.callOccurrenceKey?.[4])).toEqual([
+      0, 1,
+    ]);
   });
 
   it('the crash checkpoint carries the receipt to a fresh agent', async () => {
@@ -467,12 +522,21 @@ describe('integration: the receipt names what the library placed, and only that'
       const error = await failing.agent.run({ message: 'stage the rows' }).catch((e) => e);
       expect(error).toBeInstanceOf(RunCheckpointError);
       const issued = refInRequest(failing.requests[1]!);
-      const stored = JSON.parse(JSON.stringify((error as RunCheckpointError).checkpoint));
-      expect(stored.placedTickets).toEqual([{ toolCallId: 't1', ref: issued }]);
+      const stored = JSON.parse(
+        JSON.stringify((error as RunCheckpointError).checkpoint),
+      ) as AgentRunCheckpoint;
+      const result = placedResultOf(stored, issued);
+      expect(stored.placedTickets).toEqual([
+        { toolCallId: 't1', ref: issued, callOccurrenceKey: result.callOccurrenceKey },
+      ]);
 
       const later = build([answer(SAFE_ANSWER)], { gate: { nudge: true }, reactMode });
       await later.agent.resumeOnError(stored);
       expect(lastLine(later.requests[0]!)).toContain(`'${issued}' (dataset/rows)`);
+      expect(later.agent.checkpoint()?.placedTickets).toEqual(stored.placedTickets);
+      expect(later.requests[0]?.messages.find((message) => message.toolCallId === 't1')).toEqual(
+        stripFrameworkFields([result])[0],
+      );
     }
   });
 });
@@ -774,13 +838,31 @@ describe('regression: absent means today, proven on prompts AND records', () => 
     expect(stable(gateOnly.requests)).toBe(stable(bare.requests));
     expect(stable(nudgeOff.requests)).toBe(stable(bare.requests));
 
-    // The RECORDS: no nudge event anywhere, no staged-refs fields, and the
-    // conversation the run keeps is the same one.
+    // The RECORDS: the same conversation and no nudge event. Compare the
+    // minted address through its proposal and result, then normalize those two cells.
+    const stableHistory = (history: readonly LLMMessage[]) => {
+      const proposals = history.flatMap((message) => message.toolCalls ?? []);
+      const results = history.filter((message) => message.role === 'tool');
+      expect(proposals.map(readCallOccurrenceKey)).toEqual([expect.any(String)]);
+      expect(results.map(readCallOccurrenceKey)).toEqual(proposals.map(readCallOccurrenceKey));
+      const stable = history.map((message) => {
+        if (message.role === 'tool') return { ...message, callOccurrenceKey: '<occurrence>' };
+        return message.role === 'assistant' && message.toolCalls !== undefined
+          ? {
+              ...message,
+              toolCalls: message.toolCalls.map((call) => ({
+                ...call,
+                callOccurrenceKey: '<occurrence>',
+              })),
+            }
+          : message;
+      });
+      return JSON.stringify(stable).replace(/art_[A-Za-z0-9]+/g, 'art_REF');
+    };
+    const baseline = stableHistory(bare.history);
     for (const r of [bare, gateOnly, nudgeOff]) {
       expect(r.all.some((e) => e.name === 'agentfootprint.agent.grounding_nudged')).toBe(false);
-      expect(JSON.stringify(r.history).replace(/art_[A-Za-z0-9]+/g, 'art_REF')).toBe(
-        JSON.stringify(bare.history).replace(/art_[A-Za-z0-9]+/g, 'art_REF'),
-      );
+      expect(stableHistory(r.history)).toBe(baseline);
     }
     expect(bare.out).toBe(HEAD_MATH_ANSWER);
     const flaggedAnswer = `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`;

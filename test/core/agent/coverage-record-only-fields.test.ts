@@ -16,7 +16,8 @@ import { withNativeResourceObservation } from '../../helpers/nativeResourceObser
  *   - BYTE LAW   — pins five dispatch paths and four envelope shapes without
  *                  the record-only fields. The historical reference has one
  *                  additive `entered: true` field per successful tool end.
- *                  It was captured on the pre-change tree by:
+ *                  The occurrence-address sidecar pins key placement, co-reference and
+ *                  batch slot while preserving the pre-change capture. Update it with:
  *                  AF_RECORD_ONLY_REFERENCE=update npx vitest run test/core/agent/coverage-record-only-fields.test.ts
  *   - SCENARIO   — a declaring tool, on each of the five paths × four shapes:
  *                  the model's requests equal the non-declaring run's byte for
@@ -25,8 +26,8 @@ import { withNativeResourceObservation } from '../../helpers/nativeResourceObser
  *   - UNIT / SECURITY / EDGE — in `coverage-short-and-kind.test.ts`.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -46,6 +47,13 @@ import { mock } from '../../../src/llm-providers.js';
 import { bearer, type CredentialProvider } from '../../../src/identity.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
+import {
+  occurrenceAdditions,
+  occurrenceReferenceText,
+  withOccurrenceAdditions,
+  type OccurrenceAddition,
+} from '../../helpers/occurrenceReference.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
 
@@ -232,9 +240,14 @@ const endOf = (h: Harness) =>
   h.events.find((e) => e.type === 'agentfootprint.stream.tool_end')!.payload;
 const firstOf = (h: Harness, type: string) => h.events.find((e) => e.type === type)?.payload;
 
-// ─── 1. BYTE LAW — declaring nothing records the pre-change bytes ─────
+// ─── 1. BYTE LAW — the pre-change record plus named metadata ──────────
 
 const REFERENCE = resolve(__dirname, 'reference/coverage-record-only-bytes.json');
+const OCCURRENCE_REFERENCE = resolve(
+  __dirname,
+  'reference/coverage-record-only-occurrence-additions.json',
+);
+const UPDATE = process.env.AF_RECORD_ONLY_REFERENCE === 'update';
 
 describe('record-only fields — the pinned record when a run declares neither field', () => {
   const cases = PATHS.flatMap((path) => SHAPES.map((shape) => [path, shape] as const));
@@ -242,22 +255,29 @@ describe('record-only fields — the pinned record when a run declares neither f
     // The historical fixture pins the record before answer standing defaulted on.
     const h = build(path, shape, false, false, false);
     expect(await drive(h, path, shape, false)).toBe('done');
-    const record = recordOf(h);
+    const record = normalizeCallOccurrences(recordOf(h));
     const key = `${path}/${shape}`;
-    const all = existsSync(REFERENCE)
-      ? (JSON.parse(readFileSync(REFERENCE, 'utf8')) as Record<string, unknown>)
+    const all = JSON.parse(readFileSync(REFERENCE, 'utf8')) as Record<
+      string,
+      { eventTypes: string[] }
+    >;
+    expect(all[key], `no pre-change reference for '${key}'`).toBeDefined();
+    const legacy = withNativeResourceObservation(all[key]!);
+    const additions = existsSync(OCCURRENCE_REFERENCE)
+      ? (JSON.parse(readFileSync(OCCURRENCE_REFERENCE, 'utf8')) as Record<
+          string,
+          OccurrenceAddition[]
+        >)
       : {};
-    if (process.env.AF_RECORD_ONLY_REFERENCE === 'update') {
-      all[key] = record;
-      mkdirSync(dirname(REFERENCE), { recursive: true });
-      writeFileSync(REFERENCE, `${JSON.stringify(all, null, 2)}\n`);
-      return;
+    const expected = UPDATE ? occurrenceAdditions(record) : additions[key];
+    expect(expected, `no occurrence reference for '${key}'`).toBeDefined();
+    expect(record).toEqual(withOccurrenceAdditions(legacy, expected!));
+    if (UPDATE) {
+      writeFileSync(
+        OCCURRENCE_REFERENCE,
+        occurrenceReferenceText({ ...additions, [key]: expected! }),
+      );
     }
-    expect(
-      all[key],
-      `no reference for '${key}' — generate it on the pre-change tree`,
-    ).toBeDefined();
-    expect(record).toEqual(withNativeResourceObservation(all[key] as { eventTypes: string[] }));
     // The model read `result` itself, so `modelResult` is absent.
     expect('modelResult' in endOf(h)).toBe(false);
   });
@@ -277,10 +297,17 @@ describe('record-only fields — a declaring tool changes the record, never the 
     const expected = `done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover${detail}.`;
     expect(await drive(plain, path, shape, false)).toBe(expected);
     expect(await drive(declaring, path, shape, true)).toBe(expected);
-    expect(declaring.requests.map(text)).toEqual(plain.requests.map(text));
-    // History (what every later request is composed from) agrees too.
+    const requests = plain.requests.map(text);
+    expect(requests.join('')).not.toContain('"callOccurrenceKey"');
+    expect(declaring.requests.map(text)).toEqual(requests);
+    // History additionally carries the recorded addresses. Compare their
+    // co-reference and slot, with only the random batch words normalized.
     const historyOf = (h: Harness) =>
-      text((h.agent.getSnapshot()?.sharedState as { history?: unknown }).history);
+      text(
+        normalizeCallOccurrences(
+          (h.agent.getSnapshot()?.sharedState as { history?: unknown }).history,
+        ),
+      );
     expect(historyOf(declaring)).toBe(historyOf(plain));
     expect(historyOf(declaring)).not.toContain('"short"');
     expect(historyOf(declaring)).not.toContain('"kind"');
@@ -378,6 +405,8 @@ describe('record-only fields — every serving path goes through the one strip',
     // `afterMoment`) and be driven by this file.
     const PINNED = [
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
+      // Reads the delivered replacement for its period fact, without serving bytes.
+      'core/agent/recordedCalls/rewrittenResult.ts',
       // Bounded inspection of the final governed/placed/capped surface for
       // canonical absence only; this reader serves no envelope or record-only lists.
       'core/agent/resultRowsets/read.ts',

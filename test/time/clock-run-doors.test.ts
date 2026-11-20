@@ -41,7 +41,8 @@ import {
   type ClockRow,
   type Tool,
 } from '../../src/index.js';
-import type { LLMResponse } from '../../src/provider-contract/types.js';
+import type { LLMMessage, LLMResponse } from '../../src/provider-contract/types.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
@@ -295,15 +296,25 @@ describe('the other wired sites', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(PAUSE_AT);
     const paused = await agent.run({ message: 'go', time: { now: NOW } });
     if (!isPaused(paused)) throw new Error('expected the check-in pause');
+    const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint)) as typeof paused.checkpoint;
+    const history = checkpoint.sharedState.history as readonly LLMMessage[];
+    const proposal = history.flatMap((message) => message.toolCalls ?? [])[0];
+    if (proposal === undefined) throw new Error('Expected the saved check-in proposal');
+    const key = readCallOccurrenceKey(proposal);
+    expect(key).toEqual(expect.any(String));
     expect(ofKind<CallRow>(agent, 'call')).toEqual([]);
     clock.mockReturnValue(RESUME_AT);
     await agent.resume(
-      paused.checkpoint,
+      checkpoint,
       checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
     );
-    expect(ofKind<CallRow>(agent, 'call').map((c) => [c.toolCallId, c.dispatchedAt])).toEqual([
-      ['c1', new Date(RESUME_AT).toISOString()],
-    ]);
+    expect(
+      ofKind<CallRow>(agent, 'call').map((c) => [
+        c.toolCallId,
+        c.dispatchedAt,
+        readCallOccurrenceKey(c),
+      ]),
+    ).toEqual([['c1', new Date(RESUME_AT).toISOString(), key]]);
   });
 
   it('the limits block beside the inputs layer renders in the zone', async () => {

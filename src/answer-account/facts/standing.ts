@@ -1,15 +1,25 @@
-import { historyCallAt } from '../../core/agent/recordedCalls.js';
+import {
+  assessmentCallOutcome,
+  historyCallAt,
+  historyCallResolver,
+  isRecordedBatchRefusal,
+  readHistoryCalls,
+} from '../../core/agent/recordedCalls.js';
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
 import { foldState } from '../../core/agent/assessment/assess.js';
-import { standingNamesFrom } from '../../core/agent/assessment/compose.js';
+import {
+  dispatchProofWitness,
+  settledSiblingWitness,
+  standingNamesFrom,
+} from '../../core/agent/assessment/compose.js';
+import { unplacedEvidenceKind } from '../../core/agent/assessment/sources.js';
 import type {
   AnswerAssessment,
   AssessmentCheck,
   AssessmentPointer,
   AssessmentReason,
 } from '../../core/agent/assessment/types.js';
-import { recordedCallOutcome } from '../../semantics/toolOutcome.js';
 import { chip, n } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, RecordPointer, Sentence } from '../types.js';
@@ -20,6 +30,8 @@ import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.j
 /** Reasons whose standing line needs the committed rows for its details. */
 export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'argument-assumed',
+  'value-contingent',
+  'check-unreachable',
   'call-not-completed',
   'work-not-finished',
   'step-skipped',
@@ -50,7 +62,14 @@ export function recordedStandingWitnesses(
 ): AnswerAssessment | undefined {
   const state = view.stateAsRecorded;
   if (state === undefined) return undefined;
-  const assessed = foldState(state, undefined, view.servedUnderPolicy);
+  const assessed = foldState(
+    state,
+    undefined,
+    view.servedUnderPolicy,
+    undefined,
+    undefined,
+    view.events,
+  );
   if (assessed.keptOut !== undefined) return undefined;
   const complete = reasons.every(
     (reason) =>
@@ -82,6 +101,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'declared-absent': 'howSure.reason.declaredAbsent',
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
   'call-not-completed': 'howSure.reason.callNotCompleted',
+  'result-withheld': 'howSure.reason.resultWithheld',
   'work-not-finished': 'howSure.reason.workNotFinished',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
@@ -150,6 +170,12 @@ const COUNTS_CALLS: ReadonlySet<AssessmentReason> = new Set([
   'period-beyond-retention',
 ]);
 
+const UNPLACED_LINES = {
+  legacy: 'howSure.reason.unplacedEvidence',
+  'result-unavailable': 'howSure.reason.resultUnavailable',
+  'call-unreadable': 'howSure.reason.callAddressUnreadable',
+} as const;
+
 /**
  * How many calls a reason rests on — read off the reason's own `source`, the
  * fold's one answer to "which calls" (`assessment/sources.ts` ·
@@ -166,6 +192,7 @@ function callsBehind(r: AnswerAssessment['reasons'][number]): number {
 const CALL_OUTCOME_LINES = {
   refused: 'howSure.reason.callRefused',
   failed: 'howSure.reason.callFailed',
+  'not-dispatched': 'howSure.reason.callNotDispatched',
   unknown: REASON_LINES['call-not-completed'],
 } as const;
 
@@ -175,14 +202,28 @@ function callOutcomeLines(ctx: ReadContext, r: AnswerAssessment['reasons'][numbe
   const groups: Record<keyof typeof CALL_OUTCOME_LINES, AssessmentPointer[]> = {
     refused: [],
     failed: [],
+    'not-dispatched': [],
     unknown: [],
   };
   for (const w of r.witness) {
+    if (settledSiblingWitness(w)) {
+      groups['not-dispatched'].push(w);
+      continue;
+    }
     const row = w.kind === 'history' ? historyCallAt(history, w.index)?.message : undefined;
-    const outcome = row === undefined ? undefined : recordedCallOutcome(row);
+    const message =
+      w.kind === 'history'
+        ? Object.getOwnPropertyDescriptor(history, String(w.index))?.value
+        : undefined;
+    const outcome =
+      row !== undefined
+        ? assessmentCallOutcome(row)
+        : isRecordedBatchRefusal(message)
+        ? 'refused'
+        : undefined;
     groups[outcome ?? 'unknown'].push(w);
   }
-  return (['refused', 'failed', 'unknown'] as const).flatMap((outcome) => {
+  return (['refused', 'failed', 'not-dispatched', 'unknown'] as const).flatMap((outcome) => {
     const witnesses = groups[outcome];
     if (witnesses.length === 0) return [];
     return ctx.say(CALL_OUTCOME_LINES[outcome], {
@@ -255,6 +296,7 @@ export function standingLines(
     ctx.view.servedUnderPolicy,
     undefined,
     declarationAddresses,
+    ctx.view.events,
   );
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {
@@ -263,6 +305,7 @@ export function standingLines(
   const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
   const ran = a.checked.filter((c) => c.ran > 0);
   const lines: Sentence[] = [];
+  let resolve: ReturnType<typeof historyCallResolver> | undefined;
   switch (a.standing) {
     case 'known':
       lines.push(
@@ -299,22 +342,38 @@ export function standingLines(
             unplaced.length > 0 && count === 0
               ? []
               : [
-                  ctx.say(REASON_LINES[r.reason], {
-                    ...(COUNTED.has(r.reason) && {
-                      vars: { n: n(count) },
-                    }),
-                    ...recordedAt(pointersOf(r.witness)),
-                    item: true,
-                  }),
+                  ctx.say(
+                    r.reason === 'check-unreachable' && r.witness.some(dispatchProofWitness)
+                      ? 'howSure.reason.dispatchProofUnavailable'
+                      : REASON_LINES[r.reason],
+                    {
+                      ...(COUNTED.has(r.reason) && {
+                        vars: { n: n(count) },
+                      }),
+                      ...recordedAt(pointersOf(r.witness)),
+                      item: true,
+                    },
+                  ),
                 ];
           if (unplaced.length === 0) return line;
+          resolve ??= historyCallResolver(readHistoryCalls(historyOf(ctx.view)));
+          const groups = new Map<TemplateId, AssessmentPointer[]>();
+          for (const pointer of unplaced) {
+            const template =
+              UNPLACED_LINES[unplacedEvidenceKind(r.reason, pointer, state, resolve)];
+            const group = groups.get(template) ?? [];
+            group.push(pointer);
+            groups.set(template, group);
+          }
           return [
             ...line,
-            ctx.say('howSure.reason.unplacedEvidence', {
-              vars: { n: n(unplaced.length) },
-              ...recordedAt(pointersOf(unplaced)),
-              item: true,
-            }),
+            ...[...groups].map(([template, group]) =>
+              ctx.say(template, {
+                vars: { n: n(group.length) },
+                ...recordedAt(pointersOf(group)),
+                item: true,
+              }),
+            ),
           ];
         }),
       );

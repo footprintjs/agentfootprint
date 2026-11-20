@@ -72,15 +72,20 @@ export type LLMProviderName =
 
 export type ToolProtocol = 'native' | 'mcp' | 'http' | 'python-fn';
 
+// Structural mirror of the recorded address in lib/callOccurrence.ts.
+// The skill graph reads this vocabulary without importing recording code.
+type CallOccurrenceKey = readonly [number, number, number, number, number];
+
 /**
- * The tool call an event was produced for. Qualify this pair with the
- * event's run identity: providers may reuse call ids across iterations or
- * runs. A nested `ctx.tools` call carries its existing inner call id.
- * This identifies an invocation, not permission to execute it.
+ * The tool call an event was produced for. The library's occurrence key
+ * ties the recorded events and history result to one outer call. Providers
+ * may reuse their call ids across iterations or runs. Nested `ctx.tools`
+ * calls carry their own inner call ids.
  */
 export interface ToolCallEventIdentity {
   readonly toolCallId: string;
   readonly iteration: number;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
 }
 
 export type CompositionKind = 'Sequence' | 'Parallel' | 'Conditional' | 'Loop';
@@ -123,6 +128,10 @@ export interface EventMeta {
   readonly compositionPath: readonly string[];
   /** Turn index (Agent context only). */
   readonly turnIndex?: number;
+  /** Present on the owning Agent's `agent.turn_end`, on either a fresh or resumed turn. */
+  readonly rootTurn?: true;
+  /** The event comes from a mounted Agent's turn within an owning Agent's run. */
+  readonly mountedTurn?: true;
   /** Iteration index (Agent context only). */
   readonly iterIndex?: number;
   /** OTEL trace id (when env.traceId is set). */

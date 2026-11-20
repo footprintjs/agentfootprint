@@ -35,6 +35,7 @@ import {
   type SourceClock,
 } from '../../time/checkRecord.js';
 import type { ZoneName } from '../../time/zone.js';
+import { retentionRefusalsOf } from '../../time/retentionRefusals.js';
 
 /** Who reads the lines: the person (the limits block) or the model (the served time line). */
 export type TimeLimitsAudience = 'person' | 'model';
@@ -45,6 +46,7 @@ export interface TimeLimitFacts {
   readonly zone: ZoneName;
   /** The turn's `period` rows that carry a check line, in the order filed. */
   readonly period: readonly PeriodRow[];
+  readonly retentionRefusals?: readonly string[];
   /** The wall-clock sources, one per tool and zone (`checkRecord.ts` · `distinctSources`). */
   readonly sources: readonly SourceClock[];
   /** The label that two sources declare different zones (`checkRecord.ts` · `clocksDiffer`). */
@@ -85,6 +87,7 @@ export function timeLimitFactsOf(
   const zone = presentationZoneOf(ledger);
   if (zone === undefined || ledger === undefined) return undefined;
   const zoneUnknown = clockOf(ledger)?.zoneSource === 'unknown';
+  const retentionRefusals = retentionRefusalsOf(ledger, turn).map(({ toolName }) => toolName);
   const period: PeriodRow[] = [];
   for (const row of ledger) {
     const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
@@ -95,10 +98,11 @@ export function timeLimitFactsOf(
   const sources = distinctSources(sourceClocksOf(ledger, turn));
   const differ = clocksDiffer(sources);
   const clocks = audience === 'person' ? sources.length > 0 : differ !== undefined;
-  if (period.length === 0 && !clocks) return undefined;
+  if (period.length === 0 && retentionRefusals.length === 0 && !clocks) return undefined;
   return {
     zone,
     period,
+    ...(retentionRefusals.length > 0 && { retentionRefusals }),
     sources,
     ...(differ !== undefined && { differ }),
     ...(zoneUnknown && { zoneUnknown: true as const }),

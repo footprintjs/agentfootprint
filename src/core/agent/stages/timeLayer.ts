@@ -25,11 +25,18 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { callOccurrenceField, readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { completeClock } from '../../../time/clock.js';
 import { granularityMsOf } from '../../../time/convert.js';
 import { driftAtDispatch } from '../../../time/drift.js';
 import { checkReading, type TimeReading } from '../../../time/reader.js';
-import { answeredZoneOf, callWindowOfCall, clockOf, readingsOf } from '../../../time/rows.js';
+import {
+  answeredZoneOf,
+  callWindowOfCall,
+  clockOf,
+  readingsOf,
+  type TimeCallIdentity,
+} from '../../../time/rows.js';
 import { callRow, clockOnResumeRow, clockRow, timeReadingRows } from '../../../time/rowsBuild.js';
 import { timeContextOf, type TimeContext } from '../../../time/wire.js';
 import { tzdataVersion, type ZoneName } from '../../../time/zone.js';
@@ -144,7 +151,7 @@ export function readTimeWords(
  */
 export function timeAtDispatch(
   scope: TypedScope<AgentState>,
-  call: { readonly toolCallId: string; readonly toolName: string },
+  call: TimeCallIdentity,
   iteration: number,
   tool: RuledToolLike | undefined,
   args: Readonly<Record<string, unknown>>,
@@ -158,7 +165,13 @@ export function timeAtDispatch(
   const dispatchedAt = new Date(atMs).toISOString();
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
-  const window = callWindowOfCall(ledger, call.toolCallId, turn);
+  const key = readCallOccurrenceKey(call);
+  const window = callWindowOfCall(
+    ledger,
+    call.toolCallId,
+    turn,
+    (row) => key !== null && readCallOccurrenceKey(row) === key,
+  );
   const clock = clockOf(ledger);
   const rules = window !== undefined && clock !== undefined ? rulesOf(tool) : undefined;
   const drift =
@@ -181,14 +194,17 @@ export function timeAtDispatch(
       ? { byMs: drift.byMs, outcome: 'redrawn', form: drift.form }
       : { byMs: drift.byMs, outcome: 'shifted' },
   );
-  recordFindings(scope, [row]);
+  recordFindings(scope, [{ ...row, ...callOccurrenceField(call.callOccurrenceKey) }]);
   const redraw =
     drift?.outcome === 'redrawn'
       ? (sent: Readonly<Record<string, unknown>>) =>
           redrawnArgs(sent, tool, window?.form, drift.values)
       : (sent: Readonly<Record<string, unknown>>) => sent;
   return {
-    context: callTimeContext(scope, call.toolCallId, row.dispatchedAt),
+    context:
+      window !== undefined && clock !== undefined
+        ? structuredClone(timeContextOf(window, clock, row.dispatchedAt))
+        : undefined,
     args: redraw(args),
     redraw,
   };
@@ -207,27 +223,6 @@ function redrawnArgs(
   const next: Record<string, unknown> = { ...args };
   if (lookback !== undefined && lookback.kind === 'lookback') delete next[lookback.argument];
   return { ...next, ...values };
-}
-
-/**
- * `ctx.time` for one call (`time/wire.ts` · `TimeContext`, time design
- * § 7.5) — present only when the inputs layer filed a `call-window` row for
- * it this turn (its tool's period declares forms) and the turn has a clock:
- * the range the call asks for, the person's zone, the frozen `now` and the
- * dispatch moment just recorded. Read from the committed ledger, never
- * recomputed.
- */
-export function callTimeContext(
-  scope: TypedScope<AgentState>,
-  toolCallId: string,
-  dispatchedAt: string,
-): TimeContext | undefined {
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const window = callWindowOfCall(ledger, toolCallId, scope.turnNumber as number);
-  if (window === undefined) return undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  return structuredClone(timeContextOf(window, clock, dispatchedAt));
 }
 
 /**

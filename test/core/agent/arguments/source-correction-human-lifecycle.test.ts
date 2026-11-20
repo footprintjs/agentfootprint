@@ -299,7 +299,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           .tool(vmTool(ran))
           .time({ zone: 'UTC', reader: englishTimeReader(), policy: { year: 'current' } })
           .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
-          .answerLayer({ standingLine: false })
+          .answerLayer({ standingLine: sibling === 'none' })
           .build();
         try {
           let result = await agent.run({
@@ -315,8 +315,11 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
             expect(stateOf(agent).argumentSourceOmissionRows).toEqual([]);
             result = await reply(agent, result, () => siblingVm);
           }
-          expect(result).toBe('Done.');
+          expect(result).toBe(
+            sibling === 'none' ? 'Done.\n\n---\n\nNot sure — a call was refused.' : 'Done.',
+          );
           expect(ambiguousRan).toEqual([]);
+          expect(agent.findings()?.filter((row) => row.kind === 'period')).toEqual([]);
           expect(ran).toEqual(sibling === 'none' ? [] : [{ vm: siblingVm }]);
           const rows = argumentsOf(agent, 'ambiguous').filter((row) => row.argument === 'vm');
           expect(rows).toEqual([

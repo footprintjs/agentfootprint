@@ -1,11 +1,17 @@
 import { namedCalls } from '../../../lib/displayName.js';
-import type { AssessmentReasonSource } from './types.js';
+import type { AssessmentPointer, AssessmentReasonSource } from './types.js';
+
+/** The committed settlement marker identifies an undispatched sibling. */
+export function settledSiblingWitness(witness: AssessmentPointer): boolean {
+  return witness.kind === 'history' && witness.path === '/notDispatched/pausedCall/toolCallId';
+}
 
 /** Group calls by the outcome the fold recorded. Registered names stay private. */
 export function callNotCompletedClause(
   source: AssessmentReasonSource,
   displayNames: ReadonlyMap<string, string>,
   fallback: string,
+  settled = 0,
 ): string {
   if (source.kind !== 'calls') return fallback;
   const clauses = (['refused', 'failed'] as const).flatMap((outcome) => {
@@ -16,6 +22,7 @@ export function callNotCompletedClause(
     if (outcome === 'failed') return [calls.length === 1 ? 'a call failed' : 'calls failed'];
     return [calls.length === 1 ? 'a call was refused' : 'calls were refused'];
   });
+  if (settled > 0) clauses.push(settled === 1 ? 'a call did not run' : 'calls did not run');
   if (clauses.length === 0) return fallback;
   if (source.unnamed !== undefined) clauses.push('other calls did not complete');
   return clauses.join(' and ');

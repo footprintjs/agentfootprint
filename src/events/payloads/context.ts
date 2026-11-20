@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import type {
   ContextLifetime,
   ContextRecency,
@@ -18,6 +19,8 @@ export interface ContextInjectedPayload {
   readonly sectionTag?: string;
   readonly source: ContextSource;
   readonly sourceId?: string;
+  /** The recorded occurrence of a baseline tool result in the messages slot. */
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly upstreamRef?: string;
   readonly reason: string;
   readonly retrievalScore?: number;

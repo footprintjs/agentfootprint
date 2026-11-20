@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { Tool } from '../../../../../../tools/tools.js';
@@ -12,9 +13,12 @@ export interface ToolMiddlewareOperations {
       readonly tool?: Tool;
       readonly toolName: string;
       readonly toolCallId: string;
+      readonly callOccurrenceKey?: CallOccurrenceKey;
       readonly iteration: number;
       readonly args: ToolArgs;
       readonly result: unknown;
+      /** The hook received a returned value, including a plain pause answer. */
+      readonly returned: boolean;
       readonly error?: boolean;
       readonly negativeResultId?: string;
       /** Invocation-local native withdrawal, never part of middleware input. */
@@ -23,5 +27,8 @@ export interface ToolMiddlewareOperations {
       readonly identity?: { tenant?: string; principal?: string; conversationId: string };
       readonly signal?: AbortSignal;
     },
-  ) => Promise<unknown>;
+  ) => Promise<{
+    readonly modelResult: unknown;
+    readonly toolResultDisposition?: LLMMessage['toolResultDisposition'];
+  }>;
 }

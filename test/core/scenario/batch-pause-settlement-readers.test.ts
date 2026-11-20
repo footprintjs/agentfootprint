@@ -28,6 +28,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
 
 import { Agent, defineTool, isInputPause, requestInput } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
@@ -181,15 +182,22 @@ describe('the settled bracket on the stream', () => {
     const { events, ran } = await settledRun();
     expect(ran).toEqual(['first']);
     const settled = events.filter((e) => isBracket(e) && idOf(e) === 'c3');
-    expect(settled.map((e) => e.payload)).toEqual([
+    expect(normalizeCallOccurrences(settled.map((e) => e.payload))).toEqual([
       {
+        callOccurrenceKey: [0, 0, 0, 1, 2],
         toolName: 'third',
         toolCallId: 'c3',
         args: { q: 'x' },
         parallelCount: 3,
         notDispatched: MARKER,
       },
-      { toolCallId: 'c3', result: SENTENCE, durationMs: 0, notDispatched: MARKER },
+      {
+        callOccurrenceKey: [0, 0, 0, 1, 2],
+        toolCallId: 'c3',
+        result: SENTENCE,
+        durationMs: 0,
+        notDispatched: MARKER,
+      },
     ]);
     expect('error' in (settled[1]!.payload as object)).toBe(false);
     // The control: the thrower's end says it failed.

@@ -264,9 +264,25 @@ const doorRows = (r: Run): readonly { kind: string; toolCallId?: string }[] =>
   ((r.snapshot.sharedState as { coverageDeclared?: unknown } | undefined)?.coverageDeclared ??
     []) as readonly { kind: string; toolCallId?: string }[];
 
-/** The ledger as the MODEL's words alone: every row the library derived taken out. */
-const modelRows = (ledger: readonly FindingsRow[]): readonly FindingsRow[] =>
-  ledger.filter((row) => (row.kind as string) !== 'unsettled-by-absence');
+/** Project the library's added address out of the historical byte comparisons. */
+const legacyRows = (ledger: readonly FindingsRow[]) =>
+  ledger.map((row) => {
+    if (row.kind !== 'basis' && row.kind !== 'standing') return row;
+    const { callOccurrenceKey: _key, ...legacy } = row;
+    return legacy.kind === 'standing' && legacy.declaredOn !== 'answer'
+      ? { ...legacy, declaredOn: { toolCallId: legacy.declaredOn.toolCallId } }
+      : legacy;
+  });
+
+const modelRows = (ledger: readonly FindingsRow[]) =>
+  legacyRows(ledger.filter((row) => row.kind !== 'unsettled-by-absence'));
+
+function expectUnsettled(ledger: readonly FindingsRow[], expected: object): void {
+  const standing = ledger[1];
+  const key = standing?.kind === 'standing' ? standing.callOccurrenceKey : undefined;
+  expect(key).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+  expect(ledger[2]).toEqual({ ...expected, callOccurrenceKey: key });
+}
 
 // ─── the scripts ─────────────────────────────────────────────────────
 
@@ -447,7 +463,7 @@ describe('unsettled by absence — F3: a ruled-out standing whose only witness i
         'unsettled-by-absence',
         'basis',
       ]);
-      expect(r.ledger[2]).toEqual(F3_ROW);
+      expectUnsettled(r.ledger, F3_ROW);
       // `try_instead` is the STRING the envelope printed, byte for byte —
       // and nothing on the row names a tool read out of it.
       expect((r.ledger[2] as unknown as { tryInstead: string }).tryInstead).toBe(
@@ -492,7 +508,7 @@ describe('unsettled by absence — F3: a ruled-out standing whose only witness i
 
   it('the recorded F3 shape — a bare `{ hba_count: 0, hbas: [] }` wrapper — files nothing: no law says where its rows are', async () => {
     const r = await run('dynamic', RULED_OUT_AT_DISPATCH('nas-cluster-07'), armed);
-    expect(JSON.stringify(r.ledger)).toBe(MODEL_ROWS_AT_DISPATCH('nas-cluster-07'));
+    expect(JSON.stringify(legacyRows(r.ledger))).toBe(MODEL_ROWS_AT_DISPATCH('nas-cluster-07'));
     for (const req of r.wire) {
       expect(req.systemPrompt ?? '').not.toContain('unsettled by absence');
     }
@@ -516,7 +532,7 @@ describe('unsettled by absence — the answer moment', () => {
       const standing = r.ledger[1] as StandingRow;
       expect(standing.declaredOn).toBe('answer');
       expect(standing.standing).toBe('ruled-out');
-      expect(r.ledger[2]).toEqual({ ...F3_ROW, iteration: 2 });
+      expectUnsettled(r.ledger, { ...F3_ROW, iteration: 2 });
     });
   }
 });
@@ -535,8 +551,12 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
       // The model's rows are the 9.112.2 bytes, and nothing is beside them —
       // the record holds ONE answer: no `tools.absent`, no door row, no
       // unsettled row, no section.
-      expect(JSON.stringify(atDispatch.ledger)).toBe(MODEL_ROWS_AT_DISPATCH('nas-cluster-08'));
-      expect(JSON.stringify(atAnswer.ledger)).toBe(MODEL_ROWS_AT_ANSWER('nas-cluster-08'));
+      expect(JSON.stringify(legacyRows(atDispatch.ledger))).toBe(
+        MODEL_ROWS_AT_DISPATCH('nas-cluster-08'),
+      );
+      expect(JSON.stringify(legacyRows(atAnswer.ledger))).toBe(
+        MODEL_ROWS_AT_ANSWER('nas-cluster-08'),
+      );
       for (const r of [atDispatch, atAnswer]) {
         expect(r.absences).toEqual([]);
         expect(doorRows(r)).toEqual([]);
@@ -548,7 +568,7 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
       const object = await run(reactMode, RULED_OUT_AT_DISPATCH('nas-cluster-06'), armed);
       expect(object.absences).toHaveLength(1);
       expect(doorRows(object).map((d) => `${d.kind}:${d.toolCallId}`)).toEqual(['absence:c1']);
-      expect(object.ledger[2]).toEqual(F3_ROW);
+      expectUnsettled(object.ledger, F3_ROW);
     });
 
     it(`${reactMode}: text whose lists are not lists completes at both moments and files nothing — it used to fail the run`, async () => {
@@ -558,8 +578,12 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
         RULED_OUT_AT_ANSWER('nas-cluster-09'),
         withSchema(armed),
       );
-      expect(JSON.stringify(atDispatch.ledger)).toBe(MODEL_ROWS_AT_DISPATCH('nas-cluster-09'));
-      expect(JSON.stringify(atAnswer.ledger)).toBe(MODEL_ROWS_AT_ANSWER('nas-cluster-09'));
+      expect(JSON.stringify(legacyRows(atDispatch.ledger))).toBe(
+        MODEL_ROWS_AT_DISPATCH('nas-cluster-09'),
+      );
+      expect(JSON.stringify(legacyRows(atAnswer.ledger))).toBe(
+        MODEL_ROWS_AT_ANSWER('nas-cluster-09'),
+      );
       // Both runs reached their answer.
       expect(atDispatch.wire).toHaveLength(3);
       expect(atAnswer.wire).toHaveLength(2);
@@ -585,7 +609,7 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
         'unsettled-by-absence',
         'basis',
       ]);
-      expect(r.ledger[2]).toEqual({ ...F3_ROW, iteration: 3 });
+      expectUnsettled(r.ledger, { ...F3_ROW, iteration: 3 });
     });
   }
 
@@ -596,7 +620,7 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
     // recognizer); only the item that names its ground is carried, the blank
     // list and the empty `try_instead` not at all.
     expect(first.absences).toHaveLength(1);
-    expect(first.ledger[2]).toEqual({
+    expectUnsettled(first.ledger, {
       kind: 'unsettled-by-absence',
       toolCallId: 'c1',
       notChecked: [
@@ -753,8 +777,12 @@ describe('unsettled by absence — the model must have been SERVED the absence: 
         expect(everyRequest(r)).not.toContain('unsettled by absence');
       }
       // The model's rows are the 9.112.2 bytes, and nothing is beside them.
-      expect(JSON.stringify(atDispatch.ledger)).toBe(MODEL_ROWS_AT_DISPATCH('nas-cluster-06'));
-      expect(JSON.stringify(atAnswer.ledger)).toBe(MODEL_ROWS_AT_ANSWER('nas-cluster-06'));
+      expect(JSON.stringify(legacyRows(atDispatch.ledger))).toBe(
+        MODEL_ROWS_AT_DISPATCH('nas-cluster-06'),
+      );
+      expect(JSON.stringify(legacyRows(atAnswer.ledger))).toBe(
+        MODEL_ROWS_AT_ANSWER('nas-cluster-06'),
+      );
       // …and a continued turn is not served the withheld words either.
       const { provider, wire } = scripted([answer('whether it is slow was not settled')]);
       const next = armed(
@@ -790,8 +818,8 @@ describe('unsettled by absence — the model must have been SERVED the absence: 
       expect(JSON.stringify(modelRows(atAnswer.ledger))).toBe(
         MODEL_ROWS_AT_ANSWER('nas-cluster-06'),
       );
-      expect(atDispatch.ledger[2]).toEqual(SCRUBBED_ROW);
-      expect(atAnswer.ledger[2]).toEqual(SCRUBBED_ROW);
+      expectUnsettled(atDispatch.ledger, SCRUBBED_ROW);
+      expectUnsettled(atAnswer.ledger, SCRUBBED_ROW);
       // Call 3 is served the section — the served envelope's parts only.
       const { kind: _kind, iteration: _iteration, ...row } = SCRUBBED_ROW;
       expect(findingsFrame(atDispatch.wire[2]!.messages).data.unsettledByAbsence).toEqual([row]);
@@ -820,7 +848,7 @@ describe('unsettled by absence — the model must have been SERVED the absence: 
 
   it('try_instead is carried byte for byte — leading, trailing and doubled whitespace included', async () => {
     const r = await run('dynamic', RULED_OUT_AT_DISPATCH('nas-cluster-11'), armed);
-    expect(r.ledger[2]).toEqual({
+    expectUnsettled(r.ledger, {
       kind: 'unsettled-by-absence',
       toolCallId: 'c1',
       tryInstead: SPACED_TRY_INSTEAD,
@@ -845,7 +873,7 @@ describe('unsettled by absence — the model must have been SERVED the absence: 
 describe('unsettled by absence — a real witness, and an unarmed agent, file nothing', () => {
   it('a ruled-out standing on a lookup that RETURNED rows files no derived row; the model’s rows are the 9.112.2 bytes', async () => {
     const r = await run('dynamic', RULED_OUT_AT_DISPATCH('esx-01'), armed);
-    expect(JSON.stringify(r.ledger)).toBe(MODEL_ROWS_AT_DISPATCH('esx-01'));
+    expect(JSON.stringify(legacyRows(r.ledger))).toBe(MODEL_ROWS_AT_DISPATCH('esx-01'));
     for (const req of r.wire) {
       expect(req.systemPrompt ?? '').not.toContain('unsettled by absence');
     }

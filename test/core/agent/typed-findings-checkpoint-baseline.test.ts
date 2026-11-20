@@ -14,6 +14,7 @@ import {
 import { recordRun } from '../../../src/doors/observe.js';
 import { mock } from '../../../src/doors/providers.js';
 import { conversationRedaction } from '../../../src/doors/security.js';
+import { normalizeFindingOccurrences } from '../../helpers/findingsOccurrences.js';
 
 const CANARY = 'findings-private-value-7b4';
 const ASSERTION = {
@@ -115,6 +116,9 @@ describe('existing findings through the public checkpoint doors', () => {
       const original = first.findings();
       expect(stored.findingsLedger).toEqual(original);
       const standings = original?.filter((row) => row.kind === 'standing');
+      const declaring = stored.history.find(
+        (row) => row.role === 'tool' && row.toolCallId === 'c2',
+      );
       expect(standings?.map((row) => row.standing)).toEqual(['fact', 'open', 'ruled-out', 'noise']);
       expect(standings?.map((row) => row.assertions)).toEqual([
         [{ ...ASSERTION, stratum: 'asserted', provenance: 'tool:c1' }],
@@ -123,7 +127,7 @@ describe('existing findings through the public checkpoint doors', () => {
         [],
       ]);
       expect(standings?.map((row) => row.declaredOn)).toEqual([
-        { toolCallId: 'c2' },
+        { toolCallId: 'c2', callOccurrenceKey: declaring?.callOccurrenceKey },
         'answer',
         'answer',
         'answer',
@@ -190,8 +194,10 @@ describe('existing findings through the public checkpoint doors', () => {
     expect(JSON.stringify(protectedRun.recording)).not.toContain(CANARY);
     expect(JSON.stringify(protectedRun.agent.getLastSnapshot())).not.toContain(CANARY);
     // These are caller-owned live/resume surfaces, not served recordings.
-    expect(protectedRun.agent.findings()).toEqual(control.agent.findings());
-    expect(protectedRun.checkpoint.findingsLedger).toEqual(control.checkpoint.findingsLedger);
+    expect(normalizeFindingOccurrences(protectedRun.agent.findings())).toEqual(
+      normalizeFindingOccurrences(control.agent.findings()),
+    );
+    expect(protectedRun.checkpoint.findingsLedger).toEqual(protectedRun.agent.findings());
 
     const next = agentWith(
       mock({ reply: 'continued', chunkDelayMs: 0 }),
@@ -203,8 +209,8 @@ describe('existing findings through the public checkpoint doors', () => {
       message: 'Continue.',
       continueFrom: JSON.parse(JSON.stringify(protectedRun.checkpoint)) as AgentRunCheckpoint,
     });
-    expect(next.findings()).toEqual(control.agent.findings());
-    expect(next.checkpoint()?.findingsLedger).toEqual(control.checkpoint.findingsLedger);
+    expect(next.findings()).toEqual(protectedRun.agent.findings());
+    expect(next.checkpoint()?.findingsLedger).toEqual(protectedRun.checkpoint.findingsLedger);
     expect(JSON.stringify(recorder.toRecording())).not.toContain(CANARY);
   });
 });

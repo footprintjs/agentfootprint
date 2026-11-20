@@ -13,6 +13,11 @@ import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
+import {
+  readCallOccurrenceKey,
+  type CallOccurrenceKey,
+} from '../../../../../lib/callOccurrence.js';
+import { proposalWithOccurrence } from '../batch/paused.js';
 
 interface ToolScriptsOperationsLinks {
   readonly peelCall: ToolCatalogOperations['peelCall'];
@@ -102,10 +107,17 @@ export function buildToolScriptsOperations(
   const proposedArgsOf = (
     scope: TypedScope<AgentState>,
     toolCallId: string,
+    callOccurrenceKey?: CallOccurrenceKey,
   ): Readonly<Record<string, unknown>> | undefined => {
     const history = scope.history as readonly LLMMessage[];
+    if (callOccurrenceKey !== undefined) {
+      const call = proposalWithOccurrence(history, toolCallId, callOccurrenceKey);
+      return call === undefined ? undefined : links.peelCall(call).args;
+    }
     for (let i = history.length - 1; i >= 0; i--) {
-      const call = history[i]?.toolCalls?.find((c) => c.id === toolCallId);
+      const call = history[i]?.toolCalls?.find(
+        (c) => c.id === toolCallId && readCallOccurrenceKey(c) === undefined,
+      );
       if (call !== undefined) return links.peelCall(call).args;
     }
     return undefined;
@@ -157,7 +169,10 @@ export function buildToolScriptsOperations(
       call.seen.entered === true
         ? call.seen.proposed
         : own?.proposed ??
-          programOfCall(tool, proposedArgsOf(scope, call.toolCallId) ?? call.carried);
+          programOfCall(
+            tool,
+            proposedArgsOf(scope, call.toolCallId, call.seen.callOccurrenceKey) ?? call.carried,
+          );
     const submitted =
       call.seen.entered === true
         ? call.seen.submitted

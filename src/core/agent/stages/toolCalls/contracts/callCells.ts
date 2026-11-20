@@ -1,3 +1,4 @@
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type {
   ReadToolResultEnvelope,
   ToolResultStatus,
@@ -30,6 +31,7 @@ export interface CallExecution {
   resultFinalizer?: NativeResultFinalizer;
   denied: boolean;
   executed: boolean;
+  toolResultExecution?: LLMMessage['toolResultExecution'];
   submittedProgram: unknown;
   executeThrew: boolean;
   ranCode: CodeRunFacts | undefined;
@@ -62,4 +64,6 @@ export interface CallSkillRoute {
 
 export interface CallDelivery {
   resultStr: string;
+  modelResultCapped: boolean;
+  toolResultDisposition?: LLMMessage['toolResultDisposition'];
 }

@@ -18,6 +18,18 @@ confidence. Four decision points, one layer each:
 | 3 · results | read a result | `sf-results`, at the loop head — the loop target, before the window strategy (`mounts.ts` · `mountResultsLayer`) | **shipped: the period verdict** (step 7b) — one `period` row per call whose result declared its period or whose tool declares a `ToolPeriod` — `core/agent/results/README.md`; the reading checks and outcome rows are step 8 |
 | 4 · answer | give the answer | the first stage of the final branch (`mounts.ts` · `startFinalBranch`), `assess-answer` | **enabled by default**: the standing folds in the run and travels as data (`turn_end.answerAssessment`, `agentfootprint.answer.assessed`). Eligible prose answers with doubt carry a line. Disable with `.answerLayer(false)`. See `core/agent/assessment/README.md`. |
 
+## Tool entry and settlement
+
+On inputs, findings or answer runs, ToolCalls retains at most 1,024 entry facts
+for the turn (`enteredToolCalls.ts`). Each contains the recorded occurrence key
+and `entered: true`, written immediately before the tool executes. On an answer
+run, the matching settlement list records the outcome and served result facts
+without its bytes (`settledToolCalls.ts`). The writers append individual rows
+and record completeness beside each list. A native pause or same-request error
+resume carries the proofs forward. A new turn or mounted Agent starts its own
+record. Overflow, an unbound occurrence or a same-turn retry without its prior
+proof marks the record incomplete.
+
 ## How a layer mounts
 
 ```ts
@@ -33,7 +45,7 @@ branch loop back to it, so it reads the batch just run before the window
 strategy folds it away; a re-entry that ran no tool files nothing twice. It
 tells the two apart by the iteration that dispatched the batch — ToolCalls
 stamps it (`AgentState.toolResultsIteration`, under the arm) — never by call
-id, which a provider may reuse (`mounts.ts` · `batchToJudge`).
+id, which a provider may reuse (`resultsInput.ts` · `batchToJudge`).
 
 - **Handed** (the input mapping, frozen inside the subflow): only what the layer reads — for
   the inputs layer, the batch, Route's dispatch values and `turnNumber`; for the results
@@ -100,7 +112,7 @@ layer is armed, the one writer stamps every ledger row with its `turn`, a contin
 conversation's ledger is restored, and the checkpoint carries the turn it ended on
 (`AgentRunCheckpoint.turnNumber`; `runtime/conversation/owner.ts` · `turnNumberOf` also
 carries it when no layer is armed but `.negativeClaims()` is configured) — seed continues the stamp from it and from the restored
-ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`), because a window strategy trims the
+ledger's latest stamp (`runtime/conversation/seedHistory.ts` · `turnNumberFor`), because a window strategy trims the
 stored history and a count of its user messages repeats.
 
 Under declared sources the mount hands the layer the RAW pieces its checks read — the served

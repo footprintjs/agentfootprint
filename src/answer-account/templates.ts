@@ -41,7 +41,7 @@ import { t, type AccountTemplate } from './templateEntry.js';
 export type { AccountTemplate, TemplateVoucher } from './templateEntry.js';
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 19;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 21;
 
 /** The closed table. Ids are `row.part@version` in prose; the version lives on the entry. */
 export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({

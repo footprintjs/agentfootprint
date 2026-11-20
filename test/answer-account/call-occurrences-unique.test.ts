@@ -36,6 +36,15 @@ const BASELINE: readonly string[] = [
   'de5cff9c40e06e40619edbb63683f1e3977ae5fcad45fd06ba8ddf644d2d0873',
   'a7ef02339f73e9b201e1a03d27ad62849d64b1cac99796ba655bee749d392335',
 ];
+
+// The four pause fixtures now report that the settled sibling did not run.
+// Its proposed input and synthetic result no longer count as tool evidence.
+const SETTLED_SIBLING_BASELINE: Readonly<Partial<Record<number, string>>> = {
+  4: '59f453f39f7a28b7fbb47d30bf59941b07191a1b5493d3fd46e111ffdbe8ddeb',
+  9: 'a1f81f90db44da0b1830d3d9f3297d1728173b29a12683e8ddbb508def3fc3d1',
+  14: '4dbc4d9dcfcf3423702f45c31d1ad0f6f8ff6c19bc55ecebafea194f7531dcae',
+  19: '075376244a947cfed3a4298dabbea8bd73d7b002471d7a7663ceaaec0cc26726',
+};
 const SEEDS = Array.from({ length: 20 }, (_, seed) => seed);
 
 beforeEach(() => {
@@ -176,9 +185,9 @@ it.each(SEEDS)(
           if (!runs.has(meta.runId)) runs.set(meta.runId, `recorded-run-${runs.size + 1}`);
         }
         const account = accountForAnswer(recording);
-        // The new unmatched-evidence templates advance the vocabulary only.
+        // New templates advance the vocabulary for unmatched evidence and withheld results.
         // Compare every old sentence and pointer against the pinned version-18 account.
-        expect(account.templates).toEqual({ set: 'answer-account', version: 19 });
+        expect(account.templates).toEqual({ set: 'answer-account', version: 21 });
         captures.push({
           account: { ...account, templates: { ...account.templates, version: 18 } },
           answer: typeof result === 'string' ? result : 'paused',
@@ -201,6 +210,6 @@ it.each(SEEDS)(
       );
     }
     if (followUp) await capture(() => agent.followUp('Review the next inventory.'));
-    expect(digest(captures, runs)).toBe(BASELINE[seed]);
+    expect(digest(captures, runs)).toBe(SETTLED_SIBLING_BASELINE[seed] ?? BASELINE[seed]);
   },
 );

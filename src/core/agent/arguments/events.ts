@@ -1,6 +1,7 @@
 /** Fold — the existing masked argument-row event projection. */
 import { typedEmit, type EmitableScope } from '../../../recorders/core/typedEmit.js';
 import { HIDDEN_VALUE, type ArgumentRow } from './rows.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 
 /**
  * The inputs layer's row event (`agentfootprint.findings.argument`) — names,
@@ -13,6 +14,7 @@ export function emitArgumentRow(scope: EmitableScope, row: ArgumentRow): void {
   const hidden = row.value === HIDDEN_VALUE;
   typedEmit(scope, 'agentfootprint.findings.argument', {
     toolCallId: row.toolCallId,
+    ...callOccurrenceField(row.callOccurrenceKey),
     toolName: row.toolName,
     iteration: row.iteration,
     turn: row.turn,

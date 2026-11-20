@@ -1,10 +1,8 @@
-import type { ToolSemantics } from './dependencyTypes.js';
+import type { ToolCallEventIdentity, ToolSemantics } from './dependencyTypes.js';
 import type { CoverageCompositionPayload, PeriodPayload } from './toolEffects.js';
 
-export interface ToolCoverageDeclaredPayload {
+export interface ToolCoverageDeclaredPayload extends ToolCallEventIdentity {
   readonly toolName: string;
-  readonly toolCallId: string;
-  readonly iteration: number;
   readonly checked?: readonly CoverageItemPayload[];
   readonly notChecked?: readonly CoverageItemPayload[];
   readonly cannotCover?: readonly CoverageItemPayload[];
@@ -64,9 +62,7 @@ export interface CoverageItemPayload {
  * even when the content itself was refused as oversized. Detached plain
  * data (structuredClone), never a live reference into the tool's own value.
  */
-export interface ToolSemanticsDeclaredPayload {
+export interface ToolSemanticsDeclaredPayload extends ToolCallEventIdentity {
   readonly toolName: string;
-  readonly toolCallId: string;
-  readonly iteration: number;
   readonly semantics: ToolSemantics;
 }

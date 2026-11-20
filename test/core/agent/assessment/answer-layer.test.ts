@@ -61,7 +61,7 @@ import {
   STANDING_LINE_OPENINGS,
   type AnswerAssessmentData,
 } from '../../../../src/core/agent/assessment/compose.js';
-import { answerFoldReads } from '../../../../src/core/agent/honesty/mounts.js';
+import { answerFoldReads } from '../../../../src/core/agent/honesty/answerFoldReads.js';
 import { honestyLayersOf } from '../../../../src/core/agent/honesty/armed.js';
 import { validateCheckpoint } from '../../../../src/core/runCheckpoint.js';
 import { TOOL_RESULTS } from '../fixtures/sanEvidence.js';
@@ -246,13 +246,21 @@ describe('UNIT — the read list and the run constant', () => {
       'findingsLedger',
       'stoppedEarly',
       'coverageDeclared',
+      'enteredToolCalls',
+      'enteredToolCallsComplete',
+      'settledToolCalls',
+      'settledToolCallsComplete',
       'unsupportedValues',
       'answerValidation',
       'argumentAsk',
       'middlewareDecisions',
     ]);
-    // A rewrite needs a ruled argument to rewrite: no inputs layer, no read.
+    // A tool result has an after-tool decision even when inputs are unarmed.
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('middlewareDecisions');
+    expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('settledToolCalls');
+    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toEqual(
+      expect.arrayContaining(['middlewareDecisions', 'settledToolCalls']),
+    );
   });
 
   it('names every armed layer and nothing else — absent when none is armed', () => {

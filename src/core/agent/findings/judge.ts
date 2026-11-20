@@ -34,6 +34,7 @@
 
 import type { Classifier, ClassifyRequest } from '../../../classify/types.js';
 import { ClassifierError } from '../../../classify/types.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import {
   recordFindings,
   type FindingsScope,
@@ -163,6 +164,7 @@ export async function judgeResult(
     row = {
       kind: 'judgment-error',
       toolCallId: entry.toolCallId,
+      ...callOccurrenceField(entry.callOccurrenceKey),
       toolName: entry.toolName,
       source: 'judge',
       judge: { name: judge.name },
@@ -217,6 +219,7 @@ function judgmentRowFrom(
   return {
     kind: 'judgment',
     toolCallId: entry.toolCallId,
+    ...callOccurrenceField(entry.callOccurrenceKey),
     toolName: entry.toolName,
     source: 'judge',
     judge: { name: judgeName, model: result.model },

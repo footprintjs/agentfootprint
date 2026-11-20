@@ -56,6 +56,7 @@ export function streamingShapes() {
     'agentfootprint.stream.tool_start': eventShape<'agentfootprint.stream.tool_start'>({
       toolName: str,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       args: keysMarker,
       // The tool's argument view of the same call: keys only, like `args`.
       shownArgs: keysMarker,
@@ -74,6 +75,7 @@ export function streamingShapes() {
 
     'agentfootprint.stream.tool_end': eventShape<'agentfootprint.stream.tool_end'>({
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       result: typeMarker,
       error: bool,
       durationMs: num,
@@ -107,6 +109,7 @@ export function streamingShapes() {
     }),
 
     'agentfootprint.context.injected': eventShape<'agentfootprint.context.injected'>({
+      callOccurrenceKey: listOf(num),
       contentSummary: charsMarker,
       contentHash: str,
       rawContent: charsMarker,

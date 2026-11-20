@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { recordRun } from '../../src/recorders/observability/recordRun.js';
@@ -193,7 +194,8 @@ describe('3LO consent — the URL never reaches a channel the caller did not ask
     const h = buildAgent(consentVault({ granted: false, calls: 0 }));
     await h.agent.run({ message: 'go' });
     const ev = h.events.find((e) => e.name === 'agentfootprint.credential.authorization_required');
-    expect(ev?.payload).toEqual({
+    expect(normalizeCallOccurrences(ev?.payload)).toEqual({
+      callOccurrenceKey: [0, 0, 0, 1, 0],
       service: 'billing',
       sessionId: SESSION_ID,
       toolCallId: 'c1',
