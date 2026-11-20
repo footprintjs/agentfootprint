@@ -157,6 +157,16 @@ export interface InnerRunStore extends InnerRunLookup {
   keep(record: InnerRunRecord): void;
 }
 
+// A trace binding can inspect retained records without touching the store's
+// eviction order. A consumer-provided lookup does not prove this capability.
+const retainedTraceRecords = new WeakMap<InnerRunLookup, () => readonly InnerRunRecord[]>();
+
+export function readRetainedTraceRecords(
+  lookup: InnerRunLookup,
+): readonly InnerRunRecord[] | undefined {
+  return retainedTraceRecords.get(lookup)?.();
+}
+
 /**
  * The key an inner-record store rides on a `Tool`.
  *
@@ -227,7 +237,7 @@ export function innerRunStore(limit: number = DEFAULT_INNER_RUN_LIMIT): InnerRun
     return found[1];
   };
 
-  return {
+  const store: InnerRunStore = {
     keep(record: InnerRunRecord): void {
       touch(keyOf(record), record);
       while (records.size > cap) {
@@ -269,6 +279,8 @@ export function innerRunStore(limit: number = DEFAULT_INNER_RUN_LIMIT): InnerRun
       return cap;
     },
   };
+  retainedTraceRecords.set(store, () => [...records.values()]);
+  return store;
 }
 
 /**
@@ -283,7 +295,7 @@ export function innerRunStore(limit: number = DEFAULT_INNER_RUN_LIMIT): InnerRun
 export function mergeInnerRuns(lookups: readonly InnerRunLookup[]): InnerRunLookup | undefined {
   if (lookups.length === 0) return undefined;
   if (lookups.length === 1) return lookups[0];
-  return {
+  const merged: InnerRunLookup = {
     get: (toolCallId) => {
       for (const lookup of lookups) {
         const found = lookup.get(toolCallId);
@@ -308,6 +320,11 @@ export function mergeInnerRuns(lookups: readonly InnerRunLookup[]): InnerRunLook
       return Math.min(...lookups.map((lookup) => lookup.limit));
     },
   };
+  const read = lookups.map((lookup) => retainedTraceRecords.get(lookup));
+  if (read.every((get) => get !== undefined)) {
+    retainedTraceRecords.set(merged, () => read.flatMap((get) => get?.() ?? []));
+  }
+  return merged;
 }
 
 /**
@@ -333,7 +350,7 @@ export function innerRunsOfConversation(
   belongs: (runId: string | undefined) => boolean,
 ): InnerRunLookup {
   const admits = (record: InnerRunRecord): boolean => belongs(record.runId);
-  return {
+  const view: InnerRunLookup = {
     get: (toolCallId) => viewGet(lookup, toolCallId, admits),
     getWhere: (toolCallId, accept) =>
       viewGet(lookup, toolCallId, (record) => admits(record) && accept(record)),
@@ -347,6 +364,9 @@ export function innerRunsOfConversation(
       return lookup.limit;
     },
   };
+  const read = retainedTraceRecords.get(lookup);
+  if (read !== undefined) retainedTraceRecords.set(view, () => read().filter(admits));
+  return view;
 }
 
 /** `getWhere` when the lookup has it; else `get`, admitted or not found. */

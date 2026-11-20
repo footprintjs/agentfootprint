@@ -143,12 +143,15 @@ function writtenBeforeEntered(recording: Recording): Recording {
   } as Recording;
 }
 
-const journal = (recording: Recording, id: string) =>
+const journal = (recording: Recording, id: string, showWithheldResults = false) =>
   callTraceTool(
-    traceToolpack({
-      snapshot: recording.snapshot,
-      events: recording.events,
-    } as unknown as TraceToolpackArtifacts),
+    traceToolpack(
+      {
+        snapshot: recording.snapshot,
+        events: recording.events,
+      } as unknown as TraceToolpackArtifacts,
+      { showWithheldResults },
+    ),
     'inspect_tool_call',
     { toolCallId: id },
   );
@@ -171,7 +174,8 @@ describe('one recorded entry fact across the account, journal and commentary', (
     expect(ends(recording)[0]).not.toHaveProperty('entered');
     expect(ends(recording)[0]).not.toHaveProperty('error');
     expect(read(recording).facts.calls[0]?.outcome).toBe('declined');
-    const entry = await journal(recording, 'legacy-call');
+    expect(await journal(recording, 'legacy-call')).toBe('A result was kept out by a rule.');
+    const entry = await journal(recording, 'legacy-call', true);
     expect.soft(entry).toContain("ran with: nothing — call 'legacy-call' was never executed.");
     expect.soft(entry).toContain("outcome: denied by 'gate'");
     expect.soft(entry).toContain('result: "declined by human"');
