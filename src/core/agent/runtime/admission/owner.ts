@@ -2,7 +2,12 @@ import type { AgentRunOptions } from '../runOptions/options.js';
 import { assertOutputStrategySupported } from '../../run/outputStrategySupport.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation } from '../../../runnerExecution.js';
-import { type AttachRecorderOptions, type CombinedRecorder, type RunSetup } from 'footprintjs';
+import {
+  isDevMode,
+  type AttachRecorderOptions,
+  type CombinedRecorder,
+  type RunSetup,
+} from 'footprintjs';
 import type { RunContext } from '../../../../bridge/eventMeta.js';
 import { ContextRecorder } from '../../../../recorders/core/ContextRecorder.js';
 import { contextRecordedRecorder } from '../../../../recorders/core/ContextRecordedRecorder.js';
@@ -113,6 +118,12 @@ export function prepareAgentRun(
   };
 
   const getRunCtx = (): RunContext => invocation.context();
+  const deferredOpts: AttachRecorderOptions | undefined =
+    this.configuration.observerDelivery === 'deferred'
+      ? { delivery: 'deferred', ...this.configuration.observerDeliveryOptions }
+      : undefined;
+  const clonesObserverEmits =
+    deferredOpts !== undefined && (deferredOpts.capture ?? 'clone') === 'clone';
   // The run's redaction (`src/redaction/`): this agent's `redact` joined
   // with any policy the caller handed down for this run (a tool's
   // `ctx.redact`). Opened for EVERY run — with no policy the serving is the
@@ -135,10 +146,6 @@ export function prepareAgentRun(
   // next microtask checkpoint, terminal flush before run()/resume()
   // returns). Default 'inline' attaches with no options bag —
   // byte-identical to every prior release.
-  const deferredOpts: AttachRecorderOptions | undefined =
-    this.configuration.observerDelivery === 'deferred'
-      ? { delivery: 'deferred', ...this.configuration.observerDeliveryOptions }
-      : undefined;
   const attachObserver = (rec: CombinedRecorder): void => {
     attachments.push({ recorder: rec, ...(deferredOpts && { options: deferredOpts }) });
   };
@@ -171,12 +178,30 @@ export function prepareAgentRun(
   // history snapshot), which is read ONLY in run()'s catch — after the
   // engine's terminal flush at the reject boundary — so deferral is safe
   // (pinned by test: crash checkpoints stay complete under 'deferred').
-  attachObserver(agentRecorder(turnEvents));
+  const onSummary =
+    deferredOpts === undefined
+      ? undefined
+      : () => {
+          const count = (invocation.value.summarizedEmits ?? 0) + 1;
+          invocation.value.summarizedEmits = count;
+          if (count === 1 && deferredOpts.capture !== 'summary' && isDevMode()) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              '[agentfootprint] A deferred emit arrived as a summary, so a complete event could not be forwarded. ' +
+                'See snapshot.observerStats.summarizedEmits.',
+            );
+          }
+        };
+  attachObserver(agentRecorder({ ...turnEvents, onSummary }));
   // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,
   // so a thrown run clears in-flight live state + flips monitor status.
   // Deferral-safe: the reject-boundary terminal flush delivers error.fatal
   // before the rejection reaches the caller.
-  attachObserver(errorBridge({ dispatcher, getRunContext: getRunCtx }));
+  const terminalFailure = errorBridge({ dispatcher, getRunContext: getRunCtx });
+  if (clonesObserverEmits) {
+    attachments.push({ recorder: terminalFailure.preserveFailureForDeferredCapture() });
+  }
+  attachObserver(terminalFailure);
   // The cost bridge is ALWAYS attached since 8.14.0. It used to be gated on
   // `pricingTable`, which was right while `cost.*` only ever meant money:
   // `emitCostTick` returns on its first line without a table, so the gate
@@ -340,7 +365,7 @@ export function prepareAgentRun(
     binding: {
       metadata,
       bindScope: (scope, context) => {
-        redaction.bindScope(scope, context);
+        redaction.bindScope(scope, context, clonesObserverEmits);
       },
     },
   };

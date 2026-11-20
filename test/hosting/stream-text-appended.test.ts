@@ -14,7 +14,6 @@
  * rest) · Redaction (the real answer, never the served one).
  */
 
-import { flowChart } from 'footprintjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -23,17 +22,9 @@ import {
   defineTool,
   isPaused,
   Parallel,
-  pauseHere,
   Sequence,
   type AgentOptions,
 } from '../../src/index.js';
-import {
-  defineMemory,
-  InMemoryStore,
-  MEMORY_STRATEGIES,
-  MEMORY_TYPES,
-  type MemoryDefinition,
-} from '../../src/doors/memory.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
 import { encodeSSE, toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
@@ -41,6 +32,17 @@ import { runnerLive } from '../../src/core/runnerLive.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { MockReply } from '../../src/adapters/llm/MockProvider.js';
+import {
+  approval,
+  call,
+  DRAFT,
+  mountReport,
+  readWithHeartbeat,
+  REPORT,
+  reportBuilder,
+  TURN_END,
+  WARNING,
+} from './fixtures/streamReport.js';
 
 const lookup = defineTool({
   name: 'lookup',
@@ -61,63 +63,12 @@ const archive = defineTool({
     }),
 });
 
-const approval = defineTool({
-  name: 'ask_approval',
-  description: 'Wait for approval.',
-  inputSchema: { type: 'object', properties: {} },
-  execute: () => pauseHere({ question: 'Approve?' }),
-});
-
-const pendingReport = defineTool({
-  name: 'pending_report',
-  description: 'Check whether the report is ready.',
-  inputSchema: { type: 'object', properties: {} },
-  execute: () => ({ content: 'Queued.', effects: [], status: 'pending' }),
-});
-
-const call = (name: string, id = 'c1') => ({ content: '', toolCalls: [{ id, name, args: {} }] });
-
-const REPORT = 'The report is ready.';
-const DRAFT = 'The draft is ready.';
-const WARNING = '\n\n---\n\nNot sure — a tool reported unfinished work.';
 const REPORT_CHUNKS = ['The ', 'report ', 'is ', 'ready.', WARNING];
 const DRAFT_CHUNKS = ['The ', 'draft ', 'is ', 'ready.'];
-const TURN_END = 'agentfootprint.agent.turn_end';
-
-function reportBuilder(
-  answer: string,
-  pause: boolean,
-  options: Pick<AgentOptions, 'redact' | 'observerDelivery' | 'reactMode'> = {},
-) {
-  const replies = [call('pending_report'), ...(pause ? [call('ask_approval', 'c2')] : []), answer];
-  return Agent.create({ provider: mock({ replies, chunkDelayMs: 0 }), model: 'm', ...options })
-    .tool(pendingReport)
-    .tool(approval)
-    .answerLayer({ standingLine: true });
-}
 
 function nestedReport(pause: boolean, observerDelivery?: AgentOptions['observerDelivery']) {
   const child = reportBuilder(DRAFT, pause).build();
-  const read = flowChart('Seed', () => undefined, 'seed')
-    .addSubFlowChartNext('specialist', child.getSpec(), 'Specialist', {
-      inputMapper: () => ({
-        message: 'Check the draft.',
-        identity: { conversationId: 'specialist' },
-      }),
-      outputMapper: () => ({ formatted: 'The specialist finished.' }),
-    })
-    .build();
-  const memory = defineMemory({
-    id: 'nested',
-    type: MEMORY_TYPES.EPISODIC,
-    strategy: { kind: MEMORY_STRATEGIES.WINDOW, size: 2 },
-    store: new InMemoryStore(),
-    readOnly: true,
-  });
-  const agent = reportBuilder(REPORT, false, { observerDelivery })
-    .memory({ ...memory, read: read as unknown as MemoryDefinition['read'] })
-    .build();
-  return { agent, child };
+  return { agent: mountReport(child, { observerDelivery }), child };
 }
 
 type Runnable = {
@@ -132,24 +83,6 @@ async function readText(
   const chunks: string[] = [];
   for await (const chunk of toSSE(agent, { format: 'text', ...options })) chunks.push(chunk);
   return chunks;
-}
-
-/** Start reading now. Once the run's observers have drained, the next heartbeat bounds the wait. */
-function readWithHeartbeat(runner: Pick<Runnable, 'on'>, options: ToSSEOptions) {
-  let drained = false;
-  const reading = (async () => {
-    const chunks: string[] = [];
-    for await (const chunk of toSSE(runner, { ...options, heartbeatMs: 50 })) {
-      if (chunk !== ': ping\n\n') chunks.push(chunk);
-      // Returning releases the iterator even when the stream failed to close.
-      else if (drained) return { closed: false, chunks };
-    }
-    return { closed: true, chunks };
-  })();
-  return () => {
-    drained = true;
-    return reading;
-  };
 }
 
 /** Run once, reading the text reply; returns the reply and the run's answer. */
