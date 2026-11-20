@@ -6,21 +6,23 @@
  *
  * Test types (Convention 3):
  *   - PERFORMANCE — commit-log bytes over a 50-iteration run with a ruled tool,
- *                   armed against the same run unarmed; the per-iteration cost
- *                   of the mount (a ratio against the unarmed twin); the
+ *                   armed against the same run unarmed; the mounted stages and
+ *                   earlier rows visited per batch against the unarmed twin; the
  *                   ledger merge at 1,000 rows scales linearly;
  *   - LOAD        — ONE ledger write per dispatching batch across the 50
  *                   iterations, never one per call.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Agent, defineTool, type Tool } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
-import { appendRows } from '../../../../src/core/agent/findings/ledger.js';
+import type { LLMProvider } from '../../../../src/provider-contract/types.js';
+import * as ledger from '../../../../src/core/agent/findings/ledger.js';
 import { argumentRowOf } from '../../../../src/core/agent/arguments/rows.js';
 import type { FindingsRow } from '../../../../src/core/agent/findings/types.js';
-import { expectScalesLinearly, expectWithinTimes } from '../../../helpers/perf.js';
+import { STAGE_IDS, SUBFLOW_IDS } from '../../../../src/lib/conventions.js';
+import { countMountedStageRuns, observeMountRowReads } from '../../../helpers/mountWork.js';
+import { expectScalesLinearly } from '../../../helpers/perf.js';
 
 const SCHEMA = {
   type: 'object',
@@ -41,31 +43,39 @@ function logs(ruled: boolean): Tool {
   }) as Tool;
 }
 
-/** `calls` iterations that each call the tool without `window`, then an answer. */
-function provider(calls: number) {
+/** `batches` iterations of `width` calls without `window`, then an answer. */
+function provider(batches: number, width: number): LLMProvider {
   let i = 0;
   return {
     name: 'perf-mock',
-    complete: async (_req: LLMRequest): Promise<LLMResponse> => {
+    complete: async () => {
       i += 1;
-      return i <= calls
+      return i <= batches
         ? {
             content: '',
-            // The unruled twin must still get a valid call: it is judged by
-            // the author's schema, so it sends the value the layer would fill.
-            toolCalls: [{ id: `c${i}`, name: 'search_logs', args: { service: `s${i}` } }],
+            toolCalls: Array.from({ length: width }, (_, k) => ({
+              id: `c${i}-${k}`,
+              name: 'search_logs',
+              args: { service: `s${i}-${k}` },
+            })),
             usage: { input: 0, output: 0 },
+            stopReason: 'tool_use',
           }
-        : { content: 'done', toolCalls: [], usage: { input: 0, output: 0 } };
+        : {
+            content: 'done',
+            toolCalls: [],
+            usage: { input: 0, output: 0 },
+            stopReason: 'end_turn',
+          };
     },
   };
 }
 
-async function run(ruled: boolean, calls: number) {
+async function run(ruled: boolean, batches: number, width = 1) {
   const agent = Agent.create({
-    provider: provider(calls) as never,
+    provider: provider(batches, width),
     model: 'm',
-    maxIterations: calls + 5,
+    maxIterations: batches + 5,
     // The unruled twin's calls lack a required argument; validation must not
     // be what differs between the two runs.
     toolArgValidation: 'off',
@@ -108,18 +118,38 @@ describe('performance — the inputs layer, measured', () => {
     },
   );
 
-  it(
-    'the per-iteration cost of the mount stays within 3× of the unarmed twin',
-    { timeout: 120_000, retry: 2 },
-    async () => {
-      await expectWithinTimes({
-        subject: () => run(true, 5),
-        baseline: () => run(false, 5),
-        times: 3,
-        why:
-          'the armed run adds one subflow of four small stages per iteration and one ledger ' +
-          'merge per batch; 3× bounds it well above that and still trips on a per-call rescan',
-      });
+  it.each([1, 4, 8])(
+    'adds four stages per iteration and visits earlier findings once per %i-call batch',
+    async (width) => {
+      const stages = [
+        STAGE_IDS.DECLARE_ARGUMENTS,
+        STAGE_IDS.VERIFY_ARGUMENTS,
+        STAGE_IDS.RECORD_ARGUMENTS,
+        STAGE_IDS.RESOLVE_ARGUMENTS,
+      ];
+      const batches = 5;
+      const earlierRows = (width * batches * (batches - 1)) / 2;
+      const merge = vi.spyOn(ledger, 'appendRows');
+      const work = observeMountRowReads(SUBFLOW_IDS.INPUTS);
+      try {
+        const unarmed = await run(false, batches, width);
+        expect(merge).not.toHaveBeenCalled();
+        for (const stage of stages)
+          expect(countMountedStageRuns(unarmed, SUBFLOW_IDS.INPUTS, stage)).toBe(0);
+        expect(work.reads().findingsLedger).toBe(0);
+
+        const armed = await run(true, batches, width);
+        expect(merge).toHaveBeenCalledTimes(batches);
+        // Each stage runs once per model reply, including the final answer. The earlier
+        // ledger has 0, 1, … batches of rows. Its reads grow with the width, so a scan
+        // for each call would read width times the allowed rows.
+        for (const stage of stages)
+          expect(countMountedStageRuns(armed, SUBFLOW_IDS.INPUTS, stage)).toBe(batches + 1);
+        expect(work.reads().findingsLedger, 'previous findings rows visited').toBe(earlierRows);
+      } finally {
+        work.restore();
+        merge.mockRestore();
+      }
     },
   );
 
@@ -144,10 +174,10 @@ describe('performance — the inputs layer, measured', () => {
       const large = { prev: rows(1000), add: rows(1000) };
       await expectScalesLinearly({
         small: () => {
-          for (let k = 0; k < 20; k++) appendRows(small.prev, small.add);
+          for (let k = 0; k < 20; k++) ledger.appendRows(small.prev, small.add);
         },
         large: () => {
-          for (let k = 0; k < 20; k++) appendRows(large.prev, large.add);
+          for (let k = 0; k < 20; k++) ledger.appendRows(large.prev, large.add);
         },
         scale: 10,
         why: 'appendRows copies and folds the ledger once — linear, never a rescan per row',

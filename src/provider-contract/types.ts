@@ -9,17 +9,25 @@
  * these contracts. `core/` and `core-flow/` depend only on them, never on an adapter.
  */
 
-import type { ContextRole, ContextSource } from '../events/types.js';
+import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../events/types.js';
+import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+import type { ToolCallEntry } from './innerCalls.js';
+import type { ToolResultRecord } from './toolResultRecord.js';
+import type { WireRole } from './wireRole.js';
+export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
+export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
-export interface LLMMessage {
+export interface LLMMessage extends ToolResultRecord {
   readonly role: ContextRole;
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */
   readonly toolCallId?: string;
+  /** Recording-only address of a library-observed tool call. Omitted from provider requests. */
+  readonly callOccurrenceKey?: NonNullable<ToolCallEventIdentity['callOccurrenceKey']>;
   /** For `role: 'tool'` — the tool name this result corresponds to. */
   readonly toolName?: string;
   /**
@@ -29,23 +37,13 @@ export interface LLMMessage {
    */
   readonly toolArgumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
   /**
-   * Producer-owned notice origin, recorded only under findings admission.
-   * `not-entered` means the producer refused before tool.execute; an error
-   * thrown inside execute remains a result. `input-cancelled` is the host's
-   * notice, not a completed result, and says nothing about prior tool entry.
-   * `outcome-unknown` is the host's notice for a call left open by a run that
-   * stopped after a person's decision was used (`hosting/answeredPause.ts`):
-   * whether it entered is not known, and the notice is not its result.
-   * Absent on old history: no missing origin is reconstructed from text.
-   * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
-   */
-  readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
-  /**
    * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
    * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
    * Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
    */
   readonly outcome?: 'refused' | 'failed';
+  /** Tool-only status of an admitted return. Never derived from `content` or sent to a provider. */
+  readonly reportedStatus?: ReportedToolStatus;
   /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -57,17 +55,13 @@ export interface LLMMessage {
    * `providerMeta` (9.29.0) rides back UNCHANGED — it is the same bag the
    * response put there, and for Gemini it holds the `thoughtSignature` without
    * which the model refuses the turn after a tool call. See
-   * {@link LLMResponse}'s `toolCalls[].providerMeta`. Unlike `injectedBy`, it
-   * is NOT stripped on the way to a provider: it exists to be sent.
+   * {@link LLMResponse}'s `toolCalls[].providerMeta`, sent unchanged. The recording
+   * address survives native pause and resume and is stripped before transport.
    */
-  readonly toolCalls?: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly args: Readonly<Record<string, unknown>>;
-    /** Stream integrity evidence retained with the attempted call; never tool input. */
-    readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
-    readonly providerMeta?: Readonly<Record<string, unknown>>;
-  }[];
+  readonly toolCalls?: readonly (Omit<LLMResponse['toolCalls'][number], 'argumentsFailure'> &
+    Pick<LLMMessage, 'callOccurrenceKey'> & {
+      readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
+    })[];
   /**
    * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
    *
@@ -246,25 +240,6 @@ export interface LLMMessage {
   /** On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent. */
   readonly calls?: readonly import('./innerCalls.js').InnerCallRan[];
 }
-
-/**
- * The roles a provider can carry INSIDE the `messages` array.
- *
- * `'tool'` is deliberately absent: a tool message is an answer to a specific
- * `tool_use` id, so it cannot be authored by an injection — there is no call
- * for it to answer. See `LLMProvider.carriesInMessages`.
- */
-export type WireRole = 'system' | 'user' | 'assistant';
-
-/**
- * The floor every known wire supports. Used for any provider that does not
- * declare `carriesInMessages` — a third-party adapter is assumed to carry
- * only what all of them do, never more.
- */
-export const DEFAULT_CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze([
-  'user',
-  'assistant',
-]);
 
 export interface LLMToolSchema {
   readonly name: string;
@@ -785,29 +760,6 @@ export interface LLMProvider {
 }
 
 // ─── Permission Engine ──────────────────────────────────────────────
-
-/**
- * One entry in the in-flight tool-call sequence delivered to
- * `PermissionChecker.check()` since v2.12. Lets sequence-aware
- * policies (exfil chain detection, idempotency limits, cost guards)
- * inspect what has already been dispatched: the model's calls, and each
- * call a tool made through `ctx.tools.call` right after its outer call.
- *
- * Derived from `scope.history` at check time — single source of truth,
- * survives `agent.resumeOnError(checkpoint)` correctly.
- */
-export interface ToolCallEntry {
-  /** Tool name dispatched. */
-  readonly name: string;
-  /** Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view. */
-  readonly args: Readonly<Record<string, unknown>> | undefined;
-  /** ReAct iteration the call was dispatched on. */
-  readonly iteration: number;
-  /** `'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin. */
-  readonly providerId?: string;
-  /** `true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own. */
-  readonly inner?: true;
-}
 
 /**
  * What a tool DECLARES it touches (9.11.0).

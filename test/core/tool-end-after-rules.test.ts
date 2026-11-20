@@ -1,7 +1,7 @@
 /**
  * `stream.tool_end` says what the RULES did — additive fields, absent unless a
- * CONFIGURED rule acted, so an agent with no rule records the bytes it always
- * did (the byte law; owner ruling, fix round 2).
+ * CONFIGURED rule acted. The base payload also addresses the call by its
+ * occurrence, whether or not a rule acted.
  *
  * `tool_start` is the model's proposal (emitted before the permission gate and
  * the before-tool chain) and `tool_end.result` is the tool's own answer (the
@@ -17,11 +17,11 @@
  *
  * Not a rule field: `entered` says whether the tool's function was entered
  * (`semantics/toolRan.ts`). It is written on a call that never reached its
- * tool (`false`) and beside the `error` of one that did (`true`); a success
- * and a rule's refusal keep their bytes. Pinned here per case.
+ * tool (`false`) and beside the `error` of one that did (`true`).
+ * Pinned here per case.
  *
  * Test types: UNIT (the helpers), SCENARIO (real Agent runs through the
- * dispatch path), BOUNDARY (the byte law on every no-rule path the second
+ * dispatch path), BOUNDARY (the field set on every no-rule path the second
  * review found), SECURITY (the privacy review's round-2 attacks, inverted).
  */
 import { describe, expect, it } from 'vitest';
@@ -40,6 +40,7 @@ import {
   shownArgsOf,
 } from '../../src/core/toolShownArgs.js';
 import { filedNothing } from '../../src/integrity/disposition/ledger.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 
 type Payload = Record<string, unknown>;
 type Built = ReturnType<ReturnType<typeof Agent.create>['build']>;
@@ -75,12 +76,21 @@ const newFieldsOn = (p: Payload): string[] => NEW_FIELDS.filter((k) => k in p);
 
 describe('BOUNDARY — no configured rule adds no rule-specific field', () => {
   it('a call that ran', async () => {
-    const { ends } = await runCapturing((b) => b.tool(lookup(() => ({ balance: 1 }))), {
+    const { starts, ends } = await runCapturing((b) => b.tool(lookup(() => ({ balance: 1 }))), {
       name: 'lookup',
       args: { account: 'A-1' },
     });
-    expect(Object.keys(ends[0]!).sort()).toEqual(['durationMs', 'entered', 'result', 'toolCallId']);
+    expect(Object.keys(ends[0]!).sort()).toEqual([
+      'callOccurrenceKey',
+      'durationMs',
+      'entered',
+      'result',
+      'toolCallId',
+    ]);
     expect(ends[0]!.entered).toBe(true);
+    const key = readCallOccurrenceKey(starts[0]!);
+    expect(key?.endsWith('.0')).toBe(true);
+    expect(readCallOccurrenceKey(ends[0]!)).toBe(key);
   });
 
   it('an unknown tool name — error: true, entered: false', async () => {
@@ -136,8 +146,8 @@ describe('BOUNDARY — no configured rule adds no rule-specific field', () => {
     expect(newFieldsOn(ends[0]!)).toEqual([]);
   });
 
-  it('a plain absent() naming a registered tool — tools.absent carries no new key', async () => {
-    const { absences } = await runCapturing(
+  it('a plain absent() naming a registered tool carries the base tools.absent fields', async () => {
+    const { starts, ends, absences } = await runCapturing(
       (b) =>
         b
           .tool({
@@ -156,6 +166,7 @@ describe('BOUNDARY — no configured rule adds no rule-specific field', () => {
       { name: 'find', args: {} },
     );
     expect(Object.keys(absences[0]!).sort()).toEqual([
+      'callOccurrenceKey',
       'checked',
       'iteration',
       'lookedFor',
@@ -163,6 +174,10 @@ describe('BOUNDARY — no configured rule adds no rule-specific field', () => {
       'toolName',
       'tryInsteadTool',
     ]);
+    const key = readCallOccurrenceKey(starts[0]!);
+    expect(key?.endsWith('.0')).toBe(true);
+    expect(readCallOccurrenceKey(absences[0]!)).toBe(key);
+    expect(readCallOccurrenceKey(ends[0]!)).toBe(key);
   });
 
   it('a tool that threw DID run: error, entered: true, and no notExecuted', async () => {

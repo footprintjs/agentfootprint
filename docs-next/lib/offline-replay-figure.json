@@ -1,0 +1,24 @@
+{
+  "commit": "d966fbcd880bba639ac587f8fd59164772403a0e",
+  "cohort": [
+    "agentfootprint@15.0.0",
+    "agentfootprint-lens@0.84.0",
+    "footprint-explainable-ui@2.0.0",
+    "footprintjs@14.0.0",
+    "foottrace@2.1.0"
+  ],
+  "agentFootprintVersion": "15.0.0",
+  "figure": {
+    "asset": "offline-replay",
+    "width": 573,
+    "height": 512
+  },
+  "meta": {
+    "input": "Weather in San Francisco?",
+    "result": "Got it — San Francisco: sunny, 72°F.",
+    "events": 57,
+    "redaction": "pii",
+    "title": "Replayed from a persisted Trace"
+  },
+  "traceSha256": "aef1006df451e8e3ead096c3fab04d71910fb70c606f96306e3847948ce3f386"
+}

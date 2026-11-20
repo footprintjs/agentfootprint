@@ -6,11 +6,11 @@
  * Role:    a `ContextError` holds values: its `message` and `witnesses` quote
  *          the arguments and the rows it is about, and a `predicate` names an
  *          argument path or a column. The event channel carries those. The row
- *          carries none of them: the kind, the seam, the iteration, the softer
- *          class, and the names of the tools among its subjects. A value cannot
- *          reach the record through a field that does not exist.
+ *          carries the finding kind, seam, iteration, advisory flag and tool
+ *          identities. Call-bound rows keep the recorded occurrence address.
  */
 
+import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import type { IntegritySeam } from '../disposition/types.js';
 import type { ContextError, ContextErrorKind } from './types.js';
 
@@ -19,7 +19,12 @@ const MAX_ROW_TOOLS = 32;
 /** A subject longer than this is no registered tool name, so it is left off, never shortened. */
 const MAX_TOOL_NAME_CHARS = 256;
 
-export interface IntegrityFindingRow {
+export interface IntegrityCallWitness {
+  readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
+}
+
+export interface IntegrityFindingRow extends Partial<IntegrityCallWitness> {
   readonly kind: 'integrity-finding';
   /** The conversation turn; the one writer stamps it when the row is filed. */
   readonly turn?: number;
@@ -41,7 +46,11 @@ export interface IntegrityFindingRow {
  * // { kind: 'integrity-finding', iteration: 3, finding: 'missing-column', seam: 'write', tools: ['list_ports'] }
  * ```
  */
-export function integrityFindingRowOf(f: ContextError, iteration: number): IntegrityFindingRow {
+export function integrityFindingRowOf(
+  f: ContextError,
+  iteration: number,
+  call?: IntegrityCallWitness,
+): IntegrityFindingRow {
   const tools = f.subjects
     .filter((s) => s.kind === 'tool' && s.id.length <= MAX_TOOL_NAME_CHARS)
     .map((s) => s.id)
@@ -52,6 +61,10 @@ export function integrityFindingRowOf(f: ContextError, iteration: number): Integ
     finding: f.kind,
     seam: f.seam,
     ...(tools.length > 0 && { tools }),
+    ...(call !== undefined && {
+      toolCallId: call.toolCallId,
+      ...callOccurrenceField(call.callOccurrenceKey),
+    }),
     ...(f.advisory === true && { advisory: true as const }),
   };
 }

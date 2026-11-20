@@ -59,6 +59,11 @@ import type { FindingsNegativeClaimPayload } from '../../../events/payloads.js';
 import { emitArgumentRow } from '../arguments/events.js';
 import { isTimeRowKind } from '../../../time/rows.js';
 import {
+  callOccurrenceField,
+  readCallOccurrenceKey,
+  type CallOccurrenceKey,
+} from '../../../lib/callOccurrence.js';
+import {
   PROPOSITION_CHARS,
   type BasisRow,
   type ConflictRow,
@@ -90,6 +95,7 @@ export interface PreviousResult {
   readonly toolName?: string;
   readonly result: string;
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
 }
 
 /** What `foldLedger` answers about a ledger. */
@@ -169,6 +175,7 @@ function witnessesOf(conflict: Conflict, standingOf: ReadonlyMap<string, Standin
       if (assertionKey(a) !== conflict.key) continue;
       witnesses.push({
         toolCallId: row.toolCallId,
+        ...callOccurrenceField(row.callOccurrenceKey),
         subject: { kind: a.subject.kind, id: a.subject.id },
         predicate: a.predicate,
       });
@@ -203,8 +210,6 @@ export interface AppendedRows {
   readonly ledger: FindingsRow[];
   /** The conflict rows this merge filed (a key whose readings first disagreed here). */
   readonly newConflicts: readonly ConflictRow[];
-  /** The judge's current reading per result, for the standing event's `agrees`. */
-  readonly judgments: ReadonlyMap<string, JudgmentRow>;
 }
 
 /**
@@ -242,7 +247,7 @@ export function appendRows(
       iteration,
       ...(stamp !== undefined && { turn: stamp.turn }),
     }));
-  return { ledger: [...merged, ...newConflicts], newConflicts, judgments: fold.judgments };
+  return { ledger: [...merged, ...newConflicts], newConflicts };
 }
 
 /**
@@ -268,9 +273,9 @@ export function recordFindings(
   // detached plain data (RFC-001 'clone' capture under deferred delivery).
   const prev: FindingsRow[] = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
   const filed = stamped(rows, stamp);
-  const { ledger, newConflicts, judgments } = appendRows(prev, filed, stamp);
+  const { ledger, newConflicts } = appendRows(prev, filed, stamp);
   scope.findingsLedger = ledger;
-  for (const row of filed) emitRow(scope, row, newConflicts, judgments);
+  for (const row of filed) emitRow(scope, row, newConflicts, ledger);
 }
 
 /**
@@ -283,12 +288,13 @@ export function emitRow(
   scope: FindingsScope,
   row: FindingsRow,
   newConflicts: readonly ConflictRow[] = [],
-  judgments: ReadonlyMap<string, JudgmentRow> = new Map(),
+  ledger: readonly FindingsRow[] = [],
 ): void {
   if (row.kind === 'basis') {
     typedEmit(scope, 'agentfootprint.findings.declared', {
       toolName: row.toolName,
       toolCallId: row.toolCallId,
+      ...callOccurrenceField(row.callOccurrenceKey),
       iteration: row.iteration,
       basis: row.basis,
       ...(row.expect !== undefined && { expect: row.expect }),
@@ -305,6 +311,7 @@ export function emitRow(
     // made on the STANDING event below, where both readings exist.
     typedEmit(scope, 'agentfootprint.findings.judged', {
       toolCallId: row.toolCallId,
+      ...callOccurrenceField(row.callOccurrenceKey),
       toolName: row.toolName,
       iteration: row.iteration,
       against: row.against,
@@ -321,6 +328,7 @@ export function emitRow(
   if (row.kind === 'judgment-error') {
     typedEmit(scope, 'agentfootprint.findings.judge_failed', {
       toolCallId: row.toolCallId,
+      ...callOccurrenceField(row.callOccurrenceKey),
       toolName: row.toolName,
       iteration: row.iteration,
       ...(row.status !== undefined && { status: row.status }),
@@ -337,7 +345,10 @@ export function emitRow(
     typedEmit(scope, 'agentfootprint.findings.contingent', {
       iteration: row.iteration,
       declaredOn: row.declaredOn === 'answer' ? 'answer' : 'tool-call',
-      ...(row.declaredOn !== 'answer' && { toolCallId: row.declaredOn.toolCallId }),
+      ...(row.declaredOn !== 'answer' && {
+        toolCallId: row.declaredOn.toolCallId,
+        ...callOccurrenceField(row.declaredOn.callOccurrenceKey),
+      }),
       carriers: row.carriers.length,
       standings,
       valueChars: row.value.length,
@@ -351,8 +362,9 @@ export function emitRow(
   if (row.kind === 'unsettled-by-absence') return;
   // The answer layer's witness rows (honesty layer 4) emit nothing of their
   // own either: the verdict each one commits fired its event beside it, from
-  // the same stage (`agent.evidence_checked`, `skill.steps_unfinished`).
-  if (row.kind === 'grounded' || row.kind === 'steps-unfinished') return;
+  // the same stage (`agent.evidence_checked`, `skill.steps_unfinished`, `skill.step_skipped`).
+  if (row.kind === 'grounded' || row.kind === 'steps-unfinished' || row.kind === 'step-skipped')
+    return;
   // The time layer's rows (`time/rows.ts`) emit nothing either: the
   // clock, a resume's passed time and a call's dispatch moment are VALUES,
   // which live in the rows; no event field ships without a reader.
@@ -372,6 +384,7 @@ export function emitRow(
       ...(row.partlyBeyondRetention === true ? (['partly-beyond-retention'] as const) : []),
     ];
     typedEmit(scope, 'agentfootprint.findings.period', {
+      ...(row.callOccurrenceKey !== undefined && { callOccurrenceKey: row.callOccurrenceKey }),
       toolCallId: row.toolCallId,
       toolName: row.toolName,
       iteration: row.iteration,
@@ -386,18 +399,21 @@ export function emitRow(
     return;
   }
   if (row.kind !== 'standing') return;
-  const conflictKeys = newConflicts
-    .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))
-    .map((c) => c.key);
+  const key = readCallOccurrenceKey(row);
+  const sameCall = (other: { readonly toolCallId: string }) =>
+    key !== null && other.toolCallId === row.toolCallId && readCallOccurrenceKey(other) === key;
+  const conflictKeys = newConflicts.filter((c) => c.witnesses.some(sameCall)).map((c) => c.key);
   // The model's standing beside the judge's CURRENT judgment of the same
   // result (9.104.0) — `agrees` is a comparison made for the sink at the
   // one moment both readings exist (the judgment always lands first, before
   // the model call that declares), never written to a row: the two sources
   // stay two rows on the record (the second-source law). Absent when no
   // judgment exists — an unarmed run, a failed call, an unknown id.
-  const judged = judgments.get(row.toolCallId);
+  let judged: JudgmentRow | undefined;
+  for (const item of ledger) if (item.kind === 'judgment' && sameCall(item)) judged = item;
   typedEmit(scope, 'agentfootprint.findings.standing', {
     toolCallId: row.toolCallId,
+    ...callOccurrenceField(row.callOccurrenceKey),
     ...(row.toolName !== undefined && { toolName: row.toolName }),
     iteration: row.iteration,
     standing: row.standing,
@@ -472,7 +488,10 @@ export function standingRowsFrom(
   iteration: number,
   request?: { readonly witness: FindingsRequest | undefined; readonly placedTickets?: unknown },
 ): StandingRow[] {
-  const on: DeclaredOn = declaredOn === 'answer' ? 'answer' : { toolCallId: declaredOn.toolCallId };
+  const on: DeclaredOn =
+    declaredOn === 'answer'
+      ? 'answer'
+      : { toolCallId: declaredOn.toolCallId, ...callOccurrenceField(declaredOn.callOccurrenceKey) };
   const issued = issuedTicketsOf(request?.placedTickets);
   return (declaration.previous ?? []).map((entry) => {
     const knownResult =
@@ -508,6 +527,10 @@ export function standingRowsFrom(
     return {
       kind: 'standing',
       toolCallId: entry.toolCallId,
+      ...(identified &&
+        reference !== undefined &&
+        typeof readCallOccurrenceKey(reference) === 'string' &&
+        callOccurrenceField(reference.callOccurrenceKey)),
       ...(toolName !== undefined && { toolName }),
       ...(ref !== undefined && { ref }),
       standing: entry.standing,
@@ -529,7 +552,11 @@ export function standingRowsFrom(
  * reported loudly rather than defaulted (never infer a basis).
  */
 export function basisRowFrom(
-  tc: { readonly id: string; readonly name: string },
+  tc: {
+    readonly id: string;
+    readonly name: string;
+    readonly callOccurrenceKey?: CallOccurrenceKey;
+  },
   declaration: FindingsDeclaration,
   iteration: number,
   malformed?: number,
@@ -543,6 +570,7 @@ export function basisRowFrom(
   return {
     kind: 'basis',
     toolCallId: tc.id,
+    ...callOccurrenceField(tc.callOccurrenceKey),
     toolName: tc.name,
     iteration,
     basis: declaration.basis,

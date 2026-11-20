@@ -18,6 +18,19 @@
       "automerge": true
     },
     {
+      "description": "review the published docs-demo cohort and its regenerated diagrams together",
+      "matchFileNames": ["docs-demo/**"],
+      "matchPackageNames": [
+        "agentfootprint",
+        "agentfootprint-lens",
+        "footprint-explainable-ui",
+        "footprintjs",
+        "foottrace"
+      ],
+      "groupName": "docs demo cohort",
+      "automerge": false
+    },
+    {
       "description": "peer ranges stay manual: bump the floor deliberately at a real major, never auto-widen",
       "matchDepTypes": ["peerDependencies"],
       "enabled": false

@@ -113,13 +113,18 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * `notDispatched`, the batch settlement's marker (9.113.0 — the model reads the
  * settled call's sentence; the marker is that fact for the library's readers),
  * `toolResultOrigin`, the findings-only producer notice origin,
- * and `toolChars`, the tool-bytes boundary on a result the inputs layer
+ * `toolResultDisposition`, the after-tool rule's disposition,
+ * `toolResultExecution`, the tool's entry and return, and
+ * `toolChars`, the tool-bytes boundary on a result the inputs layer
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
  * `foldedExempt`, a compaction summary's exemption lineage (the exempt corpus
  * reads it; the model reads the summary's text), `answersAsk` for a typed
- * answer, `calls` for the inner permission sequence, and `outcome` for the
- * recorded settlement.
+ * answer, `calls` for the inner permission sequence, and `outcome` and
+ * `reportedStatus` for the recorded settlement. The result origin, execution,
+ * and disposition stay in the record too. The `callOccurrenceKey` on a
+ * result or proposed tool call is also record-only. The provider's call ID,
+ * arguments and metadata still travel with the proposed call.
  * Messages without any pass through BY REFERENCE, so an agent that delivers,
  * settles and annotates nothing allocates nothing — and the array's length and
  * order are untouched either way, which is what keeps
@@ -137,31 +142,96 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * // [{ role: 'user', content: 'hi' }]
  * ```
  */
-export function stripFrameworkFields(messages: readonly LLMMessage[]): readonly LLMMessage[] {
+export function stripFrameworkFields(
+  messages: readonly LLMMessage[],
+  reuseProjection = false,
+): readonly LLMMessage[] {
   if (!messages.some(carriesFrameworkFields)) return messages;
-  return messages.map((m) => {
-    if (!carriesFrameworkFields(m)) return m;
-    const {
-      injectedBy: _delivered,
-      notDispatched: _settled,
-      toolResultOrigin: _resultOrigin,
-      toolChars: _toolBytes,
-      foldedExempt: _lineage,
-      answersAsk: _typedAnswer,
-      calls: _inner,
-      outcome: _settledAs,
-      ...composed
-    } = m;
-    void _delivered;
-    void _settled;
-    void _resultOrigin;
-    void _toolBytes;
-    void _lineage;
-    void _typedAnswer;
-    void _inner;
-    void _settledAs;
-    return composed;
+  return messages.map((message) => {
+    if (!carriesFrameworkFields(message)) return message;
+    return reuseProjection ? rememberedProjection(message) : stripMessageFields(message);
   });
+}
+
+// Committed history swaps immutable entries. A record-only address on every
+// tool message would otherwise mint a fresh port object on every iteration,
+// defeat the receipt's by-object memo and hash the whole conversation again.
+// Weak keys tie each projection to that history entry's own lifetime.
+// The memo is for request assembly and receipts. Cache preparation receives
+// its own editable copy of the assembled request.
+interface MessageProjection {
+  readonly input: readonly (readonly [string, unknown])[];
+  readonly output: readonly (readonly [string, unknown])[];
+  readonly message: LLMMessage;
+}
+const projections = new WeakMap<LLMMessage, MessageProjection>();
+
+function rememberedProjection(source: LLMMessage): LLMMessage {
+  const input = Object.entries(source);
+  const prior = projections.get(source);
+  if (
+    prior !== undefined &&
+    sameMessageFields(prior.input, input) &&
+    sameMessageFields(prior.output, Object.entries(prior.message))
+  ) {
+    return prior.message;
+  }
+  const message = stripMessageFields(source);
+  projections.set(source, { input, output: Object.entries(message), message });
+  return message;
+}
+
+function sameMessageFields(
+  before: MessageProjection['input'],
+  after: MessageProjection['input'],
+): boolean {
+  return (
+    before.length === after.length &&
+    before.every(([key, value], index) => {
+      const field = after[index];
+      return field?.[0] === key && Object.is(field[1], value);
+    })
+  );
+}
+
+function stripMessageFields(m: LLMMessage): LLMMessage {
+  const {
+    injectedBy: _delivered,
+    notDispatched: _settled,
+    toolResultOrigin: _resultOrigin,
+    toolResultDisposition: _resultDisposition,
+    toolResultExecution: _resultExecution,
+    toolChars: _toolBytes,
+    foldedExempt: _lineage,
+    answersAsk: _typedAnswer,
+    calls: _inner,
+    outcome: _settledAs,
+    reportedStatus: _reportedStatus,
+    callOccurrenceKey: _occurrenceKey,
+    ...composed
+  } = m;
+  void _delivered;
+  void _settled;
+  void _resultOrigin;
+  void _resultDisposition;
+  void _resultExecution;
+  void _toolBytes;
+  void _lineage;
+  void _typedAnswer;
+  void _inner;
+  void _settledAs;
+  void _reportedStatus;
+  void _occurrenceKey;
+  if (!carriesToolCallKeys(composed.toolCalls)) return composed;
+  return {
+    ...composed,
+    toolCalls: composed.toolCalls.map((call) => {
+      if (!hasOccurrenceKey(call)) return call;
+      const { callOccurrenceKey: _key, ...providerCall } = call;
+      void _key;
+      return providerCall;
+    }),
+  };
 }
 
 /** Does this message carry a field {@link stripFrameworkFields} removes? */
@@ -170,12 +240,27 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.injectedBy !== undefined ||
     message.notDispatched !== undefined ||
     message.toolResultOrigin !== undefined ||
+    message.toolResultDisposition !== undefined ||
+    message.toolResultExecution !== undefined ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
     message.answersAsk !== undefined ||
     message.calls !== undefined ||
-    message.outcome !== undefined
+    message.outcome !== undefined ||
+    message.reportedStatus !== undefined ||
+    hasOccurrenceKey(message) ||
+    carriesToolCallKeys(message.toolCalls)
   );
+}
+
+function hasOccurrenceKey(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && 'callOccurrenceKey' in value;
+}
+
+function carriesToolCallKeys(
+  calls: LLMMessage['toolCalls'],
+): calls is NonNullable<LLMMessage['toolCalls']> {
+  return Array.isArray(calls) && calls.some(hasOccurrenceKey);
 }
 
 /** What the messages-slot join needs from an injection record. */

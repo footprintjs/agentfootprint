@@ -73,7 +73,8 @@ function agent(
     argumentSources: true,
     ...(options.correction !== false && { declarationCorrection: 'once' as const }),
   };
-  return { agent: builder.inputsLayer(inputs).build(), calls: () => calls };
+  // These synthetic checkpoints pin source-correction state independently of answer standing.
+  return { agent: builder.inputsLayer(inputs).answerLayer(false).build(), calls: () => calls };
 }
 
 describe('source declaration correction checkpoint lifetime', () => {

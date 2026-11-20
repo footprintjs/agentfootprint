@@ -1,4 +1,5 @@
 import type { CodeRunFacts } from '../../../../codeRunnerTool.js';
+import type { CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import type { PendingToolTransition } from '../../../../../injection-engine/leases.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type { ProposedCall } from '../batch/paused.js';
@@ -7,10 +8,13 @@ import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.
 
 /** What a resumed call's `execute` saw — read by its script row (`deps.scriptRecord`). */
 export interface ResumedCallFacts {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /** Invocation-local finalization closure; never serialized or filed as script data. */
   resultFinalizer?: NativeResultFinalizer;
   /** Set once `execute` was about to be handed the call (the program values below were read then). */
   entered?: true;
+  /** Settlement at the tool boundary, before the framework reads or delivers the result. */
+  toolResultExecution?: LLMMessage['toolResultExecution'];
   /** The declared argument's value as the model proposed it — read before `execute`. */
   proposed?: unknown;
   /** The declared argument's value handed to `execute` — read just before it ran. */

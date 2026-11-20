@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import {
   type ToolArgValidationMode,
   validateToolArgs,
@@ -21,7 +22,12 @@ export function buildArgumentRefusal(toolArgValidation: ToolArgValidationMode) {
     scope: TypedScope<AgentState>,
     tool: Tool,
     args: unknown,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    call: {
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly iteration: number;
+      readonly callOccurrenceKey?: CallOccurrenceKey;
+    },
   ): string | undefined => {
     if (toolArgValidation === 'off') return undefined;
     const verdict = validateToolArgs(args, tool.schema.inputSchema);

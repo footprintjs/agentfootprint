@@ -216,7 +216,9 @@ describe('findings current-context result classification', () => {
       .maxIterations(6)
       .build();
     try {
-      expect(await agent.run({ message: 'Read the fixture.' })).toBe('Done.');
+      expect(await agent.run({ message: 'Read the fixture.' })).toBe(
+        'Done.\n\n---\n\nNot sure — calls were refused.',
+      );
       expect(calls).toEqual(['executed', 'accepted-retry']);
     } finally {
       await agent.shutdown();

@@ -21,5 +21,6 @@ export function streamRecorder(options: StreamRecorderOptions): EmitBridge {
     prefix: 'agentfootprint.stream.',
     dispatcher: options.dispatcher,
     getRunContext: options.getRunContext,
+    turnMetaAt: options.turnMetaAt,
   });
 }

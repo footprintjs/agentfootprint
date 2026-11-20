@@ -734,6 +734,28 @@ describe('recordFindings — the one writer', () => {
 });
 
 describe('recordFindings — conflict rows', () => {
+  it('names a new conflict only on events for the recorded witnesses', () => {
+    const scope = fakeScope();
+    const [other, earlier, witness] = standingRowsFrom(
+      BATCH,
+      declaring(
+        fact('call_2', state('fc1/7', 'up')),
+        fact('call_1', state('fc1/7', 'up')),
+        fact('call_1', state('fc1/7', 'down')),
+      ),
+      'answer',
+      3,
+    );
+    recordFindings(scope, [
+      { ...other, callOccurrenceKey: [1, 2, 3, 4, 0] },
+      { ...earlier, callOccurrenceKey: [5, 6, 7, 8, 0] },
+      { ...witness, callOccurrenceKey: [9, 10, 11, 12, 0] },
+    ]);
+    expect(
+      scope.events.map((event) => (event.payload as { conflictKeys?: string[] }).conflictKeys),
+    ).toEqual([[STATE_KEY], undefined, [STATE_KEY]]);
+  });
+
   it('writes ONE conflict row, identities only, at the write whose readings first disagreed', () => {
     const scope = fakeScope();
     recordFindings(

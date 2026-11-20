@@ -7,7 +7,9 @@ it('runs the documented source-correction CodeFile with native free mocks', asyn
     executions: number;
     ledger: readonly Record<string, unknown>[];
   };
-  expect(result.answer).toBe('The synthetic disk lookup completed.');
+  expect(result.answer).toBe(
+    'The synthetic disk lookup completed.\n\n---\n\nNot sure — a call was refused.',
+  );
   expect(result.executions).toBe(1);
   expect(result.ledger).toContainEqual(
     expect.objectContaining({

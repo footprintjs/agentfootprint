@@ -36,6 +36,10 @@ export interface DeliveryState {
     toolName: string;
     result: string;
     toolCallId: string;
+    callOccurrenceKey?: import('../../../../lib/callOccurrence.js').CallOccurrenceKey;
+    /** The results layer carries a synthetic notice across a checkpoint without judging it. */
+    entered?: false;
+    threw?: true;
     /** The tool's OWN declared outcome (9.19.0) — present only when the tool
      *  returned a result envelope carrying `status`. `onToolStatus` route
      *  edges key on it. */
@@ -49,7 +53,7 @@ export interface DeliveryState {
    * commits exactly the keys it always did.
    *
    * It is how the layer at the loop head knows a batch from a re-entry
-   * (`honesty/mounts.ts` · `batchToJudge`): ToolCalls advances `iteration`
+   * (`honesty/resultsInput.ts` · `batchToJudge`): ToolCalls advances `iteration`
    * by one and loops straight to the layer, so the batch is new exactly when
    * the loop head's `iteration` is this plus one — each batch judged once per
    * run, never by call id, which a provider may reuse. Per run: a
@@ -124,17 +128,10 @@ export interface DeliveryState {
   findingsLayout?: 'late-v1' | 'late-v2';
   findingsContextBytes?: number;
   /**
-   * The answer-turn ask on this run (9.103.0) — present ONLY when
-   * `AgentOptions.findings.answerAsk` is `'quote-facts'`, seeded by
-   * `stages/seed.ts` beside `findingsServe` under the same arm, and absent
-   * for every other agent — including an armed one on the default `'none'`,
-   * so the dial's default writes no key and an armed record is the bytes
-   * it was before the dial existed (the `forcedOutputToolName` shape:
-   * absent means the default). It exists for the same reason as
-   * `findingsServe`: the rebuild (`servedView.ts` · `viewOf`) appends
-   * `FINDINGS_ANSWER_ASK` to the piece the way the wire did, and the dial
-   * is a build-time constant it must read from the RECORD, not from the
-   * receipt it is checking.
+   * Run constant seeded beside `findingsServe` only for `answerAsk: 'quote-facts'`.
+   * Live calls put the quote-facts sentence in the findings instruction. Replay
+   * reads this run constant to append `FINDINGS_ANSWER_ASK` to the legacy
+   * findings system piece for older records.
    */
   findingsAnswerAsk?: 'quote-facts';
   /**

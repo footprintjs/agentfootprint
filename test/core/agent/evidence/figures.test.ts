@@ -225,7 +225,9 @@ describe('figures: the gate, end to end', () => {
       posture: 'guard',
       figures: true,
     });
-    expect(await agent.run({ message: 'How full is CLUSTER-A01?' })).toBe(HAIKU_2);
+    expect(await agent.run({ message: 'How full is CLUSTER-A01?' })).toBe(
+      `${HAIKU_2}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result, even after one revision.`,
+    );
     expect(events.map((e) => e.action)).toEqual(['revision-asked', 'flagged']);
     expect(events[0]!.unsupported).toEqual([
       { value: '53.2', shape: 'figure' },

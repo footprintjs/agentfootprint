@@ -1,6 +1,7 @@
 import type {
   LLMMessage,
   LLMProviderName,
+  ToolCallEventIdentity,
   ToolProtocol,
   ToolResultStatus,
 } from './dependencyTypes.js';
@@ -102,9 +103,9 @@ export interface LLMTokenPayload {
   readonly content: string;
 }
 
-export interface ToolStartPayload {
+export interface ToolStartPayload
+  extends Pick<ToolCallEventIdentity, 'toolCallId' | 'callOccurrenceKey'> {
   readonly toolName: string;
-  readonly toolCallId: string;
   /**
    * The arguments as the model proposed them — the REAL values, also for a
    * tool whose argument view hides some ({@link shownArgs}). Only the run's
@@ -146,7 +147,7 @@ export interface ToolStartPayload {
  * by `ctx.progress(payload)` from within `tool.execute`, in call order, always
  * BETWEEN this call's `stream.tool_start` and its `stream.tool_end`.
  *
- * The split is deliberate: the three identity fields are stamped by the
+ * The split is deliberate: the identity fields are stamped by the
  * FRAMEWORK from the dispatch it is already holding (a tool cannot claim to be
  * another call, another tool, or another iteration), and `payload` is the tool
  * author's data forwarded verbatim. Nothing here is ever shown to the model —
@@ -155,7 +156,7 @@ export interface ToolStartPayload {
  * Absent entirely for every tool that never reports: a run whose tools call
  * nothing files no `tool_progress` events at all.
  */
-export interface ToolProgressPayload {
+export interface ToolProgressPayload extends Pick<ToolCallEventIdentity, 'callOccurrenceKey'> {
   /** The invocation this report belongs to — matches `stream.tool_start.toolCallId`. */
   readonly toolCallId: string;
   /** The tool that reported. */
@@ -171,8 +172,8 @@ export interface ToolProgressPayload {
   readonly payload: unknown;
 }
 
-export interface ToolEndPayload {
-  readonly toolCallId: string;
+export interface ToolEndPayload
+  extends Pick<ToolCallEventIdentity, 'toolCallId' | 'callOccurrenceKey'> {
   readonly result: unknown;
   readonly error?: boolean;
   readonly durationMs: number;

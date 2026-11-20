@@ -1,0 +1,23 @@
+{
+  "commit": "d966fbcd880bba639ac587f8fd59164772403a0e",
+  "cohort": [
+    "agentfootprint@15.0.0",
+    "agentfootprint-lens@0.84.0",
+    "footprint-explainable-ui@2.0.0",
+    "footprintjs@14.0.0",
+    "foottrace@2.1.0"
+  ],
+  "agentFootprintVersion": "15.0.0",
+  "figures": {
+    "quickstart": {
+      "asset": "skill-graph-quickstart",
+      "width": 349,
+      "height": 153
+    },
+    "support": {
+      "asset": "skills-explained",
+      "width": 181,
+      "height": 207
+    }
+  }
+}

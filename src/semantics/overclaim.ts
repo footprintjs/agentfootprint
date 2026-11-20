@@ -42,8 +42,8 @@
  * curly-apostrophe folding. They are a gate's net, not a grammar: a phrasing
  * they miss is a missed finding, never a pass. The fuller detection grammar
  * (clauses, negation scope, languages) belongs to the delivery check, a later
- * piece; it may reuse these lists. {@link OVERCLAIM_PHRASES_VERSION} changes
- * whenever a list does. The version is kept with the authored phrase lists.
+ * piece; it may reuse these lists. Update {@link OVERCLAIM_PHRASES_VERSION}
+ * when editing either authored phrase list.
  */
 
 import { readAbsence, readCoverageLedger } from './coverage/recognize.js';
@@ -51,7 +51,7 @@ import { namesFacetOf } from './coverage/among.js';
 import { readToolResultEnvelope } from './toolEffects.js';
 import type { ToolAbsence } from './coverage/types.js';
 
-/** Bumped whenever {@link NON_EXISTENCE} or {@link WRONGNESS} changes. */
+/** Update when editing {@link NON_EXISTENCE} or {@link WRONGNESS}. */
 export const OVERCLAIM_PHRASES_VERSION = 1;
 
 /** The opt-in rule sets `check:semantics` takes (`rules: ['overclaim']`). */

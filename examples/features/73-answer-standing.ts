@@ -89,6 +89,12 @@ export async function run(input: string): Promise<string> {
     input,
   );
   const rows = await standingOf(() => [{ port: 'eth1/7', state: 'down' }], input);
+  const pending = await standingOf(
+    () => ({ content: 'Request received.', effects: [], status: 'pending' }),
+    input,
+  );
+  check(pending.reasons.some((reason) => reason.reason === 'work-not-finished'),
+    'a pending tool result to leave an unfinished work warning');
 
   const line = (label: string, a: typeof silent) =>
     `${label}: ${a.standing}${

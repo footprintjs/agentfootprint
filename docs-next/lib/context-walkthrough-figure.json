@@ -1,0 +1,114 @@
+{
+  "commit": "d966fbcd880bba639ac587f8fd59164772403a0e",
+  "cohort": [
+    "agentfootprint@15.0.0",
+    "agentfootprint-lens@0.84.0",
+    "footprint-explainable-ui@2.0.0",
+    "footprintjs@14.0.0",
+    "foottrace@2.1.0"
+  ],
+  "agentFootprintVersion": "15.0.0",
+  "steps": {
+    "question": {
+      "label": "Run start",
+      "index": 0,
+      "values": {}
+    },
+    "selection": {
+      "label": "Route 1",
+      "index": 2,
+      "values": {
+        "userMessage": "Which selected nodes have the highest reported P95 latency?",
+        "llmLatestToolCalls": [
+          {
+            "id": "call-nodes-1",
+            "name": "node_summaries",
+            "args": {
+              "cluster": "demo-a",
+              "window": "2026-09-11T14:00:00Z / 2026-09-11T15:00:00Z",
+              "revision": 3,
+              "filter": {
+                "field": "nodes.p95_us",
+                "between": [
+                  1000,
+                  2000
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "reference": {
+      "label": "Tool call 1",
+      "index": 3,
+      "values": {
+        "lastToolResult": {
+          "toolName": "node_summaries",
+          "result": "{\"selection\":{\"cluster\":\"demo-a\",\"window\":\"2026-09-11T14:00:00Z / 2026-09-11T15:00:00Z\",\"revision\":3,\"filter\":{\"field\":\"nodes.p95_us\",\"between\":[1000,2000]}},\"source\":{\"ref\":\"nodes@v1\",\"measure\":\"nodes.p95_us\",\"unit\":\"microseconds\",\"grain\":\"one reported node summary per source window\",\"unknown\":\"excluded, never treated as zero\"},\"rows\":[{\"node\":\"11\",\"p95_us\":1500},{\"node\":\"12\",\"p95_us\":1250},{\"node\":\"13\",\"p95_us\":1500},{\"node\":\"14\",\"p95_us\":null}]}"
+        }
+      }
+    },
+    "prepare": {
+      "label": "Iteration 2",
+      "index": 4,
+      "values": {
+        "iteration": 2,
+        "lastToolResult": {
+          "toolName": "node_summaries",
+          "result": "{\"selection\":{\"cluster\":\"demo-a\",\"window\":\"2026-09-11T14:00:00Z / 2026-09-11T15:00:00Z\",\"revision\":3,\"filter\":{\"field\":\"nodes.p95_us\",\"between\":[1000,2000]}},\"source\":{\"ref\":\"nodes@v1\",\"measure\":\"nodes.p95_us\",\"unit\":\"microseconds\",\"grain\":\"one reported node summary per source window\",\"unknown\":\"excluded, never treated as zero\"},\"rows\":[{\"node\":\"11\",\"p95_us\":1500},{\"node\":\"12\",\"p95_us\":1250},{\"node\":\"13\",\"p95_us\":1500},{\"node\":\"14\",\"p95_us\":null}]}"
+        }
+      }
+    },
+    "model": {
+      "label": "Route 2",
+      "index": 5,
+      "values": {
+        "llmLatestContent": "{\"ref\":\"finding:highest-p95@3\",\"sourceRef\":\"nodes@v1\",\"selectionRevision\":3,\"nodeIds\":[\"11\",\"13\"],\"maximum\":1500,\"unit\":\"microseconds\",\"matchedRows\":2,\"ties\":\"retained\"}"
+      }
+    },
+    "finding": {
+      "label": "Answer 1",
+      "index": 6,
+      "values": {
+        "answerValidation": {
+          "validatorId": "finding-names-its-result",
+          "validatorVersion": "1",
+          "mode": "enforce",
+          "status": "passed",
+          "checked": 3,
+          "failed": 0,
+          "unreachable": 0,
+          "notApplicable": 0,
+          "checks": [
+            {
+              "id": "source-ref",
+              "disposition": "checked-pass",
+              "path": "sourceRef"
+            },
+            {
+              "id": "maximum-is-a-retained-value",
+              "disposition": "checked-pass",
+              "path": "maximum"
+            },
+            {
+              "id": "selection-revision",
+              "disposition": "checked-pass",
+              "path": "selectionRevision"
+            }
+          ],
+          "schemaAccepted": true,
+          "candidateDigest": "sha-256:7b0cffa054814bc96255ad1d2feb87296cd2c5380940cb0f53abc71b2d62ecfe",
+          "resolvedRefs": []
+        }
+      }
+    },
+    "answer": {
+      "label": "Run end",
+      "index": 7,
+      "values": {
+        "finalContent": "{\"ref\":\"finding:highest-p95@3\",\"sourceRef\":\"nodes@v1\",\"selectionRevision\":3,\"nodeIds\":[\"11\",\"13\"],\"maximum\":1500,\"unit\":\"microseconds\",\"matchedRows\":2,\"ties\":\"retained\"}"
+      }
+    }
+  }
+}

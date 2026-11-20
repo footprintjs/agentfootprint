@@ -24,9 +24,6 @@ const { aliases: browserLibraryAliases } = resolveBrowserLibraries(import.meta.d
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  // The live "Try it" demos run the REAL agent in the browser with a mock provider.
-  // The lens is a sibling package imported client-side, so Turbopack must bundle it.
-  transpilePackages: ['agentfootprint-lens', 'storydeck'],
   turbopack: {
     // Use the parent repository as the root for the docs site and its source.
     root: resolve(import.meta.dirname, '..'),
@@ -63,14 +60,6 @@ const config = {
   // need replacement before webpack's scheme reader runs; aliases alone are
   // too late for them.
   webpack: (config, { webpack, isServer }) => {
-    if (!isServer) {
-      const entry = resolve(import.meta.dirname, 'components/demos/skillGraphView.ts');
-      config.module.rules.push({
-        test: (file) => file === entry,
-        enforce: 'pre',
-        use: resolve(import.meta.dirname, 'scripts/skill-graph-view-loader.cjs'),
-      });
-    }
     const browserNodeStub = resolve(import.meta.dirname, 'lib/stubs/browser-node-builtins.js');
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -94,9 +83,7 @@ const config = {
         browserNodeStub,
       ),
     );
-    // DOCS_WEBPACK_STATS=1 writes a per-module stats file per compiler so
-    // scripts/demo-chunk-modules.mjs can say WHICH library modules a chunk
-    // carries — the number check-site-budget.mjs ratchets is only the sum.
+    // DOCS_WEBPACK_STATS=1 writes per-module stats for inspecting bundle contents.
     if (process.env.DOCS_WEBPACK_STATS === '1') {
       config.plugins.push({
         apply(compiler) {
@@ -109,10 +96,8 @@ const config = {
               nestedModules: true,
               // Under `all: false` webpack also defaults `cachedModules` to
               // false, and a WARM .next/cache marks every unchanged module
-              // cached — so a second build in a row collapsed the whole
-              // library into one nameless "cached modules" group and
-              // demo-chunk-modules.mjs printed 0 modules. Cached is a build
-              // fact, not a bundle fact: list them.
+              // cached, which can otherwise collapse a warm build into one
+              // nameless "cached modules" group. Keep those modules visible.
               cachedModules: true,
               ids: true,
               source: false,

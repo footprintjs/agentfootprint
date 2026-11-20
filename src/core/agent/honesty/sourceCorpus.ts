@@ -42,6 +42,7 @@
 import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { leadingJsonValue } from '../../../lib/servedJson.js';
 import { isIssuedTicket, issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
@@ -277,9 +278,10 @@ export function declaredSourcesOf(
   for (const call of calls) {
     const tool = toolOf(call.name);
     if (ownsReservedArgument(tool?.schema as LLMToolSchema | undefined)) continue;
+    const owner = { toolCallId: call.id, ...callOccurrenceField(call.callOccurrenceKey) };
     const args = call.args as PlainObject;
     if (!Object.prototype.hasOwnProperty.call(args, RESERVED_ARGUMENT)) {
-      out.push({ toolCallId: call.id, from: [] });
+      out.push({ ...owner, from: [] });
       continue;
     }
     const { [RESERVED_ARGUMENT]: raw, ...rest } = args;
@@ -288,7 +290,7 @@ export function declaredSourcesOf(
     const malformed =
       !filesBasisRow && (read.sourcesMalformed ?? 0) > 0 ? read.sourcesMalformed : undefined;
     out.push({
-      toolCallId: call.id,
+      ...owner,
       from: read.declaration?.from ?? [],
       ...(malformed !== undefined && { malformed }),
       ...(options?.declarationCorrection === true &&

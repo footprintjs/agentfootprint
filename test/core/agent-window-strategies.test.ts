@@ -629,8 +629,12 @@ describe('window strategies — checkpoint / resume', () => {
       .window(slidingWindow({ keepRecentTurns: 2 }))
       .build();
 
+    // A completed checkpoint carries the window but has no same-request error proof.
+    expect(checkpoint!.toolTurnEvidence).toBeUndefined();
     const answer = await revived.resumeOnError(checkpoint);
-    expect(answer).toBe('final answer');
+    expect(answer).toBe(
+      'final answer\n\n---\n\nNot sure — the record could not establish tool entry for every checked call.',
+    );
     expect(next.requests[0]!.messages.some((m) => m.content.startsWith(DROP_NOTICE_PREFIX))).toBe(
       true,
     );

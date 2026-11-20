@@ -125,6 +125,10 @@ export default function EngineeringPage() {
             or refuse a call, and it can’t invent a tool’s result, so what the model reads is the
             real output or a refusal.
           </p>
+          <p>
+            In this sample, the invalid order ID is refused. The delivered answer includes
+            “Not sure — a call was refused.”
+          </p>
         </ReadingRow>
 
         <ReadingRow

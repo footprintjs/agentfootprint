@@ -143,6 +143,7 @@ export async function run(_input: string): Promise<string> {
   });
   console.log('120 days ago  →', old.reasons, old.standing);
   check(old.reasons.includes('period-beyond-retention'), 'beyond retention');
+  check(!old.reasons.includes('period-undeclared'), 'the refused call has no result to judge');
   return clamped.standing;
 }
 

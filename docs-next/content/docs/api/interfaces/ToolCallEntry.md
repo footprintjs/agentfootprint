@@ -4,7 +4,7 @@ title: ToolCallEntry
 
 # Interface: ToolCallEntry
 
-Defined in: [src/provider-contract/types.ts:799](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L799)
+Defined in: [src/provider-contract/innerCalls.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/innerCalls.ts#L49)
 
 One entry in the in-flight tool-call sequence delivered to
 `PermissionChecker.check()` since v2.12. Lets sequence-aware
@@ -21,7 +21,7 @@ survives `agent.resumeOnError(checkpoint)` correctly.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\> \| `undefined`
 
-Defined in: [src/provider-contract/types.ts:803](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L803)
+Defined in: [src/provider-contract/innerCalls.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/innerCalls.ts#L53)
 
 Bound tool arguments in permission questions. Public halt reports use the inner tool's shown view.
 
@@ -31,7 +31,7 @@ Bound tool arguments in permission questions. Public halt reports use the inner 
 
 > `readonly` `optional` **inner?**: `true`
 
-Defined in: [src/provider-contract/types.ts:809](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L809)
+Defined in: [src/provider-contract/innerCalls.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/innerCalls.ts#L59)
 
 `true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own.
 
@@ -41,7 +41,7 @@ Defined in: [src/provider-contract/types.ts:809](https://github.com/footprintjs/
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/provider-contract/types.ts:805](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L805)
+Defined in: [src/provider-contract/innerCalls.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/innerCalls.ts#L55)
 
 ReAct iteration the call was dispatched on.
 
@@ -51,7 +51,7 @@ ReAct iteration the call was dispatched on.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:801](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L801)
+Defined in: [src/provider-contract/innerCalls.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/innerCalls.ts#L51)
 
 Tool name dispatched.
 
@@ -61,6 +61,6 @@ Tool name dispatched.
 
 > `readonly` `optional` **providerId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:807](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L807)
+Defined in: [src/provider-contract/innerCalls.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/innerCalls.ts#L57)
 
 `'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin.

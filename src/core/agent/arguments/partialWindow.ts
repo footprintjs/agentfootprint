@@ -135,6 +135,7 @@ export function validPartialFields(
     field?.window?.role === 'confirm-meaning' &&
     field.window.mention === meaning.window?.mention &&
     sameData(field.window.confirmOnlyIds, meaning.window?.confirmOnlyIds) &&
+    sameData(field.window.confirmOnlyAddresses, meaning.window?.confirmOnlyAddresses) &&
     sameData(field.members, meaning.members)
   );
 }

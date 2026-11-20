@@ -4,7 +4,7 @@ title: AnswerValidationOptions<T>
 
 # Interface: AnswerValidationOptions\<T\>
 
-Defined in: [src/answer-validation/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L137)
+Defined in: [src/answer-validation/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L141)
 
 Opt-in contract. The callback cannot replace the accepted answer.
 
@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L247)
+Defined in: [src/answer-validation/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L251)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -132,7 +132,7 @@ Agent.create({ provider, model })
 
 > `readonly` **id**: `string`
 
-Defined in: [src/answer-validation/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L138)
+Defined in: [src/answer-validation/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L142)
 
 ***
 
@@ -140,7 +140,7 @@ Defined in: [src/answer-validation/types.ts:138](https://github.com/footprintjs/
 
 > `readonly` `optional` **limits?**: `AnswerValidationLimits`
 
-Defined in: [src/answer-validation/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L142)
+Defined in: [src/answer-validation/types.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L146)
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [src/answer-validation/types.ts:142](https://github.com/footprintjs/
 
 > `readonly` `optional` **mode?**: `"enforce"` \| `"observe"`
 
-Defined in: [src/answer-validation/types.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L141)
+Defined in: [src/answer-validation/types.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L145)
 
 Enforce withholds non-passing results; observe records them. Default enforce.
 
@@ -158,7 +158,7 @@ Enforce withholds non-passing results; observe records them. Default enforce.
 
 > `readonly` **version**: `string`
 
-Defined in: [src/answer-validation/types.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L139)
+Defined in: [src/answer-validation/types.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L143)
 
 ## Methods
 
@@ -166,7 +166,7 @@ Defined in: [src/answer-validation/types.ts:139](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L248)
+Defined in: [src/answer-validation/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L252)
 
 #### Parameters
 

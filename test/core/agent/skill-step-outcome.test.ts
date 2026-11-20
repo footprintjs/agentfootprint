@@ -528,7 +528,10 @@ describe('a step whose tool keeps failing ends with the turn', () => {
       { skill: refund(statusTool('lookup', envelope('failure'))), maxIterations: 4 },
     );
     const answer = await agent.run({ message: 'refund' });
-    expect(answer).toBe('The lookup kept failing; nothing was refunded.');
+    expect(answer).toBe(
+      'The lookup kept failing; nothing was refunded.\n\n---\n\n' +
+        "Not sure — calls failed; the run stopped before the model finished; the answer came before the skill's declared steps finished.",
+    );
     expect(advanced).toHaveLength(0);
     expect(held.map((h) => h.toolCallId)).toEqual(['t2', 't3']);
     expect(unfinished).toHaveLength(1);

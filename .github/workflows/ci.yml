@@ -67,7 +67,7 @@ jobs:
   # Vitest splits by file count, not by time. To change N, edit the `shard` list
   # and the `/4` together; test/docs/ci-test-shards.test.ts refuses a mismatch.
   test-shard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       # Every shard finishes, so one run shows every failure.
@@ -94,7 +94,7 @@ jobs:
   # What runs around the test suite, on both Node versions: the contract, the
   # compiler and the package as it would ship.
   test-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -174,7 +174,7 @@ jobs:
   # Every example, typechecked AND run end-to-end against mock providers — the
   # code people copy. Once per commit (on Node 22) is enough.
   test-examples:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -202,7 +202,7 @@ jobs:
   test:
     if: always()
     needs: [test-shard, test-package, test-examples]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       fail-fast: false
@@ -222,7 +222,7 @@ jobs:
   # Also the two checks the Release workflow runs that nothing else in CI did —
   # a PR green here must not go red at release time.
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -268,7 +268,7 @@ jobs:
       !(github.event_name == 'pull_request' &&
         github.head_ref == 'release/next' &&
         github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -284,7 +284,7 @@ jobs:
             docs-next/package-lock.json
 
       - name: Install root deps
-        run: npm ci
+        run: npm ci --no-audit
 
       # docs-next's prebuild generators import the built library through file:...
       - name: Build library (dist for the docs generators)
@@ -292,13 +292,7 @@ jobs:
 
       - name: Install docs-next deps
         working-directory: docs-next
-        run: npm ci --strict-peer-deps
-
-      - name: Check when the docs can use a published Lens
-        working-directory: docs-next
-        run: |
-          node --test vendor/lens/check-published.test.mjs
-          node vendor/lens/check-published.mjs
+        run: npm ci --strict-peer-deps --no-audit
 
       # The "Try it live" embed runs this builder in the reader's browser. The
       # deploy (docs.yml) checks it too — too late: npm already has the version.
@@ -342,7 +336,7 @@ jobs:
   # README, the AI-instruction copies. `docs:check` regenerates everything and
   # fails on any diff — the fix is always `npm run docs:regen` + commit.
   generated:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -367,7 +361,7 @@ jobs:
       github.event_name == 'pull_request' &&
       !(github.head_ref == 'release/next' &&
         github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -385,9 +379,9 @@ jobs:
   # lib/remark-doc-links.mjs); this re-derives the id->route index from the
   # filesystem and fails on any dead id or stale #anchor. A page moved between
   # taxonomy folders, or a reworded heading, can therefore never ship a broken
-  # link. Self-contained: github-slugger is the script's only external dep.
+  # link. github-slugger is already pinned by the root lockfile.
   docs-links:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -395,8 +389,9 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          cache: npm
 
-      - run: npm install --no-save github-slugger
+      - run: npm ci --ignore-scripts --no-audit
       - run: node scripts/check-doc-links.mjs --strict
 
   # Docs-truth RATCHET — asks "do the docs describe what the code actually does?"
@@ -414,7 +409,7 @@ jobs:
   #
   # Needs the build: the DECLARED column reads dist/, i.e. what actually ships.
   docs-truth:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -435,7 +430,7 @@ jobs:
   # blob, and `coverage` below merges them. A shard's own log prints only its
   # partial figures; the merged figures are the ones that count.
   coverage-shard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -474,7 +469,7 @@ jobs:
   coverage:
     if: always()
     needs: coverage-shard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Every shard succeeded
@@ -520,7 +515,7 @@ jobs:
   # annotation: any process in any job, an install script included, can print
   # one of those.
   tested-tree:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

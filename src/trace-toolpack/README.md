@@ -18,10 +18,12 @@ an attention omission that must stay visible.
 ## An id a provider reused: the latest call decides
 A provider may reuse a tool-call id across turns (the library's own fallback
 ids are minted per provider instance). `inspect_tool_call` answers for the
-LATEST call under the id. The bracket and its step come from the order of
-the recorded events (`traceToolpack/toolCallOccurrence.ts` ·
-`latestCallOccurrence`). The journal reads the latest proposal and its answer
-from committed history. Its duration comes from the selected occurrence's
+LATEST call under the id. For recordings with call addresses, the journal
+uses the selected call's address to join its proposal, result and events
+through the shared recorded-call reader. It reports a missing or unreadable
+result explicitly. Older recordings use the order of the recorded events
+(`traceToolpack/toolCallOccurrence.ts` · `latestCallOccurrence`) and the
+committed history. Duration comes from the selected occurrence's
 `tool_end`. The journal reads "not dispatched" when that bracket or the
 corresponding history message carries the batch settlement marker
 (9.113.0, `notDispatchedOf`). Governance rows, check-ins and validation reports

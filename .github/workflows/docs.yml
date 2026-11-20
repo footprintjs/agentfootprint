@@ -32,8 +32,11 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,6 +95,15 @@ jobs:
         working-directory: docs-next
         run: npm run check:site-budget
 
+      # The demo check runs independently. Use a checked bundle only if the
+      # main push for this source has already finished successfully.
+      - name: Add the Quick Start demo if it passed
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/deploy_docs_demo.py
+
       # GitHub Pages must not run Jekyll (it would drop the _next/ underscore dir).
       - name: Disable Jekyll
         run: touch docs-next/out/.nojekyll
@@ -103,7 +115,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       pages: write

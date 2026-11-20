@@ -1,9 +1,11 @@
 import type { CheckInDecision } from '../../../../checkin.js';
+import type { CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 
 /** Ephemeral values for one existing resume door; never checkpoint state. */
 export interface ResumeCallFrame {
   readonly toolName: string;
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly startMs: number;
 }
 

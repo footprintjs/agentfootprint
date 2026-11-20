@@ -213,7 +213,11 @@ describe('mounted retained-source recovery after strict findings refusal', () =>
         expect(sourceCalls).toBe(1);
         expect(consumerCalls).toBe(mode === 'retained' ? 1 : 0);
         expect(readSeen).toBe(mode === 'retained');
-        expect(output).toBe(mode === 'retained' ? 'Inspected.' : 'Unavailable.');
+        expect(output).toBe(
+          mode === 'retained'
+            ? 'Inspected.\n\n---\n\nNot sure — a call was refused.'
+            : 'Unavailable.\n\n---\n\nNot sure — a call was refused.',
+        );
       } finally {
         await agent.shutdown();
       }

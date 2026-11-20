@@ -45,7 +45,11 @@ import {
   type FindingsRow,
   type ToolMiddleware,
 } from '../../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
+import type {
+  LLMMessage,
+  LLMRequest,
+  LLMResponse,
+} from '../../../../src/provider-contract/types.js';
 
 /** The word an after-tool rule keeps from the model — unique, so a leak anywhere on the wire shows. */
 const WITHHELD = 'SECRET-internal-collector-host-db7.corp';
@@ -148,7 +152,8 @@ async function runWith(rule: ToolMiddleware, reactMode: 'dynamic' | 'dynamic-gro
     .toolMiddleware(rule)
     .build();
   await agent.run({ message: 'is nas-cluster-06 slow?' });
-  return { ledger: (agent.findings() ?? []) as readonly FindingsRow[], wire };
+  const history = agent.getSnapshot()?.sharedState.history as readonly LLMMessage[] | undefined;
+  return { ledger: (agent.findings() ?? []) as readonly FindingsRow[], history, wire };
 }
 
 /** The tool message one request carried for one call. */
@@ -185,7 +190,7 @@ describe('unsettled by absence — the review’s leak probe: after-tool governa
     });
 
     it(`${reactMode}: an after-tool allow(value, why) SCRUB of not_checked — the section never re-serves the scrubbed words`, async () => {
-      const { ledger, wire } = await runWith(
+      const { ledger, history, wire } = await runWith(
         {
           name: 'scrub',
           onToolResult: (c) => {
@@ -211,12 +216,18 @@ describe('unsettled by absence — the review’s leak probe: after-tool governa
           tryInstead: HBA_MISS.tryInstead,
         },
       ]);
+      const result = history?.find(
+        (message) => message.role === 'tool' && message.toolCallId === 'c1',
+      );
+      expect(result?.callOccurrenceKey).toHaveLength(5);
       expect(ledger.find((row) => row.kind === 'unsettled-by-absence')).toEqual({
         kind: 'unsettled-by-absence',
         toolCallId: 'c1',
+        callOccurrenceKey: result?.callOccurrenceKey,
         cannotCover: HBA_MISS.cannotCover,
         tryInstead: HBA_MISS.tryInstead,
         iteration: 2,
+        turn: 1,
       });
       expect(JSON.stringify(wire)).not.toContain(WITHHELD);
     });

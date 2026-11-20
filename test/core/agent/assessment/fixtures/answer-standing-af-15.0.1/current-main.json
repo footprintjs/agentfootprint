@@ -1,0 +1,26 @@
+{
+  "source": "05fdfdeee419ca4717b2c138d1bd12f13df1b906",
+  "rootTurnField": ["events", 31, "meta", "rootTurn"],
+  "occurrenceFields": [
+    ["commitLog", 15, "overwrite", "llmLatestToolCalls", 0, "callOccurrenceKey"],
+    ["commitLog", 19, "overwrite", "history", 0, "toolCalls", 0, "callOccurrenceKey"],
+    ["commitLog", 19, "overwrite", "history", 1, "callOccurrenceKey"],
+    ["commitLog", 19, "overwrite", "toolResults", 0, "callOccurrenceKey"],
+    ["commitLog", 23, "overwrite", "messagesInjections", 2, "callOccurrenceKey"],
+    ["events", 12, "payload", "callOccurrenceKey"],
+    ["events", 13, "payload", "callOccurrenceKey"],
+    ["events", 14, "payload", "history", 1, "toolCalls", 0, "callOccurrenceKey"],
+    ["events", 14, "payload", "history", 2, "callOccurrenceKey"],
+    ["events", 19, "payload", "callOccurrenceKey"]
+  ],
+  "capture": {
+    "events": {
+      "bytes": 15571,
+      "sha256": "360346218312ac70bcaf5b414a44bb07036c50d95cdec421984f6df1e2360234"
+    },
+    "commitLog": {
+      "bytes": 14418,
+      "sha256": "7429376a428acc87a7002988cdb409e0d0e8d9ff567908063e0ef040858dd99d"
+    }
+  }
+}

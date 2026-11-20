@@ -121,6 +121,38 @@ describe('PROPERTY — the block prints exactly the items the data holds, in ord
   });
 });
 
+it('names each occurrence that declared a coverage item once, even when IDs are shared', () => {
+  const first = {
+    kind: 'ledger',
+    toolName: 'read_catalog',
+    toolCallId: 'same',
+    iteration: 1,
+    checked: [{ what: 'archived logs' }],
+    notChecked: [],
+    cannotCover: [],
+  } as const satisfies DeclaredCoverage;
+  const second = { ...first, toolName: 'read_events' };
+  const repeated = { ...second, kind: 'absence' } as const;
+  const line = (rows: readonly DeclaredCoverage[]) =>
+    blockSection(
+      composeAnswerWithCoverage('Done.', rows, '', '', undefined, undefined, (tool) =>
+        tool === 'read_catalog' ? 'reading the catalog' : undefined,
+      ),
+      LABELS.checked,
+    );
+
+  const firstKey = [1, 2, 3, 4, 0] as const;
+  const secondKey = [1, 2, 3, 4, 1] as const;
+  expect(
+    line([
+      { ...first, callOccurrenceKey: firstKey },
+      { ...second, callOccurrenceKey: secondKey },
+      { ...repeated, callOccurrenceKey: secondKey },
+    ]),
+  ).toEqual(['archived logs (reading the catalog and 1 other call)']);
+  expect(line([first, second, repeated])).toEqual(['archived logs (reading the catalog)']);
+});
+
 // ─── UNIT ────────────────────────────────────────────────────────────
 
 describe('UNIT — the typed answer’s limits as one value', () => {
@@ -205,7 +237,7 @@ function proseAgent(
 }
 
 describe('INTEGRATION — a typed answer’s limits carry what was assumed', () => {
-  it('the data’s `assumed` is the prose twin’s "Assumed" block, line for line', async () => {
+  it('the data’s `assumed` supplies the same value the prose twin’s standing line names', async () => {
     const typed = typedAgent(searchLogs());
     const turnEnds: Record<string, unknown>[] = [];
     typed.on('agentfootprint.agent.turn_end', (e) => {
@@ -223,10 +255,12 @@ describe('INTEGRATION — a typed answer’s limits carry what was assumed', () 
     expect(turnEnds.at(-1)!.answerCoverage).toEqual(limits);
 
     const prose = proseAgent(searchLogs());
-    const answer = (await prose.run({ message: 'errors on checkout?' })) as string;
-    const printed = answer.split("Assumed (a tool's rule, not your words):\n")[1]!.split('\n');
-    expect(printed).toEqual(
-      limits!.assumed!.map((l) => `- ${l.argument} = ${JSON.stringify(l.value)} (${l.toolName})`),
+    const answer = await prose.run({ message: 'errors on checkout?' });
+    const assumed = limits!.assumed![0]!;
+    expect(answer).toBe(
+      `No errors.\n\n---\n\nNot sure — ${assumed.argument} = ${JSON.stringify(
+        assumed.value,
+      )} was assumed by ${assumed.toolName}'s rule, not given by you.`,
     );
   });
 
@@ -245,7 +279,7 @@ describe('INTEGRATION — a typed answer’s limits carry what was assumed', () 
     expect(JSON.stringify(typed.answerCoverage())).not.toContain('"2h"');
   });
 
-  it('a before-tool rewrite with no declared origin leaves the row out — of the data as of the block', async () => {
+  it('a before-tool rewrite with no declared origin leaves the fill out of the data and the line', async () => {
     const rewrite = (b: ReturnType<typeof Agent.create>) =>
       b.toolMiddleware({
         name: 'widen',
@@ -258,7 +292,9 @@ describe('INTEGRATION — a typed answer’s limits carry what was assumed', () 
     await typed.runTyped({ message: 'errors on checkout?' });
     expect(typed.answerCoverage()).toBeUndefined(); // nothing declared, the one row superseded
     const prose = proseAgent(searchLogs(), rewrite);
-    expect(await prose.run({ message: 'errors on checkout?' })).toBe('No errors.');
+    expect(await prose.run({ message: 'errors on checkout?' })).toBe(
+      'No errors.\n\n---\n\nNot sure — a before-tool rule set a value a call ran with and did not say where it came from.',
+    );
   });
 
   it('no ruled tool: a typed run that declared nothing commits no key', async () => {

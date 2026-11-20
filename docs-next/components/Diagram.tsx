@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { asset } from '@/lib/site';
 import styles from './Diagram.module.css';
 
@@ -11,7 +12,19 @@ import styles from './Diagram.module.css';
  * Uses asset() so each src carries the deploy basePath (raw <img> URLs are NOT
  * prefixed by Next) — correct in both local dev and the GitHub Pages build.
  */
-export function Diagram({ name, alt }: { name: string; alt: string }) {
+export function Diagram({
+  name,
+  alt,
+  width,
+  height,
+  caption,
+}: {
+  name: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  caption?: ReactNode;
+}) {
   return (
     <figure style={{ margin: '1.5rem 0', textAlign: 'center' }}>
       {/* Both variants stay in the static HTML; CSS selects the one matching the
@@ -21,6 +34,8 @@ export function Diagram({ name, alt }: { name: string; alt: string }) {
         alt={alt}
         src={asset(`/assets/${name}-light.svg`)}
         className={`${styles.image} ${styles.light}`}
+        width={width}
+        height={height}
         loading="lazy"
         decoding="async"
       />
@@ -29,9 +44,12 @@ export function Diagram({ name, alt }: { name: string; alt: string }) {
         alt={alt}
         src={asset(`/assets/${name}-dark.svg`)}
         className={`${styles.image} ${styles.dark}`}
+        width={width}
+        height={height}
         loading="lazy"
         decoding="async"
       />
+      {caption && <figcaption>{caption}</figcaption>}
     </figure>
   );
 }

@@ -1,3 +1,4 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import { type DecisionLedger, spendDecision } from '../../../../consentRequest.js';
@@ -5,6 +6,7 @@ import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { boundArgsOf } from '../access/bindings.js';
 import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
@@ -15,9 +17,14 @@ import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
-import { appendBatchResult } from '../batch/settle.js';
+import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
+import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type {
   ResumedInvocation,
@@ -59,6 +66,8 @@ export function buildResumeCheckIn(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
+    | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -72,6 +81,7 @@ export function buildResumeCheckIn(
     frame: ResumeConsentFrame,
   ): Promise<void> => {
     const { consentDecision, runSignal, toolName, toolCallId, startMs } = frame;
+    const occurrence = callOccurrenceField(frame.callOccurrenceKey);
 
     const iteration = scope.iteration as number;
     // The copy the person approved, detached (`boundArgsOf`).
@@ -102,6 +112,7 @@ export function buildResumeCheckIn(
     // (`checkInHiddenArgs.ts`); `'not-recorded'` for a pause stored before.
     const hiddenArgs = recordedHiddenArgs(scope.pausedRequest);
     typedEmit(scope, 'agentfootprint.checkin.decision', {
+      ...occurrence,
       toolName,
       toolCallId,
       iteration,
@@ -116,6 +127,7 @@ export function buildResumeCheckIn(
     let result: unknown;
     /** What the model reads — see the ask path above. */
     let modelResult: unknown;
+    let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
     let stepToolRan = false;
@@ -127,7 +139,7 @@ export function buildResumeCheckIn(
     let negativeResultId: string | undefined;
     let resumedHalt: ResumedPolicyHalt | undefined;
     /** What the approved call's `execute` saw — its script row reads it. */
-    const scriptSeen: ResumedCallFacts = {};
+    const scriptSeen: ResumedCallFacts = { ...occurrence };
     try {
       if (decision.approved) {
         const env = scope.$getEnv();
@@ -163,7 +175,9 @@ export function buildResumeCheckIn(
         // Consent moved the execution to this side of the pause; the rules
         // about results move with it.
         if (dispatched.executed === true) {
-          modelResult = await links.afterMoment(scope, {
+          ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+            returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
+            ...occurrence,
             ...(tool && { tool }),
             toolName,
             toolCallId,
@@ -178,7 +192,7 @@ export function buildResumeCheckIn(
             history: [...(scope.history as readonly LLMMessage[])],
             ...(scope.runIdentity && { identity: scope.runIdentity }),
             ...(env.signal && { signal: env.signal }),
-          });
+          }));
         }
       } else {
         result = declinedResult(decision.note);
@@ -188,7 +202,7 @@ export function buildResumeCheckIn(
       // Placement then the truncation net — the batch loop's precedence.
       const decisionPlaced = await links.placeResults(
         scope,
-        { toolName, toolCallId, iteration },
+        { toolName, toolCallId, iteration, ...occurrence },
         { result, modelResult },
         stepToolRan,
       );
@@ -236,7 +250,7 @@ export function buildResumeCheckIn(
       if (deps.stepPlanFor) {
         decisionResultStr = links.applyStepReturn(
           scope,
-          { toolName, toolCallId, iteration, settled: decisionSettled },
+          { toolName, toolCallId, iteration, ...occurrence, settled: decisionSettled },
           decisionResultStr,
         );
       }
@@ -246,7 +260,7 @@ export function buildResumeCheckIn(
         const decisionTransition: TransitionBatchState = { losers: [] };
         decisionResultStr += links.applyToolEffects(
           scope,
-          { toolName, toolCallId, iteration },
+          { toolName, toolCallId, iteration, ...occurrence },
           resumeEnvelope,
           decisionTransition,
         );
@@ -262,16 +276,27 @@ export function buildResumeCheckIn(
             ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
             toolCallId,
             toolName,
+            ...occurrence,
             ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !stepToolRan ||
+                resumedHalt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, decisionPlaced.modelResult),
+            ),
+            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A decline ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(decisionSettled),
+            ...reportedStatusField(decisionSettled),
           },
         ],
-        { toolName, toolCallId },
+        { toolName, toolCallId, ...occurrence },
       );
       const decisionHistory = decisionSettlement.history;
-      scope.history = decisionHistory;
+      commitSettledToolHistory(scope, decisionHistory);
       // Drives `on-tool-return` triggers, same as the execute path.
       scope.lastToolResult = {
         toolName,
@@ -282,13 +307,15 @@ export function buildResumeCheckIn(
         toolName,
         result: decisionResultStr,
         toolCallId,
+        ...occurrence,
+        ...(deps.resultsLayer === true && missingResultFields(toolRan, scriptSeen.threw)),
         ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
       });
       await judgeLanded(
         scope,
         deps.findingsJudge,
         toolRan,
-        { toolName, result: decisionResultStr, toolCallId },
+        { toolName, result: decisionResultStr, toolCallId, ...occurrence },
         iteration,
         links.turnStampOf(scope),
       );
@@ -305,6 +332,7 @@ export function buildResumeCheckIn(
         toolName,
         {
           toolCallId,
+          ...occurrence,
           result: decisionCapped.result,
           durationMs: Date.now() - startMs,
           ...(error === true && { error: true }),

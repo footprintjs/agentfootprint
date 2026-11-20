@@ -305,6 +305,7 @@ const INJECTION_STRUCTURE: ReadonlySet<string> = new Set([
   'slot',
   'source',
   'sourceId',
+  'callOccurrenceKey',
   'upstreamRef',
   'reason',
   'asRole',

@@ -6,6 +6,6 @@ title: Expect
 
 > **Expect** = `"low"` \| `"medium"` \| `"high"`
 
-Defined in: [src/core/agent/findings/types.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L67)
+Defined in: [src/core/agent/findings/types.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L69)
 
 How useful the model expects the result to be — a bucket, never a number.

@@ -130,7 +130,9 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
       },
     });
     try {
-      expect(await agent.run({ message: 'Read synthetic rows.' })).toBe('Done.');
+      expect(await agent.run({ message: 'Read synthetic rows.' })).toBe(
+        "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.",
+      );
       expect(tool.calls).toBe(1); // #calls requires the exact original this/private brand.
       expect(getterReads).toBe(0);
       expect(columnFindings(events).map((row) => row.rowset)).toEqual(['first']);
@@ -262,7 +264,9 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
       .build();
     const events = watch(agent);
     try {
-      expect(await agent.run({ message: 'Read synthetic rows.' })).toBe('Done.');
+      expect(await agent.run({ message: 'Read synthetic rows.' })).toBe(
+        "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.",
+      );
       expect(tool.calls).toBe(1);
       expect(columnFindings(events).map((row) => row.rowset)).toEqual(['second']);
     } finally {
@@ -289,7 +293,9 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
       .build();
     const events = watch(agent);
     try {
-      expect(await agent.run({ message: 'Read both synthetic sets.' })).toBe('Done.');
+      expect(await agent.run({ message: 'Read both synthetic sets.' })).toBe(
+        "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.",
+      );
       expect(lists).toBe(3);
       expect(tool.calls).toBe(2);
       expect(columnFindings(events).map((row) => row.rowset)).toEqual(['first', 'second']);
@@ -312,7 +318,9 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
       .build();
     const events = watch(agent);
     try {
-      expect(await agent.run({ message: 'Read synthetic rows.' })).toBe('Done.');
+      expect(await agent.run({ message: 'Read synthetic rows.' })).toBe(
+        "Done.\n\n---\n\nNot sure — a call was refused; a tool's rows hold a different type than the tool declares.",
+      );
       expect(tool.calls).toBe(1);
       expect(columnFindings(events).map((row) => row.rowset)).toEqual(['first']);
       expect(
@@ -513,7 +521,9 @@ describe('component-owned new rowset metadata at native catalog intake', () => {
           requestId: input.requestId,
           values: { [input.fields[0]!.id]: 'fresh-fixture-vm' },
         }),
-      ).toBe('Done.');
+      ).toBe(
+        "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.",
+      );
       expect(lists).toBeGreaterThanOrEqual(2);
       expect(calls).toBe(0);
       expect(executed).toEqual(['fresh-fixture-vm']);

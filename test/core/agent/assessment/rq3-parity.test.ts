@@ -19,8 +19,9 @@
  *
  *   ASKED ↔ `ask`;  NOT-COVERED ↔ `coverage-gap`;  DECLARED-ABSENT ↔
  *   `declared-absent`;  FOUND ↔ `unrefuted` (never `known`: no tie check);
- *   UNKNOWN ↔ "the record cannot vouch" — `not-applicable`, or `unknown` with
- *   only `empty-undeclared` (an empty readable rowset nobody declared).
+ *   UNKNOWN ↔ "the record cannot vouch" — `not-applicable`, or `unknown` whose
+ *   reasons are limited to `empty-undeclared` (an empty readable rowset nobody
+ *   declared) and `call-not-completed` (a failed or refused call).
  *
  * This file runs BOTH over the same recorded runs — each a real agent on the
  * mock provider, recorded with `recordRun` — and requires every turn to land in
@@ -152,7 +153,8 @@ function foldClass(a: AnswerAssessment): Rq3 | 'OTHER' {
   if (a.assessment === 'unrefuted') return 'FOUND';
   const cannotVouch =
     a.assessment === 'not-applicable' ||
-    (reasons.length > 0 && reasons.every((r) => r === 'empty-undeclared'));
+    (reasons.length > 0 &&
+      reasons.every((r) => r === 'empty-undeclared' || r === 'call-not-completed'));
   return cannotVouch ? 'UNKNOWN' : 'OTHER';
 }
 
@@ -169,6 +171,7 @@ interface Case {
   readonly calls: readonly { readonly tool: string; readonly entity: string }[];
   readonly rq3: Rq3;
   readonly fold: Rq3;
+  readonly unknownReason?: 'empty-undeclared' | 'call-not-completed';
   readonly difference?: Difference;
 }
 
@@ -359,6 +362,7 @@ const CASES: readonly Case[] = [
     calls: [{ tool: 'find_vms', entity: 'host-9' }],
     rq3: 'UNKNOWN',
     fold: 'UNKNOWN',
+    unknownReason: 'call-not-completed',
   },
   {
     id: 'P2 a filter that matched nothing → the empty-success shape',
@@ -368,6 +372,7 @@ const CASES: readonly Case[] = [
     calls: [{ tool: 'find_vms', entity: 'host-9' }],
     rq3: 'UNKNOWN',
     fold: 'UNKNOWN',
+    unknownReason: 'empty-undeclared',
   },
   {
     id: 'P3 a wrapper shape nobody declared',
@@ -409,6 +414,7 @@ const CASES: readonly Case[] = [
     calls: [{ tool: 'find_vms', entity: 'host-9' }],
     rq3: 'UNKNOWN',
     fold: 'UNKNOWN',
+    unknownReason: 'call-not-completed',
   },
   {
     id: 'P7 an absence stripped to its empty-success shape, beside rows for another entity',
@@ -482,6 +488,12 @@ describe('PARITY — the fold against the registered RQ3 rule, over recorded run
     for (const t of turns) {
       expect(t.rq3, `${t.c.id}: RQ3`).toBe(t.c.rq3);
       expect(t.fold, `${t.c.id}: fold`).toBe(t.c.fold);
+      if (t.c.unknownReason !== undefined) {
+        expect(
+          t.assessment.reasons.map((r) => r.reason),
+          t.c.id,
+        ).toContain(t.c.unknownReason);
+      }
     }
   });
 

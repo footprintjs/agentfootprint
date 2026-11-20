@@ -137,6 +137,7 @@ describe('assume — a missing ruled argument is filled by the library', () => {
           kind: 'argument',
           turn: 1,
           toolCallId: 'c1',
+          callOccurrenceKey: expect.any(Array),
           toolName: 'search_logs',
           iteration: 1,
           argument: 'window',
@@ -152,6 +153,7 @@ describe('assume — a missing ruled argument is filled by the library', () => {
       expect(argEvents.map((e) => e.payload)).toEqual([
         {
           toolCallId: 'c1',
+          callOccurrenceKey: expect.any(Array),
           toolName: 'search_logs',
           iteration: 1,
           turn: 1,
@@ -166,6 +168,8 @@ describe('assume — a missing ruled argument is filled by the library', () => {
       // `tool_start` keeps the model's proposal; `tool_end` names the filled key.
       const start = seen.find((e) => e.type === 'agentfootprint.stream.tool_start')!;
       expect(start.payload.args).toEqual({ service: 'checkout' });
+      expect(argumentRows(agent)[0]?.callOccurrenceKey).toEqual(start.payload.callOccurrenceKey);
+      expect(argEvents[0]?.payload.callOccurrenceKey).toEqual(start.payload.callOccurrenceKey);
       const end = seen.find((e) => e.type === 'agentfootprint.stream.tool_end')!;
       expect(end.payload.changedArgKeys).toEqual(['window']);
 
@@ -385,8 +389,8 @@ describe('assume — across turns (the turn stamp and the widened restore)', () 
   });
 });
 
-describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', () => {
-  it('appends one line per assumed value; the answer is unchanged with nothing assumed', async () => {
+describe('assume — the standing line under .limitsTravelWithTheAnswer()', () => {
+  it('names the assumed value in the line and does not repeat it in an Assumed block', async () => {
     const withFill = Agent.create({
       provider: scripted([call('c1', 'search_logs', { service: 'a' }), answer('No errors.')])
         .provider as never,
@@ -397,7 +401,8 @@ describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', ()
       .build();
     const out = (await withFill.run({ message: 'go' })) as AgentRunResult;
     expect(String(out)).toBe(
-      'No errors.\n\n---\n\nAssumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
+      'No errors.\n\n---\n\n' +
+        'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you; a tool did not say what time its result covers.',
     );
 
     const noFill = Agent.create({
@@ -410,7 +415,10 @@ describe('assume — the "Assumed" block under .limitsTravelWithTheAnswer()', ()
       .tool(searchLogs([]))
       .limitsTravelWithTheAnswer()
       .build();
-    expect(String(await noFill.run({ message: 'go' }))).toBe('No errors.');
+    expect(String(await noFill.run({ message: 'go' }))).toBe(
+      'No errors.\n\n---\n\n' +
+        'Not sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
   });
 });
 

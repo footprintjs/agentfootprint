@@ -3,6 +3,7 @@ import type { CallExecution, CallArguments } from '../contracts/callCells.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { extractSequence } from '../../../../../security/extractSequence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
@@ -97,7 +98,7 @@ function endRunOnHalt(
     sequenceLength: extractSequence(history, iteration).length,
     ...(haltContext.checkerId !== undefined && { checkerId: haltContext.checkerId }),
   });
-  scope.history = history;
+  commitSettledToolHistory(scope, history);
   scope.policyHaltReason = haltContext.reason;
   scope.policyHaltTellLLM = haltContext.tellLLM;
   scope.policyHaltTarget = target;

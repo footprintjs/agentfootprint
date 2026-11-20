@@ -265,6 +265,7 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         iteration: 2,
         toolCallId: 'c1',
         toolName: 'client_activity',
+        callOccurrenceKey: callRow.callOccurrenceKey,
         how: 'filled',
         form: 0,
         asked: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' },

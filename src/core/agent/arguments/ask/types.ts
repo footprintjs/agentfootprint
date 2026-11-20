@@ -14,6 +14,8 @@ import type { AskWaiting } from '../pendingPrivateAsk.js';
 import type { PartialWindowState } from '../partialWindow.js';
 import type { ArgumentFill } from '../resolve.js';
 import type { ArgumentRow } from '../rows.js';
+import type { CallOccurrenceKey } from '../../../../lib/callOccurrence.js';
+import type { BatchAddress } from '../batchAddress.js';
 
 // ─── The fields ─────────────────────────────────────────────────────────
 
@@ -27,6 +29,8 @@ export interface AskMember {
   readonly spelling?: PeriodSpelling;
   /** Every call of the batch that needs this argument asked, in batch order. */
   readonly toolCallIds: readonly string[];
+  /** Batch-local addresses, in the same order as the displayed provider IDs. */
+  readonly callAddresses?: readonly BatchAddress[];
   /**
    * Under declared sources: the person's own words a READING was made of
    * (the first call's that carried one) — shown with the field, never the
@@ -69,6 +73,7 @@ export interface WindowAskField {
   readonly role?: 'confirm-meaning';
   /** These calls keep their selected arguments; other members retain the ordinary window-fill role. */
   readonly confirmOnlyIds?: readonly string[];
+  readonly confirmOnlyAddresses?: readonly BatchAddress[];
   readonly reply?: { readonly version: 1; readonly description: string };
   /** Updated proposals stay in the existing governed ask carrier. */
   readonly reading?: TimeReadingRow;
@@ -128,6 +133,7 @@ export interface ArgumentAskState {
 /** One call's `ask` arguments, as the layer's Resolve stage named them. */
 export interface CallAsk {
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly ask: readonly string[];
   /** Under declared sources: the person's words a reading was made of, per argument. */
   readonly quoted?: readonly { readonly argument: string; readonly quote: string }[];

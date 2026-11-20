@@ -17,11 +17,11 @@
  *   3. Integration  — assistant message in scope.history has thinkingBlocks
  *   4. Property     — random handler outputs preserve message-construction invariants
  *   5. Security     — redaction scrubs content; signature byte-exact preserved
- *   6. Performance  — agent without handler has SAME perf as v2.13 (no extra stage)
+ *   6. Performance  — no thinking stage or extra provider call when no handler resolves
  *   7. ROI          — end-to-end Mock provider with thinking → blocks → assistant message
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   Agent,
   defineTool,
@@ -37,7 +37,7 @@ import {
 } from '../../src/thinking/index.js';
 import { redactThinkingBlocks, REDACTED_PLACEHOLDER } from '../../src/security/index.js';
 import { buildThinkingSubflow } from '../../src/core/slots/buildThinkingSubflow.js';
-import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
+import { SUBFLOW_IDS } from '../../src/lib/conventions.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -51,22 +51,24 @@ function mockProvider(opts: {
   rawThinking?: unknown;
   content?: string;
   declares?: ThinkingHandler | null;
-}): LLMProvider {
+  toolTurns?: number;
+}) {
   let calls = 0;
   const declared = opts.declares === undefined ? mockThinkingHandler : opts.declares;
   return {
     name: opts.name ?? 'mock',
     ...(declared !== null && { thinkingHandler: declared }),
-    complete: async (): Promise<LLMResponse> => {
+    complete: vi.fn(async (): Promise<LLMResponse> => {
       calls += 1;
+      const usesTool = calls <= (opts.toolTurns ?? 0);
       return {
-        content: opts.content ?? 'final answer',
-        toolCalls: [],
+        content: usesTool ? '' : opts.content ?? 'final answer',
+        toolCalls: usesTool ? [{ id: `echo-${calls}`, name: 'echo', args: {} }] : [],
         usage: { input: 1, output: 1 },
-        stopReason: 'end_turn',
+        stopReason: usesTool ? 'tool_use' : 'end_turn',
         ...(opts.rawThinking !== undefined && { rawThinking: opts.rawThinking }),
       };
-    },
+    }),
   };
 }
 
@@ -366,40 +368,50 @@ describe('framework-wiring — security: opt-out skips handler entirely', () => 
   });
 });
 
-// ─── 6. PERFORMANCE — non-thinking agents have same perf ─────────
+// ─── 6. PERFORMANCE — count work across ReAct iterations ─────────
 
-describe('framework-wiring — performance: no overhead when no handler resolves', () => {
-  it(
-    'explicit opt-out (thinkingHandler(null)) — no overhead per turn',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // Tight loop comparing baseline (no handler) to explicit opt-out.
-      // Both should be roughly equivalent. Sanity check that
-      // thinkingHandler(null) doesn't add hidden cost.
-      const provider1 = mockProvider({ name: 'unknown-provider', declares: null }); // declares none
-      const agent1 = Agent.create({ provider: provider1, model: 'mock' }).system('s').build();
+describe('framework-wiring — counted thinking work', () => {
+  it('explicit opt-out adds zero thinking entries and provider calls across turns', async () => {
+    const echo = defineTool({
+      name: 'echo',
+      description: 'Echo',
+      inputSchema: { type: 'object' },
+      execute: async () => 'ok',
+    });
+    const rawThinking = {
+      kind: 'anthropic',
+      blocks: [{ type: 'thinking', thinking: 'reasoning' }],
+    };
 
-      const provider2 = mockProvider({ name: 'mock' });
-      const agent2 = Agent.create({ provider: provider2, model: 'mock' })
-        .system('s')
-        .thinkingHandler(null)
-        .build();
-      // Purely comparative: opt-out must not be 2× the no-handler baseline,
-      // sampled alternately on this machine. The old `+ 200ms` cushion is
-      // gone — the helper floors the denominator with a load-scaled reference
-      // unit instead, so the guard means the same thing on any runner.
-      await expectWithinTimes({
-        baseline: async () => {
-          for (let i = 0; i < 4; i++) await agent1.run({ message: 'x' });
-        },
-        subject: async () => {
-          for (let i = 0; i < 4; i++) await agent2.run({ message: 'x' });
-        },
-        times: 2,
-        why: 'thinkingHandler(null) must add no hidden cost',
+    async function run(handler: 'undeclared' | 'opted-out' | 'declared') {
+      const provider = mockProvider({
+        declares: handler === 'undeclared' ? null : mockThinkingHandler,
+        rawThinking,
+        toolTurns: 2,
       });
-    },
-  );
+      const builder = Agent.create({ provider, model: 'mock', maxIterations: 4 })
+        .system('s')
+        .tool(echo);
+      if (handler === 'opted-out') builder.thinkingHandler(null);
+      const agent = builder.build();
+
+      let stageEntries = 0;
+      agent.attach({
+        id: 'count-thinking-entries',
+        onStageStart: ({ runtimeStageId }) => {
+          if (runtimeStageId.startsWith(`${SUBFLOW_IDS.THINKING}/`)) stageEntries += 1;
+        },
+      });
+
+      await agent.run({ message: 'go' });
+      return { stageEntries, providerCalls: provider.complete.mock.calls.length };
+    }
+
+    const ordinary = await run('undeclared');
+    expect(ordinary).toEqual({ stageEntries: 0, providerCalls: 3 });
+    expect(await run('opted-out')).toEqual(ordinary);
+    expect(await run('declared')).toEqual({ stageEntries: 3, providerCalls: 3 });
+  });
 });
 
 // ─── 7. ROI — end-to-end with custom handler override ────────────

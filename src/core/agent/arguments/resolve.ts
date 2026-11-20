@@ -73,10 +73,10 @@ import {
   type PeriodFacts,
 } from '../../../time/convert.js';
 import type { InstantText } from '../../../time/instant.js';
-import type { CallWindowRow } from '../../../time/rows.js';
-import { callWindowRow } from '../../../time/rowsBuild.js';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import type { ZoneName } from '../../../time/zone.js';
 import { composeResolutionRows } from './resolutionRows.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
 import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
 import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
 import {
@@ -97,12 +97,15 @@ import {
 import { keptAnswerFor, type KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
 import { timeRefusal, unreadableRulesRefusal } from './serve.js';
-import type { CallSources, DeclaredSource } from './sources.js';
+import { freeNamed, periodQuotesOf, type CallSources, type DeclaredSource } from './sources.js';
+
+export { callWindowRowsOf } from './resolutionRows.js';
 
 /** One call of the batch, as the model emitted it (its raw arguments). */
 export interface BatchCall {
   readonly id: string;
   readonly name: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly args: Readonly<Record<string, unknown>>;
   readonly argumentsFailure?: import('../../../provider-contract/types.js').LLMResponse['toolCalls'][number]['argumentsFailure'];
 }
@@ -124,6 +127,7 @@ export interface PlannedArgument {
 export interface PlannedCall {
   readonly toolCallId: string;
   readonly toolName: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /** The dispatch re-read could not read the rules — the assert's own sentence. */
   readonly refused?: string;
   readonly ruled: readonly PlannedArgument[];
@@ -139,6 +143,7 @@ export interface PlannedCall {
 export interface CheckedArgument {
   readonly toolCallId: string;
   readonly toolName: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly argument: string;
   /** The argument's rule — absent only on a FREE argument a `from` entry named. */
   readonly rule?: 'ask' | 'assume';
@@ -196,12 +201,12 @@ export interface TimeArm {
 
 /**
  * The declared sources, as the layer's stages are handed them: each call's
- * `from` entries (`sources.ts` · `CallSources`, by call id — a call with no
+ * `from` entries (`sources.ts` · `CallSources`, by batch address — a call with no
  * entry declares nothing: its tool owns the reserved argument) and, for the
  * checks, the corpora (`checks.ts` · `SourceCorpus`). Absent → the arm is off.
  */
 export interface SourcesArm {
-  readonly declared: ReadonlyMap<string, CallSources>;
+  readonly declared: ReadonlyMap<BatchAddress, CallSources>;
   /** Present from VERIFY on — DECLARE needs only the entries. */
   readonly corpus?: SourceCorpus;
   /**
@@ -260,6 +265,7 @@ export type ArgumentFill =
  */
 export interface ArgumentResolution {
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly iteration: number;
   readonly fills?: readonly ArgumentFill[];
   readonly refused?: string;
@@ -292,17 +298,6 @@ export interface ArgumentResolution {
 
 // ─── DECLARE ────────────────────────────────────────────────────────────
 
-/** The free arguments (no rule) a call's `from` entries name, in declared order. */
-function freeNamed(
-  sources: SourcesArm | undefined,
-  toolCallId: string,
-  ruled: readonly { readonly argument: string }[],
-): string[] {
-  const from = sources?.declared.get(toolCallId)?.from ?? [];
-  const ruledNames = new Set(ruled.map((r) => r.argument));
-  return from.filter((e) => !ruledNames.has(e.argument)).map((e) => e.argument);
-}
-
 /**
  * Every call of the batch whose tool carries rules — read through `rulesOf`,
  * the dispatch re-read of the SAME assert `defineTool` runs — with each ruled
@@ -321,20 +316,25 @@ export function declareBatch(
     // Missing values in a damaged stream are not a request to fill or ask.
     // ToolCalls files the ordinary enforced refusal for this exact attempt.
     if (call.argumentsFailure !== undefined) continue;
+    const owner = {
+      toolCallId: call.id,
+      toolName: call.name,
+      ...callOccurrenceField(call.callOccurrenceKey),
+    };
+    const declared = sources?.declared.get(batchAddress(call.id, call.callOccurrenceKey));
     const rules = rulesOf(toolOf(call.name));
     if (rules === undefined) {
-      const free = freeNamed(sources, call.id, []);
-      if (free.length > 0) plan.push({ toolCallId: call.id, toolName: call.name, ruled: [], free });
+      const free = freeNamed(declared, []);
+      if (free.length > 0) plan.push({ ...owner, ruled: [], free });
       continue;
     }
     if (isRefused(rules)) {
-      plan.push({ toolCallId: call.id, toolName: call.name, refused: rules.refused, ruled: [] });
+      plan.push({ ...owner, refused: rules.refused, ruled: [] });
       continue;
     }
-    const free = freeNamed(sources, call.id, rules.ruled);
+    const free = freeNamed(declared, rules.ruled);
     plan.push({
-      toolCallId: call.id,
-      toolName: call.name,
+      ...owner,
       ruled: rules.ruled.map((r) => ({
         argument: r.argument,
         rule: r.rule,
@@ -349,8 +349,8 @@ export function declareBatch(
 
 // ─── VERIFY ─────────────────────────────────────────────────────────────
 
-const callById = (calls: readonly BatchCall[]): Map<string, BatchCall> =>
-  new Map(calls.map((c) => [c.id, c]));
+const callsByAddress = (calls: readonly BatchCall[]): ReadonlyMap<BatchAddress, BatchCall> =>
+  new Map(calls.map((c) => [batchAddress(c.id, c.callOccurrenceKey), c]));
 
 /** The tool's rules, when they can be read — `undefined` otherwise. */
 function readableRules(toolOf: ToolOf, toolName: string): ToolRules | undefined {
@@ -403,10 +403,10 @@ function isFreeAsk(toolOf: ToolOf, toolName: string, argument: string): boolean 
 /** The model's `from` entry for one argument of one call, if it declared one. */
 function claimFor(
   sources: SourcesArm | undefined,
-  toolCallId: string,
+  address: BatchAddress,
   argument: string,
 ): DeclaredSource | undefined {
-  return sources?.declared.get(toolCallId)?.from.find((e) => e.argument === argument);
+  return sources?.declared.get(address)?.from.find((e) => e.argument === argument);
 }
 
 /**
@@ -421,11 +421,12 @@ function sourceCheckOf(
   argument: string,
   rule: RuledArgument | undefined,
 ): SourceCheck | undefined {
-  if (sources?.corpus === undefined || !sources.declared.has(call.id)) return undefined;
+  const address = batchAddress(call.id, call.callOccurrenceKey);
+  if (sources?.corpus === undefined || !sources.declared.has(address)) return undefined;
   const tool = toolOf(call.name);
   const spelling =
     rule?.period === true ? readableRules(toolOf, call.name)?.period?.spelling : undefined;
-  const claim = claimFor(sources, call.id, argument);
+  const claim = claimFor(sources, address, argument);
   return checkSource(
     {
       toolName: call.name,
@@ -469,24 +470,6 @@ function quotesMayShow(sources: SourcesArm | undefined): boolean {
 }
 
 /**
- * The quotes the model declared as the person's (`source: 'user'`) for a
- * call's period arguments — `undefined` when declared sources are off for the
- * call (the arm is off, or the call declares nothing). Read from the entries
- * alone, so every stage (with or without the corpora) decides alike.
- */
-function periodQuotesOf(
-  sources: SourcesArm | undefined,
-  toolCallId: string,
-  periodArguments: ReadonlySet<string>,
-): readonly string[] | undefined {
-  if (sources === undefined || !sources.declared.has(toolCallId)) return undefined;
-  const from = sources.declared.get(toolCallId)?.from ?? [];
-  return from
-    .filter((e) => e.source === 'user' && e.quote !== undefined && periodArguments.has(e.argument))
-    .map((e) => e.quote as string);
-}
-
-/**
  * Under `.time()`: per planned call whose tool's period declares forms, which
  * window the call carries (`time/bind.ts` · `callWindowOf`) — a pure
  * function of the call, the tool's forms and facts, the turn's windows and the
@@ -499,19 +482,20 @@ export function timeDecisionsOf(
   toolOf: ToolOf,
   time: TimeArm | undefined,
   sources?: SourcesArm,
-): ReadonlyMap<string, CallWindow> {
-  const decisions = new Map<string, CallWindow>();
+): ReadonlyMap<BatchAddress, CallWindow> {
+  const decisions = new Map<BatchAddress, CallWindow>();
   if (time === undefined) return decisions;
-  const byId = callById(calls);
+  const byAddress = callsByAddress(calls);
   for (const planned of plan) {
     if (planned.refused !== undefined) continue;
-    const call = byId.get(planned.toolCallId);
+    const address = batchAddress(planned.toolCallId, planned.callOccurrenceKey);
+    const call = byAddress.get(address);
     const rules = readableRules(toolOf, planned.toolName);
     const forms = periodFormsOf(rules?.period);
     if (call === undefined || rules === undefined || forms.length === 0) continue;
-    const quotes = periodQuotesOf(sources, call.id, periodArgumentsOf(rules.period));
+    const quotes = periodQuotesOf(sources?.declared.get(address), periodArgumentsOf(rules.period));
     decisions.set(
-      call.id,
+      address,
       callWindowOf(
         {
           args: call.args,
@@ -531,20 +515,6 @@ export function timeDecisionsOf(
     );
   }
   return decisions;
-}
-
-/** The `call-window` rows for this batch's decisions, in batch order (`time/rows.ts`). */
-export function callWindowRowsOf(
-  decisions: ReadonlyMap<string, CallWindow>,
-  calls: readonly BatchCall[],
-  stamp: { readonly turn: number; readonly iteration: number },
-): CallWindowRow[] {
-  return calls.flatMap((c) => {
-    const decision = decisions.get(c.id);
-    return decision === undefined
-      ? []
-      : [callWindowRow({ toolCallId: c.id, toolName: c.name }, decision, stamp)];
-  });
 }
 
 /** The arguments a decision FILLS — the chosen form's, by name — or none. */
@@ -680,27 +650,33 @@ export function verifyPlan(
   sources?: SourcesArm,
   time?: TimeArm,
 ): CheckedArgument[] {
-  const byId = callById(calls);
+  const byAddress = callsByAddress(calls);
   const decisions = timeDecisionsOf(plan, calls, toolOf, time, sources);
   const checked: CheckedArgument[] = [];
   // Quotes are shown on this batch's rows and ask only when no tool in reach can hide
   // arguments — and never beside a call whose name nothing answers (no view to ask).
   const quotesShown = quotesMayShow(sources);
-  const quoteOf = (call: BatchCall, argument: string): { quoteShown?: true } =>
-    quotesShown &&
-    toolOf(call.name) !== undefined &&
-    claimFor(sources, call.id, argument)?.quote !== undefined
-      ? { quoteShown: true }
-      : {};
   for (const planned of plan) {
     if (planned.refused !== undefined) continue;
-    const call = byId.get(planned.toolCallId);
+    const address = batchAddress(planned.toolCallId, planned.callOccurrenceKey);
+    const call = byAddress.get(address);
     if (call === undefined) continue;
     const rules = readableRules(toolOf, planned.toolName);
-    const decision = decisions.get(planned.toolCallId);
+    const decision = decisions.get(address);
     // Refused before dispatch on its window (step T5b): the call will not run, so none of its
     // arguments is filled, asked or filed — its `call-window` row is the record.
     if (decision?.how === 'refused') continue;
+    const owner = {
+      toolCallId: planned.toolCallId,
+      toolName: planned.toolName,
+      ...callOccurrenceField(planned.callOccurrenceKey),
+    };
+    const quoteOf = (argument: string): { quoteShown?: true } =>
+      quotesShown &&
+      toolOf(call.name) !== undefined &&
+      claimFor(sources, address, argument)?.quote !== undefined
+        ? { quoteShown: true }
+        : {};
     const filled = filledArguments(decision);
     const alternatives = filled.size > 0 ? formArgumentsOf(toolOf, planned.toolName) : filled;
     // A window the model SENT in one form: another form's missing arguments were an alternative
@@ -723,8 +699,7 @@ export function verifyPlan(
         : windowUntakenOf(toolOf, planned.toolName, call, kept);
     for (const p of planned.ruled) {
       const base = {
-        toolCallId: planned.toolCallId,
-        toolName: planned.toolName,
+        ...owner,
         argument: p.argument,
         rule: p.rule,
         ...(p.period === true && { period: true as const }),
@@ -747,15 +722,15 @@ export function verifyPlan(
             under.runs || isTraced(under.check)
               ? {
                   ...base,
-                  ...quoteOf(call, p.argument),
+                  ...quoteOf(p.argument),
                   source: under.check.source,
                   check: under.check,
                 }
-              : placeChecked({ ...base, ...quoteOf(call, p.argument) }, under.check),
+              : placeChecked({ ...base, ...quoteOf(p.argument) }, under.check),
           );
           continue;
         }
-        checked.push(placeChecked({ ...base, ...quoteOf(call, p.argument) }, check));
+        checked.push(placeChecked({ ...base, ...quoteOf(p.argument) }, check));
         continue;
       }
       if (p.rule === 'ask') {
@@ -786,12 +761,11 @@ export function verifyPlan(
       const check = sourceCheckOf(sources, toolOf, call, argument, undefined);
       if (check === undefined) continue;
       checked.push({
-        toolCallId: planned.toolCallId,
-        toolName: planned.toolName,
+        ...owner,
         argument,
         source: check.source,
         check,
-        ...quoteOf(call, argument),
+        ...quoteOf(argument),
       });
     }
   }
@@ -808,7 +782,7 @@ export function rowsOf(
   stamp: { readonly turn: number; readonly iteration: number },
   kept?: readonly KeptAnswer[],
   sources?: SourcesArm,
-  decisions?: ReadonlyMap<string, CallWindow>,
+  decisions?: ReadonlyMap<BatchAddress, CallWindow>,
 ): ArgumentRow[] {
   return composeResolutionRows(checked, calls, toolOf, stamp, kept, sources, decisions, {
     declaredDefault,
@@ -831,7 +805,7 @@ function quotedFor(c: CheckedArgument, sources: SourcesArm | undefined): string 
     return undefined;
   }
   if (c.quoteShown !== true) return undefined;
-  return claimFor(sources, c.toolCallId, c.argument)?.quote;
+  return claimFor(sources, batchAddress(c.toolCallId, c.callOccurrenceKey), c.argument)?.quote;
 }
 
 /**
@@ -848,23 +822,27 @@ export function resolutionsOf(
   iteration: number,
   kept?: readonly KeptAnswer[],
   sources?: SourcesArm,
-  decisions?: ReadonlyMap<string, CallWindow>,
+  decisions?: ReadonlyMap<BatchAddress, CallWindow>,
 ): ArgumentResolution[] {
   const resolutions: ArgumentResolution[] = [];
   for (const planned of plan) {
+    const owner = {
+      toolCallId: planned.toolCallId,
+      ...callOccurrenceField(planned.callOccurrenceKey),
+      iteration,
+    };
+    const address = batchAddress(planned.toolCallId, planned.callOccurrenceKey);
     if (planned.refused !== undefined) {
       resolutions.push({
-        toolCallId: planned.toolCallId,
-        iteration,
+        ...owner,
         refused: unreadableRulesRefusal(planned.toolName, planned.refused),
       });
       continue;
     }
-    const decision = decisions?.get(planned.toolCallId);
+    const decision = decisions?.get(address);
     if (decision?.how === 'refused') {
       resolutions.push({
-        toolCallId: planned.toolCallId,
-        iteration,
+        ...owner,
         refused: timeRefusal(
           planned.toolName,
           decision.refused,
@@ -878,7 +856,7 @@ export function resolutionsOf(
     const ask: string[] = [];
     const quoted: { argument: string; quote: string }[] = [];
     for (const c of checked) {
-      if (c.toolCallId !== planned.toolCallId) continue;
+      if (batchAddress(c.toolCallId, c.callOccurrenceKey) !== address) continue;
       if (c.asked !== undefined) {
         ask.push(c.argument);
         const quote = quotedFor(c, sources);
@@ -925,8 +903,7 @@ export function resolutionsOf(
       ask.some((a) => forms.has(a));
     if (fills.length > 0 || ask.length > 0) {
       resolutions.push({
-        toolCallId: planned.toolCallId,
-        iteration,
+        ...owner,
         ...(fills.length > 0 && { fills }),
         ...(ask.length > 0 && { ask }),
         ...(quoted.length > 0 && { quoted }),

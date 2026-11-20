@@ -4,6 +4,7 @@ import { parseMaybeJson } from '../emptiness.js';
 import { readPlacement, type IssuedPairs } from '../placedTickets.js';
 import type { FindingsDeclaration } from './types.js';
 import { isCollapsedToolResult } from './ticket.js';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 export type ReferenceReason =
   | 'not-served'
@@ -18,6 +19,7 @@ export interface ReferenceObservation {
   readonly reason?: ReferenceReason;
   readonly toolName?: string;
   readonly ref?: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
 }
 export interface FindingsRequest {
   readonly version: 1;
@@ -83,6 +85,7 @@ export function captureFindingsRequest(
       ...visibility,
       ...(reason !== undefined && { reason }),
       ...(reason === undefined && source?.toolName !== undefined && { toolName: source.toolName }),
+      ...(reason === undefined && callOccurrenceField(source?.callOccurrenceKey)),
     };
   });
   return { version: 1, iteration, complete: true, results };

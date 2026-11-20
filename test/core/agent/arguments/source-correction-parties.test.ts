@@ -60,7 +60,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
         .build();
       try {
-        expect(await agent.run(QUESTION)).toBe('Done.');
+        expect(await agent.run(QUESTION)).toBe('Done.\n\n---\n\nNot sure — a call was refused.');
         expect(ran).toEqual([{ vm: VM }]);
         expect(p.requests).toHaveLength(3);
         expect(argumentsOf(agent, 'held')).toEqual([
@@ -91,7 +91,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
         .build();
       try {
-        expect(await agent.run(QUESTION)).toBe('Done.');
+        expect(await agent.run(QUESTION)).toBe('Done.\n\n---\n\nNot sure — a call was refused.');
         expect(registry).toEqual([{ vm: VM }]);
         expect(external).toEqual([]);
         expect(argumentsOf(agent, 'held')[0]).toHaveProperty(
@@ -121,7 +121,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
         .build();
       try {
-        expect(await agent.run(QUESTION)).toBe('Done.');
+        expect(await agent.run(QUESTION)).toBe(
+          'Done.\n\n---\n\nNot sure — vm = "new-native-default" was assumed by read_correction_fixture\'s rule, not given by you; a call was refused.',
+        );
         expect(old).toEqual([]);
         expect(current).toEqual([{ vm: 'new-native-default' }]);
         expect(argumentsOf(agent, 'new-proposal')[0]).toMatchObject({ source: 'default' });
@@ -146,7 +148,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
         .inputsLayer({ argumentSources: true, declarationCorrection: 'once' })
         .build();
       try {
-        expect(await agent.run(QUESTION)).toBe('Unavailable.');
+        expect(await agent.run(QUESTION)).toBe(
+          'Unavailable.\n\n---\n\nNot sure — calls were refused.',
+        );
         expect(ran).toEqual([]);
         expect(p.requests[1]?.tools?.some((entry) => entry.name === TOOL) ?? false).toBe(false);
         expect(argumentsOf(agent, 'held')[0]).toHaveProperty(
@@ -173,8 +177,8 @@ it('concurrent admitted agents with identical proposed call IDs have independent
   ]);
   try {
     expect(await Promise.all([first.agent.run(QUESTION), second.agent.run(QUESTION)])).toEqual([
-      'First done.',
-      'Second done.',
+      'First done.\n\n---\n\nNot sure — a call was refused.',
+      'Second done.\n\n---\n\nNot sure — a call was refused.',
     ]);
     expect(first.ran).toEqual([{ vm: VM }]);
     expect(second.ran).toEqual([{ vm: VM }]);

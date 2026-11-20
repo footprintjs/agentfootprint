@@ -1,3 +1,4 @@
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import type {
   ArtifactOp,
   ArtifactOrigin,
@@ -146,6 +147,7 @@ export interface ArtifactHandOverFailedPayload {
  *  Meta only, never the payload: the screen redeems the ref itself, under
  *  its own identity. */
 export interface ArtifactPresentedPayload {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly ref: string;
   readonly as: string;
   readonly snapshot: {

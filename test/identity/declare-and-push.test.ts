@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { staticTokens, type CredentialProvider } from '../../src/identity.js';
@@ -151,7 +152,8 @@ describe('declare-and-push — credential material, both halves', () => {
     const ev = out.events.find(
       (e) => e.name === 'agentfootprint.credential.authorization_required',
     );
-    expect(ev?.payload).toEqual({
+    expect(normalizeCallOccurrences(ev?.payload)).toEqual({
+      callOccurrenceKey: [0, 0, 0, 1, 0],
       service: 'github',
       sessionId: 'sess_law',
       toolCallId: 'c1',

@@ -6,6 +6,8 @@ import type { TimeRange } from '../../../../../time/range.js';
 import type { ZoneName } from '../../../../../time/zone.js';
 import { validatePropertyValue } from '../../../../../tools/toolArgsValidation.js';
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf } from '../../../../../tools/declare.js';
+import type { BatchAddress } from '../../batchAddress.js';
+import { memberAddresses, windowAddressKey } from '../../askAddresses.js';
 import type { BatchCall, ToolOf } from '../../resolve.js';
 import { WINDOW_FORM_EXPECTATION } from '../constants.js';
 import { refusalExpectation } from '../fields.js';
@@ -24,7 +26,7 @@ export function windowFills(
   field: AskField,
   range: TimeRange,
   zone: ZoneName,
-  byId: ReadonlyMap<string, BatchCall>,
+  byAddress: ReadonlyMap<BatchAddress, BatchCall>,
   toolOf: ToolOf,
   time: AskTime,
   keepLookback = true,
@@ -34,8 +36,8 @@ export function windowFills(
       readonly filled: Readonly<Record<string, WindowFilled>>;
     }
   | { readonly expected: string } {
-  const fills: Record<string, WindowFill> = {};
-  const filled: Record<string, WindowFilled> = {};
+  const fills: Record<string, WindowFill> = Object.create(null);
+  const filled: Record<string, WindowFilled> = Object.create(null);
   // The offered look-back, picked as offered, stays a look-back from now — the same window the
   // served line and a later call's fill convert (`time/windows.ts` · `windowToConvert`), so the value
   // this call is handed and the value the model is told are one spelling.
@@ -72,8 +74,9 @@ export function windowFills(
           ? ('tool-trims' as const)
           : ('reads-more' as const)
         : undefined;
-    for (const id of member.toolCallIds) {
-      if (fills[id] !== undefined || !byId.has(id)) continue;
+    for (const address of memberAddresses(member)) {
+      const key = windowAddressKey(field, address);
+      if (Object.hasOwn(fills, key) || !byAddress.has(address)) continue;
       for (const [argument, value] of Object.entries(conversion.values)) {
         if (typeof value === 'object') continue;
         const verdict = validatePropertyValue(
@@ -85,8 +88,8 @@ export function windowFills(
           return { expected: expected ?? WINDOW_FORM_EXPECTATION };
         }
       }
-      fills[id] = { values: conversion.values, ...(wider !== undefined && { wider }) };
-      filled[id] = {
+      fills[key] = { values: conversion.values, ...(wider !== undefined && { wider }) };
+      filled[key] = {
         toolName: member.toolName,
         decision: {
           how: 'filled',

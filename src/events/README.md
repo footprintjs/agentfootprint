@@ -117,6 +117,16 @@ Then: add to `registry.ts` (EVENT_NAMES, AgentfootprintEventMap, ALL_EVENT_TYPES
 
 ## How consumers use this layer
 
+An owning Agent's `agent.turn_end` has `meta.rootTurn === true` on both fresh
+and resumed turns. Mounted Agents and older recordings omit the field. A
+consumer that starts reading on resume can use this marker to recognize the
+root's final answer even when it never saw the turn open.
+
+Within an owning Agent's run, a mounted Agent's `agent.turn_start`,
+`agent.turn_end`, `stream.llm_start`, `stream.llm_end` and `stream.token` carry
+`meta.mountedTurn === true` in both the live and served views. The owning
+Agent's events, standalone composition events and older records omit it.
+
 Library-produced `permission.check`, `permission.halt` and credential lifecycle
 events carry `ToolCallEventIdentity` (`toolCallId`, `iteration`). The fields are
 optional on the public payloads because older recordings and caller-emitted

@@ -5,7 +5,7 @@
  * Pattern: one owner of each row's shape (the `coverage/period.ts` ·
  *          `periodRowIsWellFormed` precedent): the module that defines a row
  *          also answers "is this a row I would have filed?", so the
- *          checkpoint door (`core/runCheckpoint.ts` · `ledgerRowIsWellFormed`)
+ *          checkpoint door (`core/checkpointLedger.ts` · `ledgerRowIsWellFormed`)
  *          refuses exactly what the library never files.
  * Role:    L0 leaf (the time layer). Imports `instant.ts`, `zone.ts`,
  *          `range.ts`, `reader.ts` (the parts check), `resolveRecord.ts` (the
@@ -49,6 +49,7 @@ import type {
   CallWindowRow,
   ClockRow,
   SourceClockRow,
+  TimeCallIdentity,
   TimeAnswerRow,
   TimeDerivedRow,
   TimeReadingRow,
@@ -69,6 +70,7 @@ export type {
   CallWindowRow,
   TimeDerivedRow,
   SourceClockRow,
+  TimeCallIdentity,
   TimeRow,
 } from './rows/types.js';
 
@@ -93,6 +95,7 @@ export function callWindowOfCall(
   ledger: readonly unknown[] | undefined,
   toolCallId: string,
   turn: number,
+  matches?: (row: Partial<CallWindowRow>) => boolean,
 ): CallWindowRow | undefined {
   if (ledger === undefined) return undefined;
   for (let i = ledger.length - 1; i >= 0; i--) {
@@ -102,7 +105,8 @@ export function callWindowOfCall(
       typeof r === 'object' &&
       r.kind === 'call-window' &&
       r.toolCallId === toolCallId &&
-      r.turn === turn
+      r.turn === turn &&
+      (matches === undefined || matches(r))
     ) {
       return r as CallWindowRow;
     }
@@ -161,7 +165,7 @@ export function timeDerivedRow(
 
 /** The `source-clock` row for one call's dataset whose declared axis names `zone`. */
 export function sourceClockRow(
-  call: { readonly toolCallId: string; readonly toolName: string },
+  call: TimeCallIdentity,
   at: { readonly turn: number; readonly iteration: number },
   zone: ZoneName,
 ): SourceClockRow {
@@ -172,6 +176,7 @@ export function sourceClockRow(
     toolCallId: call.toolCallId,
     toolName: call.toolName,
     zone,
+    ...(call.callOccurrenceKey !== undefined && { callOccurrenceKey: call.callOccurrenceKey }),
   };
 }
 
@@ -180,6 +185,7 @@ export function callRowOfCall(
   ledger: readonly unknown[] | undefined,
   toolCallId: string,
   turn: number,
+  matches?: (row: Partial<CallRow>) => boolean,
 ): CallRow | undefined {
   if (ledger === undefined) return undefined;
   for (let i = ledger.length - 1; i >= 0; i--) {
@@ -189,7 +195,8 @@ export function callRowOfCall(
       typeof r === 'object' &&
       r.kind === 'call' &&
       r.toolCallId === toolCallId &&
-      r.turn === turn
+      r.turn === turn &&
+      (matches === undefined || matches(r))
     ) {
       return r as CallRow;
     }

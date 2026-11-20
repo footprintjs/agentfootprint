@@ -95,7 +95,7 @@ import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
-import type { StandingLineWhen } from './assessment/compose.js';
+import type { AnswerLayerArm } from './assessment/answerLayerOptions.js';
 import type { CheckInBuilderOptions } from '../checkin.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
@@ -273,10 +273,9 @@ export class AgentBuilder {
    *  on its own, so this is for provider-served tools and for tools that
    *  declare a period only on their results. */
   private resultsLayerValue = false;
-  /** `.answerLayer()` (honesty layer 4). Undefined for every agent that did
-   *  not ask for it — the chart, the rows, the events and the answer are then
-   *  byte-identical; `standingLine` is the prose line's own opt-in. */
-  private answerLayerValue?: { readonly standingLine?: StandingLineWhen };
+  /** The builder's explicit choice for the answer layer. Undefined leaves
+   *  the `AgentOptions` door and shared default in charge. */
+  private answerLayerValue?: AnswerLayerArm | false;
   /** `.time()` (the time layer). Undefined for every agent that did not ask —
    *  then no clock is read, no time row is filed and `time` on a run is refused. */
   private timeValue?: TimeOptions;
@@ -1424,9 +1423,9 @@ export class AgentBuilder {
    * WHICH ANSWER FIELDS ARE CLAIMS ABOUT WHICH FACTS (9.61.0) — the claim
    * seam's contract.
    *
-   * The evidence gate (`.namesAndNumbersFromEvidence()`) grounds the answer's
-   * names and numbers: every value must appear in a tool result. Its own limit is
-   * stated in its docs — it cannot catch a false claim assembled from real
+   * The evidence gate (`.namesAndNumbersFromEvidence()`) checks extracted values
+   * against tool results and exempts values from the person, prompt context and
+   * declared defaults. It cannot catch a false claim assembled from real
    * values ("fc1/3 is healthy" when the data says the port is down uses
    * entirely grounded tokens). This closes that hole for the facts you
    * name: the run's semantic envelopes settle typed readings, and each
@@ -1957,7 +1956,7 @@ export class AgentBuilder {
   }
 
   /**
-   * Mount the ANSWER LAYER (honesty layer 4): every answer gets its standing,
+   * Configure the ANSWER LAYER (honesty layer 4): every answer gets its standing,
    * folded from the run's committed record — never from how sure the model
    * sounded — and served as data.
    *
@@ -1982,16 +1981,14 @@ export class AgentBuilder {
    *   given before a skill's declared steps finished (`steps-unfinished`);
    * - every row the findings ledger gets carries its conversation `turn`.
    *
-   * It is a LABEL: it never asks, never refuses and never changes the model's
-   * reply. The one exception is opt-in — `{ standingLine: true }` appends ONE
-   * line to a prose answer (`Not sure — window = "2h" was assumed by
-   * search_logs's rule, not given by you.`), after the limits separator.
-   * Refused beside `.answerValidation()` (which judges the exact bytes
-   * delivered) and beside `.outputSchema()` (a typed answer is JSON, and JSON
-   * followed by prose is not) — through this door and `AgentOptions.answerLayer`
-   * alike; the standing still travels as data there. The line, like the
-   * limits block, is appended to the answer the run returns — never streamed
-   * on `stream.token`.
+   * By default it appends one line to a prose answer with standing `not-sure`
+   * or `ask` (`Not sure — window = "2h" was assumed by search_logs's rule, not
+   * given by you.`). The default keeps the standing as data only beside
+   * `.answerValidation()` and `.outputSchema()`, where the exact answer bytes
+   * must hold. Explicitly requesting a line beside either is refused.
+   * Ordinary `stream.token` events carry the model's text; the composed answer
+   * is returned and appears on `turn_end.finalContent`. When output middleware
+   * holds tokens for admission, it emits the composed answer in one token.
    *
    * `{ standingLine: { when } }` says the line only when it matters:
    * `'always'` (what `true` means), `'unless-consistent'` (not for
@@ -2015,8 +2012,9 @@ export class AgentBuilder {
    * The in-run fold reads no app declarations: `agent.assessment(declarations)`
    * and the answer account take `rowsAt`, and can say more than the run did.
    *
-   * Off → the chart, the committed rows, the events and the answer are
-   * byte-identical.
+   * `.answerLayer(false)` restores the chart, committed rows, events and answer
+   * from before the default. `.answerLayer()` and `{ standingLine: false }`
+   * both keep the assessment data and leave the line off.
    *
    * @example
    *   const agent = Agent.create({ provider, model })
@@ -2028,11 +2026,7 @@ export class AgentBuilder {
    * @example One line to the person, too
    *   Agent.create({ provider, model }).tool(searchLogs).answerLayer({ standingLine: true }).build();
    */
-  answerLayer(options?: {
-    readonly standingLine?:
-      | boolean
-      | { readonly when: 'always' | 'unless-consistent' | 'not-sure-or-ask' };
-  }): this {
+  answerLayer(options?: Exclude<AgentOptions['answerLayer'], true>): this {
     return configureAnswerLayer(
       livePort<AnswerLayerPort>({
         answerLayerValue: {
@@ -2421,8 +2415,8 @@ export class AgentBuilder {
    * `seed` writes the whole spec once as the run constant
    * `AgentState.ontology`, every model call is served ONE request-only
    * system piece composed from that key (`ontology/serve.ts ·
-   * ontologyPiece`, joined after the recovery piece and before the findings
-   * piece, hashed on the receipt, rebuilt byte-equal by `servedAt`) and
+   * ontologyPiece`, joined after the recovery piece, hashed on the receipt,
+   * rebuilt byte-equal by `servedAt`) and
    * `agentfootprint.ontology.served` fires per call with identities and
    * counts only. Registers the always-on `ontology` instruction
    * (`ONTOLOGY_INSTRUCTION`, the `outputSchema()` twin: a system piece on

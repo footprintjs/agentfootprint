@@ -10,6 +10,10 @@ import type { ToolArgs } from '../../../tools/runChain.js';
 import type { ArgumentAskState } from './ask.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from './resolve.js';
 
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
+import { callsByAddress, memberAddresses, windowAddressKey } from './askAddresses.js';
+
 type Selection = { readonly root: PrivateFieldRoot; readonly path: string };
 interface KeptIdentity {
   readonly turn: number;
@@ -24,8 +28,8 @@ export interface KeptToolContext {
   /** Admitted privacy from this call's resolved working state, even without its tool. */
   readonly privateArguments?: ReadonlySet<string>;
 }
-type Calls = readonly Pick<BatchCall, 'id' | 'name' | 'args'>[];
-type SettledFills = ReadonlyMap<string, { readonly fills?: ArgumentResolution['fills'] }>;
+type Calls = readonly Pick<BatchCall, 'id' | 'name' | 'args' | 'callOccurrenceKey'>[];
+type SettledFills = ReadonlyMap<BatchAddress, { readonly fills?: ArgumentResolution['fills'] }>;
 const whole = (root: PrivateFieldRoot): Selection[] => [{ root, path: '' }];
 
 /**
@@ -112,7 +116,9 @@ export function privateResolutionArguments(
     if (row === undefined) return all();
     if (
       own(row, 'toolCallId') !== resolution.toolCallId ||
-      own(row, 'iteration') !== resolution.iteration
+      own(row, 'iteration') !== resolution.iteration ||
+      (resolution.callOccurrenceKey !== undefined &&
+        readCallOccurrenceKey(row as object) !== readCallOccurrenceKey(resolution))
     )
       continue;
     const fills = own(row, 'fills');
@@ -160,24 +166,24 @@ export function privateAskSelections(
   settled: SettledFills,
   base?: SettledFills,
 ): Selection[] {
-  const byId = new Map(calls.map((call) => [call.id, call]));
+  const byAddress = callsByAddress(calls);
   return state.fields.flatMap((field, index) => {
     const progress = state.progress[index];
     if (progress?.answer === undefined && progress?.fills === undefined) return [];
     const hidden = field.members.some((member) =>
-      member.toolCallIds.some((id) => {
-        const call = byId.get(id),
+      memberAddresses(member).some((address) => {
+        const call = byAddress.get(address),
           tool = toolOf(member.toolName);
         // The declaration disappearing cannot declassify an answer already bound to it.
         if (call === undefined || tool === undefined) return true;
         const args = filledArgs(call.args, [
-          ...(base?.get(id)?.fills ?? []),
-          ...(settled.get(id)?.fills ?? []),
+          ...(base?.get(address)?.fills ?? []),
+          ...(settled.get(address)?.fills ?? []),
         ]);
         if (progress.answer !== undefined && !Object.hasOwn(args, member.argument))
           args[member.argument] = progress.answer;
         const selected = hiddenKeys(tool, args);
-        const arguments_ = progress.fills?.[id]?.values;
+        const arguments_ = progress.fills?.[windowAddressKey(field, address)]?.values;
         return (arguments_ === undefined ? [member.argument] : Object.keys(arguments_)).some(
           (argument) => selected.has(argument),
         );
@@ -263,13 +269,13 @@ export function privateResolutionSelections(
   const facts = keptFacts(prior, kept);
   if (facts.unknown && rows.some((row) => (row.fills?.length ?? 0) > 0))
     return whole('argumentResolutions');
-  const byId = new Map(calls.map((call) => [call.id, call]));
+  const byAddress = callsByAddress(calls);
   const selections: Selection[] = [];
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index];
     const fills = row.fills ?? [];
     if (fills.length === 0) continue;
-    const call = byId.get(row.toolCallId);
+    const call = byAddress.get(batchAddress(row.toolCallId, row.callOccurrenceKey));
     if (call === undefined) return whole('argumentResolutions');
     const hidden = hiddenKeys(toolOf(call.name), filledArgs(call.args, row.fills));
     for (let fillIndex = 0; fillIndex < fills.length; fillIndex++) {

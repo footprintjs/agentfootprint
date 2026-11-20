@@ -256,6 +256,7 @@ describe('contingent — the answer moment', () => {
           value: 'fc1/7',
           carriers: [{ toolCallId: 'c1', standing: 'noise' }],
           iteration: 4,
+          turn: 1,
         },
       ]);
       // fc2/9 — its one carrier c2 is a fact; sw-01 — carried by c1 (noise)
@@ -302,13 +303,18 @@ describe('contingent — the dispatch moment', () => {
   for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
     it(`${reactMode}: a call whose arguments carry a value it just ruled out files a row on that call, and the next call is served the line`, async () => {
       const r = await run(reactMode, DISPATCH_MOMENT, both);
+      const call = r.agent
+        .checkpoint()
+        ?.history.find((message) => message.role === 'tool' && message.toolCallId === 'c2');
+      expect(call?.callOccurrenceKey).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
       expect(r.rows).toEqual([
         {
           kind: 'contingent',
-          declaredOn: { toolCallId: 'c2' },
+          declaredOn: { toolCallId: 'c2', callOccurrenceKey: call?.callOccurrenceKey },
           value: 'fc1/7',
           carriers: [{ toolCallId: 'c1', standing: 'ruled-out' }],
           iteration: 2,
+          turn: 1,
         },
       ]);
       expect(r.events).toEqual([
@@ -316,6 +322,7 @@ describe('contingent — the dispatch moment', () => {
           iteration: 2,
           declaredOn: 'tool-call',
           toolCallId: 'c2',
+          callOccurrenceKey: call?.callOccurrenceKey,
           carriers: 1,
           standings: ['ruled-out'],
           valueChars: 5,
@@ -387,9 +394,14 @@ describe('contingent — the last standing per result is the current one', () =>
 
 describe('contingent — the arms', () => {
   const findingsOnly: Build = (a) => a.system('bot').tool(probe()).findings();
+  // These controls pin the ledger and state keys before the answer layer files witnesses.
   const gateOnly: Build = (a) =>
-    a.system('bot').tool(probe()).namesAndNumbersFromEvidence({ posture: 'assist' });
-  const neither: Build = (a) => a.system('bot').tool(probe());
+    a
+      .system('bot')
+      .tool(probe())
+      .namesAndNumbersFromEvidence({ posture: 'assist' })
+      .answerLayer(false);
+  const neither: Build = (a) => a.system('bot').tool(probe()).answerLayer(false);
 
   it('`.findings()` without the gate: no row, no event, the instruction as it was, the keys the both-armed run commits', async () => {
     const r = await run('dynamic', DISPATCH_MOMENT, findingsOnly);

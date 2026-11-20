@@ -203,11 +203,8 @@ Pinned by `test/core/scenario/batch-pause-settlement.test.ts`: all four doors,
 the count, the sentence word for word, the marker on the message AND on both
 brackets (and on no other bracket), its history readers (the permission
 `sequence` — paired by position, both directions of a reused id, a fresh
-process that mints the settled id again for a call that runs, an older
-proposal of the id that nobody answered (the settlement answers the LATEST
-turn that proposed it; the in-flight limit under "Not covered yet" below is
-pinned beside it), and seeded histories: exactly the calls that ran, and the
-pre-9.113.0 sequence wherever no marker is — a policy halt,
+process that mints the settled id again, an older proposal that has no answer,
+and seeded histories with unique ids — a policy halt,
 the check-in trail, the window's pin, the findings offer, `knownResults`, the
 piece, the collapse, `droppedStandings`, and no marker on any request, the
 collapse path's included), a fresh instance resuming a JSON-restored
@@ -229,27 +226,20 @@ its LAST `tool_end`, with and without a settlement) in
 served-view rebuild under `.findings()` by the conformance law in
 `test/time-travel/receipt-conformance.test.ts`.
 
-**Not covered yet — three doors that leave the later calls unanswered, or
-answer them another way.** A permission `halt` mid-batch ends the run with the
-calls after the halted one unanswered, so a conversation continued from that
-`checkpoint()` carries them without a result. `abandonPause()` followed by
-`followUp()` (or `run({ continueFrom: agent.checkpoint() })`) continues the
-PAUSED turn's history, where the paused call and the calls after it have no
-result. And the hosting door's input cancel (`hosting/standingAgent/turn/run.ts`, the
-`'cancel' in response` branch of its decision handling) answers every
-unanswered call — the paused one and the ones after it — with
-`{"status":"input_cancelled","requestId":…}`, which carries no marker, so a
-policy's `sequence` still counts those siblings as dispatched (as it did
-before this release). In the first two the window's LAW 2 refusal
-(`'unresolved-tool-call'`) keeps the unanswered turn from folding, and a
-permission policy's `sequence` (`security/extractSequence.ts`) reads an
-unanswered call as in flight only until its id has a result: a call never
-answered — a halt's later siblings, a paused turn continued after
-`abandonPause()` — counts once a later call that runs reuses its id. The
-marker is what keeps a call out when its id comes back (it is paired by
-position, never by id), so settling those doors with it is what would close
-that too. Settling all three with `notDispatchedResult` and the marker is a
-named follow-up; a halt needs its own anchor, since "halted" is not "paused".
+**Three doors still lack explicit settlement records.** A permission `halt`
+mid-batch leaves the calls after the halted one unanswered in the checkpoint.
+`abandonPause()` followed by `followUp()` or `run({ continueFrom: agent.checkpoint() })`
+leaves the paused call and its later siblings unanswered. In both cases the
+window's LAW 2 refusal (`'unresolved-tool-call'`) keeps the unanswered turn from
+folding. The permission policy's `sequence` reads each proposal's own result,
+so those calls stay outside the sequence when a later call reuses the ID.
+The hosting door's input cancel (`hosting/standingAgent/turn/run.ts`, the
+`'cancel' in response` branch) supplies an `input-cancelled` origin when the
+pause checkpoint carries findings admission state. The sequence excludes
+those records and still counts cancellations with no origin. A recorded
+`outcome-unknown` remains a possible dispatch. Recording the unsettled calls
+explicitly at all three doors is a separate follow-up. A halt needs its own
+anchor because it does not produce a pause.
 
 ### One owner of 'never dispatched' — in history and on the stream
 
@@ -280,7 +270,7 @@ The readers, and what each does with it (paths from `src/`):
 
 | reader | carrier | a settled call is… |
 |---|---|---|
-| `security/extractSequence.ts` — a policy's `sequence`, `PolicyHaltError.sequence` | history | left out: "verify before transfer" is not met by a verify that never ran. Each marker settles the ONE proposal it answers, paired by position (`settledProposals`), never by id alone: a provider may reuse an id — the library's own fallback ids are minted per provider instance, so a fresh process mints them again — and a call that really ran under the same id, before the settled one or after it, is counted while the settled one is not |
+| `security/extractSequence.ts` — a policy's `sequence`, `PolicyHaltError.sequence` | history | left out: "verify before transfer" is not met by a verify that never ran. Each result belongs to the proposal it answers, paired by position (`pairedResults`). A provider may reuse an id after a restart or within a run. A call that ran under that id keeps its own result, and a settlement keeps only its own proposal out |
 | `core/agent/stages/toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf` — the empty-lookup check's producer corpus (`noticeEmptyLookup`) | history | no producer text: a value only the sentence carries is not one "this run produced", and a ground that was only ever settled served nothing (the row reads `unreachable`) |
 | `core/checkin.ts` · `buildTrail` — the check-in trail's `toolCalls` | history | left out: never shown as a receipt |
 | `core/agent/window/toolNames.ts` · `toolNameOfMessage` — the last-tool-result pin, the drop notice, the dangling-reference check (`core/agent/stages/callLLM.ts`, which names the frame from the history the stage already read at its top — never a second read, which would add a narrative step to every run) | history | named as no tool: the pin stays on the tool's real result |

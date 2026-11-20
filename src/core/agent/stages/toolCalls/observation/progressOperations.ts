@@ -1,6 +1,8 @@
 import { type TypedScope, isDevMode } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { ToolExecutionContext } from '../../../../../tools/tools.js';
+import type { ToolCallEventIdentity } from '../../../../../events/types.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ToolProgressOperations } from '../contracts/operations/progress.js';
 
@@ -14,11 +16,7 @@ export function buildToolProgressOperations(
 ): ToolProgressOperations {
   const toolProgress = (
     scope: TypedScope<AgentState>,
-    call: {
-      readonly toolName: string;
-      readonly toolCallId: string;
-      readonly iteration: number;
-    },
+    call: ToolCallEventIdentity & { readonly toolName: string },
   ): Pick<ToolExecutionContext, 'progress'> => ({
     progress: (payload: unknown): void => {
       try {
@@ -26,6 +24,7 @@ export function buildToolProgressOperations(
           toolCallId: call.toolCallId,
           toolName: call.toolName,
           iteration: call.iteration,
+          ...callOccurrenceField(call.callOccurrenceKey),
           payload,
         });
       } catch (err) {

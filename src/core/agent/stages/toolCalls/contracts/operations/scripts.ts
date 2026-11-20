@@ -4,6 +4,7 @@ import type { Tool } from '../../../../../../tools/tools.js';
 import type { CallSettlement } from '../../../../scripts/label.js';
 import type { CodeRunFacts, CodeRunSlot } from '../../../../../codeRunnerTool.js';
 import type { ResumedCallFacts } from '../callFacts.js';
+import type { CallOccurrenceKey } from '../../../../../../lib/callOccurrence.js';
 
 /** Explicit callback contract for existing scripts operations. */
 export interface ToolScriptsOperations {
@@ -33,6 +34,7 @@ export interface ToolScriptsOperations {
   readonly proposedArgsOf: (
     scope: TypedScope<AgentState>,
     toolCallId: string,
+    callOccurrenceKey?: CallOccurrenceKey,
   ) => Readonly<Record<string, unknown>> | undefined;
   readonly fileResumedScript: (
     scope: TypedScope<AgentState>,

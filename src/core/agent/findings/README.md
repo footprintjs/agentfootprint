@@ -321,29 +321,14 @@ unarmed stream untouched) and § 14 (re-ask exits with and without a schema).
 
 ## Served (step 3)
 
-The system piece in this section describes legacy replay. Wire-only collapse is still live.
+Live calls append the bounded findings DATA message after history. `collapseJudged`
+changes only the wire copy of tool results. Replay uses the recorded layout to
+rebuild the DATA message or the legacy system piece.
 
-Why: a record alone changes nothing the model reads. The point of the ledger
-is that the ANSWER TURN is served the model's own judgments instead of the
-whole pile — and `serve.ts` does that on the wire only, with two pure
-functions. `history` is never rewritten (the window stage stays its only
-writer), and `servedView · viewOf` recomposes with the same two calls in the
-same order, so the receipt agrees with what went out by construction.
-
-- `findingsLedgerPiece(rows, servedToolCallIds(messages))` — a
-  request-only system piece (`source: 'findings'`), joined AFTER the recovery
-  piece and never into `systemPromptInjections`: headed by the context
-  contract's own field meanings, one bucket per field marked "declared by the
-  model", `noise` as a count, results nobody named as `undeclared` (never
-  'open'); bounded by `FINDINGS_PIECE_LIMITS` with every overflow stated and
-  every empty bucket omitted; `undefined` for a basis-only ledger. The third
-  argument is the wire's `role: 'tool'` ids — a pure function cannot see the
-  wire, so the caller hands it the list and the rebuild hands it the same one.
-  The bytes are a function of those two arguments and nothing else — no call
-  number — because the piece joins the ONE system block a cache marker
-  covers: a re-ask is served the same system bytes as the call before it,
-  while a ledger that moves every call moves the block every call (`serve.ts`
-  · "The cache"; the design page names the trade).
+- `findingsLedgerPiece(rows, servedToolCallIds(messages), answerAsk)` reconstructs
+  the legacy request-only system piece. It uses the original bucket limits and
+  includes the recorded answer-turn ask when configured. The example below
+  shows that legacy piece.
 - `collapseJudged(messages, rows, mode)` — a result the model judged `noise`
   or `ruled-out` becomes a ticket, `{ collapsed: true, standing, toolCallId,
 ref? }` (`isCollapsedToolResult` reads one back); `fact` too under
@@ -908,8 +893,8 @@ beside, in the same write, at the two moments that file standings (a call's
   first, and it is strings the moment already held — so a run whose model
   rules out only results that held something records the bytes it always
   did, with no new tracked read (no narrative line, no `readKeys` entry).
-- **It survives a continued conversation.** The checkpoint door
-  (`../../runCheckpoint.ts · validateCheckpoint`) admits the kind with the
+- **It survives a continued conversation.** The checkpoint ledger
+  (`../../checkpointLedger.ts · ledgerRowIsWellFormed`) admits the kind with the
   fields the fold and the piece read; without that arm, a checkpoint holding
   the row would be refused on resume.
 - **Not covered, named here so nobody reads it as covered:**
