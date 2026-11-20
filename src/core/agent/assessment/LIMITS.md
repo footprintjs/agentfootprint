@@ -8,6 +8,7 @@
   because its check, default fill, or kept-answer reuse runs in the inputs sub-flow.
 - An Agent chart mounted directly in an engine host records served rows only.
   Witnesses require AgentFootprint's own run and its native privacy policy.
+- A row whose checked output write cannot be determined yields no source link or gap.
 
 - **A host-built record's top-level lists.** The lists ON a row go through
   `rowList`. The record's own keys — `history`, `findingsLedger`,

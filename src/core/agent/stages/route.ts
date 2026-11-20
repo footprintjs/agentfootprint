@@ -48,15 +48,18 @@ import {
   stepInProgress,
   type StepPlanFor,
 } from '../../../injection-engine/skillSteps.js';
-import { evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import {
+  checkAnswer,
+  clip,
+  evidenceRefusalSentence,
+  MAX_REPORTED_VALUES,
+} from '../evidence/gate.js';
+import { readAnswer } from '../evidence/extract.js';
+import { scriptRowsOfTurn } from '../scripts/rows.js';
+import { scriptJudge } from '../scripts/judge.js';
 import { copyScriptsVerdict } from '../scripts/match.js';
 import { scriptRecoveryClause } from '../scripts/recovery.js';
-import {
-  answerEvidenceJudge,
-  canObserveAnswerSources,
-  changedCheckedAnswer,
-  noteAnswerEvidence,
-} from './answerEvidence.js';
+import { noteAnswerEvidence } from './answerEvidence.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory } from '../evidence/evidenceIndex.js';
 import { exemptForTurn, loadTimeLineage } from './turnExempt.js';
@@ -794,7 +797,6 @@ function judgeEvidence(
    *  its values, its keys — the schema's field names — never looked up.
    *  Absent → a JSON-shaped answer is read keys and all, as it always was. */
   typedAnswer?: true,
-  checkedIn: 'read' | 'written' = 'read',
 ): 'evidence-recheck' | undefined {
   if (gate === undefined) return undefined;
   const answer = (scope.llmLatestContent as string | undefined) ?? '';
@@ -811,7 +813,7 @@ function judgeEvidence(
 
   const history = scope.history as readonly LLMMessage[];
   // Under `decimalRounding`, a scientific token in a result's text also files its decimal.
-  const evidence = evidenceFromHistory(history, gate, canObserveAnswerSources(scope) || undefined);
+  const evidence = evidenceFromHistory(history, gate);
   // Under `.time()` (step T7): the turn's time spellings by lineage.
   const time = timeLineage?.(scope);
   const derived = time !== undefined ? derivedFormsOf(time.derived) : undefined;
@@ -819,17 +821,49 @@ function judgeEvidence(
   // THE ONE JUDGE of this run's evidence, bound to what the run read: asked
   // here of the draft, and by answer validation of the exact candidate it
   // delivers (`answerEvidence.ts`) — never a verdict carried across forms.
-  const { judge, turnScripts } = answerEvidenceJudge(scope, {
-    gate,
-    evidence,
-    history,
-    exempt,
-    derived,
-    figures,
-    typedAnswer,
-  });
-  const checked = judge(answer, checkedIn);
-  const verdict = checked.verdict;
+  const judgeProse = (text: string): EvidenceVerdict =>
+    checkAnswer(text, {
+      gate,
+      evidence,
+      ...(derived !== undefined && { derived }),
+      // The figures dial: the results' numbers, folded for the derivation
+      // question (`evidence/figures.ts`). Off → not built, the verdict as it was.
+      ...(figures !== undefined && { figures: figures.figureCheckOf(text, history, gate) }),
+      exempt,
+      ...(typedAnswer === true && { typed: true }),
+    });
+  // `code: 'match'` on a PROSE answer: the script match in front of the same
+  // judge (`scripts/judge.ts`) — matched blocks are cut out of the text the
+  // gate reads, the verdict carries `scripts` and each flagged value's
+  // `region`. Reads this turn's `script` rows (and the drop count) only here,
+  // under the arm; a typed answer is read as today (design § 12).
+  const turnScripts =
+    gate.code === 'match' && typedAnswer !== true
+      ? scriptRowsOfTurn(
+          scope.findingsLedger as readonly unknown[] | undefined,
+          scope.turnNumber as number,
+        )
+      : undefined;
+  const judge =
+    turnScripts === undefined
+      ? judgeProse
+      : scriptJudge({
+          judgeProse,
+          valuesIn: (text) =>
+            new Set(
+              readAnswer(text, gate, {
+                ...(figures !== undefined && {
+                  figures: figures.figureCheckOf(text, history, gate).numbers,
+                }),
+                exactTokens: evidence.values,
+              }).candidates.map((c) => clip(c.value)),
+            ),
+          turn: turnScripts,
+          ...(scope.scriptsDropped !== undefined && {
+            scriptsDropped: scope.scriptsDropped as number,
+          }),
+        });
+  const verdict = judge(answer);
   /** The script match's verdict on this draft's blocks, as plain data — absent unarmed. */
   const scripts = verdict.scripts === undefined ? undefined : copyScriptsVerdict(verdict.scripts);
   // The answer layer's witness for the blocks the answer showed — filed only
@@ -899,7 +933,16 @@ function judgeEvidence(
   // the JUDGE, not this verdict — the validation asks it of the candidate it
   // delivers, which an output transform may have changed. In memory, this
   // stage only — not one byte of state; read only when it answers `'final'`.
-  noteAnswerEvidence(scope, judge, checked, checkedIn, afterRevision);
+  noteAnswerEvidence(scope, (text) => {
+    const judged = judge(text);
+    return {
+      lookedUp: judged.lookedUp,
+      unsupported: judged.unsupported.length,
+      truncated: judged.evidenceTruncated,
+      unread: judged.unread ?? 0,
+      revised: afterRevision,
+    };
+  });
 
   if (verdict.unsupported.length === 0) {
     fileTimeDerived(scope, verdict.derived, iteration);
@@ -1357,12 +1400,10 @@ function buildJudgingDecider(
       return 'wrap-up';
     }
     let denied = false;
-    let preChain: string | undefined;
     if (chain.length > 0) {
-      preChain = scope.llmLatestContent;
       const verdict = await runMessageChain(chain, {
         phase: 'output',
-        content: preChain,
+        content: scope.llmLatestContent,
         history: [...(scope.history as readonly LLMMessage[])],
         iteration: scope.iteration,
         ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -1406,8 +1447,6 @@ function buildJudgingDecider(
         answer,
         timeLineage,
         figures,
-        undefined,
-        changedCheckedAnswer(scope, preChain, emission),
       ) === 'evidence-recheck'
     ) {
       restoreEmission(scope, emission);
@@ -1565,7 +1604,6 @@ function buildEnforcingDecider(
           timeLineage,
           figures,
           true,
-          changedCheckedAnswer(scope, preChainAnswer, emission),
         ) === 'evidence-recheck'
       ) {
         return reAsk('evidence-recheck', evidenceRecheckRationale(scope));

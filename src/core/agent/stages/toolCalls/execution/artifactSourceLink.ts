@@ -46,7 +46,7 @@ export function captureArtifactRedemption(
       runKeepsOut(scope, outputKey) ||
       runKeepsOut(scope, 'history') ||
       runKeepsOut(scope, 'placedTickets') ||
-      consumer.historyPositions.length === 0)
+      (consumer.historyPositions.length === 0 && consumer.bounded !== true))
   )
     return undefined;
 
@@ -91,11 +91,12 @@ export function captureArtifactRedemption(
         const occurrence = receipt === undefined ? undefined : readCallOccurrenceKey(receipt);
         if (typeof occurrence !== 'string') continue;
         const input = sourceLinkInputFor(consumer, occurrence);
-        if (
-          input === undefined ||
-          !carriesPlacedTicket(frame.history[input.element], occurrence, ref)
-        )
+        if (input === undefined) {
+          // After the positions cap, the index cannot settle a missing source.
+          if (consumer.bounded === true) rows.push({ ...row, bounded: true });
           continue;
+        }
+        if (!carriesPlacedTicket(frame.history[input.element], occurrence, ref)) continue;
         rows.push({ ...row, input });
       }
       appendSourceLinkWitnesses(scope, rows);

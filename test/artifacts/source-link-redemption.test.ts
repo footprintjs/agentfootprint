@@ -36,6 +36,7 @@ async function run({
   rewriteHistory,
   ruled,
   pause,
+  fillerCount = 0,
 }: {
   mode?: 'dynamic-grouped';
   redact?: boolean;
@@ -44,6 +45,7 @@ async function run({
   rewriteHistory?: boolean;
   ruled?: boolean;
   pause?: boolean;
+  fillerCount?: number;
 } = {}) {
   const store = inMemoryArtifacts();
   const redeem = vi.spyOn(store, 'get');
@@ -72,10 +74,20 @@ async function run({
     respond: (request) => {
       const results = request.messages.filter((message) => message.role === 'tool');
       if (results.length === 0) {
-        return { content: '', toolCalls: [{ id: 'reused', name: 'get_report', args: {} }] };
+        return {
+          content: '',
+          toolCalls: [
+            ...Array.from({ length: fillerCount }, (_, index) => ({
+              id: `fill-${index}`,
+              name: 'fill_history',
+              args: {},
+            })),
+            { id: 'reused', name: 'get_report', args: {} },
+          ],
+        };
       }
-      if (results.length === 1) {
-        const placed: unknown = JSON.parse(results[0]!.content);
+      if (results.length === fillerCount + 1) {
+        const placed: unknown = JSON.parse(results[fillerCount]!.content);
         assert(isPlacedToolResult(placed));
         placedRef = placed.ref;
         return {
@@ -114,7 +126,17 @@ async function run({
   })
     .tool(getReport)
     .tool(consumeReport);
-  if (ruled) builder.findings({ argumentSources: true }).namesAndNumbersFromEvidence();
+  if (fillerCount > 0) {
+    builder.tool(
+      defineTool({
+        name: 'fill_history',
+        description: 'Return a small history entry',
+        inputSchema: { type: 'object' },
+        execute: () => 'filler',
+      }),
+    );
+  }
+  if (ruled) builder.findings({ argumentSources: true });
   if (pause) {
     builder.tool(
       defineTool({
@@ -216,7 +238,47 @@ it('records the exact redeemed proposal argument beside its one native check', a
   expect(history[2]?.role).toBe('tool');
 });
 
-it('keeps the same-scope links while a native inputs subflow resolves a ruled argument', async () => {
+it('records a truncated redemption when the result falls beyond the kept history positions', async () => {
+  const { snapshot } = await run({ fillerCount: 256 });
+  expect(snapshot.sharedState.sourceLinkConsumer).toMatchObject({ bounded: true });
+  expect(snapshot.sharedState.sourceLinkRows).toEqual([
+    {
+      kind: 'source-link',
+      version: 1,
+      linkBasis: 'reference',
+      check: 'redeemed',
+      bounded: true,
+      consumer: expect.any(String),
+      output: {
+        key: 'llmLatestToolCalls',
+        checkedIn: 'read',
+        element: 0,
+        pointer: '/args/report~1key~01',
+      },
+    },
+  ]);
+  const scope = scopeOf(snapshot);
+  const sourceLinks = sourceLinksOf(scope);
+  const [link] = sourceLinks?.links ?? [];
+  assert(link);
+  const graph = createRecordGraph([{ ...scope, sourceLinks }], {
+    maxFields: 1_000_000,
+    sourceLinkPolicy: () => true,
+  });
+  const outputNode = graph.nodeId(scope.address, link.output);
+  const page = await graph.parents(outputNode, { signal: new AbortController().signal });
+  const output = {
+    nodeId: outputNode,
+    selection: { key: 'llmLatestToolCalls', element: 0, pointer: '/args/report~1key~01' },
+  };
+  expect(page.sourceLinks).toBeUndefined();
+  expect(page.sourceLinkGaps).toEqual([
+    { code: 'not-collected', output },
+    { code: 'truncated', output },
+  ]);
+});
+
+it('keeps the redemption link while a native inputs subflow resolves a ruled argument', async () => {
   const { snapshot } = await run({ ruled: true });
   const commits = snapshot.commitLog;
   const mounts = commits.filter(
@@ -233,7 +295,6 @@ it('keeps the same-scope links while a native inputs subflow resolves a ruled ar
   }
   expect(snapshot.sharedState.sourceLinkRows).toMatchObject([
     { linkBasis: 'reference', check: 'redeemed', output: { pointer: '/args/report~1key~01' } },
-    { linkBasis: 'match', check: 'value-found', output: { key: 'llmLatestContent' } },
   ]);
 });
 

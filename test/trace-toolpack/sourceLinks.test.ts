@@ -195,6 +195,79 @@ describe('the packed source-link contract', () => {
     });
     expect(sourceLinks?.limitations).toEqual(['budget-exhausted', 'privacy-active']);
   });
+
+  it('retains witnesses before the commit reader limit', () => {
+    const scope = fixtureScope(fixture.witnessRow);
+    const complete = sourceLinksOf(scope);
+    expect(complete?.links).toHaveLength(1);
+    const tail = Array.from({ length: 4095 }, (_, i) => commit(`tail-${i}`, i + 2, {}));
+    const result = sourceLinksOf({ ...scope, commitLog: [...scope.commitLog, ...tail] });
+    expect(result).toEqual({
+      ...complete,
+      status: 'partial',
+      limitations: ['budget-exhausted'],
+    });
+    expect(
+      sourceLinksOf({ ...scope, commitLog: tail.concat(commit('extra', 4097, {})) }),
+    ).toBeUndefined();
+  });
+
+  it('keeps tracked reads in the admitted prefix before an over-wide commit', () => {
+    const consumer = fixture.servedRow.consumer;
+    const door = fixture.witness.runtimeStageId;
+    const scope: RecordScope = {
+      address: fixture.address,
+      initialState: fixture.initialState,
+      commitLog: [
+        commit(consumer, 0, { answer: 'synthetic value', [servedKey]: [fixture.servedRow] }),
+        commit(door, 1, {
+          [witnessKey]: [
+            { ...fixture.witnessRow, output: { ...fixture.witnessRow.output, checkedIn: 'read' } },
+          ],
+        }),
+      ],
+      reads: { [door]: ['answer'] },
+    };
+    const complete = sourceLinksOf(scope);
+    expect(complete?.links).toHaveLength(1);
+    const wide = commit(
+      'wide',
+      2,
+      Object.fromEntries(Array.from({ length: 129 }, (_, i) => [`field-${i}`, i])),
+    );
+    let calls = 0;
+    Object.defineProperty(wide.trace, '128', {
+      get() {
+        calls++;
+        throw new Error('unread trace row');
+      },
+    });
+    const result = sourceLinksOf({
+      ...scope,
+      commitLog: [...scope.commitLog, wide, commit('later', 3, {})],
+      reads: { ...scope.reads, wide: [], later: [] },
+    });
+    expect(result).toEqual({
+      ...complete,
+      status: 'partial',
+      limitations: ['budget-exhausted'],
+    });
+    expect(calls).toBe(0);
+  });
+
+  it('reports a reader limit when the over-wide commit shows a served write', () => {
+    const scope = fixtureScope(fixture.witnessRow);
+    const wide = commit(fixture.servedRow.consumer, 0, {
+      [servedKey]: [fixture.servedRow],
+      ...Object.fromEntries(Array.from({ length: 128 }, (_, i) => [`field-${i}`, i])),
+    });
+    expect(sourceLinksOf({ ...scope, commitLog: [wide, scope.commitLog[1]] })).toEqual({
+      version: 1,
+      status: 'partial',
+      links: [],
+      limitations: ['budget-exhausted'],
+    });
+  });
 });
 
 type HistoryState = {

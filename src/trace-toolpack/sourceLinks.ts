@@ -19,6 +19,34 @@ const maxCommits = 4096;
 // The widest native commit the packed binder admits.
 const maxTraceRows = 128;
 
+interface SourceLinkWriteFlags {
+  readonly runtimeStageId: string;
+  readonly served: boolean;
+  readonly witness: boolean;
+  readonly protectedHistory: boolean;
+  readonly bounded: boolean;
+}
+
+/** The binder expects a read map for the scope it receives. Keep the reads of
+ * retained executions through the same data-only boundary as the log. */
+function prefixReads(
+  scope: RecordScope,
+  writes: readonly SourceLinkWriteFlags[],
+): RecordScope['reads'] {
+  const captured = own(scope, 'reads');
+  if (captured === undefined) return undefined;
+  if (captured === null || typeof captured !== 'object' || Array.isArray(captured))
+    throw new TypeError('Invalid source-link reads');
+  const reads: Record<string, readonly string[]> = Object.create(null);
+  for (const runtimeStageId of new Set(writes.map((write) => write.runtimeStageId))) {
+    const field = Object.getOwnPropertyDescriptor(captured, runtimeStageId);
+    if (!field?.enumerable) continue;
+    if (!('value' in field)) throw new TypeError('Invalid source-link reads');
+    reads[runtimeStageId] = field.value as readonly string[];
+  }
+  return reads;
+}
+
 /**
  * Project a scope's own committed rows from native or admitted saved data.
  * Foottrace binds the output write. The returned shape grants no disclosure;
@@ -35,43 +63,59 @@ export function sourceLinksOf(scope: RecordScope): RecordSourceLinks | undefined
 
 function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
   const commits = readOwnList(own(scope, 'commitLog'), maxCommits);
-  const initialState = own(scope, 'initialState');
+  const initialState = own(scope, 'initialState') as RecordScope['initialState'];
   if (
     initialState === null ||
     typeof initialState !== 'object' ||
     Array.isArray(initialState) ||
-    commits === undefined ||
-    commits.unread > 0
+    commits === undefined
   )
     return undefined;
 
-  const log = commits.entries as readonly CommitBundle[];
-  const writes = log.map((bundle) => {
+  const log: CommitBundle[] = [];
+  const writes: SourceLinkWriteFlags[] = [];
+  let limited = commits.unread > 0;
+  let collected = false;
+  for (const bundle of commits.entries) {
     const trace = readOwnList(own(bundle, 'trace'), maxTraceRows);
     const runtimeStageId = own(bundle, 'runtimeStageId');
-    if (trace === undefined || trace.unread > 0 || typeof runtimeStageId !== 'string')
+    if (trace === undefined || typeof runtimeStageId !== 'string')
       throw new TypeError('Invalid source-link commit');
-    const paths = trace.entries.map((row) => own(row, 'path'));
-    if (paths.some((path) => typeof path !== 'string'))
-      throw new TypeError('Invalid source-link trace');
+    const paths = new Set<string>();
+    for (const row of trace.entries) {
+      const path = own(row, 'path');
+      const verb = own(row, 'verb');
+      if (typeof path !== 'string' || typeof verb !== 'string')
+        throw new TypeError('Invalid source-link trace');
+      paths.add(path);
+      if (path === servedKey && (verb === 'set' || verb === 'append' || verb === 'merge'))
+        collected = true;
+    }
+    if (trace.unread > 0) {
+      // A partial commit cannot safely supply any binding. Earlier commits can.
+      limited = true;
+      break;
+    }
     const overwrite = own(bundle, 'overwrite');
-    const consumer = paths.includes(consumerKey) ? own(overwrite, consumerKey) : undefined;
-    return {
+    const consumer = paths.has(consumerKey) ? own(overwrite, consumerKey) : undefined;
+    log.push(bundle as CommitBundle);
+    writes.push({
       runtimeStageId,
-      served: paths.includes(servedKey),
-      witness: paths.includes(witnessKey),
+      served: paths.has(servedKey),
+      witness: paths.has(witnessKey),
       protectedHistory:
         own(consumer, 'consumer') === runtimeStageId && own(consumer, 'historyProtected') === true,
-      bounded: paths.includes(boundKey) && own(overwrite, boundKey) === true,
-    };
-  });
+      bounded: paths.has(boundKey) && own(overwrite, boundKey) === true,
+    });
+  }
   if (
-    !writes.some(({ served }) => served) ||
-    !writes.some(({ witness, protectedHistory }) => witness || protectedHistory)
+    !collected ||
+    (!limited && !writes.some(({ witness, protectedHistory }) => witness || protectedHistory))
   )
     return undefined;
 
-  // Row locations need only these two lists. Foottrace gets the full scope for binding.
+  // Row locations need only these two lists. Foottrace binds against the whole
+  // scope when it fits, or the same retained prefix when the reader stops.
   const fold = keyedFold({
     commitLog: log,
     initialState: {
@@ -80,6 +124,10 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
     },
   });
   if (fold.basis !== 'initial+log') return undefined;
+  const reads = limited ? prefixReads(scope, writes) : undefined;
+  const bindingScope = limited
+    ? { commitLog: log, initialState, ...(reads !== undefined && { reads }) }
+    : scope;
 
   // A row carried in the seed belongs to an earlier leg. Only a native commit can add one.
   function appended(key: string, index: number): [number, readonly unknown[]] | undefined {
@@ -128,7 +176,7 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
       const row = readSourceLinkRow(rows[element]);
       if (row === undefined || !consumers.has(row.consumer)) continue;
       const where = { runtimeStageId, commitIdx, key: witnessKey, element };
-      const write = bindSourceLinkWrite(scope, where);
+      const write = bindSourceLinkWrite(bindingScope, where);
       if (write === undefined) continue;
       links.push({
         linkBasis: row.linkBasis,
@@ -144,7 +192,8 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
       });
     }
   }
-  if (consumers.size === 0 || (links.length === 0 && limitations.size === 0)) return undefined;
+  if (limited) limitations.add('budget-exhausted');
+  else if (consumers.size === 0 || (links.length === 0 && limitations.size === 0)) return undefined;
   return {
     version: 1,
     status: limitations.size ? 'partial' : 'captured',

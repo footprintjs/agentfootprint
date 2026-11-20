@@ -167,9 +167,6 @@ export function classifyToken(
 /** A JSON number literal, read where it stands (sticky). */
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 
-/** The original position exists only when this text is a literal slice of the answer. */
-type AnswerText = readonly [text: string, offset: number | undefined];
-
 /**
  * The texts an answer states, each read on its own. Prose is one text. A
  * typed answer — the whole answer one JSON object or array, which is what
@@ -188,16 +185,16 @@ type AnswerText = readonly [text: string, offset: number | undefined];
  * call depth), yielded lazily: the reader decides how far it classifies and
  * counts the rest (`MAX_ANSWER_TOKENS`).
  */
-function* answerTexts(answer: string, valuesOnly: boolean): Generator<AnswerText> {
+function* answerTexts(answer: string, valuesOnly: boolean): Generator<string> {
   const opening = answer.trimStart()[0];
   if (opening !== '{' && opening !== '[') {
-    yield [answer, 0];
+    yield answer;
     return;
   }
   try {
     JSON.parse(answer); // the grammar check — the values are read from the text below
   } catch {
-    yield [answer, 0]; // not one JSON value: prose, as it always was
+    yield answer; // not one JSON value: prose, as it always was
     return;
   }
   yield* jsonLiterals(answer, valuesOnly);
@@ -208,32 +205,27 @@ function* answerTexts(answer: string, valuesOnly: boolean): Generator<AnswerText
  * written) of a text `JSON.parse` accepted, left to right. Total on any input
  * — bounded by the text's length — though only ever handed valid JSON.
  */
-function* jsonLiterals(json: string, valuesOnly: boolean): Generator<AnswerText> {
+function* jsonLiterals(json: string, valuesOnly: boolean): Generator<string> {
   let at = 0;
   while (at < json.length) {
     const ch = json.charCodeAt(at);
     if (ch === 0x22 /* " */) {
       // The literal ends at the first quote no backslash escapes.
-      const start = at + 1;
-      let end = start;
-      let escaped = false;
+      let end = at + 1;
       while (end < json.length && json.charCodeAt(end) !== 0x22) {
-        const width = json.charCodeAt(end) === 0x5c /* \ */ ? 2 : 1;
-        if (width === 2) escaped = true;
-        end += width;
+        end += json.charCodeAt(end) === 0x5c /* \ */ ? 2 : 1;
       }
       const literal = json.slice(at, end + 1);
       at = end + 1;
       // In JSON a string followed by `:` is a key, and only a key is.
       if (valuesOnly && isKeyEnd(json, at)) continue;
-      yield [JSON.parse(literal) as string, escaped ? undefined : start];
+      yield JSON.parse(literal) as string;
     } else if (ch === 0x2d /* - */ || (ch >= 0x30 && ch <= 0x39)) {
       // Outside a string, a digit or a minus only ever starts a number.
       JSON_NUMBER.lastIndex = at;
       const literal = JSON_NUMBER.exec(json)?.[0] ?? json.charAt(at);
-      const start = at;
       at += literal.length;
-      yield [literal, start];
+      yield literal;
     } else {
       at += 1; // structure, whitespace, true / false / null
     }
@@ -313,19 +305,12 @@ export interface AnswerReadOptions {
    * not judged on its keys. Absent, keys are read too.
    */
   readonly typed?: boolean;
-  /** Ask the same reading to retain source positions for the candidates it checks. */
-  readonly captureSpans?: boolean;
 }
-
-/** Half-open UTF-16 coordinates of the spelling in the answer passed to the check. */
-export type AnswerSpan = readonly [start: number, end: number];
 
 /** One reading of an answer: the values it asserts, and how much of it was never read. */
 export interface AnswerReading {
   /** Every distinct value the answer asserts, in first-appearance order. */
   readonly candidates: readonly Candidate[];
-  /** Aligned with candidates when requested. An unmapped transformation leaves no span. */
-  readonly candidateSpans?: readonly (AnswerSpan | undefined)[];
   /**
    * Words and numbers past `MAX_ANSWER_TOKENS` that were never classified or
    * looked up — 0 when the whole answer was read. A value among them could be
@@ -368,11 +353,9 @@ export function readAnswer(
   const { figures, exactTokens, typed = false } = options;
   const seen = new Map<string, number>();
   const out: Candidate[] = [];
-  const candidateSpans =
-    options.captureSpans === true ? new Array<AnswerSpan | undefined>() : undefined;
   let budget = MAX_ANSWER_TOKENS;
   let unread = 0;
-  const record = (candidate: Candidate | undefined, span?: AnswerSpan): void => {
+  const record = (candidate: Candidate | undefined): void => {
     if (candidate === undefined) return;
     const prior = seen.get(candidate.value);
     if (prior !== undefined) {
@@ -382,17 +365,14 @@ export function readAnswer(
       if (
         candidate.decimalSpelling !== undefined &&
         decimalsOf(candidate.decimalSpelling) > decimalsOf(previous?.decimalSpelling ?? '')
-      ) {
+      )
         out[prior] = candidate;
-        if (candidateSpans !== undefined) candidateSpans[prior] = span;
-      }
       return;
     }
     seen.set(candidate.value, out.length);
     out.push(candidate);
-    candidateSpans?.push(span);
   };
-  const add = (spelling: string, rangeToken?: string, span?: AnswerSpan): void => {
+  const add = (spelling: string, rangeToken?: string): void => {
     if (budget <= 0) {
       unread += 1; // a range's second endpoint, past the line
       return;
@@ -418,22 +398,10 @@ export function readAnswer(
       candidate !== undefined && rangeToken !== undefined
         ? { ...candidate, rangeToken }
         : candidate,
-      span,
     );
   };
-  for (const [text, offset] of answerTexts(answer, typed)) {
-    const spans =
-      candidateSpans !== undefined && offset !== undefined && budget > 0
-        ? new Array<AnswerSpan>()
-        : undefined;
-    const spellings = answerTokenSpellings(
-      text,
-      spans === undefined || offset === undefined
-        ? undefined
-        : (start, end) => {
-            if (spans.length < budget) spans.push([offset + start, offset + end]);
-          },
-    );
+  for (const text of answerTexts(answer, typed)) {
+    const spellings = answerTokenSpellings(text);
     if (budget <= 0) {
       unread += spellings.length; // past the line: counted, never classified
       continue;
@@ -444,47 +412,27 @@ export function readAnswer(
         break;
       }
       const spelling = spellings[index] ?? '';
-      const span = spans?.[index];
       const token = normalizeToken(spelling);
       // Test app-owned ID declarations on the intact token before heuristics.
       if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
-        add(spelling, undefined, span);
+        add(spelling);
         continue;
       }
       const range = splitNumericRange(spelling, spellings[index + 1]);
       if (range !== undefined && exactTokens?.has(token) === true) {
         budget -= 1;
-        record({ value: token, shape: 'identifier' }, span);
+        record({ value: token, shape: 'identifier' });
         continue;
       }
       if (range !== undefined) {
         const suffix = range.unit ?? '';
-        // Endpoints come from the same anchored range match. Its normalized
-        // spelling preserves their widths, including the single separator.
-        const lastOffset = range.first.length + 1;
-        add(
-          `${range.first}${suffix}`,
-          token,
-          span === undefined ? undefined : [span[0], span[0] + range.first.length],
-        );
-        add(
-          `${range.last}${suffix}`,
-          token,
-          span === undefined
-            ? undefined
-            : [span[0] + lastOffset, span[0] + lastOffset + range.last.length],
-        );
+        add(`${range.first}${suffix}`, token);
+        add(`${range.last}${suffix}`, token);
         continue;
       }
       // An en dash outside our narrow grammar retains the tokenizer's old meaning.
-      if (spelling.includes('–')) {
-        // This fallback tokenizes a normalized spelling, whose positions may
-        // already differ from the answer's. Do not attach guessed coordinates.
-        for (const piece of tokenize(spelling)) add(piece);
-      } else {
-        add(spelling, undefined, span);
-      }
+      for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
     }
   }
-  return { candidates: out, unread, ...(candidateSpans !== undefined && { candidateSpans }) };
+  return { candidates: out, unread };
 }

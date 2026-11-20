@@ -2,4 +2,4 @@
 type: added
 ---
 
-Flat Agent recordings can carry source links for checked answer values and successful artifact redemptions. The reader uses each native check's recorded positions to show the matching source when the host grants the exact output, witness, and input.
+Flat Agent recordings can carry a source link for a successful artifact redemption. The reader uses the redemption's recorded positions to show the earlier tool result when the host grants the exact output, witness, and input.

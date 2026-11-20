@@ -114,15 +114,6 @@ import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js
 import { scientificDecimalOf } from './numberPrecision.js';
 import { jsonPrefixOf, leadingJsonValues } from '../../../lib/servedJson.js';
 import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
-import {
-  carry,
-  markCarrier,
-  type CarrierSink,
-  type SourceOccurrences,
-  type ValueCarriers,
-} from './carriers.js';
-
-export { MAX_CARRIERS, type ValueCarriers } from './carriers.js';
 
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
@@ -132,6 +123,32 @@ export { MAX_CARRIERS, type ValueCarriers } from './carriers.js';
  * CEILING, TWO METERS" in `resultCarries.ts` before trusting "the same".
  */
 export const MAX_INDEX_TOKENS = 200_000;
+
+/**
+ * How many results one indexed form remembers as its CARRIERS (9.110.0)
+ * before the list is cut and marked. Eight, because the question the list
+ * answers — "did EVERY result that carried this value get judged non-fact?"
+ * (`findings/contingent.ts`) — needs the whole list or none of it: a value
+ * nine results carried is a common value, not a tower, and the honest answer
+ * for it is "not judged" rather than a verdict read off a prefix.
+ */
+export const MAX_CARRIERS = 8;
+
+/**
+ * Which of THIS turn's tool results carried one indexed form (9.110.0) —
+ * the `toolCallId` of each `role: 'tool'` message that served it, in wire
+ * order, each id once. The other half of the provenance the walk already
+ * had: `values` says WHEN a value was last read, this says FROM WHERE.
+ */
+export interface ValueCarriers {
+  readonly toolCallIds: readonly string[];
+  /**
+   * Set when more than `MAX_CARRIERS` results carried the form: the list is
+   * the first `MAX_CARRIERS` and a reader must not judge "every carrier"
+   * from it.
+   */
+  readonly truncated?: true;
+}
 
 /** A finished index plus the honesty flag that says whether it is complete. */
 export interface EvidenceCorpus {
@@ -164,7 +181,6 @@ export interface EvidenceCorpus {
    * ruled-out.
    */
   readonly carriers: ReadonlyMap<string, ValueCarriers>;
-  readonly occurrences?: SourceOccurrences;
   /**
    * True when the ceiling was hit and the index is INCOMPLETE. The gate
    * downgrades itself to record-only when this is set: a partial corpus can
@@ -187,10 +203,20 @@ export interface EvidenceCorpus {
 }
 
 /** Mutable accumulator while walking. */
-interface Sink extends CarrierSink {
+interface Sink {
   /** form → the latest turn that served it. See {@link EvidenceCorpus.values}. */
   readonly values: Map<string, number>;
+  /** form → the ids of THIS turn's results that carried it. See {@link EvidenceCorpus.carriers}. */
+  readonly carriers: Map<string, { toolCallIds: string[]; truncated?: true }>;
   budget: number;
+  /** The turn the walk is currently inside. Bumped by each user turn. */
+  turn: number;
+  /**
+   * The `toolCallId` of the tool result being walked, or `undefined` when
+   * the text is not a tool result (the exempt corpus, a result with no id)
+   * — nothing is then recorded as a carrier.
+   */
+  toolCallId: string | undefined;
   /**
    * Under `decimalRounding` only: the declared ID shapes, present as the sign
    * that a standalone scientific token in a result's TEXT also files the
@@ -198,6 +224,27 @@ interface Sink extends CarrierSink {
    * always was; the exempt corpus never sets it.
    */
   readonly decimalShapes?: readonly EvidenceShape[];
+}
+
+/**
+ * File the result being walked as a carrier of `form` — once per result,
+ * in wire order, cut and marked at `MAX_CARRIERS`. Costs no index entry: a
+ * carrier is an attribute of an entry the walk was going to write anyway.
+ */
+function carry(sink: Sink, form: string): void {
+  const id = sink.toolCallId;
+  if (id === undefined) return;
+  const entry = sink.carriers.get(form);
+  if (entry === undefined) {
+    sink.carriers.set(form, { toolCallIds: [id] });
+    return;
+  }
+  if (entry.toolCallIds.includes(id)) return;
+  if (entry.toolCallIds.length >= MAX_CARRIERS) {
+    entry.truncated = true;
+    return;
+  }
+  entry.toolCallIds.push(id);
 }
 
 function add(sink: Sink, raw: string): void {
@@ -375,7 +422,6 @@ export function evidenceFromHistory(
    * Absent, or the dial off → the corpus it always was.
    */
   gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>,
-  captureOccurrences?: true,
 ): EvidenceCorpus {
   const sink: Sink = {
     values: new Map<string, number>(),
@@ -384,7 +430,6 @@ export function evidenceFromHistory(
     turn: 0,
     toolCallId: undefined,
     ...(gate?.decimalRounding === true && { decimalShapes: gate.shapes }),
-    ...(captureOccurrences === true && { occurrences: new Map() }),
   };
   let toolResultsThisTurn = 0;
   for (const msg of history) {
@@ -401,7 +446,7 @@ export function evidenceFromHistory(
     }
     if (msg.role !== 'tool') continue;
     toolResultsThisTurn += 1;
-    markCarrier(sink, msg);
+    sink.toolCallId = typeof msg.toolCallId === 'string' ? msg.toolCallId : undefined;
     // The tool's OWN bytes (`lib/toolBytes.ts` · `toolBytesOf`, the one owner of the
     // boundary): the inputs layer's note carries a value the call ran with ("2h", the
     // value the tool's rule assumes), and indexing it would let an assumption ground an
@@ -412,7 +457,6 @@ export function evidenceFromHistory(
   return {
     values: sink.values,
     carriers: sink.carriers,
-    ...(sink.occurrences !== undefined && { occurrences: sink.occurrences }),
     truncated: sink.budget <= 0,
     currentTurn: sink.turn,
     toolResultsThisTurn,
