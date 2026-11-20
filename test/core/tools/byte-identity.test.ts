@@ -1616,7 +1616,7 @@ function projection(snapshot: Snapshot): unknown {
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
 const OCCURRENCE_REFERENCE_DIR = new URL('call-occurrence/', REFERENCE_DIR);
 const OCCURRENCE_REFERENCE = new URL('additions.json', OCCURRENCE_REFERENCE_DIR);
-const SERVED_ROW_REFERENCE = new URL('served-row-additions.json', REFERENCE_DIR);
+const SERVED_ROW_REFERENCE = new URL('served-row-writer/served-row-additions.json', REFERENCE_DIR);
 const V15_NATIVE_REFERENCE_DIR = new URL('./reference/v15-native-cohort/', import.meta.url);
 const V15_NATIVE_CAPTURES = new Map(
   (
