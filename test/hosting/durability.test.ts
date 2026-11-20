@@ -561,7 +561,7 @@ describe('durability — the findings ledger rides the conversation', () => {
   });
 
   it('an UNARMED standing agent over the same store neither restores nor writes the key', async () => {
-    // The arm gates every read and write: an agent without `.findings()`
+    // The arm gates every read and write: this agent has both the findings and answer layers off;
     // continuing this conversation runs exactly as it always did, so the
     // conversation it stores back carries no `findingsLedger` — the record
     // stays only in the envelope the armed agent wrote.
@@ -573,6 +573,7 @@ describe('durability — the findings ledger rides the conversation', () => {
     })
       .system('terse')
       .tool(recordingTool([]))
+      .answerLayer(false)
       .build();
     const host = inProcessHost();
     const handle = await standingAgent({ agent: second, sessions, host, durability: 'sync' });

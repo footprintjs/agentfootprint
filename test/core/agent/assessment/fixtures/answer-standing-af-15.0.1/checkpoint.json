@@ -1,0 +1,279 @@
+{
+  "checkpointVersion": 2,
+  "sharedState": {
+    "toolResourceOwner": {
+      "version": 1,
+      "birth": {
+        "runId": "1795114800000-0000000001",
+        "componentOrdinal": 0
+      },
+      "nextDispatch": 1,
+      "pending": {
+        "version": 1,
+        "birth": {
+          "runId": "1795114800000-0000000001",
+          "componentOrdinal": 0
+        },
+        "ordinal": 0
+      }
+    },
+    "userMessage": "Check a group.",
+    "history": [
+      {
+        "role": "user",
+        "content": "Check a group."
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "ask1",
+            "name": "ask_group",
+            "args": {}
+          }
+        ]
+      }
+    ],
+    "runIdentity": {
+      "conversationId": "1795114800000-0000000001"
+    },
+    "runIdentitySource": "run",
+    "runSessionId": null,
+    "newMessages": [],
+    "turnNumber": 1,
+    "contextTokensRemaining": 32000,
+    "iteration": 1,
+    "maxIterations": 10,
+    "finalContent": "",
+    "totalInputTokens": 4,
+    "totalOutputTokens": 0,
+    "turnStartMs": 1795114800000,
+    "systemPromptInjections": [],
+    "messagesInjections": [
+      {
+        "contentSummary": "Check a group.",
+        "contentHash": "b8b6e364",
+        "slot": "messages",
+        "source": "user",
+        "reason": "conversation history [0]",
+        "rawContent": "Check a group.",
+        "asRole": "user",
+        "asRecency": "latest",
+        "position": 0
+      }
+    ],
+    "toolsInjections": [
+      {
+        "contentSummary": "ask_group: Ask which group to check.",
+        "contentHash": "9384d1bc",
+        "slot": "tools",
+        "source": "registry",
+        "sourceId": "ask_group",
+        "reason": "tool registry",
+        "rawContent": "ask_group: Ask which group to check.",
+        "position": 0
+      }
+    ],
+    "llmLatestContent": "",
+    "llmLatestToolCalls": [
+      {
+        "id": "ask1",
+        "name": "ask_group",
+        "args": {}
+      }
+    ],
+    "thinkingBlocks": [],
+    "pausedToolCallId": "ask1",
+    "pausedToolName": "ask_group",
+    "pausedToolStartMs": 1795114800000,
+    "cumTokensInput": 0,
+    "cumTokensOutput": 0,
+    "cumEstimatedUsd": 0,
+    "costBudgetHit": false,
+    "activeInjections": [],
+    "activatedInjectionIds": [],
+    "dynamicToolSchemas": [
+      {
+        "name": "ask_group",
+        "description": "Ask which group to check.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
+    "deliveredMessageKeys": [],
+    "cacheMarkers": [
+      {
+        "field": "system",
+        "boundaryIndex": 0,
+        "ttl": "short",
+        "reason": "system stable prefix (1 entries, ending at base system prompt)"
+      },
+      {
+        "field": "messages",
+        "boundaryIndex": 0,
+        "ttl": "short",
+        "reason": "conversation tail through wire index 0 — the moving breakpoint: the next call repeats this prefix and appends after it"
+      }
+    ],
+    "cachingDisabled": false,
+    "skillHistory": [],
+    "activeByslot": {
+      "systemPrompt": [],
+      "messages": [],
+      "tools": []
+    },
+    "receipt": {
+      "requestMeasurement": {
+        "boundary": "initial-prepared-request",
+        "format": "json-utf8-v1",
+        "status": "measured",
+        "total": {
+          "jsonChars": 193,
+          "jsonBytes": 193
+        },
+        "slots": {
+          "messages": {
+            "jsonChars": 44,
+            "jsonBytes": 44
+          },
+          "tools": {
+            "jsonChars": 112,
+            "jsonBytes": 112
+          }
+        }
+      },
+      "system": {
+        "hash": "575ac02ec6bf56c1",
+        "chars": 0,
+        "pieces": []
+      },
+      "messages": {
+        "count": 1,
+        "entries": [
+          {
+            "role": "user",
+            "hash": "ae75108d86722278"
+          }
+        ],
+        "requestOnly": []
+      },
+      "tools": {
+        "names": [
+          "ask_group"
+        ],
+        "schemaHashes": {
+          "ask_group": "92b00c6865d95627"
+        },
+        "forced": null,
+        "withheld": null
+      },
+      "cache": {
+        "transform": "unchanged",
+        "transformHash": null,
+        "markersApplied": [],
+        "strategy": "none"
+      },
+      "params": {},
+      "basis": {
+        "epoch": 1,
+        "runId": "1795114800000-0000000001",
+        "model": "mock",
+        "provider": "mock"
+      }
+    },
+    "toolResults": [],
+    "pausedToolArgs": {},
+    "servedToolParties": {
+      "version": 2,
+      "owner": {
+        "runId": "1795114800000-0000000001",
+        "componentOrdinal": 0
+      },
+      "turn": 1,
+      "iteration": 1,
+      "argumentAsk": false,
+      "truncated": false,
+      "bound": [
+        {
+          "index": 0,
+          "id": {
+            "kind": "plain",
+            "value": "[\"string\",\"ask1\"]"
+          },
+          "name": {
+            "kind": "plain",
+            "value": "ask_group"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        }
+      ],
+      "current": [
+        {
+          "name": {
+            "kind": "plain",
+            "value": "ask_group"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        }
+      ],
+      "last": [
+        {
+          "name": {
+            "kind": "plain",
+            "value": "ask_group"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        }
+      ]
+    }
+  },
+  "pausedStageId": "tool-calls",
+  "pausedExecution": {
+    "runId": "1795114800000-0000000001",
+    "runtimeStageId": "tool-calls#22"
+  },
+  "subflowPath": [],
+  "pauseData": {
+    "toolCallId": "ask1",
+    "toolName": "ask_group",
+    "question": "Which group should I check?"
+  },
+  "subflowStates": {},
+  "executionCount": 23,
+  "visitCounts": {
+    "seed": 1,
+    "sf-injection-engine": 1,
+    "sf-injection-engine/gather": 1,
+    "sf-injection-engine/evaluate": 1,
+    "sf-injection-engine/route": 1,
+    "sf-injection-engine/delta": 1,
+    "context": 1,
+    "sf-system-prompt": 1,
+    "sf-system-prompt/compose": 1,
+    "sf-messages": 1,
+    "sf-messages/compose": 1,
+    "sf-tools": 1,
+    "sf-tools/discover": 1,
+    "sf-tools/compose": 1,
+    "sf-cache": 1,
+    "sf-cache/decide-cache-markers": 1,
+    "sf-cache/cache-gate": 1,
+    "sf-cache/apply-markers": 1,
+    "call-llm": 1,
+    "sf-thinking": 1,
+    "sf-thinking/thinking-mock": 1,
+    "sf-route": 1,
+    "tool-calls": 1
+  },
+  "invokerStageId": "sf-route",
+  "pausedAt": 1795114800000
+}

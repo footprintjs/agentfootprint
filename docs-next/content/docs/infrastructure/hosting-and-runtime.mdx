@@ -423,7 +423,10 @@ before, so a wire written earlier keeps working unchanged:
   per response, holding that response's state, mapping each host lifecycle
   point to a list of `StreamFrame` values (`{ event, data }`). The incumbent
   shape is itself expressed as the default framing, which is the evidence the
-  seam is in the right place.
+  seam is in the right place. A standing agent's `chunk` frames carry the
+  streamed tokens. Its terminal `complete` frame contains the entire answer
+  with any standing line. Use that frame as the final text if you display the
+  chunks as previews.
 - **Whether a failure's words travel.** `failure()` (and a framing's) receives a
   `FailureOrigin`: `'refused'` is a handler *choosing* to fail with words it
   picked for the caller; `'threw'` is an exception the host caught, whose

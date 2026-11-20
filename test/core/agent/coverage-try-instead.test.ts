@@ -202,7 +202,11 @@ const absenceTool = (value: () => unknown, name = 'cluster_latency') =>
 /** One real loop: the tool answers with the absence, the model answers. */
 const runOnce = async (
   value: () => unknown,
-  opts: { readonly limits?: boolean; readonly grouped?: boolean } = {},
+  opts: {
+    readonly limits?: boolean;
+    readonly grouped?: boolean;
+    readonly answerLayer?: false;
+  } = {},
 ) => {
   const absences: Ev[] = [];
   const toolEnds: Ev[] = [];
@@ -213,6 +217,7 @@ const runOnce = async (
   let builder = Agent.create({
     provider,
     model: 'mock',
+    answerLayer: opts.answerLayer,
     maxIterations: 4,
     ...(opts.grouped === true && { reactMode: 'dynamic-grouped' as const }),
   })
@@ -660,7 +665,10 @@ describe('integration: the tool turn in a JSON checkpoint still carries the type
     );
     const second = recording([answer('Nothing was collected for it.')]);
     const out = await build(second.provider).resume(stored as never, 'the one in the east lab');
-    expect(out).toBe('Nothing was collected for it.');
+    expect(out).toBe(
+      'Nothing was collected for it.\n\n---\n\n' +
+        'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
 
     const resumedTurn = second.sent[0]?.find((m) => m.role === 'tool' && m.toolCallId === 't1');
     expect(resumedTurn).toBeDefined();
@@ -785,7 +793,8 @@ interface SentenceFormReference {
 
 describe('regression: the sentence form is byte-identical', () => {
   it('matches the 9.112.2 reference with the event suggestion and recorded occurrence', async () => {
-    const t = await runOnce(() => absent(SENTENCE_DECL), { limits: true });
+    // This witness pins the complete pre-default answer, including the legacy limits block.
+    const t = await runOnce(() => absent(SENTENCE_DECL), { limits: true, answerLayer: false });
     expectOccurrence(t);
     const observed: SentenceFormReference = {
       envelope: JSON.stringify(absent(SENTENCE_DECL)),

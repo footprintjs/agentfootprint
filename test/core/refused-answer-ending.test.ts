@@ -112,7 +112,13 @@ describe('a refused answer ends a standalone run without delivering it', () => {
         agent.on('agentfootprint.agent.turn_end', (e) => ends.push(e.payload as never));
         await agent.run('hi').catch(() => undefined);
         expect(ends).toHaveLength(1);
-        expect(ends[0]!.finalContent).toBe(answer);
+        expect(ends[0]!.finalContent).toBe(
+          refused
+            ? answer +
+                '\n\n---\n\n' +
+                'Not sure — names or numbers in the answer appear in no tool result, even after one revision.'
+            : answer,
+        );
         if (refused) expect(ends[0]!.refused).toEqual({ by: 'evidence-rails' });
         else expect(ends[0]).not.toHaveProperty('refused');
       }

@@ -104,7 +104,10 @@ const servedModeAtEveryEpoch = (agent: Agent): unknown[] => {
 };
 
 async function ran(build: (b: Built) => Built): Promise<Agent> {
-  const agent = build(Agent.create({ provider: answerOnly(), model: 'm' })).build();
+  // Isolate the findings layer's own writes from the default answer layer.
+  const agent = build(Agent.create({ provider: answerOnly(), model: 'm' }))
+    .answerLayer(false)
+    .build();
   await agent.run({ message: 'hi' });
   return agent;
 }

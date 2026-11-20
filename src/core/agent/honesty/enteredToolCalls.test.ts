@@ -106,7 +106,8 @@ describe('committed tool entry', () => {
             toolName === 'blocked' ? deny('Expected admission refusal.') : { kind: 'allow' },
         });
       if (armed) builder.inputsLayer();
-      const agent = builder.build();
+      // This fixture toggles only the inputs layer that records entry.
+      const agent = builder.answerLayer(false).build();
       try {
         await expect(agent.run({ message: 'Run both fixtures.' })).resolves.toBe('Done.');
         expect(deniedEntered).toBe(false);

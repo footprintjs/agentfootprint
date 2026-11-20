@@ -16,7 +16,9 @@ it.each([
       'Done.',
     ]);
     try {
-      expect(await fixture.agent.run(QUESTION)).toBe('Done.');
+      expect(await fixture.agent.run(QUESTION)).toBe(
+        'Done.\n\n---\n\nNot sure — a call was refused.',
+      );
       const event = fixture.events.find(
         (event) =>
           event.type === 'agentfootprint.findings.argument' &&

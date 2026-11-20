@@ -299,6 +299,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing', 'basis']);
     expect(ledger[0]).toEqual({
       kind: 'basis',
+      turn: 1,
       toolCallId: 'c1',
       callOccurrenceKey: first,
       toolName: 'look',
@@ -308,6 +309,7 @@ describe('.findings() — dispatch peels, files a basis, files the previous batc
     });
     expect(ledger[1]).toEqual({
       kind: 'standing',
+      turn: 1,
       toolCallId: 'c1',
       callOccurrenceKey: first,
       toolName: 'look',
@@ -426,12 +428,15 @@ describe('.findings() — the unarmed agent is the agent it always was', () => {
       { content: '', toolCalls: [{ id: 'c1', name: 'look', args: { q: 'a' } }] },
       'done',
     ];
+    // Isolate entry evidence written by the findings layer.
     const on = Agent.create({ provider: scripted([], ...script), model: 'm' })
       .tool(recordingTool('look', []) as never)
       .findings()
+      .answerLayer(false)
       .build();
     const off = Agent.create({ provider: scripted([], ...script), model: 'm' })
       .tool(recordingTool('look', []) as never)
+      .answerLayer(false)
       .build();
     const rowsOn = await runCollecting(on);
     const rowsOff = await runCollecting(off);
@@ -521,6 +526,7 @@ describe(".findings() — the JSON answer carries the last batch's standings", (
     const callOccurrenceKey = occurrenceOf(agent, 'c1');
     expect(ledger[1]).toEqual({
       kind: 'standing',
+      turn: 1,
       toolCallId: 'c1',
       callOccurrenceKey,
       toolName: 'look',
@@ -569,6 +575,7 @@ describe(".findings() without an output schema — every decider peels the answe
   const PEELED = JSON.stringify({ down: 'p1' });
   const STANDING: StandingRow = {
     kind: 'standing',
+    turn: 1,
     toolCallId: 'c1',
     toolName: 'look',
     standing: 'ruled-out',
@@ -589,6 +596,7 @@ describe(".findings() without an output schema — every decider peels the answe
     string,
     (b: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>,
     { wrapUpAtMaxIterations?: false },
+    boolean?,
   ])[] = [
     ['the plain decider (WrapUp mounted)', (b) => b, {}],
     [
@@ -601,10 +609,11 @@ describe(".findings() without an output schema — every decider peels the answe
       (b) => b.messageMiddleware({ name: 'pass', onMessage: () => allow() }),
       {},
     ],
-    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}],
+    ['the judging decider (evidence gate)', (b) => b.namesAndNumbersFromEvidence(), {}, true],
   ];
 
-  describe.each(SHAPES)('%s', (_label, arm, opts) => {
+  describe.each(SHAPES)('%s', (_label, arm, opts, evidenceGate) => {
+    const witnessKinds = evidenceGate ? ['grounded'] : [];
     const build = (answer: string): Agent =>
       arm(
         Agent.create({ provider: scripted([], CALL_ONE, answer), model: 'm', ...opts })
@@ -622,7 +631,7 @@ describe(".findings() without an output schema — every decider peels the answe
 
       expect(answer).toBe(PEELED);
       const ledger = ledgerOf(agent)!;
-      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing']);
+      expect(ledger.map((r) => r.kind)).toEqual(['basis', 'standing', ...witnessKinds]);
       const callOccurrenceKey = occurrenceOf(agent, 'c1');
       expect(ledger[1]).toEqual({ ...STANDING, callOccurrenceKey });
       expect(rows.find((r) => r.type === 'agentfootprint.findings.standing')?.payload).toEqual({
@@ -649,10 +658,10 @@ describe(".findings() without an output schema — every decider peels the answe
       ).toEqual(['tool-calls', 'final']);
     });
 
-    it('a plain-text answer is untouched and files nothing', async () => {
+    it('a plain-text answer is untouched and files no declared standing', async () => {
       const agent = build('p1 is down');
       expect(await agent.run({ message: 'which port is down?' })).toBe('p1 is down');
-      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', ...witnessKinds]);
     });
 
     it('a prose answer that ends in a code block of notes: the block goes, its standings are filed (9.114.2)', async () => {
@@ -671,7 +680,7 @@ describe(".findings() without an output schema — every decider peels the answe
       const spaced = '{ "down": "p1" }';
       const agent = build(spaced);
       expect(await agent.run({ message: 'which port is down?' })).toBe(spaced);
-      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis']);
+      expect(ledgerOf(agent)!.map((r) => r.kind)).toEqual(['basis', ...witnessKinds]);
     });
   });
 
@@ -781,7 +790,10 @@ describe(".findings() without an output schema — every decider peels the answe
     );
     const answer = await agent.run({ message: 'which port is down?' });
 
-    expect(answer).toBe(JSON.stringify({ summary: 'p1 is down; the second look never ran' }));
+    expect(answer).toBe(
+      JSON.stringify({ summary: 'p1 is down; the second look never ran' }) +
+        '\n\n---\n\nNot sure — the run stopped before the model finished.',
+    );
     expect(
       rows
         .filter((r) => r.type === 'agentfootprint.agent.route_decided')
@@ -1305,18 +1317,21 @@ describe('.findings() — the unarmed twin of a declaring model', () => {
     const seenOff: Shot[] = [];
     const ranOn: Record<string, unknown>[] = [];
     const ranOff: Record<string, unknown>[] = [];
+    // Isolate entry evidence written by the findings layer.
     const on = Agent.create({
       provider: scripted(seenOn, CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
       .tool(recordingTool('look', ranOn) as never)
       .findings()
+      .answerLayer(false)
       .build();
     const off = Agent.create({
       provider: scripted(seenOff, CALL_ONE, CALL_TWO, 'p1 is down'),
       model: 'm',
     })
       .tool(recordingTool('look', ranOff) as never)
+      .answerLayer(false)
       .build();
     const rowsOn = await runCollecting(on);
     const rowsOff = await runCollecting(off);
@@ -1621,6 +1636,7 @@ describe('.findings() — a provider tool that declares `_findings` itself', () 
         toolCallId: 'p1',
         callOccurrenceKey: occurrenceOf(agent, 'p1'),
         toolName: 'plain',
+        turn: 1,
         iteration: 1,
         basis: 'direct',
       },

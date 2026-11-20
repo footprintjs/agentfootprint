@@ -34,6 +34,7 @@ import {
 } from '../../src/doors/observe.js';
 import { explainRecording } from '../../src/hosting/answerAccounts.js';
 import { runnerLive } from '../../src/core/runnerLive.js';
+import { Agent } from '../../src/index.js';
 import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
 import {
   ALL_SECRETS,
@@ -43,6 +44,8 @@ import {
   fixtureAgent,
   leaksIn,
   locationsOf,
+  lookupTool,
+  scriptedProvider,
   withoutAnswerBoundary,
 } from './fixture.js';
 import { everySurface, type Surfaced } from './everySurface.js';
@@ -248,7 +251,16 @@ describe('agent redaction — the trace toolpack (a past run served to a model)'
 
 describe('agent redaction — without a policy', () => {
   it('with shapes off nothing changes; by default only the pinned index is added', async () => {
-    const plain = fixtureAgent();
+    // Pin the context-shape index independently of the default answer policy.
+    const plain = Agent.create({
+      provider: scriptedProvider(),
+      model: 'mock',
+      maxIterations: 4,
+      answerLayer: false,
+    })
+      .system('You look citizens up.')
+      .tool(lookupTool())
+      .build();
     const live = runnerLive(plain)!;
     const real: unknown[] = [];
     const served: unknown[] = [];

@@ -10,6 +10,7 @@ import {
   isPaused,
   pauseHere,
   slidingWindow,
+  summarizeOldest,
   type AgentOptions,
   type ToolMiddleware,
 } from '../../../../src/index.js';
@@ -21,7 +22,12 @@ import {
   MEMORY_TYPES,
   type MemoryDefinition,
 } from '../../../../src/doors/memory.js';
-import { assessAnswer, recordRun, type Recording } from '../../../../src/observe.js';
+import {
+  accountForAnswer,
+  assessAnswer,
+  recordRun,
+  type Recording,
+} from '../../../../src/observe.js';
 import { assessmentDataOf } from '../../../../src/core/agent/assessment/compose.js';
 import type { AssessmentReason } from '../../../../src/core/agent/assessment/types.js';
 import type { AnswerAssessedPayload } from '../../../../src/events/payloads/answer.js';
@@ -31,6 +37,8 @@ import { observeStanding } from './standing-surfaces.js';
 
 const DONE = 'Done.';
 const QUESTION = { message: 'Go.' };
+const SUMMARY = 'Synthetic summary output.';
+const WINDOW_MATERIAL = 'Retained synthetic fixture material. '.repeat(35);
 const PRIVATE_NOTICE = 'This result is private.';
 const WITHHELD = `${DONE}\n\n---\n\nNot sure — a result was kept out by a rule.`;
 const call = (name: string, id: string, args: Record<string, unknown> = {}) => ({
@@ -49,7 +57,7 @@ const tool = (name: string, execute: () => unknown) =>
     execute,
   });
 
-const filler = () => tool('filler', () => 'ok');
+const filler = (output = 'ok') => tool('filler', () => output);
 const approval = () => tool('ask_approval', () => pauseHere({ question: 'Approve?' }));
 const gap = () => coverage([{ ok: true }], { checked: ['shelf B'], notChecked: ['shelf C'] });
 const noMatch = () => absent({ what: 'order 77', checked: ['the live store'] });
@@ -69,6 +77,8 @@ type Options = Pick<
   'observerDelivery' | 'reactMode' | 'checkColumnTypes' | 'maxIterations'
 >;
 type Tool = ReturnType<typeof defineTool>;
+const windowDoors = ['act-sliding', 'compaction', 'direct-summarize'] as const;
+type WindowDoor = (typeof windowDoors)[number];
 
 interface Shape {
   readonly execute?: () => unknown;
@@ -77,12 +87,14 @@ interface Shape {
   readonly rule?: ToolMiddleware;
   readonly options?: Options;
   readonly defaultPins?: true;
+  readonly windowPressure?: true;
   readonly memory?: MemoryDefinition;
 }
 
-function build(shape: Shape, evicts: boolean) {
+function build(shape: Shape, evicts: boolean | WindowDoor) {
   const replies = shape.replies ?? [call('lookup', 'c1'), call('filler', 'c2'), DONE];
   const historyAtRequest: string[][] = [];
+  const summaryAtRequest: boolean[] = [];
   let i = 0;
   const provider = mock({
     chunkDelayMs: 0,
@@ -92,9 +104,13 @@ function build(shape: Shape, evicts: boolean) {
           entry.role === 'tool' && entry.toolCallId !== undefined ? [entry.toolCallId] : [],
         ),
       );
+      summaryAtRequest.push(request.messages.some(({ content }) => content.includes(SUMMARY)));
       const reply = replies[i++];
       if (reply === undefined) throw new Error('Unexpected additional model request.');
-      return reply;
+      if (!shape.windowPressure) return reply;
+      // Cross the compaction threshold after the original result reaches the model.
+      const usage = { input: 100 * i, output: 5 };
+      return typeof reply === 'string' ? { content: reply, usage } : { ...reply, usage };
     },
   });
   const builder = Agent.create({
@@ -103,12 +119,27 @@ function build(shape: Shape, evicts: boolean) {
     ...(evicts && !shape.defaultPins && { keepLastToolResults: false as const }),
     ...shape.options,
   })
-    .tools([...(shape.tools ?? [tool('lookup', shape.execute ?? rows)]), filler()])
+    .tools([
+      ...(shape.tools ?? [tool('lookup', shape.execute ?? rows)]),
+      filler(shape.windowPressure ? WINDOW_MATERIAL : undefined),
+    ])
     .answerLayer({ standingLine: true });
-  if (evicts) builder.window(slidingWindow({ keepRecentTurns: shape.defaultPins ? 2 : 1 }));
+  if (evicts === true)
+    builder.window(slidingWindow({ keepRecentTurns: shape.defaultPins ? 2 : 1 }));
+  if (evicts === 'act-sliding') builder.act({ window: slidingWindow({ keepRecentTurns: 1 }) });
+  if (evicts === 'compaction' || evicts === 'direct-summarize') {
+    const options = {
+      thresholdTokens: 140,
+      keepRecentTurns: 1,
+      model: 'fixture-summarizer',
+      summarizer: mock({ reply: SUMMARY }),
+    };
+    if (evicts === 'compaction') builder.compaction(options);
+    else builder.window(summarizeOldest(options));
+  }
   if (shape.rule !== undefined) builder.toolMiddleware(shape.rule);
   if (shape.memory !== undefined) builder.memory(shape.memory);
-  return { agent: builder.build(), historyAtRequest };
+  return { agent: builder.build(), historyAtRequest, summaryAtRequest };
 }
 
 async function read(agent: Agent, drive = () => agent.run(QUESTION), mounted = false) {
@@ -132,7 +163,7 @@ async function read(agent: Agent, drive = () => agent.run(QUESTION), mounted = f
     expect(assessmentDataOf(saved)).toEqual(event);
     expect(turns[0]?.answerAssessment).toEqual(event);
     expect(turns[0]?.finalContent).toBe(returned);
-    return { returned, event, saved };
+    return { returned, event, saved, recording };
   } finally {
     offAssessed();
     offEnd();
@@ -143,6 +174,7 @@ async function read(agent: Agent, drive = () => agent.run(QUESTION), mounted = f
 interface WindowCase extends Shape {
   readonly name: string;
   readonly reason: AssessmentReason;
+  readonly wording?: string;
 }
 
 const cases: readonly WindowCase[] = [
@@ -164,10 +196,16 @@ const cases: readonly WindowCase[] = [
     replies: [call('lun_map', 'c1'), call('filler', 'c2'), DONE],
   },
   { name: 'withheld native return', reason: 'result-withheld', rule: denyLookup },
-  { name: 'throw from execute', reason: 'call-not-completed', execute: throws },
+  {
+    name: 'throw from execute',
+    reason: 'call-not-completed',
+    execute: throws,
+    wording: 'Not sure — a call failed.',
+  },
   {
     name: 'pre-dispatch refusal',
     reason: 'call-not-completed',
+    wording: 'Not sure — a call was refused.',
     rule: {
       name: 'block-lookup',
       onToolCall: (entry) => (entry.toolName === 'lookup' ? deny('Not allowed.') : allow()),
@@ -207,8 +245,68 @@ describe('the window keeps no authority over recorded call evidence', () => {
       expect(evicted.historyAtRequest.at(-1)).toEqual(['c2']);
       expect(before.event.reasons).toEqual([shape.reason]);
       expect(after.event.reasons).toEqual(before.event.reasons);
-      if (shape.reason !== 'call-not-completed') expect(after.returned).toBe(before.returned);
+      expect(after.returned).toBe(before.returned);
+      if (shape.wording !== undefined) {
+        expect(after.returned).toBe(`${DONE}\n\n---\n\n${shape.wording}`);
+        for (const { recording } of [before, after]) {
+          expect(accountForAnswer(recording).facts.limitsBlock.value).toBe(shape.wording);
+        }
+      }
       if (shape.reason === 'result-withheld') expect(after.returned).toBe(WITHHELD);
+    } finally {
+      await retained.agent.shutdown();
+      await evicted.agent.shutdown();
+    }
+  });
+});
+
+const doorCases: readonly (Shape & { name: string; reason?: AssessmentReason })[] = [
+  ...cases,
+  { name: 'clean control' },
+];
+
+describe.each(windowDoors)('standing through %s', (door) => {
+  it.each(doorCases)('retains the verdict for $name', async (fixture) => {
+    const first = fixture.replies?.[0] ?? call('lookup', 'c1');
+    if (typeof first === 'string') throw new Error('Expected the first fixture call.');
+    const calls = [
+      first,
+      ...Array.from({ length: 4 }, (_, index) => call('filler', `c${index + 2}`)),
+    ];
+    const shape: Shape = {
+      ...fixture,
+      options: { ...fixture.options, reactMode: 'dynamic' },
+      windowPressure: true,
+      replies: [...calls.map((reply) => ({ ...reply, content: WINDOW_MATERIAL })), DONE],
+    };
+    const retained = build(shape, false);
+    const evicted = build(shape, door);
+    const input = { message: WINDOW_MATERIAL };
+    try {
+      const before = await read(retained.agent, () => retained.agent.run(input));
+      const after = await read(evicted.agent, () => evicted.agent.run(input));
+      expect(retained.historyAtRequest.at(-1)).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
+      expect(evicted.historyAtRequest[1]).toContain('c1');
+      expect(evicted.historyAtRequest.at(-1)).not.toContain('c1');
+      expect(evicted.historyAtRequest.at(-1)).toContain('c5');
+      expect(retained.summaryAtRequest.at(-1)).toBe(false);
+      expect(evicted.summaryAtRequest.at(-1)).toBe(door !== 'act-sliding');
+      const savedFirstResult = (agent: Agent) =>
+        agent
+          .getLastSnapshot()
+          ?.sharedState.history.some(
+            ({ role, toolCallId }) => role === 'tool' && toolCallId === 'c1',
+          );
+      expect(savedFirstResult(retained.agent)).toBe(true);
+      expect(savedFirstResult(evicted.agent)).toBe(false);
+      expect(before.event.reasons).toEqual(fixture.reason === undefined ? [] : [fixture.reason]);
+      expect(after.event.reasons).toEqual(before.event.reasons);
+      if (fixture.reason === undefined) {
+        expect(before.event.standing).toBe('consistent');
+        expect(after.event.standing).toBe('not-assessed');
+      } else {
+        expect(after.returned).toBe(before.returned);
+      }
     } finally {
       await retained.agent.shutdown();
       await evicted.agent.shutdown();
@@ -385,6 +483,11 @@ describe('recorded settlement across the coordinator window axes', () => {
   it.each([
     { name: 'a public summary', replacement: 'Result on file.', reasons: [] },
     { name: 'a pending job', replacement: pending(), reasons: ['work-not-finished'] },
+    {
+      name: 'a reported failure',
+      replacement: { content: 'No public result.', effects: [], status: 'failure' },
+      reasons: ['call-not-completed'],
+    },
   ])(
     'follows a rewrite to $name with and without the call in history',
     async ({ replacement, reasons }) => {
@@ -432,6 +535,7 @@ describe('recorded settlement across the coordinator window axes', () => {
         );
         expect(calls).toBe(2);
         expect(proof.event.reasons).toEqual(evicts ? ['call-not-completed'] : []);
+        if (evicts) expect(proof.returned).toContain('Not sure — a call failed.');
       } finally {
         await agent.shutdown();
       }

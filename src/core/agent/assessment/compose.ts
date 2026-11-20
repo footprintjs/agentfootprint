@@ -41,8 +41,10 @@ import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
 import { dispatchProofWitness } from './entryEvidence.js';
 import {
   callNotCompletedClause,
+  evictedCallOutcomes,
   settledSiblingWitness,
   unfinishedWorkClause,
+  type EvictedCallOutcomes,
 } from './callStandingWords.js';
 import type {
   AnswerAssessment,
@@ -342,6 +344,7 @@ export interface StandingNames {
   readonly skippedSteps?: number;
   readonly batchRefused?: true;
   readonly settledSiblings?: number;
+  readonly evictedOutcomes?: EvictedCallOutcomes;
   readonly dispatchProofGap?: true;
 }
 
@@ -376,10 +379,12 @@ export function sourcesByReason(
 export function standingFactsOf(
   assessment: AnswerAssessment,
   displayNames: ReadonlyMap<string, string>,
+  state?: Readonly<Record<string, unknown>>,
 ): StandingNames {
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
   const settlements = assessment.reasons.find((r) => r.reason === 'call-not-completed')?.witness;
   const settledSiblings = settlements?.filter(settledSiblingWitness).length;
+  const evictedOutcomes = evictedCallOutcomes(settlements, state);
   const batchRefused = settlements?.some(
     (pointer) =>
       pointer.kind === 'history' &&
@@ -395,6 +400,7 @@ export function standingFactsOf(
     ...(skippedSteps !== undefined && { skippedSteps }),
     ...(batchRefused && { batchRefused: true as const }),
     ...(settledSiblings !== undefined && { settledSiblings }),
+    ...(evictedOutcomes !== undefined && { evictedOutcomes }),
     ...(dispatchProofGap && { dispatchProofGap: true as const }),
   };
 }
@@ -474,6 +480,7 @@ function reasonClause(
         names.displayNames,
         names.batchRefused ? 'a call was refused' : REASON_WORDS[reason],
         names.settledSiblings,
+        names.evictedOutcomes,
       );
     }
     if (reason === 'work-not-finished') {

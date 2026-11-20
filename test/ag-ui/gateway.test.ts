@@ -20,6 +20,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { EventSchema } from '@ag-ui/core/schemas';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,9 +112,16 @@ describe('1 — the default composition is byte-identical', () => {
     const golden = JSON.parse(
       readFileSync(new URL('./fixtures/default-wire.golden.json', import.meta.url), 'utf8'),
     ) as unknown[];
-    const replayed = await defaultWire();
+    const replayed = await defaultWire(true);
     expect(replayed.map((e) => e.label)).toEqual(golden.map((e) => (e as { label: string }).label));
     expect(replayed).toEqual(golden);
+  });
+
+  it('pins the complete wire with the default answer assessment', async () => {
+    const wire = JSON.stringify(await defaultWire(false));
+    expect(createHash('sha256').update(wire).digest('hex')).toBe(
+      'dbe0cd9c8181968a585b1a6640334723115a562368c6609dca3436d144b67a7a',
+    );
   });
 
   it('the default reader reads the parsed body as it is — JSON-only spellings and depth refuse as before', async () => {

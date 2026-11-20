@@ -162,7 +162,9 @@ describe('integration: recording is unconditional', () => {
   it('files tools.coverage_declared and tracks the ledger even with the option OFF', async () => {
     const t = buildAgent({ replies: [call('replication_health'), final(CONFIDENT)] });
     const out = await t.agent.run('is replication healthy?');
-    expect(out).toBe(CONFIDENT);
+    expect(out).toBe(
+      `${CONFIDENT}\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover.`,
+    );
     expect(t.declared).toHaveLength(1);
     expect(t.declared[0]).toMatchObject({
       toolName: 'replication_health',
@@ -312,9 +314,11 @@ describe('regression: the survival guarantee does not depend on the model', () =
     expect(out).toContain('host-side multipathing');
   });
 
-  it('with the option OFF the answer is exactly the model’s own words — the append is opt-in', async () => {
+  it('without coverage delivery, the answer carries the default standing line alone', async () => {
     const t = buildAgent({ replies: [call('replication_health'), final(CONFIDENT)] });
     const out = await t.agent.run('is replication healthy?');
-    expect(out).toBe(CONFIDENT);
+    expect(out).toBe(
+      `${CONFIDENT}\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover.`,
+    );
   });
 });

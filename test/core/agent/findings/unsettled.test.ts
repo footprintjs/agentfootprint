@@ -216,6 +216,9 @@ const clusterInventory = () =>
 
 type Build = (a: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>;
 
+// Isolate the findings record and compare its rows to the historical writer.
+const FINDINGS_ONLY = { answerLayer: false } as const;
+
 const armed: Build = (a) => a.system('bot').tool(hostHbas()).tool(clusterInventory()).findings();
 const unarmed: Build = (a) => a.system('bot').tool(hostHbas()).tool(clusterInventory());
 /** An output schema that accepts any object — the door the answer's `_findings` rides through. */
@@ -241,6 +244,7 @@ async function run(
       maxIterations: 8,
       reactMode,
       ...options,
+      ...FINDINGS_ONLY,
     }),
   ).build();
   const absences: unknown[] = [];
@@ -633,6 +637,7 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
         model: 'mock',
         maxIterations: 8,
         reactMode: 'dynamic',
+        ...FINDINGS_ONLY,
       }),
     ).build();
     await next.run({ message: 'and the cluster?', continueFrom: restored });
@@ -670,6 +675,7 @@ describe('unsettled by absence — the dispatch door says whether it was an abse
         model: 'mock',
         maxIterations: 8,
         reactMode: 'dynamic',
+        ...FINDINGS_ONLY,
       }),
     ).build();
     await next.run({ message: 'and the HBAs?', continueFrom: first.agent.checkpoint()! });
@@ -780,7 +786,13 @@ describe('unsettled by absence — the model must have been SERVED the absence: 
       // …and a continued turn is not served the withheld words either.
       const { provider, wire } = scripted([answer('whether it is slow was not settled')]);
       const next = armed(
-        Agent.create({ provider: provider as never, model: 'mock', maxIterations: 8, reactMode }),
+        Agent.create({
+          provider: provider as never,
+          model: 'mock',
+          maxIterations: 8,
+          reactMode,
+          ...FINDINGS_ONLY,
+        }),
       ).build();
       await next.run({ message: 'and the cluster?', continueFrom: atAnswer.agent.checkpoint()! });
       expect(JSON.stringify(wire)).not.toContain(NOT_CHECKED_WORDS);
@@ -899,6 +911,7 @@ describe('unsettled by absence — the row survives the checkpoint and is served
         model: 'mock',
         maxIterations: 8,
         reactMode: 'dynamic',
+        ...FINDINGS_ONLY,
       }),
     ).build();
     await next.run({ message: 'and the cluster?', continueFrom: restored });

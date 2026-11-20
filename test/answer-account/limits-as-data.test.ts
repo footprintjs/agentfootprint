@@ -165,20 +165,29 @@ describe('INTEGRATION — a prose answer’s appended section, split at the sepa
     assertP7(account, recording);
   });
 
-  it('an "Assumed" block alone no longer reads as the model’s words', async () => {
-    const agent = Agent.create({
+  it.each([
+    {
+      mode: 'default standing',
+      dataOnly: false,
+      section: 'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you.',
+    },
+    {
+      mode: 'an Assumed block when the line is off',
+      dataOnly: true,
+      section: 'Assumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
+    },
+  ])('keeps $mode apart from the model’s words', async ({ dataOnly, section }) => {
+    const builder = Agent.create({
       provider: callThen('search_logs', { service: 'checkout' }, 'No errors.'),
       model: 'mock',
     })
       .tool(searchLogs)
-      .limitsTravelWithTheAnswer()
-      .build();
+      .limitsTravelWithTheAnswer();
+    const agent = (dataOnly ? builder.answerLayer({ standingLine: false }) : builder).build();
     const recording = await recorded(agent, 'errors on checkout?');
     const account = accountForAnswer(recording);
     expect(account.answer.value).toBe('No errors.');
-    expect(account.facts.limitsBlock.value).toBe(
-      'Assumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
-    );
+    expect(account.facts.limitsBlock.value).toBe(section);
   });
 
   it('the line, the limits and the block: one section, in the composer’s order', async () => {

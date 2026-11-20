@@ -27,7 +27,7 @@ answer one question — a bare `[]` reads "not sure" (`empty-undeclared`), an
 (`coverage-gap`, `declared-absent`), and rows with nothing declared read
 "consistent with the record" — never "known".
 
-## In the run — the answer layer (`.answerLayer()`)
+## In the run — the answer layer
 
 The same fold, run INSIDE the run, as the first stage of the final branch — after
 the Route decider's checks filed their verdicts, before the turn is captured — and
@@ -37,7 +37,6 @@ served as data the moment the answer exists:
 const agent = Agent.create({ provider, model })
   .tool(listDownPorts)
   .namesAndNumbersFromEvidence({ posture: 'assist' })
-  .answerLayer({ standingLine: true }) // `{}` / no argument: the data only
   .build();
 
 agent.on('agentfootprint.answer.assessed', (e) => e.payload.standing); // 'not-sure'
@@ -71,12 +70,16 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   (`AgentRunCheckpoint.turnNumber`, carried while a layer is armed) and from the
   restored ledger's latest stamp (`runtime/conversation/seedHistory.ts` · `turnNumberFor`): a window
   strategy trims the stored history, and its count of user messages repeats.
-- **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` (or a
-  mode, below) only, on a PROSE answer only (refused beside `.answerValidation()` and
-  `.outputSchema()` at build, in every mode). Appended after the limits separator by
-  the one composer; beside `.limitsTravelWithTheAnswer()` it names the assumed values
-  itself and the "Assumed" block is not appended too — the block is appended whenever
-  no line was. An assumed value is printed only in the tool's own view.
+- **The line** — `compose.ts` · `standingLineOf` renders the line for eligible prose
+  answers. The default selects `'not-sure-or-ask'` and serves data alone beside
+  `.answerValidation()` or `.outputSchema()`. An explicit line still fails to
+  build beside either. The composer puts the line after the limits separator.
+  Beside `.limitsTravelWithTheAnswer()`, the line names assumed values when it
+  appears. The "Assumed" block supplies them when the line is absent. Values
+  appear only in the tool's own view.
+- **Delivery** — ordinary tokens carry the model's text. When output admission
+  holds provider chunks, PrepareFinal emits the composed answer in one token.
+  In either case, `turn_end.finalContent` carries the completed answer.
 - **THE EQUALITY LAW** — the in-run standing equals `assessAnswer()` over the same
   recording read afterwards: one pure function over the same committed rows, at the one
   moment nothing after it can change them. Pinned by
@@ -85,11 +88,15 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   cut the turn short, an agent mounted in a composition, and 40 generated
   configurations.
 
-The runnable example is `examples/features/76-answer-layer.ts`.
+See `examples/features/123-answer-standing-default.ts` for the default and the
+opt-out, and `examples/features/76-answer-layer.ts` for an explicit line.
 
 ### When the line is said — `standingLine: { when }`
 
-**The rule.** `standingLine` is `true` (= `{ when: 'always' }`) or `{ when }`:
+**The rule.** Omit `.answerLayer()` to use the default. Call `.answerLayer()` or
+`.answerLayer({ standingLine: false })` to serve data only, or `.answerLayer(false)`
+to remove the layer. Set `standingLine` to `true` (equivalent to
+`{ when: 'always' }`) or `{ when }` to select a mode explicitly.
 
 | `when` | The line is appended for | Left off for |
 |---|---|---|
@@ -452,13 +459,13 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 
 | Clause | Here |
 |---|---|
-| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; the layer's own arm, `.answerLayer()` |
+| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; `.answerLayer()` configures the default layer |
 | VERIFY | existing: the Route decider's checks (`core/agent/stages/route.ts` · `judgeClaims`), `core/agent/evidence/gate.ts` · `checkAnswer`, `answer-validation/validate.ts` · `executeAnswerValidation` |
 | RECORD | the existing committed keys, and — under the layer's arm — the two witness rows (`witness.ts`), filed by the Route decider (`core/agent/stages/route.ts` · `judgeEvidence`, `judgeUnfinishedSteps`) |
-| RESOLVE | label only: the fold never asks, refuses or rewrites; the one opt-in line is appended after the answer, never into it |
+| RESOLVE | the fold labels the answer and appends a line for the selected standings |
 | FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader, in the run and after it |
-| SERVE | after the run: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`, the answer account's "How sure" row (`answer-account/facts/howSure.ts` · `readHowSure`); in the run (armed): `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and the line under `{ standingLine: true }` |
-| ARM + MEASURE | `.answerLayer()`; off → byte-identical (every reference under `test/core/tools/reference/` unchanged; `agent-answer-layer` is the armed one); this README's last section |
+| SERVE | after the run: `agent.assessment()`, `assessAnswer` on `agentfootprint/observe`, and the answer account's "How sure" row. In the run: `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and a line for selected standings |
+| ARM + MEASURE | enabled by default; `.answerLayer(false)` restores the prior off behavior |
 
 ## Parity with the study's RQ3 rule
 
