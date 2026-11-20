@@ -1,12 +1,13 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
+import type { IntegrityCallWitness } from '../../../../../../integrity/finding/row.js';
 import type { LLMMessage } from '../../../../../../provider-contract/types.js';
 
 /** Explicit callback contract for existing integrity operations. */
 export interface ToolIntegrityOperations {
   readonly judgeColumns: (
     scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    call: IntegrityCallWitness & { readonly toolName: string; readonly iteration: number },
     value: unknown,
   ) => string | undefined;
   readonly noticeEmptyLookup: (

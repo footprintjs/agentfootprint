@@ -4,7 +4,7 @@ title: CodeCommandOptions
 
 # Interface: CodeCommandOptions
 
-Defined in: [src/provider-contract/types.ts:1296](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1296)
+Defined in: [src/provider-contract/types.ts:1268](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1268)
 
 How one [CodeSession.runCommand](/docs/api/interfaces/CodeSession#runcommand) is bounded.
 
@@ -14,7 +14,7 @@ How one [CodeSession.runCommand](/docs/api/interfaces/CodeSession#runcommand) is
 
 > `readonly` `optional` **checkpoint?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1319](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1319)
+Defined in: [src/provider-contract/types.ts:1291](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1291)
 
 A line the command prints when it reaches a point you care about — for
 example `make && echo STEP_DONE` with `checkpoint: 'STEP_DONE'`. The
@@ -32,7 +32,7 @@ nothing about why. One line, no line breaks.
 
 > `readonly` `optional` **maxOutputChars?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1307](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1307)
+Defined in: [src/provider-contract/types.ts:1279](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1279)
 
 Per-stream ceiling for this command's output, in characters. The
  runner's own `maxOutputChars` when absent. A cut is stated on `truncated`.
@@ -43,7 +43,7 @@ Per-stream ceiling for this command's output, in characters. The
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/provider-contract/types.ts:1304](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1304)
+Defined in: [src/provider-contract/types.ts:1276](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1276)
 
 Stop waiting when this fires.
 
@@ -53,7 +53,7 @@ Stop waiting when this fires.
 
 > `readonly` `optional` **timeoutMs?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1302](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1302)
+Defined in: [src/provider-contract/types.ts:1274](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1274)
 
 Stop waiting after this many milliseconds. What happens to the command
 depends on the backend, and the error says which: a local child process is

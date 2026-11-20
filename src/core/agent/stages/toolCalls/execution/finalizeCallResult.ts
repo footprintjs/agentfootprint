@@ -17,6 +17,7 @@ interface FinalizeCallFrame {
   readonly callArguments: CallArguments;
   readonly execution: CallExecution;
   readonly outcome: CallResultCell;
+  readonly skillRejected: boolean;
   readonly sourceEvidenceArmed: boolean;
 }
 
@@ -32,7 +33,7 @@ export async function finalizeCallResult(
   // Last thing before the result becomes history, and only for a call
   // that ran. `modelResult` is what the model reads; `result` stays the
   // truth about the tool and is what `stream.tool_end` reports.
-  const rawModelResult = execution.executed
+  const delivery = execution.executed
     ? await operations.afterMoment(scope, {
         ...occurrence,
         ...(tool && { tool }),
@@ -41,6 +42,12 @@ export async function finalizeCallResult(
         iteration: batch.iteration,
         args: callArguments.callArgs,
         result: outcome.result,
+        returned:
+          execution.toolResultExecution === 'returned' &&
+          !outcome.error &&
+          !execution.denied &&
+          !execution.ceilingRefused &&
+          !frame.skillRejected,
         negativeResultId: execution.negativeDispatch?.resultId,
         ...(execution.resultFinalizer && { onSourceWithheld: execution.resultFinalizer.withheld }),
         ...(outcome.error === true && { error: true }),
@@ -48,7 +55,8 @@ export async function finalizeCallResult(
         ...(batch.runIdentity && { identity: batch.runIdentity }),
         ...(batch.env.signal && { signal: batch.env.signal }),
       })
-    : outcome.result;
+    : undefined;
+  const rawModelResult = delivery === undefined ? outcome.result : delivery.modelResult;
   const sourceHalt = frame.sourceEvidenceArmed ? sourceEvidenceHaltOf(scope) : undefined;
   if (sourceHalt !== undefined) {
     execution.denied = true;
@@ -85,6 +93,7 @@ export async function finalizeCallResult(
   // already summarized a huge result is measured on what it produced, so
   // the cap composes with governance rather than pre-empting it.
   let capped = operations.capResults(tc.name, placedValues);
+  const modelResultCapped = !Object.is(capped.modelResult, placedValues.modelResult);
   const uncapped = capped.modelResult === placedValues.modelResult;
   const refusal =
     execution.resultFinalizer === undefined
@@ -104,5 +113,10 @@ export async function finalizeCallResult(
   const modelResult = capped.modelResult;
   execution.resultFinalizer?.assertFinalized();
 
-  return { capped, modelResult };
+  return {
+    capped,
+    modelResult,
+    modelResultCapped,
+    toolResultDisposition: delivery?.toolResultDisposition,
+  };
 }

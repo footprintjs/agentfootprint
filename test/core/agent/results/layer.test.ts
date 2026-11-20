@@ -42,6 +42,7 @@ import {
   absent,
   coverage,
   defineTool,
+  deny,
   describedResult,
   isPaused,
   pauseHere,
@@ -362,6 +363,65 @@ describe('a result that declares its period — one verdict per call', () => {
 });
 
 describe('a tool that declares a period argument (ToolPeriod) — silence is recorded as silence', () => {
+  it.each([false, true])(
+    'judges the period only when the tool entered (blocked: %s)',
+    async (blocked) => {
+      const execute = vi.fn(() => [{ value: 1 }]);
+      const provider = scripted([
+        call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+        answer('Done.'),
+      ]);
+      const builder = Agent.create({ provider: provider.provider as never, model: 'm' })
+        .tool(searchLogs(execute))
+        .answerLayer({ standingLine: true });
+      if (blocked) {
+        builder.toolMiddleware({ name: 'stop-before-read', onToolCall: () => deny('No access.') });
+      }
+      const agent = builder.build();
+      try {
+        const result = await agent.run({ message: 'Read checkout errors in the last hour.' });
+        expect(execute).toHaveBeenCalledTimes(blocked ? 0 : 1);
+        expect(periodRows(agent).map(({ verdict }) => verdict)).toEqual(
+          blocked ? [] : ['undeclared'],
+        );
+        const periodClause = 'a tool did not say what time its result covers';
+        if (blocked) {
+          expect(result).toContain('a call was refused');
+          expect(result).not.toContain(periodClause);
+        } else {
+          expect(result).toContain(periodClause);
+        }
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it('an entered call that throws has no returned period to judge', async () => {
+    const execute = vi.fn(() => {
+      throw new Error('Synthetic read failed.');
+    });
+    const agent = Agent.create({
+      provider: scripted([
+        call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+        answer('Done.'),
+      ]).provider as never,
+      model: 'm',
+    })
+      .tool(searchLogs(execute))
+      .answerLayer({ standingLine: true })
+      .build();
+    try {
+      const result = await agent.run({ message: 'Read checkout errors in the last hour.' });
+      expect(execute).toHaveBeenCalledOnce();
+      expect(periodRows(agent)).toEqual([]);
+      expect(await reasonsOf(agent)).toContain('call-not-completed');
+      expect(result).not.toContain('a tool did not say what time its result covers');
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
   it('a bare result: `undeclared`, joined to the inputs layer’s row for the same call', async () => {
     const agent = Agent.create({
       provider: scripted([call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')])

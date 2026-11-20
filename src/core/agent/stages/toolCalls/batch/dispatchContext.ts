@@ -1,5 +1,4 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
-import type { CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
@@ -7,7 +6,6 @@ import { assistantToolTurn } from './assistantTurn.js';
 import { frozenTurnOf } from '../access/bindings.js';
 import { isSealed } from '../../../../../lib/frozenCopy.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
-import type { ToolResultStatus } from '../../../../../semantics/toolEffects.js';
 import { towersFor } from '../evidence/towers.js';
 import type { TimeLineage } from '../../route.js';
 import type { TransitionBatchState } from '../contracts/callFacts.js';
@@ -93,13 +91,7 @@ export function buildDispatchContext(
     // results that really happened (the resume paths APPEND the answered
     // call to this same array). `lastToolResult` stays the last entry;
     // `on-tool-return` triggers and skill-graph routes read the batch.
-    const batchResults: {
-      toolName: string;
-      result: string;
-      toolCallId: string;
-      callOccurrenceKey?: CallOccurrenceKey;
-      status?: ToolResultStatus;
-    }[] = [];
+    const batchResults: NonNullable<AgentState['toolResults']>[number][] = [];
     // Findings standings were preserved in the admission preflight, before
     // the batch ask could pause. Their identity came from this response's
     // immutable request witness, not this resetting result list. Absence

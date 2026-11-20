@@ -395,6 +395,8 @@ describe('record-only fields — every serving path goes through the one strip',
     // `afterMoment`) and be driven by this file.
     const PINNED = [
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
+      // Reads the delivered replacement for its period fact, without serving bytes.
+      'core/agent/recordedCalls/rewrittenResult.ts',
       // Bounded inspection of the final governed/placed/capped surface for
       // canonical absence only; this reader serves no envelope or record-only lists.
       'core/agent/resultRowsets/read.ts',

@@ -171,7 +171,7 @@ function appendedStandingLine(end: ViewEvent, view: RecordingView): string | und
   const assessed = recordedStandingWitnesses(view, data.reasons);
   const { state } = view;
   if (assessed === undefined || state === undefined) return undefined;
-  const source = assumedValuesSourceOf(data.reasons, state);
+  const source = assumedValuesSourceOf(assessed, state);
   const assumed =
     source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
   const facts = standingFactsOf(assessed, displayNames ?? new Map());

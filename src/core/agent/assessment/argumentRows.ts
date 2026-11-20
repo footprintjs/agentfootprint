@@ -11,6 +11,7 @@ import { isRecord, str } from './recordValues.js';
 export interface ArgumentRowRead {
   readonly index: number;
   readonly historyIndex?: number;
+  readonly occurrenceKey?: string | null;
   readonly argument: string;
   readonly source?: string;
   /** Set on a row that ASKED the person — no source yet. */
@@ -108,6 +109,7 @@ export function argumentRows(
       index,
       argument,
       ...(historyIndex !== undefined && { historyIndex }),
+      ...(occurrenceKey !== undefined && { occurrenceKey }),
       ...(source !== undefined && { source }),
       asked: typeof row.asked === 'string' && source === undefined,
       ruled: row.rule !== undefined || row.period === true,

@@ -8,6 +8,7 @@ import type { buildToolArtifactsOperations } from '../execution/artifactsOperati
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { shouldCheckIn, type CheckInRequest } from '../../../../checkin.js';
 import {
@@ -193,7 +194,7 @@ export async function admitCheckInCall(
     // Commit partial state so resume() finds history intact (mirror the
     // pauseHere path). The bound copy of the args rides the checkpoint,
     // so an APPROVED tool executes exactly what was asked.
-    scope.history = frame.newHistory;
+    commitSettledToolHistory(scope, frame.newHistory);
     scope.pausedToolCallId = frame.tc.id;
     scope.pausedToolName = frame.tc.name;
     scope.pausedToolStartMs = frame.startMs;

@@ -37,6 +37,9 @@ export interface DeliveryState {
     result: string;
     toolCallId: string;
     callOccurrenceKey?: import('../../../../lib/callOccurrence.js').CallOccurrenceKey;
+    /** The results layer carries a synthetic notice across a checkpoint without judging it. */
+    entered?: false;
+    threw?: true;
     /** The tool's OWN declared outcome (9.19.0) — present only when the tool
      *  returned a result envelope carrying `status`. `onToolStatus` route
      *  edges key on it. */
@@ -50,7 +53,7 @@ export interface DeliveryState {
    * commits exactly the keys it always did.
    *
    * It is how the layer at the loop head knows a batch from a re-entry
-   * (`honesty/mounts.ts` · `batchToJudge`): ToolCalls advances `iteration`
+   * (`honesty/resultsInput.ts` · `batchToJudge`): ToolCalls advances `iteration`
    * by one and loops straight to the layer, so the batch is new exactly when
    * the loop head's `iteration` is this plus one — each batch judged once per
    * run, never by call id, which a provider may reuse. Per run: a

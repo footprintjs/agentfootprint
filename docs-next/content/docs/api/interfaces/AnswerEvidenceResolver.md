@@ -4,7 +4,7 @@ title: AnswerEvidenceResolver
 
 # Interface: AnswerEvidenceResolver
 
-Defined in: [src/answer-validation/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L45)
+Defined in: [src/answer-validation/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L49)
 
 Read-only, bounded, and pre-bound to the run's artifact scope.
 
@@ -14,7 +14,7 @@ Read-only, bounded, and pre-bound to the run's artifact scope.
 
 > **resolve**(`ref`, `options`): `Promise`\<`AnswerEvidenceResolution`\>
 
-Defined in: [src/answer-validation/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L47)
+Defined in: [src/answer-validation/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L51)
 
 Exact kind match, as with tool wants. No listing or automatic parent walk.
 
