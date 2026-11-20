@@ -251,11 +251,15 @@ describe('UNIT — the read list and the run constant', () => {
       'answerValidation',
       'argumentAsk',
       'middlewareDecisions',
+      'withheldToolResultTurn',
     ]);
     // A tool result has an after-tool decision even when inputs are unarmed.
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('middlewareDecisions');
-    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toContain(
-      'middlewareDecisions',
+    expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain(
+      'withheldToolResultTurn',
+    );
+    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toEqual(
+      expect.arrayContaining(['middlewareDecisions', 'withheldToolResultTurn']),
     );
   });
 
