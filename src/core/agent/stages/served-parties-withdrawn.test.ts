@@ -63,7 +63,7 @@ describe('no pause: a provider withdraws a tool, then the model names it', () =>
       })
       .build();
     const out = await agent.run({ message: 'go' });
-    expect(out).toBe('done');
+    expect(out).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(ran).toEqual(['gone:provider']);
     expect(toolMsgs(s.requests.at(-1)).at(-1)).toContain('Unknown tool');
   });
@@ -118,7 +118,7 @@ describe('SAME resume: last-served memory across a pause', () => {
         requestId: paused.awaitingInput.requestId,
         values: { y: 'a' },
       });
-      expect(out).toBe('done');
+      expect(out).toBe('done\n\n---\n\nNot sure — a call was refused.');
       expect(ran).toEqual(['shared:provider']);
       expect(toolMsgs(s.requests.at(-1)).at(-1)).toContain('offered');
     });

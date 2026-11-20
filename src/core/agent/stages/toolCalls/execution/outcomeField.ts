@@ -16,3 +16,16 @@ export function reportedStatusField(call: DispatchSettlement): Pick<LLMMessage, 
   const reportedStatus = call.ran ? reportedStatusOf(call.status) : undefined;
   return reportedStatus === undefined ? {} : { reportedStatus };
 }
+
+/** Retain the exact native boundary fact when standing is armed. */
+export function toolResultExecutionField(
+  answerLayer: true | undefined,
+  execution: LLMMessage['toolResultExecution'],
+  unserved: boolean,
+): Pick<LLMMessage, 'toolResultExecution'> {
+  if (answerLayer !== true) return {};
+  return {
+    toolResultExecution:
+      execution === 'returned' && unserved ? 'returned-unserved' : execution ?? 'not-entered',
+  };
+}

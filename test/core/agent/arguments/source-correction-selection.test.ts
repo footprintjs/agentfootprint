@@ -30,7 +30,9 @@ describe('current native app grounding through selection changes and follow-ups'
       try {
         expect(await f.agent.run('Read the current selection.')).toBe('A complete.');
         selected = 'synthetic-vm-selection-b';
-        expect(await f.agent.followUp('Read the new current selection.')).toBe('B complete.');
+        expect(await f.agent.followUp('Read the new current selection.')).toBe(
+          'B complete.\n\n---\n\nNot sure — a call was refused.',
+        );
         expect(await f.agent.followUp('Give me its inventory.')).toBe('B follow-up complete.');
         expect(f.ran).toEqual([
           { vm: 'synthetic-vm-selection-a' },

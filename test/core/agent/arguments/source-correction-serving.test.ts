@@ -158,7 +158,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
     it('masks only actual current call views and private framework quotes in the new public event', async () => {
       const f = fixture(mode, [first, response('Done.')]);
       try {
-        expect(await f.agent.run(QUESTION)).toBe('Done.');
+        expect(await f.agent.run(QUESTION)).toBe('Done.\n\n---\n\nNot sure — calls were refused.');
         expect(f.executions()).toBe(0);
         const ended = f.events.find((event) => event.type === 'agentfootprint.agent.iteration_end');
         const shown = proposal((ended?.payload as { history?: readonly LLMMessage[] }).history);
@@ -215,7 +215,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           expect(JSON.stringify(publicValue)).not.toContain(VM);
         }
         restored = fixture(mode, [response('Resumed.')], true);
-        expect(await restored.agent.resumeOnError(jsonCopy(checkpoint))).toBe('Resumed.');
+        expect(await restored.agent.resumeOnError(jsonCopy(checkpoint))).toBe(
+          'Resumed.\n\n---\n\nNot sure — calls were refused.',
+        );
         expect(proposal(restored.requests[0]?.messages)).toEqual(wire);
         expect(proposal(restored.agent.checkpoint()?.history)).toEqual(raw);
         expect(restored.agent.checkpoint()?.sourceDeclarationCorrection).toEqual({ spent: true });

@@ -613,7 +613,7 @@ describe('integration: through the real loop', () => {
     expect(text).toMatch(/^refused: `provenance\.source` must name the system of record/);
     expect(text).not.toContain('size_tb');
     expect(recorded).toHaveLength(0);
-    expect(answer).toBe('Two VMs, 15.5 TB between them.');
+    expect(answer).toBe('Two VMs, 15.5 TB between them.\n\n---\n\nNot sure — a call failed.');
   });
 });
 

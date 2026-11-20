@@ -545,7 +545,10 @@ describe('EDGE — how the turn ended: a pause of every kind, a run that threw',
     const answer = await agent.resumeOnError(failed.checkpoint);
     const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
     recorder.stop();
-    expect(answer).toBe('No VMs are hosted on host-9.');
+    expect(answer).toBe(
+      'No VMs are hosted on host-9.\n\n---\n\n' +
+        'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
     // The checkpoint carries history, not `coverageDeclared` — the row is gone, the envelope is not.
     const state = agent.getLastSnapshot()!.sharedState as { coverageDeclared?: unknown };
     expect(state.coverageDeclared).toBeUndefined();

@@ -273,7 +273,9 @@ describe('source contract projection on actual native provider requests', () => 
       DONE,
     ]);
     try {
-      expect(await f.agent.run({ message: QUESTION })).toBe('Done.');
+      expect(await f.agent.run({ message: QUESTION })).toBe(
+        'Done.\n\n---\n\nNot sure — a lookup came back empty without saying what it searched.',
+      );
       expect(f.ran).toEqual([{ vm: VM, from: 'business-input' }]);
     } finally {
       await f.agent.shutdown();
@@ -332,7 +334,9 @@ describe('source contract projection on actual native provider requests', () => 
     const frames: ContextRecordedPayload[] = [];
     const off = agent.on('agentfootprint.context.recorded', (event) => frames.push(event.payload));
     try {
-      expect(await agent.run({ message: QUESTION })).toBe('Done.');
+      expect(await agent.run({ message: QUESTION })).toBe(
+        'Done.\n\n---\n\nNot sure — a lookup came back empty without saying what it searched.',
+      );
       expect(requests).toHaveLength(2);
       expect(
         ((schema(requests[0]!).properties as Bag).vm as Bag).description,
@@ -438,7 +442,9 @@ describe('source contract projection on actual native provider requests', () => 
       .findings()
       .build();
     try {
-      expect(await agent.run({ message: QUESTION })).toBe('Done.');
+      expect(await agent.run({ message: QUESTION })).toBe(
+        'Done.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a lookup came back empty without saying what it searched.',
+      );
       expect(ran).toEqual([{ vm: VM }]);
       expect((schema(requests[0]!).required as unknown[] | undefined) ?? []).not.toContain(
         '_findings',

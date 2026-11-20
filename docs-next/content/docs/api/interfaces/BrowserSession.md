@@ -4,7 +4,7 @@ title: BrowserSession
 
 # Interface: BrowserSession
 
-Defined in: [src/provider-contract/types.ts:1038](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1038)
+Defined in: [src/provider-contract/types.ts:1010](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1010)
 
 One open browser session.
 
@@ -14,7 +14,7 @@ One open browser session.
 
 > `readonly` `optional` **automationEndpoint?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1048](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1048)
+Defined in: [src/provider-contract/types.ts:1020](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1020)
 
 Where an automation client attaches — a CDP WebSocket, for Playwright and
 friends. Absent on a backend that offers no such channel.
@@ -28,7 +28,7 @@ Playwright; it hands you the endpoint and stays out of the way.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/provider-contract/types.ts:1040](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1040)
+Defined in: [src/provider-contract/types.ts:1012](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1012)
 
 The backend's own id for this session.
 
@@ -38,7 +38,7 @@ The backend's own id for this session.
 
 > `readonly` `optional` **liveViewEndpoint?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1050](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1050)
+Defined in: [src/provider-contract/types.ts:1022](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1022)
 
 Where a PERSON can watch this session, when the backend offers a view.
 
@@ -48,7 +48,7 @@ Where a PERSON can watch this session, when the backend offers a view.
 
 > **click**(`req`): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1052](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1052)
+Defined in: [src/provider-contract/types.ts:1024](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1024)
 
 Click at a point, in the operating system rather than in the page.
 
@@ -82,7 +82,7 @@ Click at a point, in the operating system rather than in the page.
 
 > `optional` **handControlTo**(`driver`): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1072](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1072)
+Defined in: [src/provider-contract/types.ts:1044](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1044)
 
 Hand the controls to a person, or take them back (optional).
 
@@ -107,7 +107,7 @@ Absent on a backend with no such notion; feature-detect before offering it.
 
 > **press**(`req`): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1061](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1061)
+Defined in: [src/provider-contract/types.ts:1033](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1033)
 
 Press a named key, optionally more than once.
 
@@ -133,7 +133,7 @@ Press a named key, optionally more than once.
 
 > **screenshot**(): `Promise`\<[`BrowserShot`](/docs/api/interfaces/BrowserShot)\>
 
-Defined in: [src/provider-contract/types.ts:1063](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1063)
+Defined in: [src/provider-contract/types.ts:1035](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1035)
 
 Take a screenshot of the session as it is now.
 
@@ -147,7 +147,7 @@ Take a screenshot of the session as it is now.
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1080](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1080)
+Defined in: [src/provider-contract/types.ts:1052](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1052)
 
 Release the session.
 
@@ -165,7 +165,7 @@ no-op, not an error.
 
 > **type**(`text`): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1059](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1059)
+Defined in: [src/provider-contract/types.ts:1031](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1031)
 
 Type text, as a keyboard would.
 

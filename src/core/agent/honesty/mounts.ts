@@ -1,5 +1,3 @@
-import { resultsLayerInput } from './resultsInput.js';
-export { batchToJudge, timeOfBatch } from './resultsInput.js';
 import { findingsReferenceRefusal, type FindingsRequest } from '../findings/admission.js';
 import { ownsReservedArgument, splitFindings } from '../findings/reserved.js';
 /**
@@ -86,17 +84,20 @@ import { keptThisTurn } from '../arguments/kept.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
 import type { InputsLayerDeps, InputsLayerState, SourceInputs } from '../arguments/subflow.js';
-import type { CallWindowRow } from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
+import type { CallWindowRow } from '../../../time/rows.js';
 
 import type { PeriodRow } from '../../../semantics/coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
 import type { ResultsLayerDeps, ResultsLayerState } from '../results/subflow.js';
+import { resultsLayerInput } from './resultsInput.js';
+import type { AnswerFoldKey } from './answerFoldReads.js';
 import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
 import type { InputsMountDeps } from './inputsMountContract.js';
 export type { InputsMountDeps } from './inputsMountContract.js';
+export { batchToJudge, timeOfBatch } from './resultsInput.js';
 
 type StageModule = typeof import('../arguments/subflow.js');
 type CorpusModule = typeof import('./sourceCorpus.js');
@@ -463,19 +464,6 @@ export const RESULTS_LOOP_TARGET: string = SUBFLOW_IDS.RESULTS;
 
 // ─── The answer layer (honesty layer 4) ─────────────────────────────────
 
-/** A committed key the one fold (`assessment/assess.ts` · `assessAnswer`) reads. */
-export type AnswerFoldKey =
-  | 'history'
-  | 'turnNumber'
-  | 'pausedToolCallId'
-  | 'findingsLedger'
-  | 'coverageDeclared'
-  | 'stoppedEarly'
-  | 'unsupportedValues'
-  | 'answerValidation'
-  | 'argumentAsk'
-  | 'middlewareDecisions';
-
 /** What an agent with the answer layer armed hands the final branch — build-time facts, never scope. */
 export interface AnswerMountDeps {
   /** The committed keys the fold reads — only those this agent's arms can write (`answerFoldReads`). */
@@ -493,59 +481,6 @@ export interface AnswerMountDeps {
    * reason's calls in those words (`assessment/stage.ts`).
    */
   readonly displayNameOfFor?: (scope: object) => (toolName: string) => string | undefined;
-}
-
-/**
- * THE READ LIST — which committed keys the answer layer's fold reads, from
- * the agent's arms: a key no arm of this agent can write is never read (a
- * tracked read of a key a run never writes is a phantom context source —
- * honesty law 9). Over-approximates on purpose: a key an arm CAN write is
- * read whether or not this run wrote it, so the in-run fold never misses a row
- * the read-after fold sees (the equality law).
- *
- * - always: `history`, `turnNumber`, `pausedToolCallId` (seed writes them),
- *   `findingsLedger` (the witness rows, and any rows a continued conversation
- *   restores — the restore is wired while a layer is armed) and
- *   `stoppedEarly` — the Route decider writes it on EVERY agent
- *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
- *   whenever the model asked for calls, whether or not this agent registered
- *   a tool that could answer them;
- * - a tool surface: `coverageDeclared` (only a tool that ran declares
- *   coverage);
- * - the evidence gate: `unsupportedValues`;
- * - `.answerValidation()`: `answerValidation`;
- * - the inputs layer: `argumentAsk`, and `middlewareDecisions` when a
- *   before-tool chain can rewrite a filled value.
- *
- * Every key's writers were checked against this list: a writer that no arm
- * gates puts its key in the always group — decide by the writer, never by the
- * usual path to it.
- *
- * @example
- * ```ts
- * answerFoldReads({ tools: true, evidenceGate: false, answerValidation: false, inputs: false, toolMiddleware: false });
- * // ['history', 'turnNumber', 'pausedToolCallId', 'findingsLedger', 'stoppedEarly', 'coverageDeclared']
- * ```
- */
-export function answerFoldReads(arms: {
-  readonly tools: boolean;
-  readonly evidenceGate: boolean;
-  readonly answerValidation: boolean;
-  readonly inputs: boolean;
-  readonly toolMiddleware: boolean;
-}): readonly AnswerFoldKey[] {
-  return [
-    'history',
-    'turnNumber',
-    'pausedToolCallId',
-    'findingsLedger',
-    'stoppedEarly',
-    ...(arms.tools ? (['coverageDeclared'] as const) : []),
-    ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
-    ...(arms.answerValidation ? (['answerValidation'] as const) : []),
-    ...(arms.inputs ? (['argumentAsk'] as const) : []),
-    ...(arms.inputs && arms.toolMiddleware ? (['middlewareDecisions'] as const) : []),
-  ];
 }
 
 type AnswerStageModule = typeof import('../assessment/stage.js');

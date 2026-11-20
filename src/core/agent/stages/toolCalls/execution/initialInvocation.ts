@@ -18,6 +18,8 @@ import type { buildToolArtifactsOperations } from './artifactsOperations.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
+import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
@@ -222,8 +224,7 @@ export async function invokeInitialTool(
             tool: frame.tool,
             party: frame.resolved.party,
             args: frame.callArguments.callArgs,
-            toolCallId: frame.tc.id,
-            iteration: frame.iteration,
+            ...declarationCall,
             runId: frame.runFactsOf(scope)?.runId,
             dispatch: searchDispatch,
             context: executionContext,
@@ -235,14 +236,18 @@ export async function invokeInitialTool(
       frame.tool,
       frame.callArguments.callArgs,
     );
+    let returned = false;
     try {
+      recordToolEntry(scope, frame.tc.callOccurrenceKey);
       frame.outcome.result = await frame.tool.execute(
         frame.callArguments.callArgs,
         executionContext,
       );
+      returned = true;
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
       await binding.close(frame.env.signal);
+      frame.execution.toolResultExecution = returned ? 'returned' : 'threw';
       if (binding.halt !== undefined) frame.execution.haltContext ??= { ...binding.halt };
     }
     throwIfAborted(frame.env.signal);
@@ -360,11 +365,7 @@ export async function invokeInitialTool(
       // door, one step after the ceiling. Only when the payload
       // survived it: rows nobody will read have no columns worth
       // arguing about.
-      const columnRefusal = frame.judgeColumns(
-        scope,
-        { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
-        frame.outcome.result,
-      );
+      const columnRefusal = frame.judgeColumns(scope, declarationCall, frame.outcome.result);
       if (columnRefusal !== undefined) {
         if (frame.execution.negativeDispatch !== undefined)
           keepNegativeResultOut(scope, frame.execution.negativeDispatch.resultId);
@@ -434,7 +435,7 @@ export async function invokeInitialTool(
       const writePause = (): void => {
         if (frame.execution.negativeDispatch !== undefined)
           pauseNegativeCall(scope, frame.execution.negativeDispatch.resultId);
-        scope.history = frame.newHistory;
+        commitSettledToolHistory(scope, frame.newHistory);
         scope.pausedToolCallId = frame.tc.id;
         scope.pausedToolName = frame.tc.name;
         scope.pausedToolStartMs = frame.startMs;

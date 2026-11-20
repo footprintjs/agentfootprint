@@ -12,8 +12,15 @@ function toolMessage(content: string) {
   return { role: 'tool', content, toolCallId: call.id, toolName: call.name };
 }
 
-function recordedToolMessage(content: string) {
-  return { ...toolMessage(content), callOccurrenceKey: [0, 0, 0, 1, 0] };
+function recordedToolMessage(
+  content: string,
+  toolResultExecution: 'returned' | 'returned-unserved' = 'returned',
+) {
+  return {
+    ...toolMessage(content),
+    callOccurrenceKey: [0, 0, 0, 1, 0],
+    toolResultExecution,
+  };
 }
 
 async function dispatch(
@@ -117,7 +124,7 @@ describe('reported status on committed tool messages', () => {
     const resumed = await dispatch(refusal, { pause: true });
     expect(inline.message.content).toContain('declares no `search`');
     expect(normalizeCallOccurrences(inline.message)).toStrictEqual({
-      ...recordedToolMessage(inline.message.content),
+      ...recordedToolMessage(inline.message.content, 'returned-unserved'),
       outcome: 'failed',
     });
     expect(normalizeCallOccurrences(resumed.message)).toStrictEqual(
@@ -137,7 +144,7 @@ describe('reported status on committed tool messages', () => {
     });
     expect(recorded.message.content).toContain('No data was returned.');
     expect(normalizeCallOccurrences(recorded.message)).toStrictEqual({
-      ...recordedToolMessage(recorded.message.content),
+      ...recordedToolMessage(recorded.message.content, 'returned-unserved'),
       outcome: 'failed',
       reportedStatus: 'invalid',
     });

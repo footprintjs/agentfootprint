@@ -20,7 +20,7 @@
  * is a verdict on the answer itself (a value no result carried, a claim in it,
  * the app's checks on its bytes); `run` when it is about how the run went (a
  * pause still waiting, a limit, unfinished steps, a check that could not reach
- * a verdict). The fold never decides it per run, so "the run" is never an
+ * a verdict). A contingent value disclosed in the answer rests on the answer itself, so "the run" is never an
  * empty list of calls in disguise.
  *
  * WHAT IS NOT HERE, AND WHY. A reason is read from a COMMITTED row, never from
@@ -44,7 +44,7 @@ export interface ReasonEntry {
   readonly layer?: HonestyLayer;
   readonly class: 'ask' | 'not-sure';
   /**
-   * What the reason rests on, DECLARED here once — never inferred per run
+   * What the reason rests on, DECLARED here once — with the answer witness for `value-contingent` classified separately
    * (`types.ts` · `AssessmentReasonSource`): `calls` (the calls its rows name,
    * read by `sources.ts` · `reasonSourceOf`), `answer` (the answer itself) or
    * `run` (the run as a whole).
@@ -125,7 +125,15 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      "history: a tool message of this turn with outcome 'refused' or 'failed', without a later completed call of the same tool with equal recorded arguments",
+      "history: this turn's recorded refusal, failed outcome or batch settlement, without a later completed call of the same tool with equal recorded arguments",
+  },
+  {
+    reason: 'result-withheld',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
   },
   {
     reason: 'work-not-finished',
@@ -204,7 +212,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      'findingsLedger: a period row of this turn with beyondRetention (the time layer, step T8) — the window was wholly older than the tool declares its source keeps: refused before dispatch, or read that way',
+      'findingsLedger: a call-window refused for beyond-retention or a period row with beyondRetention (step T8) — the window was wholly older than the tool declares its source keeps',
   },
   {
     reason: 'sources-conflict',
@@ -314,7 +322,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      "answerValidation.checks: an agent:negative-claims: row with reason 'declaration-overclaimed' — a tool's refusal said more than it read; the row's tools name the tool (negativeClaims/delivery.ts · reportWithNegatives keeps both)",
+      "answerValidation.checks: an agent:negative-claims: row with reason 'declaration-overclaimed' — a native declaration said more than the entered tool checked; the row identifies the served occurrence (negativeClaims/delivery.ts · reportWithNegatives)",
   },
   {
     reason: 'answer-check-failed',

@@ -1810,6 +1810,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.callNotDispatched@1": {
+  "text": "2 calls did not run.",
+  "parts": [
+   {
+    "text": "2 calls did not run."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.callNotCompleted@1": {
   "text": "2 calls did not complete.",
   "parts": [
@@ -1833,6 +1842,15 @@
   "parts": [
    {
     "text": "2 calls failed."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.resultWithheld@1": {
+  "text": "A result was kept out by a rule.",
+  "parts": [
+   {
+    "text": "A result was kept out by a rule."
    }
   ],
   "source": "library"
@@ -2058,6 +2076,15 @@
   "parts": [
    {
     "text": "The app's answer checks failed this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.dispatchProofUnavailable@1": {
+  "text": "The record could not establish tool entry for every checked call.",
+  "parts": [
+   {
+    "text": "The record could not establish tool entry for every checked call."
    }
   ],
   "source": "library"

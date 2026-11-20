@@ -157,6 +157,8 @@ function build(
   let builder = Agent.create({
     provider,
     model: 'mock',
+    // Preserve the historical settlement record comparison.
+    answerLayer: false,
     ...(kind === 'consent' && { credentials }),
   }).tools(tools);
   if (kind === 'ask') {
@@ -1121,7 +1123,9 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       },
     };
     const { agent, ran } = precondition({ checker });
-    expect(await answerTheInput(agent)).toBe('done');
+    expect(await answerTheInput(agent)).toBe(
+      'done\n\n---\n\nNot sure — a call was refused and a call did not run.',
+    );
     expect(sequences.transfer_funds).toEqual(['collect_input']);
     // So the transfer was refused: nothing but the input door ever executed.
     expect(ran).toEqual([]);
@@ -1308,7 +1312,9 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       requestId: paused.awaitingInput.requestId,
       values: { acct: 7 },
     });
-    expect(answer).toBe('transfer refused');
+    expect(answer).toBe(
+      'transfer refused\n\n---\n\nNot sure — a call was refused and a call did not run.',
+    );
 
     // The precondition: the verify was settled, and the fresh process minted
     // its id again for a lookup that really ran.
@@ -1441,7 +1447,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it('the offer after the resume lists calls that ran, excluding settled and refused notices', async () => {
     const { agent, answer, requests } = await judgedRun();
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused and a call did not run.');
     expect(requests).toHaveLength(4);
     // Request 3 (the first after the resume) carries all three results on
     // the wire — one per tool_use — and offers only the two that are results.
@@ -1522,7 +1528,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it("the window's record never lists it among the dropped results", async () => {
     const { answer, state } = await judgedRun('evicting');
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused and a call did not run.');
     const dropped = (state.compactions ?? []).flatMap((r) => r.droppedStandings ?? []);
     // The batch turn left: its results are listed with the standing the model
     // declared (or none) — and the settled call, which had no result, is not.
@@ -1597,7 +1603,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
           requestId: paused.awaitingInput.requestId,
           values: { year: 2026 },
         }),
-      ).toBe('done');
+      ).toBe(withSettled ? 'done\n\n---\n\nNot sure — a call did not run.' : 'done');
       // The window's last visit, after d1 filed both standings.
       return seen.find((turn) => turn.ids.includes('c1'));
     };

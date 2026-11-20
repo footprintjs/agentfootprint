@@ -227,7 +227,9 @@ describe('actual published 14.1.1 time request -> current native resume', () => 
       false,
     );
     expect(resumed.awaitingInput).toBeUndefined();
-    expect(resumed.outcome).toBe('Done.');
+    expect(resumed.outcome).toBe(
+      'Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(resumed.completed).toBe(1);
     expect(resumed.seen).toEqual([ORIGINAL_EFFECT]);
     expect(resumed.requests).toHaveLength(1); // Only the scripted final answer after the tool.

@@ -42,6 +42,7 @@ import {
   absent,
   coverage,
   defineTool,
+  deny,
   describedResult,
   isPaused,
   pauseHere,
@@ -194,7 +195,7 @@ describe('a result that declares its period — one verdict per call', () => {
       const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
 
       // The run constant says the layer was armed.
-      expect(state.honestyLayers).toEqual({ results: true });
+      expect(state.honestyLayers).toEqual({ results: true, answer: true });
 
       // The coverage channel carries the declared period — the tool's own words.
       const coverageRows = state.coverageDeclared as { period?: DeclaredPeriod }[];
@@ -362,6 +363,65 @@ describe('a result that declares its period — one verdict per call', () => {
 });
 
 describe('a tool that declares a period argument (ToolPeriod) — silence is recorded as silence', () => {
+  it.each([false, true])(
+    'judges the period only when the tool entered (blocked: %s)',
+    async (blocked) => {
+      const execute = vi.fn(() => [{ value: 1 }]);
+      const provider = scripted([
+        call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+        answer('Done.'),
+      ]);
+      const builder = Agent.create({ provider: provider.provider as never, model: 'm' })
+        .tool(searchLogs(execute))
+        .answerLayer({ standingLine: true });
+      if (blocked) {
+        builder.toolMiddleware({ name: 'stop-before-read', onToolCall: () => deny('No access.') });
+      }
+      const agent = builder.build();
+      try {
+        const result = await agent.run({ message: 'Read checkout errors in the last hour.' });
+        expect(execute).toHaveBeenCalledTimes(blocked ? 0 : 1);
+        expect(periodRows(agent).map(({ verdict }) => verdict)).toEqual(
+          blocked ? [] : ['undeclared'],
+        );
+        const periodClause = 'a tool did not say what time its result covers';
+        if (blocked) {
+          expect(result).toContain('a call was refused');
+          expect(result).not.toContain(periodClause);
+        } else {
+          expect(result).toContain(periodClause);
+        }
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it('an entered call that throws has no returned period to judge', async () => {
+    const execute = vi.fn(() => {
+      throw new Error('Synthetic read failed.');
+    });
+    const agent = Agent.create({
+      provider: scripted([
+        call('c1', 'search_logs', { service: 'checkout', window: '1h' }),
+        answer('Done.'),
+      ]).provider as never,
+      model: 'm',
+    })
+      .tool(searchLogs(execute))
+      .answerLayer({ standingLine: true })
+      .build();
+    try {
+      const result = await agent.run({ message: 'Read checkout errors in the last hour.' });
+      expect(execute).toHaveBeenCalledOnce();
+      expect(periodRows(agent)).toEqual([]);
+      expect(await reasonsOf(agent)).toContain('call-not-completed');
+      expect(result).not.toContain('a tool did not say what time its result covers');
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
   it('a bare result: `undeclared`, joined to the inputs layer’s row for the same call', async () => {
     const agent = Agent.create({
       provider: scripted([call('c1', 'search_logs', { service: 'checkout' }), answer('No errors.')])
@@ -372,7 +432,7 @@ describe('a tool that declares a period argument (ToolPeriod) — silence is rec
       .build(); // no .resultsLayer(): a registered ToolPeriod arms it by itself
     await agent.run({ message: 'any errors on checkout?' });
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-    expect(state.honestyLayers).toEqual({ inputs: true, results: true });
+    expect(state.honestyLayers).toEqual({ inputs: true, results: true, answer: true });
     expect(normalizeCallOccurrences(periodRows(agent))).toEqual([
       {
         callOccurrenceKey: [0, 0, 0, 1, 0],
@@ -441,7 +501,7 @@ describe('without the layer — a declared period is recorded, never judged in s
         .build();
       await agent.run({ message: 'twice' });
       const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-      expect(state).not.toHaveProperty('honestyLayers');
+      expect(state.honestyLayers).toEqual({ answer: true });
       expect((state.coverageDeclared as { period?: unknown }[]).map((r) => r.period)).toEqual([
         PERIODS.stale,
         PERIODS.stale,
@@ -476,7 +536,7 @@ describe('without the layer — a declared period is recorded, never judged in s
         .build();
       await agent.run({ message: 'any errors?' });
       const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
-      expect(state.honestyLayers).toEqual({ inputs: true });
+      expect(state.honestyLayers).toEqual({ inputs: true, answer: true });
       expect(state).not.toHaveProperty('toolResultsIteration');
       expect(periodRows(agent)).toEqual([]);
       const warnings = warn.mock.calls
@@ -738,6 +798,7 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
     const out = String(await agent.run({ message: 'any failures in the last hour?' }));
     expect(out).toBe(
       'No failures.\n\n---\n\n' +
+        "Not sure — a tool said nothing matched; a tool's data does not reach the time the question asked about.\n\n" +
         'Coverage of this answer — declared by the tools that produced it, not by the model:\n\n' +
         'Checked:\n- every job in the 02:00 export\n\n' +
         'Period:\n- backup_runs queried 2026-09-26T09:00:00Z to 2026-09-26T10:00:00Z; the store ' +
@@ -768,7 +829,7 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
     );
   });
 
-  it('nothing declared a period: the block is the bytes it always was', async () => {
+  it('nothing declared a period: the coverage block has its checked items and no Period line', async () => {
     const agent = Agent.create({
       provider: scripted([call('c1', 'backup_runs', { host: 'silent' }), answer('No failures.')])
         .provider as never,
@@ -780,6 +841,7 @@ describe('the person reads it — only under .limitsTravelWithTheAnswer()', () =
     const out = String(await agent.run({ message: 'any failures?' }));
     expect(out).toBe(
       'No failures.\n\n---\n\n' +
+        'Not sure — a tool said nothing matched.\n\n' +
         'Coverage of this answer — declared by the tools that produced it, not by the model:\n\n' +
         'Checked:\n- every job in the 02:00 export',
     );
@@ -904,7 +966,7 @@ describe('security: the verdict travels as a word, never as the instants', () =>
 // ─── BYTE IDENTITY ───────────────────────────────────────────────────
 
 describe('byte identity: nothing declared, nothing mounted', () => {
-  it('no ToolPeriod and no .resultsLayer(): no sf-results, no run constant, no row', async () => {
+  it('no ToolPeriod and no .resultsLayer(): no results stage, run constant or finding', async () => {
     const agent = Agent.create({
       provider: scripted([call('c1', 'backup_runs', { host: 'silent' }), answer('none')])
         .provider as never,
@@ -915,7 +977,7 @@ describe('byte identity: nothing declared, nothing mounted', () => {
     await agent.run({ message: 'x' });
     const snapshot = agent.getSnapshot()!;
     expect(snapshot.commitLog.some((b) => b.stageId === 'sf-results')).toBe(false);
-    expect(snapshot.sharedState).not.toHaveProperty('honestyLayers');
+    expect(snapshot.sharedState.honestyLayers).toEqual({ answer: true });
     expect(snapshot.sharedState).not.toHaveProperty('toolResultsIteration');
     expect(agent.findings()).toBeUndefined();
   });

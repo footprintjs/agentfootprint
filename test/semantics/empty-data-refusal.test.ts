@@ -236,7 +236,9 @@ describe('integration: through the real loop', () => {
       }),
     );
     expect(text).toBe(`${REFUSED_PREFIX}${EMPTY('facts')} (field: facts)`);
-    expect(answer).toBe('No backup runs for vm-99 in the export.');
+    expect(answer).toBe(
+      'No backup runs for vm-99 in the export.\n\n---\n\nNot sure — a call failed.',
+    );
   });
 
   it('the branch the refusal asks for — rows.length ? describedResult : absent — delivers an absence', async () => {
