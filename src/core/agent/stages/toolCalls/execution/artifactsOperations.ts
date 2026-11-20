@@ -53,6 +53,7 @@ export function buildToolArtifactsOperations(
      *  (the same reason the non-string belt already runs behind a disabled
      *  gate). */
     inputSchema: Readonly<Record<string, unknown>> | undefined,
+    recordRedeemedRef?: (argName: string, ref: string) => void,
   ): Promise<
     | {
         readonly ok: true;
@@ -80,6 +81,7 @@ export function buildToolArtifactsOperations(
       wants,
       args,
       inputSchema,
+      recordRedeemedRef,
     );
     if (!verdict.ok) {
       for (const refusal of verdict.refusals) {

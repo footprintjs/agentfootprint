@@ -4,6 +4,8 @@
 
 - Source links are produced in the flat chart only. A grouped run's record
   carries no source-link channel.
+- Source links for an argument's declared source wait for cross-scope support
+  because its check, default fill, or kept-answer reuse runs in the inputs sub-flow.
 
 - **A host-built record's top-level lists.** The lists ON a row go through
   `rowList`. The record's own keys — `history`, `findingsLedger`,

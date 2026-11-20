@@ -5,6 +5,7 @@ import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
 import { mock } from '../../../../src/llm-providers.js';
 import { recordRun } from '../../../../src/observe.js';
 import type { LLMMessage } from '../../../../src/provider-contract/types.js';
+import { sourceLinkGrantOfSnapshot } from '../../../../src/redaction/sourceLinkPolicy.js';
 import { epochLocations, readAfterCall, readAtCall } from '../../../../src/time-travel/index.js';
 
 const reply = { toolCalls: [{ id: 'reused', name: 'sample', args: {} }] };
@@ -95,6 +96,55 @@ it('drops a paused consumer when the next leg accepts an output without an exact
     expect(readAtCall(next!, 'sourceLinkConsumer')).toEqual(firstConsumer);
     expect(readAfterCall(next!, 'sourceLinkConsumer')).toBeUndefined();
     expect(readAfterCall(next!, 'llmLatestContent')).toBe('Finished.');
+  } finally {
+    await agent.shutdown();
+  }
+});
+
+it('keeps tool occurrence positions private when the run masks its history', async () => {
+  const agent = Agent.create({
+    model: 'mock',
+    provider: mock({ replies: [reply, { content: 'Finished.' }] }),
+  })
+    .tool(sample)
+    .build();
+  try {
+    expect(await agent.run('Read the sample.', { redact: { keys: ['history'] } })).toBe(
+      'Finished.',
+    );
+    const snapshot = agent.getSnapshot();
+    if (!snapshot?.logAddress) throw new Error('Expected an addressed native snapshot.');
+    const address = snapshot.logAddress;
+    const final = epochLocations(snapshot).at(-1);
+    if (!final) throw new Error('Expected a recorded model call.');
+    expect(readAfterCall(final, 'sourceLinkConsumer')).toMatchObject({
+      consumer: final.callRuntimeStageId,
+      historyPositions: [],
+    });
+    const grant = sourceLinkGrantOfSnapshot(snapshot);
+    const context = { signal: new AbortController().signal };
+    expect(grant).toBeTypeOf('function');
+    expect(
+      grant?.({ at: 'view', address, consumer: final.callRuntimeStageId, key: 'history' }, context),
+    ).toBe(false);
+    expect(
+      grant?.(
+        { at: 'write', address, runtimeStageId: final.callRuntimeStageId, key: 'llmLatestContent' },
+        context,
+      ),
+    ).toBe(true);
+    expect(
+      grant?.(
+        {
+          at: 'write',
+          address: { ...address, logRunId: 'other' },
+          runtimeStageId: final.callRuntimeStageId,
+          key: 'llmLatestContent',
+        },
+        context,
+      ),
+    ).toBe(false);
+    expect(sourceLinkGrantOfSnapshot(JSON.parse(JSON.stringify(snapshot)))).toBeUndefined();
   } finally {
     await agent.shutdown();
   }

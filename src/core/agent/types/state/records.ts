@@ -14,6 +14,10 @@ export interface RecordsState {
   sourceLinkServedRows?: readonly import('../../receipt/servedRow.js').ServedRow[];
   /** The exact served consumer for this scope's latest accepted model response. */
   sourceLinkConsumer?: SourceLinkConsumer;
+  /** Source-link witnesses appended by the native stage that made each check. */
+  sourceLinkRows?: readonly import('foottrace/cause').SourceLinkRow[];
+  /** A native check had more witnesses than the record could keep. */
+  sourceLinkRowsBounded?: true;
 
   /**
    * Every coverage statement the run's tools declared, in the order they

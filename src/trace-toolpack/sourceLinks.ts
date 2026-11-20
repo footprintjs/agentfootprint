@@ -12,6 +12,7 @@ import { captureOwn as own } from './causeCapture.js';
 
 const servedKey = 'sourceLinkServedRows';
 const witnessKey = 'sourceLinkRows';
+const boundKey = 'sourceLinkRowsBounded';
 const maxLinks = 256;
 const maxCommits = 4096;
 // The widest native commit the packed binder admits.
@@ -56,6 +57,7 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
       runtimeStageId,
       served: paths.includes(servedKey),
       witness: paths.includes(witnessKey),
+      bounded: paths.includes(boundKey) && own(own(bundle, 'overwrite'), boundKey) === true,
     };
   });
   if (!writes.some(({ served }) => served) || !writes.some(({ witness }) => witness))
@@ -87,7 +89,7 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
   let examined = 0;
   for (const [
     commitIdx,
-    { runtimeStageId, served: wroteServed, witness: wroteWitness },
+    { runtimeStageId, served: wroteServed, witness: wroteWitness, bounded },
   ] of writes.entries()) {
     if (!executions.has(runtimeStageId)) {
       executions.add(runtimeStageId);
@@ -101,7 +103,9 @@ function projectSourceLinks(scope: RecordScope): RecordSourceLinks | undefined {
         }
       }
     }
-    if (!wroteWitness || consumers.size === 0) continue;
+    if (consumers.size === 0) continue;
+    if (bounded) limitations.add('budget-exhausted');
+    if (!wroteWitness) continue;
     const witness = appended(witnessKey, commitIdx);
     if (witness === undefined) continue;
     const [start, rows] = witness;

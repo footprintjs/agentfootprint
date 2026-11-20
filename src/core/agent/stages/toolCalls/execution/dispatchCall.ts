@@ -267,6 +267,10 @@ export function buildCallDispatch(
         if (tool?.wants !== undefined) {
           await admitWantedArguments(scope, {
             resolveWantsAtDispatch: operations.resolveWantsAtDispatch,
+            runId: operations.runFactsOf(scope)?.runId,
+            callIndex,
+            proposedArgs: batch.frozenArgsAt(callIndex),
+            history: batch.newHistory,
             tc,
             tool,
             callArguments,
