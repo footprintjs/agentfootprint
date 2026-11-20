@@ -1,5 +1,10 @@
 import type { StandingLineWhen } from './compose.js';
 
+export type AnswerLayerArm = { readonly standingLine?: StandingLineWhen };
+export type AnswerLayerOptions =
+  | boolean
+  | { readonly standingLine?: boolean | { readonly when: StandingLineWhen } };
+
 /**
  * The line's modes, as the option doors check them — keyed by the type the
  * layer's composer decides with (`assessment/compose.ts` · `StandingLineWhen`),
@@ -23,7 +28,7 @@ const STANDING_LINE_MODES: { readonly [W in StandingLineWhen]: true } = Object.f
 export function answerLayerArm(
   options: Readonly<Record<string, unknown>>,
   door: string,
-): { readonly standingLine?: StandingLineWhen } {
+): AnswerLayerArm {
   const unknown = Object.keys(options).filter((k) => k !== 'standingLine');
   if (unknown.length > 0) {
     throw new Error(
@@ -66,14 +71,12 @@ export function answerLayerArm(
 
 /**
  * `AgentOptions.answerLayer` as the arm `build()` resolves: `undefined` when
- * it is absent or `false`, `{}` for `true`, an object through
+ * it is absent, `false` to turn the layer off, `{}` for `true`, an object through
  * `answerLayerArm` — so the options door meets every refusal the builder's
  * door does. Anything else is refused by name.
  */
-export function answerLayerFromOptions(
-  value: unknown,
-): { readonly standingLine?: StandingLineWhen } | undefined {
-  if (value === undefined || value === false) return undefined;
+export function answerLayerFromOptions(value: unknown): AnswerLayerArm | false | undefined {
+  if (value === undefined || value === false) return value;
   if (value === true) return {};
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(

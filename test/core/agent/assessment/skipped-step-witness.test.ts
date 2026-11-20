@@ -34,7 +34,7 @@ function buildAgent(onSkip: 'advance' | 'hold', armed: boolean) {
     }),
     model: 'mock',
   }).injection(procedure);
-  return (armed ? builder.answerLayer() : builder).build();
+  return (armed ? builder.answerLayer() : builder.answerLayer(false)).build();
 }
 
 function stepWitnesses(ledger: readonly { kind: string }[] = []) {

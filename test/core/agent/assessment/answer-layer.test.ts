@@ -714,7 +714,7 @@ describe('SCENARIO — the standing as data, from a real run', () => {
       const b = Agent.create({ provider: mock({ reply: 'x' }), model: 'mock' }).tool(
         lookup('find_vm', () => []),
       );
-      return (armed ? b.answerLayer() : b).build();
+      return (armed ? b : b.answerLayer(false)).build();
     };
     const armed = JSON.stringify(build(true).getSpec());
     const unarmed = JSON.stringify(build(false).getSpec());
@@ -745,6 +745,7 @@ describe('SCENARIO — the standing as data, from a real run', () => {
         }),
       )
       .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .answerLayer(false)
       .build();
     const { assessed, turnEnds } = await runOnce(agent, 'which ports?');
     expect(assessed).toEqual([]);
@@ -1280,12 +1281,12 @@ describe('BOUNDARY — the turn stamp never repeats in a conversation', () => {
   });
 
   it('only while a layer is armed does the carrier hold the turn — an unarmed checkpoint keeps its bytes', async () => {
-    const plain = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' }).build();
+    const plain = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' })
+      .answerLayer(false)
+      .build();
     await plain.run({ message: 'hello' });
     expect('turnNumber' in plain.checkpoint()!).toBe(false);
-    const armed = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' })
-      .answerLayer()
-      .build();
+    const armed = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' }).build();
     await armed.run({ message: 'hello' });
     expect(armed.checkpoint()!.turnNumber).toBe(1);
   });

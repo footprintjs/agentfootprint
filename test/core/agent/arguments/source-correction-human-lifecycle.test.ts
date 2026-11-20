@@ -125,7 +125,10 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
             requestId: meaning.awaitingInput.requestId,
             values: { [range.id]: choice },
           }),
-        ).toBe('Done.');
+        ).toBe(
+          'Done.\n\n---\n\nNot sure — a lookup came back empty without saying what it searched; ' +
+            'a tool did not say what time its result covers; a tool read a different stretch of time than the one asked about.',
+        );
         expect(ran).toEqual([{ vm: VM }]);
         expect(timeRan).toEqual([{ start, stop }]);
         expect(calls).toBe(2);
@@ -186,7 +189,9 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           expect.objectContaining({ asked: 'unverified' }),
         ]);
         expect(stateOf(agent).argumentSourceOmissionRows).toEqual([]);
-        expect(await reply(agent, second, () => VM)).toBe('Done.');
+        expect(await reply(agent, second, () => VM)).toBe(
+          'Done.\n\n---\n\nNot sure — a lookup came back empty without saying what it searched.',
+        );
         expect(ran).toEqual([{ vm: VM }]);
         expect(fieldsRan).toHaveLength(1);
         expect(calls).toBe(2);

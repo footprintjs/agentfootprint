@@ -481,6 +481,7 @@ describe('scenario — the history fallback never re-injects `_findings` (9.101.
         toolName: 'ask_person',
         iteration: 1,
         basis: 'direct',
+        turn: 1,
       },
     ]);
   });

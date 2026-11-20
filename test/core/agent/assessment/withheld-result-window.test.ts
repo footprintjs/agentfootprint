@@ -264,7 +264,7 @@ describe('standing when a previously withheld result leaves history', () => {
       nativeValue: OVERSIZED_RESULT,
       ruleValue: expect.stringContaining('over its declared 100-char ceiling'),
       reasons: ['call-not-completed'],
-      expectedAnswer: undefined,
+      expectedAnswer: FAILED,
     },
     {
       archiveResult: 'over-ceiling',

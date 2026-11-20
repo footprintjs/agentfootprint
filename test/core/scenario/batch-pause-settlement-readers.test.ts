@@ -139,7 +139,7 @@ async function settledRun(): Promise<SettledRun> {
     requestId: paused.awaitingInput.requestId,
     values: { year: 2026 },
   });
-  expect(answer).toBe('done');
+  expect(answer).toBe('done\n\n---\n\nNot sure — a call failed and a call did not run.');
   const domain = recorder.boundary.getEvents();
   recorder.stop();
   // Offline reader fixture for the actual resumed leg only. The checkpoint

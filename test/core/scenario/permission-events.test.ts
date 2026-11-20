@@ -170,7 +170,7 @@ describe('permission — integration', () => {
       .build();
 
     const out = await agent.run({ message: 'please nuke' });
-    expect(out).toBe('handled');
+    expect(out).toBe('handled\n\n---\n\nNot sure — a call was refused.');
     expect(seenToolContents).toHaveLength(1);
     expect(seenToolContents[0]).toContain('permission denied');
     expect(seenToolContents[0]).toContain('too-risky');

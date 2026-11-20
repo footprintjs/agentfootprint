@@ -164,7 +164,9 @@ describe('the period left out entirely: ONE window is owed', () => {
         requestId: out.awaitingInput.requestId,
         values: { [fields[0]!.id]: '6h' },
       });
-      expect(done).toBe('done');
+      expect(done).toBe(
+        'done\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([{ cluster: 'c', window: '6h' }]);
     });
   }

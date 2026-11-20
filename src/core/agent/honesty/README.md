@@ -16,7 +16,7 @@ confidence. Four decision points, one layer each:
 | 1 · choice | choose a tool | beside the inputs layer | a later step |
 | 2 · inputs | fill its inputs | `sf-inputs`, after the LLM call and before Route (`mounts.ts` · `mountInputsLayer`); its batch ask is raised by ToolCalls, first thing (`stages/argumentAsk.ts` · `askBeforeDispatch`) | **shipped: `assume`, `ask` for a missing value** (one ask per batch), **and declared sources** (`.inputsLayer({ argumentSources: true })`, or `.findings({ argumentSources: true })` beside the ledger: the model's `_findings.from`, checked; an untraced value on an `ask` argument is asked) — `core/agent/arguments/README.md` |
 | 3 · results | read a result | `sf-results`, at the loop head — the loop target, before the window strategy (`mounts.ts` · `mountResultsLayer`) | **shipped: the period verdict** (step 7b) — one `period` row per call whose result declared its period or whose tool declares a `ToolPeriod` — `core/agent/results/README.md`; the reading checks and outcome rows are step 8 |
-| 4 · answer | give the answer | the first stage of the final branch (`mounts.ts` · `startFinalBranch`), `assess-answer` | **shipped** (`.answerLayer()`): the standing folded in the run and served as data (`turn_end.answerAssessment`, `agentfootprint.answer.assessed`), two witness rows filed by Route, an opt-in line — `core/agent/assessment/README.md` |
+| 4 · answer | give the answer | the first stage of the final branch (`mounts.ts` · `startFinalBranch`), `assess-answer` | **enabled by default**: the standing folds in the run and travels as data (`turn_end.answerAssessment`, `agentfootprint.answer.assessed`). Eligible prose answers with doubt carry a line. Disable with `.answerLayer(false)`. See `core/agent/assessment/README.md`. |
 
 ## Tool entry and settlement
 
@@ -61,7 +61,7 @@ id, which a provider may reuse (`resultsInput.ts` · `batchToJudge`).
   (`findings/ledger.ts` · `emitRow`) — names, enums and counts only.
 - **Lazy**: each layer's stage bodies — and every run-time half the other stages need
   from it (for the inputs layer: `arguments/dispatch.ts`, `arguments/serve.ts`) — load
-  through `import()` under the arm, so a plain agent's bundle carries none of them. What
+  through `import()` under the arm when the run reaches them. What
   stays static is what a synchronous door needs first (the inputs layer's list:
   `arguments/README.md`, "What a plain agent carries").
 
@@ -89,7 +89,7 @@ let finalBranch = startFinalBranch(deps.answerLayer, prepareFinalFor(deps), deps
 - **Lazy**: the stage body, the fold and the line's composer load through `import()` on the first
   armed answer; the witness rows' shape (`assessment/witness.ts`) stays static, because the
   checkpoint door checks it synchronously.
-- **What a plain agent carries**: what a synchronous door needs first — the arm and its build
+- **What the builder carries**: what a synchronous door needs first — the arm and its build
   refusals (`AgentBuilder.answerLayer`), the branch choice (`mounts.ts` · `startFinalBranch`,
   `answerFoldReads`), the witness rows' builders and checkpoint check, the event's name — and
   the armed PrepareFinal body, kept beside every other PrepareFinal body because they share one

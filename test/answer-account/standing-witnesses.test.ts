@@ -196,7 +196,10 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             checkInApproved({ request: result.checkIn, by: 'fixture' }),
           );
         }
-        if (windowed && !rendersStanding) expect(result).toBe('Read the shelf.');
+        if (windowed && !rendersStanding)
+          expect(result).toBe(
+            'Read the shelf.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
+          );
         else if (paused) expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;

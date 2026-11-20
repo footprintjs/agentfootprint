@@ -329,7 +329,9 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
       .findings({ argumentSources: true })
       .build();
     const out = await agent.run({ message: 'Any errors on checkout over the last week?' });
-    expect(out).toBe('No errors.');
+    expect(out).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(argumentRows(agent)).toEqual([
       {
@@ -391,7 +393,9 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
     expect((await agent.assessment())?.standing).toBe('ask');
 
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('No errors in the last hour.');
+    expect(done).toBe(
+      'No errors in the last hour.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
     const rows = argumentRows(agent);
     expect(rows[1]).toMatchObject({ source: 'answered', value: '1h', proposed: '24h' });
@@ -757,7 +761,9 @@ describe('a result, the app, an earlier answer — each checked in its one place
     const paused = await agent.run({ message: 'Errors on checkout?' });
     await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
     const second = await agent.followUp('And the flows on srv-4417?');
-    expect(second).toBe('3 flows.');
+    expect(second).toBe(
+      '3 flows.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '24h' },
       { host: 'srv-4417', range: '-24h' },
@@ -822,7 +828,9 @@ describe('a result, the app, an earlier answer — each checked in its one place
       .build();
     const seq = Sequence.create().step('plan', planner).step('work', worker).build();
     const out = await seq.run({ message: 'Any errors on checkout?' });
-    expect(out).toBe('No errors.');
+    expect(out).toBe(
+      'No errors.\n\n---\n\nNot sure — window = "2h" was assumed by search_logs\'s rule, not given by you; a tool did not say what time its result covers.',
+    );
     // The worker ran as the Sequence's step: its state is the step's subflow heap.
     const snap = seq.getSnapshot() as unknown as {
       subflowResults: Record<string, { treeContext: { globalContext: Record<string, unknown> } }>;
@@ -911,7 +919,9 @@ describe('a result, the app, an earlier answer — each checked in its one place
       .findings({ argumentSources: true })
       .build();
     const done = workflow(planner(), assuming);
-    expect(await done.run({ message: 'Any errors on checkout?' })).toBe('No errors.');
+    expect(await done.run({ message: 'Any errors on checkout?' })).toBe(
+      'No errors.\n\n---\n\nNot sure — window = "2h" was assumed by search_logs\'s rule, not given by you; a tool did not say what time its result covers.',
+    );
     const snap = done.getSnapshot() as unknown as {
       subflowResults: Record<string, { treeContext: { globalContext: Record<string, unknown> } }>;
     };
@@ -1170,7 +1180,9 @@ describe('SECURITY — library text is never evidence, and no value passes a too
       );
       const out = await agent.run({ message: sentence });
       // The verdict is unchanged — "last week" is a phrase declared for 7d — only the text is withheld.
-      expect(out).toBe('No errors.');
+      expect(out).toBe(
+        'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(argumentRows(agent)[0]).toMatchObject({
         toolCallId: 'c2',
         source: 'said',
@@ -1240,7 +1252,9 @@ describe('SECURITY — library text is never evidence, and no value passes a too
           [batch(quoting('c2', sentence, '7d')), batch(signIn('c1')), answer('No errors.')],
           () => [hiding],
         );
-        expect(await agent.run({ message: sentence })).toBe('No errors.');
+        expect(await agent.run({ message: sentence })).toBe(
+          'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+        );
         const row = argumentRows(agent).find((r) => r.toolCallId === 'c2');
         // The verdict is unchanged — only the text is withheld.
         expect(row).toMatchObject({ source: 'said', matched: 'phrase', quote: 'REDACTED' });

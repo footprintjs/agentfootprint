@@ -634,7 +634,9 @@ describe('integration: the nudge truth table', () => {
       [refundSkill()],
     );
     const answer = await agent.run({ message: 'refund order 42' });
-    expect(answer).toBe('still stopping — cannot verify the charge');
+    expect(answer).toBe(
+      "still stopping — cannot verify the charge\n\n---\n\nNot sure — the answer came before the skill's declared steps finished.",
+    );
     expect(unfinished.map((u) => u.action)).toEqual(['nudged', 'accepted']);
   });
 

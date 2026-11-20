@@ -1000,11 +1000,31 @@ describe('BOUNDARY — the limits block marks an item’s calls the same way', (
   it('a named call’s items carry its words; an unnamed call’s items stay as they were', async () => {
     const plain = (await limitsAgent(false).run({ message: 'which files?' })) as string;
     const named = (await limitsAgent(true).run({ message: 'which files?' })) as string;
-    expect(plain).toContain('- the files attached to this chat\n');
-    expect(named).toContain(`- the files attached to this chat (${LOADING})\n`);
-    expect(named.endsWith('\n- the hosts in the estate')).toBe(true);
-    // Only that one line differs.
-    expect(named.replace(` (${LOADING})`, '')).toBe(plain);
+    const plainWarning = 'Not sure — a tool said nothing matched.';
+    const namedWarning = 'Not sure — loading the attached data reported no matching results.';
+    expect(plain).toBe(
+      [
+        'No data file is attached.',
+        '',
+        '---',
+        '',
+        plainWarning,
+        '',
+        'Coverage of this answer — declared by the tools that produced it, not by the model:',
+        '',
+        'Checked:',
+        '- the files attached to this chat',
+        '- the hosts in the estate',
+      ].join('\n'),
+    );
+    expect(named).toBe(
+      plain
+        .replace(plainWarning, namedWarning)
+        .replace(
+          '- the files attached to this chat',
+          `- the files attached to this chat (${LOADING})`,
+        ),
+    );
   });
 });
 

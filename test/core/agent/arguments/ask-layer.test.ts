@@ -206,7 +206,9 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       ]);
 
       const done = await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
-      expect(done).toBe('No errors on either.');
+      expect(done).toBe(
+        'No errors on either.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([
         { service: 'checkout', window: '24h' },
         { service: 'payments', window: '24h' },
@@ -289,7 +291,9 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       .tool(searchLogs(ran))
       .build();
     const out = await agent.run({ message: 'errors this week?' });
-    expect(out).toBe('ok');
+    expect(out).toBe(
+      'ok\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(argumentRows(agent)).toEqual([
       expect.objectContaining({ argument: 'window', rule: 'ask', source: 'model', value: '7d' }),
@@ -356,7 +360,10 @@ describe('resume — a fresh agent, a serialized checkpoint', () => {
       .tool(searchLogs(ran))
       .build();
     const seen = events(second);
-    expect(await second.resume(stored(paused), replyTo(paused, { f1: '7d' }))).toBe('Done.');
+    expect(await second.resume(stored(paused), replyTo(paused, { f1: '7d' }))).toBe(
+      'Done.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; ' +
+        'a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '24h' },
       { service: 'payments', window: '7d' },
@@ -392,7 +399,9 @@ describe('resume — a fresh agent, a serialized checkpoint', () => {
     })
       .tool(searchLogs(ran))
       .build();
-    expect(await second.resume(cp, reply)).toBe('Done.');
+    expect(await second.resume(cp, reply)).toBe(
+      'Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
   });
 });
@@ -450,7 +459,9 @@ describe('the hosted path — render, answer, cancel', () => {
         sessionId: 's',
         decision: { requestId: pending!.requestId, values: { f1: '1h' } },
       });
-      expect(done.output).toBe('No errors.');
+      expect(done.output).toBe(
+        'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
     } finally {
       await handle.close();
@@ -555,7 +566,9 @@ describe('one human question per resume — a later pause in the SAME batch is r
       .build();
     const paused = await agent.run({ message: 'go' });
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('ok');
+    expect(done).toBe(
+      'ok\n\n---\n\nNot sure — a call failed; a tool did not say what time its result covers.',
+    );
     const result = m.requests[1]!.messages.find(
       (msg) => msg.role === 'tool' && msg.toolCallId === 'c2',
     );
@@ -590,7 +603,9 @@ describe('one human question per resume — a later pause in the SAME batch is r
       requestId: second.awaitingInput.requestId,
       values: { year: 2026 },
     });
-    expect(done).toBe('Got the year.');
+    expect(done).toBe(
+      'Got the year.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
   });
 });
 
@@ -651,7 +666,9 @@ describe('the readers of a pause', () => {
       (agent.getSnapshot()?.sharedState as { pausedToolCallId?: string }).pausedToolCallId,
     ).toBe('');
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '7d' }));
-    expect(done).toBe('done');
+    expect(done).toBe(
+      'done\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '7d' },
       { service: 'payments', window: '1h' },
@@ -722,7 +739,9 @@ describe('a composition — Sequence(agent) resumes the ask with a raw reply', (
       requestId: paused.awaitingInput.requestId,
       values: { f1: '24h' },
     });
-    expect(done).toBe('No errors.');
+    expect(done).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '24h' }]);
   });
 });
@@ -828,7 +847,7 @@ describe('PROPERTY — every answer inside the declared choices', () => {
       ARGUMENT_REASK_QUESTION,
       ARGUMENT_REASK_QUESTION,
     ]);
-    expect(out).toBe('could not run it');
+    expect(out).toBe('could not run it\n\n---\n\nNot sure — a call was refused.');
     expect(ran).toEqual([]);
     expect(argumentRows(agent).map((r) => r.asked ?? r.source)).toEqual([
       'missing',

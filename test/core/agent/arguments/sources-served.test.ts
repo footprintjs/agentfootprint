@@ -432,7 +432,12 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     // The run constant says what was armed; the ledger's own constant is absent.
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
-    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
+    expect(state.honestyLayers).toEqual({
+      inputs: true,
+      argumentSources: true,
+      results: true,
+      answer: true,
+    });
     expect(state.findingsServe).toBeUndefined();
   });
 
@@ -459,7 +464,9 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
       .inputsLayer({ argumentSources: true })
       .build();
     const out = await agent.run({ message: 'Any errors on checkout over the last week?' });
-    expect(out).toBe('No errors.');
+    expect(out).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     const ledger = agent.findings() ?? [];
     // (+ the results layer's `period` row, honesty step 7b: a ToolPeriod tool.)
@@ -491,7 +498,9 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
       expect.objectContaining({ asked: 'unverified', proposed: '24h', claimed: 'none' }),
     ]);
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('No errors in the last hour.');
+    expect(done).toBe(
+      'No errors in the last hour.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
   });
 
@@ -549,7 +558,9 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     const note = m.requests[1]!.messages.find((msg) => msg.role === 'tool')!;
     expect(note.content).toContain(`(the call had left it out)${ANSWERED_SOURCE_CLAUSE}.]`);
     const second = await agent.followUp('And on payments?');
-    expect(second).toBe('No errors on payments.');
+    expect(second).toBe(
+      'No errors on payments.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '24h' },
       { service: 'payments', window: '24h' },
@@ -592,7 +603,7 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     expect(propertiesOf(req, 'search_logs')._findings).toBeUndefined();
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
-    expect(state.honestyLayers).toEqual({ inputs: true, results: true });
+    expect(state.honestyLayers).toEqual({ inputs: true, results: true, answer: true });
   });
 
   it('SECURITY: the builder door refuses what it cannot read', () => {
@@ -638,7 +649,12 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     expect(toolOf(m.requests[0]!, 'search_logs').inputSchema.required).toContain('_findings');
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
-    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
+    expect(state.honestyLayers).toEqual({
+      inputs: true,
+      argumentSources: true,
+      results: true,
+      answer: true,
+    });
   });
 });
 
@@ -708,7 +724,9 @@ describe('INTEGRATION — the choice seam reads a ruled call’s arguments witho
 
   it('a result id and the source words in `from` are never judged as argument values', async () => {
     const { agent, out, unsupported } = await runFlows('srv-4417');
-    expect(out).toBe('3 flows.');
+    expect(out).toBe(
+      '3 flows.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(unsupported).toEqual([]);
     // The ruled argument's row, then the free one a `from` entry named.
     expect(argumentRows(agent).map((r) => [r.argument, r.source])).toEqual([
@@ -872,7 +890,9 @@ describe('SECURITY — the author’s `_findings` and a hidden answer', () => {
       .inputsLayer({ argumentSources: true })
       .build();
     const out = await agent.run({ message: 'Note that checkout is fine.' });
-    expect(out).toBe('Noted.');
+    expect(out).toBe(
+      'Noted.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d', _findings: 'mine' }]);
     expect(argumentRows(agent)).toEqual([
       expect.objectContaining({ argument: 'window', source: 'model' }),

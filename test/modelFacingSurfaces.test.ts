@@ -1393,7 +1393,9 @@ async function sourceDeclarationFeedback(): Promise<readonly string[]> {
     { extraTools: [sibling] },
   );
   try {
-    expect(await fixture.agent.run(SOURCE_CORRECTION_QUESTION)).toBe('Held.');
+    expect(await fixture.agent.run(SOURCE_CORRECTION_QUESTION)).toBe(
+      'Held.\n\n---\n\nNot sure — calls were refused.',
+    );
     expect(fixture.ran).toEqual([]);
     expect(siblingRuns).toBe(0);
     const notices = (fixture.requests[1]?.messages ?? []).filter(

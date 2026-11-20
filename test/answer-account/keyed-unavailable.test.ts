@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
 import { Agent, coverage, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer, recordRun, type Recording } from '../../src/observe.js';
+import { accountForAnswer, assessAnswer, recordRun, type Recording } from '../../src/observe.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
 
-it('standing uses only an addressable served result when a keyed result is missing or conflicting', async () => {
+it('standing keeps a recorded settlement when its history is missing or conflicting', async () => {
   const inventory = defineTool({
     name: 'inventory',
     description: 'Read fixture shelves.',
@@ -42,16 +42,29 @@ it('standing uses only an addressable served result when a keyed result is missi
     state.history = original.filter(
       (entry) => entry.role !== 'tool' && entry.toolCalls === undefined,
     );
-    expect(standingText(recording)).toContain(noVerdict);
+    expect(assessAnswer(recording).reasons.map(({ reason }) => reason)).toEqual(['coverage-gap']);
     const legacy = JSON.parse(
       JSON.stringify(recording, (name, value: unknown) =>
-        name === 'callOccurrenceKey' ? undefined : value,
+        [
+          'callOccurrenceKey',
+          'enteredToolCalls',
+          'enteredToolCallsComplete',
+          'settledToolCalls',
+          'settledToolCallsComplete',
+        ].includes(name)
+          ? undefined
+          : value,
       ),
     ) as Recording;
     expect(standingText(legacy)).toContain(noVerdict);
 
     state.history = [...original, { ...result! }];
-    expect(standingText(recording)).toContain(noVerdict);
+    expect(assessAnswer(recording).reasons.map(({ reason }) => reason)).toEqual(['coverage-gap']);
+    const olderKeyed = JSON.parse(JSON.stringify(recording)) as Recording;
+    const olderState = olderKeyed.snapshot.sharedState as Record<string, unknown>;
+    delete olderState.settledToolCalls;
+    delete olderState.settledToolCallsComplete;
+    expect(standingText(olderKeyed)).toContain(noVerdict);
   } finally {
     recorder.stop();
   }

@@ -87,11 +87,14 @@ const historyOf = (agent: Agent): readonly LLMMessage[] =>
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('functional: assist records and flags', () => {
-  it('returns the answer UNCHANGED and files the verdict', async () => {
+  it('appends the warning and files the verdict', async () => {
     const { agent, checks } = buildAgent([callFlogi, { content: FABRICATED_ANSWER }], {});
     const answer = await agent.run({ message: 'which array port is affected?' });
 
-    expect(answer).toBe(FABRICATED_ANSWER);
+    expect(answer).toBe(
+      FABRICATED_ANSWER +
+        '\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.',
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]!.action).toBe('flagged');
     expect(checks[0]!.posture).toBe('assist');
@@ -209,7 +212,10 @@ describe('functional: guard corrects in the loop', () => {
     // cannot ground a value on its second try will not on its fifth, and the
     // retry storm this replaces is the failure the library exists to remove.
     expect(calls).toBe(3);
-    expect(answer).toBe(FABRICATED_ANSWER);
+    expect(answer).toBe(
+      FABRICATED_ANSWER +
+        '\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result, even after one revision.',
+    );
     expect(caps.checks.map((c) => c.action)).toEqual(['revision-asked', 'flagged']);
     expect(agent.unsupportedValues()?.revised).toBe(true);
     expect(agent.unsupportedValues()?.refused).toBe(false);
@@ -413,7 +419,10 @@ describe('integration: composes with .reliability()', () => {
     // Reliability governs what a CALL does before the response is committed;
     // the gate governs an answer that WAS committed. Two layers, no collision.
     expect(attempts).toBe(2);
-    expect(answer).toBe(FABRICATED_ANSWER);
+    expect(answer).toBe(
+      FABRICATED_ANSWER +
+        '\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.',
+    );
     expect(caps.checks.map((c) => c.action)).toEqual(['flagged']);
   });
 });

@@ -57,7 +57,9 @@ for (const door of ['plain', 'check-in'] as const) {
     agent.on('agentfootprint.stream.tool_start', (event) => starts.push(event));
     agent.on('agentfootprint.checkin.request', (event) => questions.push(event));
     try {
-      await expect(agent.run('go')).resolves.toBe('corrected');
+      await expect(agent.run('go')).resolves.toBe(
+        'corrected\n\n---\n\nNot sure — a call was refused.',
+      );
       expect(effects).toEqual([]);
       expect(starts).toEqual([]);
       expect(questions).toEqual([]);

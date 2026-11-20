@@ -173,7 +173,7 @@ export async function assessAnswerStage(
           reason === 'value-contingent' ||
           reason === 'step-skipped',
       )
-      ? standingFactsOf(assessed, displayNames)
+      ? standingFactsOf(assessed, displayNames, record)
       : undefined,
   );
   // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a

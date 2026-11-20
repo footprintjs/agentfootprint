@@ -366,7 +366,9 @@ describe('frozen across a pause', () => {
     await expect(agent.resume(paused.checkpoint, 'yes', { time: { now: NOW } })).rejects.toThrow(
       /reads no clock/,
     );
-    await expect(agent.resume(paused.checkpoint, 'yes')).resolves.toBe('done');
+    await expect(agent.resume(paused.checkpoint, 'yes')).resolves.toBe(
+      'done\n\n---\n\nNot sure — a tool said nothing matched.',
+    );
   });
 });
 
