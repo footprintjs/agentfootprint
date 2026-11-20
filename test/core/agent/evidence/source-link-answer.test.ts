@@ -3,10 +3,18 @@ import { createRecordGraph, type RecordScope, type SourceLinkRow } from 'foottra
 import { expect, it } from 'vitest';
 import type { RuntimeSnapshot } from 'footprintjs';
 import type { StageSnapshot } from 'footprintjs/advanced';
-import { Agent, allow, defineTool } from '../../../../src/index.js';
+import { Agent, allow, defineTool, slidingWindow } from '../../../../src/index.js';
 import { mock } from '../../../../src/providers.js';
 import { openRecording, recordRun } from '../../../../src/observe.js';
-import { keyedFold } from '../../../../src/time-travel/index.js';
+import {
+  epochLocations,
+  keyedFold,
+  readAfterCall,
+  readAtCall,
+} from '../../../../src/time-travel/index.js';
+import { isCollapsedToolResult } from '../../../../src/core/agent/findings/serve.js';
+import type { ServedRow } from '../../../../src/core/agent/receipt/servedRow.js';
+import type { LLMMessage } from '../../../../src/provider-contract/types.js';
 import { sourceLinksOf } from '../../../../src/trace-toolpack/sourceLinks.js';
 
 const answer = 'The storage pool has 4200 GB.';
@@ -254,6 +262,132 @@ it.each([answer, 'The storage pool has a different capacity.'])(
           reads: trackedReads(snapshot),
         }),
       ).toBeUndefined();
+    } finally {
+      await agent.shutdown();
+    }
+  },
+);
+
+it.each(['whole', 'evicted', 'collapsed'] as const)(
+  'links the source only when the final call received the result whole (%s)',
+  async (transport) => {
+    const requests: Array<{ readonly content: string; readonly toolCallId?: string }[]> = [];
+    const result = `${answer} ${'Storage capacity measurement. '.repeat(22)}`;
+    const provider = mock({
+      replies: [
+        { content: '', toolCalls: [{ id: 'capacity', name: 'capacity', args: {} }] },
+        ...Array.from({ length: 3 }, (_, index) => ({
+          content: '',
+          toolCalls: [
+            {
+              id: `label-${index}`,
+              name: 'label',
+              args:
+                index === 0 && transport === 'collapsed'
+                  ? {
+                      _findings: {
+                        previous: [
+                          {
+                            toolCallId: 'capacity',
+                            standing: 'fact',
+                            sought: true,
+                            assertions: [
+                              {
+                                subject: { kind: 'storage', id: 'pool' },
+                                predicate: 'capacity',
+                                value: 4200,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    }
+                  : {},
+            },
+          ],
+        })),
+        { content: answer },
+      ],
+    });
+    const builder = Agent.create({
+      provider: {
+        name: provider.name,
+        complete(request) {
+          requests.push(
+            request.messages.map(({ content, toolCallId }) => ({
+              content,
+              ...(toolCallId === undefined ? {} : { toolCallId }),
+            })),
+          );
+          return provider.complete(request);
+        },
+      },
+      model: 'mock',
+      ...(transport === 'evicted' && { keepLastToolResults: false as const }),
+    })
+      .tool(capacity(result))
+      .tool(
+        defineTool({
+          name: 'label',
+          description: 'Read the storage pool label.',
+          inputSchema: { type: 'object' },
+          execute: () => 'The label is storage.',
+        }),
+      )
+      .namesAndNumbersFromEvidence({ posture: 'assist' });
+    if (transport === 'evicted') builder.window(slidingWindow({ keepRecentTurns: 1 }));
+    if (transport === 'collapsed') builder.findings({ serve: 'ledger-only' });
+    const agent = builder.build();
+    try {
+      expect(
+        await agent.run(`What is the capacity? ${'Start the sampling exercise. '.repeat(18)}`),
+      ).toBe(answer);
+      expect(requests[1]?.some(({ content }) => content === result)).toBe(true);
+      const finalInput = requests.at(-1)?.find(({ toolCallId }) => toolCallId === 'capacity');
+      if (transport === 'evicted') expect(finalInput).toBeUndefined();
+      if (transport === 'collapsed') {
+        assert(finalInput);
+        expect(isCollapsedToolResult(JSON.parse(finalInput.content))).toBe(true);
+      }
+      if (transport === 'whole') expect(finalInput?.content).toBe(result);
+
+      const snapshot = agent.getSnapshot();
+      assert(snapshot?.logAddress);
+      const finalCall = epochLocations(snapshot).at(-1);
+      assert(finalCall);
+      const history = readAtCall(finalCall, 'history') as readonly LLMMessage[];
+      const position = history.findIndex(({ content }) => content === result);
+      const served = readAfterCall(finalCall, 'sourceLinkServedRows') as readonly ServedRow[];
+      const row = served.find(({ consumer }) => consumer === finalCall.callRuntimeStageId);
+      assert(row);
+      if (transport === 'evicted') {
+        expect(position).toBe(-1);
+      } else {
+        expect(position).toBeGreaterThanOrEqual(0);
+        expect(
+          row.served[0]?.elements?.some(([start, end]) => start <= position && position < end),
+        ).toBe(transport === 'whole');
+      }
+      const scope: RecordScope = {
+        address: snapshot.logAddress,
+        commitLog: snapshot.commitLog,
+        initialState: snapshot.initialState,
+        reads: trackedReads(snapshot),
+      };
+      const sourceLinks = sourceLinksOf(scope);
+      const [link] = sourceLinks?.links ?? [];
+      if (transport === 'whole') {
+        assert(link?.input);
+        const graph = createRecordGraph([{ ...scope, sourceLinks }], {
+          sourceLinkPolicy: () => true,
+        });
+        const page = await graph.parents(graph.nodeId(scope.address, link.output), {
+          signal: new AbortController().signal,
+        });
+        expect(page.sourceLinks).toMatchObject([{ standing: 'witnessed' }]);
+      } else {
+        expect(sourceLinks).toBeUndefined();
+      }
     } finally {
       await agent.shutdown();
     }

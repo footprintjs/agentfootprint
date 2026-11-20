@@ -8,7 +8,9 @@ import {
   allow,
   defineTool,
   inMemoryArtifacts,
+  isPaused,
   isPlacedToolResult,
+  pauseHere,
   placedResultKind,
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
@@ -25,13 +27,21 @@ const getReport = defineTool({
   execute: () => payload,
 });
 
-async function run(
-  reactMode?: 'dynamic-grouped',
-  redact = false,
-  rewrite = false,
-  rewriteHistory = false,
-  ruled = false,
-) {
+async function run({
+  mode,
+  redact,
+  rewrite,
+  rewriteHistory,
+  ruled,
+  pause,
+}: {
+  mode?: 'dynamic-grouped';
+  redact?: boolean;
+  rewrite?: boolean;
+  rewriteHistory?: boolean;
+  ruled?: boolean;
+  pause?: boolean;
+} = {}) {
   const store = inMemoryArtifacts();
   const redeem = vi.spyOn(store, 'get');
   const consume = vi.fn((args: Record<typeof argument, string>) => {
@@ -76,6 +86,12 @@ async function run(
           ],
         };
       }
+      if (pause && results.length === 2) {
+        return {
+          content: '',
+          toolCalls: [{ id: 'pause', name: 'ask_label', args: {} }],
+        };
+      }
       return { content: ruled ? '4417 records consumed.' : 'done', toolCalls: [] };
     },
   });
@@ -83,12 +99,22 @@ async function run(
     provider,
     model: 'mock',
     artifacts: { store, placement: { maxInlineChars: 1600 } },
-    ...(reactMode === undefined ? {} : { reactMode }),
+    ...(mode === undefined ? {} : { reactMode: mode }),
     ...(redact && { redact: { fields: { history: ['2.content'] } } }),
   })
     .tool(getReport)
     .tool(consumeReport);
   if (ruled) builder.findings({ argumentSources: true }).namesAndNumbersFromEvidence();
+  if (pause) {
+    builder.tool(
+      defineTool({
+        name: 'ask_label',
+        description: 'Ask the user for a label',
+        inputSchema: { type: 'object' },
+        execute: () => pauseHere({ question: 'What is the label?' }),
+      }),
+    );
+  }
   if (rewrite || rewriteHistory) {
     builder.toolMiddleware({
       name: 'replace-proposal-reference',
@@ -104,14 +130,24 @@ async function run(
     });
   }
   const agent = builder.build();
-  expect(await agent.run({ message: 'Fetch and consume the report' })).toBe(
-    ruled ? '4417 records consumed.' : 'done',
-  );
-  expect(consume).toHaveBeenCalledOnce();
-  expect(redeem).toHaveBeenCalledOnce();
-  const snapshot = agent.getLastSnapshot();
-  assert(snapshot?.logAddress);
-  return { snapshot, address: snapshot.logAddress };
+  try {
+    const result = await agent.run({ message: 'Fetch and consume the report' });
+    const beforeResume = pause ? agent.getSnapshot() : undefined;
+    if (pause) {
+      assert(isPaused(result));
+      const checkpoint = JSON.parse(JSON.stringify(result.checkpoint)) as typeof result.checkpoint;
+      expect(await agent.resume(checkpoint, 'report label')).toBe('done');
+    } else {
+      expect(result).toBe(ruled ? '4417 records consumed.' : 'done');
+    }
+    expect(consume).toHaveBeenCalledOnce();
+    expect(redeem).toHaveBeenCalledOnce();
+    const snapshot = agent.getLastSnapshot();
+    assert(snapshot?.logAddress);
+    return { snapshot, address: snapshot.logAddress, beforeResume };
+  } finally {
+    await agent.shutdown();
+  }
 }
 
 it('records the exact redeemed proposal argument beside its one native check', async () => {
@@ -161,7 +197,7 @@ it('records the exact redeemed proposal argument beside its one native check', a
 });
 
 it('keeps the same-scope links while a native inputs subflow resolves a ruled argument', async () => {
-  const { snapshot } = await run(undefined, false, false, false, true);
+  const { snapshot } = await run({ ruled: true });
   const commits = snapshot.commitLog;
   const mounts = commits.filter(
     ({ stageId, trace }) =>
@@ -181,6 +217,23 @@ it('keeps the same-scope links while a native inputs subflow resolves a ruled ar
   ]);
 });
 
+it('does not reopen the earlier artifact link from a resumed leg’s seed', async () => {
+  const { snapshot, address, beforeResume } = await run({ pause: true });
+  assert(beforeResume?.logAddress);
+  expect(beforeResume.logAddress).not.toEqual(address);
+  expect(beforeResume.sharedState.sourceLinkRows).toMatchObject([
+    { linkBasis: 'reference', check: 'redeemed' },
+  ]);
+  expect(snapshot.initialState).toHaveProperty(
+    'sourceLinkRows',
+    beforeResume.sharedState.sourceLinkRows,
+  );
+  expect(
+    sourceLinksOf({ address, commitLog: snapshot.commitLog, initialState: snapshot.initialState }),
+  ).toBeUndefined();
+  expect(findLastWriter([...snapshot.commitLog], 'sourceLinkRows')).toBeUndefined();
+});
+
 it.each([
   { label: 'grouped chart', mode: 'dynamic-grouped' as const },
   { label: 'protected input', redact: true },
@@ -188,8 +241,8 @@ it.each([
   { label: 'rewritten history body', rewriteHistory: true },
 ])(
   'keeps redemption behavior without producing a link for a $label',
-  async ({ mode, redact, rewrite, rewriteHistory }) => {
-    const { snapshot } = await run(mode, redact, rewrite, rewriteHistory);
+  async ({ label: _label, ...options }) => {
+    const { snapshot } = await run(options);
     expect(findLastWriter([...snapshot.commitLog], 'sourceLinkRows')).toBeUndefined();
     expect(snapshot.sharedState.sourceLinkRows).toBeUndefined();
   },
