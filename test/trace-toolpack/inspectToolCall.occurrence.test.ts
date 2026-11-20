@@ -103,6 +103,7 @@ describe('inspect_tool_call from keyed saved recordings', () => {
           } as AgentfootprintEvent,
         ],
         [rewrite('one', key)],
+        true,
       );
     const keyed = await inspectOne(first);
     expect(keyed).toBe(await inspectOne());

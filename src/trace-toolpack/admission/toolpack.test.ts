@@ -89,6 +89,14 @@ async function replies(tools: Tool[]) {
 }
 
 describe('admitted trace tool bindings', () => {
+  it('gives the same search miss for unadmitted text and absent text', async () => {
+    const tools = traceToolpack(record('Orchard planning', 'withheld'));
+    const recorded = await callTraceTool(tools, 'find_in_trace', { query: 'Orchard planning' });
+    const absent = await callTraceTool(tools, 'find_in_trace', { query: 'Seaside planning' });
+    expect(recorded).toBe(absent);
+    expect(recorded).toContain('no match in the admitted record');
+  });
+
   it.each(['withheld', 'rewritten'] as const)(
     'keeps every tool reply stable when unlisted state changes in a %s record',
     async (delivery) => {

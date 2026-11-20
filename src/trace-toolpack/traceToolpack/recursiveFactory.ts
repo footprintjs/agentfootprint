@@ -96,7 +96,9 @@ export function traceToolpack(
   if (savedClaim) throw new TypeError('Stored capture evidence requires traceCauseTools.');
   if (options?.showWithheldResults !== true && requiresTraceAdmission(artifacts)) {
     try {
-      return buildTraceTools(projectTraceArtifacts(artifacts), options).map(admittedTraceTool);
+      return buildTraceTools(projectTraceArtifacts(artifacts), options, true).map(
+        admittedTraceTool,
+      );
     } catch {
       // Unreadable or oversized recordings get a fixed answer, never the host bag.
       const admitted: TraceToolpackArtifacts = {
@@ -110,7 +112,7 @@ export function traceToolpack(
         },
         narrative: [TRACE_WITHHELD],
       };
-      return buildTraceTools(admitted, options).map((tool) => ({
+      return buildTraceTools(admitted, options, true).map((tool) => ({
         ...tool,
         execute: () => TRACE_WITHHELD,
       }));
@@ -148,6 +150,7 @@ function admittedTraceTool(tool: Tool): Tool {
 function buildTraceTools(
   artifacts: TraceToolpackArtifacts,
   options?: TraceToolpackOptions,
+  restricted = false,
 ): Tool[] {
   const traceArtifacts =
     options?.showWithheldResults !== true && artifacts.innerRuns !== undefined
@@ -165,7 +168,7 @@ function buildTraceTools(
   const tools: Tool[] = [
     buildRunOverview(artifacts, index),
     buildFindContextErrors(artifacts, index, calls, opts),
-    buildFindInTrace(artifacts, index),
+    buildFindInTrace(artifacts, index, restricted),
     buildTraceNode(artifacts, index, opts),
     buildTraceSlice(artifacts, index, opts),
     buildBacktrack(artifacts, index, opts),

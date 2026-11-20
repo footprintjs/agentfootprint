@@ -1,3 +1,4 @@
+import { stageIdOf } from 'foottrace';
 import { pathSegments } from 'foottrace/paths';
 import {
   readRecordedResultDecision,
@@ -53,6 +54,33 @@ function didNotDispatch(row: object): boolean {
   );
 }
 
+function rootEvidence(snapshot: object, runId: unknown, first: object, last: object): boolean {
+  const log = field(snapshot, 'logAddress');
+  const tree = field(snapshot, 'executionTree');
+  const mode = field(snapshot, 'commitValues');
+  if (
+    typeof runId !== 'string' ||
+    runId.length === 0 ||
+    !isObject(log) ||
+    !isObject(tree) ||
+    !isObject(field(snapshot, 'initialState')) ||
+    !isObject(field(snapshot, 'sharedState')) ||
+    (mode !== 'full' && mode !== 'delta')
+  )
+    return false;
+  const drill = readOwnList(field(log, 'drillPath'), 0);
+  const start = field(first, 'runtimeStageId');
+  return (
+    field(log, 'logRunId') === runId &&
+    drill?.unread === 0 &&
+    field(first, 'stageId') === 'seed' &&
+    typeof start === 'string' &&
+    field(tree, 'runtimeStageId') === start &&
+    field(last, 'stageId') === 'final' &&
+    field(last, 'phase') === 'exit'
+  );
+}
+
 /** Absence of a changed decision is usable only after reading the bounded
  * record evidence, including older commits. A window can remove the message
  * that carried the mark while either the decision or old value remains. */
@@ -60,7 +88,16 @@ export function requiresTraceAdmission(artifacts: TraceToolpackArtifacts): boole
   const committedResults = new Set<string>();
   const unchangedResults = new Set<string>();
   const observedResults = new Set<string>();
-  let committedDecisionLedger = false;
+  const legacyResultEvents = new Set<string>();
+  const unnamedLegacyEnds = new Set<string>();
+  const committedLegacyById = new Map<string, string | null>();
+  let committedDecisionRows = 0;
+  let policyEvents = 0;
+  let terminalEvents = 0;
+  let commitCount = 0;
+  let contiguous = true;
+  let firstCommit: object | undefined;
+  let lastCommit: object | undefined;
   let observedUnkeyedResult = false;
   let remaining = maxEntries;
   const scan = (value: unknown, affected: (row: unknown) => boolean): boolean => {
@@ -99,6 +136,12 @@ export function requiresTraceAdmission(artifacts: TraceToolpackArtifacts): boole
     if (key.startsWith('legacy:')) {
       if (legacyAddresses.has(key)) return true;
       legacyAddresses.add(key);
+      if (output === committedResults) {
+        const id = field(row, 'toolCallId');
+        if (typeof id !== 'string' || id.length > 4096) return true;
+        const previous = committedLegacyById.get(id);
+        committedLegacyById.set(id, previous === undefined || previous === key ? key : null);
+      }
     }
     output.add(key);
     return false;
@@ -118,8 +161,9 @@ export function requiresTraceAdmission(artifacts: TraceToolpackArtifacts): boole
     if (!isObject(state)) return true;
     const decisions = field(state, 'middlewareDecisions');
     if (decisions !== undefined) {
+      const before = remaining;
       if (scan(decisions, (row) => inspectDecision(row, committed))) return true;
-      if (committed) committedDecisionLedger = true;
+      if (committed) committedDecisionRows = Math.max(committedDecisionRows, before - remaining);
     }
     const results = committed ? committedResults : observedResults;
     const history = field(state, 'history');
@@ -144,6 +188,10 @@ export function requiresTraceAdmission(artifacts: TraceToolpackArtifacts): boole
   };
   const inspectCommit = (value: unknown): boolean => {
     if (!isObject(value)) return true;
+    if (commitCount === 0) firstCommit = value;
+    lastCommit = value;
+    if (field(value, 'idx') !== commitCount) contiguous = false;
+    commitCount++;
     const overwrite = field(value, 'overwrite');
     const updates = field(value, 'updates');
     if (inspectEvidence(overwrite, true) || inspectEvidence(updates, true)) return true;
@@ -165,41 +213,96 @@ export function requiresTraceAdmission(artifacts: TraceToolpackArtifacts): boole
       );
     });
   };
-  const inspectEvent = (row: unknown): boolean => {
+  const inspectEvent = (row: unknown, runId: unknown): boolean => {
     if (!isObject(row)) return true;
     const type = field(row, 'type');
-    if (type === unreadable) return true;
-    if (type === 'agentfootprint.middleware.decision')
+    if (typeof type !== 'string') return true;
+    if (type === 'agentfootprint.agent.turn_end') {
+      const meta = field(row, 'meta');
+      if (isObject(meta)) {
+        const stage = field(meta, 'runtimeStageId');
+        if (
+          field(meta, 'runId') === runId &&
+          typeof stage === 'string' &&
+          stage.length <= 4096 &&
+          stageIdOf(stage) === 'final/prepare-final'
+        )
+          terminalEvents++;
+      }
+    }
+    if (type === 'agentfootprint.middleware.decision') {
+      policyEvents++;
       return inspectDecision(field(row, 'payload'), false);
+    }
     if (!resultEvents.has(type)) return false;
     const payload = field(row, 'payload');
     if (!isObject(payload)) return true;
-    if (type === 'agentfootprint.stream.tool_end' && didNotDispatch(payload)) return false;
+    if (type === 'agentfootprint.stream.tool_end') {
+      const key = address(payload);
+      if (key?.startsWith('legacy:')) {
+        if (legacyResultEvents.has(key)) return true;
+        legacyResultEvents.add(key);
+      }
+      if (didNotDispatch(payload)) return false;
+      // Some older brackets named only the provider ID. Resolve them after
+      // reading the complete history, and only to its one matching result.
+      if (
+        key === undefined &&
+        readCallOccurrenceKey(payload) === undefined &&
+        field(payload, 'toolName') === undefined
+      ) {
+        const id = field(payload, 'toolCallId');
+        if (typeof id !== 'string' || id.length > 4096 || unnamedLegacyEnds.has(id)) return true;
+        unnamedLegacyEnds.add(id);
+        return false;
+      }
+    }
     return inspectResult(payload, observedResults);
   };
 
   try {
     const snapshot = field(artifacts, 'snapshot');
     if (!isObject(snapshot)) return true;
+    const runId = field(snapshot, 'runId');
+    const state = field(snapshot, 'sharedState');
     const events = field(artifacts, 'events');
     if (
       // On resume the fold base is the detached checkpoint state. Earlier
       // history and its append-only decision ledger may exist only there.
       inspectEvidence(field(snapshot, 'initialState'), true) ||
-      inspectEvidence(field(snapshot, 'sharedState'), false) ||
-      (events !== undefined && scan(events, inspectEvent)) ||
+      inspectEvidence(state, false) ||
+      (events !== undefined && scan(events, (row) => inspectEvent(row, runId))) ||
       scan(field(snapshot, 'commitLog'), inspectCommit)
     )
       return true;
+    // A recorded middleware event always had a ledger row. The append-only
+    // ledger cannot disappear or shrink as a run reaches its final state.
+    const ledger = isObject(state)
+      ? readOwnList(field(state, 'middlewareDecisions'), 0)
+      : undefined;
+    if (committedDecisionRows === 0 && (policyEvents > 0 || (ledger?.unread ?? 0) > 0)) return true;
+    if (isObject(state) && (ledger?.unread ?? 0) < committedDecisionRows) return true;
     for (const key of observedResults) {
       if (!committedResults.has(key) && !unchangedResults.has(key)) return true;
     }
     if (observedUnkeyedResult && committedResults.size === 0 && unchangedResults.size === 0)
       return true;
-    // Older history has no stamp. A readable decision ledger is needed to
-    // interpret that absence, even if the result itself was committed.
+    for (const id of unnamedLegacyEnds) {
+      const key = committedLegacyById.get(id);
+      if (key == null || legacyResultEvents.has(key)) return true;
+      legacyResultEvents.add(key);
+    }
+    // Before occurrence stamps, an absent policy row proves non-intervention
+    // only in the complete native root log of a terminal run.
+    const completeLegacyLog =
+      contiguous &&
+      terminalEvents === 1 &&
+      firstCommit !== undefined &&
+      lastCommit !== undefined &&
+      rootEvidence(snapshot, runId, firstCommit, lastCommit);
     for (const key of committedResults) {
-      if (key.startsWith('legacy:') && !committedDecisionLedger) return true;
+      if (key.startsWith('legacy:') && (!completeLegacyLog || !legacyResultEvents.has(key)))
+        return true;
     }
     return false;
   } catch {
