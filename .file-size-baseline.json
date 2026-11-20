@@ -78,7 +78,6 @@
     "src/injection-engine/skillGraph.ts": 1064,
     "src/injection-engine/skillGraphCheckup.ts": 671,
     "src/injection-engine/skillGuard.ts": 665,
-    "src/injection-engine/skillsFromDir.ts": 909,
     "src/injection-engine/types.ts": 684,
     "src/lib/conventions.ts": 676,
     "src/mcp/mcpClient.ts": 930,
