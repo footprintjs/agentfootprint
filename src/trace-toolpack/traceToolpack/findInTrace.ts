@@ -49,7 +49,11 @@ function matchWindow(text: string, needleLower: string, radius: number): string 
  * The zero-hit answer is the honest one: it names what never enters the
  * record at all, so "not found" cannot be read as "did not happen".
  */
-function buildFindInTrace(artifacts: TraceToolpackArtifacts, index: ToolpackIndex): Tool {
+function buildFindInTrace(
+  artifacts: TraceToolpackArtifacts,
+  index: ToolpackIndex,
+  restricted = false,
+): Tool {
   return defineTool<{ query: string; maxHits?: number }, string>({
     name: 'find_in_trace',
     description:
@@ -156,7 +160,7 @@ function buildFindInTrace(artifacts: TraceToolpackArtifacts, index: ToolpackInde
       }
 
       // 4. NARRATIVE — the story, when the artifacts carry one.
-      const narrative = artifacts.narrative;
+      const narrative = restricted ? undefined : artifacts.narrative;
       if (!full && narrative !== undefined) {
         for (let i = 0; i < narrative.length; i++) {
           const window = matchWindow(narrative[i], needle, FIND_CONTEXT_RADIUS);
@@ -176,6 +180,13 @@ function buildFindInTrace(artifacts: TraceToolpackArtifacts, index: ToolpackInde
         (narrative !== undefined ? `, ${narrative.length} narrative line(s)` : '');
 
       if (hits.length === 0) {
+        if (restricted) {
+          return (
+            `find_in_trace: no match in the admitted record — searched ${scope}.\n` +
+            (budgetHit ? 'The value scan reached its limit. Narrow the query.\n' : '') +
+            'Try a shorter phrase or a key from run_overview.'
+          );
+        }
         return (
           `find_in_trace: no match for '${trimmed}' — searched ${scope}.\n` +
           (budgetHit
