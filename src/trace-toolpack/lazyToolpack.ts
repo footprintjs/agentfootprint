@@ -29,7 +29,7 @@ import type { RuntimeSnapshot } from 'footprintjs';
 import type { Tool } from '../tools/tools.js';
 import { callTraceTool, traceToolpack } from './traceToolpack.js';
 import { NO_COMPLETED_RUN_MESSAGE } from '../lib/traceToolNames.js';
-import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
+import type { ModelTraceToolpackOptions, TraceToolpackArtifacts } from './types.js';
 
 // Declared in `traceToolNames.ts` (beside the reserved names) so the delegate
 // tool can answer "no run yet" without loading this module; re-exported here
@@ -84,9 +84,13 @@ const EMPTY_SNAPSHOT = {
  */
 export function lazyTraceToolpack(
   resolve: () => TraceToolpackArtifacts | undefined,
-  options?: TraceToolpackOptions,
+  options?: ModelTraceToolpackOptions,
 ): Tool[] {
-  const template = traceToolpack({ snapshot: EMPTY_SNAPSHOT, narrative: [], events: [] }, options);
+  const modelOptions = { ...options, showWithheldResults: false };
+  const template = traceToolpack(
+    { snapshot: EMPTY_SNAPSHOT, narrative: [], events: [] },
+    modelOptions,
+  );
 
   // One real toolpack per completed run: memoized by snapshot identity.
   // Retention note: the memo pins at most ONE prior snapshot (whatever a
@@ -102,7 +106,7 @@ export function lazyTraceToolpack(
     ) {
       memoSnapshot = artifacts.snapshot;
       memoCause = artifacts.cause;
-      memoTools = traceToolpack(artifacts, options);
+      memoTools = traceToolpack(artifacts, modelOptions);
     }
     return memoTools;
   };

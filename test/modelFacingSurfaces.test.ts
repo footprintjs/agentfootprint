@@ -674,7 +674,13 @@ const traceToolpackResults = async (): Promise<readonly string[]> => {
   // The descent's two "no record here" arms: a lookup holding OTHER records,
   // and a lookup holding none at all.
   const stocked = innerRunStore(4);
-  stocked.keep({ toolCallId: 'c9', toolName: 'weather_advice', outcome: 'ok', steps: 4 });
+  stocked.keep({
+    toolCallId: 'c9',
+    toolName: 'weather_advice',
+    outcome: 'ok',
+    steps: artifacts.snapshot.commitLog.length,
+    recording: { snapshot: artifacts.snapshot },
+  });
   return [
     // The never-dispatched arm (9.113.0): a call the paused batch settled.
     await callTraceTool(traceToolpack(await settledBatchArtifacts()), 'inspect_tool_call', {

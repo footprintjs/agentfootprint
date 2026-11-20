@@ -629,9 +629,13 @@ describe('inspect_tool_call — security', () => {
       } as unknown as TraceToolpackArtifacts['snapshot'],
     };
 
-    const out = await callTraceTool(traceToolpack(artifacts), 'inspect_tool_call', {
-      toolCallId: 'c1',
-    });
+    const out = await callTraceTool(
+      traceToolpack(artifacts, { showWithheldResults: true }),
+      'inspect_tool_call',
+      {
+        toolCallId: 'c1',
+      },
+    );
     expect(out).toContain('TOOL CALL c1 — lookup_order'); // the join still works
     expect(out).not.toContain(secret); // …on the redacted copy only
     expect(out).toContain('[REDACTED]'); // the placeholder passes through verbatim

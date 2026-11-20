@@ -281,6 +281,10 @@ function contracts(ft, cause, paths) {
         localStageId: 'answer',
         subflowPath: 'outer',
       }),
+    'foottrace:stageIdOf': () => {
+      assert.equal(ft.stageIdOf('outer/answer#12'), 'outer/answer');
+      assert.equal(ft.stageIdOf('outer/answer'), 'outer/answer');
+    },
     'foottrace:stateAt': () => {
       assert.deepEqual(ft.stateAt({ initialState: { retained: true }, commitLog: log }, 1).state, {
         retained: true,

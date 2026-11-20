@@ -68,9 +68,13 @@ function servedCommits(epochs: ReturnType<typeof epochLocations>) {
 }
 
 describe('the served history row', () => {
-  it.each(['classic', 'dynamic', 'dynamic-grouped'] as const)(
-    'writes one row in each actual call execution and keeps provider messages unchanged (%s)',
-    async (mode) => {
+  it.each([
+    { mode: 'classic', logs: 1, verbs: ['set', 'append'] },
+    { mode: 'dynamic', logs: 1, verbs: ['set', 'append'] },
+    { mode: 'dynamic-grouped', logs: 2, verbs: ['set', 'set'] },
+  ] as const)(
+    'writes one row in each actual call execution and keeps provider messages unchanged ($mode)',
+    async ({ mode, logs, verbs }) => {
       const { recording, requests } = await record(mode);
       const consumers = recording.events
         .filter((event) => event.type === 'agentfootprint.stream.llm_start')
@@ -78,6 +82,7 @@ describe('the served history row', () => {
       const epochs = epochLocations(recording.snapshot);
       expect(epochs).toHaveLength(2);
       expect(epochs.map(({ callRuntimeStageId }) => callRuntimeStageId)).toEqual(consumers);
+      expect(new Set(epochs.map(({ log }) => log)).size).toBe(logs);
       expect(servedCommits(epochs)).toEqual(epochs.map(({ log, callIdx }) => log[callIdx]));
       for (const [index, epoch] of epochs.entries()) {
         const { log, callIdx, callRuntimeStageId, runLog, source } = epoch;
@@ -86,7 +91,9 @@ describe('the served history row', () => {
           log.findIndex((bundle) => bundle.runtimeStageId === callRuntimeStageId),
         );
         const { trace } = log[callIdx]!;
-        expect(trace.filter(({ path }) => path === key)).toHaveLength(1);
+        expect(trace.filter(({ path }) => path === key).map(({ verb }) => verb)).toEqual([
+          verbs[index],
+        ]);
         expect(trace.some(({ path }) => path === RECEIPT_KEY)).toBe(true);
 
         const fold = keyedFold(source);
