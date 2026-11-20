@@ -132,6 +132,24 @@ describe('llmEdgeWeigher — unit', () => {
     expect(stepOutputText(fixture.commitLog, lastIdxOf, 'nope#9', 2000)).toBeUndefined();
   });
 
+  it('keeps request-recording bookkeeping out of the text scored as model output', async () => {
+    const chart = flowChart('model call', async (scope) => {
+      scope.$setValue('receipt', { digest: 'fixture' });
+      scope.$setValue('sourceLinkServedRows', [
+        { kind: 'served', version: 1, consumer: 'call', served: [] },
+      ]);
+      scope.$setValue('answer', ANSWER);
+    }).build();
+    const executor = new FlowChartExecutor(chart);
+    await executor.run({});
+    const log = executor.getSnapshot().commitLog as CommitBundle[];
+    const commit = log.find((bundle) => bundle.trace.some(({ path }) => path === 'answer'))!;
+    const indexes = new Map(log.map((bundle, index) => [bundle.runtimeStageId, index]));
+    expect(stepOutputText(log, indexes, commit.runtimeStageId, 2000)).toBe(
+      `answer=${JSON.stringify(ANSWER)}`,
+    );
+  });
+
   it('rankedParents is empty for unknown / unprimed ids', async () => {
     const fixture = await runHairball();
     const handle = freshWeigher(fixture);
