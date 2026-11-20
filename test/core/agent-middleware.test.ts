@@ -35,6 +35,7 @@ import {
   type MiddlewareDecision,
   type ToolMiddleware,
 } from '../../src/index.js';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 import { mock } from '../../src/llm-providers.js';
 import { mockMcpClient } from '../../src/tool-providers/index.js';
 import type {
@@ -42,6 +43,7 @@ import type {
   LLMResponse,
   PermissionChecker,
 } from '../../src/provider-contract/types.js';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -167,7 +169,7 @@ describe('middleware — scenario', () => {
 
     const answer = await agent.run({ message: 'ship it' });
 
-    expect(answer).toBe('done'); // the run continued — a denial is not a crash
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.'); // the run continued — a denial is not a crash
     expect(seen).toEqual([]); // the tool never ran
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toBe('writes to prod need a change ticket');
@@ -255,7 +257,7 @@ describe('middleware — scenario', () => {
 
     const answer = await agent.run({ message: 'go' });
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toContain("middleware 'broken' threw: policy service unreachable");
@@ -350,10 +352,13 @@ describe('middleware — integration', () => {
       checkInDeclined({ request: pausedRequest(paused), by: 'alice', note: 'not this one' }),
     );
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toBe('declined by human: not this one');
+    expect(ledger(agent)).toContainEqual(
+      expect.objectContaining({ outcome: 'deny', personApproved: false }),
+    );
   });
 
   // 8.13.0 — this used to DECLINE silently, filing a `checkin.decision` with
@@ -447,7 +452,7 @@ describe('middleware — integration', () => {
     expect(seen).toEqual([{ amount: 1000 }]);
   });
 
-  it('resume continues the chain from the link AFTER the one that asked', async () => {
+  it('resume asks the policy again and uses one human answer for the same question', async () => {
     const ran: string[] = [];
     const { seen, tool } = recordingTool();
     const agent = Agent.create({
@@ -475,13 +480,21 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(
+    const answer = await agent.resume(
       paused.checkpoint,
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     );
 
-    expect(ran).toEqual(['gate', 'after']); // 'gate' asked once, not twice
+    expect(answer).toBe('done');
+    expect(ran).toEqual(['gate', 'gate', 'after']);
     expect(seen).toEqual([{ amount: 5, lines: [{ sku: 'a' }] }]);
+    const rows = ledger(agent).filter((row) => row.moment === 'before-tool');
+    expect(rows).toMatchObject([
+      { middleware: 'gate', outcome: 'ask', why: 'approve?' },
+      { middleware: 'gate', outcome: 'allow', personApproved: true, why: 'approved by alice' },
+      { middleware: 'gate', outcome: 'ask', phase: 'resume', why: 'approve?' },
+      { middleware: 'after', outcome: 'allow', phase: 'resume' },
+    ]);
   });
 
   it('a link after the ask that REWRITES the approved arguments refuses the call — an approval covers the call it was shown', async () => {
@@ -515,10 +528,12 @@ describe('middleware — integration', () => {
     expect(rows.map((row) => [row.middleware, row.outcome, row.changed])).toEqual([
       ['gate', 'ask', false],
       ['gate', 'allow', false],
+      ['gate', 'ask', false],
       ['after', 'allow', true],
-      ['gate', 'deny', false],
+      ['agentfootprint', 'refused', false],
     ]);
-    expect(rows[3]?.why).toContain("'after'");
+    expect(rows[3]).toMatchObject({ phase: 'resume', why: 'raised post-approval' });
+    expect(rows[4]).toMatchObject({ phase: 'resume', why: 'call-changed' });
   });
 
   it.each([
@@ -561,7 +576,11 @@ describe('middleware — integration', () => {
       expect(toolResult?.content).toContain('was not run on that call');
       expect(toolResult?.content).toContain("'sneaky'");
       const rows = ledger(agent).filter((row) => row.moment === 'before-tool');
-      expect(rows[rows.length - 1]).toMatchObject({ middleware: 'gate', outcome: 'deny' });
+      expect(rows[rows.length - 1]).toMatchObject({
+        middleware: 'agentfootprint',
+        outcome: 'refused',
+        phase: 'resume',
+      });
       expect(rows[rows.length - 1]?.why).toContain('call-changed');
     },
   );
@@ -633,7 +652,7 @@ describe('middleware — integration', () => {
     expect(seen).toEqual([{ lines: [{ sku: 'a' }], amount: 5 }]);
   });
 
-  it('a SECOND ask during a resume refuses by name — one human question per resume', async () => {
+  it('a different policy question refuses the resumed call without another pause', async () => {
     const { seen, tool } = recordingTool();
     const spy = spyProvider(callThen('act'));
     const agent = Agent.create({ provider: spy.provider, model: 'm' })
@@ -646,14 +665,25 @@ describe('middleware — integration', () => {
 
     const paused = await agent.run({ message: 'go' });
     if (!isAskPause(paused)) throw new Error('expected a pause');
-    await agent.resume(
+    const answer = await agent.resume(
       paused.checkpoint,
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     );
 
-    expect(seen).toEqual([]); // never executed ungoverned
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
+    expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
-    expect(toolResult?.content).toContain("middleware 'second-gate' asked a person to decide");
+    expect(toolResult?.content).toContain("the current policy requires a person's answer again");
+    expect(toolResult?.content).toContain('The tool may be called again.');
+    expect(toolResult?.content).not.toMatch(/second-gate|second-question/);
+    expect(
+      ledger(agent)
+        .filter((row) => row.phase === 'resume')
+        .slice(-2),
+    ).toMatchObject([
+      { middleware: 'second-gate', outcome: 'ask' },
+      { outcome: 'refused', why: 'second-question' },
+    ]);
   });
 
   // ── The two gates: whose question was answered? (8.13.0) ─────────────
@@ -694,16 +724,11 @@ describe('middleware — integration', () => {
 
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
-    expect(toolResult?.content).toContain('declares its own checkIn consent gate');
-    // Past tense, about the resumed call (9.86.1): the result is re-read on
-    // every later call of the turn, so "trips for these arguments … cannot be
-    // retried this turn. Answer without it, or finish." was a forecast plus a
-    // standing order. What it says now is what happened on that call.
-    expect(toolResult?.content).toContain('that gate tripped for those arguments');
-    expect(toolResult?.content).toContain('was not executed on that call');
-    expect(toolResult?.content).not.toMatch(/cannot be retried|Answer without it, or finish/);
-    // The refusal names the middleware, so the author knows which gate to drop.
-    expect(toolResult?.content).toContain("'gate'");
+    expect(toolResult?.content).toContain(
+      "did not run because the current policy requires a person's answer again",
+    );
+    expect(toolResult?.content).toContain('The tool may be called again.');
+    expect(toolResult?.content).not.toMatch(/'gate'|second-question/);
   });
 
   it("checkIn: 'always' + an approved ask still refuses — the demand trips on every call", async () => {
@@ -733,7 +758,7 @@ describe('middleware — integration', () => {
 
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
-    expect(toolResult?.content).toContain('declares its own checkIn consent gate');
+    expect(toolResult?.content).toContain("the current policy requires a person's answer again");
   });
 
   it('an approved ask on a tool whose checkIn demand does NOT trip EXECUTES the tool', async () => {
@@ -930,7 +955,7 @@ describe('middleware — property', () => {
     }
   });
 
-  it('LAW 10: the same chain on two mock adapters produces identical ledgers', async () => {
+  it('LAW 10: the same chain on two mock adapters records equivalent decisions', async () => {
     const build = () =>
       Agent.create({ provider: mock({ replies: callThen('act', { n: 7 }) }), model: 'm' })
         .tools([recordingTool().tool])
@@ -944,12 +969,21 @@ describe('middleware — property', () => {
         })
         .build();
 
-    const a = build();
-    const b = build();
-    await a.run({ message: 'go' });
-    await b.run({ message: 'go' });
-
-    expect(ledger(a)).toEqual(ledger(b));
+    const run = async (agent: Agent) => {
+      const starts: string[] = [];
+      agent.on('agentfootprint.stream.tool_start', ({ payload }) => {
+        starts.push(readCallOccurrenceKey(payload) ?? '');
+      });
+      await agent.run({ message: 'go' });
+      const decisions = ledger(agent);
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.endsWith('.0')).toBe(true);
+      expect(decisions.filter((row) => row.at === 'tool').map(readCallOccurrenceKey)).toEqual(
+        starts,
+      );
+      return normalizeCallOccurrences(decisions);
+    };
+    expect(await run(build())).toEqual(await run(build()));
   });
 });
 
@@ -1286,7 +1320,7 @@ describe('middleware — toolSource', () => {
   });
 
   it('the resumed half of a chain sees the SAME source the asking half saw', async () => {
-    // A dispatch that pauses continues from the link after the one that asked.
+    // Rechecking the approved question keeps the dispatch's original tool source.
     // A chain that changed its mind about where the tool came from halfway
     // through one dispatch would be worse than not knowing at all.
     const { seen, mw } = watcher();
@@ -1887,8 +1921,19 @@ describe('middleware — the onToolCall chain sees the PEELED args under .findin
     // carries the declaration, and the ledger holds its basis row.
     const assistant = spy.requests[1]?.messages.find((m) => m.role === 'assistant');
     expect(assistant?.toolCalls?.[0]?.args).toEqual(DECLARING);
+    expect(assistant?.toolCalls?.[0]).not.toHaveProperty('callOccurrenceKey');
+    const callOccurrenceKey = row?.callOccurrenceKey;
+    expect(typeof readCallOccurrenceKey({ callOccurrenceKey })).toBe('string');
     expect(agent.findings()).toEqual([
-      { kind: 'basis', toolCallId: 'c1', toolName: 'act', iteration: 1, basis: 'direct' },
+      {
+        kind: 'basis',
+        toolCallId: 'c1',
+        toolName: 'act',
+        iteration: 1,
+        basis: 'direct',
+        callOccurrenceKey,
+        turn: 1,
+      },
     ]);
   });
 

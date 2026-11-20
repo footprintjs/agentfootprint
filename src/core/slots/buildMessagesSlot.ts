@@ -35,6 +35,7 @@
 
 import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
 import type { ContextRecency, ContextRole, ContextSource } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
@@ -53,6 +54,7 @@ export interface InputMessage {
   readonly content: string;
   readonly toolCallId?: string;
   readonly toolName?: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /** Set by the delivery stage on a message an Injection put here — the
    *  marker this slot attributes by. Mirrors `LLMMessage.injectedBy`. */
   readonly injectedBy?: {
@@ -125,6 +127,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
           position: i,
           ...(by !== undefined && { sourceId: by.injectionId }),
           ...(by === undefined && m.toolCallId !== undefined && { sourceId: m.toolCallId }),
+          ...(by === undefined && m.role === 'tool' && callOccurrenceField(m.callOccurrenceKey)),
         };
       });
 

@@ -3,19 +3,27 @@
  *
  * Outcome, from typed fields only (never a `why` prose):
  *   - `not-dispatched` — `tool_end.notDispatched` (a batch settled on a pause);
- *   - `declined`       — a person was asked and declined: a before-tool deny on
- *                        the call a RESUMED leg answers (its start is in the
- *                        earlier leg), or a `checkin.decision` with
- *                        `approved: false`;
+ *   - `declined`       — a person was asked and declined: a check-in or a
+ *                        middleware answer. Legacy records identify a decline
+ *                        by an unphased before-tool denial on the paused call;
  *   - `refused`        — BEFORE-tool only: `tool_end.notExecuted`, a deny
  *                        `middleware.decision` with `moment: 'before-tool'`, or a
  *                        `permission.check` for this call that did not allow;
- *   - `failed`         — `tool_end.error`;
+ *   - `not-executed`   — the tool's function was never entered and no rule
+ *                        or person stopped it (`tool_end.entered: false`: an
+ *                        unknown tool name, rejected arguments, a blocked
+ *                        credential);
+ *   - `failed`         — `tool_end.error` on a call whose tool ran
+ *                        (`entered: true`);
+ *   - `ended-in-error` — `tool_end.error` on a record that does not say
+ *                        whether the tool ran (no `entered`: written before
+ *                        that field existed) — never told as "it ran";
  *   - `unknown`        — a start with no recorded end;
  *   - `ran`            — otherwise. An AFTER-tool deny keeps `ran` and sets
  *                        `withheldBy`: the tool ran and the model read the
  *                        rule's refusal (`notExecuted` covers before-tool rules
- *                        only, and its absence proves nothing).
+ *                        only, and its absence proves nothing). The recorded
+ *                        result status is a separate fact, `reportedStatus`.
  *
  * Emptiness is read from what the MODEL read — `modelResult ?? result` — and
  * never judged on a withheld result. The reader is the ONE emptiness reader
@@ -25,8 +33,17 @@
  * (`tools.semantics_declared`).
  */
 
+import {
+  declarationOccurrences,
+  readCallOccurrences,
+  type CallOccurrence,
+  type HistoryCall,
+} from '../../core/agent/recordedCalls.js';
 import { strip } from '../../semantics/coverage/read.js';
+import { reportedStatusOf } from '../../semantics/toolOutcome.js';
+import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
+import { outcomeOf } from './callOutcome.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
 import {
@@ -89,10 +106,14 @@ export interface CoverageRead {
 /** One call, as the row readers need it (the fact plus the events behind it). */
 export interface CallRead {
   readonly fact: ToolCallFact;
+  readonly historyIndex?: number;
+  readonly presented?: true;
   readonly start?: ViewEvent;
   readonly end?: ViewEvent;
   /** The decision or permission row that refused / withheld it. */
   readonly ruleEvent?: ViewEvent;
+  /** The recorded human approval before a policy recheck refused the call. */
+  readonly approvalEvent?: ViewEvent;
   readonly coverage?: CoverageRead;
   /** The `tools.semantics_declared` row: the described envelope as the record keeps it. */
   readonly described?: ViewEvent;
@@ -115,8 +136,9 @@ export interface CallsRead {
   readonly calls: readonly CallRead[];
   /** Calls past `MAX_CALLS`, counted, not listed. */
   readonly omitted: number;
-  /** Ids of every call of this run (listed or not) — the in-view reader skips them. */
-  readonly ids: ReadonlySet<string>;
+  /** Committed result positions of the calls linked to this run. */
+  readonly historyIndices: ReadonlySet<number>;
+  readonly declarationAddresses?: ReadonlyMap<number, number>;
 }
 
 const SECTIONS: readonly CoverageSectionKey[] = ['checked', 'notChecked', 'cannotCover'];
@@ -131,28 +153,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return ka.every((k) =>
     deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
   );
-}
-
-/** One pass per event type: toolCallId → its events, in recording order. */
-type CallIndex = (type: string, id: string) => readonly ViewEvent[];
-
-function indexByCall(ctx: ReadContext): CallIndex {
-  const cache = new Map<string, Map<string, ViewEvent[]>>();
-  return (type, id) => {
-    let byId = cache.get(type);
-    if (byId === undefined) {
-      byId = new Map();
-      for (const e of ctx.view.ofType(type)) {
-        const key = str(e.payload.toolCallId);
-        if (key === undefined) continue;
-        const list = byId.get(key) ?? [];
-        list.push(e);
-        byId.set(key, list);
-      }
-      cache.set(type, byId);
-    }
-    return byId.get(id) ?? [];
-  };
 }
 
 /** One declaration as a reader meets it: its fields, and where each leaf of it is on the record. */
@@ -265,14 +265,12 @@ export const COVERAGE_STATE_KEY = 'coverageDeclared';
  * earlier leg, its rows are in this record's state.
  */
 export function readStateCoverage(
-  rows: readonly unknown[],
-  toolCallId: string,
+  rows: readonly { readonly row: Readonly<Record<string, unknown>>; readonly index: number }[],
   served: boolean,
 ): CoverageRead | undefined {
   const sources: DeclarationSource[] = [];
   const wordsKeptOut = (value: unknown): boolean => served && isKeptOut(value);
-  rows.forEach((row, index) => {
-    if (!isRecord(row) || row.toolCallId !== toolCallId) return;
+  for (const { row, index } of rows) {
     sources.push({
       fields: row,
       base: (...keys: readonly (string | number)[]) => stateAt(COVERAGE_STATE_KEY, index, ...keys),
@@ -280,15 +278,15 @@ export function readStateCoverage(
       isKeptOut: wordsKeptOut,
       keptOutField: (field: string) => wordsKeptOut(row[field]),
     });
-  });
+  }
   return readDeclarations(sources, []);
 }
 
 function toolNameFor(
-  ctx: ReadContext,
   id: string,
-  start?: ViewEvent,
-  coverage?: CoverageRead,
+  start: ViewEvent | undefined,
+  coverage: CoverageRead | undefined,
+  history: HistoryCall | undefined,
 ): { readonly name: string; readonly pointer: RecordPointer } | undefined {
   const fromStart = str(start?.payload.toolName);
   if (start !== undefined && fromStart !== undefined)
@@ -296,106 +294,19 @@ function toolNameFor(
   const declared = coverage?.events.find((e) => str(e.payload.toolName) !== undefined);
   if (declared !== undefined)
     return { name: str(declared.payload.toolName) as string, pointer: at(declared, 'toolName') };
-  const history = historyOf(ctx.view);
-  const index = history.findIndex(
-    (m) => isRecord(m) && m.toolCallId === id && typeof m.toolName === 'string',
-  );
-  if (index < 0) return undefined;
-  const message = history[index] as Record<string, unknown>;
-  return { name: message.toolName as string, pointer: historyAt(index, '/toolName', id) };
-}
-
-/** The permission rows between this call's start and end that name its tool. */
-function permissionRows(
-  ctx: ReadContext,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): ViewEvent[] {
-  if (start === undefined) return [];
-  const upTo = end?.index ?? Number.POSITIVE_INFINITY;
-  return ctx.view
-    .ofType('permission.check')
-    .filter((e) => e.index > start.index && e.index < upTo && e.payload.target === toolName);
-}
-
-/** The permission verdicts that stop a call before it runs. */
-export const PERMISSION_REFUSALS: ReadonlySet<unknown> = new Set(['deny', 'halt']);
-
-interface Outcome {
-  readonly outcome: ToolCallFact['outcome'];
-  readonly refusedBy?: string;
-  readonly withheldBy?: string;
-  readonly ruleEvent?: ViewEvent;
-}
-
-/** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
-const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'error'] as const;
-
-function outcomeOf(
-  ctx: ReadContext,
-  byCall: CallIndex,
-  id: string,
-  toolName: string,
-  start?: ViewEvent,
-  end?: ViewEvent,
-): Outcome {
-  const decisions = byCall('middleware.decision', id);
-  const beforeDeny = decisions.find(
-    (e) => e.payload.moment === 'before-tool' && e.payload.outcome === 'deny',
-  );
-  const afterDeny = decisions.find(
-    (e) => e.payload.moment === 'after-tool' && e.payload.outcome === 'deny',
-  );
-  // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
-  // allow || gate_open), so it is never a refusal.
-  const permissionDeny = permissionRows(ctx, toolName, start, end).find((e) =>
-    PERMISSION_REFUSALS.has(e.payload.result),
-  );
-  const checkInDeclined = byCall('checkin.decision', id).find((e) => e.payload.approved === false);
-  const pausedId = str(ctx.view.state?.pausedToolCallId);
-  const isPausedCall =
-    ctx.resumedLeg && ((pausedId !== undefined && pausedId === id) || start === undefined);
-
-  // The record keeps out a field that says how the call ended (a redaction
-  // policy's placeholder): how it ended cannot be told, so it is not guessed.
-  if (end !== undefined && OUTCOME_FIELDS.some((field) => keptOut(end, field)))
-    return { outcome: 'unknown' };
-  if (end?.payload.notDispatched !== undefined)
-    return { outcome: 'not-dispatched', ruleEvent: end };
-  if (checkInDeclined !== undefined) return { outcome: 'declined', ruleEvent: checkInDeclined };
-  if (beforeDeny !== undefined && isPausedCall)
-    return { outcome: 'declined', ruleEvent: beforeDeny };
-  if (beforeDeny !== undefined) {
-    const by = str(beforeDeny.payload.middleware);
-    return {
-      outcome: 'refused',
-      ruleEvent: beforeDeny,
-      ...(by !== undefined && { refusedBy: by }),
-    };
-  }
-  if (permissionDeny !== undefined) {
-    const by = str(permissionDeny.payload.policyRuleId);
-    return {
-      outcome: 'refused',
-      ruleEvent: permissionDeny,
-      ...(by !== undefined && { refusedBy: by }),
-    };
-  }
-  if (end?.payload.notExecuted === true) return { outcome: 'refused', ruleEvent: end };
-  if (end?.payload.error === true) return { outcome: 'failed' };
-  if (end === undefined) return { outcome: 'unknown' };
-  const by = str(afterDeny?.payload.middleware);
-  return afterDeny !== undefined
-    ? { outcome: 'ran', ruleEvent: afterDeny, ...(by !== undefined && { withheldBy: by }) }
-    : { outcome: 'ran' };
+  const name = history?.toolName;
+  return history !== undefined && name !== undefined
+    ? { name, pointer: historyAt(history.index, '/toolName', id) }
+    : undefined;
 }
 
 /** The one leaf on `tool_end` that says how the call ended, as the account read it. */
 export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordPointer {
-  if (isRecord(end.payload.notDispatched)) {
+  if (readNotDispatched(end.payload.notDispatched) === 'settled') {
     return at(end, 'notDispatched', 'pausedCall', 'toolCallId');
   }
+  // A call whose tool never ran: the leaf that says so.
+  if (end.payload.notExecuted !== true && end.payload.entered === false) return at(end, 'entered');
   for (const key of ['notExecuted', 'error', 'status'] as const) {
     if (end.payload[key] !== undefined) return at(end, key);
   }
@@ -419,18 +330,17 @@ function viewOf(end: ViewEvent): ToolCallFact['view'] {
     : 'model-result';
 }
 
-function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
-  const start = byCall('stream.tool_start', id)[0];
-  const ends = byCall('stream.tool_end', id);
-  const end = ends[ends.length - 1];
-  const coverageEvents = [...byCall('tools.absent', id), ...byCall('tools.coverage_declared', id)];
+function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallRead {
+  const { providerId: id, start, end, eventsOf, history } = occurrence;
+  const coverageEvents = [...eventsOf('tools.absent'), ...eventsOf('tools.coverage_declared')];
   const coverage = readCoverage(coverageEvents, ctx.view.servedUnderPolicy);
-  const described = byCall('tools.semantics_declared', id)[0];
-  const named = toolNameFor(ctx, id, start, coverage);
+  const described = eventsOf('tools.semantics_declared')[0];
+  const named = toolNameFor(id, start, coverage, history);
   // A call no event names is still a call: counted as unread, judged, and said to be unnamed.
   if (named === undefined) ctx.noteUnread();
   const toolName = named?.name ?? '';
-  const outcome = outcomeOf(ctx, byCall, id, toolName, start, end);
+  const outcome = outcomeOf(ctx, occurrence, toolName);
+  const status = outcome.outcome === 'ran' ? reportedStatusOf(end?.payload.status) : undefined;
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
   // The door THIS record holds for the call — its events — decides what was declared; a marker
   // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
@@ -442,6 +352,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     ? { emptiness: 'unknown', undeclaredShape: false, rowsUnread: 'redacted' }
     : judged
     ? readEmptiness('modelResult' in end.payload ? end.payload.modelResult : end.payload.result, {
+        placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
         ...(rowsAtOf(ctx.declarations, toolName) !== undefined && {
           rowsAt: rowsAtOf(ctx.declarations, toolName),
         }),
@@ -454,7 +365,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
         },
       })
     : { emptiness: 'unknown', undeclaredShape: false };
-  const findings = byCall('findings.declared', id)[0];
+  const findings = eventsOf('findings.declared')[0];
   const basis = str(findings?.payload.basis);
   const expect = str(findings?.payload.expect);
   const idPointer = start ? at(start, 'toolCallId') : end ? at(end, 'toolCallId') : undefined;
@@ -468,6 +379,7 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
     toolName: toolName.slice(0, FACT_TEXT_CHARS),
     ...(named === undefined && { unnamed: true as const }),
     outcome: outcome.outcome,
+    ...(status !== undefined && { reportedStatus: status }),
     ...(outcome.refusedBy !== undefined && { refusedBy: outcome.refusedBy }),
     ...(outcome.withheldBy !== undefined && { withheldBy: outcome.withheldBy }),
     emptiness: emptiness.emptiness,
@@ -497,9 +409,12 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
   };
   return {
     fact,
+    ...(history !== undefined && { historyIndex: history.index }),
+    ...(eventsOf('artifacts.presented').length > 0 && { presented: true as const }),
     ...(start !== undefined && { start }),
     ...(end !== undefined && { end }),
     ...(outcome.ruleEvent !== undefined && { ruleEvent: outcome.ruleEvent }),
+    ...(outcome.approvalEvent !== undefined && { approvalEvent: outcome.approvalEvent }),
     ...(coverage !== undefined && { coverage }),
     ...(described !== undefined && { described }),
     emptiness,
@@ -515,21 +430,29 @@ function readOne(ctx: ReadContext, byCall: CallIndex, id: string): CallRead {
 
 /** Every call of this run, first-seen order (a resumed leg's paused call has only an end). */
 export function readCalls(ctx: ReadContext): CallsRead {
-  const firstSeen = new Map<string, number>();
-  for (const type of ['stream.tool_start', 'stream.tool_end']) {
-    for (const e of ctx.view.ofType(type)) {
-      const id = str(e.payload.toolCallId);
-      if (id !== undefined && !firstSeen.has(id)) firstSeen.set(id, e.index);
+  const occurrences = readCallOccurrences(ctx.view.events, historyOf(ctx.view));
+  const calls = occurrences.map((occurrence) => readOne(ctx, occurrence));
+  const rows = ctx.view.stateAsRecorded?.coverageDeclared;
+  const declarationAddresses = new Map<number, number>();
+  if (Array.isArray(rows)) {
+    const linked = declarationOccurrences(
+      rows,
+      ctx.view.events,
+      occurrences,
+      ctx.view.servedUnderPolicy,
+    );
+    for (const [index, call] of linked) {
+      if (call.history !== undefined) declarationAddresses.set(index, call.history.index);
     }
   }
-  const ids = [...firstSeen.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
-  const byCall = indexByCall(ctx);
-  const calls = ids.map((id) => readOne(ctx, byCall, id));
   return {
     all: calls,
     calls: calls.slice(0, MAX_CALLS),
     omitted: Math.max(0, calls.length - MAX_CALLS),
-    ids: new Set(ids),
+    ...(declarationAddresses.size > 0 && { declarationAddresses }),
+    historyIndices: new Set(
+      calls.flatMap((call) => (call.historyIndex === undefined ? [] : [call.historyIndex])),
+    ),
   };
 }
 

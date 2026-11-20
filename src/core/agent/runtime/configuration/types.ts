@@ -85,6 +85,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  findings ledger's own serve stays `findingsOptions`'s: without
    *  `.findings()` the arm plants `_findings.from` on ruled tools only. */
   readonly argumentSourcesArmed?: true;
+  readonly sourceDeclarationCorrection?: 'once';
 
   /** `AgentOptions.argumentAskContext` (honesty layer 2): the host's own
    *  context for the inputs layer's batch ask, handed to the dispatch stage
@@ -100,8 +101,8 @@ export interface AgentConfiguration extends ModelConfiguration {
   /** `.answerLayer()` (honesty layer 4): the answer's standing folded at the
    *  head of the final branch and served as data; `standingLine` — also one
    *  line appended to a prose answer, for the standings its mode names
-   *  (`'always'` for `standingLine: true`). Undefined on every agent that did not
-   *  ask, and that undefined is the whole zero-cost guarantee: no stage, no
+   *  (`'always'` for `standingLine: true`). Undefined when the layer is off,
+   *  and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
   readonly answerLayerOption?: {
     readonly standingLine?: import('../../assessment/compose.js').StandingLineWhen;

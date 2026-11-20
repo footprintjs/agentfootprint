@@ -185,7 +185,7 @@ function scriptedProvider(rounds: number): LLMProvider {
   };
 }
 
-function trapAgent(withGrounding: boolean) {
+function trapAgent(withGrounding: boolean, options: { answerLayer?: false } = {}) {
   const events: Array<Record<string, unknown>> = [];
   // The last-tool-result pin (9.57.0) is the shipped FIRST line of defense —
   // with it on, each tool's most recent result refuses to leave, and this
@@ -197,6 +197,7 @@ function trapAgent(withGrounding: boolean) {
     model: 'm',
     maxIterations: 12,
     keepLastToolResults: false,
+    ...options,
   })
     .tool(bigGround())
     .tool(firesAtIds(withGrounding))
@@ -244,9 +245,7 @@ describe('functional: the evicted ground files ONE finding through the real loop
  * can pin this.
  *
  * The reference was generated on the 9.112.2 tree (commit f430358b, before any
- * source edit of 9.113.0) by this file in update mode:
- *
- *   AF_DANGLING_NARRATIVE_REFERENCE=update npx vitest run test/integrity/danglingReference.test.ts -t 'narrates'
+ * source edit of 9.113.0) with the then-current test's update mode.
  *
  * REGENERATED for the moving cache breakpoint (the conversation tail is
  * marked, `CacheDecisionSubflow.ts` · `conversationTailMarker`). The whole
@@ -254,6 +253,9 @@ describe('functional: the evicted ground files ONE finding through the real loop
  * (19 lines: the decision's write, the merge-back's input, each call's
  * read), the tail marker beside the system one. No step was added, removed
  * or renumbered, so the law this pins still holds.
+ *
+ * Occurrence addressing changes only the tool start/end payload summaries.
+ * The end summary now abbreviates five keys, including the address.
  *
  * The one moving part, the turn's clock (`turnStartMs`), is masked.
  */
@@ -264,8 +266,9 @@ const NATIVE_NARRATIVE_REFERENCE = resolve(
 );
 
 describe('regression: the check adds no step to the narrative', () => {
-  it('the trap retains the exact native14 narrative, including every tracked read', async () => {
-    const { agent, events } = trapAgent(true);
+  it('pins the narrative with occurrence summaries and every native14 tracked read', async () => {
+    // This fixture pins the native14 narrative, so the answer layer stays off.
+    const { agent, events } = trapAgent(true, { answerLayer: false });
     await agent.run({ message: TASK });
     // The trap is armed: compositions after the drop ran the check.
     expect(events.filter((e) => e.kind === 'dangling-reference')).toHaveLength(1);

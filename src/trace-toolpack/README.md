@@ -18,12 +18,27 @@ an attention omission that must stay visible.
 ## An id a provider reused: the latest call decides
 A provider may reuse a tool-call id across turns (the library's own fallback
 ids are minted per provider instance). `inspect_tool_call` answers for the
-LATEST call under the id: its result is the latest `role: 'tool'` message, its
-outcome and duration come off the LAST `tool_end` for the id
-(`traceToolpack/toolCallJournal.ts` · `buildInspectToolCall`), and it reads "not dispatched"
-when the latest bracket or message carries the batch settlement's marker
-(9.113.0, `notDispatchedOf`). The step line still names the step of the first
-call under the id that ran (`bracketsFor`).
+LATEST call under the id. For recordings with call addresses, the journal
+uses the selected call's address to join its proposal, result and events
+through the shared recorded-call reader. It reports a missing or unreadable
+result explicitly. Older recordings use the order of the recorded events
+(`traceToolpack/toolCallOccurrence.ts` · `latestCallOccurrence`) and the
+committed history. Duration comes from the selected occurrence's
+`tool_end`. The journal reads "not dispatched" when that bracket or the
+corresponding history message carries the batch settlement marker
+(9.113.0, `notDispatchedOf`). Governance rows, check-ins and validation reports
+need evidence that links them to the selected occurrence. The shared reader
+(`semantics/toolRan.ts` · `toolRanOf`) reads whether the tool ran from
+that bracket. A call that never reached its tool (an unknown name, rejected arguments, a rule that
+refused it, a person who declined it) reads `ran with: nothing — call 'u1' was
+never executed.`, and its outcome line never says `ok`: with an error,
+`outcome: error — call 'u1' was not executed: the tool was never entered`;
+without one, the decline or refusal first (`outcome: declined — a person was
+asked at the check-in; call 'g1' never reached its tool`, `outcome: refused by
+a rule — call 'p1' never reached its tool`), else `outcome: not executed — call
+'u1' never reached its tool`. An error on a record written before
+`tool_end.entered` existed reads `outcome: error — this record does not say
+whether the tool ran`.
 
 ```text
 c1 answered 'first answer' in 1ms, then — reused — threw 'second call failed' after 27ms:

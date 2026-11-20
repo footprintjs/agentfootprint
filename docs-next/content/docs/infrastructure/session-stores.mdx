@@ -245,10 +245,14 @@ declared: {
 That is `agentEngineSessions`. Its backing service requires a `userId` when a
 session is created and refuses to change it afterwards, so a conversation that
 ran anonymously on turn one stays under the anonymous placeholder in the
-service-side index forever. Its real owner **is** recorded — in the envelope,
-where `persist` reads it to refuse a foreign signer — but the index that
-`ownerOf` and `listByUser` answer from cannot be moved. Such a session appears
-in nobody's list until it is written under a new id.
+service-side index forever. Its real owner **is** recorded — in a write-once
+state key beside the envelope, which the first signed turn fills and an
+anonymous turn never touches, so `persist` refuses a different signer — but the
+index that `ownerOf` and `listByUser` answer from cannot be moved. Such a
+session appears in nobody's list until it is written under a new id. A session
+stored before that key existed and whose conversation names nobody cannot say
+who signed it, so a signed turn on it is refused (`ERR_SESSION_NOT_FOUND`); an
+anonymous turn on it is stored as before.
 
 That is a ceiling of the backing service, not a defect and not a gap in the
 battery. It is written down so it can be argued with, and the case still runs

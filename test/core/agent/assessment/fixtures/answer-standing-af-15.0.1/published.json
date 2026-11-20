@@ -1,0 +1,207 @@
+{
+  "versions": {
+    "agentfootprint": "15.0.1",
+    "footprintjs": "14.0.0",
+    "foottrace": "2.1.0",
+    "contextfootprint": "0.1.1"
+  },
+  "package": {
+    "url": "https://registry.npmjs.org/agentfootprint/-/agentfootprint-15.0.1.tgz",
+    "integrity": "sha512-LuAjFf8vSSZaTifdL10CjoTMCQootMacI+9111PN7/mxrkClhkxoTR/W0N+JlPpvLPU4BV1S0DEbJHBObvaY2g==",
+    "sha256": "9baf5c9ef82092e831a4234ebb4733445641c3fa4ace6fe72a20952418151d45"
+  },
+  "lock": {
+    "head": "17e125d9ec2fbe9dc912645d52d4737b5affd5df",
+    "path": "bench/honest-report/cohorts/after/package-lock.json",
+    "sha256": "8fd4448175166c3bab1621378ea013c0e9456a02c4b048da46576d400b2a3292"
+  },
+  "checkpointSha256": "940f2ea00bddad99d1752556da273271e117274e43fa6a3a9949ddea26d5f227",
+  "capture": {
+    "chart": {
+      "bytes": 11592,
+      "sha256": "b80ff57dde4877828bc087597792c3f2c0c12f09bcbe4b6d69af2f72217c868f"
+    },
+    "commitLog": {
+      "bytes": 14258,
+      "sha256": "2a4133396beb9c1d2d8da8ecda6ea2971303c11ec5edd48a2ce597055a33f9c6"
+    },
+    "events": {
+      "bytes": 15395,
+      "sha256": "c6220b8b7b10b420af5081111b45e00fb3ee80a9b0722a1bfa4a67df5002c262"
+    },
+    "answer": {
+      "bytes": 20,
+      "sha256": "87780494b21be1d8d01d754f32641e88c631404d8c2f8062f2b3d23a27ac2852"
+    }
+  },
+  "admission": [
+    {
+      "reactMode": "classic",
+      "tools": false,
+      "schema": false,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "classic",
+      "tools": false,
+      "schema": false,
+      "validated": true,
+      "refusal": "AgentBuilder.answerValidation requires .outputSchema(parser)."
+    },
+    {
+      "reactMode": "classic",
+      "tools": false,
+      "schema": true,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "classic",
+      "tools": false,
+      "schema": true,
+      "validated": true,
+      "refusal": null
+    },
+    {
+      "reactMode": "classic",
+      "tools": true,
+      "schema": false,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "classic",
+      "tools": true,
+      "schema": false,
+      "validated": true,
+      "refusal": "AgentBuilder.answerValidation requires .outputSchema(parser)."
+    },
+    {
+      "reactMode": "classic",
+      "tools": true,
+      "schema": true,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "classic",
+      "tools": true,
+      "schema": true,
+      "validated": true,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": false,
+      "schema": false,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": false,
+      "schema": false,
+      "validated": true,
+      "refusal": "AgentBuilder.answerValidation requires .outputSchema(parser)."
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": false,
+      "schema": true,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": false,
+      "schema": true,
+      "validated": true,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": true,
+      "schema": false,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": true,
+      "schema": false,
+      "validated": true,
+      "refusal": "AgentBuilder.answerValidation requires .outputSchema(parser)."
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": true,
+      "schema": true,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic",
+      "tools": true,
+      "schema": true,
+      "validated": true,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": false,
+      "schema": false,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": false,
+      "schema": false,
+      "validated": true,
+      "refusal": "AgentBuilder.answerValidation requires .outputSchema(parser)."
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": false,
+      "schema": true,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": false,
+      "schema": true,
+      "validated": true,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": true,
+      "schema": false,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": true,
+      "schema": false,
+      "validated": true,
+      "refusal": "AgentBuilder.answerValidation requires .outputSchema(parser)."
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": true,
+      "schema": true,
+      "validated": false,
+      "refusal": null
+    },
+    {
+      "reactMode": "dynamic-grouped",
+      "tools": true,
+      "schema": true,
+      "validated": true,
+      "refusal": null
+    }
+  ]
+}

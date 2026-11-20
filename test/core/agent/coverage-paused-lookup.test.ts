@@ -1,4 +1,3 @@
-import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
 /**
  * A lookup that pauses still declares what it looked at (9.114.0).
  *
@@ -18,17 +17,15 @@ import { withNativeResourceObservation } from '../../helpers/nativeResourceObser
  * never rides the awaiting-input shape.
  *
  * Sections (Convention 3): unit (the declaration's refusals, the stamped
- * shape) · integration (byte-identical rows to a returning lookup, the
+ * shape) · integration (rows matching a returning lookup modulo batch entropy, the
  * empty-lookup seam, the three-call batch and the unsettled rule) · regression
  * (a raise without `absence`, and a malformed hand raise with or without it, each
  * pinned against a reference captured on the 9.113.0 tree — `git archive`
- * of the release commit — by this file in update mode):
- *
- *   AF_PAUSED_LOOKUP_REFERENCE=update npx vitest run test/core/agent/coverage-paused-lookup.test.ts
+ * of the release commit — by the then-current test in update mode).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { flowChart } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
@@ -57,6 +54,9 @@ import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-
 import { stampInputRequest, validateInputDeclaration } from '../../../src/tools/inputRequest.js';
 import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls/index.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
+import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
+import { withTypedAnswerMark } from '../../helpers/typedAnswerMark.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────
 
@@ -148,6 +148,7 @@ function build(
     /** A tool middleware that rewrites the lookup's `wwpn` to `DEVICE`, so
      *  the args the tool runs with are not the args the model sent. */
     readonly rewriteWwpn?: boolean;
+    readonly answerLayer?: false;
   } = {},
 ): Leg {
   const events: Leg['events'] = [];
@@ -164,6 +165,7 @@ function build(
     provider,
     model: 'mock',
     maxIterations: 6,
+    answerLayer: extra.answerLayer,
     noticeEmptyLookups: true,
     ...(reactMode !== undefined && { reactMode }),
   })
@@ -259,7 +261,7 @@ describe('unit: `InputRequestDeclaration.absence` — minted by `absent()`, refu
 
 describe('integration: a raising lookup files what a returning lookup files', () => {
   it.each(['dynamic', 'dynamic-grouped'] as const)(
-    '%s: `tools.absent` and the `coverageDeclared` rows are byte-identical to a lookup that RETURNS the same absence',
+    '%s: a raised and returned absence file the same bytes after normalizing batch entropy',
     async (mode) => {
       const returned = build('return', mode);
       await returned.agent.run({ message: 'which port is the first device on?' });
@@ -268,16 +270,30 @@ describe('integration: a raising lookup files what a returning lookup files', ()
       const paused = await raised.agent.run({ message: 'which port is the first device on?' });
       if (!isInputPause(paused)) throw new Error('expected an input pause');
 
-      const want = payloadsOf(returned, 'agentfootprint.tools.absent');
-      expect(want).toHaveLength(1);
-      expect(JSON.stringify(payloadsOf(raised, 'agentfootprint.tools.absent'))).toBe(
-        JSON.stringify(want),
+      const record = (leg: Leg) => {
+        const absent = payloadsOf(leg, 'agentfootprint.tools.absent');
+        const rows = stateOf(leg.agent).coverageDeclared;
+        const starts = payloadsOf(leg, 'agentfootprint.stream.tool_start');
+        const occurrence = starts.find((start) => start.toolCallId === 'c2')?.callOccurrenceKey;
+        expect(occurrence).toEqual([
+          expect.any(Number),
+          expect.any(Number),
+          expect.any(Number),
+          expect.any(Number),
+          0,
+        ]);
+        expect(absent).toHaveLength(1);
+        expect(rows).toHaveLength(1);
+        expect(absent[0]?.callOccurrenceKey).toEqual(occurrence);
+        expect(rows?.[0]?.callOccurrenceKey).toEqual(occurrence);
+        return { absent, rows };
+      };
+      const raisedRecord = record(raised);
+      expect(JSON.stringify(normalizeCallOccurrences(raisedRecord))).toBe(
+        JSON.stringify(normalizeCallOccurrences(record(returned))),
       );
-      const rows = stateOf(returned.agent).coverageDeclared;
-      expect(rows).toHaveLength(1);
-      expect(JSON.stringify(stateOf(raised.agent).coverageDeclared)).toBe(JSON.stringify(rows));
-      // Filed at the RAISE: the rows ride the checkpoint the pause returned.
-      expect(JSON.stringify(paused.checkpoint)).toContain(JSON.stringify(rows));
+      // The raised lookup's exact row, including its address, rides its checkpoint.
+      expect(JSON.stringify(paused.checkpoint)).toContain(JSON.stringify(raisedRecord.rows));
     },
   );
 
@@ -416,7 +432,10 @@ describe('integration: a raising lookup files what a returning lookup files', ()
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe(answer.content);
+      expect(done).toBe(
+        answer.content +
+          '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+      );
       expect(payloadsOf(raised, 'agentfootprint.tools.absent')).toHaveLength(1);
       expect(JSON.stringify(stateOf(raised.agent).coverageDeclared)).toBe(rowsAtRaise);
       // The paused call's served result is the person's answer — never the envelope.
@@ -508,7 +527,7 @@ describe('integration: a raise that does not pause files nothing', () => {
 
       expect(isPaused(raisedOut)).toBe(false);
       expect(raisedOut).toBe(returnedOut);
-      expect(raisedOut).toBe(answer.content);
+      expect(raisedOut).toBe(answer.content + '\n\n---\n\nNot sure — a call failed.');
       // The call errored with the text the returned path serves — parity.
       expect(returnsIt.served()).toBeDefined();
       expect(raisesIt.served()).toBe(returnsIt.served());
@@ -546,7 +565,7 @@ describe('integration: a raise that does not pause files nothing', () => {
       paused.checkpoint,
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     );
-    expect(done).toBe(answer.content);
+    expect(done).toBe(answer.content + '\n\n---\n\nNot sure — a call failed.');
     expect(absentIds).toEqual([]);
     expect(stateOf(agent).coverageDeclared).toBeUndefined();
     expect(served()).toContain('requested a pause while resuming an approved check-in');
@@ -593,7 +612,10 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(answer.content);
+    expect(done).toBe(
+      answer.content +
+        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
     expect(filedUnder).toEqual(['outer_proc/c1']);
   });
 
@@ -665,7 +687,10 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(answer.content);
+    expect(done).toBe(
+      answer.content +
+        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    );
     expect(filedUnder).toEqual(['outer/c1']);
   });
 });
@@ -738,7 +763,10 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe('done');
+      expect(done).toBe(
+        'done\n\n---\n\nNot sure — a call did not run; ' +
+          'a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+      );
 
       // The settlement is unchanged: c3 never ran, and its result is the sentence.
       expect(ran).toEqual(['c1', 'd1']);
@@ -768,11 +796,10 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
   );
 });
 
-// ─── 4. REGRESSION — a raise without `absence` is byte-identical to 9.113.0 ──
+// ─── 4. REGRESSION — the 9.113.0 raise plus named record metadata ──────
 
 const REFERENCE = resolve(__dirname, 'reference/paused-lookup-no-absence.json');
 
-/** Every run-varying number dropped: timings and fire times. */
 /** Expected-side clean14 metadata only; historical behavior/payload/order stay exact. */
 const nativeOwnershipKeys = (legacy: readonly string[], savedPause = false): string[] => {
   const added = ['runIdentitySource', 'runSessionId', 'toolResourceOwner'];
@@ -781,6 +808,31 @@ const nativeOwnershipKeys = (legacy: readonly string[], savedPause = false): str
   return [...legacy, ...added].sort();
 };
 
+/** Expected side only. Each proposal batch in these fixtures has distinct call IDs. */
+function withHistoryOccurrences(history: readonly LLMMessage[]): readonly LLMMessage[] {
+  let batch = 0;
+  const occurrences = new Map<string, NonNullable<LLMMessage['callOccurrenceKey']>>();
+  return history.map((message) => {
+    if (message.role === 'assistant' && message.toolCalls?.length) {
+      batch++;
+      return {
+        ...message,
+        toolCalls: message.toolCalls.map((call, slot) => {
+          expect(occurrences.has(call.id)).toBe(false);
+          const callOccurrenceKey = [0, 0, 0, batch, slot] as const;
+          occurrences.set(call.id, callOccurrenceKey);
+          return { ...call, callOccurrenceKey };
+        }),
+      };
+    }
+    if (message.role !== 'tool') return message;
+    const callOccurrenceKey = occurrences.get(message.toolCallId!);
+    expect(callOccurrenceKey).toBeDefined();
+    return { ...message, callOccurrenceKey };
+  });
+}
+
+/** Every run-varying number dropped: timings and fire times. */
 const untimed = (value: unknown): unknown =>
   JSON.parse(
     JSON.stringify(value, (key, v: unknown) =>
@@ -788,12 +840,13 @@ const untimed = (value: unknown): unknown =>
     ),
   );
 
-describe('regression: a raise WITHOUT `absence` records what 9.113.0 recorded', () => {
+describe('regression: a raise WITHOUT `absence` preserves the 9.113.0 record with named metadata', () => {
   // `absence: null` is the field omitted, so it records the same bytes.
   it.each(['raise-bare', 'raise-null'] as const)(
-    '%s: grounded lookup, raise, resume — the record matches the reference captured before this release',
+    '%s: grounded lookup, raise, resume — the record matches the extended 9.113.0 reference',
     async (shape) => {
-      const leg = build(shape);
+      // This witness pins the full record captured before answer standing defaulted on.
+      const leg = build(shape, undefined, false, undefined, { answerLayer: false });
       const paused = await leg.agent.run({ message: 'which port is the first device on?' });
       if (!isInputPause(paused)) throw new Error('expected an input pause');
       const keysAtPause = Object.keys(leg.agent.getSnapshot()?.sharedState ?? {}).sort();
@@ -820,19 +873,18 @@ describe('regression: a raise WITHOUT `absence` records what 9.113.0 recorded', 
         requests: leg.requests.map((r) => r.messages),
         history: stateOf(leg.agent).history ?? [],
       });
-      const record = JSON.parse(text.split(requestId).join('<requestId>')) as unknown;
-      if (process.env.AF_PAUSED_LOOKUP_REFERENCE === 'update') {
-        if (shape !== 'raise-bare') return;
-        mkdirSync(dirname(REFERENCE), { recursive: true });
-        writeFileSync(REFERENCE, `${JSON.stringify(record, null, 2)}\n`);
-        return;
-      }
-      expect(existsSync(REFERENCE), 'no reference — capture it on the pre-change tree').toBe(true);
+      const record = normalizeCallOccurrences(
+        JSON.parse(text.split(requestId).join('<requestId>')),
+      );
       const legacy = JSON.parse(readFileSync(REFERENCE, 'utf8'));
+      // The historical requests remain exact. On recorded history, a typed ask's
+      // landed answer carries the library's mark and each call carries its address.
+      const expected = withTypedAnswerMark(withNativeResourceObservation(legacy));
       expect(record).toEqual({
-        ...withNativeResourceObservation(legacy),
+        ...expected,
         keysAtPause: nativeOwnershipKeys(legacy.keysAtPause, true),
         keysAfterResume: nativeOwnershipKeys(legacy.keysAfterResume, true),
+        history: withHistoryOccurrences(expected.history),
       });
     },
   );
@@ -914,7 +966,9 @@ async function failedRaiseRecord(
   raise: () => never,
 ): Promise<Record<string, unknown>> {
   const eventTypes: string[] = [];
+  // This witness pins the complete failed run captured before the default.
   const agent = Agent.create({
+    answerLayer: false,
     provider: mock({ replies: [...replies] }),
     model: 'mock',
     maxIterations: 6,
@@ -956,28 +1010,24 @@ async function failedRaiseRecord(
 }
 
 describe('regression: a malformed HAND raise fails as 9.113.0 failed, with or without `absence`', () => {
-  it('the failed run keeps the in-flight batch — the record matches the reference captured before this release', async () => {
+  it('the failed run keeps the in-flight batch with its addresses and the original failure', async () => {
     const record: Record<string, unknown> = {};
     for (const [label, { replies, raise }] of Object.entries(MALFORMED)) {
-      record[label] = await failedRaiseRecord(replies, raise);
+      record[label] = normalizeCallOccurrences(await failedRaiseRecord(replies, raise));
     }
     const snapshot = JSON.parse(JSON.stringify(record)) as Record<string, unknown>;
-    if (process.env.AF_PAUSED_LOOKUP_REFERENCE === 'update') {
-      mkdirSync(dirname(MALFORMED_REFERENCE), { recursive: true });
-      writeFileSync(MALFORMED_REFERENCE, `${JSON.stringify(snapshot, null, 2)}\n`);
-      return;
-    }
-    expect(existsSync(MALFORMED_REFERENCE), 'no reference — capture it on the 9.113.0 tree').toBe(
-      true,
-    );
     const legacy = JSON.parse(readFileSync(MALFORMED_REFERENCE, 'utf8')) as Record<
       string,
-      { keys: string[] }
+      { keys: string[]; history: LLMMessage[] }
     >;
     const expected = Object.fromEntries(
       Object.entries(legacy).map(([label, record]) => [
         label,
-        { ...record, keys: nativeOwnershipKeys(record.keys) },
+        {
+          ...record,
+          keys: nativeOwnershipKeys(record.keys),
+          history: withHistoryOccurrences(record.history),
+        },
       ]),
     );
     expect(snapshot).toEqual(expected);

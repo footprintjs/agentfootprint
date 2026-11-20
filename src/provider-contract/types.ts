@@ -1,27 +1,33 @@
 /**
  * provider-contract/types — the Ports of the hexagonal architecture.
  *
- * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
- *          (Cockburn, 2005).
+ * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters (Cockburn, 2005).
  * Role:    Contracts for every external dependency the library reaches for:
  *          LLM providers, memory stores, permission checkers, pricing tables.
  * Emits:   N/A (interfaces only).
- *
- * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy,
- * ...) implement these contracts. `core/` and `core-flow/` depend only on
- * these interfaces — never on concrete adapters.
+ * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy, ...) implement
+ * these contracts. `core/` and `core-flow/` depend only on them, never on an adapter.
  */
 
-import type { ContextRole, ContextSource } from '../events/types.js';
+import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../events/types.js';
+import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+import type { ToolCallEntry } from './innerCalls.js';
+import type { ToolResultRecord } from './toolResultRecord.js';
+import type { WireRole } from './wireRole.js';
+export type { ToolCallEntry } from './innerCalls.js';
+export type { TypedAnswerMark } from './typedAnswerMark.js';
+export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
-export interface LLMMessage {
+export interface LLMMessage extends ToolResultRecord {
   readonly role: ContextRole;
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */
   readonly toolCallId?: string;
+  /** Recording-only address of a library-observed tool call. Omitted from provider requests. */
+  readonly callOccurrenceKey?: NonNullable<ToolCallEventIdentity['callOccurrenceKey']>;
   /** For `role: 'tool'` — the tool name this result corresponds to. */
   readonly toolName?: string;
   /**
@@ -31,17 +37,13 @@ export interface LLMMessage {
    */
   readonly toolArgumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
   /**
-   * Producer-owned notice origin, recorded only under findings admission.
-   * `not-entered` means the producer refused before tool.execute; an error
-   * thrown inside execute remains a result. `input-cancelled` is the host's
-   * notice, not a completed result, and says nothing about prior tool entry.
-   * `outcome-unknown` is the host's notice for a call left open by a run that
-   * stopped after a person's decision was used (`hosting/answeredPause.ts`):
-   * whether it entered is not known, and the notice is not its result.
-   * Absent on old history: no missing origin is reconstructed from text.
-   * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
+   * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
+   * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
+   * Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
    */
-  readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
+  readonly outcome?: 'refused' | 'failed';
+  /** Tool-only status of an admitted return. Never derived from `content` or sent to a provider. */
+  readonly reportedStatus?: ReportedToolStatus;
   /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -53,17 +55,13 @@ export interface LLMMessage {
    * `providerMeta` (9.29.0) rides back UNCHANGED — it is the same bag the
    * response put there, and for Gemini it holds the `thoughtSignature` without
    * which the model refuses the turn after a tool call. See
-   * {@link LLMResponse}'s `toolCalls[].providerMeta`. Unlike `injectedBy`, it
-   * is NOT stripped on the way to a provider: it exists to be sent.
+   * {@link LLMResponse}'s `toolCalls[].providerMeta`, sent unchanged. The recording
+   * address survives native pause and resume and is stripped before transport.
    */
-  readonly toolCalls?: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly args: Readonly<Record<string, unknown>>;
-    /** Stream integrity evidence retained with the attempted call; never tool input. */
-    readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
-    readonly providerMeta?: Readonly<Record<string, unknown>>;
-  }[];
+  readonly toolCalls?: readonly (Omit<LLMResponse['toolCalls'][number], 'argumentsFailure'> &
+    Pick<LLMMessage, 'callOccurrenceKey'> & {
+      readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
+    })[];
   /**
    * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
    *
@@ -161,13 +159,13 @@ export interface LLMMessage {
    * last-tool-result pin, the drop notice, the dangling-reference check); and
    * the trace toolpack's `inspect_tool_call`
    * (`trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`); and, under
-   * `.findings()`, the offer, the identity source, the piece's `undeclared:`
-   * line, the collapse, the window's `droppedStandings` and a turn's standing
-   * (`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,
-   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` ·
-   * `turnStandingOf` — the `'ledger-fact'` pin and
-   * `WindowStrategyInput.standingOf`) — a settled message is not a result to
-   * judge. None of them parses the sentence.
+   * `.findings()`, the offer, the identity source, the findings DATA's `undeclaredResultIds`
+   * (and the replay-only piece's `undeclared:` line), the collapse, the window's
+   * `droppedStandings` and a turn's standing (`core/agent/findings/offer.ts`,
+   * `findings/context.ts` · `findingsContext`, `findings/serve.ts` · `collapseJudged`,
+   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` · `turnStandingOf` — the
+   * `'ledger-fact'` pin and `WindowStrategyInput.standingOf`) — a settled message is not a
+   * result to judge. None of them parses the sentence.
    *
    * **One definition, two carriers.** The settled call's two brackets on the
    * event stream carry the same fact under the same name, typed off THIS field
@@ -237,26 +235,11 @@ export interface LLMMessage {
    * `stripFrameworkFields` removes it with the other framework fields.
    */
   readonly foldedExempt?: readonly string[];
+  /** The library's mark on a person's typed answer: see {@link TypedAnswerMark}. */
+  readonly answersAsk?: import('./typedAnswerMark.js').TypedAnswerMark;
+  /** On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent. */
+  readonly calls?: readonly import('./innerCalls.js').InnerCallRan[];
 }
-
-/**
- * The roles a provider can carry INSIDE the `messages` array.
- *
- * `'tool'` is deliberately absent: a tool message is an answer to a specific
- * `tool_use` id, so it cannot be authored by an injection — there is no call
- * for it to answer. See `LLMProvider.carriesInMessages`.
- */
-export type WireRole = 'system' | 'user' | 'assistant';
-
-/**
- * The floor every known wire supports. Used for any provider that does not
- * declare `carriesInMessages` — a third-party adapter is assumed to carry
- * only what all of them do, never more.
- */
-export const DEFAULT_CARRIES_IN_MESSAGES: readonly WireRole[] = Object.freeze([
-  'user',
-  'assistant',
-]);
 
 export interface LLMToolSchema {
   readonly name: string;
@@ -779,31 +762,6 @@ export interface LLMProvider {
 // ─── Permission Engine ──────────────────────────────────────────────
 
 /**
- * One entry in the in-flight tool-call sequence delivered to
- * `PermissionChecker.check()` since v2.12. Lets sequence-aware
- * policies (exfil chain detection, idempotency limits, cost guards)
- * inspect what the agent has already dispatched this run.
- *
- * Derived from `scope.history` at check time — single source of truth,
- * survives `agent.resumeOnError(checkpoint)` correctly.
- */
-export interface ToolCallEntry {
-  /** Tool name dispatched. */
-  readonly name: string;
-  /** Tool args passed to `tool.execute(args, ctx)`. */
-  readonly args: Readonly<Record<string, unknown>> | undefined;
-  /** ReAct iteration the call was dispatched on. */
-  readonly iteration: number;
-  /**
-   * Optional source identifier — `'local'` for tools registered via
-   * `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for
-   * tools resolved through a `discoveryProvider`. Lets cross-hub
-   * exfil rules match on origin, not just name.
-   */
-  readonly providerId?: string;
-}
-
-/**
  * What a tool DECLARES it touches (9.11.0).
  *
  * The four values a tool can honestly say about itself. Deliberately a subset
@@ -926,10 +884,10 @@ export interface PermissionDecision {
    */
   readonly reason?: string;
   /**
-   * v2.12 — content delivered to the LLM as the synthetic `tool_result`
-   * on `'deny'` and `'halt'`. When omitted, defaults to a deliberately
-   * generic `"Tool '${name}' is not available in this context."` —
-   * NEVER falls back to `reason` (which is telemetry, not user-facing).
+   * v2.12 — content for the synthetic `tool_result` on an explicit deny or halt.
+   * A deny defaults to `"[permission denied: ${rationale ?? 'policy'}]"`. The
+   * rationale can reach the model. A halt defaults to `"Tool '${name}' is not
+   * available in this context."` Both defaults leave `reason` in telemetry.
    */
   readonly tellLLM?: ToolResultContent;
 }
@@ -971,21 +929,15 @@ export interface PermissionChecker {
 }
 
 /**
- * Does this checker ask to be consulted about `capability`? (9.11.0)
- *
- * `'tool_call'` is always true — it has been enforced since v2.4 and needs no
- * declaration. Everything else is true only when the checker named it.
- * Absence is NO.
+ * Is this checker asked about `capability`? (9.11.0) `'tool_call'`: always, enforced since v2.4, no declaration needed. Anything else: only when the checker named it in `governs`; absence is NO.
  */
 export function checkerGoverns(
   checker: PermissionChecker | undefined,
   capability: PermissionCapability,
 ): boolean {
   if (!checker) return false;
-  if (capability === 'tool_call') return true;
-  return checker.governs?.includes(capability) === true;
+  return capability === 'tool_call' || checker.governs?.includes(capability) === true;
 }
-
 // ─── Pricing Table ──────────────────────────────────────────────────
 
 export type TokenKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite';

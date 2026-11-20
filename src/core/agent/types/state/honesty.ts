@@ -1,4 +1,8 @@
 export interface HonestyState {
+  /** One native protocol correction per human request; never a conversation-derived allowance. */
+  sourceDeclarationCorrectionSpent?: true;
+  /** Already masked omission observations, pending their actual batch-barrier settlement. */
+  argumentSourceOmissionRows?: readonly import('../../arguments/rows.js').ArgumentRow[];
   // ── The honesty layers (`sf-inputs`, …) ───────────────────────
   /**
    * Which honesty layers this run armed — the ONE run constant, written once
@@ -6,6 +10,14 @@ export interface HonestyState {
    * of the record tells "armed, filed nothing" from "never armed" by it.
    */
   honestyLayers?: import('../../honesty/armed.js').HonestyLayers;
+  /** This Agent turn's bounded tool entry proofs, retained independently of history eviction. */
+  enteredToolCalls?: readonly import('../../honesty/enteredToolCalls.js').EnteredToolCall[];
+  /** Whether this turn retained all observed entries within the ledger limit. */
+  enteredToolCallsComplete?: boolean;
+  /** The current turn's content-free, occurrence-keyed settlement facts. */
+  settledToolCalls?: readonly import('../../recordedCalls.js').RecordedToolSettlement[];
+  /** Whether every settled call of this turn has a readable fact. */
+  settledToolCallsComplete?: boolean;
   /**
    * The answer's standing, as data — written by the answer layer's stage at
    * the head of the Final branch (honesty layer 4, `assessment/stage.ts` ·

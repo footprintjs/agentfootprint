@@ -15,8 +15,9 @@
  *                   ledger; the sources-only decoration and its decorator;
  *                   the decoration predicate; the `ask` sentence under the arm
  *                   (and step 4's, byte for byte, without it); the answered
- *                   note's `turn` clause (never for a hidden answer); no
- *                   instruction line; the `inputsLayer` option's reader;
+ *                   note's `turn` clause (never for a hidden answer); the existing
+ *                   native ledger piece specializes for ASK without a new
+ *                   instruction piece; the `inputsLayer` option's reader;
  *   - FUNCTIONAL  — `.inputsLayer({ argumentSources: true })`: `_findings`
  *                   with `from` alone on RULED tools only, the unruled tool
  *                   and the system prompt as a plain agent's; a quoted value
@@ -320,11 +321,16 @@ describe('UNIT — where the model decides: the `ask` sentence, and the answered
     const off = withArgumentRules(asking.schema, asking as never, { sources: false });
     const window = (s: typeof armed) =>
       (s.inputSchema.properties as Record<string, { description: string }>).window!.description;
-    expect(window(armed)).toBe(`Look-back period. ${ASK_SOURCES_SENTENCE}`);
+    expect(window(armed)).toMatch(/^Look-back period\. For a supplied value,/);
     expect(window(plain)).toBe(`Look-back period. ${ASK_SENTENCE}`);
     expect(window(off)).toBe(window(plain));
-    expect(ASK_SOURCES_SENTENCE.startsWith(ASK_SENTENCE.slice(0, -1))).toBe(true);
-    expect(ASK_SOURCES_SENTENCE).toContain('quote their words');
+    expect(window(armed)).not.toContain('unless the person gave it');
+    expect(window(armed)).toContain('in `_findings.from`');
+    for (const source of ['user', 'result', 'turn', 'app']) {
+      expect(window(armed)).toContain(`'${source}'`);
+    }
+    expect(window(armed)).toContain("the person's quoted words");
+    expect(window(armed)).toContain('app-supplied context');
   });
 
   it('an `assume` property says the same thing under the arm — its value is filled, never asked', () => {
@@ -400,7 +406,21 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     };
     const { req, agent } = await serve(true);
     const plain = (await serve(false)).req;
-    expect(propertiesOf(req, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    const declared = propertiesOf(req, 'search_logs')._findings as Schema;
+    expect(declared).toMatchObject({
+      type: 'object',
+      required: ['from'],
+      properties: { from: { type: 'array' } },
+    });
+    expect(Object.keys(declared.properties)).toEqual(['from']);
+    expect((declared.properties.from!.items as Schema).properties.source!.enum).toEqual([
+      'user',
+      'result',
+      'turn',
+      'app',
+      'assumed',
+    ]);
+    expect(toolOf(req, 'search_logs').inputSchema.required).toContain('_findings');
     expect(propertiesOf(req, 'search_logs').window!.description).toBe(
       `Look-back period. ${ASK_SOURCES_SENTENCE}`,
     );
@@ -412,7 +432,12 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     // The run constant says what was armed; the ledger's own constant is absent.
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
-    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
+    expect(state.honestyLayers).toEqual({
+      inputs: true,
+      argumentSources: true,
+      results: true,
+      answer: true,
+    });
     expect(state.findingsServe).toBeUndefined();
   });
 
@@ -439,7 +464,9 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
       .inputsLayer({ argumentSources: true })
       .build();
     const out = await agent.run({ message: 'Any errors on checkout over the last week?' });
-    expect(out).toBe('No errors.');
+    expect(out).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     const ledger = agent.findings() ?? [];
     // (+ the results layer's `period` row, honesty step 7b: a ToolPeriod tool.)
@@ -471,7 +498,9 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
       expect.objectContaining({ asked: 'unverified', proposed: '24h', claimed: 'none' }),
     ]);
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('No errors in the last hour.');
+    expect(done).toBe(
+      'No errors in the last hour.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
   });
 
@@ -529,7 +558,9 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     const note = m.requests[1]!.messages.find((msg) => msg.role === 'tool')!;
     expect(note.content).toContain(`(the call had left it out)${ANSWERED_SOURCE_CLAUSE}.]`);
     const second = await agent.followUp('And on payments?');
-    expect(second).toBe('No errors on payments.');
+    expect(second).toBe(
+      'No errors on payments.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '24h' },
       { service: 'payments', window: '24h' },
@@ -572,7 +603,7 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
     expect(propertiesOf(req, 'search_logs')._findings).toBeUndefined();
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
-    expect(state.honestyLayers).toEqual({ inputs: true, results: true });
+    expect(state.honestyLayers).toEqual({ inputs: true, results: true, answer: true });
   });
 
   it('SECURITY: the builder door refuses what it cannot read', () => {
@@ -611,10 +642,19 @@ describe('FUNCTIONAL — `.inputsLayer({ argumentSources: true })`: `from` on ru
       .inputsLayer()
       .build();
     await agent.run({ message: 'hello' });
-    expect(propertiesOf(m.requests[0]!, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    expect(propertiesOf(m.requests[0]!, 'search_logs')._findings).toMatchObject({
+      required: ['from'],
+      properties: { from: { type: 'array' } },
+    });
+    expect(toolOf(m.requests[0]!, 'search_logs').inputSchema.required).toContain('_findings');
     const state = agent.getSnapshot()!.sharedState as Record<string, unknown>;
     // (+ `results: true`, honesty step 7b: search_logs declares a ToolPeriod.)
-    expect(state.honestyLayers).toEqual({ inputs: true, argumentSources: true, results: true });
+    expect(state.honestyLayers).toEqual({
+      inputs: true,
+      argumentSources: true,
+      results: true,
+      answer: true,
+    });
   });
 });
 
@@ -684,7 +724,9 @@ describe('INTEGRATION — the choice seam reads a ruled call’s arguments witho
 
   it('a result id and the source words in `from` are never judged as argument values', async () => {
     const { agent, out, unsupported } = await runFlows('srv-4417');
-    expect(out).toBe('3 flows.');
+    expect(out).toBe(
+      '3 flows.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(unsupported).toEqual([]);
     // The ruled argument's row, then the free one a `from` entry named.
     expect(argumentRows(agent).map((r) => [r.argument, r.source])).toEqual([
@@ -812,7 +854,11 @@ describe('SECURITY — the author’s `_findings` and a hidden answer', () => {
     expect(propertiesOf(first, 'search_logs').window!.description).toBe(
       `Look-back period. ${ASK_SOURCES_SENTENCE}`,
     );
-    expect(propertiesOf(first, 'search_logs')._findings).toEqual(FINDINGS_SOURCES_SCHEMA);
+    expect(propertiesOf(first, 'search_logs')._findings).toMatchObject({
+      required: ['from'],
+      properties: { from: { type: 'array' } },
+    });
+    expect(toolOf(first, 'search_logs').inputSchema.required).toContain('_findings');
     await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
     // Run as written: the value is the author's argument, never peeled, and nothing was declared.
     expect(ran).toEqual([{ service: 'checkout', window: '24h', _findings: 'mine' }]);
@@ -844,7 +890,9 @@ describe('SECURITY — the author’s `_findings` and a hidden answer', () => {
       .inputsLayer({ argumentSources: true })
       .build();
     const out = await agent.run({ message: 'Note that checkout is fine.' });
-    expect(out).toBe('Noted.');
+    expect(out).toBe(
+      'Noted.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d', _findings: 'mine' }]);
     expect(argumentRows(agent)).toEqual([
       expect.objectContaining({ argument: 'window', source: 'model' }),
@@ -892,6 +940,7 @@ describe('PERFORMANCE — what each arm serves per request (recorded, not claime
       const req = m.requests[0]!;
       return {
         system: (req.systemPrompt ?? '').length,
+        systemText: req.systemPrompt ?? '',
         ruled: JSON.stringify(toolOf(req, 'search_logs')).length,
         unruled: JSON.stringify(toolOf(req, 'list_services')).length,
       };
@@ -913,7 +962,13 @@ describe('PERFORMANCE — what each arm serves per request (recorded, not claime
     expect(sources.system).toBe(plain.system);
     expect(sources.unruled).toBe(plain.unruled);
     expect(sources.ruled).toBeGreaterThan(plain.ruled);
-    expect(both.system).toBe(ledger.system);
+    const ledgerLines = ledger.systemText.split('\n'),
+      sourceLines = both.systemText.split('\n');
+    expect(ledgerLines[0]).toContain('optional `_findings`');
+    expect(sourceLines[0]).toContain('where _findings is required');
+    expect(sourceLines[0]).not.toContain('optional `_findings`');
+    expect(sourceLines.slice(1)).toEqual(ledgerLines.slice(1));
+    expect(both.system - ledger.system).toBe(sourceLines[0]!.length - ledgerLines[0]!.length);
     expect(both.unruled).toBe(ledger.unruled);
     // The sources-only arm costs the ruled tool less than the ledger's decoration alone does.
     expect(sources.ruled - plain.ruled).toBeLessThan(ledger.ruled - plain.ruled);

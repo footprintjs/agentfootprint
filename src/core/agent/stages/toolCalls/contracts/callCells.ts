@@ -1,3 +1,4 @@
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type {
   ReadToolResultEnvelope,
   ToolResultStatus,
@@ -5,7 +6,8 @@ import type {
 import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { CodeRunFacts } from '../../../../codeRunnerTool.js';
 import type { NegativeDispatch } from '../../../negativeClaims/capture.js';
-import type { NativeSourceCapture } from '../../../sourceEvidence/capture.js';
+import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.js';
+import type { InnerCallHalt } from '../../../innerCallOuter.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
 
@@ -14,6 +16,10 @@ export interface CallResultCell {
   error: boolean | undefined;
   toolEnvelope: ReadToolResultEnvelope | undefined;
   toolStatus: ToolResultStatus | undefined;
+  /** The status word of a result that is an envelope but for an unknown
+   *  status (`semantics/toolEffects.ts` · `unknownStatusOf`), cleaned —
+   *  read only by the procedure step, which tells it. */
+  unknownStatus: string | undefined;
 }
 
 export interface CallArguments {
@@ -22,9 +28,10 @@ export interface CallArguments {
 }
 
 export interface CallExecution {
-  sourceCapture?: NativeSourceCapture;
+  resultFinalizer?: NativeResultFinalizer;
   denied: boolean;
   executed: boolean;
+  toolResultExecution?: LLMMessage['toolResultExecution'];
   submittedProgram: unknown;
   executeThrew: boolean;
   ranCode: CodeRunFacts | undefined;
@@ -36,6 +43,8 @@ export interface CallExecution {
         reason: string;
         tellLLM: string;
         checkerId?: string;
+        /** Present when an INNER call drew the halt (`innerCallOuter.ts`): the call it names. */
+        call?: InnerCallHalt['call'];
       }
     | undefined;
 }
@@ -55,4 +64,6 @@ export interface CallSkillRoute {
 
 export interface CallDelivery {
   resultStr: string;
+  modelResultCapped: boolean;
+  toolResultDisposition?: LLMMessage['toolResultDisposition'];
 }

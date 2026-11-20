@@ -7,8 +7,9 @@
  *          (`time/forms.ts` · `turnFormsWindowsOf`), the values the
  *          library filled from a window (`./route.ts` · `isWindowFillRow`) and
  *          the served time line.
- * Role:    the Route decider loads it through `import()` under `.time()` only
- *          (`./route.ts` · `loadTimeLineage`): `forms.ts` re-resolves a
+ * Role:    the Route decider and the tool-calls stage's dispatch moment load it
+ *          through `import()` under `.time()` only
+ *          (`./turnExempt.ts` · `loadTimeLineage`): `forms.ts` re-resolves a
  *          confirmed reading (`resolve.ts`), so it stays off the graph
  *          `import { Agent }` loads (the optional-family law,
  *          `test/trace-toolpack/browserGraph.test.ts`).

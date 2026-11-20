@@ -1,0 +1,202 @@
+{
+  "ask/bare": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "ask/foreign": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "ask/ledger": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "ask/nested": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["coverageDeclared","1","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "batch/bare": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "batch/foreign": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "batch/ledger": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "batch/nested": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["coverageDeclared","1","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "check-in/bare": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "check-in/foreign": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "check-in/ledger": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "check-in/nested": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["coverageDeclared","1","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "consent/bare": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "consent/foreign": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "consent/ledger": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "consent/nested": [
+    [["coverageDeclared","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["coverageDeclared","1","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","3","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","4","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "pause/bare": [
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "pause/foreign": [
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "pause/ledger": [
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ],
+  "pause/nested": [
+    [["history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["history","2","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","0","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","1","payload","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","1","toolCalls","0","callOccurrenceKey"],[0,0,0,1,0]],
+    [["payloads","2","payload","history","2","callOccurrenceKey"],[0,0,0,1,0]]
+  ]
+}

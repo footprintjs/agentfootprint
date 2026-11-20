@@ -173,7 +173,7 @@ it('truncated history never turns a dropped provider name into a unique inactive
   if (!isPaused(paused)) throw new Error('Expected pause');
   await expect(
     agent.resume(paused.checkpoint, checkInApproved({ request: paused.checkIn!, by: 'fixture' })),
-  ).resolves.toBe('done');
+  ).resolves.toBe('done\n\n---\n\nNot sure — a call was refused.');
   expect(ran).toEqual(['noop']);
   expect(
     s.requests.at(-1)!.messages.find((message) => message.toolName === 'x')?.content,

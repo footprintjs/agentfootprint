@@ -5,6 +5,8 @@
  */
 
 import type { AgentfootprintEventEnvelope } from './types.js';
+import type { ToolEventMap } from './registry/toolEvents.js';
+import type { SkillEventMap } from './registry/skillEvents.js';
 import type {
   AgentHandoffPayload,
   AgentIterationEndPayload,
@@ -73,40 +75,7 @@ import type {
   ReliabilityRecoveredPayload,
   ResilienceOutputFallbackTriggeredPayload,
   ResilienceOutputCannedUsedPayload,
-  SkillActivatedPayload,
-  SkillDeactivatedPayload,
-  SkillEscalatedPayload,
-  SkillGraphDeclaredPayload,
-  SkillRejectedPayload,
-  SkillRerouteSupersededPayload,
-  SkillRouteConflictPayload,
-  SkillStepAdvancedPayload,
-  SkillStepSkippedPayload,
-  SkillStepsUnfinishedPayload,
-  SkillTurnRoutedPayload,
-  ToolAbsentPayload,
-  ToolCoverageDeclaredPayload,
-  ToolSemanticsDeclaredPayload,
-  ToolsCodeRunPayload,
-  ToolsRequestAttemptsPayload,
-  ToolsMcpClientPayload,
-  ToolEffectPayload,
-  ToolRepeatedCallPayload,
-  ToolResultRefusedPayload,
   ToolEndPayload,
-  ToolsActivatedPayload,
-  ToolsDeactivatedPayload,
-  ToolsDiscoveryStartedPayload,
-  ToolsDiscoveryCompletedPayload,
-  ToolsDiscoveryFailedPayload,
-  ToolsShadowedPayload,
-  ToolsClaimSwallowedPayload,
-  ToolsAnsweredOffWirePayload,
-  ToolsSessionStartedPayload,
-  ToolsSessionReusedPayload,
-  ToolsSessionClosedPayload,
-  ToolsSessionCloseFailedPayload,
-  ToolsOfferedPayload,
   ToolProgressPayload,
   ToolStartPayload,
   ValidationArgsInvalidPayload,
@@ -140,7 +109,7 @@ import type {
 export { EVENT_NAMES } from './registry/names.js';
 
 // ─── Event type → payload: the key table typed `.on(type, ...)` reads ───
-export interface AgentfootprintEventMap {
+export interface AgentfootprintEventMap extends ToolEventMap, SkillEventMap {
   // composition
   'agentfootprint.composition.enter': AgentfootprintEventEnvelope<
     'agentfootprint.composition.enter',
@@ -317,147 +286,6 @@ export interface AgentfootprintEventMap {
   'agentfootprint.memory.written': AgentfootprintEventEnvelope<
     'agentfootprint.memory.written',
     MemoryWrittenPayload
-  >;
-  // tools
-  'agentfootprint.tools.offered': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.offered',
-    ToolsOfferedPayload
-  >;
-  'agentfootprint.tools.activated': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.activated',
-    ToolsActivatedPayload
-  >;
-  'agentfootprint.tools.deactivated': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.deactivated',
-    ToolsDeactivatedPayload
-  >;
-  'agentfootprint.tools.discovery_started': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.discovery_started',
-    ToolsDiscoveryStartedPayload
-  >;
-  'agentfootprint.tools.discovery_completed': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.discovery_completed',
-    ToolsDiscoveryCompletedPayload
-  >;
-  'agentfootprint.tools.discovery_failed': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.discovery_failed',
-    ToolsDiscoveryFailedPayload
-  >;
-  'agentfootprint.tools.shadowed': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.shadowed',
-    ToolsShadowedPayload
-  >;
-  'agentfootprint.tools.claim_swallowed': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.claim_swallowed',
-    ToolsClaimSwallowedPayload
-  >;
-  'agentfootprint.tools.answered_off_wire': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.answered_off_wire',
-    ToolsAnsweredOffWirePayload
-  >;
-  'agentfootprint.tools.resource_restore': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.resource_restore',
-    {
-      readonly local: 'retained' | 'none-known-locally' | 'unconfirmed';
-      readonly remote: 'unknown';
-    }
-  >;
-  'agentfootprint.tools.session_started': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.session_started',
-    ToolsSessionStartedPayload
-  >;
-  'agentfootprint.tools.session_reused': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.session_reused',
-    ToolsSessionReusedPayload
-  >;
-  'agentfootprint.tools.session_closed': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.session_closed',
-    ToolsSessionClosedPayload
-  >;
-  'agentfootprint.tools.effect': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.effect',
-    ToolEffectPayload
-  >;
-  'agentfootprint.tools.result_refused': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.result_refused',
-    ToolResultRefusedPayload
-  >;
-  'agentfootprint.tools.repeated_call': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.repeated_call',
-    ToolRepeatedCallPayload
-  >;
-  'agentfootprint.tools.absent': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.absent',
-    ToolAbsentPayload
-  >;
-  'agentfootprint.tools.code_run': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.code_run',
-    ToolsCodeRunPayload
-  >;
-  'agentfootprint.tools.request_attempts': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.request_attempts',
-    ToolsRequestAttemptsPayload
-  >;
-  'agentfootprint.tools.mcp_client': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.mcp_client',
-    ToolsMcpClientPayload
-  >;
-  'agentfootprint.tools.coverage_declared': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.coverage_declared',
-    ToolCoverageDeclaredPayload
-  >;
-  'agentfootprint.tools.semantics_declared': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.semantics_declared',
-    ToolSemanticsDeclaredPayload
-  >;
-  'agentfootprint.tools.session_close_failed': AgentfootprintEventEnvelope<
-    'agentfootprint.tools.session_close_failed',
-    ToolsSessionCloseFailedPayload
-  >;
-  // skill
-  'agentfootprint.skill.activated': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.activated',
-    SkillActivatedPayload
-  >;
-  'agentfootprint.skill.graph_declared': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.graph_declared',
-    SkillGraphDeclaredPayload
-  >;
-  'agentfootprint.skill.deactivated': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.deactivated',
-    SkillDeactivatedPayload
-  >;
-  'agentfootprint.skill.rejected': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.rejected',
-    SkillRejectedPayload
-  >;
-  'agentfootprint.skill.reroute_superseded': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.reroute_superseded',
-    SkillRerouteSupersededPayload
-  >;
-  'agentfootprint.skill.route_conflict': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.route_conflict',
-    SkillRouteConflictPayload
-  >;
-  'agentfootprint.skill.turn_routed': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.turn_routed',
-    SkillTurnRoutedPayload
-  >;
-  'agentfootprint.skill.step_advanced': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.step_advanced',
-    SkillStepAdvancedPayload
-  >;
-  'agentfootprint.skill.step_skipped': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.step_skipped',
-    SkillStepSkippedPayload
-  >;
-  'agentfootprint.skill.steps_unfinished': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.steps_unfinished',
-    SkillStepsUnfinishedPayload
-  >;
-  'agentfootprint.skill.escalated': AgentfootprintEventEnvelope<
-    'agentfootprint.skill.escalated',
-    SkillEscalatedPayload
   >;
   // validation
   'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
@@ -758,6 +586,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.session_close_failed',
   'agentfootprint.tools.effect',
   'agentfootprint.tools.result_refused',
+  'agentfootprint.tools.rowset_checked',
   'agentfootprint.tools.repeated_call',
   'agentfootprint.tools.absent',
   'agentfootprint.tools.code_run',
@@ -774,6 +603,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.skill.route_conflict',
   'agentfootprint.skill.turn_routed',
   'agentfootprint.skill.step_advanced',
+  'agentfootprint.skill.step_held',
   'agentfootprint.skill.step_skipped',
   'agentfootprint.skill.steps_unfinished',
   'agentfootprint.skill.escalated',

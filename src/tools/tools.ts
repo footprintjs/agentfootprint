@@ -17,6 +17,7 @@ import type { Credential, CredentialNeed, CredentialProvider } from '../identity
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { RESULT_CLASSES, type ToolResultClass } from '../semantics/types.js';
 import { assertResultColumns, type ToolResultColumns } from '../integrity/column-types/types.js';
+import { resultRowsetsOf, type ToolResultRowset } from './resultRowsets.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
 import '../lib/displayName.js';
@@ -252,6 +253,8 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    *   });
    */
   readonly resultColumns?: ToolResultColumns;
+  /** Explicit named final-result bindings; also requires checkColumnTypes. */
+  readonly resultRowsets?: readonly ToolResultRowset[];
   /**
    * WHO OWNS THIS TOOL (9.60.0) — the identity edge, stamped at the one
    * moment the code demonstrably knows both ends: registration. Before
@@ -620,15 +623,8 @@ export function assertResultClass(
   }
 }
 
-/**
- * The COLUMN-TYPE CONTRACT's rule and vocabulary, re-exported HERE.
- *
- * They are DEFINED in `src/integrity/column-types/types.ts`, because
- * `src/integrity/` is a strict leaf that imports nothing outside itself and
- * the check has to be able to read the words. They are re-exported here
- * because `defineTool` and the MCP ingest both reach for their rules through
- * `tools/tools.ts` — one door for every declaration's rule, and no second copy
- * of any of them anywhere.
+/** Column vocabulary and validation live in `src/integrity/column-types/types.ts`.
+ * Local definition and MCP intake share this one rule through this module.
  */
 export {
   assertResultColumns,
@@ -825,20 +821,20 @@ export interface ToolDispatchCallOptions {
  * Tools delivered by a `ToolProvider` are NOT visible (there is no build-time
  * list), a stated caveat, not an accident.
  *
- * What an inner call gets: the outer call's own facts (credentials, signal,
- * progress) with `hasArtifacts: false` — an inner tool must not mint claim
- * tickets competing with the composed answer's own — and a derived
- * `toolCallId` naming the outer call it belongs to. A declared `needs` is
- * resolved before the inner execute (fail-closed: a service that requires
- * interactive consent refuses by name — an inner call cannot pause).
+ * What an inner call passes, in a model call's order, on ONE copy of `args`
+ * taken when it is made: the agent's `permissionChecker` (its `sequence` holds
+ * the earlier inner calls that ran; a `halt` ends the run once the outer call
+ * settles) and before-tool middleware, under its derived `toolCallId`
+ * (`<outer>#inner-<n>`); what they refuse for a model call they refuse here, by
+ * name. It inherits the outer call's facts with `hasArtifacts: false`.
+ * Credentials fail closed without an inner approval. A handle used after
+ * its outer tool settles refuses. Calls during the open stage leave an
+ * `innerToolCalls` row. After commit, refusals reach the caller without a row.
  */
 export interface ToolDispatch {
   /** Is this name in the dispatch map? Provider-delivered tools answer false. */
   has(name: string): boolean;
-  /**
-   * Execute a registered tool and return its result exactly as returned —
-   * a coverage envelope arrives as the envelope, an absence as the absence.
-   */
+  /** Run a registered tool; its result comes back exactly as returned (an absence as the absence). */
   call(name: string, args: unknown, opts?: ToolDispatchCallOptions): Promise<unknown>;
 }
 
@@ -1129,6 +1125,8 @@ export interface DefineToolOptions<TArgs, TResult> {
    *  {@link Tool.resultColumns}). Needs the `checkColumnTypes` dial too.
    *  Omitted → nothing measured, byte-identical. */
   readonly resultColumns?: ToolResultColumns;
+  /** Explicit named final-result bindings; also requires checkColumnTypes. */
+  readonly resultRowsets?: readonly ToolResultRowset[];
   /** The stamped identity edge — see {@link Tool.owner}. */
   readonly owner?: ToolOwner;
   /** The declared argument grounds — see {@link Tool.argumentsFrom}. */
@@ -1222,6 +1220,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   // first rowset of the first armed run, where the symptom would be a check
   // that quietly judges nothing.
   assertResultColumns(options.name, options.resultColumns);
+  const resultRowsets = resultRowsetsOf(options.name, options, options.resultColumns);
   // A decision component for a gate that never fires is configuration that
   // lies — configured-and-inert looks exactly like configured-and-working
   // (the `.checkIn({ scorer })`-with-minimal-evidence precedent). And a
@@ -1307,6 +1306,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.resultClass !== undefined && { resultClass: options.resultClass }),
     ...(options.resultKind !== undefined && { resultKind: options.resultKind }),
     ...(options.resultColumns !== undefined && { resultColumns: options.resultColumns }),
+    ...(resultRowsets !== undefined && { resultRowsets }),
     ...(options.owner !== undefined && { owner: options.owner }),
     ...(options.argumentsFrom !== undefined && { argumentsFrom: options.argumentsFrom }),
     ...(options.composedOf !== undefined && { composedOf: options.composedOf }),

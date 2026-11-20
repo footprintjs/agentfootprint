@@ -4,9 +4,9 @@ title: ResumeDecisionRefusal
 
 # Type Alias: ResumeDecisionRefusal
 
-> **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"` \| `"ledger-changed"` \| `"closed-by-host"`
+> **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"` \| `"ledger-changed"` \| `"closed-by-host"` \| `"view-changed"`
 
-Defined in: [src/core/pause.ts:394](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L394)
+Defined in: [src/core/pause.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L404)
 
 Why a decision could not answer the request a run is paused on — the
 [ResumeDecisionError](/docs/api/classes/ResumeDecisionError) `reason`:
@@ -42,3 +42,11 @@ Why a decision could not answer the request a run is paused on — the
     answer could reach it any more, and proved its call never ran: it spent
     the request in the ledger the request was minted under, so no decision
     can run it. The call did not run, and nothing ran now.
+  - `'view-changed'` — a check-in only: the decision names this request and
+    the call is intact, but the resumed tool's argument view would hide
+    other arguments than the request told the person were hidden
+    (`CheckInRequest.hiddenArgs`, bound into the id) — a redeploy that
+    changed the view. An approval covers exactly what was shown, so the
+    person is asked again. The message names the difference by argument
+    name, never by value. Raised inside execution, still before the tool:
+    the view lives in the tool, not in the checkpoint.

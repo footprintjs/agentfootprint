@@ -10,6 +10,9 @@ import { memberIdentityIn, memberRequestIn } from '../../../memberRun.js';
 import { buildToolRegistry } from '../../buildToolRegistry.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
+import type { buildToolResolver } from '../../stages/toolResolver.js';
+import { evidenceExemptArm } from '../routing/exemptArm.js';
+import type { buildSlots } from '../slots/buildSlots.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface ToolCallsEnvironment {
@@ -29,6 +32,8 @@ export interface ToolCallsEnvironment {
   readonly toolColumns: NonNullable<
     Parameters<typeof buildToolCallsHandler>[0]['columnDeclarations']
   >;
+  readonly toolRowsets: ReturnType<typeof buildSlots>['toolRowsets'];
+  readonly resultRowsetsForValues: ReturnType<typeof buildSlots>['resultRowsetsForValues'];
   readonly permissionChecker: AgentConfiguration['permissionChecker'];
   readonly credentialProvider: AgentConfiguration['credentialProvider'];
   readonly artifactStore: AgentConfiguration['artifactStore'];
@@ -40,6 +45,21 @@ export interface ToolCallsEnvironment {
     run: RunnerScopeValues<AgentRunValues>,
   ): ReturnType<NonNullable<Parameters<typeof buildToolCallsHandler>[0]['currentRun']>>;
   readonly emitLateFact: NonNullable<Parameters<typeof buildToolCallsHandler>[0]['emitForRun']>;
+  /** The run's dispatch resolver — the one the route decider reads declared defaults through. */
+  readonly resolverForValues: (values: AgentRunValues) => ReturnType<typeof buildToolResolver>;
+}
+
+/** The exempt arm, as a deps fragment: absent unless the inputs layer and the gate are armed. */
+function evidenceExemptOf(
+  environment: ToolCallsEnvironment,
+  run: RunnerScopeValues<AgentRunValues>,
+): { evidenceExempt?: NonNullable<ReturnType<typeof evidenceExemptArm>> } {
+  const arm = evidenceExemptArm(
+    environment.configuration,
+    environment.inputsArmed,
+    environment.resolverForValues(run.value),
+  );
+  return arm === undefined ? {} : { evidenceExempt: arm };
 }
 
 /** Keep per-invocation stage creation inside the native component's existing memo. */
@@ -69,6 +89,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       ...(environment.inputsArmed && { inputsLayer: true as const }),
       // Declared sources: the peel reads `_findings.from` as the layer did.
       ...(environment.argumentSources && { argumentSources: true as const }),
+      ...(environment.configuration.sourceDeclarationCorrection !== undefined && {
+        declarationCorrection: environment.configuration.sourceDeclarationCorrection,
+      }),
       // The results layer (honesty layer 3, step 7b) — read in one place: a
       // period a result declares with NO layer mounted is dev-warned (nobody
       // will file its verdict). And the turn stamp, as under any layer.
@@ -97,6 +120,11 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
         environment.configuration.evidenceGate !== undefined && {
           evidenceGate: environment.configuration.evidenceGate,
         }),
+      // …and what it exempts beside the gate: the route decider's own arm,
+      // from the one builder (`routing/exemptArm.ts`), so the two moments of
+      // the contingent check exempt the same values.
+      ...(environment.configuration.findingsOptions !== undefined &&
+        evidenceExemptOf(environment, run)),
       // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
       // map callLLM reads at the choice seam, so the two stages agree by
       // construction about which calls are armed. Value-conditional on both
@@ -113,8 +141,15 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       // that asked for neither hands the handler exactly the deps object it
       // always did.
       ...(environment.configuration.checkColumnTypes !== 'off' &&
-        environment.toolColumns.size > 0 && {
-          columnDeclarations: environment.toolColumns,
+        (environment.toolColumns.size > 0 ||
+          environment.toolRowsets.size > 0 ||
+          environment.configuration.externalToolProvider !== undefined) && {
+          ...(environment.toolColumns.size > 0 && { columnDeclarations: environment.toolColumns }),
+          ...(environment.toolRowsets.size > 0 && { rowsetDeclarations: environment.toolRowsets }),
+          ...((environment.toolRowsets.size > 0 ||
+            environment.configuration.externalToolProvider !== undefined) && {
+            resultRowsetsFor: environment.resultRowsetsForValues(run.value),
+          }),
           columnCheckMode: environment.configuration.checkColumnTypes,
           integrityLedger: run.value.integrityLedger,
         }),

@@ -53,7 +53,6 @@ import {
 // store has to refuse to read.
 import type { SqliteDatabaseLike } from '../../src/hosting/sqliteSessions.js';
 import type { AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
-import { expectWithinTimes } from '../helpers/perf.js';
 import { inProcessHost } from './testHost.js';
 
 // ─── Is there a database to test against? ────────────────────────────
@@ -505,29 +504,43 @@ onSqlite('sqliteSessions — two stores on one file (WAL)', () => {
 // ─── performance ─────────────────────────────────────────────────────
 
 onSqlite('sqliteSessions — what it costs', () => {
-  it('finding one session does not get slower as the store fills up', async () => {
-    // The claim worth defending, and the reason this is a database rather than
-    // a JSON file: lookup goes through the primary key, so a store with a
-    // hundred times more sessions in it answers in about the same time. A file
-    // this store replaces would read and parse all of them.
-    const small = open(await tempFile('small.db'));
-    const large = open(await tempFile('large.db'));
-    for (let i = 0; i < 20; i++) {
-      await small.persist(`s-${i}`, toEnvelope(conversation(`m${i}`)));
-    }
-    for (let i = 0; i < 2000; i++) {
-      await large.persist(`s-${i}`, toEnvelope(conversation(`m${i}`)));
+  it('hydrates a session using a primary-key search without scanning the sessions table', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const plan: string[] = [];
+    let explainHydrate = false;
+
+    // Use the real driver and explain the SQL and bindings hydrate actually executes.
+    class ObservedDatabase extends DatabaseSync {
+      override prepare(sql: string) {
+        const statement = super.prepare(sql);
+        const get = statement.get.bind(statement);
+        statement.get = (...params: Parameters<typeof get>) => {
+          if (explainHydrate) {
+            const rows = super.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params);
+            plan.push(...rows.map((row) => String(row.detail)));
+          }
+          return get(...params);
+        };
+        return statement;
+      }
     }
 
-    await expectWithinTimes({
-      baseline: () => small.hydrate('s-10'),
-      subject: () => large.hydrate('s-1000'),
-      // An index makes this ~1×; 3 leaves room for a deeper B-tree and for the
-      // page cache being colder on the bigger file, and still fails loudly if
-      // lookup ever becomes a scan (which at 100× the rows would be ~100×).
-      times: 3,
-      why: 'hydrate is an indexed lookup, not a scan over every stored session',
-    });
+    const store = sqliteSessions({ file: await tempFile(), _sqlite: ObservedDatabase });
+    opened.push(store);
+    await store.persist('other', toEnvelope(conversation('another session')));
+    await store.persist('target', toEnvelope(conversation('the requested session')));
+
+    explainHydrate = true;
+    expect(readEnvelope(await store.hydrate('target')).originalInput.message).toBe(
+      'the requested session',
+    );
+    expect(plan).not.toContainEqual(expect.stringMatching(/^SCAN (?:TABLE )?agent_sessions\b/));
+    // SQLite names the implicit index for this table's text primary key.
+    expect(plan).toContainEqual(
+      expect.stringMatching(
+        /^SEARCH (?:TABLE )?agent_sessions USING (?:COVERING )?INDEX sqlite_autoindex_agent_sessions_1 \(session_id=\?\)$/,
+      ),
+    );
   });
 });
 

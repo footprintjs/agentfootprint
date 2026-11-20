@@ -7,7 +7,7 @@ import { SITE } from '@/lib/site';
 
 const title = 'Context engineering, step by step — AgentFootprint';
 const description =
-  'See how a question becomes a scoped, checked answer. Follow the context, data references and validation through two visual walkthroughs.';
+  'See how a question becomes a scoped, checked answer. Read two illustrated lessons and inspect context from a saved mock run.';
 export const metadata: Metadata = {
   title: { absolute: title },
   description,
@@ -47,8 +47,9 @@ export default function ContextEngineeringPage() {
           <em>less to guess.</em>
         </h1>
         <p>
-          A question becomes a clear task, a scoped data reference, and a checked finding.
-          <br className="cx-wide-break" /> Follow what changes—one step at a time.
+          Follow a saved mock run from a scoped question to a checked finding.
+          <br className="cx-wide-break" /> See how a production application can prepare context
+          and render an answer.
         </p>
       </header>
       <ContextStory />
@@ -132,11 +133,11 @@ export default function ContextEngineeringPage() {
             </p>
           </details>
           <details>
-            <summary>Is this a real model run?</summary>
+            <summary>Where do the context examples come from?</summary>
             <p>
-              No. The data and model proposals are invented to make the mechanism visible. The
-              conflicting values reproduce the shape checked by the local comparator example. The
-              walkthrough does not measure tokens, accuracy or causal diagnosis.
+              The answer excerpts come from a saved run on a deterministic mock provider. Both
+              lessons use synthetic data. The diagrams illustrate how a production host can prepare
+              and check an answer or handle disagreeing values.
             </p>
           </details>
         </div>

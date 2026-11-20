@@ -23,10 +23,12 @@ import {
 import { observeNegativeProse } from '../negativeClaims/prose.js';
 import { recordFindings } from '../findings/ledger.js';
 import { negativeRecordOf } from '../negativeClaims/capture.js';
+import { overclaimCheckOf, type NegativeOverclaim } from '../negativeClaims/overclaims.js';
 import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
 import type { ResolvedNegativeClaimPhrases } from '../../../integrity/negative-claim/phrases.js';
 import { takeAnswerEvidence } from './answerEvidence.js';
-import type { RouteBranch } from './route.js';
+import { emitRouteDecided, type RouteBranch } from './route.js';
+import { announceHeld, holdRouteAnnouncement } from './routeAnnouncement.js';
 
 /** Wrap only the configured agent's terminal decision, in the outer scope.
  * The final branch can consume the verdict, while snapshots retain its owner.
@@ -68,7 +70,7 @@ export function withAnswerValidation(
     negatives === undefined || config.agentChecks.includes('negative-claims')
       ? config
       : { ...config, agentChecks: [...config.agentChecks, 'negative-claims'] };
-  return async (scope) => {
+  const validated = async (scope: TypedScope<AgentState>): Promise<RouteBranch> => {
     // Even a provider that ignores the no-tools repair request cannot dispatch.
     if (negatives !== undefined && scope.toolsOffAfterRevision === true)
       scope.llmLatestToolCalls = [];
@@ -110,6 +112,7 @@ export function withAnswerValidation(
     let raw = scope.llmLatestContent;
     let candidateParser = parser;
     let prepared: ReturnType<typeof renderNegativeCandidate> | undefined;
+    let declarations: readonly NegativeOverclaim[] | undefined;
     if (negatives !== undefined) {
       const record = negativeRecordOf(scope, negatives.runId());
       try {
@@ -124,25 +127,27 @@ export function withAnswerValidation(
         );
         const overclaims =
           scope.negativeClaimState?.overclaims.filter((row) => row.turn === record.turn) ?? [];
-        if (overclaims.length > 0)
+        if (overclaims.length > 0) {
+          declarations = overclaims;
+          // The body and event keep the established one diagnostic per tool.
+          const tools = [...new Set(overclaims.map((row) => row.tool))];
           prepared.answer = {
             ...prepared.answer,
-            checks: [
-              ...prepared.answer.checks,
-              ...overclaims.map((row, index) => ({
-                id: `agent:negative-claims:declaration:${index}`,
-                path: '/',
-                index,
-                kind: 'unknown' as const,
-                code: 'declaration-overclaimed',
-                disposition: 'not-applicable' as const,
-                tools: [row.tool],
-                results: [],
-              })),
-            ],
+            checks: [...prepared.answer.checks, ...tools.map(overclaimCheckOf)],
           };
-        if (prepared.correction && prepareNegativeCorrection(scope, record, negatives.config.field))
+        }
+        if (
+          prepared.correction &&
+          prepareNegativeCorrection(scope, record, negatives.config.field)
+        ) {
+          announceHeld(scope, emitRouteDecided, {
+            chosen: 'negative-recheck',
+            rationale: NEGATIVE_RECHECK_RATIONALE,
+          });
           return 'negative-recheck';
+        }
+        // No correction: the decider's own announcement stands, said now.
+        announceHeld(scope, emitRouteDecided);
         // Observe the model's original strings, never the statements just composed
         // by the library. Rejected correction drafts return before this writer.
         const prose = observeNegativeProse(
@@ -163,6 +168,7 @@ export function withAnswerValidation(
         candidateParser = { parse: (value: unknown) => value };
         scope.answerNegatives = prepared.answer;
       } catch {
+        announceHeld(scope, emitRouteDecided);
         // The app's parser was already invoked once; do not repeat a stateful parser.
         candidateParser = {
           parse: () => {
@@ -201,7 +207,7 @@ export function withAnswerValidation(
       scope.answerValidation =
         prepared === undefined
           ? { ...result.report, delivery: 'fallback' }
-          : reportWithNegatives(result.report, prepared.answer, allowed);
+          : reportWithNegatives(result.report, prepared.answer, allowed, declarations);
       if (!allowed) scope.answerValidationBlocked = true;
       else scope.llmLatestContent = result.content ?? raw;
       return 'final';
@@ -214,7 +220,25 @@ export function withAnswerValidation(
     }
     return 'final';
   };
+  if (negatives === undefined) return validated;
+  // Typed negative claims can turn the decider's 'final' into 'negative-recheck', so its
+  // announcement is held until the branch is known (`routeAnnouncement.ts`): one
+  // `route_decided` per iteration, naming the branch the run took. Every other exit
+  // (another branch, a prior refusal, a throw) says what the decider said.
+  return async (scope) => {
+    holdRouteAnnouncement(scope);
+    try {
+      return await validated(scope);
+    } finally {
+      announceHeld(scope, emitRouteDecided);
+    }
+  };
 }
+
+/** The `route_decided` rationale for the one citation correction — composed by the library. */
+const NEGATIVE_RECHECK_RATIONALE =
+  'final answer cites a result that does not resolve — asking once for corrected citations, ' +
+  'with the tools off';
 
 /**
  * The rows of the agent's own checks this validation lists, every one judged

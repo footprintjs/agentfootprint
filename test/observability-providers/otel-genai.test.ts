@@ -515,6 +515,32 @@ describe('otelObservability GenAI — unit: explainability span events', () => {
     expect(cred.attributes['agentfootprint.credential.kind']).toBe('bearer');
   });
 
+  it('keeps the phase and call id on the permission span event after a wait', () => {
+    const { tracer, spans } = makeMockTracer();
+    const strat = otelObservability({ serviceName: 'svc', tracer });
+    strat.exportEvent(envelope('agentfootprint.agent.turn_start', { turnIndex: 0 }));
+    const call = {
+      capability: 'tool_call',
+      actor: 'agent',
+      target: 'sample',
+      toolCallId: 'sample-1',
+    };
+    strat.exportEvent(envelope('agentfootprint.permission.check', { ...call, result: 'allow' }));
+    strat.exportEvent(
+      envelope('agentfootprint.permission.check', { ...call, result: 'deny', phase: 'resume' }),
+    );
+    const events = spans[0]!.events.filter((e) => e.name === 'agentfootprint.permission.check');
+    expect(events.map((e) => e.attributes)).toMatchObject([
+      { 'agentfootprint.permission.result': 'allow' },
+      {
+        'agentfootprint.permission.result': 'deny',
+        'agentfootprint.permission.phase': 'resume',
+        'agentfootprint.permission.tool_call_id': 'sample-1',
+      },
+    ]);
+    expect(events[0]!.attributes).not.toHaveProperty('agentfootprint.permission.phase');
+  });
+
   it('explainability: false suppresses span events but keeps gen_ai.* attributes', () => {
     const { tracer, spans } = makeMockTracer();
     const strat = otelObservability({ serviceName: 'svc', tracer, explainability: false });

@@ -1,8 +1,10 @@
+import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
-import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
+import { groundedTextOf } from './callLLM/groundedText.js';
 import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
+import { issuedTicketsOf } from '../placedTickets.js';
 import { observeRequests } from '../../../provider-contract/requestObserver.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
@@ -26,24 +28,15 @@ import { observeRequests } from '../../../provider-contract/requestObserver.js';
  */
 
 import type { TypedScope } from 'footprintjs';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
   LLMCallHooks,
-  LLMProvider,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
 } from '../../../provider-contract/types.js';
-import {
-  forcedToolChoiceFor,
-  UnsupportedToolChoiceError,
-} from '../../../provider-contract/forcedToolChoice.js';
-import {
-  autoNativeOutputSchemaFor,
-  nativeOutputSchemaFor,
-  UnsupportedNativeOutputError,
-} from '../../../provider-contract/nativeOutputSchema.js';
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -52,25 +45,27 @@ import { danglingReferencesOf } from '../../../integrity/dangling-reference/chec
 import {
   declaredEnumValuesOf,
   unsupportedArgumentsOf,
-  type ExternalGround,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
-import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { readExternalGrounds } from './callLLM/externalGrounds.js';
+import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
+import {
+  assertForcedRequestSupported,
+  describeProviderDispatch,
+  detachProviderInput,
+  providerDispatchFor,
+  receiptProviderRequest,
+  selectOutputFormat,
+} from './callLLM/providerRequest.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
-
-import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
+import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
-import {
-  abortableIterable,
-  throwIfAborted,
-  untilAborted,
-  withRequestSignal,
-} from '../../../lib/abort.js';
+import { abortableIterable, throwIfAborted, untilAborted } from '../../../lib/abort.js';
 import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
@@ -98,72 +93,6 @@ import type { AgentState } from '../types.js';
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
-
-/** One capability rule at both request boundaries, before cache or model I/O. */
-function assertForcedRequestSupported(provider: LLMProvider, request: LLMRequest): void {
-  if (request.toolChoice !== undefined && !forcedToolChoiceFor(provider, request.model)) {
-    throw new UnsupportedToolChoiceError({ provider: provider.name, model: request.model });
-  }
-  // The structured-output twin (`strategy: 'native'`), judged on the same
-  // effective model — a configured or per-skill model included.
-  if (request.outputFormat !== undefined && !nativeOutputSchemaFor(provider, request.model)) {
-    throw new UnsupportedNativeOutputError({ provider: provider.name, model: request.model });
-  }
-}
-
-/**
- * Consult the app's external-ground provider, throw-proof by law (9.72.0): a
- * provider that throws, or returns anything but an array, contributes
- * nothing — the check then runs on exactly what the run itself served, as if
- * the door were closed. An accounting door must never change a run's
- * outcome (the fileIntegrityDisposition rule, one tier down). Entry-level
- * hygiene — dropping blank values and unlabeled sources — lives in the
- * check itself, beside the fences it joins.
- */
-function readExternalGrounds(
-  provider: (() => readonly ExternalGround[]) | undefined,
-): readonly ExternalGround[] {
-  if (provider === undefined) return [];
-  try {
-    const entries = provider();
-    return Array.isArray(entries) ? entries : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * The frame's non-assistant messages as GROUNDS for the unsupported-argument
- * seam — each tool result read as the TOOL's own bytes (`lib/toolBytes.ts` ·
- * `toolBytesOf`), so a value only the inputs layer's note carries ("the call
- * ran with "production", the value the tool's rule assumes") grounds nothing:
- * library-authored text is never evidence for a value (honesty law 4).
- *
- * The frame is the wire copy, which has lost the boundary field
- * (`composeRequest.ts` · `stripFrameworkFields` removes it and keeps every
- * message, in order), so the cut is read off the COMMITTED twin at the same
- * index — and applied only while the frame still holds that twin's text byte
- * for byte. A result the findings collapse turned into a ticket, or a cache
- * strategy rewrote, is read as it was sent; the staged-refs nudge after the
- * last committed message has no twin and is read as sent.
- */
-function groundedTextOf(frame: readonly LLMMessage[], committed: readonly LLMMessage[]): string[] {
-  const grounds: string[] = [];
-  frame.forEach((message, i) => {
-    if (
-      message.role === 'assistant' ||
-      (message.role === 'user' && message.content.startsWith(FINDINGS_DATA_FRAME_PREFIX))
-    )
-      return;
-    const twin = committed[i];
-    grounds.push(
-      twin !== undefined && twin.role === 'tool' && twin.content === message.content
-        ? toolBytesOf(twin)
-        : message.content,
-    );
-  });
-  return grounds;
-}
 
 // LENS · system-text + tool-list · request-ephemeral
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
@@ -268,7 +197,9 @@ export function buildCallLLMStage(
     // so `messages[i]` is still the message the cache marker's index names.
     // `committed` keeps both markers for the readers below that must see them.
     const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
-    const history = stripFrameworkFields(committed);
+    const projected = stripFrameworkFields(committed, true);
+    // Receipt assembly keeps a stable list even when stripping returns a live array.
+    const history = projected === committed ? [...projected] : projected;
 
     // ── the findings ledger, served (9.101.0, step 3) ──────────────────
     // ONE gated read of the committed key, used twice. The COLLAPSE rewrites,
@@ -293,11 +224,11 @@ export function buildCallLLMStage(
       deps.hasFindingsLedger === true
         ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
         : committed;
-    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed);
+    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
-    // findings piece's cache law), so an unchanged map serves unchanged bytes
+    // cached system-prefix contract), so an unchanged map serves unchanged bytes
     // on every call of the run. The composer is loaded through `import()` —
     // the optional-family law of docs-next's site budget (`toolCalls/evidence/judgeLanded.ts ·
     // judgeLanded`): an unarmed agent never loads the module. The event
@@ -326,23 +257,6 @@ export function buildCallLLMStage(
         });
       }
     }
-    // The join: injections, then the recovery piece, then the ontology piece,
-    // then the findings piece — a FIXED order `servedView.ts · viewOf`
-    // mirrors. Every request-only piece is composed into `systemPieces` ONLY,
-    // never pushed into `systemPromptInjections`: a piece there would be
-    // exempt from the evidence gate (`evidenceIndex.ts · exemptFromRun`
-    // indexes every injection's rawContent), and the ledger quotes the
-    // model's own words.
-    const systemPieces =
-      recoveryPiece === undefined && ontologyPieceRecord === undefined
-        ? systemPromptInjections
-        : [
-            ...systemPromptInjections,
-            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
-            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
-          ];
-    const systemPrompt = joinSystemPrompt(systemPieces);
-
     // Dynamic schemas — registry tools + injection-supplied tools (Skills'
     // `inject.tools` when their Injection is active). Falls back to the static
     // schemas at startup before the tools slot has run. Computed BEFORE the
@@ -374,10 +288,19 @@ export function buildCallLLMStage(
       withheld !== null
         ? EMPTY_TOOL_SCHEMAS
         : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
-    // Under `'tool-forced'` the schema rides along as one more tool ON THE
-    // WIRE. It is reported in `llm_start` too, and deliberately: that event's
-    // whole claim is "what the model actually saw this call", and a tool the
-    // model was forced to use is the last thing to leave out of it.
+    // The forced schema rides on the wire and in `llm_start`. Offered contracts
+    // specialize the findings instruction in request-only copies that replay rebuilds.
+    const systemPieces = projectSourceInstructions(
+      recoveryPiece === undefined && ontologyPieceRecord === undefined
+        ? systemPromptInjections
+        : [
+            ...systemPromptInjections,
+            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
+          ],
+      registeredToolSchemas,
+    );
+    const systemPrompt = joinSystemPrompt(systemPieces);
     const activeToolSchemas = deps.schemaTool
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;
@@ -393,23 +316,13 @@ export function buildCallLLMStage(
     // the mechanism that composed it, so the receipt can say a line existed
     // without saying what it said.
     const requestOnly: { readonly message: LLMMessage; readonly reason: string }[] = [];
-    if (deps.toolWants !== undefined) {
-      const match = findStagedRefs(
-        messages,
-        deps.toolWants,
-        new Set(registeredToolSchemas.map((t) => t.name)),
-      );
-      if (match !== undefined) {
-        const nudge: LLMMessage = { role: 'user', content: stagedRefsNudgeLine(match) };
-        requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
-        wireMessages = [...messages, nudge];
-        typedEmit(scope, 'agentfootprint.agent.grounding_nudged', {
-          iteration,
-          refs: match.refs.map((r) => ({ ref: r.ref, kind: r.kind })),
-          ...(match.refsOmitted > 0 && { refsOmitted: match.refsOmitted }),
-          tools: [...match.tools],
-        });
-      }
+    const nudge =
+      deps.toolWants === undefined
+        ? undefined
+        : stagedRefsNudgeFor(scope, messages, deps.toolWants, registeredToolSchemas, iteration);
+    if (nudge !== undefined) {
+      requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
+      wireMessages = [...messages, nudge];
     }
     // THE TIME LINE (step T6b, `.time({ reader })` only) — the library's conclusion about the
     // person's time words, LAST, at the decision point: a settled window with its source and each
@@ -489,15 +402,6 @@ export function buildCallLLMStage(
     const startMs = Date.now();
     // Auto follows the actual provider/model, including cache-selected models
     // and each reliability fallback. Explicit strategies retain their refusals.
-    const selectOutputFormat = (request: LLMRequest, selected: LLMProvider): LLMRequest => {
-      if (deps.nativeOutputAuto !== true || deps.outputFormat === undefined) return request;
-      if (autoNativeOutputSchemaFor(selected, request.model)) {
-        return { ...request, outputFormat: deps.outputFormat };
-      }
-      const { outputFormat: _unused, ...ordinary } = request;
-      void _unused;
-      return ordinary;
-    };
     const baseRequest = selectOutputFormat(
       {
         ...(systemPrompt.length > 0 && { systemPrompt }),
@@ -515,6 +419,8 @@ export function buildCallLLMStage(
         ...(deps.outputFormat !== undefined && { outputFormat: deps.outputFormat }),
       },
       provider,
+      deps.nativeOutputAuto === true,
+      deps.outputFormat,
     );
     // v2.6+ — call cache strategy to attach provider-specific cache
     // hints. CacheGate has already routed (apply-markers / no-markers)
@@ -524,13 +430,19 @@ export function buildCallLLMStage(
     // unsupported effective request before even that preparation does I/O.
     assertForcedRequestSupported(provider, baseRequest);
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
-    const cachePrepared = await cacheStrategy.prepareRequest(baseRequest, cacheMarkers, {
+    const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const cachePrepared = await cacheStrategy.prepareRequest(detached.request, detached.markers, {
       iteration,
       iterationsRemaining: iterationsRemainingOf(deps.maxIterations, iteration),
       recentHitRate: scope.recentHitRate,
       cachingDisabled: scope.cachingDisabled ?? false,
     });
-    const llmRequest = selectOutputFormat(cachePrepared.request, provider);
+    const llmRequest = selectOutputFormat(
+      cachePrepared.request,
+      provider,
+      deps.nativeOutputAuto === true,
+      detached.outputFormat,
+    );
     // Judge the final request on the effective brain/configured model, not
     // the agent's build-time default. This is before provider I/O and outside
     // the reliability loop: retrying cannot repair an unsupported contract.
@@ -559,6 +471,8 @@ export function buildCallLLMStage(
     // nothing.
     if (deps.recordReceipt !== false) {
       const evictedForAttention = deps.evictedTurns?.read(iteration) ?? [];
+      const hostStrategy =
+        deps.cacheStrategyIsOverride === true && cacheStrategy === deps.cacheStrategy;
       scope[RECEIPT_KEY] = buildReceipt(
         {
           runId: deps.getRunId?.() ?? '',
@@ -574,7 +488,12 @@ export function buildCallLLMStage(
           // Read as it always was; the revision's rule rides `withheld`.
           withheld: scope.wrapUpAsked === true ? 'wrap-up' : withheld,
           baseRequest,
-          preparedRequest: llmRequest,
+          preparedRequest: receiptProviderRequest(
+            llmRequest,
+            detached.request,
+            baseRequest,
+            hostStrategy,
+          ),
           // The breakpoints the strategy really APPLIED, not the candidates it
           // was offered. `scope.cacheMarkers` already records the offer; which of
           // them survived the provider's clamp is the half that decides the bill,
@@ -590,7 +509,8 @@ export function buildCallLLMStage(
           strategy: typeof cacheStrategy.name === 'string' ? cacheStrategy.name : '',
           ...(evictedForAttention.length > 0 && { omittedForAttention: evictedForAttention }),
         },
-        deps.receiptDigests,
+        // Host strategies can reissue their own objects with nested edits.
+        hostStrategy ? undefined : deps.receiptDigests,
       );
     }
 
@@ -698,6 +618,8 @@ export function buildCallLLMStage(
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
+    const issued = deps.findings === true ? issuedTicketsOf(scope.placedTickets) : undefined;
+    const capture = (req: LLMRequest) => captureFindingsRequest(req, committed, iteration, issued);
     // THE RUN'S SIGNAL REACHES THE WIRE. Every attempt carries it on its
     // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
     // provider's own HTTP request — the engine stopping the traversal leaves a
@@ -709,17 +631,19 @@ export function buildCallLLMStage(
     // answer that lands after it is refused before anything records or bills
     // it (`lib/abort.ts`, law 4).
     const runSignal = scope.$getEnv?.()?.signal;
+    const dispatchFor = providerDispatchFor(
+      runSignal,
+      deps.nativeOutputAuto === true,
+      detached.outputFormat,
+    );
     const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
       const selectedProvider = hooks.provider ?? provider;
-      req = selectOutputFormat(req, selectedProvider);
+      req = dispatchFor.forAttempt(req, selectedProvider);
       assertForcedRequestSupported(selectedProvider, req);
       throwIfAborted(runSignal);
-      const attempts = replayAttempts(
-        withRequestSignal(req, runSignal),
-        hooks.providerHooks ?? providerHooks,
-      );
-      let candidate =
-        deps.findings === true ? captureFindingsRequest(req, committed, iteration) : undefined;
+      const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
+      let dispatch = describeProviderDispatch(selectedProvider, req);
+      let candidate = deps.findings === true ? capture(req) : undefined;
       const attemptHooks =
         deps.findings === true
           ? observeRequests(
@@ -729,11 +653,11 @@ export function buildCallLLMStage(
                   preparation: Parameters<NonNullable<LLMCallHooks['onReplayPrepared']>>[0],
                 ) => {
                   attempts.hooks.onReplayPrepared?.(preparation);
-                  candidate = captureFindingsRequest(preparation.request, committed, iteration);
+                  candidate = capture(preparation.request);
                 },
               },
               (request) => {
-                candidate = captureFindingsRequest(request, committed, iteration);
+                candidate = capture(request);
               },
             )
           : attempts.hooks;
@@ -816,12 +740,12 @@ export function buildCallLLMStage(
         // those are two genuinely billed calls and collapsing them would
         // hide real double-billing. (That this branch can re-call at all
         // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        if (deps.findings === true)
-          candidate = captureFindingsRequest(attempts.request, committed, iteration);
-        resp = await untilAborted(
-          selectedProvider.complete(attempts.request, attemptHooks),
-          runSignal,
-        );
+        const completion = selectedProvider.stream
+          ? dispatchFor.select(attempts.request, selectedProvider)
+          : attempts.request;
+        dispatch = describeProviderDispatch(selectedProvider, completion);
+        if (deps.findings === true) candidate = capture(completion);
+        resp = await untilAborted(selectedProvider.complete(completion, attemptHooks), runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
@@ -849,11 +773,7 @@ export function buildCallLLMStage(
         hooks.providerIndex === undefined
           ? resp
           : tagThinkingResponse(resp, String(hooks.providerIndex));
-      answeredBy = {
-        provider: selectedProvider.name,
-        model: req.model,
-        native: req.outputFormat !== undefined,
-      };
+      answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
       return attempts.response(answered);
     };
@@ -929,10 +849,7 @@ export function buildCallLLMStage(
           providerHooks,
           ...((deps.findings === true || deps.outputFormat !== undefined) && {
             prepareFallback: (request: LLMRequest) => {
-              const witness =
-                deps.findings === true
-                  ? captureFindingsRequest(request, committed, iteration)
-                  : undefined;
+              const witness = deps.findings === true ? capture(request) : undefined;
               return () => {
                 // A callback may return arbitrary text; it did not inherit
                 // native generation from the provider response it replaces.
@@ -992,7 +909,8 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
-    scope.llmLatestToolCalls = response.toolCalls;
+    const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
+    scope.llmLatestToolCalls = acceptedToolCalls;
     // Native candidates only, every call (so it is never stale): the stop reason the
     // Route decider judges a constrained answer by — a 'refusal' or
     // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
@@ -1088,7 +1006,7 @@ export function buildCallLLMStage(
     // what the model actually saw, never against scope history it did not.
     if (deps.toolGrounding !== undefined && deps.toolGrounding.size > 0) {
       const grounding = deps.toolGrounding;
-      const armedCalls = response.toolCalls.filter((c) => grounding.has(c.name));
+      const armedCalls = acceptedToolCalls.filter((c) => grounding.has(c.name));
       if (armedCalls.length > 0) {
         const schemaOf = new Map(
           (llmRequest.tools ?? []).map((t) => [t.name, t.inputSchema] as const),
@@ -1102,20 +1020,18 @@ export function buildCallLLMStage(
         // library records what the app asserts; the source label rides every
         // excusal so a reader can audit the chain.
         const external = readExternalGrounds(deps.externalGrounds);
-        const { findings: argumentFindings, externalGroundings } = unsupportedArgumentsOf(
+        const {
+          findings: argumentFindings,
+          externalGroundings,
+          occurrences,
+        } = unsupportedArgumentsOf(
           armedCalls.map((c) => ({
             toolName: c.name,
             toolCallId: c.id,
-            // Peeled under the arm (9.101.0): `_findings` carries the model's
-            // own assertion subjects and values, and `stringLeaves` walks
-            // every nested leaf — an unpeeled declaration would file that
-            // family's unrecoverable false finding. Unconditional by
-            // construction: `toolGrounding` is harvested from the REGISTRY
-            // alone (`Agent.build`), and an armed registry tool never owns
-            // the name (`buildToolRegistry · assertReservedArgument`), so
-            // the value here is always the model's. Unarmed: `c.args` itself.
-            // Declared sources without the ledger decorate RULED tools only:
-            // peeled where the served schema carries the decoration.
+            ...callOccurrenceField(c.callOccurrenceKey),
+            // Peel the model's `_findings` metadata before reading argument
+            // leaves. Grounded registry tools reserve that key. With sources
+            // alone, only ruled tools advertise it in their served schemas.
             args:
               deps.findings === true ||
               (deps.argumentSources === true && carriesFindingsDecoration(schemaOf.get(c.name)))
@@ -1134,11 +1050,9 @@ export function buildCallLLMStage(
           })),
           {
             grounded: [
-              // The findings piece is mixed-trust for the same reason the
-              // recovery piece is: it quotes the model's OWN declarations,
-              // so a value that exists only there must not excuse an
-              // argument. Either request-only piece narrows the credited
-              // system text to the trusted injections.
+              // The recovery piece quotes the model's words; only the trusted
+              // system injections count as grounds when that piece is present.
+              // Findings DATA is a request-only message after history.
               ...(recoveryPiece === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []
@@ -1164,7 +1078,9 @@ export function buildCallLLMStage(
           argumentFindings.length > 0 ? 'checked-fail' : 'checked-pass',
           argumentFindings.length > 0 ? Date.now() : undefined,
         );
-        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger);
+        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger, (finding) =>
+          occurrences.get(finding),
+        );
         // Each excusal is a per-attempt fact and rides the emit channel —
         // deliberately NOT deduplicated the way findings are: a repeated call
         // is a fresh choice, and each excusal names the assertion that stood
@@ -1195,15 +1111,15 @@ export function buildCallLLMStage(
         deps.integrityLedger?.current?.note('empty-lookup', 'write', 'not-applicable');
       }
     }
-    // THE COLUMN-TYPE CONTRACT's aliveness half (9.78.0), and it needs its
-    // OWN block rather than a clause in the one above: this check is armed by
-    // `resultColumns`, not by `argumentsFrom`, and an agent that declares one
-    // and not the other is the ordinary case. Same law, same reason — the
-    // rows are judged where a RESULT exists, so a response that asked for no
-    // declaring tool would otherwise leave two armed rows untouched through a
-    // whole run, and an untouched row reads as rot.
+    // Column checks arm independently of argumentsFrom. Results are judged at
+    // write; here, a response with no currently declaring call states NA in
+    // both rows. An opaque provider still owes this note when its set is empty.
+    // A function observes declarations after this iteration's actual discovery.
     if (deps.columnDeclaringTools !== undefined) {
-      const declaring = deps.columnDeclaringTools;
+      const declaring =
+        typeof deps.columnDeclaringTools === 'function'
+          ? deps.columnDeclaringTools(response.toolCalls.map((call) => call.name))
+          : deps.columnDeclaringTools;
       if (!response.toolCalls.some((c) => declaring.has(c.name))) {
         deps.integrityLedger?.current?.note('column-type-mismatch', 'write', 'not-applicable');
         deps.integrityLedger?.current?.note('missing-column', 'write', 'not-applicable');

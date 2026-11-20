@@ -7,6 +7,7 @@ import { joinSystemPrompt } from '../../../composeRequest.js';
 import type { InjectionRecord } from '../../../../../recorders/core/types.js';
 import type { BatchSettlement } from '../contracts/callFacts.js';
 import { pausedBatchOf } from './paused.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { notDispatchedResult, notDispatchedMarker } from './settle.js';
 import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
@@ -53,11 +54,10 @@ export function buildToolSettlementOperations(
     return systemPrompt ? [{ role: 'system', content: systemPrompt }, ...history] : [...history];
   };
 
-  const settleBatch = (
-    answered: LLMMessage[],
-    paused: { readonly toolName: string; readonly toolCallId: string },
-  ): BatchSettlement => {
-    const batch = pausedBatchOf(answered, paused.toolCallId);
+  const settleBatch: ToolSettlementOperations['settleBatch'] = (answered, frame) => {
+    const { toolName, toolCallId, callOccurrenceKey } = frame;
+    const paused = { toolName, toolCallId };
+    const batch = pausedBatchOf(answered, toolCallId, callOccurrenceKey);
     if (batch.undispatched.length === 0)
       return { history: answered, settled: [], size: batch.size, paused };
     const settled = batch.undispatched.map((call) => ({
@@ -73,6 +73,7 @@ export function buildToolSettlementOperations(
             content: result,
             toolCallId: call.id,
             toolName: call.name,
+            ...callOccurrenceField(call.callOccurrenceKey),
             notDispatched: notDispatchedMarker(paused),
           }),
         ),
@@ -122,13 +123,20 @@ export function buildToolSettlementOperations(
           settlement: 'not-entered',
         });
       }
-      links.emitToolStart(scope, {
-        toolName: call.name,
-        toolCallId: call.id,
-        args: links.peelCall(call).args,
-        parallelCount: settlement.size,
-        notDispatched: notDispatchedMarker(settlement.paused),
-      });
+      // The tool is resolved only for its argument view: a page that streams
+      // this bracket shows what the view shows (`stream.tool_start.shownArgs`).
+      links.emitToolStart(
+        scope,
+        {
+          toolName: call.name,
+          toolCallId: call.id,
+          args: links.peelCall(call).args,
+          parallelCount: settlement.size,
+          ...callOccurrenceField(call.callOccurrenceKey),
+          notDispatched: notDispatchedMarker(settlement.paused),
+        },
+        links.resolveTool(call.name).tool,
+      );
       links.emitToolEnd(
         scope,
         call.name,
@@ -136,6 +144,7 @@ export function buildToolSettlementOperations(
           toolCallId: call.id,
           result,
           durationMs: 0,
+          ...callOccurrenceField(call.callOccurrenceKey),
           notDispatched: notDispatchedMarker(settlement.paused),
         },
         false,

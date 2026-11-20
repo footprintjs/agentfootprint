@@ -81,6 +81,8 @@ export const eventDispositions: Readonly<
   'agentfootprint.tools.claim_swallowed': 'A declared tool claim was not preserved.',
   'agentfootprint.tools.answered_off_wire': 'A tool answered outside the recorded model request.',
   'agentfootprint.tools.resource_restore': 'The run recorded a tool resource restoration.',
+  'agentfootprint.tools.rowset_checked':
+    "The run recorded a declared rowset's availability and check status.",
   'agentfootprint.tools.session_started': 'A tool session started.',
   'agentfootprint.tools.session_reused': 'The run reused a tool session.',
   'agentfootprint.tools.session_closed': 'A tool session closed.',
@@ -97,6 +99,7 @@ export const eventDispositions: Readonly<
   'agentfootprint.skill.graph_declared': 'The run recorded its declared skill routes.',
   'agentfootprint.skill.reroute_superseded': 'A proposed skill route was superseded.',
   'agentfootprint.skill.step_advanced': 'The skill advanced to its next step.',
+  'agentfootprint.skill.step_held': 'The tool reported that the skill step was incomplete.',
   'agentfootprint.skill.step_skipped': 'A skill step was skipped.',
   'agentfootprint.skill.steps_unfinished': 'The skill still has unfinished steps.',
   'agentfootprint.permission.check': 'The run recorded a permission decision.',

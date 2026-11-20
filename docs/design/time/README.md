@@ -1112,7 +1112,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   argument and period rows exist only under their layers), so a `call` row is ONE per dispatched
   call, filed just before `tool.execute` at both of ToolCalls' execute sites (the batch loop and
   the check-in resume door) — a call that never reached a tool files none. "The checkpoint arm" is
-  `core/runCheckpoint.ts` · `ledgerRowIsWellFormed` routing the three kinds to `rows.ts` ·
+  `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` routing the three kinds to `rows.ts` ·
   `timeRowIsWellFormed`, plus the ledger restore armed under `.time()` so a continued
   conversation keeps each turn's clock. No row fires an event (the `conflict` precedent), and
   nothing is served to the model, so no sentence is registered; the armed byte reference is

@@ -26,6 +26,7 @@
  */
 
 import { clipValue } from '../../../integrity/argumentLeaves.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 /** Where a ruled argument's value came from, as the library's checks placed it. */
 export type ArgumentSource = 'said' | 'answered' | 'result' | 'app' | 'default' | 'model';
@@ -82,6 +83,7 @@ export interface ArgumentRow {
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
   readonly turn: number;
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly iteration: number;
   /** The top-level argument name — schema vocabulary, like `toolName`. */
@@ -90,9 +92,13 @@ export interface ArgumentRow {
   readonly rule?: 'ask' | 'assume';
   /** Set on the argument `Tool.period` names. */
   readonly period?: true;
-  /** Where the value came from; absent only on an asked row. */
+  /** Where the value came from; absent on asked or withheld proposal rows. */
   readonly source?: ArgumentSource;
   readonly asked?: ArgumentAsked;
+  /** The source declaration was absent and this batch was actually held for native correction. */
+  readonly correction?: 'source-declaration-required';
+  /** A known native admission refusal preempted this candidate before correction or a human ask. */
+  readonly withheld?: 'batch-preempted';
   /**
    * The value the call runs with, in the tool's own argument view, clipped
    * (`integrity/argumentLeaves.ts` · `clipValue`); `'REDACTED'` when the view
@@ -445,8 +451,8 @@ const optionalTrue = (value: unknown): boolean => value === undefined || value =
 /**
  * Whether a value read from a stored checkpoint is an `argument` row this
  * library could have written: the identity strings, a numeric `iteration` and
- * `turn`, a `source` or an `asked` in its vocabulary, and every enum field in
- * its own. The checkpoint door's `argument` arm (`core/runCheckpoint.ts`).
+ * `turn`, a source/ask or finite withheld outcome in its vocabulary, and every
+ * enum field in its own. The `argument` arm of `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` calls this.
  */
 export function argumentRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {
   return (
@@ -456,7 +462,17 @@ export function argumentRowIsWellFormed(r: Readonly<Record<string, unknown>>): b
     typeof r.argument === 'string' &&
     typeof r.iteration === 'number' &&
     typeof r.turn === 'number' &&
-    (isIn(r.source, ARGUMENT_SOURCES) || isIn(r.asked, ARGUMENT_ASKED)) &&
+    (isIn(r.source, ARGUMENT_SOURCES) ||
+      isIn(r.asked, ARGUMENT_ASKED) ||
+      r.correction === 'source-declaration-required' ||
+      r.withheld === 'batch-preempted') &&
+    optionalIn(r.correction, ['source-declaration-required']) &&
+    optionalIn(r.withheld, ['batch-preempted']) &&
+    ((r.correction === undefined && r.withheld === undefined) ||
+      (r.claimed === 'none' &&
+        r.source === undefined &&
+        r.asked === undefined &&
+        !(r.correction !== undefined && r.withheld !== undefined))) &&
     optionalIn(r.source, ARGUMENT_SOURCES) &&
     optionalIn(r.asked, ARGUMENT_ASKED) &&
     optionalIn(r.rule, ['ask', 'assume']) &&

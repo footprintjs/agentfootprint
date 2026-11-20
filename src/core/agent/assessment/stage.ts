@@ -48,16 +48,17 @@ import type { TypedScope } from 'footprintjs';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
-import { assessAnswer } from './assess.js';
+import { retainedStateValue } from '../../../redaction/runRedaction.js';
+import { assessLive } from './assess.js';
+import { assumedValuesSourceOf } from './assumedValues.js';
+import type { AnswerAssessment } from './types.js';
 import {
   assessmentDataOf,
-  assumedValuesSourceOf,
   rewrittenBehind,
-  sourcesByReason,
+  standingFactsOf,
   standingDisplayNames,
   standingLineOf,
   standingLineSaid,
-  type AnswerAssessmentData,
   type StandingAssumedValue,
   type StandingLineWhen,
 } from './compose.js';
@@ -104,15 +105,15 @@ function committedRecordOf(
 /**
  * This turn's assumed values for the line — the "Assumed" block's own reading
  * (`arguments/serve/assumed.ts` · `assumedLinesFor`), over the same record the fold
- * read, from the source `compose.ts` · `assumedValuesSourceOf` chooses (the
+ * read, from the source `assumedValues.ts` · `assumedValuesSourceOf` chooses (the
  * answer account rebuilds the line from the same choice). The reader loads
  * only when the fold says a value was assumed.
  */
 async function assumedValuesOf(
-  data: AnswerAssessmentData,
+  assessed: AnswerAssessment,
   record: Readonly<Record<string, unknown>>,
 ): Promise<readonly StandingAssumedValue[]> {
-  const source = assumedValuesSourceOf(data.reasons, record);
+  const source = assumedValuesSourceOf(assessed, record);
   if (source === undefined) return [];
   const { assumedLinesFor } = await import('../arguments/serve.js');
   return assumedLinesFor(source.ledger, source.turn, source.readDecisions);
@@ -136,7 +137,9 @@ export async function assessAnswerStage(
   ) {
     return;
   }
-  const assessed = assessAnswer({ snapshot: { sharedState: record } });
+  const assessed = assessLive({ sharedState: record }, undefined, (history) =>
+    retainedStateValue(scope, 'history', history),
+  );
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);
   // The event carries its own fresh copy — detached plain data, never the
@@ -151,7 +154,7 @@ export async function assessAnswerStage(
     return;
   }
   const data = assessmentDataOf(assessed);
-  const assumed = await assumedValuesOf(data, record);
+  const assumed = await assumedValuesOf(assessed, record);
   // The app's words for the calls the reasons rest on — only tools that declare them.
   const displayNames =
     deps.displayNameOf === undefined
@@ -161,7 +164,17 @@ export async function assessAnswerStage(
     data,
     assumed,
     rewrittenBehind(assessed),
-    displayNames.size > 0 ? { sources: sourcesByReason(assessed), displayNames } : undefined,
+    displayNames.size > 0 ||
+      data.reasons.some(
+        (reason) =>
+          reason === 'check-unreachable' ||
+          reason === 'call-not-completed' ||
+          reason === 'work-not-finished' ||
+          reason === 'value-contingent' ||
+          reason === 'step-skipped',
+      )
+      ? standingFactsOf(assessed, displayNames, record)
+      : undefined,
   );
   // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a
   // reader rebuilds the very line (`answer-account/account.ts` · `appendedStandingLine`).

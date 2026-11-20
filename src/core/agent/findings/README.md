@@ -40,9 +40,11 @@ legs with a new host configuration. Replay reads these call facts, uses the
 same composer, reads compatible absent-discriminator records with the legacy formatter,
 and reports unsupported or affected legacy layouts/bounds as `findings-layout`.
 
-The historical sections below describe the earlier ledger/system-piece and
-schema-offer design where labelled. Live code no longer calls that enum path;
-`serve.ts`'s textual formatter remains for older recordings and its pure tests.
+The sections "Served (step 3)", "The offer (packet 6)", and "The answer-turn
+ask (packet 7)" retain the legacy system piece, schema enum, and `FINDINGS_ANSWER_ASK`
+for replay. Live requests use DATA, `collapseJudged`, and the `quote-facts` sentence
+on the findings instruction. Standing resolution uses the accepted request witness
+and issued-placement receipts.
 For current usage see [the cache guide](https://agentfootprint.dev/docs/build/caching).
 No cache savings or model citation quality is claimed from the free tests.
 
@@ -66,8 +68,8 @@ downstream (a window strategy, a lens, a check) can tell a fact the answer
 rests on from a probe that found nothing. Asking a second model to judge
 would cost a call per result and put a second voice on the record.
 
-So the ask rides along. Every served tool schema gets one reserved optional
-property, `_findings`, and the model declares on each call why it makes it
+So observations ride in reserved `_findings` metadata and stay optional.
+Source-armed ASK declarations require our envelope. The model declares why it makes a call
 (`basis`) and, on the next call or on a JSON answer, what each previous
 result **is** to it. Zero extra calls. The library peels the property off
 before the tool, the middleware or the validator sees the args, files the
@@ -144,10 +146,10 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
 - Reads a tool call's args (`splitFindings`), a JSON answer
   (`peelAnswerFindings`), the results the run can identify — the served
   history's `role: 'tool'` messages plus the previous batch's `toolResults`
-  entries (`offer.ts · knownResults`) — and a placed result's ticket through
-  `artifacts/placement.ts · isPlacedToolResult` — the one guarded parse, of a
-  string the library minted. Since 9.113.0 also, for the result a
-  `ruled-out` standing names, that result's served string — its leading
+  entries (`offer.ts · knownResults`). `admission.ts` reads the first JSON
+  value and checks `placedTickets.ts` for the matching call and ref. A
+  standing gets artifact provenance only while both witnesses agree.
+  For the result a `ruled-out` standing names, that result's served string — its leading
   JSON object, read by the one coverage recognizer, is the only source of
   the derived row's words — and, only when that object reads as an absence,
   the dispatch door's coverage rows for the call (`AgentState.coverageDeclared`,
@@ -319,27 +321,14 @@ unarmed stream untouched) and § 14 (re-ask exits with and without a schema).
 
 ## Served (step 3)
 
-Why: a record alone changes nothing the model reads. The point of the ledger
-is that the ANSWER TURN is served the model's own judgments instead of the
-whole pile — and `serve.ts` does that on the wire only, with two pure
-functions. `history` is never rewritten (the window stage stays its only
-writer), and `servedView · viewOf` recomposes with the same two calls in the
-same order, so the receipt agrees with what went out by construction.
+Live calls append the bounded findings DATA message after history. `collapseJudged`
+changes only the wire copy of tool results. Replay uses the recorded layout to
+rebuild the DATA message or the legacy system piece.
 
-- `findingsLedgerPiece(rows, servedToolCallIds(messages))` — a
-  request-only system piece (`source: 'findings'`), joined AFTER the recovery
-  piece and never into `systemPromptInjections`: headed by the context
-  contract's own field meanings, one bucket per field marked "declared by the
-  model", `noise` as a count, results nobody named as `undeclared` (never
-  'open'); bounded by `FINDINGS_PIECE_LIMITS` with every overflow stated and
-  every empty bucket omitted; `undefined` for a basis-only ledger. The third
-  argument is the wire's `role: 'tool'` ids — a pure function cannot see the
-  wire, so the caller hands it the list and the rebuild hands it the same one.
-  The bytes are a function of those two arguments and nothing else — no call
-  number — because the piece joins the ONE system block a cache marker
-  covers: a re-ask is served the same system bytes as the call before it,
-  while a ledger that moves every call moves the block every call (`serve.ts`
-  · "The cache"; the design page names the trade).
+- `findingsLedgerPiece(rows, servedToolCallIds(messages), answerAsk)` reconstructs
+  the legacy request-only system piece. It uses the original bucket limits and
+  includes the recorded answer-turn ask when configured. The example below
+  shows that legacy piece.
 - `collapseJudged(messages, rows, mode)` — a result the model judged `noise`
   or `ruled-out` becomes a ticket, `{ collapsed: true, standing, toolCallId,
 ref? }` (`isCollapsedToolResult` reads one back); `fact` too under
@@ -417,6 +406,8 @@ Measured on the long-run table of `npm run bench:findings`; the design page §
 Step 4 has the print.
 
 ## The offer (packet 6)
+
+> **Replay path.** The schema enum described here applies to replay. Live calls list advisory IDs in DATA.
 
 Why: on a hosted model the ask "by its tool_result id" produced standings
 named by ORDINAL — `"0"`, `"1"` — recorded honestly as `unknownId` and
@@ -553,6 +544,8 @@ ruled out (search_logs, tool:call_4): the optic was not swapped this week — te
 ```
 
 ## The answer-turn ask (packet 7)
+
+> **Replay path.** The system-piece ask described here applies to replay. `quote-facts` adds to the live findings instruction.
 
 Why: the fourth real-model run (`docs/design/2026-09-findings-ledger-real-model.md`
 § Fourth run) measured the cost of the served piece — one fact value in
@@ -900,8 +893,8 @@ beside, in the same write, at the two moments that file standings (a call's
   first, and it is strings the moment already held — so a run whose model
   rules out only results that held something records the bytes it always
   did, with no new tracked read (no narrative line, no `readKeys` entry).
-- **It survives a continued conversation.** The checkpoint door
-  (`../../runCheckpoint.ts · validateCheckpoint`) admits the kind with the
+- **It survives a continued conversation.** The checkpoint ledger
+  (`../../checkpointLedger.ts · ledgerRowIsWellFormed`) admits the kind with the
   fields the fold and the piece read; without that arm, a checkpoint holding
   the row would be refused on resume.
 - **Not covered, named here so nobody reads it as covered:**
@@ -1072,28 +1065,18 @@ reserved argument carries one more part, on the calls of a RULED tool:
   `kind: 'argument'` on this ledger) — never by this folder: a declaration is a claim, and the
   record keeps the library's verdict beside it.
 
-## Unreleased exact-claim protocol — not mounted
+## Exact-claim protocol
 
-The pure verification modules prepare an explicit opt-in; no public option or
-model request uses them yet. `verificationCheck.ts` binds one literal claim to
-one authorized result occurrence and asks the shared comparison owner. A match
-means agreement with identified tool evidence under an authored rule, not proof
-of truth, arbitrary prose or an entire answer. The model's standing is unchanged.
+Search calls that reach execution and armed negative-claim capture reserve result
+identities. The checkpoint reader restores admitted identity and verification data.
+The current runtime refuses a resume or continuation holding a `claimVerification`
+carrier instead of dropping its stored evidence. A bounded historical observation
+can be read without replaying its comparison.
 
-`verificationRow.ts` admits a detached, bounded observation without rerunning
-the comparison. `verificationState.ts` retains exact receipts and namespace-global
-reservation counters without eviction. `verificationConfig.ts` holds authored
-callbacks only in configuration and requires a separate grant for all original
-semantic metadata and selected executed scope; payload equality grants nothing.
-`verificationCheckpoint.ts` joins stored row identities to that carrier at both
-native checkpoint boundaries. Carrier-free observations are readable history,
-not resumable evidence. An unarmed continuation refuses instead of dropping the
-carrier; ordinary old checkpoints retain their existing shape and behavior.
-
-No extra ledger or event stream is introduced. `recordFindings` remains the one
-writer; its fold ignores these independent observations. Runtime dispatch/parser
-wiring, per-declaration bounds, delivered-answer binding and offline efficacy
-measurement remain pending before any opt-in use or release.
+`verificationCheck.ts` binds a literal claim to one authorized result occurrence.
+Comparison and evidence retention have no public mount. Agreement there would cover
+the identified tool evidence and the authored rule. `recordFindings` remains the
+ledger writer.
 
 ## Files
 

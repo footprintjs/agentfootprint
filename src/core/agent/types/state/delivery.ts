@@ -36,6 +36,10 @@ export interface DeliveryState {
     toolName: string;
     result: string;
     toolCallId: string;
+    callOccurrenceKey?: import('../../../../lib/callOccurrence.js').CallOccurrenceKey;
+    /** The results layer carries a synthetic notice across a checkpoint without judging it. */
+    entered?: false;
+    threw?: true;
     /** The tool's OWN declared outcome (9.19.0) — present only when the tool
      *  returned a result envelope carrying `status`. `onToolStatus` route
      *  edges key on it. */
@@ -49,7 +53,7 @@ export interface DeliveryState {
    * commits exactly the keys it always did.
    *
    * It is how the layer at the loop head knows a batch from a re-entry
-   * (`honesty/mounts.ts` · `batchToJudge`): ToolCalls advances `iteration`
+   * (`honesty/resultsInput.ts` · `batchToJudge`): ToolCalls advances `iteration`
    * by one and loops straight to the layer, so the batch is new exactly when
    * the loop head's `iteration` is this plus one — each batch judged once per
    * run, never by call id, which a provider may reuse. Per run: a
@@ -124,17 +128,10 @@ export interface DeliveryState {
   findingsLayout?: 'late-v1' | 'late-v2';
   findingsContextBytes?: number;
   /**
-   * The answer-turn ask on this run (9.103.0) — present ONLY when
-   * `AgentOptions.findings.answerAsk` is `'quote-facts'`, seeded by
-   * `stages/seed.ts` beside `findingsServe` under the same arm, and absent
-   * for every other agent — including an armed one on the default `'none'`,
-   * so the dial's default writes no key and an armed record is the bytes
-   * it was before the dial existed (the `forcedOutputToolName` shape:
-   * absent means the default). It exists for the same reason as
-   * `findingsServe`: the rebuild (`servedView.ts` · `viewOf`) appends
-   * `FINDINGS_ANSWER_ASK` to the piece the way the wire did, and the dial
-   * is a build-time constant it must read from the RECORD, not from the
-   * receipt it is checking.
+   * Run constant seeded beside `findingsServe` only for `answerAsk: 'quote-facts'`.
+   * Live calls put the quote-facts sentence in the findings instruction. Replay
+   * reads this run constant to append `FINDINGS_ANSWER_ASK` to the legacy
+   * findings system piece for older records.
    */
   findingsAnswerAsk?: 'quote-facts';
   /**
@@ -144,14 +141,16 @@ export interface DeliveryState {
    *
    * It is the one input to that nudge that was build-time-only. The nudge is a
    * `role: 'user'` line composed for a single request and written to no
-   * history; with this key on the record, `servedView.ts` · `servedAt` composes
-   * the identical line from committed state — conversation, tools served, and
-   * these declarations — instead of declaring the model's own words a gap.
+   * history. The served view uses the conversation, served tools, declarations
+   * and `placedTickets` to reconstruct the line. An armed resume records an
+   * empty receipt when the checkpoint has none.
    *
    * A plain record rather than the `Map` the join takes, because an object
    * write to scope is JSON-round-tripped and a `Map` round-trips to `{}`.
    */
   toolWantsByName?: Readonly<Record<string, readonly string[]>>;
+  /** The receipt of the tickets the library placed in this conversation. */
+  placedTickets?: readonly import('../../placedTickets.js').PlacedTicket[];
   /** Which skill ids the caller's role may NOT see this iteration (9.86.0),
    *  resolved ONCE by the tools slot and published here so every model-facing
    *  composer applies the same filter. Read by the `read_skill` gate before it

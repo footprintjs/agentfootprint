@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-159 exported from `agentfootprint`.
+160 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -155,6 +155,7 @@ title: Type Aliases
 - [`ToolResultColumns`](/docs/api/type-aliases/ToolResultColumns)
 - [`ToolResultContent`](/docs/api/type-aliases/ToolResultContent)
 - [`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome)
+- [`ToolResultRowsetSource`](/docs/api/type-aliases/ToolResultRowsetSource)
 - [`ToolResultStatus`](/docs/api/type-aliases/ToolResultStatus)
 - [`ToolWants`](/docs/api/type-aliases/ToolWants)
 - [`UnmatchedReason`](/docs/api/type-aliases/UnmatchedReason)

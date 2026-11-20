@@ -14,7 +14,8 @@ import { defineTool } from '../../../src/tools/tools.js';
 import { mock } from '../../../src/adapters/llm/MockProvider.js';
 import { withRetry, withFallback, fallbackProvider } from '../../../src/resilience/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
-import { expectScalesLinearly, expectWithinTimes, measureAsync } from '../../helpers/perf.js';
+import * as retryWait from '../../../src/lib/sleep.js';
+import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const ok = (tag: string): LLMResponse => ({
   content: tag,
@@ -261,34 +262,46 @@ describe('resilience — security (hostile inputs)', () => {
   });
 });
 
-// ─── Performance — overhead is bounded ─────────────────────────────
+// ─── Success path — no retry work ────────────────────────────────────
 
-describe('resilience — performance', () => {
-  it(
-    'withRetry adds almost nothing on the success path',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // The bare provider is the baseline, timed here on this machine. When the
-      // first attempt succeeds the wrapper is a try/catch and nothing else, so
-      // 3× is generous headroom — and load slows both halves alike.
-      const provider: LLMProvider = {
-        name: 'fast',
-        complete: async () => ok('fast'),
-      };
-      const wrapped = withRetry(provider, { initialDelayMs: 0 });
+describe('resilience — success path', () => {
+  it.each([
+    { requests: 1, maxAttempts: 1 },
+    { requests: 1, maxAttempts: 20 },
+    { requests: 10, maxAttempts: 1 },
+    { requests: 10, maxAttempts: 20 },
+  ])(
+    'calls the provider once per request across $requests requests with up to $maxAttempts attempts',
+    async ({ requests, maxAttempts }) => {
+      const response = ok('fast');
+      const complete = vi.fn(async () => response);
+      const shouldRetry = vi.fn(() => true);
+      const onRetry = vi.fn();
+      const onResilience = vi.fn();
+      const sleep = vi.spyOn(retryWait, 'sleep').mockResolvedValue(undefined);
+      try {
+        const wrapped = withRetry(
+          { name: 'fast', complete },
+          { maxAttempts, shouldRetry, onRetry },
+        );
 
-      const call = async (target: LLMProvider, times: number): Promise<void> => {
-        for (let i = 0; i < times; i++) await target.complete(req);
-      };
-      await expectWithinTimes({
-        baseline: () => call(provider, 1000),
-        subject: () => call(wrapped, 1000),
-        times: 3,
-        why: 'withRetry must be nearly free when nothing retries',
-      });
+        for (let i = 0; i < requests; i++) {
+          expect(await wrapped.complete(req, { onResilience })).toBe(response);
+          expect(complete).toHaveBeenCalledTimes(i + 1);
+        }
+
+        expect(shouldRetry).not.toHaveBeenCalled();
+        expect(onRetry).not.toHaveBeenCalled();
+        expect(onResilience).not.toHaveBeenCalled();
+        expect(sleep).not.toHaveBeenCalled();
+      } finally {
+        sleep.mockRestore();
+      }
     },
   );
+});
 
+describe('resilience — performance', () => {
   it(
     'fallbackProvider chain construction is O(n) — ten times the providers, ten times the work',
     { timeout: 30_000, retry: 2 },

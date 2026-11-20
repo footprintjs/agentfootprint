@@ -5,7 +5,9 @@
  * Test types (Convention 3):
  *   - FUNCTIONAL   — the served schema carries `_findings.from` on RULED tools
  *                    only (first, and required), explained once in its own
- *                    property — no instruction line — under the arm only; a declared phrase makes "over the last week" check
+ *                    property under the arm only; source-armed ASK contracts
+ *                    specialize the existing native ledger instruction piece,
+ *                    with no extra instruction piece; a declared phrase makes "over the last week" check
  *                    out as `7d` and the call runs; an untraced value on an
  *                    `ask` argument is ASKED (the model's value never rides
  *                    the ask) and the answer's note says what the call had
@@ -46,8 +48,9 @@
  *                    no hiding tool); the served note names no hidden value; a before-tool rewrite after the layer reads as
  *                    assumed; events never carry a value or a quote;
  *   - PERFORMANCE  — what `from` adds to a served request (recorded, not
- *                    claimed; the system prompt does not move), and the
- *                    checks' cost per batch;
+ *                    claimed), the existing native instruction's ASK head
+ *                    specialization without an extra piece, and the checks'
+ *                    cost per batch;
  *   - LOAD         — 50 calls × 5 ruled arguments, each with a `from` entry:
  *                    250 rows in ONE ledger write.
  */
@@ -71,10 +74,7 @@ import { allow } from '../../../../src/core/agent/middleware/outcomes.js';
 import type { LLMRequest, LLMResponse } from '../../../../src/provider-contract/types.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { checkSource } from '../../../../src/core/agent/arguments/checks.js';
-import {
-  FINDINGS_FROM_PROPERTY,
-  FINDINGS_INSTRUCTION_ID,
-} from '../../../../src/core/agent/findings/reserved.js';
+import { FINDINGS_INSTRUCTION_ID } from '../../../../src/core/agent/findings/reserved.js';
 import { sourceCorpusOf } from '../../../../src/core/agent/honesty/sourceCorpus.js';
 import { mockMcpClient } from '../../../../src/mcp/mockMcpClient.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
@@ -234,7 +234,7 @@ afterEach(() => {
 // ─── FUNCTIONAL ──────────────────────────────────────────────────────
 
 describe('what the model is served — `from` on ruled tools only, explained once, only under the arm', () => {
-  it('armed: a ruled tool’s `_findings` carries `from` first and required; an unruled tool’s does not; no instruction line', async () => {
+  it('armed: an ASK tool requires nested sources; an unruled tool does not; the native instruction specializes', async () => {
     const m = scripted([answer('hi')]);
     const agent = Agent.create({ provider: m.provider as never, model: 'm' })
       .tool(askingSearch([]))
@@ -248,14 +248,36 @@ describe('what the model is served — `from` on ruled tools only, explained onc
       required: string[];
       description: string;
     };
-    expect(ruled.properties.from).toEqual(FINDINGS_FROM_PROPERTY);
+    expect(ruled.properties.from).toMatchObject({
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['argument', 'source'],
+        properties: {
+          source: {
+            type: 'string',
+            enum: ['user', 'result', 'turn', 'app', 'assumed'],
+            description: expect.stringContaining('app-supplied context'),
+          },
+        },
+      },
+    });
     expect(Object.keys(ruled.properties)[0]).toBe('from');
     expect(ruled.required).toEqual(['basis', 'from']);
+    expect(req.tools!.find((tool) => tool.name === 'search_logs')!.inputSchema.required).toContain(
+      '_findings',
+    );
     expect(findingsProperty(req, 'list_services').properties!.from).toBeUndefined();
     // The first sentence of the decoration is unchanged — `withoutFindingsArgument` still knows it.
     expect(ruled.description).toMatch(/^Findings v1 \(reserved/);
-    // Explained ONCE, in the property: the system prompt carries no sources line.
-    expect(req.systemPrompt ?? '').not.toContain('_findings.from');
+    // The existing native instruction follows the current ASK contract, without repeating its origins.
+    expect(req.systemPrompt ?? '').toContain('where _findings is required');
+    expect(req.systemPrompt ?? '').toContain(
+      'in `_findings.from` inside that call argument object',
+    );
+    expect(req.systemPrompt ?? '').not.toContain(
+      'Tool schemas carry an optional `_findings` argument',
+    );
     expect(req.systemPrompt ?? '').not.toContain("'turn'");
   });
 
@@ -307,7 +329,9 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
       .findings({ argumentSources: true })
       .build();
     const out = await agent.run({ message: 'Any errors on checkout over the last week?' });
-    expect(out).toBe('No errors.');
+    expect(out).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(argumentRows(agent)).toEqual([
       {
@@ -321,6 +345,7 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
         period: true,
         source: 'said',
         value: '7d',
+        callOccurrenceKey: expect.any(Array),
         claimed: 'user',
         matched: 'phrase',
         quote: 'over the last week',
@@ -368,7 +393,9 @@ describe('the checks decide what runs — an untraced value on an `ask` argument
     expect((await agent.assessment())?.standing).toBe('ask');
 
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('No errors in the last hour.');
+    expect(done).toBe(
+      'No errors in the last hour.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
     const rows = argumentRows(agent);
     expect(rows[1]).toMatchObject({ source: 'answered', value: '1h', proposed: '24h' });
@@ -734,7 +761,9 @@ describe('a result, the app, an earlier answer — each checked in its one place
     const paused = await agent.run({ message: 'Errors on checkout?' });
     await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
     const second = await agent.followUp('And the flows on srv-4417?');
-    expect(second).toBe('3 flows.');
+    expect(second).toBe(
+      '3 flows.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '24h' },
       { host: 'srv-4417', range: '-24h' },
@@ -799,7 +828,9 @@ describe('a result, the app, an earlier answer — each checked in its one place
       .build();
     const seq = Sequence.create().step('plan', planner).step('work', worker).build();
     const out = await seq.run({ message: 'Any errors on checkout?' });
-    expect(out).toBe('No errors.');
+    expect(out).toBe(
+      'No errors.\n\n---\n\nNot sure — window = "2h" was assumed by search_logs\'s rule, not given by you; a tool did not say what time its result covers.',
+    );
     // The worker ran as the Sequence's step: its state is the step's subflow heap.
     const snap = seq.getSnapshot() as unknown as {
       subflowResults: Record<string, { treeContext: { globalContext: Record<string, unknown> } }>;
@@ -888,7 +919,9 @@ describe('a result, the app, an earlier answer — each checked in its one place
       .findings({ argumentSources: true })
       .build();
     const done = workflow(planner(), assuming);
-    expect(await done.run({ message: 'Any errors on checkout?' })).toBe('No errors.');
+    expect(await done.run({ message: 'Any errors on checkout?' })).toBe(
+      'No errors.\n\n---\n\nNot sure — window = "2h" was assumed by search_logs\'s rule, not given by you; a tool did not say what time its result covers.',
+    );
     const snap = done.getSnapshot() as unknown as {
       subflowResults: Record<string, { treeContext: { globalContext: Record<string, unknown> } }>;
     };
@@ -1147,7 +1180,9 @@ describe('SECURITY — library text is never evidence, and no value passes a too
       );
       const out = await agent.run({ message: sentence });
       // The verdict is unchanged — "last week" is a phrase declared for 7d — only the text is withheld.
-      expect(out).toBe('No errors.');
+      expect(out).toBe(
+        'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(argumentRows(agent)[0]).toMatchObject({
         toolCallId: 'c2',
         source: 'said',
@@ -1217,7 +1252,9 @@ describe('SECURITY — library text is never evidence, and no value passes a too
           [batch(quoting('c2', sentence, '7d')), batch(signIn('c1')), answer('No errors.')],
           () => [hiding],
         );
-        expect(await agent.run({ message: sentence })).toBe('No errors.');
+        expect(await agent.run({ message: sentence })).toBe(
+          'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+        );
         const row = argumentRows(agent).find((r) => r.toolCallId === 'c2');
         // The verdict is unchanged — only the text is withheld.
         expect(row).toMatchObject({ source: 'said', matched: 'phrase', quote: 'REDACTED' });
@@ -1350,7 +1387,7 @@ describe('SECURITY — library text is never evidence, and no value passes a too
 // ─── PERFORMANCE / LOAD ─────────────────────────────────────────────
 
 describe('PERFORMANCE — what the arm adds to a request, and what the checks cost', () => {
-  it('records the served bytes `from` adds (a ruled tool only; the system prompt does not move)', async () => {
+  it('records the ruled source contract and the existing native instruction’s single-head specialization', async () => {
     const serve = async (argumentSources: boolean) => {
       const m = scripted([answer('hi')]);
       const agent = Agent.create({ provider: m.provider as never, model: 'm' })
@@ -1365,6 +1402,7 @@ describe('PERFORMANCE — what the arm adds to a request, and what the checks co
         ruled: JSON.stringify(req.tools!.find((t) => t.name === 'search_logs')).length,
         unruled: JSON.stringify(req.tools!.find((t) => t.name === 'list_services')).length,
         system: (req.systemPrompt ?? '').length,
+        systemText: req.systemPrompt ?? '',
       };
     };
     const off = await serve(false);
@@ -1379,8 +1417,14 @@ describe('PERFORMANCE — what the arm adds to a request, and what the checks co
     );
     expect(on.unruled).toBe(off.unruled);
     expect(on.ruled - off.ruled).toBe(on.tools - off.tools);
-    // `from` is explained once, in its own property: the system prompt does not move.
-    expect(on.system - off.system).toBe(0);
+    // Only the existing native instruction's head changes; no extra line or piece is added.
+    const offLines = off.systemText.split('\n'),
+      onLines = on.systemText.split('\n');
+    expect(offLines[0]).toContain('optional `_findings`');
+    expect(onLines[0]).toContain('where _findings is required');
+    expect(onLines[0]).not.toContain('optional `_findings`');
+    expect(onLines.slice(1)).toEqual(offLines.slice(1));
+    expect(on.system - off.system).toBe(onLines[0]!.length - offLines[0]!.length);
   });
 });
 

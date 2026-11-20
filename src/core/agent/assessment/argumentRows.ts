@@ -1,0 +1,134 @@
+/** Fold — argument observations with proved replacement before assessment. */
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
+import {
+  argumentHistoryCallResolver,
+  unlandedCallKey,
+  type HistoryCall,
+} from '../recordedCalls.js';
+import { isRecord, str } from './recordValues.js';
+
+/** One retained `argument` observation of this turn. */
+export interface ArgumentRowRead {
+  readonly index: number;
+  readonly historyIndex?: number;
+  readonly occurrenceKey?: string | null;
+  readonly argument: string;
+  readonly source?: string;
+  /** Set on a row that ASKED the person — no source yet. */
+  readonly asked: boolean;
+  readonly ruled: boolean;
+  readonly failed: boolean;
+  readonly withheld: boolean;
+  /** The declared-sources check judged it (`claimed` present) — and whether it reached a verdict. */
+  readonly sourced?: 'verdict' | 'uncheckable';
+  /** `said` + `reading`: the value is the model's reading of the person's words. */
+  readonly reading: boolean;
+  /** `result` + `setAside`: the value came from a result the model had set aside. */
+  readonly setAside: boolean;
+}
+
+/** A question from the inputs layer pauses before its batch dispatches. */
+export function waitingArgumentIteration(
+  state: Readonly<Record<string, unknown>>,
+): number | undefined {
+  const ask = state.argumentAsk;
+  return isRecord(ask) && isRecord(ask.waiting) && typeof ask.iteration === 'number'
+    ? ask.iteration
+    : undefined;
+}
+
+function* argumentRowsOfTurn(state: Readonly<Record<string, unknown>>) {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  for (let index = 0; index < ledger.length; index++) {
+    const row: unknown = Object.getOwnPropertyDescriptor(ledger, String(index))?.value;
+    if (isRecord(row) && row.kind === 'argument' && (turn === undefined || row.turn === turn)) {
+      yield [index, row] as const;
+    }
+  }
+}
+
+export function resolveArgumentHistory(
+  state: Readonly<Record<string, unknown>>,
+  calls: readonly HistoryCall[],
+  history: readonly unknown[],
+  turnBegins: number,
+) {
+  return argumentHistoryCallResolver(calls, history, turnBegins, argumentRowsOfTurn(state));
+}
+
+/**
+ * This turn's CURRENT argument rows (honesty layer 2): the ledger's `argument`
+ * rows whose `turn` is the run's `turnNumber` — the ledger crosses turns on a
+ * continued conversation, and a row from an earlier turn is about a call this
+ * answer does not rest on. A later row replaces an observation of the same
+ * argument at the same proved result position. Without a retained result, a
+ * later library pre-dispatch row can replace an observation of the same keyed
+ * call, or of the same turn, tool and call ID in legacy history. A missing
+ * result may have been evicted, so ordinary rows remain separate evidence.
+ * A record with no `turnNumber` reads every row.
+ */
+export function argumentRows(
+  state: Readonly<Record<string, unknown>>,
+  currentCalls: readonly HistoryCall[],
+  history: readonly unknown[],
+  turnBegins: number,
+): readonly ArgumentRowRead[] {
+  const waiting = waitingArgumentIteration(state);
+  const groups = new Map<number | string | symbol, Map<string, ArgumentRowRead[]>>();
+  let resolve: ReturnType<typeof resolveArgumentHistory> | undefined;
+  for (const [index, row] of argumentRowsOfTurn(state)) {
+    const toolCallId = str(row.toolCallId);
+    const toolName = str(row.toolName);
+    const argument = str(row.argument);
+    const occurrenceKey = readCallOccurrenceKey(row);
+    if ((toolCallId === undefined && occurrenceKey === undefined) || argument === undefined)
+      continue;
+    const source = str(row.source);
+    const withheld = row.correction !== undefined || row.withheld !== undefined;
+    const pending = withheld || (waiting !== undefined && row.iteration === waiting);
+    const resolved = (resolve ??= resolveArgumentHistory(state, currentCalls, history, turnBegins))(
+      toolCallId,
+      toolName,
+      occurrenceKey,
+    );
+    const historyIndex = !pending && resolved.kind === 'matched' ? resolved.call.index : undefined;
+    let proposalKey: string | undefined;
+    if (resolved.kind === 'missing') {
+      if (typeof occurrenceKey === 'string') proposalKey = occurrenceKey;
+      else if (
+        occurrenceKey === undefined &&
+        toolName !== undefined &&
+        typeof row.turn === 'number' &&
+        Number.isSafeInteger(row.turn)
+      ) {
+        proposalKey = unlandedCallKey({ turn: row.turn, toolName, toolCallId });
+      }
+    }
+    const read: ArgumentRowRead = {
+      index,
+      argument,
+      ...(historyIndex !== undefined && { historyIndex }),
+      ...(occurrenceKey !== undefined && { occurrenceKey }),
+      ...(source !== undefined && { source }),
+      asked: typeof row.asked === 'string' && source === undefined,
+      ruled: row.rule !== undefined || row.period === true,
+      failed: row.failed !== undefined,
+      withheld,
+      ...(typeof row.claimed === 'string' && {
+        sourced: row.failed === 'uncheckable' ? ('uncheckable' as const) : ('verdict' as const),
+      }),
+      reading: source === 'said' && row.reading === true,
+      setAside: source === 'result' && typeof row.setAside === 'string',
+    };
+    const key = historyIndex ?? proposalKey ?? Symbol();
+    const forCall = groups.get(key) ?? new Map<string, ArgumentRowRead[]>();
+    const observations = forCall.get(argument);
+    const replaces = historyIndex !== undefined || (proposalKey !== undefined && pending);
+    if (observations === undefined) forCall.set(argument, [read]);
+    else if (replaces) observations[observations.length - 1] = read;
+    else observations.push(read);
+    groups.set(key, forCall);
+  }
+  return [...groups.values()].flatMap((forCall) => [...forCall.values()].flat());
+}

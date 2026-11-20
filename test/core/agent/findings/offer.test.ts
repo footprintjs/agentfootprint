@@ -28,6 +28,8 @@ import { describe, expect, it } from 'vitest';
 import type { LLMMessage } from '../../../../src/provider-contract/types.js';
 import { placedToolResult } from '../../../../src/artifacts/placement.js';
 import type { ArtifactMeta } from '../../../../src/artifacts/types.js';
+import { captureFindingsRequest } from '../../../../src/core/agent/findings/admission.js';
+import { issuedTicketsOf } from '../../../../src/core/agent/placedTickets.js';
 import {
   basisRowFrom,
   foldLedger,
@@ -323,16 +325,24 @@ describe('knownResults — what a standing resolves against', () => {
     expect(before.map((r) => r.unknownId)).toEqual([undefined, true, true]);
   });
 
-  it('a placed result on the served history resolves to artifact:<ref> through the message’s ticket', () => {
+  it('a served result keeps its artifact ref when the native receipt confirms it', () => {
     const ticket = JSON.stringify(placedToolResult('fetch_log', PLACED_META, 40_000, 8_000));
     const wire: LLMMessage[] = [
       { role: 'tool', content: ticket, toolCallId: 'c5', toolName: 'fetch_log' },
     ];
+    const placedTickets = [{ toolCallId: 'c5', ref: PLACED_META.ref }];
+    const witness = captureFindingsRequest(
+      { model: 'mock', messages: wire },
+      wire,
+      2,
+      issuedTicketsOf(placedTickets),
+    );
     const [row] = standingRowsFrom(
       knownResults(wire),
       { previous: [{ toolCallId: 'c5', standing: 'fact' }] },
       'answer',
       2,
+      { witness, placedTickets },
     );
     expect(row!.ref).toBe('art_9f3c');
     expect(row!.toolName).toBe('fetch_log');

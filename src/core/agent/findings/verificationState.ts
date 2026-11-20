@@ -1,6 +1,10 @@
 /**
  * Private, immutable evidence carrier for the explicit findings verifier.
- * Role: reservation and bounded retention; no schema, events or Agent wiring.
+ * Role: reservation and bounded retention; no schema or events.
+ * `createVerificationState` / `reserveResultIdentity` run when a declared
+ * search reaches execution and during armed negative-claim capture, writing the
+ * `resultIdentities` carrier. `reserveClaimIdentity` and
+ * `retainVerificationEvidence` have no caller outside tests.
  * The checkpoint owner authenticates provenance and supplies the ledger's
  * largest claim ordinal. Shape validation alone never authorizes a record.
  */
@@ -82,7 +86,7 @@ export function readVerificationState(
   });
 }
 
-/** Called only when opted in. No randomness is consumed at module load. */
+/** Called at a run's first reservation (a `search` tool call, an armed negative-claims call). */
 export function createVerificationState(
   runId: string,
   namespaceSource: () => string = () => globalThis.crypto.randomUUID(),

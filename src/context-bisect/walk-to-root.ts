@@ -18,8 +18,8 @@
  * - `root` is CAUSAL (ablation-only): set only when run-wide ablation flips on a stable baseline.
  *   Without a `rerun`, the walk is correlational and `root` is absent.
  * - FLAT charts only for the cross-loop hop — grouped loop frames are scope-isolated (degraded + flagged).
- * - Three first-class honest stops (never silent): `unseparated-siblings`, `overdetermined-or-incomplete`,
- *   `untracked-origin`.
+ * - A recorded read with multiple possible sources stops the walk with
+ *   `ambiguous-read-source`; the walk cannot choose one writer from that record.
  * - THE PROXY IS NOT ALWAYS NEEDED (`variables`, 7.12): where the recording carries per-write
  *   provenance, a suspect's state key has an EXACT recorded life — the value this loop read and the
  *   write that produced it — so the descent is a commit-log fact, not a similarity guess, and the hop
@@ -61,7 +61,8 @@ import type { AgentKeyMoment, AgentVariableSlice, DataflowCoverage } from './var
 export type RootCauseNote =
   | 'unseparated-siblings'
   | 'overdetermined-or-incomplete'
-  | 'untracked-origin';
+  | 'untracked-origin'
+  | 'ambiguous-read-source';
 
 /**
  * How this hop's DESCENT TARGET was chosen:
@@ -130,7 +131,8 @@ export interface WalkToRootOptions {
    * from the proxy's provenance scrape, and the hop is stamped
    * `narrowedBy: 'dataflow'`. Anything less than exact (dial off, stage-level
    * edges, no dataflow at all, a grouped/scope-isolated frame) falls back to the
-   * beam, unchanged.
+   * beam. A recorded read with several possible sources ends the walk with
+   * `ambiguous-read-source`, regardless of aggregate coverage.
    *
    * OMIT IT and the walk behaves EXACTLY as before — same hops, same order, same
    * verdicts, every hop stamped `'text-similarity'`.
@@ -194,24 +196,18 @@ function writtenByOf(frame: LoopFrame): Map<string, SuspectOrigin> {
   return map;
 }
 
-/**
- * The DETERMINISTIC descent: the write that produced the value this loop's
- * `call-llm` read of `stateKey` — straight off the recorded moments, no
- * embedding involved.
- *
- * Preference order, both commit-log facts:
- *   1. the read moment BY this loop's call-llm → its `fromWriteIdx` → that
- *      write (exact value identity — footprintjs pins the same rule its forward
- *      walk uses);
- *   2. otherwise the last write strictly before the call-llm's commit (the key
- *      the call-llm did not read directly — e.g. an inferred proximate).
- *
- * Returns `undefined` unless coverage is EXACT: a conservative (stage-level)
- * edge must never be presented as an exact hop.
- */
+/** A read recorded for this loop's call-llm in the variable's log scope. */
+function recordedRead(slice: AgentVariableSlice | undefined, frame: LoopFrame) {
+  // Grouped frames index their own inner log and cannot join a run-log slice.
+  if (frame.subflowScope !== undefined || frame.llmCallId === undefined) return undefined;
+  return slice?.moments.find((m) => m.kind === 'read' && m.runtimeStageId === frame.llmCallId);
+}
+
+/** For a non-ambiguous read under exact coverage, resolve its writer from the recorded moments. */
 function dataflowWriter(
   slice: AgentVariableSlice | undefined,
   frame: LoopFrame,
+  read: AgentKeyMoment | undefined,
 ): AgentKeyMoment | undefined {
   const coverage: DataflowCoverage | undefined = slice?.coverage;
   if (slice === undefined || coverage !== 'exact') return undefined;
@@ -220,13 +216,10 @@ function dataflowWriter(
   if (frame.subflowScope !== undefined) return undefined;
 
   const writes = slice.moments.filter((m) => m.kind === 'write');
-  const read =
-    frame.llmCallId !== undefined
-      ? slice.moments.find((m) => m.kind === 'read' && m.runtimeStageId === frame.llmCallId)
-      : undefined;
-  if (read?.fromWriteIdx !== undefined) {
+  if (read !== undefined) {
     return writes.find((w) => w.commitIdx === read.fromWriteIdx);
   }
+  // With no direct read of this key, keep the before-commit lookup for inferred provenance.
   const llmIdx = frame.llmCallArrayIdx;
   if (llmIdx === undefined) return undefined;
   const before = writes.filter((w) => w.commitIdx < llmIdx);
@@ -355,10 +348,12 @@ export async function walkTrajectory(
     // instead of a provenance scrape or an inferred proximate. Absent
     // `variables`, `exactWriter` is always undefined and nothing below changes.
     const beamOrigin = writtenBy.get(chosen.suspectId);
-    const exactWrite =
-      beamOrigin?.stateKey !== undefined
-        ? dataflowWriter(variableOf(beamOrigin.stateKey), frame)
-        : undefined;
+    const beamVariable = beamOrigin === undefined ? undefined : variableOf(beamOrigin.stateKey);
+    const beamRead = recordedRead(beamVariable, frame);
+    const beamReadAmbiguous = Boolean(beamRead?.orWriteIdxs?.length);
+    const exactWrite = beamReadAmbiguous
+      ? undefined
+      : dataflowWriter(beamVariable, frame, beamRead);
     const exactFrameIdx =
       exactWrite !== undefined ? writerFrame.get(exactWrite.runtimeStageId) : undefined;
     const exactWriter =
@@ -371,29 +366,37 @@ export async function walkTrajectory(
     // conditioned on — that's where a buried root (e.g. the misdirecting instruction) scores + convicts.
     // It is an INFERRED proximate (`call-llm` read `history`, not this key), so a RECORDED exact edge
     // for the narrowed suspect outranks it: better evidence wins, and the hop says which it used.
-    const toolName =
+    const proximate = frame.proximateToolSource;
+    const toolName = (proximate?.value as { toolName?: unknown } | undefined)?.toolName;
+    const useProximate =
       !convicted &&
+      !beamReadAmbiguous &&
       exactWriter === undefined &&
-      frame.proximateToolSource &&
-      typeof (frame.proximateToolSource.value as { toolName?: unknown })?.toolName === 'string'
-        ? (frame.proximateToolSource.value as { toolName: string }).toolName
-        : undefined;
-    if (toolName !== undefined) chosen = { suspectId: toolName, kind: 'tool' };
+      proximate !== undefined &&
+      typeof toolName === 'string';
+    if (useProximate) chosen = { suspectId: toolName, kind: 'tool' };
+    const ambiguousRead =
+      beamReadAmbiguous ||
+      (useProximate &&
+        Boolean(recordedRead(variableOf(proximate.stateKey), frame)?.orWriteIdxs?.length));
 
     const narrowedBy: HopNarrowedBy = exactWriter !== undefined ? 'dataflow' : 'text-similarity';
-    const writer = exactWriter ?? writtenBy.get(chosen.suspectId)?.writerId;
+    const writer = ambiguousRead
+      ? undefined
+      : exactWriter ?? writtenBy.get(chosen.suspectId)?.writerId;
     const nextFrameIdx = writer !== undefined ? writerFrame.get(writer) : undefined;
     const descendIdx =
       nextFrameIdx !== undefined && nextFrameIdx < frameIdx ? nextFrameIdx : undefined; // strictly backward
 
     // Per-hop honest note: untracked-origin (structural — no provenance writer to descend) is set
     // regardless of a rerun; unseparated-siblings flags a narrow that couldn't separate the top-2.
-    const inlineNote: RootCauseNote | undefined =
-      writer === undefined
-        ? 'untracked-origin'
-        : unseparated && !convicted
-        ? 'unseparated-siblings'
-        : undefined;
+    const inlineNote: RootCauseNote | undefined = ambiguousRead
+      ? 'ambiguous-read-source'
+      : writer === undefined
+      ? 'untracked-origin'
+      : unseparated && !convicted
+      ? 'unseparated-siblings'
+      : undefined;
 
     hops.push({
       loopIndex: frame.loopIndex,

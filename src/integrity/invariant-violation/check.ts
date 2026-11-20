@@ -21,7 +21,12 @@
  * (hook throws are swallowed and the error path commits anyway), and
  * blocking a park because tools were still registered would invert
  * causality — the park is the correct fact; the stale serving is the
- * defect. Dev posture throws AFTER the append, in the writer's own caller.
+ * defect. Dev posture (`integrityPosture: 'dev'`) does not throw on a
+ * finding either: the run finishes with its answer. It throws
+ * `CheckerDeadError` only when a registered check is DEAD — it filed no
+ * disposition in a run where work existed, or missed its own canary
+ * (`disposition/ledger.ts` · `assertAlive`, called by
+ * `core/agent/runtime/integrity/owner.ts` · `assertIntegrityAlive`).
  */
 
 import type { Assertion, SubjectRef } from '../assertion/types.js';
@@ -109,4 +114,55 @@ export function invariantViolationsOf(
         `serving is the defect — nothing here resolves which, and the write always lands.`,
     },
   ];
+}
+
+/** One mounted map as the compose seam sees it: its id and the tools it owns. */
+export interface MountedMapTools {
+  readonly id: string;
+  readonly toolNames: readonly string[];
+}
+
+/**
+ * The compose-seam backstop: every PARKED map's owned tools compared against
+ * the merged wire list the tools slot is about to serve.
+ *
+ * The findings come back already at seam `'compose'`, so the one rail that
+ * files them (`core/agent/integrityFindings.ts` · `fileIntegrityFindings`)
+ * computes the dedup identity from exactly what it emits. The tools slot used
+ * to keep its own copy of that loop, which took the identity from the
+ * write-seam finding before relabelling it: it stored
+ * `invariant-violation @write […]` beside an event that said `compose`.
+ *
+ * `compared` is false when no mounted map had a parked tool this pass — the
+ * check had nothing it could violate, which the caller states as
+ * `not-applicable`, never as a pass.
+ *
+ * @example
+ * ```ts
+ * composeViolationsOf([{ id: 'm', toolNames: ['t'] }], new Set(['t']),
+ *   { names: ['t'], provenance: 'tools slot (merged wire list)' }, 3);
+ * // → { findings: [{ kind: 'invariant-violation', seam: 'compose', … }], compared: true }
+ * ```
+ */
+export function composeViolationsOf(
+  maps: readonly MountedMapTools[],
+  parked: ReadonlySet<string>,
+  served: ServedTools,
+  iteration: number,
+): { readonly findings: readonly ContextError[]; readonly compared: boolean } {
+  const findings: ContextError[] = [];
+  let compared = false;
+  for (const map of maps) {
+    const parkedOwned = map.toolNames.filter((name) => parked.has(name));
+    if (parkedOwned.length === 0) continue;
+    compared = true;
+    const write: EngagementWrite = {
+      mapId: map.id,
+      standing: 'parked',
+      iteration,
+      ownedToolNames: parkedOwned,
+    };
+    for (const f of invariantViolationsOf(write, served)) findings.push({ ...f, seam: 'compose' });
+  }
+  return { findings, compared };
 }

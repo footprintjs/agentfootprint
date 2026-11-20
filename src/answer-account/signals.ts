@@ -15,6 +15,7 @@
  * left out of the count (`reachable + unreachable + notApplicable = 3`).
  */
 
+import { callOutcomeOf } from '../semantics/toolOutcome.js';
 import { chip, dedupePointers, joinSentences, n, v } from './render.js';
 import type {
   CheckId,
@@ -33,9 +34,10 @@ import {
   type ReadContext,
 } from './facts/common.js';
 import { itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
+import { endedInError, errorCounts } from './facts/errorCounts.js';
 import { heldChip } from './facts/checked.js';
 import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
-import type { PausedLegRead } from './facts/pausedLeg.js';
+import { unmatchedBeforePause, type PausedLegRead } from './facts/pausedLeg.js';
 import type { InViewAll } from './facts/inView.js';
 import type { UnderstoodRead } from './facts/understood.js';
 
@@ -115,6 +117,14 @@ export function runChecks(
     });
   }
   if (understood.check === 'reachable') checkPointers.push(...understood.checkPointers);
+
+  if (pausedLeg.historyUnmatched) {
+    addUnreachable({
+      check: 'empty-results',
+      missing: 'unreadable',
+      sentence: unmatchedBeforePause(ctx),
+    });
+  }
 
   // A call no event names cannot be put in a sentence about its tool: every check it would
   // feed is said to be unreachable for it, by its call id — never silently skipped.
@@ -201,18 +211,12 @@ export function runChecks(
   // own `present`) returned a receipt for the screen, not data the answer was built on: whether
   // it was empty is not a question it can be asked, so it is left out of the check — never read
   // as a shape nobody declared (take 3: the receipt alone made the check unreachable).
-  const presented = new Set(
-    ctx.view
-      .ofType('artifacts.presented')
-      .map((e) => e.payload.toolCallId)
-      .filter((id): id is string => typeof id === 'string'),
-  );
   const judged = calls.all.filter(
     (c) =>
       c.fact.outcome === 'ran' &&
       c.fact.withheldBy === undefined &&
       c.end !== undefined &&
-      !presented.has(c.fact.toolCallId),
+      c.presented !== true,
   );
   if (
     judged.length > 0 ||
@@ -355,6 +359,10 @@ export function runChecks(
     });
   }
 
+  if (pausedLeg.historyUnmatched) {
+    states.existence = 'unreachable';
+    states['empty-results'] = 'unreachable';
+  }
   const ids: readonly CheckId[] = ['decided-delivered', 'existence', 'empty-results'];
   return {
     signals,
@@ -381,13 +389,14 @@ export function wrongLines(
   const lines: Sentence[] = checks.signals.map((s) => s.sentence);
   // Every call, not only the listed ones: a count is a judgement.
   const all = calls.all;
-  const count = (o: string) => all.filter((c) => c.fact.outcome === o).length;
-  const failed = count('failed');
-  const refused = count('refused');
-  const declined = count('declined');
-  const notDispatched = count('not-dispatched');
-  const troubled = all.filter((c) =>
-    ['failed', 'refused', 'declined', 'not-dispatched'].includes(c.fact.outcome),
+  const reported = all.filter((call) => call.fact.reportedStatus !== undefined);
+  // The same tally as `facts.errors` (`facts/errorCounts.ts` · `errorCounts`): a call that
+  // never reached its tool is "not executed", never "failed" (set 16).
+  const { failed, notExecuted, refused, declined, notDispatched } = errorCounts(all);
+  const troubled = all.filter(
+    (c) =>
+      endedInError(c) ||
+      ['not-executed', 'refused', 'declined', 'not-dispatched'].includes(c.fact.outcome),
   );
   if (troubled.length > 0) {
     lines.push(
@@ -395,6 +404,7 @@ export function wrongLines(
         vars: {
           n: n(troubled.length),
           failed: n(failed),
+          notExecuted: n(notExecuted),
           refused: n(refused),
           declined: n(declined),
           notDispatched: n(notDispatched),
@@ -402,9 +412,25 @@ export function wrongLines(
         pointers: troubled.flatMap((c) => c.fact.pointers.slice(-1)),
       }),
     );
-  } else if (all.length > 0) {
+  } else if (
+    all.length > 0 &&
+    reported.every(
+      ({ fact }) =>
+        callOutcomeOf({ ran: true, clean: true, status: fact.reportedStatus }) === undefined,
+    )
+  ) {
     lines.push(
       ctx.say('wrong.noErrors', { pointers: all.flatMap((c) => c.fact.pointers.slice(-1)) }),
+    );
+  }
+  if (reported.length > 0) {
+    lines.push(
+      ctx.say('wrong.reportedStatus', {
+        vars: { n: n(reported.length) },
+        pointers: reported.flatMap(({ end }) =>
+          end ? [at(end, 'entered'), at(end, 'status')] : [],
+        ),
+      }),
     );
   }
   const withheld = all.filter((c) => c.fact.withheldBy !== undefined && c.ruleEvent !== undefined);
@@ -451,7 +477,7 @@ export function wrongLines(
   if (applicable === 0 && checks.signals.length === 0) {
     lines.push(ctx.say('wrong.notApplicable', { status: 'not-applicable' }));
   }
-  if (ctx.resumedLeg) {
+  if (ctx.resumedLeg && !pausedLeg.historyUnmatched) {
     lines.push(
       pausedLeg.stateHeld
         ? // The routing is named as lost only when it is: a verdict the paused state holds is
@@ -481,11 +507,8 @@ export interface SummaryRead {
 }
 
 /**
- * The one-liner. On a resumed leg whose record holds the committed state, the
- * checks above read the part before the pause from it, so the one-liner is
- * the one any answer gets, followed by what this record does NOT hold of the
- * part before the pause (its events). Only a record with no committed history
- * says the part before the pause is not in it.
+ * The one-liner for a resumed leg reports whether the paused state is held
+ * and whether the tool results from it can be matched to the final history.
  */
 export function summaryOf(
   ctx: ReadContext,
@@ -495,10 +518,14 @@ export function summaryOf(
 ): SummaryRead {
   const read = summaryOfChecks(ctx, checks, finished, pausedLeg.stateHeld);
   if (!finished || !ctx.resumedLeg || !pausedLeg.stateHeld) return read;
+  const resumed = ctx.say('summary.resumed.held', {
+    status: 'not-recorded',
+    missing: 'before-pause',
+  });
   return {
     sentence: joinSentences(
       read.sentence,
-      ctx.say('summary.resumed.held', { status: 'not-recorded', missing: 'before-pause' }),
+      pausedLeg.historyUnmatched ? joinSentences(resumed, unmatchedBeforePause(ctx)) : resumed,
     ),
     tone: read.tone,
   };

@@ -13,13 +13,15 @@
  *
  * The boundary is the paused state itself: a call before the pause is a tool
  * message in `initialState.history` after its last person entry (the request
- * the run was answering when it paused) that is not a call of this leg. Its
- * bytes and declaration are read where a pointer can land — the committed
- * `sharedState` (matched by call id) — and a call the committed history no
- * longer holds is passed over, never guessed.
+ * the run was answering when it paused) that is not a call of this leg. If
+ * that history survives as the committed history's prefix, its tool messages
+ * identify the same occurrences by position. A declaration is attached only
+ * when the committed row identifies one compatible occurrence. If the prefix
+ * has changed, the positions cannot be matched and the rows say so. The
+ * routing verdict can still be read from the paused state.
  *
  * So, exactly:
- *   - RECOVERABLE — each call answered before the pause; what came back, read
+ *   - RECOVERABLE WITH THE PREFIX — each call answered before the pause; what came back, read
  *     by the ONE emptiness reader over the tool's own bytes with the door the
  *     state holds (its `coverageDeclared` rows: an `absence` row, a `ledger`
  *     boundary); what its tool declared it checked, did not check and can
@@ -41,10 +43,14 @@
  * record.
  */
 
+import {
+  historyStartsWith,
+  readHistoryCalls,
+  rowsForHistoryCall,
+} from '../../core/agent/recordedCalls.js';
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
-import type { SentenceVar } from '../types.js';
-import { isRecord, str } from '../view.js';
+import type { Sentence, SentenceVar } from '../types.js';
 import {
   COVERAGE_STATE_KEY,
   readStateCoverage,
@@ -55,12 +61,12 @@ import {
   FACT_TEXT_CHARS,
   historyAt,
   historyOf,
-  isPersonEntry,
   readEmptiness,
   rowsAtOf,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
+import { isPersonEntry } from '../../lib/saidByPerson.js';
 
 /** One call answered before the pause, as the committed state keeps it. */
 export interface BeforePauseCall {
@@ -77,13 +83,19 @@ export interface BeforePauseCall {
 }
 
 export interface PausedLegRead {
-  /** The record holds the state the run paused with (`snapshot.initialState`) — the part before the pause is read from it. */
+  /** The record holds the state the run paused with (`snapshot.initialState`). */
   readonly stateHeld: boolean;
-  /** Every call answered before the pause, in history order — none when the leg was not resumed. */
+  /** The paused history's positions do not match the committed history. */
+  readonly historyUnmatched?: true;
+  /** Recoverable calls answered before the pause, in history order. */
   readonly calls: readonly BeforePauseCall[];
 }
 
 const NOT_RESUMED: PausedLegRead = { stateHeld: false, calls: [] };
+
+export function unmatchedBeforePause(ctx: ReadContext): Sentence {
+  return ctx.say('beforePause.unmatched', { status: 'not-recorded', missing: 'unreadable' });
+}
 
 /**
  * On a resumed leg: the part before the pause, read from the committed state
@@ -91,29 +103,45 @@ const NOT_RESUMED: PausedLegRead = { stateHeld: false, calls: [] };
  * that are not calls of this leg, each with what came back and what its tool
  * declared.
  */
-export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead {
+export function readPausedLeg(
+  ctx: ReadContext,
+  calls: Pick<CallsRead, 'historyIndices'>,
+): PausedLegRead {
   const pausedWith = ctx.view.pausedWith;
   if (!ctx.resumedLeg || pausedWith === undefined) return NOT_RESUMED;
-  const before = pausedHistory(pausedWith.history as readonly unknown[]);
+  const before = pausedWith.history as readonly unknown[];
   const history = historyOf(ctx.view);
+  if (!ctx.view.isStateKeptOut('history') && !historyStartsWith(history, before)) {
+    return { stateHeld: true, historyUnmatched: true, calls: [] };
+  }
   const coverageRows = ctx.view.state?.[COVERAGE_STATE_KEY];
   const rows: readonly unknown[] = Array.isArray(coverageRows) ? coverageRows : [];
+  const all = readHistoryCalls(history);
+  let current = -1;
+  for (let index = before.length - 1; index >= 0; index--) {
+    if (isPersonEntry(before[index])) {
+      current = index;
+      break;
+    }
+  }
   const out: BeforePauseCall[] = [];
-  for (const id of before) {
-    if (calls.ids.has(id)) continue;
-    const i = history.findIndex((m) => isRecord(m) && m.role === 'tool' && m.toolCallId === id);
-    const m = history[i];
-    if (!isRecord(m)) continue;
-    const name = str(m.toolName);
-    if (name === undefined) continue;
-    const coverage = readStateCoverage(rows, id, ctx.view.servedUnderPolicy);
+  for (const occurrence of all) {
+    const { providerId: id, toolName: name, index: i, message: m } = occurrence;
+    if (
+      i <= current ||
+      i >= before.length ||
+      calls.historyIndices.has(i) ||
+      id === undefined ||
+      name === undefined
+    )
+      continue;
+    const attributed = rowsForHistoryCall(rows, all, occurrence);
+    const coverage = readStateCoverage(attributed, ctx.view.servedUnderPolicy);
     const rowsAt = rowsAtOf(ctx.declarations, name);
-    // The door this record holds for the call is its committed declaration — the same rows the
-    // standing fold reads (`assessment/assess.ts`), so the two cannot disagree about it.
-    const mine = rows.filter((r) => isRecord(r) && r.toolCallId === id) as readonly {
-      readonly kind?: unknown;
-    }[];
+    // The declaration and emptiness both use these same occurrence rows.
+    const mine = attributed.map(({ row }) => row);
     const reading = readEmptiness(toolBytesOf({ content: m.content, toolChars: m.toolChars }), {
+      placement: { toolCallId: id, issued: ctx.view.issuedPlacements },
       ...(rowsAt !== undefined && { rowsAt }),
       ...(mine.length > 0 && {
         door: {
@@ -132,19 +160,4 @@ export function readPausedLeg(ctx: ReadContext, calls: CallsRead): PausedLegRead
     });
   }
   return { stateHeld: true, calls: out };
-}
-
-/** The call ids of the tool messages after the last person entry of the paused state's history. */
-function pausedHistory(history: readonly unknown[]): readonly string[] {
-  let current = -1;
-  history.forEach((m, i) => {
-    if (isPersonEntry(m)) current = i;
-  });
-  const ids: string[] = [];
-  history.forEach((m, i) => {
-    if (i <= current || !isRecord(m) || m.role !== 'tool') return;
-    const id = str(m.toolCallId);
-    if (id !== undefined && !ids.includes(id)) ids.push(id);
-  });
-  return ids;
 }

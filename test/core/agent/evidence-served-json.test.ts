@@ -1,6 +1,6 @@
 /**
  * A served tool result that is NOT one JSON value — read by the JSON grammar
- * as far as it goes (`evidence/servedJson.ts`, through `evidenceIndex.ts` ·
+ * as far as it goes (`lib/servedJson.ts`, through `evidenceIndex.ts` ·
  * `readResult`, the ONE reading the evidence index and the declared-sources
  * check share).
  *
@@ -39,7 +39,7 @@ import { describe, expect, it } from 'vitest';
 
 import { absent } from '../../../src/semantics/coverage/index.js';
 import { evidenceFromHistory, readResult } from '../../../src/core/agent/evidence/evidenceIndex.js';
-import { jsonPrefixOf, leadingJsonValues } from '../../../src/core/agent/evidence/servedJson.js';
+import { jsonPrefixOf, leadingJsonValues } from '../../../src/lib/servedJson.js';
 
 const NOTE =
   "\n\n[identical call: 'list_hosts' has now returned exactly this result 2 times this turn, for exactly these arguments.]";

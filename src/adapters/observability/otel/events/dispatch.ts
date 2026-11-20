@@ -380,8 +380,9 @@ export function createEventDispatcher({
         const errored = p.error !== undefined && p.error !== false;
         const ranName = p.toolCallId !== undefined ? t.toolNames.get(p.toolCallId) : undefined;
         if (p.toolCallId !== undefined) t.toolNames.delete(p.toolCallId);
-        // A call that returned without error and was not refused ran a tool
-        // this agent holds — what a `tryInsteadTool` name is recognized by.
+        // A call that returned without error and was not refused is a tool this
+        // agent holds — what a `tryInsteadTool` name is recognized by. (A call
+        // declined on resume passes too: `answer-account/README.md`, "Not covered yet".)
         if (ranName !== undefined && !errored && p.notExecuted !== true)
           remember(ranTools, ranName);
         // Correlate by toolCallId (the only identity ToolEndPayload

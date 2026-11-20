@@ -126,6 +126,12 @@ const NAMES = {
     'toolResults',
     'toolCalls',
     'middlewareDecisions',
+    // A tool's inner calls (`ctx.tools.call`): each row holds the arguments the
+    // composing tool passed. A field selector does not reach into a list's rows,
+    // so the key is named whole, like `middlewareDecisions`; the gates' events
+    // still say each decision was made.
+    'innerToolCalls',
+    'innerCallPolicyArgs',
     'pausedToolArgs',
     'pausedAskArgs',
     'pausedCheckInArgs',
@@ -137,6 +143,7 @@ const NAMES = {
     // guess of the paused call's arguments against the request id
     // (`core/consentRequest.ts`), so it is kept out with them.
     'pausedRequest',
+    'pausedGatePolicy',
     'policyHaltArgs',
     'claimFacts',
     // The findings ledger — and with it every `script` row's `text`, the program

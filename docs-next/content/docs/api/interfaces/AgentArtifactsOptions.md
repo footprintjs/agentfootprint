@@ -4,7 +4,7 @@ title: AgentArtifactsOptions
 
 # Interface: AgentArtifactsOptions
 
-Defined in: [src/core/agent/types/artifacts.ts:10](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L10)
+Defined in: [src/core/agent/types/artifacts.ts:11](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L11)
 
 The object form of `AgentOptions.artifacts` (9.22.0): the store plus its
 operator dials. `placement` cannot be spelled without `store` — a
@@ -17,7 +17,7 @@ lies, and the shape refuses it before a runtime check has to.
 
 > `readonly` `optional` **placement?**: [`ArtifactPlacement`](/docs/api/interfaces/ArtifactPlacement)
 
-Defined in: [src/core/agent/types/artifacts.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L23)
+Defined in: [src/core/agent/types/artifacts.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L24)
 
 The placement threshold. A tool result whose finalized text exceeds
 `maxInlineChars` is checked into the store (under the tool's declared
@@ -34,7 +34,7 @@ results are never measured and never placed, exactly as before.
 
 > `readonly` `optional` **recordings?**: `boolean` \| [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 
-Defined in: [src/core/agent/types/artifacts.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L61)
+Defined in: [src/core/agent/types/artifacts.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L62)
 
 Check each completed run's RECORDING into the store (9.26.0), so a screen
 can replay the turn later without the deployment inventing a place to keep
@@ -78,6 +78,6 @@ RESUMED run — which is what the recorder saw.
 
 > `readonly` **store**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/core/agent/types/artifacts.ts:12](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L12)
+Defined in: [src/core/agent/types/artifacts.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L13)
 
 The claim-check store — same seam as the bare `ArtifactStore` form.

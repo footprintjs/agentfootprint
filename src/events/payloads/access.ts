@@ -9,6 +9,8 @@ export interface PermissionCheckPayload extends Partial<ToolCallEventIdentity> {
   readonly actor: string;
   readonly target?: string;
   readonly result: 'allow' | 'deny' | 'halt' | 'gate_open';
+  /** A fresh decision for a call that waited for someone. */
+  readonly phase?: 'resume';
   readonly policyEngine?: 'opa' | 'cerbos' | 'custom';
   readonly policyRuleId?: string;
   readonly rationale?: string;

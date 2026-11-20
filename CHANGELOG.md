@@ -5,6 +5,439 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.0.1] - 2026-11-20
+
+### Security
+
+- **Model-facing traces respect tool-result middleware.** Earlier versions that support both result middleware and model-facing traces are affected when `.selfExplain()` or a model-facing trace pack is used with an `onToolResult` rule that denies or rewrites a result. Upgrade to this release. Host-owned recordings remain available under their existing redaction policy.
+
+## [16.0.0] - 2026-11-20
+
+### Breaking
+
+- **Answers warn about doubts by default.** Agents that leave the answer layer
+  unconfigured now attach the answer's standing to `agentfootprint.agent.turn_end`
+  and emit `agentfootprint.answer.assessed`. A prose answer with standing `not-sure`
+  or `ask` carries a line explaining why. With `.answerValidation()` or
+  `.outputSchema()`, the standing travels as data and the answer keeps its
+  validated format.
+
+  The standing keeps recorded tool outcomes when a history window drops their
+  messages, so a turn that previously read as consistent or not assessed may now
+  say why it is not sure.
+
+  **Migration:** Add `.answerLayer(false)` to restore the previous chart, committed
+  rows, events and answer. To keep the standing data and omit the line, use
+  `.answerLayer({ standingLine: false })`. The same values work in
+  `AgentOptions.answerLayer`.
+
+  The first assessed turn loads the assessment code on demand, so that work
+  counts against the turn's deadline before final delivery.
+
+  When the line appears, it is part of the delivered assistant message. If the
+  conversation retains that message, the next request can carry the line within
+  its assistant history.
+
+  In a composition, a member Agent's standing line travels with its answer into
+  the next step's input and any mapper that reads the member's text, so use
+  `.outputSchema()` or `.answerLayer({ standingLine: false })` for a member whose
+  answer is parsed.
+
+  Ordinary streaming sends the model's text in `stream.token`. If output admission
+  holds the provider's chunks, the released token contains the composed answer.
+  Output middleware formats the model's text first. The standing line is appended
+  after that formatting, outside any closing marker the formatter added. Use
+  `.answerLayer({ standingLine: false })` if your app needs the formatter's exact
+  text and still wants the standing as data. The built-in text stream sends any
+  remaining text after the tokens, including when opened before a resume. If your
+  app paints its own tokens, use `turn_end.finalContent` for the finished message or render the
+  standing and reason codes from `agentfootprint.answer.assessed` in your own UI.
+
+- **The answer's standing now reports a tool call that was refused or failed.** A later
+  completed call of the same tool with equal recorded arguments clears the earlier
+  reason. Calls whose arguments are unavailable or hidden cannot establish a match.
+  When a tool batch pauses and a sibling never dispatches, the standing says a
+  call did not run.
+  Each recorded result keeps its own outcome even when two calls share an ID.
+  The answer account also shows a recorded non-success status for a tool that ran.
+
+  Migration: Handle the new `call-not-completed` assessment reason in code that
+  switches exhaustively on reason types. Displays that show the standing may now say
+  "not sure" for a turn that previously said "not assessed" or "consistent."
+
+- **The answer's standing reports unfinished tool work and skipped steps.** It
+  reads an admitted partial or pending result and the committed record of a
+  procedure advancing past a declared step.
+  Each reported status belongs to its own recorded result, even when calls share an ID.
+
+  Migration: Handle `work-not-finished` and `step-skipped` in exhaustive
+  assessment reason switches. Tool history can now include the record-only
+  `reportedStatus` field. An inline result that fails validation after the
+  envelope is read now omits the rejected status from its end event, matching
+  the resumed paths.
+
+- **Snapshots and saved recordings include recorded value types and array lengths by default.** Read a path at a replay commit with `contextShapeAt` from `agentfootprint/observe`. Redacted values withhold their type and length. Recursive discovery is opt-in.
+
+  Migration: If you store, hash or compare the JSON from `getSnapshot()`, `getLastSnapshot()` or `recordRun(agent)`, eligible snapshots now contain a `contextShapes` field and their bytes change. Pass `{ contextShapes: false }` to the snapshot getter or as the second argument to `recordRun` to keep the previous bytes.
+
+### Added
+
+- **Read coverage counts and evidence for a completed turn.** Hosts can read
+  per-call declaration counts and the final evidence verdict before filing a
+  recording, and use the same readers when the recording is loaded later.
+
+- **Saved evidence can identify a specific tool call when IDs repeat.** New
+  recordings keep an opaque call address on tool results, events and evidence
+  rows. Readers use that address through a pause and after the history is
+  trimmed. Saved recordings from before this change remain readable.
+
+  The address holds random words. Two runs of the same script record different
+  addresses, so a test that compares the events or records of two runs must
+  leave `callOccurrenceKey` out of the comparison. Nothing sent to a provider
+  changes.
+  Use a complete text marker when checking records for leaked text, since a short
+  run of digits can also occur inside an address.
+
+  A cache strategy or a provider adapter can no longer change the saved record.
+  Each model call hands the `CacheStrategy` its own copy of the request and
+  passes what the strategy returns to the provider as it is. Before, an edit
+  made in place to that request could reach the history the run saved.
+
+  Automatic native output keeps the format requirement selected for each call
+  when an adapter adds or removes a format in place, including runs without a
+  signal and streams that fall through to a completion.
+
+- **Identify the owning Agent's completed turn.** Its `turn_end` event carries
+  `meta.rootTurn: true` on both fresh and resumed runs. Older records can lack
+  the field.
+
+### Changed
+
+- **Keep mounted drafts out of an Agent's text stream.** With
+  `toSSE({ format: 'text' })`, fresh and resumed streams skip tokens from mounted
+  Agents so a chat client sees the owning Agent's text. Mounted tokens are
+  available in full event frames and in scoped record-only AG-UI messages.
+
+### Fixed
+
+- When a host rule denies a tool result, the answer's standing reports
+  `result-withheld` once without naming the tool or exposing its result.
+  The per-call settlement record keeps that warning even after a history window
+  evicts the result.
+  When a rule rewrites a result, the standing assesses the replacement.
+
+- **Tool calls with a shared ID keep their own arguments.** With the inputs
+  layer on, two calls in one provider reply that share an ID now each run
+  with their own arguments and receive only their own fills.
+
+- **Finish SSE streams at the owning Agent's turn end.** Both `toSSE()` formats
+  now continue past a mounted Agent's turn end and deliver the owning Agent's
+  response through its marked turn end. This applies to fresh streams, streams
+  retained across a pause, and streams opened to resume a turn.
+
+  A full-format stream opened to resume a turn now closes at the next pause, as
+  a text stream does. It used to stay open until the turn ended.
+
+- **Keep repeated tool-call IDs separate in answer accounts.** Calls keep their
+  own recorded result, status and evidence when a provider reuses an ID. The
+  account identifies evidence rows it could not match to a call and keeps them
+  out of call totals.
+
+- The answer's standing judges period coverage only for a returned tool result.
+  A refused call or one that throws can still explain why it did not complete.
+  A refusal based on the tool's declared retention still reports that limit.
+  Reasons about proposed tool inputs only appear once the tool was entered.
+
+  Runs with the answer or inputs layer append entry evidence for each entered
+  call. The answer layer also appends how each call ended and how its result
+  was delivered. Each list retains up to 1,024 calls per turn. If a list would
+  exceed that bound, the assessment reports `check-unreachable`.
+
+- **Finish the streamed answer after a pause.** A new text SSE or record-only
+  AG-UI stream can deliver the final answer when it attaches before resuming.
+  Text SSE respects the refusal decision associated with the final answer.
+  An SSE stream now closes when its `filter` drops the final event. It used
+  to stay open.
+
+## [15.0.1] - 2026-11-19
+
+### Fixed
+
+- **Clarify the evidence and request-lifecycle documentation.** The guides now
+  describe which values the evidence gate exempts, how live findings and legacy
+  replay are composed, and when executed searches reserve a result identity.
+
+- **Corrected result attribution in permission-checker call sequences.** When a
+  tool-call ID repeated, the sequence could list a refused or unanswered call as
+  dispatched, or omit a call that ran. IDs can repeat when a fresh process resumes a
+  saved run with an adapter that generates IDs locally. Custom checkers that
+  use the order or count of calls in `sequence` could make a decision from the
+  wrong sequence. The built-in role allowlist bases its decisions on role,
+  capability, and target, so its decisions were unaffected.
+  Recorded non-entry and input cancellation now keep those calls out of the
+  permission sequence, regardless of their display text.
+  When findings are off, a custom `tellLLM` refusal can still appear in
+  `sequence`, so enable findings or start the refusal text with
+  `[permission denied:` to keep it out.
+
+- **Corrected the message when a saved run carries findings verification evidence.** The
+  message now explains why the saved run cannot resume or continue and points to
+  `agent.run({ message })` to start a new run.
+
+## [15.0.0] - 2026-11-19
+
+### Breaking
+
+- **Require FootPrint 14 and Foottrace 2.1 or later in major 2.** Agentfootprint 15
+  requires the FootPrint peer range `^14.0.0` and the Foottrace dependency
+  range `^2.1.0`.
+
+  Migration: upgrade to `footprintjs@^14.0.0` and `foottrace@^2.1.0`.
+  During the release train, install the published Agentfootprint 15 candidate
+  with the exact stable engine `footprintjs@14.0.0`. Regenerate the
+  application lockfile with strict peer resolution and run the consumer checks.
+  Verify that Agentfootprint and the engine resolve the same physical Foottrace
+  installation.
+
+  Public `openRecording` replay was verified for a saved plain JSON
+  `recordRun(agent).toRecording()` bundle from Agentfootprint 14.3.1,
+  FootPrint 11.1.0, and Foottrace 1.11.1. The check reopens the saved snapshot,
+  inspects the original tool call, and finds its result in the commit log.
+
+  The native record carries `beganAt` and `sawUntil` read windows when available.
+  These fields count commits. Preserve them when saving records. The trace tools'
+  use of those windows to attribute reads is tracked in a follow-up.
+
+- **A tool call approved before a wait can be refused when it resumes.** Before running the approved call, the agent asks its permission checker and tool middleware again about the approved arguments. If a policy needs another human answer, the resumed call is refused. The person is asked again only if the model calls again. A tool middleware response the library cannot recognize also results in a library refusal.
+
+  Migration: Finish paused runs before upgrading, because a tool approval from an earlier version lacks the gate record required to resume. Removing or renaming a before-tool link, or removing the permission checker used before the wait, refuses the resumed call. A link that rewrites arguments sees its own output when asked again and must leave it unchanged for the approved call to run. A middleware question that uses an artifact ticket can reuse the approval for the same ticket on the same call. Keep the ticket for that call or use inline props, since minting a fresh ticket changes the question. Handle a refusal on resume even when a person already approved the call.
+
+  Keep credential consent checkpoints in trusted storage because the resume relies on them for the suspended arguments and the original gate record.
+
+### Changed
+
+- **The answer account says "It ran {tool}" only when the record shows the tool ran.** A call that ended in an error before its tool was reached (a tool name that does not exist, arguments the schema rejected, a blocked credential) used to read "It ran reboot_host, and the tool reported an error." and "reboot_host returned an error, not a result.", the same words as a tool that ran and threw, and "Nothing to report: none of the tool calls ran." was said even when a tool had run and thrown. Now such a call reads "It asked to run reboot_host; the call was not executed." and "reboot_host did not run, so it found nothing."; a tool that ran and threw reads as before. "None of the tool calls ran" is said only when every call is known not to have run; otherwise the line is "Nothing to report: no tool call returned a result in this record." The "Anything wrong" line counts such a call as "not executed", never as "failed": "1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run." Answer-account template set 16: six new sentences, and `wrong.errors` at version 2 (it gained the "not executed" count); no other sentence changed.
+
+  **Migration:** Check saved tool-end payloads, account outcome handling, and any tests or UI that match the changed wording.
+
+  - `stream.tool_end` carries `entered: true` on every call that reached the tool's function, including successful calls, and `entered: false` on a call that never entered, including a declined check-in or ask. Brackets carrying `notExecuted` or `notDispatched` already record a refusal or settlement and keep their existing fields. Apps that compare `tool_end` payloads byte for byte should expect one additional field on successful calls.
+  - `ToolCallFact.outcome` (the account's `facts.calls`) gains `'not-executed'` (the tool never ran) and `'ended-in-error'` (an error on a record that does not say whether the tool ran); `'failed'` now means the tool ran. What to do: a `switch` over the outcome adds the two new cases.
+  - `facts.errors.failed` no longer counts a call that never reached its tool; the new `facts.errors.notExecuted` counts it. What to do: an app that read `failed` as "every call that ended in an error" adds `notExecuted`.
+  - The "Anything wrong" line has a new clause, "{n} not executed" (`wrong.errors@2`), and saved accounts carry template set 16. What to do: an app that pinned that line's text, or the set number, updates the pin.
+  - When no call returned a result and at least one may have run, the "It did not check" line reads "Nothing to report: no tool call returned a result in this record." (was "none of the tool calls ran"), and the long-list line reads "None of the tool calls listed here returned a result; …" (was "…listed here ran; …"). What to do: update a pinned text.
+  - The tool-call ledger an answer check reads (`context.toolCalls`) lists a call whose tool never ran as `'not-run'`, also when it ended in an error; `'error'` now means the tool ran. What to do: a check that looked for `'error'` to catch an unknown tool name looks for `'not-run'`. A run paused on an earlier version and resumed on this one keeps the rows of its first leg as they were written: an unknown tool name there stays `'error'`, and only the calls of the resumed leg read `'not-run'`.
+  - The check-in summary an approver reads (`CheckInRequest.evidence.trail.summary`) counts calls, not runs: "3 tool calls over 2 iterations" (was "3 tools run over 2 iterations"), "no tool calls yet (iteration 1)" (was "no tools run yet (iteration 1)"). The history it is built from does not always say whether a call's tool ran. What to do: update a pinned summary.
+  - The trace toolpack’s `inspect_tool_call` describes arguments as used only when the record proves entry. A missing end bracket or a malformed settlement marker leaves execution unrecorded unless a separate recorded decision establishes denial or decline. A valid settlement marker on the stream or in history still proves that the call was never dispatched.
+  - Teaching commentary says the call was not executed when the end bracket proves it. When execution is unrecorded, the commentary says the record does not say whether the tool ran.
+  - The chat-interface adapter (AG-UI) sends "The call was not executed." as the `TOOL_CALL_RESULT` of a failed call that never reached its tool, where it sent "The tool failed."; with `toolErrors: 'served'` it still sends the record's own result. What to do: a page that matched "The tool failed." also matches the new sentence.
+  - A saved `tool_end` field among `error`, `entered` and `notExecuted` that is present but not a boolean leaves execution unrecorded, even beside a valid entry stamp. If the bracket still records `error: true`, the account says the call ended in an error. Without that error or separate evidence of refusal, decline or settlement, it says how the call ended is unknown.
+  - A saved `tool_end.notDispatched` marker proves settlement only when it names the paused call with a string ID and name. A malformed marker leaves execution unrecorded.
+  - A recording made before 15.0.0 has no entry stamp. The answer account, trace call journal and teaching commentary report that entry was not recorded unless they can read a recorded decline, denial or settlement. The journal still shows the result text. An old error still reads "the call ended in an error" in the account and counts under "failed". New recordings say whether the tool was entered. A run resumed across the upgrade can contain both kinds of bracket, and each is read on its own evidence. A recording read without its event stream may now read "unknown" in the journal where it previously read "ok".
+
+  Not covered yet, by design of this change: some readers still answer "did this call run?" on their own (the audit adapter's run tracker and the OpenTelemetry adapter, which count a call declined on resume as run; the approver trail's per-call `ok`, which follows the history message and reaches the approver as `ok: true` for an unknown tool name until the history carries a call's outcome; the step graph and the bug-report transcript, which drop `entered`; and the account's rows before a pause, which are read from history). `src/answer-account/README.md`, "Not covered yet", lists them; they are part of a planned change, "one answer to: did this call run".
+
+- **A streamed answer's standing line and limits block now reach the reader over record-only AG-UI and `toSSE({ format: 'text' })`.** At the turn's end, both write the rest of `turn_end.finalContent`. Record-only AG-UI writes it as its own text message. The text format can write one more chunk when it saw the turn start at the root. A filter that drops only trailing tokens gets those words back with the rest. If a filter leaves a gap so the written text no longer matches the answer's prefix, nothing is added. If the provider streams nothing or a filter drops every token, the whole answer is written. Refused answers produce no additional text. A fresh stream on resume writes only the tokens from the already-open turn, if any. Under a Sequence or Parallel the stream still stops at the first agent's turn. Its text can be the run's answer when that agent also answers last. `stream.token` still carries only the model's words.
+
+  **Migration.** If your UI appends the answer itself after either stream writes it, remove that step to avoid duplicate text. If you use a token filter to suppress answer text, use the full event format and select the events to display. Read a resumed or composed run's full answer from its returned outcome.
+
+- A check-in tells the approver which argument values were hidden. The request binds that list to the call and carries it into the decision record.
+
+  **Migration**
+
+  - Show `CheckInRequest.hiddenArgs` next to the arguments on approval screens. The request omits the list when the view hides nothing. The built-in `evidence.willDo` names the hidden arguments in quoted text. A custom assembler receives the same list on `CheckInAssemblerInput.hiddenArgs`.
+  - A view that throws or returns unsupported data displays placeholders for all arguments. An inconclusive string probe masks that argument and lists its name. A check-in refuses a call with a whole scalar argument value, and the protected wire display shows that value as hidden under the fixed name `arguments`. Custom views should depend only on their arguments. An unchanged non-string value can be indistinguishable from a custom placeholder of that type.
+  - An approval binds the hidden names and the arguments that will run. Empty lists leave the request id unchanged. Handle the new `view-changed` refusal when the resumed view would hide a different set of names. The decision stays unspent, and the host can ask again. An edited checkpoint list continues to be refused as `call-changed`.
+  - Decision readers should accept `hiddenArgs: 'not-recorded'` when a pause predates the list. On new pauses, `checkin.decision` and `CheckInRecorder` keep the names from the request. The private check-in marks use those names too. The app's redaction policy can mask argument names in served records.
+  - On `stream.tool_start`, use `shownArgs` and `hiddenArgs` when showing arguments to a person. The built-in AG-UI translation streams this view in `TOOL_CALL_ARGS`, and `TOOL_CALL_START` names the arguments hidden from the proposal. When input fills or middleware can change the proposal, the early display masks all values. The check-in interrupt gives its own list and evidence from the bound call. The `toolArguments` projector applies to calls without a protected view.
+  - Tool argument views receive frozen copies. Update custom views that modify their inputs. The library checks unchanged strings separately for private argument marks.
+
+  The app's run-wide redaction policy governs original arguments in `stream.tool_start.args`, `agent.iteration_end.history`, recorded history and snapshots. The answer account exposes the approval flag, tool name and call id. A check-in on a hidden view records the person's consent with limited visibility. Tool results retain their separate delivery policy.
+
+- **Placement tickets are recognised by the library's own receipt, and small corrections to the claim checks.**
+
+  - A tool result shaped like a placement ticket counts as one only when the library placed it. The run keeps a receipt of the tickets it placed (`placedTickets` in its state, one `{ toolCallId, ref }` per placement); the staged-refs nudge, the declared-sources check, the answer account and findings admission read it. These readers recognize a placed ticket even when a procedure note follows its JSON. A ticket-shaped result the library did not place gets no staged-refs line and no `agentfootprint.agent.grounding_nudged` event, and the declared-sources check reads it as an ordinary result (`not-in-result`, or `result` when the value is in it) instead of `placed-result`. The answer account applies the app’s row rules to that value, and findings standings carry no artifact reference for the unissued ticket. Migration: none for an app; a tool that wants its data staged declares `resultKind` and lets the library place it.
+  - A stored conversation carries the receipt as the new optional `AgentRunCheckpoint.placedTickets`: the tickets whose `role: 'tool'` messages the stored history still holds, written by `checkpoint()` and by the crash checkpoint on `RunCheckpointError` only when there is at least one. So a ticket placed in an earlier turn is still named after `followUp()`, `run({ continueFrom })`, `resumeOnError()` and a pause and resume. A call id a provider reuses in a later turn keeps every ref minted under it (one entry per pair). Migration: store and hand back a checkpoint whole. A store that copies known fields only must also keep `placedTickets`. The library trusts this field as stored, just as it trusts the rest of the checkpoint. It cannot establish who wrote a stored field, so keep the session store as safe as the run.
+  - A malformed `placedTickets` (not a list of `{ toolCallId, ref }` strings) is refused with a `TypeError` at every checkpoint door: `run({ continueFrom })`, `followUp()`, `resumeOnError()`, and the hosting doors `readEnvelope`, `checkEnvelope` and the paused-run validator. Migration: do not edit the field by hand; drop it rather than rewrite it.
+  - **A conversation stored or paused by an earlier version has no receipt, and it is read in the stricter direction**: none of its tickets is named in the staged-refs line, the answer account or new findings standings, and the declared-sources check reads each as an ordinary result. An armed run paused before the upgrade and resumed after it records an empty receipt when none was restored. The live request and `servedAt` for the resumed leg both omit the staged-refs line until that leg issues a ticket. Migration: finish paused runs before upgrading; tickets in conversations stored by an earlier version are not named.
+  - The `placedTickets` state key: `[]` at seed on an agent that declares `wants` (the nudge armed), `[]` at an armed resume when the older checkpoint has no receipt, and one entry per placement on every agent with `artifacts.placement`, with or without `wants`. Snapshots, recordings and checkpoints carry it. Migration: a reader that compares whole states expects the new key.
+  - `servedAt` on a recording made before this change (one with `toolWantsByName` and no `placedTickets`) rebuilds the staged-refs line by the ticket-shape rule that run used, so the view gives back the line that was sent. Migration: none.
+  - The prior-turn check no longer starts a new turn at a line the library wrote (a wrap-up frame, a step nudge, a drop notice, a compaction summary, a delivered injection), so fewer `prior-turn-evidence` findings are filed and the turn numbers on grounding rows can be lower. A person's message that opens with one of the library's own prefixes is still taken for the library's (unchanged, now documented). Migration: none; a finding that disappears was filed against this turn's own result.
+  - The answer's standing (`assessment/assess.ts`) reads where this turn begins by the same rule as the answer account: an `ephemeral` library line in a restored history (a retry's feedback) no longer starts a turn, so the standing can change for such a history. Migration: none.
+  - The dispatch moment of the contingent check now exempts the same values as the answer moment: a value the person gave the inputs layer's batch ask, a declared default the turn assumed, and under `.time()` a time the person said no longer file a contingent row at the next call. Migration: none.
+  - `resultColumns` counts a column as present only when the row has it as its own key, so a declared column named `constructor` or `toString` that no row delivered is reported as `missing-column` instead of a mismatch, and under `enforce` a valid result is no longer refused for it. Migration: none.
+  - The two private-argument refusals that shared the code `ERR_PRIVATE_ARGUMENT_RECORD` are now one error class with that code, so the resumed-question refusal's `error.name` is now `PrivateArgumentRecordError` (was `PendingPrivateAskError`). Migration: match on `code`, which is unchanged.
+  - The tools slot's compose-seam backstop files its findings through the same path every other seam uses, so its dedup identity names the compose seam it reports (`@compose`). No live route reaches it. Migration: none.
+  - Unchanged bytes: the negative-prose note codes and claim kinds are declared once (the row types and checkpoint admission read the same list; what is admitted does not change), and the findings DATA frame is measured with a running byte total instead of being re-encoded after every entry (the frame is byte-identical).
+
+- **A tool called from inside another tool passes the same gates as a call the model makes.** `ctx.tools.call(name, args)` now puts the inner call to the agent's `permissionChecker` (its `tool_call` question, the capabilities the tool declares that the checker governs, and `skill_read` for `read_skill`) and to its before-tool middleware links, through the same functions and in the same order as a model call, with the inner call's own arguments and under its own id (`<outer call id>#inner-<n>`). A sequence rule sees the inner calls, and a checker's `'halt'` on one ends the run. Before, an inner call was asked nothing: a tool the checker or a middleware refused to the model ran when another tool called it.
+
+  What "governs" now means: your `permissionChecker` and `.toolMiddleware()` links decide every `tool.execute()` the agent's dispatch makes — the model's calls, and the calls a tool makes through `ctx.tools`. A checker is now asked about calls the model never proposed (`actor` is still `'agent'`; the id ends in `#inner-<n>`).
+
+  What an app will notice:
+  - **A composed tool that calls a tool your checker or middleware refuses now gets an `Error`** from `ctx.tools.call` naming the tool and the refusal, and the inner tool does not run. A middleware `ask` refuses the inner call too (a person cannot be asked from inside another tool). To do: let the composing tool handle the error, or allow the inner call in your rule.
+  - **A checker's halt ends the run once the outer call settles.** It takes precedence over a new pause, closes further inner admissions and publishes `permission.halt` with the halted inner call's id and tool name. Catch `PolicyHaltError` as for a model call's halt. Alert routes keyed on `toolCallId` receive inner ids.
+  - **A checker's sequence includes admitted inner calls.** Admission follows invocation order and becomes visible when the tool enters, including while it is running. Permission checks receive the bound input. Rules that count model calls can filter entries marked `inner: true`.
+  - **The outer call's history carries its inner calls' shown arguments in `LLMMessage.calls`.** The library removes the field before provider requests. If you build requests from history directly, strip this field. Treat native pause, conversation and error-recovery checkpoints as sensitive working data. Retain the private policy carrier with its stored conversation. The library refuses a tool-call check when the earlier inner-call inputs cannot be established.
+  - **Inner calls take a plain JSON argument object.** The library copies it synchronously, then copies a middleware rewrite before running the tool. Pass plain JSON records for composed calls. Omitting arguments supplies an empty object.
+  - **Refusals come in the model call's order:** the permission check, the tool's argument rules, the middleware chain, an unknown name, the schema, the `skill_read` question, then the check-in and `wants` refusals. An inner call to a `checkIn` or `wants` tool is now walked through the middleware before it is refused, and an unknown name is put to the checker and the middleware first, as a model call's is. To do: a checker or link that assumes the named tool exists must handle an unknown name, as it already must for the model's calls.
+  - **A `ctx.tools` kept past its outer call's `execute` is refused** by name. Calls made while the outer stage is open leave a row, with `refusedBy: 'ended'` for such refusals, and after the stage commits the caller receives refusals without a row. To do: make inner calls inside `execute` and await them.
+  - **More events and rows under inner ids.** Each gated inner call files its own `permission.check` and `middleware.decision` events and `middlewareDecisions` rows under `<outer>#inner-<n>`; no `tool_start` / `tool_end` fires for it, so the library's readers of the model's calls count as before. To do: app code that counts those events or rows as calls the model made should skip ids containing `#inner-`.
+  - **The audit row records entry and settlement under one id.** Calls that are still active when the stage closes remain `unsettled`. The record uses shown arguments. Include `innerToolCalls` and `innerCallPolicyArgs` in hand-written redaction lists that already keep tool-call state private.
+  - **The inner id after a refused inner call is one higher than before:** every `ctx.tools.call` takes its id when it is made, a refused one included.
+  - **The answer account** (`accountForAnswer`) no longer reads a `permission.check` filed under another call's id as a verdict on the call it is reading. It does not name inner calls.
+
+  The shared permission verdict contract comes from its own change. This change uses the shared permission and middleware owners.
+
+- **`route_decided` names the citation correction, and `tool_end.changedArgKeys` names the keys a redrawn look-back ran with.** An agent with typed negative claims (`.outputSchema()` + `.negativeClaims({ field, tools })`) whose answer cited a result that does not resolve announced `chosen: 'final'` and then took the correction branch; it now announces `'negative-recheck'`, one announcement per iteration. Under `.time()`, when a drifted look-back is redrawn at the batch dispatch, `tool_end.changedArgKeys` now names `start_time` and `end_time`, the keys the tool ran with, instead of the removed `window`. A resumed call (after a check-in pause) still carries no `changedArgKeys`.
+
+  Migration: a listener that took `chosen: 'final'` as the end of the turn waits for the `'final'` that follows a `'negative-recheck'`; a reader of `changedArgKeys` reads the names the event carries, as before.
+
+- **`agentfootprint-check-semantics` reads each catalog row's `search`, and refuses one `defineTool` would refuse.** The command line dropped a row's `search`, so a tool declaring a search and returning `absent({ checked: 'declared' })` failed the gate (exit 1, `declared-without-search`) while `checkSemantics` passed the same row; it now gives the same verdict (exit 0). A `search` that `defineTool` would refuse (`{}`, a string, `complete: 'bogus'` …) now makes `checkSemantics` throw, naming the tool and the field (the command line exits 2), where before it passed the gate or crashed with a `TypeError`. The checks that need the tool's `inputSchema` are not made there; a catalog row carries none.
+
+  Migration: dump each row's `search` from the defined tool (`tool.search`), which `defineTool` already accepted.
+
+- **A procedure step is done only when its tool says so; a declared failure holds the step.** A step of a skill's `steps` used to advance on a declared failure. A tool that returned `{ content, effects: [], status: 'failure' }` moved the procedure on, the next step's tool was offered, the model read "Step 1 of 2 done." and `skill.step_advanced` was recorded. Now what the tool declared decides, by one rule, in the tool loop and on every resume (after an `askHuman` answer, an approved check-in, an approved middleware `ask`, and granted credential consent), on agents with a skill graph and on plain agents alike:
+
+  - `'success'` or `'absent'`: the step advances and the model reads "Step 1 of 2 done." as before. `'absent'` (the tool looked and found nothing, declared in an envelope or by returning `absent(…)`) is a completed step; the event carries the word (`status: 'absent'`), so a reader can tell it from a plain success.
+  - No declared status (a plain return value, or a person's answer to a tool's own pause): the step advances, and the model reads "Step 1 of 2 ran; its tool declared no status." instead of "done" ("It was the last step." instead of "All 2 steps complete." on the last one).
+  - A status word the library does not know, in a value that is an effects envelope in every other way (`{ content, effects: [], status: 'queued' }`): the value is still data, and the step is not held (a tool with its own vocabulary must not lock a procedure). It advances, and the model reads `Step 1 of 2 ran; its tool reported "queued", a status this library does not know, so the step was not held.` The word is cleaned first (control, line-separator and invisible format characters removed, cut at 40 characters).
+  - `'failure'`, `'denied'` or `'invalid'`: the step holds. The pointer stays, the next step's tool is not offered, the model reads "Step 1 of 2 was not completed: its tool reported 'failure'. The procedure stayed on step 1 (tool: `lookup`).", and the new event `agentfootprint.skill.step_held` records the step, `outcome: 'failed'` and the declared `status`.
+  - `'pending'` or `'partial'`: the step holds the same way; the sentence adds ", so its work was not finished" and the event says `outcome: 'not-finished'`.
+
+  A status word is now read in any case and with surrounding spaces trimmed, everywhere an envelope is read: `{ content, effects: [], status: 'FAILURE' }` declares `'failure'` (it used to be data, its whole object shown to the model). A thrown error or a refusal by the library (a permission denial, a declined check-in or ask, a credential that failed at resume, a result over its ceiling) still holds the step with no extra sentence and no step event, as before; those refusals keep their own events. A step tool that keeps failing is ended by the turn's existing limits (`maxIterations`, a cost budget), and the procedure is recorded `steps_unfinished { action: 'cut-short' }`. The one nudge after a premature answer now says the steps "had not been completed when the answer above was given" and asks for them "to be completed, or for the reason they were not", where it said they "had not run": a held step's tool did run.
+
+  What an app will notice, and what to do:
+
+  - `skill.step_advanced` always carries `outcome` (`'succeeded'` or `'not-reported'`; `SkillStepAdvancedPayload.outcome` is a required field), plus `status` (`'success'` / `'absent'`) when it succeeded and `unknownStatus` when the tool wrote a word the library does not know. A payload built by hand no longer compiles without `outcome`: add it. A recording made before this change has none of the three, which proves nothing either way.
+  - A step whose tool declares a failure, denial, invalid result, pending or partial no longer advances, and the next step's tool is not offered until it succeeds or is skipped: a procedure that relied on moving past a failed step needs a `skip_step` (or the tool must declare success).
+  - A listener for `skill.*` receives the new `step_held` event (`SkillStepHeldPayload`): handle or ignore it; an app that counts event names sees one more.
+  - The model's tool message for a step whose tool returns a plain value says "ran; its tool declared no status." instead of "done": return `{ content, effects: [], status: 'success' }` where the tool can say its work was done. This also applies when a result reaches the agent as a plain value from an MCP tool in default text mode, a page-answered frontend tool, or an `askHuman` / `pauseHere` step. Structured MCP modes can carry an envelope. A person's "no" also advances a step through the plain resume path. Saved prompts, transcripts or tests that pin "Step k of n done." for such a tool must be updated.
+  - A tool that returned an envelope with a status in another case or with spaces (`'Success'`, `' denied '`) now has it read: its content is unwrapped for the model, `stream.tool_end` carries the word, `onToolStatus` edges can fire on it, the committed tool message's `outcome` reads it, and `readToolResultEnvelope` returns it lower-case. Check any route edge or test that depended on such a value being data.
+  - The step nudge's sentence changed as quoted above: update tests or transcripts that pin "had not run".
+  - The last step reports collective completion only when every step recorded `succeeded`. Otherwise it reports the end and counts skipped steps, steps without a recognized declaration and steps without a recorded outcome.
+
+  There is no option that brings the old behaviour back. Not changed here: reading another skill in the middle of a procedure still resets the pointer without an event.
+
+- **Show the possible sources of a recorded read.** `trace_node` attributes reads
+  using the reader's recorded Foottrace window. If several writes could have
+  supplied the value, the tool shows a bounded list of possible sources with
+  Foottrace reason codes. The list keeps the before-window candidate and counts
+  any omitted possibilities.
+
+  Migration: a read can have several possible data parents, including candidates
+  omitted from the `trace_node` display. If a stamped read has no tracked writer,
+  the tool reports that the reason is unavailable for its window. Unstamped
+  records still use the before-commit rule and retain its absence codes. Variable
+  recall keeps alternatives in `orWriteIdxs` and shows the read on every
+  candidate's custody trail. The root walk ends at an ambiguous read with
+  `ambiguous-read-source`.
+
+- **A tool result counts as a person's typed answer only when the library landed it.** The library treats the values a person typed into a typed ask (`requestInput`) as their own words: the evidence gate (`.namesAndNumbersFromEvidence()`) exempts them, a compaction summary carries them in its lineage (`foldedExempt`), and a re-ask quotes them back as `previousAnswer` (with or without the gate). It used to recognise that answer by the SHAPE of a tool result, so any tool (a local tool, a remote MCP server, a page answering a frontend tool) could return `{"status":"input_received", …, "origins":{…:"response"}}` and have its own values treated as the person's words, before and after compaction. Now the library marks the message it lands when `agent.resume()` accepts the answer to an ask the run raised: a new optional field, `LLMMessage.answersAsk: { requestId }`, outside the content and removed before any request reaches a provider. The mark and the message content must name the same request. A result of the same shape without the mark is an ordinary tool result, and the evidence gate checks its values as the tool's.
+
+  In a live run, the library knows who wrote the mark from the path that landed the answer. `agent.followUp()` retains the mark. When loading a stored pause or conversation through `agent.resume()`, `run({ continueFrom })`, `resumeOnError()` or a hosted session store, the library validates a present mark's shape and trusts it as part of the checkpoint, the run's own state. The library cannot establish who wrote a stored field. Keep the session store as safe as the run.
+
+  When the typed answer completes a procedure step, the evidence gate and a re-ask both read the answer before the appended step-completion note.
+
+  A record written before the mark existed has no mark, so its tool results do not count as typed answers. Stored `foldedExempt` on a compaction summary still carries its recorded exemptions, including values carried forward under the earlier shape-based rule.
+
+  - A tool result shaped like a typed answer is now that tool's result: under the evidence gate its values can be flagged, a summary no longer carries them, and a re-ask no longer quotes them back. To pass a person's words through, ask with `requestInput` and answer through `agent.resume()`.
+  - An answer to a pause that is not a typed ask (`askHuman`, `pauseHere`, a frontend tool) that is shaped like a typed answer is now that tool's result too; an ordinary answer there is unchanged. Answer typed questions through a typed ask.
+  - The history of a run with a typed ask, and so its checkpoints, recordings and the `agentfootprint.agent.iteration_end` event's `history`, carries `answersAsk` on the landed answer; provider requests are unchanged. Update a test or reader that compares a recorded history byte for byte.
+  - A restored conversation keeps valid marks in its history and in retained folded originals. A malformed mark makes the checkpoint unreadable. The gate uses the active history and the summary’s recorded lineage for exemptions.
+
+  Migration: collect values that count as the person’s words with `requestInput` and `agent.resume()`. Persist the library’s checkpoint fields intact, and include `answersAsk` in byte-for-byte history comparisons for typed asks. A restored pre-mark conversation can flag more values when the model repeats an old tool result.
+
+### Fixed
+
+- Clarify how the Agent records abandoned pauses and handles pauses from wrapped charts.
+  Document the scope of window and request fingerprints and the integrity findings emitted
+  by the current checks.
+
+- Document the live findings DATA frame, legacy replay, and current checkpoint boundaries.
+  Clarify the answer checks, message deferral, MCP declarations, and procedure limits.
+
+### Security
+
+- **Tool permission, pause and check-in handling hardened.** A permission checker's answer is now read by one rule everywhere it is asked, and the check-in evidence and pause records name what the run actually recorded. What an app will notice:
+
+  - A permission check that answers anything but `'allow'`, `'gate_open'`, `'deny'` or `'halt'` (for example `'ask'`, `'ALLOW'`, `'deny '`, `{}` or `{ result: null }`) now refuses the call, at the tool gate and at a governed capability gate (`skill_read` included). Migration: make your checker return one of the four answers.
+  - In that case `permission.check` records `'deny'` with the library's rationale ("permission checker answer not recognised: … got an object") and no longer carries the checker's own `policyRuleId`, `rationale` or `reason`. Migration: a dashboard that read those fields for such answers reads the library's rationale instead.
+  - A checker that returns `null` or `undefined` still refuses the call. The recorded rationale now reports an unrecognised answer and ends with “got no decision”. Migration: dashboards that match `permission-checker threw` need to match the missing-decision rationale for these answers.
+  - The check-in evidence trail (`evidence.trail.toolCalls[].ok`) is now read first from how each call settled: a tool that threw, a call refused before it ran (permission, middleware, unknown tool, invalid arguments, a declined check-in or ask, a blocked credential), a declared envelope status of `'failure'`, `'invalid'` or `'denied'`, a result withheld over its size ceiling or refused by the column contract, and a host's notice standing in for a result (`toolResultOrigin`) read `ok: false`. Migration: read `ok` as "the call completed".
+  - A tool message with no `outcome` mark, which includes every message of a history stored by an earlier version (a checkpoint, a paused run, a stored conversation), still reads `ok: false` when its text begins with one of the library's refusal forms ("[permission denied", "declined by human", "credential error", "authorization required"), as before. So a stored history reads its refusals as it did before the upgrade (only a stored host notice carrying `toolResultOrigin` now reads `ok: false`), and a tool whose own completed result begins with one of those forms still reads `ok: false`. Migration: none for stored runs; a tool that wants its result to read ok must not begin it with a refusal form.
+  - A committed tool message in the history can carry a new field, `outcome` (`'refused'` or `'failed'`, absent when the call completed); `LLMMessage` gains it as an optional field. It is in checkpoints, stored conversations and events that carry the history, and is never sent to a provider. Migration: a test that compares stored history byte for byte gains this field on calls that did not complete.
+  - A tool's own pause data (`pauseHere` / `askHuman`) can no longer set `toolCallId`, `toolName`, `checkIn`, `ask`, `awaitingInput` or `authorization`: the real call's id and name are written, and the other keys are dropped whatever their value, in `pauseData`, the checkpoint, the `pause.request` event, `describePause` and `abandonPause()`. A tool's forged `checkIn` or `ask` no longer opens a gate (a plain answer resumes it), a forged `awaitingInput` no longer throws `InputRequestError`, and a forged consent link is not shown. Migration: a tool that used one of these names for its own data must rename it.
+  - An AG-UI pause waits on the page only when the paused call's name is one of the app's `frontendTools`; a server tool whose name is not a declared frontend tool and that writes `agUiFrontendTool` into its pause data waits on a person. Migration: give server tools names of their own, distinct from your frontend tools.
+  - The refusal of a pause raised while resuming now names the door it came through ("an approved ask", "granted credential consent"); the check-in sentence is unchanged. Migration: none.
+
+## [14.10.1] - 2026-11-18
+
+### Fixed
+
+- **Thinking agents with tools work again on the newest Claude models with default caching.** With default settings, an agent that used thinking and at least one tool on `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` or `claude-fable-5-1` stopped before its second model call with `UnsafeThinkingReplayError` (`prefix-changed`). A finished thinking turn was wrongly retired from the next request: through an agent that next turn failed with `DataCloneError`; through a direct provider call the thinking was dropped with a `prefix-changed` omission. The conversation had not changed: the saved check of the thinking was taken over the request after the library added its own cache marks, which rewrite a plain text turn into a marked block. The check is now taken over the conversation as the library sent it, before the cache marks, on `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`. `invokeModelGateway()` sends no cache marks by default, so it was affected only when an app turned prompt caching on or passed its own markers.
+
+  What an app will notice: the default setup completes its tool turns, and finished thinking is kept in the next request, so later requests carry the earlier thinking and count more input tokens than a run that had dropped it. Every saved conversation that replayed before still replays. A conversation saved by an earlier release on these models with default caching, whose saved check was taken over a marked turn, still cannot continue: one that waits in a tool turn refuses on resume with the same `prefix-changed` error, and one whose last turn finished with thinking has that turn retired, which through an agent still fails with `DataCloneError` (a separate defect, not fixed here). Start such a conversation again. `caching: 'off'`, which some apps used to get past this, is no longer needed.
+
+### Security
+
+- **A stored conversation keeps its owner when it is saved mid-run.**
+
+  - With `durability: 'sync'` or `'async'`, progress saves now carry the same owner as the completed turn. If a signed turn fails after saving progress, its owner can continue from the saved row at a door with an identity verifier. Other signed users and anonymous callers at a door configured with `allowAnonymous` receive `ERR_SESSION_NOT_FOUND`. When a session store rejects a save by a different signer, the host reports `ERR_SESSION_OWNERSHIP_CONFLICT` in every durability mode and leaves the stored conversation intact.
+  - At a door without an identity verifier, `session-pending` now returns `ERR_SESSION_NOT_FOUND` when the caller and the stored conversation's envelope name different users. A caller who names nobody can still retrieve the waiting question using the session id. A store that keeps ownership outside the envelope (`agentEngineSessions`) can refuse to save an answer to a question this read served, and a shared ownership check through the store port is deferred to a major release.
+  - `agentEngineSessions` marks a newly created anonymous session in its stored state and remembers the first signer across later anonymous writes. It refuses another signer with `ERR_SESSION_OWNERSHIP_CONFLICT`. A signed save receives `ERR_SESSION_NOT_FOUND` if a legacy row sits under the anonymous placeholder and its envelope names nobody, or if an anonymous-placeholder row has an unreadable owner mark. A legacy row under the anonymous placeholder whose envelope names an owner can still be saved by that owner. Anonymous writes to legacy ownerless rows still work.
+  - `agentEngineSessions.listByUser` can recover a usable id for some older rows. It omits a legacy row if the store rewrote its id and the conversation names no id that opens the row. A row can still be opened directly if its original id resolves to it.
+
+  The core stored conversation has no explicit marker for a session that began anonymously. Its existing ownerless rows remain indistinguishable from rows that previously lost their owner. A verifying door still refuses access to those rows for every signed caller, while an anonymous caller can still open them with `allowAnonymous`.
+
+  The explicit anonymous marker for core conversations and the count of rows omitted by `listByUser` are deferred to a major release because each requires a public type change.
+
+- **`memoryBankStore` refuses invalid scope parts and `s3VectorsStore` checks the stored namespace on reads and conversation-wide erasure.**
+
+  - **Memory Bank.** A scope part whose value is null, undefined or not text, or whose key is empty, previously disappeared from the scope sent to the service. Tenants that differed only in that part could then share memories. When the store resolves a scope, it now throws a `TypeError` naming the invalid key before contacting the service. Convert non-text values to text in `scopeFor`. Correctly typed scopes with nonempty keys keep their existing behavior. Previously written memories retain their original, immutable service scope and remain accessible under that scope until removed.
+  - **S3 Vectors.** `get`, `list` and `forget` check the stored namespace. A conversation never lists or forgets another conversation’s rows when their key prefixes overlap. A single read returns `null` for a row outside the caller’s namespace. Rows without namespace metadata are no longer listed or erased by conversation-wide `forget`. Because `forget` requests metadata, it now needs `s3vectors:GetVectors` alongside `s3vectors:ListVectors` and `s3vectors:DeleteVectors`. Stored keys are unchanged. When two entries share one physical key, a later write still replaces the earlier entry and a single `delete(id)` can still remove the other conversation’s entry. Changing those keys requires a major-version migration.
+
+## [14.10.0] - 2026-11-18
+
+### Added
+
+- **Capture trust facts and receive the exact hosted recording.** Supply a fresh
+  `trustBoundaryRecorder` factory in `artifacts.recordings.trustBoundaries` to add
+  one bounded trust bundle per invocation. A bound `HostReply.turnArtifacts` hook can read
+  `turn.recording` for the root recording that was published to its own scope.
+
+  The SQLite store now reads only metadata for artifact heads, lists, and parent
+  checks. Full reads still load the payload and verify its recorded digest.
+
+## [14.9.2] - 2026-11-17
+
+### Fixed
+
+- **Serve the source declaration contract that native input admission enforces.** With argument sources enabled, actual ASK tools require the library-owned `_findings` envelope and `from` list. One shared contract aligns tool schemas, source hints, per-request instructions and correction feedback across all verified source kinds. Optional observations and other tool cohorts retain their existing schemas; native source checks, human fallback and correction allowance remain unchanged. Saved-request views use the same projection and retain uncertainty when privacy withholds the tool schema.
+
+## [14.9.1] - 2026-11-17
+
+### Fixed
+
+- **Explain the exact nesting of missing source declarations.** Native correction feedback now includes a bounded typed contract derived from the library's declaration schema. It names missing arguments without copying their values, preserves the optional tool-schema envelope and existing human fallback, and never turns framework feedback into source evidence.
+
+## [14.9.0] - 2026-11-17
+
+### Added
+
+- **Correct an omitted argument-source declaration once before asking the person.** Opt in with `inputsLayer({ argumentSources: true, declarationCorrection: 'once' })`. The native batch barrier holds every proposed tool call, asks the model for an actual source declaration and verifies its new proposal through the existing checks. False or malformed claims and genuinely missing values keep their human-question or refusal path. The allowance survives same-request pause/crash recovery and resets on a new human turn; framework notices never become source evidence.
+
+## [14.8.0] - 2026-11-17
+
+### Added
+
+- **Check explicitly declared rowsets in the final governed result.** `Tool.resultRowsets` binds named column contracts to inline paths or bounded datasets published by that same native invocation. The existing column-type dial, findings and dispositions apply across ordinary and resumed execution. Availability has a finite value-free event; warn preserves delivery and enforce refuses unavailable or mistyped results. SourceEvidence shares one sealed publication receipt. Existing direct-array `resultColumns` delivery and the default off path retain their behavior. With an enabled dial and a dynamic provider, responses without a current declaring call file honest not-applicable write accounting.
+
+## [14.7.3] - 2026-11-17
+
+### Fixed
+
+- **Native argument questions no longer fail with `checker_dead` before their tools can run.** A batch held for a person's input now records honest no-result encounters for its armed write checks. Completed results and findings, real checker liveness, and successful reply/resume behavior remain intact.
+
 ## [14.7.2] - 2026-11-16
 
 _Internal changes only — nothing a user of the library can see._

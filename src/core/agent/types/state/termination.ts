@@ -14,6 +14,8 @@ export interface TerminationState {
   policyHaltTellLLM?: string;
   /** The proposed tool call that triggered the halt (NOT executed). */
   policyHaltTarget?: string;
+  /** The exact composed invocation when it was the call the checker halted. */
+  policyHaltInnerCallId?: string;
   policyHaltArgs?: Readonly<Record<string, unknown>>;
   /** ReAct iteration the halt fired on. */
   policyHaltIteration?: number;

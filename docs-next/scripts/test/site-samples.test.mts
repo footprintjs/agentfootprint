@@ -26,7 +26,6 @@ test('every name a sample imports exists on that door', async () => {
       /import\s+\{([^}]*)\}\s+from\s+'((?:agentfootprint|footprintjs)[^']*)'/g,
     )) {
       const door = match[2]!;
-      if (door === 'agentfootprint-lens') continue; // a React package, checked by tsc
       const exported = await doorOf(door);
       for (const raw of match[1]!.split(',')) {
         const name = raw.trim();
@@ -112,7 +111,10 @@ test('LOOP: each of the five moments does what the sample says', async () => {
   assert.ok(!all.includes('4242 4242'), 'the card number is gone before the model sees it');
   assert.ok(!all.includes('flagged'), 'the internal note is gone before the model reads it');
   assert.ok(all.includes('order ids look like A-1042'), 'the refusal reason reaches the model');
-  assert.equal(answer, 'Still pending, as our review team said.');
+  assert.equal(
+    answer,
+    'Still pending, as our review team said.\n\n---\n\nNot sure — a call was refused.',
+  );
 });
 
 test('HARNESS: the pieces work together, and the fallback takes over', async () => {

@@ -37,8 +37,8 @@ export interface Scope {
   text: OpenText | undefined;
   /** The text message of the scope's current LLM call — the parent of its tool calls. */
   callMessageId: string | undefined;
-  /** A token streamed since the scope's last `llm_start`. */
-  streamed: boolean;
+  /** The text streamed since the scope's last `llm_start`; `undefined` = no token. */
+  streamedText: string | undefined;
   reasoning: OpenReasoning | undefined;
   /** Open step names, in the order they opened. */
   readonly steps: string[];
@@ -60,8 +60,35 @@ export const newScope = (
   isAgent: false,
   text: undefined,
   callMessageId: undefined,
-  streamed: false,
+  streamedText: undefined,
   reasoning: undefined,
   steps: [],
   calls: [],
 });
+
+/**
+ * The open call a `tool_end` closes. One agent runs its calls one at a time,
+ * so the open call at the result's stage execution is the one it answers;
+ * where the record still names the call (no redaction policy), the id
+ * decides among several.
+ */
+export function takeCall(
+  scope: Scope,
+  address: string,
+  servedId: unknown,
+): AgUiOpenCall | undefined {
+  let at = -1;
+  for (let i = scope.calls.length - 1; i >= 0; i--) {
+    const call = scope.calls[i] as AgUiOpenCall;
+    if (call.address !== address) continue;
+    if (at < 0) at = i;
+    if (typeof servedId === 'string' && call.servedId === servedId) {
+      at = i;
+      break;
+    }
+  }
+  // The call a paused run left open is answered by the first result in its
+  // scope: the continuation's stage executions are new, so no address matches.
+  if (at < 0) at = scope.calls.findIndex((call) => call.resumed === true);
+  return at < 0 ? undefined : scope.calls.splice(at, 1)[0];
+}

@@ -40,6 +40,8 @@
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
+import type { ArgumentAskDeps } from './argumentAskDeps.js';
+export type { ArgumentAskDeps } from './argumentAskDeps.js';
 import { readToolOwner } from '../../../tools/toolResourceOwner.js';
 
 import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
@@ -54,6 +56,7 @@ import {
   readAskAnswer,
   settledCalls,
   withWaiting,
+  withSettled,
   type ArgumentAskState,
   type AskWaiting,
   type CallAsk,
@@ -65,8 +68,14 @@ import {
   callWindowRowsOf,
   type ArgumentResolution,
   type BatchCall,
-  type ToolOf,
 } from '../arguments/resolve.js';
+import { batchAddress, type BatchAddress } from '../arguments/batchAddress.js';
+import {
+  callsByAddress,
+  addressOf,
+  memberAddresses,
+  restoreAskAddresses,
+} from '../arguments/askAddresses.js';
 import { withFills } from '../arguments/dispatch.js';
 import { markPrivateAsk, requirePrivateQuestionSupport } from '../arguments/privateAnswers.js';
 import { privateFieldsInForce, markPrivateFields } from '../../../redaction/runRedaction.js';
@@ -87,17 +96,16 @@ import {
 } from '../arguments/partialWindow.js';
 import { declaredSourcesOf } from '../honesty/sourceCorpus.js';
 import { periodFactsOf, rulesOf, isRefused } from '../../../tools/declare.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { timeRefusal, unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
-import type { TimeAskMessages } from '../../../time/ask.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
 import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
 import { spellRange } from '../../../time/range.js';
-import type { TimePolicy } from '../../../time/resolve.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
 import type { AskTime } from '../arguments/ask.js';
 
@@ -183,44 +191,10 @@ function windowPlanOf(
   };
 }
 
-/** What the dispatch stage hands the ask — closures, never scope. */
-export interface ArgumentAskDeps {
-  /** Already refused calls do not acquire new obligations. */
-  readonly excludedCallIds?: readonly string[];
-  readonly admitAnswer?: () => void;
-  readonly saveParties?: () => void;
-  readonly pendingAsk?: boolean;
-  readonly settledAsk?: () => void;
-  readonly refuseMalformedBatch?: () => boolean;
-  readonly argumentSources?: true;
-  /** The implementation that will answer a name — the shared dispatch resolver's. */
-  readonly toolOf: ToolOf;
-  /** The run id a stamped request id carries; absent → the turn's start time. */
-  readonly runId?: () => string | undefined;
-  /** The host's own context for the ask (`AgentOptions.argumentAskContext`). */
-  readonly hostContext?: () => unknown;
-  /**
-   * Present exactly under `.time()`: an answer for a period argument is also
-   * judged against the tool's declared facts at the turn's clock
-   * (`arguments/ask/validation.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
-   * `reader` is present exactly under `.time({ reader })`: a call that left
-   * its period out while the turn's one mention was open is asked THAT
-   * mention's window (the lazy word-driven ask) — `policy` re-reads the
-   * mention after a zone answer, `messages` are the app's catalog overrides.
-   */
-  readonly time?: {
-    readonly appZone?: ZoneName;
-    readonly reader?: {
-      readonly policy: TimePolicy;
-      readonly messages?: Partial<TimeAskMessages>;
-    };
-  };
-}
-
 /** What the ask hands the batch back. */
 export interface AskedBatch {
-  /** Per call id, the entry ToolCalls applies: the layer's fills plus the answered ones, or a refusal. */
-  readonly resolutions: ReadonlyMap<string, ArgumentResolution>;
+  /** Per call, the entry ToolCalls applies: the layer's fills plus the answered ones, or a refusal. */
+  readonly resolutions: ReadonlyMap<BatchAddress, ArgumentResolution>;
   /** This pass carries the person's answer — the batch's one human question has been asked. */
   readonly answered: boolean;
   readonly refused?: true;
@@ -245,6 +219,7 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
   return [...((scope.llmLatestToolCalls as readonly BatchCall[] | undefined) ?? [])].map((c) => ({
     id: c.id,
     name: c.name,
+    ...callOccurrenceField(c.callOccurrenceKey),
     args: { ...(c.args ?? {}) },
     ...(c.argumentsFailure !== undefined && { argumentsFailure: c.argumentsFailure }),
   }));
@@ -259,12 +234,16 @@ function stateFor(
   scope: TypedScope<AgentState>,
   iteration: number,
   pending: boolean,
+  calls: readonly BatchCall[],
 ): ArgumentAskState | undefined {
   if (!pending) return undefined;
   const state = scope.$getValue('argumentAsk') as ArgumentAskState | undefined;
-  return state !== undefined && state.iteration === iteration
-    ? (structuredClone(state) as ArgumentAskState)
-    : undefined;
+  if (state === undefined || state.iteration !== iteration) return undefined;
+  const detached = structuredClone(state) as ArgumentAskState;
+  if (detached.partial !== undefined && !validPartialSnapshot(detached)) {
+    throw new TypeError('argumentAsk: partial-window state does not match this batch');
+  }
+  return restoreAskAddresses(detached, calls);
 }
 
 /** The typed ask for the next round, stamped — the host's context judged first. */
@@ -291,42 +270,6 @@ function stampRound(
   return { requestId, fieldIndexes, awaiting };
 }
 
-/** Each call's entry with the settled ask folded in: the answered fills, or the unanswered refusal. */
-function withSettled(
-  resolutions: ReadonlyMap<string, ArgumentResolution>,
-  state: ArgumentAskState,
-  calls: readonly BatchCall[],
-): Map<string, ArgumentResolution> {
-  const nameOf = new Map(calls.map((c) => [c.id, c.name]));
-  const settled = settledCalls(state);
-  const merged = new Map<string, ArgumentResolution>();
-  for (const [id, entry] of resolutions) {
-    const s = settled.get(id);
-    if (s === undefined || entry.refused !== undefined) {
-      merged.set(id, entry);
-      continue;
-    }
-    if (s.exhausted.length > 0) {
-      merged.set(id, {
-        toolCallId: id,
-        iteration: entry.iteration,
-        refused: unansweredRefusal(nameOf.get(id) ?? id, s.exhausted),
-      });
-      continue;
-    }
-    // An answered value replaces any earlier fill of the same argument (a window answered for
-    // a form whose other argument the tool's rule had assumed).
-    const answered = new Set(s.fills.map((f) => f.argument));
-    const fills = [...(entry.fills ?? []).filter((f) => !answered.has(f.argument)), ...s.fills];
-    merged.set(id, {
-      toolCallId: id,
-      iteration: entry.iteration,
-      ...(fills.length > 0 && { fills }),
-    });
-  }
-  return merged;
-}
-
 /**
  * Ask the person, ONCE for the whole batch and before anything in it runs,
  * for every value the layer named — or, on the re-run a resume makes, take the
@@ -337,13 +280,21 @@ function withSettled(
  */
 export function askBeforeDispatch(
   scope: TypedScope<AgentState>,
-  resolutions: ReadonlyMap<string, ArgumentResolution>,
+  resolutions: ReadonlyMap<BatchAddress, ArgumentResolution>,
   deps: ArgumentAskDeps,
 ): AskedBatch {
   const iteration = scope.iteration as number;
   const turn = scope.turnNumber as number;
-  const calls = batchOf(scope).filter((call) => !deps.excludedCallIds?.includes(call.id));
+  const calls = batchOf(scope).filter(
+    (call) => !deps.excludedCallAddresses?.includes(addressOf(call)),
+  );
   const entries = new Map(resolutions);
+  const notifyRefusals = (current: ReadonlyMap<BatchAddress, ArgumentResolution>) => {
+    if (deps.refusedCalls !== undefined)
+      deps.refusedCalls(
+        [...current].filter(([, entry]) => entry.refused !== undefined).map(([address]) => address),
+      );
+  };
   const time = askTimeOf(scope, deps);
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const readings = readingsOf(ledger, turn);
@@ -353,8 +304,9 @@ export function askBeforeDispatch(
   );
   const origins: PartialOrigin[] = [];
   const refuse = (call: BatchCall, arguments_: readonly string[], expected: string) => {
-    entries.set(call.id, {
+    entries.set(addressOf(call), {
       toolCallId: call.id,
+      ...callOccurrenceField(call.callOccurrenceKey),
       iteration,
       refused: unansweredRefusal(
         call.name,
@@ -368,7 +320,7 @@ export function askBeforeDispatch(
     (open.length > 0 || answers.length > 0)
   ) {
     for (const call of calls) {
-      if (entries.get(call.id)?.refused !== undefined) continue;
+      if (entries.get(addressOf(call))?.refused !== undefined) continue;
       const origin = partialOriginOf(call, deps.toolOf, time);
       if (origin === 'ambiguous') {
         refuse(call, ['period'], 'one unambiguous declared period form');
@@ -376,16 +328,24 @@ export function askBeforeDispatch(
         if (open.length > 1) refuse(call, origin.arguments, 'one unambiguous time mention');
         else {
           origins.push(origin);
-          if (!entries.has(call.id)) entries.set(call.id, { toolCallId: call.id, iteration });
+          const address = addressOf(call);
+          if (!entries.has(address))
+            entries.set(address, {
+              toolCallId: call.id,
+              ...callOccurrenceField(call.callOccurrenceKey),
+              iteration,
+            });
         }
       }
     }
   }
+  notifyRefusals(entries);
   const asks: CallAsk[] = [...entries.values()].flatMap((r) =>
     r.refused === undefined && r.ask !== undefined && r.ask.length > 0
       ? [
           {
             toolCallId: r.toolCallId,
+            ...callOccurrenceField(r.callOccurrenceKey),
             ask: r.ask,
             ...(r.quoted !== undefined && { quoted: r.quoted }),
             ...(r.window === true && { window: true as const }),
@@ -393,10 +353,19 @@ export function askBeforeDispatch(
         ]
       : [],
   );
-  const stored = stateFor(scope, iteration, deps.pendingAsk === true);
+  const stored = stateFor(scope, iteration, deps.pendingAsk === true, calls);
   if (asks.length === 0 && origins.length === 0 && stored === undefined)
     return { resolutions: entries, answered: false };
   if (deps.refuseMalformedBatch?.() === true)
+    return { resolutions: entries, answered: false, refused: true };
+  if (
+    deps.correctOmissions !== undefined &&
+    stored === undefined &&
+    origins.length === 0 &&
+    ![...entries.values()].some((entry) => entry.refused !== undefined) &&
+    !asks.some((ask) => ask.window === true) &&
+    deps.correctOmissions?.(asks) === true
+  )
     return { resolutions: entries, answered: false, refused: true };
   requirePrivateQuestionSupport(
     scope,
@@ -406,10 +375,7 @@ export function askBeforeDispatch(
   const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
   const identity = { owner, turn, iteration, mention, origins };
-  if (
-    stored?.partial !== undefined &&
-    (!validPartialState(stored.partial, identity) || !validPartialSnapshot(stored))
-  ) {
+  if (stored?.partial !== undefined && !validPartialState(stored.partial, identity)) {
     throw new TypeError('argumentAsk: partial-window state does not match this batch');
   }
   if (
@@ -470,8 +436,9 @@ export function askBeforeDispatch(
   let round = nextAskRound(state);
   if (round === undefined && state.partial?.phase === 'complete-arguments') {
     const completed = withSettled(entries, state, calls);
+    notifyRefusals(completed);
     const eligible = origins.filter(
-      (origin) => completed.get(origin.call.id)?.refused === undefined,
+      (origin) => completed.get(addressOf(origin.call))?.refused === undefined,
     );
     const plan = windowPlanOf(scope, deps, asks, true);
     if ((eligible.length > 0 || fillAsks.length > 0) && open.length > 0) {
@@ -509,6 +476,27 @@ export function askBeforeDispatch(
     markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
     scope.argumentAsk = next;
     deps.saveParties?.();
+    if (deps.beforePause !== undefined) {
+      const byAddress = callsByAddress(calls);
+      deps.beforePause(
+        waiting.fieldIndexes.flatMap((index) =>
+          next.fields[index].members.flatMap((member) =>
+            memberAddresses(member).flatMap((address) => {
+              const call = byAddress.get(address);
+              return call === undefined
+                ? []
+                : [
+                    {
+                      toolCallId: call.id,
+                      ...callOccurrenceField(call.callOccurrenceKey),
+                      argument: member.argument,
+                    },
+                  ];
+            }),
+          ),
+        ),
+      );
+    }
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
@@ -521,10 +509,10 @@ export function askBeforeDispatch(
     const currentReadings = readingsOf(currentLedger, turn);
     const clock = clockOf(currentLedger);
     const materialized = calls
-      .filter((c) => settled.get(c.id)?.refused === undefined)
-      .map((c) => ({ ...c, args: withFills(c.args, settled.get(c.id)) }));
+      .filter((c) => settled.get(addressOf(c))?.refused === undefined)
+      .map((c) => ({ ...c, args: withFills(c.args, settled.get(addressOf(c))) }));
     for (const origin of origins) {
-      const call = materialized.find((c) => c.id === origin.call.id);
+      const call = materialized.find((c) => addressOf(c) === addressOf(origin.call));
       if (call === undefined) continue;
       if (
         !hasOneMaterializedWindow(call, deps.toolOf, time) ||
@@ -532,8 +520,9 @@ export function askBeforeDispatch(
           (r) => isOpenForPerson(r) && !currentAnswers.some((a) => a.mention === (r.mention ?? 0)),
         )
       ) {
-        settled.set(call.id, {
+        settled.set(addressOf(call), {
           toolCallId: call.id,
+          ...callOccurrenceField(call.callOccurrenceKey),
           iteration,
           refused: unansweredRefusal(
             call.name,
@@ -550,7 +539,10 @@ export function askBeforeDispatch(
         deps.argumentSources === true
           ? {
               declared: new Map(
-                declaredSourcesOf(calls, deps.toolOf).map((source) => [source.toolCallId, source]),
+                declaredSourcesOf(calls, deps.toolOf).map((source) => [
+                  batchAddress(source.toolCallId, source.callOccurrenceKey),
+                  source,
+                ]),
               ),
             }
           : undefined;
@@ -558,8 +550,8 @@ export function askBeforeDispatch(
       // preserved partial/complete scopes against the freshly recorded meaning, never their provenance.
       const compare = materialized.filter(
         (c) =>
-          settled.get(c.id)?.refused === undefined &&
-          !(settled.get(c.id)?.fills ?? []).some(
+          settled.get(addressOf(c))?.refused === undefined &&
+          !(settled.get(addressOf(c))?.fills ?? []).some(
             (f) => f.source === 'window' || (f.source === 'answered' && f.window === true),
           ),
       );
@@ -577,11 +569,12 @@ export function askBeforeDispatch(
       );
       recordFindings(scope, callWindowRowsOf(decisions, compare, { turn, iteration }), { turn });
       for (const call of compare) {
-        const decision = decisions.get(call.id);
+        const decision = decisions.get(addressOf(call));
         const rules = rulesOf(deps.toolOf(call.name));
         if (decision?.how === 'refused' && rules !== undefined && !isRefused(rules)) {
-          settled.set(call.id, {
+          settled.set(addressOf(call), {
             toolCallId: call.id,
+            ...callOccurrenceField(call.callOccurrenceKey),
             iteration,
             refused: timeRefusal(
               call.name,
@@ -594,5 +587,6 @@ export function askBeforeDispatch(
       }
     }
   }
+  notifyRefusals(settled);
   return { resolutions: settled, answered };
 }

@@ -5,8 +5,7 @@ import { withNegativeProse } from '../../negativeClaims/observe.js';
 import { withAnswerValidation } from '../../stages/answerValidation.js';
 import { withAnswerCoverage } from '../../stages/answerCoverage.js';
 import { buildToolResolver } from '../../stages/toolResolver.js';
-import { answeredValuesOf, declaredDefaultsFrom } from '../../stages/route.js';
-import { isRefused, rulesOf } from '../../../../tools/declare.js';
+import { evidenceExemptArm } from './exemptArm.js';
 import type { AgentContext } from '../contracts.js';
 
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
@@ -58,23 +57,9 @@ export function routeFactory(
       // and the values the person gave the layer's batch ask (step 4). The
       // results layer (step 7b) arms the stamp alone — "while any layer is
       // armed, the one writer stamps the turn" — and nothing else.
+      // The exempt arm is built by the one builder the dispatch moment uses too.
       environment.inputsArmed || environment.resultsArmed
-        ? {
-            ...(environment.inputsArmed &&
-              this.configuration.evidenceGate !== undefined && {
-                declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
-                  const rules = rulesOf(resolve(toolName).tool);
-                  if (rules === undefined || isRefused(rules)) return undefined;
-                  return rules.ruled.find((r) => r.argument === argument)?.assume;
-                }),
-                answeredValues: answeredValuesOf,
-                // Under `.time()` (step T7): the turn's time spellings by
-                // lineage — said ones exempt, derived ones filed, not flagged.
-                ...(this.configuration.timeOptions !== undefined && {
-                  timeLineage: true as const,
-                }),
-              }),
-          }
+        ? { ...evidenceExemptArm(this.configuration, environment.inputsArmed, resolve) }
         : undefined,
       // THE ANSWER LAYER (honesty layer 4) — the same value-conditional
       // trailing positional: the judges file the answer's witness rows, and

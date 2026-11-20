@@ -1,0 +1,86 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font: 16px/1.5 system-ui, sans-serif;
+}
+
+main {
+  --bg: #faf9f6;
+  --fg: #27241d;
+  --muted: #5f594d;
+  --surface: #fff;
+  --border: #cdc6b7;
+  --link: #674014;
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  padding: 1.5rem clamp(1rem, 4vw, 3rem) 2.5rem;
+}
+
+main[data-theme='dark'] {
+  --bg: #17171b;
+  --fg: #f1eee6;
+  --muted: #b8b2a6;
+  --surface: #232328;
+  --border: #5a5650;
+  --link: #eeb86c;
+  color-scheme: dark;
+}
+
+article {
+  max-width: 95rem;
+  margin: 0 auto;
+}
+
+a {
+  color: var(--link);
+}
+
+h1 {
+  margin: 1rem 0 0.35rem;
+  font-size: clamp(1.6rem, 3.5vw, 2.6rem);
+}
+
+p {
+  margin: 0.45rem 0;
+}
+
+.cohort,
+#chart-help {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.controls button {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--fg);
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.controls button[aria-pressed='true'] {
+  border-color: var(--link);
+  box-shadow: inset 0 -2px var(--link);
+}
+
+.chart {
+  height: clamp(24rem, 67vh, 58rem);
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+  overflow: hidden;
+}

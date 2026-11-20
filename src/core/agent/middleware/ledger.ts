@@ -1,10 +1,12 @@
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 /**
  * middleware/ledger — INTERNAL. Where a chain's decisions become record.
  *
  * Pattern: one writer for one committed key.
  * Role:    core/ layer. `runChain` decides; this file is the only thing
  *          that commits what it decided and emits the matching event, so
- *          the three call sites cannot record the same fact three
+ *          the agent's call sites (the tool dispatch, an inner call through
+ *          `ctx.tools`, the message boundary) cannot record the same fact
  *          different ways.
  * Emits:   `agentfootprint.middleware.decision`, one per row.
  *
@@ -53,21 +55,31 @@ export interface LedgerScope {
  * No-op on an empty list, so an agent with no middleware never writes the
  * key at all and its commit log is the one it always had.
  */
-export function recordDecisions(scope: LedgerScope, rows: readonly MiddlewareDecision[]): void {
+export function recordDecisions(
+  scope: LedgerScope,
+  rows: readonly MiddlewareDecision[],
+  callOccurrenceKey?: CallOccurrenceKey,
+): void {
   if (rows.length === 0) return;
   const prev = (scope.middlewareDecisions as readonly MiddlewareDecision[] | undefined) ?? [];
   // Spread into a plain local array first: a TypedScope array read is a live
   // deep-proxy view, and both the commit and the event payloads below must be
   // detached plain data (RFC-001 'clone' capture under deferred delivery).
-  scope.middlewareDecisions = [...prev, ...rows];
-  for (const row of rows) {
+  const stamped =
+    callOccurrenceKey === undefined
+      ? rows
+      : rows.map((row) => ({ ...row, ...callOccurrenceField(callOccurrenceKey) }));
+  scope.middlewareDecisions = [...prev, ...stamped];
+  for (const row of stamped) {
     typedEmit(scope, 'agentfootprint.middleware.decision', {
       middleware: row.middleware,
       moment: row.moment,
       at: row.at,
       ...(row.phase !== undefined && { phase: row.phase }),
+      ...(row.personApproved !== undefined && { personApproved: row.personApproved }),
       ...(row.toolName !== undefined && { toolName: row.toolName }),
       ...(row.toolCallId !== undefined && { toolCallId: row.toolCallId }),
+      ...callOccurrenceField(row.callOccurrenceKey),
       iteration: row.iteration,
       outcome: row.outcome,
       changed: row.changed,

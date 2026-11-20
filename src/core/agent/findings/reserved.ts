@@ -19,22 +19,21 @@
  *   - Never mutate a schema or an args object: every changed value is a
  *     rebuilt copy, and an unchanged one is the SAME reference (so an unarmed
  *     path, or a schema the author already decorated, is byte-identical).
- *   - `_findings` is never added to a tool's `required` and never touches
- *     `additionalProperties`; the author's own `_findings` property wins.
+ *   - Observations stay optional. Source-armed ASK declarations alone require
+ *     our envelope; `additionalProperties` and the author's own property win.
  *   - Never coerce, never infer: a field that fails its enum check is dropped
  *     and COUNTED (`malformed`), never defaulted. An absent declaration stays
  *     absent — `splitFindings` returns no `findings` for it.
- *   - `FINDINGS_ARGUMENT_SCHEMA` is the frozen base and is never edited. The
- *     OFFER (`withFindingsArgument`'s second argument — the ids of served
- *     results the model can still read: no standing, `fact` or `open`,
- *     newest first; `offer.ts · offeredResultIds`) is a rebuilt copy per call
- *     whose `previous.items.properties.toolCallId` carries `enum: offer`; an
- *     empty offer serves the base by reference. The offer is what the model
- *     may COPY, never what the library resolves: an id outside it is still
- *     recorded as the model wrote it (`ledger.ts · standingRowsFrom`,
- *     `unknownId: true`), never mapped to a position — and every id inside
- *     it resolves, because the rows are identified against the same served
- *     history the offer was read from (`offer.ts · knownResults`).
+ *   - `FINDINGS_ARGUMENT_SCHEMA` is the frozen base and is never edited.
+ *     `withFindingsArgument(schema, { from? })` plants it (or its `from`
+ *     variant) with NO enum, stable across result changes. The offer (the
+ *     ids of served results the model can still read, `offer.ts ·
+ *     offeredResultIds`) travels in the request-only DATA frame
+ *     (`context.ts`); an `enum: offer` on `previous[].toolCallId` was the old
+ *     layout, rebuilt only by `time-travel/servedView`. An id the model writes
+ *     is recorded as written (`ledger.ts · standingRowsFrom`, `unknownId:
+ *     true`), never mapped to a position, and is identified against the
+ *     request witness (`admission.ts · referenceObservation`).
  *
  * Both model-facing strings here (`FINDINGS_INSTRUCTION` and the schema's
  * description) say what the model may DO and never what the library
@@ -43,7 +42,16 @@
  */
 
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
-import { DECLARED_SOURCE_KINDS, readSources } from '../arguments/sources.js';
+import { readSources } from '../arguments/sources.js';
+import {
+  FINDINGS_FROM_PROPERTY,
+  FINDINGS_MARKER,
+  OPTIONAL_FINDINGS_HEAD,
+  requireSourceContract,
+  withoutSourceRequirement,
+  type SourceDecorationOptions,
+} from '../sourceContract.js';
+export { FINDINGS_FROM_PROPERTY, FINDINGS_INSTRUCTION_ID } from '../sourceContract.js';
 import {
   BASIS_VALUES,
   EXPECT_VALUES,
@@ -105,7 +113,6 @@ const FINDINGS_DESCRIPTION =
  * `withoutFindingsArgument` recognises the library's decoration when the
  * reference is gone (a committed tool list is a `structuredClone`; see there).
  */
-const FINDINGS_MARKER = 'Findings v1 (reserved by the agent runtime).';
 
 /**
  * How many ids an offer lists at most: the newest results the model may
@@ -115,8 +122,8 @@ const FINDINGS_MARKER = 'Findings v1 (reserved by the agent runtime).';
 export const FINDINGS_OFFER_CAP = 32;
 
 /**
- * The JSON schema of the reserved property — frozen, served as-is, and NEVER
- * listed in the parent's `required`. `basis` is required INSIDE it so a model
+ * The observational property stays frozen and optional. Source-armed ASK
+ * projections alone require its container. `basis` is required INSIDE it so a model
  * that opens the object says why it made the call.
  */
 export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
@@ -213,28 +220,6 @@ export const FINDINGS_ARGUMENT_SCHEMA: PlainObject = deepFreeze({
  * about what serving does; judged by `unprovable` at the strictest lifetime
  * in `test/modelFacingSurfaces.test.ts`.
  */
-export const FINDINGS_FROM_PROPERTY: PlainObject = deepFreeze({
-  type: 'array',
-  description:
-    'Where each argument value the call sends came from, one entry per value, recorded with ' +
-    "the library's check of it; a value with no entry has no declared source on the record.",
-  items: {
-    type: 'object',
-    properties: {
-      argument: { type: 'string' },
-      source: {
-        type: 'string',
-        enum: [...DECLARED_SOURCE_KINDS],
-        description:
-          "'user': the person's words (quote); 'result': a tool result (id); 'turn': their " +
-          "answer when the run asked them; 'app': your instructions; 'assumed': your own choice.",
-      },
-      quote: { type: 'string', description: "Copied exactly from the person's messages." },
-      id: { type: 'string' },
-    },
-    required: ['argument', 'source'],
-  },
-});
 
 /**
  * `planted` with `from` among its properties — a rebuilt, deep-frozen copy
@@ -252,7 +237,7 @@ function withFromProperty(planted: PlainObject): PlainObject {
 }
 
 /** The base decoration with `from` — built once, served by reference like the base. */
-const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM: PlainObject = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
+export const FINDINGS_ARGUMENT_SCHEMA_WITH_FROM = withFromProperty(FINDINGS_ARGUMENT_SCHEMA);
 
 /**
  * The reserved property DECLARED SOURCES plant WITHOUT the findings ledger
@@ -326,14 +311,13 @@ export function findingsAnswerSchema(): PlainObject {
  * declared-sources corpus leaves the library's own instruction out of the
  * app's text by it.
  */
-export const FINDINGS_INSTRUCTION_ID = 'findings-ledger';
 
 /**
  * The always-on system instruction `.findings()` registers (the twin of
  * `outputSchema()`'s piece). It asks; it promises nothing about serving.
  */
 export const FINDINGS_INSTRUCTION = [
-  'Findings v1. Tool schemas carry an optional `_findings` argument; declare it on your tool calls.',
+  OPTIONAL_FINDINGS_HEAD,
   "`_findings.basis` on each call: 'direct' when you expect the result to answer what you are " +
     "after, 'exploratory' when you are looking; add `expect` ('low' | 'medium' | 'high') for how " +
     'useful you expect it to be.',
@@ -385,17 +369,17 @@ export function findingsInstructionFor(arms: { readonly contingent: boolean }): 
 }
 
 /**
- * The answer-turn ask (9.103.0) — appended to the served ledger piece
- * (`serve.ts · findingsLedgerPiece`) ONLY under
- * `findings({ answerAsk: 'quote-facts' })`, a bench-gated dial whose default
- * is `'none'`. It tells the model HOW to answer from the piece: the real-model
- * page's fourth run measured one fact value in twelve restated when the
- * piece is served with no such ask (`docs/design/2026-09-findings-ledger-real-model.md`
- * § Fourth run), and this is the instruction variant that run asked for. It
- * says what the model may DO with each kind of line and promises nothing
- * about what the library serves; a constant, so the cache law of the piece
- * holds with it (`serve.ts` · "The cache"). Judged by `unprovable` at the
- * strictest lifetime in `test/modelFacingSurfaces.test.ts`.
+ * The answer-turn ask (9.103.0) — REPLAY ONLY: live calls no longer send it.
+ * Under `findings({ answerAsk: 'quote-facts' })` the model now gets the
+ * shorter sentence `instruction.ts · findingsInstruction` appends to the
+ * instruction; this constant stays so `time-travel/servedView` can rebuild a
+ * recording whose served ledger piece (`serve.ts · findingsLedgerPiece`)
+ * ended with it. Why it was written: the real-model page's fourth run
+ * measured one fact value in twelve restated with no such ask
+ * (`docs/design/2026-09-findings-ledger-real-model.md` § Fourth run). It
+ * says what the model may DO with each kind of line and promises nothing;
+ * a constant, so the old piece's cache law held with it (`serve.ts`).
+ * The row in `test/modelFacingSurfaces.test.ts` covers this legacy constant.
  */
 export const FINDINGS_ANSWER_ASK = [
   'When you answer, answer from the lines under `facts` and copy each value exactly as it is ' +
@@ -423,13 +407,13 @@ export function ownsReservedArgument(schema: LLMToolSchema | undefined): boolean
   return isPlainObject(properties) && hasOwn(properties, RESERVED_ARGUMENT);
 }
 
-/** Plant the stable optional findings schema. The host's `from` capability is
+/** Plant the stable findings schema. The host's optional/source-ASK capability is
  * fixed for a tool; mutable result IDs live in the late request DATA, never
  * here. Author-owned properties win and decorating twice is idempotent.
  */
 export function withFindingsArgument(
   schema: LLMToolSchema,
-  options?: { readonly from?: boolean },
+  options?: SourceDecorationOptions,
 ): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
   const properties = schema.inputSchema.properties;
@@ -437,6 +421,9 @@ export function withFindingsArgument(
   const from = options?.from === true;
   // Declared sources (honesty layer 2): a ruled tool's decoration gains `from`.
   const planted = from ? FINDINGS_ARGUMENT_SCHEMA_WITH_FROM : FINDINGS_ARGUMENT_SCHEMA;
+  if (from && options?.sourceContract === true) {
+    return { ...schema, inputSchema: requireSourceContract(schema.inputSchema, planted) };
+  }
   return {
     ...schema,
     inputSchema: {
@@ -463,10 +450,15 @@ export function withFindingsArgument(
  * withSourcesArgument(searchLogs.schema).inputSchema.properties._findings; // FINDINGS_SOURCES_SCHEMA
  * ```
  */
-export function withSourcesArgument(schema: LLMToolSchema): LLMToolSchema {
+export function withSourcesArgument(schema: LLMToolSchema, sourceContract = false): LLMToolSchema {
   if (ownsReservedArgument(schema)) return schema;
   const properties = schema.inputSchema.properties;
   const existing = isPlainObject(properties) ? properties : undefined;
+  if (sourceContract)
+    return {
+      ...schema,
+      inputSchema: requireSourceContract(schema.inputSchema, FINDINGS_SOURCES_SCHEMA),
+    };
   return {
     ...schema,
     inputSchema: {
@@ -509,7 +501,7 @@ export function withoutFindingsArgument(inputSchema: unknown): unknown {
   if (!carriesFindingsDecoration(inputSchema)) return inputSchema;
   const properties = (inputSchema as PlainObject).properties as PlainObject;
   const { [RESERVED_ARGUMENT]: _decoration, ...rest } = properties;
-  return { ...(inputSchema as PlainObject), properties: rest };
+  return { ...withoutSourceRequirement(inputSchema as PlainObject, _decoration), properties: rest };
 }
 
 /**

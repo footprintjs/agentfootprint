@@ -3,6 +3,7 @@ import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { CallResultCell, CallArguments, CallExecution } from '../contracts/callCells.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { batchAddress } from '../../../arguments/batchAddress.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 
@@ -22,6 +23,7 @@ export function prepareCallState(
      *  today's path byte for byte. */
     toolEnvelope: undefined,
     toolStatus: findingsRefusal === undefined ? undefined : 'invalid',
+    unknownStatus: undefined,
   };
   // Permission gate — when a checker is configured, evaluate BEFORE
   // executing the tool. Emits `permission.check` with the decision.
@@ -32,6 +34,8 @@ export function prepareCallState(
   //   • 'halt'                → synthetic tool_result lands; run terminates
   //                             via scope.$break + Agent.run throws
   //                             PolicyHaltError at the API boundary
+  //   • anything else         → refused like a checker that threw
+  //                             (`readPermissionDecision`, fail-closed)
   //
   // Strict ordering on halt: synthetic tool_result → halt event →
   // commit (newHistory written to scope) → $break. This guarantees
@@ -55,7 +59,7 @@ export function prepareCallState(
   // really run. A fill is a FRESH object — never an edit of `tc.args`,
   // which is the assistant message's own object when `.findings()` is
   // off. No entry (every unarmed agent) → `args` itself, by reference.
-  const resolution = resolutions?.get(tc.id);
+  const resolution = resolutions?.get(batchAddress(tc.id, tc.callOccurrenceKey));
   const runArgs: ToolArgs = inputs !== undefined ? inputs.withFills(args, resolution) : args;
   const callArguments: CallArguments = {
     callArgs: runArgs,

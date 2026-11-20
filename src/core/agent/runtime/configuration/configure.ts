@@ -230,10 +230,18 @@ export function configureAgent(
   const inputsLayer = readInputsLayerOption(opts.inputsLayer);
   if (inputsLayer !== undefined) config.inputsLayerOption = true;
   if (opts.resultsLayer === true) config.resultsLayerOption = true;
-  if (opts.answerLayer === true) config.answerLayerOption = {};
-  else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
+  const answerLayer = opts.answerLayer;
+  if (answerLayer === undefined) {
+    // Resolve the default without enumerating the caller's options. Checked
+    // and typed answers use the assessment data beside their exact output.
+    config.answerLayerOption =
+      answerValidationConfig !== undefined || outputSchemaParser !== undefined
+        ? {}
+        : { standingLine: 'not-sure-or-ask' };
+  } else if (answerLayer === true) config.answerLayerOption = {};
+  else if (typeof answerLayer === 'object' && answerLayer !== null) {
     // The builder judged the option (`assessment/answerLayerOptions.ts` · `answerLayerArm`); `true` is 'always'.
-    const line = opts.answerLayer.standingLine;
+    const line = answerLayer.standingLine;
     config.answerLayerOption =
       line === true
         ? { standingLine: 'always' }
@@ -256,6 +264,14 @@ export function configureAgent(
     // Declared sources read `AgentInput.messageFrom` — a composition hands
     // the marker only to a runner that reads it.
     readsMessageFrom(runner);
+  }
+  if (inputsLayer?.declarationCorrection === 'once') {
+    if (config.argumentSourcesArmed !== true) {
+      throw new Error(
+        'Agent: inputsLayer.declarationCorrection requires resolved argumentSources: true.',
+      );
+    }
+    config.sourceDeclarationCorrection = 'once';
   }
   // A member runs for the run that mounted it: a composition hands it that
   // run as `parentRun` (`core/memberRun.ts`).
@@ -494,7 +510,13 @@ export function configureAgent(
         typeof opts.artifacts.recordings === 'object' &&
         opts.artifacts.recordings !== null
       ) {
-        config.artifactRecordings = opts.artifacts.recordings;
+        const recordings = opts.artifacts.recordings;
+        const trust = recordings.trustBoundaries;
+        if (trust !== undefined && typeof trust !== 'function')
+          throw new TypeError(
+            'Agent artifacts.recordings.trustBoundaries needs a recorder factory.',
+          );
+        config.artifactRecordings = { ...recordings, trustBoundaries: trust };
       }
     } else {
       config.artifactStore = opts.artifacts;

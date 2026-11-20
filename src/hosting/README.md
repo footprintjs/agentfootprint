@@ -3,9 +3,9 @@ me, outlive the request — plus local adapters that prove the ports work.
 
 ## What it reads / what it writes
 - Reads a request and a session; hands the runner a run.
-- Streams a run's events to a browser as server-sent events: `stream.ts`
-  (`toSSE`, `SSEFormatter`, `encodeSSE`, published through `/observe`), every
-  payload written by `lib/wireJson.ts` · `toWireJson`.
+- Streams SSE through `/observe` (`toSSE`, `SSEFormatter`, `encodeSSE`). Full events use [`toWireJson`](../lib/wireJson.ts).
+  [Both live Agent stream formats](./stream.ts#L52-L75) close at the marked root end or a fatal error. A stream opened for resume also closes at the next pause.
+  Standalone compositions and record-only event sources close at the first agent `turn_end` or a fatal error. A live composition reports failures during chart execution as fatal events, even before any member turn ends. Read a composition’s full reply from the returned outcome.
 - Writes sessions through `SessionLifecycle`. One genuine record surface lives
   here: `ingressRecord.ts` keeps one row per request the door refused BEFORE a
   run existed, and states honestly that an empty bundle is not evidence that

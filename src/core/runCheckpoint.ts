@@ -49,39 +49,23 @@
  *       retries the call on the next iteration.
  *
  * Pattern: Memento (GoF) — snapshot of an object's internal state
- *          for later restoration. Same shape as `FlowchartCheckpoint`
+ *          for later restoration. The same pattern as `FlowchartCheckpoint`
  *          but at the agent layer (one logical iteration vs. one
- *          DFS stage).
+ *          DFS stage). Each checkpoint has its own reader and resume contract.
  */
 
-import { negativeProseRowIsWellFormed } from './agent/findings/negativeProse.js';
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from '../thinking/replay.js';
-import {
-  applyReplayRetirements,
-  replayRetirements,
-  type ReplayRetirement,
-} from '../thinking/replayHistory.js';
+import { replayRetirements, type ReplayRetirement } from '../thinking/replayHistory.js';
 import {
   isContextWindowExceeded,
   looksLikeContextWindowExceeded,
 } from '../provider-contract/contextWindow.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { FoldedSpan } from './agent/window/types.js';
-import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
-import { referenceRefusalRowIsWellFormed } from './agent/findings/refusal.js';
-import { periodRowIsWellFormed } from '../semantics/coverage/period.js';
-import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
-import { scriptRowIsWellFormed } from './agent/scripts/rows.js';
-import { isTimeRowKind, timeRowIsWellFormed } from '../time/rows.js';
-import {
-  BASIS_VALUES,
-  EXPECT_VALUES,
-  STANDING_VALUES,
-  type FindingsLedger,
-} from './agent/findings/types.js';
+import type { FindingsLedger } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
-import { isClaimVerificationRow } from './agent/findings/verificationRow.js';
 import { checkpointWithCarriers } from './agent/sourceEvidence/checkpointValidation.js';
 import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
 import {
@@ -89,216 +73,28 @@ import {
   type NegativeCheckpoint,
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
-import { ownConfigArray } from '../integrity/claim-binding/scope.js';
+import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
+import { admitStoredHistory, checkpointReplayHistory } from './checkpointHistory.js';
+import { validateCheckpointLedger } from './checkpointLedger.js';
+import {
+  admitToolTurnEvidence,
+  toolTurnEvidenceFrom,
+} from './agent/recordedCalls/toolTurnCheckpoint.js';
+import {
+  admitFoldedInnerCallPolicy,
+  innerCallPolicyFor,
+  innerCallPolicyOf,
+  innerCallPolicyReferences,
+} from '../redaction/innerCallPolicyCarrier.js';
 import type { SourceEvidenceIndex } from '../artifacts/sourceEvidence/types.js';
-import { sourceEvidenceOf } from './agent/runtime/conversation/checkpointParts.js';
+import {
+  sourceDeclarationCorrectionOf,
+  sourceEvidenceOf,
+} from './agent/runtime/conversation/checkpointParts.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
-/** Internal repair state kept separately from the human conversation.
- * Restored only when retrying the same failed request, never on a new turn. */
-export interface EvidenceRecoveryCheckpoint {
-  readonly revisionSpent: true;
-  /** Present only when the request carrying this instruction did not complete. */
-  readonly pending?: {
-    readonly instruction: string;
-    /** The figures dial's late line, when the pending revision has one. */
-    readonly conclusion?: string;
-  };
-}
-
-/**
- * JSON-serializable checkpoint of an in-progress agent run. Persist
- * to ANY durable store (Redis / Postgres / S3 / disk / queue) and
- * resume hours / days / deploys later via `agent.resumeOnError(...)`.
- *
- * **Stable shape** — the `version` field guards forward compat. v1
- * → v2 transitions will be supported via a migration helper.
- */
-export interface AgentRunCheckpoint {
-  /** Host-kept native source index. It contains refs only and does not authenticate an imported checkpoint. */
-  readonly sourceEvidence?: SourceEvidenceIndex;
-  /** Private admitted negative evidence; keep checkpoints on the trusted host. */
-  readonly negativeClaimState?: NegativeCheckpoint['negativeClaimState'];
-  readonly resultIdentities?: NegativeCheckpoint['resultIdentities'];
-  /** Schema version. v1 = conversation-history-based. */
-  readonly version: 1;
-  /** `runId` of the FAILING run — lets the consumer correlate a
-   *  persisted checkpoint back to the original run's observability.
-   *  NOT reused on resume: `resumeOnError` starts a fresh run with a
-   *  fresh `runId` (only the conversation history is restored). */
-  readonly runId: string;
-  /** Conversation history at the LAST completed iteration boundary
-   *  (LLM messages). The next iteration retries from here. */
-  readonly history: readonly LLMMessage[];
-  /** Index of the last completed iteration in the FAILING run
-   *  (diagnostic — not consumed on resume). The resumed run restores
-   *  this history but re-seeds its own iteration counter at 1 with a
-   *  full `maxIterations` budget. */
-  readonly lastCompletedIteration: number;
-  /** Original input message. Surfaces in observability + lets the
-   *  consumer correlate checkpoint to the user's request. */
-  readonly originalInput: { readonly message: string };
-  /** Wall-clock when the checkpoint was captured. Diagnostic only. */
-  readonly checkpointedAt: number;
-  /**
-   * The same request's bounded evidence repair. `resumeOnError` restores this
-   * budget and any unsent feedback; `run({ continueFrom })` adds a new human
-   * turn and deliberately starts a fresh repair budget. Not conversation text.
-   * Absent for checkpoints written before request-scoped recovery.
-   */
-  readonly evidenceRecovery?: EvidenceRecoveryCheckpoint;
-  /**
-   * Every span this conversation folded into a summary, oldest first — what
-   * makes a compacted conversation still a provable one after the process
-   * that compacted it is gone.
-   *
-   * Written by `.compaction()`; absent on a conversation that never folded,
-   * and absent on one stored by a runtime older than 8.2. Under the default
-   * `retain: 'conversation'` each span carries the folded messages verbatim;
-   * under `retain: 'discard'` the span is still here, naming what left, and
-   * only `messages` is absent.
-   *
-   * Join a summary in {@link history} to its span with `foldedSpanFor(...)` —
-   * by content fingerprint, never by index, because a later fold moves every
-   * index after it.
-   *
-   * **Version 1 still, deliberately.** An optional field is not a format
-   * change: a runtime that has never heard of `folded` reads this checkpoint,
-   * ignores it, and continues the conversation correctly — the summary is an
-   * ordinary message in `history` either way. Bumping the version would make
-   * an older deployment REFUSE a session it can serve perfectly well, which is
-   * the opposite of what the version field is for.
-   */
-  readonly folded?: readonly FoldedSpan[];
-  /**
-   * The model's standings on its tool results (9.101.0) — the committed
-   * `AgentState.findingsLedger`, carried so a continued conversation keeps
-   * what the model already called a fact, left open, ruled out or dismissed,
-   * instead of re-deriving it from results the store no longer serves whole.
-   *
-   * Written only when the run's ledger is non-empty; absent on every
-   * conversation whose agent never called `.findings()` and on any stored by
-   * a runtime older than 9.101.0 — the {@link folded} rule: an optional field
-   * is not a format change, and a runtime that has never heard of this key
-   * reads the checkpoint, ignores it, and continues correctly. The rows are
-   * plain records and arrays only (the shape `recordFindings` writes), so
-   * they round-trip through JSON and `structuredClone` unchanged.
-   *
-   * **Version 1 still**, by the same documented rule as {@link folded} /
-   * {@link skillCursor}.
-   */
-  readonly findingsLedger?: FindingsLedger;
-  /**
-   * Private, opt-in exact evidence and reservation counters. Unlike historical
-   * observations, this carrier can support later checks. A newest-version
-   * continuation must explicitly keep verification enabled, never discard it.
-   * Storage ownership/authenticity remains the checkpoint caller's obligation.
-   */
-  readonly claimVerification?: ClaimVerificationState;
-  /**
-   * The conversation TURN the stored history ends on — the stored run's
-   * `AgentState.turnNumber` — carried while an honesty layer is armed.
-   *
-   * Every ledger row filed while a layer is armed carries its `turn`, and the
-   * answer's standing reads "this turn" by that stamp, so a stamp must never
-   * repeat in one conversation. The count of user messages in `history` cannot
-   * promise that: a window strategy or a compaction trims the stored history,
-   * and the count repeats and goes backwards — an earlier turn's verdict would
-   * then be folded as a later turn's. So the next run starts from this number:
-   * `run({ continueFrom })` is the turn after it, `resumeOnError` the same
-   * turn again. Written by both carriers (`checkpoint()` and the crash
-   * checkpoint), and only while a layer is armed — every other checkpoint
-   * keeps its exact byte shape.
-   *
-   * **Version 1 still**, by the same documented rule as {@link folded} /
-   * {@link findingsLedger}: an optional field is not a format change, and a
-   * runtime that has never heard of it continues the conversation correctly.
-   */
-  readonly turnNumber?: number;
-  /**
-   * WHO this conversation belongs to — the `identity` the stored run was
-   * given, carried so that continuing it lands in the same namespace it
-   * started in (9.2.0).
-   *
-   * Before this field, continuing a conversation re-seeded identity from the
-   * resuming run's own id: every continued turn wrote its memory under a
-   * FRESH `conversationId`, so turn two's facts were stored somewhere turn
-   * three could not read them. Nothing threw, and the only symptom was an
-   * agent that kept forgetting — the same class of failure as a store that
-   * silently forgot everything looking exactly like a new user.
-   *
-   * Absent on a conversation stored before 9.2.0, and absent when the run
-   * never got an explicit identity (the default is derived from a runId, and
-   * carrying THAT forward would pin a whole conversation to one run's id).
-   * An explicit `identity` on the continuing call always wins.
-   *
-   * **Version 1 still**, on the same reasoning as {@link folded}: an optional
-   * field is not a format change, and a runtime that has never heard of it
-   * continues the conversation correctly.
-   */
-  readonly identity?: MemoryIdentity;
-  /**
-   * WHERE the conversation's skill graph stood when the stored turn ended —
-   * the graph cursor, carried so a continued conversation can default its
-   * next turn's start to it (SG-C, 9.17.0).
-   *
-   * Written ONLY when the recording agent's graph declared
-   * `continuity: 'conversation'`; under the default `'turn'` the field is
-   * never written and the byte shape of every checkpoint is unchanged. On
-   * the continuing side it is honored only under the same declaration, and
-   * the RouteTurn cascade still judges it against the new message — an
-   * inherited cursor is a sticky DEFAULT, not a lock. An id the continuing
-   * graph does not know is dropped and recorded
-   * (`turn_routed.droppedResume`), never silently parked.
-   *
-   * **Version 1 still**, by the same documented rule as {@link folded} /
-   * {@link identity} / {@link agent}: an optional field is not a format
-   * change — an older runtime ignores it and continues correctly.
-   */
-  readonly skillCursor?: string;
-  /**
-   * WHICH agent recorded this conversation — present only when that agent was
-   * given an explicit `Agent.create({ id })` (9.2.0).
-   *
-   * A conversation is a transcript, and a transcript can be replayed on any
-   * agent. Usually that is the point: a deploy that adds a tool or edits a
-   * prompt must still be able to continue yesterday's conversations, so the
-   * runtime cannot refuse on "the agent changed". But replaying the BILLING
-   * agent's conversation on the SUPPORT agent is a different mistake, and it
-   * used to be accepted in silence.
-   *
-   * The rule is the one the embedder fingerprint already uses: **ids decide
-   * only when BOTH sides named themselves.** A default id (`'agent'`) is not
-   * naming yourself, so the majority of callers — who never pass one — are
-   * never refused. Two sides that both chose a name and chose different ones
-   * are refused, by name.
-   *
-   * Version 1 still, for the same reason as the two fields above.
-   */
-  readonly agent?: { readonly id: string };
-  /** Where the failure happened. Diagnostic — surfaces in oncall
-   *  triage so you can tell "LLM 500 mid-iteration" from "tool
-   *  threw" from "validation kept failing". */
-  readonly failurePoint?: {
-    readonly iteration: number;
-    readonly phase: 'iteration' | 'tool' | 'llm' | 'unknown';
-    /**
-     * What was OPEN when it threw — `'call-llm'` for the model call, or the
-     * declared name of the tool that was running (8.14.0).
-     *
-     * Absent when nothing was open (a failure between brackets), which is the
-     * honest answer rather than a guess.
-     *
-     * **Never a URL, never a credential, never request or response content.**
-     * Only the literal string `'call-llm'` or a tool name the app itself
-     * declared. A checkpoint is persisted to Redis / Postgres / S3 and read by
-     * whoever is on call; nothing that could carry a secret goes in it. Do not
-     * "improve" this field into carrying the endpoint.
-     */
-    readonly stage?: string;
-  };
-}
+export type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
 
 /**
  * Thrown by `agent.run()` when a fault occurs mid-run. Carries the
@@ -345,6 +141,8 @@ export class RunCheckpointError extends Error {
     this.name = 'RunCheckpointError';
     this.cause = cause;
     this.checkpoint = checkpoint;
+    if (checkpoint.innerCallPolicyArgs !== undefined)
+      Object.defineProperty(this, 'checkpoint', { enumerable: false });
   }
 }
 
@@ -589,247 +387,65 @@ export function retainReplayRetirements(
   tracker.replayRetirements = [...(tracker.replayRetirements ?? []), ...structuredClone(edits)];
 }
 
-/** Read only approved replay edits onto the history each checkpoint already owns. */
-export function checkpointReplayHistory(
-  history: readonly LLMMessage[],
-  tracker?: RunCheckpointTracker,
-): readonly LLMMessage[] {
-  return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
-}
-
-/**
- * Build a JSON-serializable checkpoint from a tracker + failure
- * info. Pure function — no side effects.
- *
- * @internal
- */
+/** Build a storage checkpoint from committed history and failure observations. @internal */
 export function buildCheckpoint(
   tracker: RunCheckpointTracker,
   failurePoint?: NonNullable<AgentRunCheckpoint['failurePoint']>,
-  /**
-   * Spans this run folded, read from committed state by the caller. Passed in
-   * rather than tracked, because the tracker follows `history` through events
-   * and a fold's span is committed state — and because the same reader then
-   * serves both checkpoint carriers, so neither can lose what the other keeps.
-   */
+  /** Compaction spans paired with the committed history. */
   folded?: readonly FoldedSpan[],
-  /**
-   * Who the run was for and which agent ran it — the two fields that make a
-   * stored conversation continuable rather than merely readable (9.2.0).
-   * Both are absent unless the caller chose them explicitly; see
-   * {@link AgentRunCheckpoint.identity} and {@link AgentRunCheckpoint.agent}.
-   */
+  /** The original owner and agent, when the caller named them. */
   owner?: { readonly identity?: MemoryIdentity; readonly agentId?: string },
-  /**
-   * The graph cursor at the last committed state (SG-C) — read from the same
-   * snapshot `folded` comes from, by the same one-reader-two-carriers rule:
-   * `Agent.continuityCursorOf` serves BOTH `checkpoint()` and this crash
-   * carrier, so a conversation cannot keep its place on one path and silently
-   * lose it on the other. Passed only when the graph declared
-   * `continuity: 'conversation'`.
-   */
   skillCursor?: string,
   evidenceRecovery?: EvidenceRecoveryCheckpoint,
-  /**
-   * The model's standings on its tool results (9.101.0), read from the same
-   * committed snapshot `folded` comes from, by the same one-reader-two-carriers
-   * rule — so a crash checkpoint cannot lose a ledger `checkpoint()` keeps.
-   * Absent unless the run's ledger is non-empty.
-   */
   findingsLedger?: FindingsLedger,
-  /**
-   * The turn the failing run was on (honesty layers), read from the same
-   * committed snapshot by the same one-reader-two-carriers rule — so a crash
-   * checkpoint cannot lose the turn `checkpoint()` keeps. Absent unless a
-   * layer is armed; see {@link AgentRunCheckpoint.turnNumber}.
-   */
   turnNumber?: number,
   /** Private evidence beside the same committed ledger; absent unless explicitly opted in. */
   claimVerification?: ClaimVerificationState,
   negativeClaims?: NegativeCheckpoint,
   sourceEvidence?: SourceEvidenceIndex,
+  sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
+  placed?: unknown,
+  state?: unknown,
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
       ? undefined
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
+  const history = checkpointReplayHistory(tracker.history, tracker);
+  const placedTickets = ticketsStillServed(placed, history);
+  const innerCallPolicyArgs = innerCallPolicyFor(state, history);
+  const toolTurnEvidence = toolTurnEvidenceFrom(state);
   return {
     version: 1,
     runId: tracker.runId,
-    history: checkpointReplayHistory(tracker.history, tracker),
+    history,
+    ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     lastCompletedIteration: tracker.lastCompletedIteration,
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
+    ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
     ...(folded !== undefined && folded.length > 0 && { folded }),
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
     ...(skillCursor !== undefined && { skillCursor }),
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
+    ...(sourceDeclarationCorrection === undefined
+      ? {}
+      : {
+          sourceDeclarationCorrection: sourceDeclarationCorrectionOf({
+            sourceDeclarationCorrection,
+          }),
+        }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
     ...(turnNumber !== undefined && { turnNumber }),
+    ...(placedTickets !== undefined && { placedTickets }),
     ...(verification !== undefined && { claimVerification: verification }),
     ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
     ...(sourceEvidence === undefined
       ? {}
       : { sourceEvidence: sourceEvidenceOf({ sourceEvidence }) }),
   };
-}
-
-/**
- * One ledger row is well-formed when it carries the fields its kind's reader
- * consumes (`findings/ledger.ts · foldLedger` and the row builders). Shape
- * only — a standing's `assertions` must be an array, never "an array of
- * assertions whose values look right" — because the continued run re-seeds
- * the row verbatim and the fold reads exactly these fields. Every value
- * vocabulary is the one `findings/types.ts` declares.
- */
-function ledgerRowIsWellFormed(row: unknown): boolean {
-  if (row === null || typeof row !== 'object' || Array.isArray(row)) return false;
-  // Admit the new closed protocol before legacy field reads. Its reader refuses
-  // accessors and unsafe values, and never runs a checker while restoring.
-  const kind = Object.getOwnPropertyDescriptor(row, 'kind');
-  if (kind !== undefined && !('value' in kind)) return false;
-  if (kind?.value === 'negative-claim' || kind?.value === 'negative-claim-note')
-    return negativeProseRowIsWellFormed(row);
-  if (kind?.value === 'claim-verification') return isClaimVerificationRow(row);
-  if (kind?.value === 'reference-refusal') return referenceRefusalRowIsWellFormed(row);
-  const r = row as Record<string, unknown>;
-  const isIn = (value: unknown, vocabulary: readonly string[]) =>
-    typeof value === 'string' && vocabulary.includes(value);
-  const isIdentity = (value: unknown) =>
-    value !== null &&
-    typeof value === 'object' &&
-    typeof (value as { toolCallId?: unknown }).toolCallId === 'string';
-  // The honesty layers' turn stamp may ride EVERY kind (the one writer stamps
-  // each row it files while a layer is armed); readers compare it as a number,
-  // so a stamp of any other type would quietly drop its row from its own turn.
-  if (r.turn !== undefined && typeof r.turn !== 'number') return false;
-  // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
-  // differing `time`, each call's dispatch moment, and each time mention the
-  // armed reader found (`time-reading`). One owner of their kinds and shape
-  // (`time/rows.ts`). An older runtime refuses a checkpoint carrying one.
-  if (isTimeRowKind(r.kind)) return timeRowIsWellFormed(r);
-  switch (r.kind) {
-    case 'basis':
-      return (
-        typeof r.toolCallId === 'string' &&
-        typeof r.toolName === 'string' &&
-        typeof r.iteration === 'number' &&
-        isIn(r.basis, BASIS_VALUES) &&
-        (r.expect === undefined || isIn(r.expect, EXPECT_VALUES))
-      );
-    case 'standing':
-      return (
-        typeof r.toolCallId === 'string' &&
-        isIn(r.standing, STANDING_VALUES) &&
-        Array.isArray(r.assertions) &&
-        typeof r.iteration === 'number' &&
-        (r.declaredOn === 'answer' || isIdentity(r.declaredOn))
-      );
-    case 'conflict':
-      return (
-        typeof r.key === 'string' && Array.isArray(r.witnesses) && typeof r.iteration === 'number'
-      );
-    // The judge's two rows (9.104.0) — the door had no arm for them until
-    // 9.110.0, so a checkpoint of a judged run was refused on resume. The
-    // fold reads `toolCallId` and `standing` off a judgment row and nothing
-    // off an error row but its kind.
-    case 'judgment':
-      return (
-        typeof r.toolCallId === 'string' &&
-        isIn(r.standing, STANDING_VALUES) &&
-        typeof r.iteration === 'number'
-      );
-    case 'judgment-error':
-      return typeof r.toolCallId === 'string' && typeof r.iteration === 'number';
-    // The towers (9.110.0): the served piece reads `declaredOn`, `value` and
-    // every carrier's `toolCallId` and `standing`. The rule that writes the
-    // row never files an empty carrier list and never a `fact` carrier (one
-    // fact carrier means the value stands), so the door refuses both — a
-    // row with either is not one `recordFindings` wrote.
-    case 'contingent':
-      return (
-        (r.declaredOn === 'answer' || isIdentity(r.declaredOn)) &&
-        typeof r.value === 'string' &&
-        Array.isArray(r.carriers) &&
-        r.carriers.length >= 1 &&
-        r.carriers.every(
-          (c: unknown) =>
-            c !== null &&
-            typeof c === 'object' &&
-            typeof (c as { toolCallId?: unknown }).toolCallId === 'string' &&
-            isIn((c as { standing?: unknown }).standing, ['open', 'noise', 'ruled-out']),
-        ) &&
-        typeof r.iteration === 'number'
-      );
-    // The row beside a ruled-out standing that rests on an absence
-    // (9.113.0): the fold reads `toolCallId`, the piece reads each list's
-    // items and `tryInstead`. The rule writes a list only when it holds an
-    // item with a string `what`, and `tryInstead` only as a non-empty
-    // string, so the door refuses anything else — a row with an empty list
-    // is not one `recordFindings` wrote.
-    case 'unsettled-by-absence':
-      return (
-        typeof r.toolCallId === 'string' &&
-        (r.notChecked === undefined || isCoverageList(r.notChecked)) &&
-        (r.cannotCover === undefined || isCoverageList(r.cannotCover)) &&
-        (r.tryInstead === undefined || (typeof r.tryInstead === 'string' && r.tryInstead !== '')) &&
-        typeof r.iteration === 'number'
-      );
-    // The inputs layer's verdict on one ruled argument (honesty layer 2) —
-    // the arm ships in the SAME change as the row kind (the judge rows were
-    // refused until 9.110.0 because their arm came later). One owner of the
-    // row's shape: `arguments/rows.ts`. An older runtime refuses a checkpoint
-    // that carries this kind.
-    case 'argument':
-      return argumentRowIsWellFormed(r);
-    // The results layer's verdict on one call's period (honesty layer 3, step
-    // 7b) — the arm ships in the SAME change as the row kind. One owner of the
-    // row's shape: `agent/coverage/period.ts`. An older runtime refuses a
-    // checkpoint that carries this kind.
-    case 'period':
-      return periodRowIsWellFormed(r);
-    // The answer layer's witness rows (honesty layer 4): the evidence gate's
-    // clean verdict, an answer given before its declared steps finished, and
-    // the script match's verdict on a shown block (`script-shown`). The arms
-    // ship in the SAME change as the kinds; one owner of their shape
-    // (`assessment/witness.ts`). An older runtime refuses a checkpoint that
-    // carries any of them.
-    case 'grounded':
-    case 'steps-unfinished':
-    case 'script-shown':
-    case 'integrity-finding':
-    case 'claim-unsettled':
-      return witnessRowIsWellFormed(r);
-    // The script record (`core/agent/scripts/`): one owner of its shape
-    // (`scripts/rows.ts`). An older runtime refuses a checkpoint that carries it.
-    case 'script':
-      return scriptRowIsWellFormed(r);
-    default:
-      return false;
-  }
-}
-
-/** A conversation turn: a positive whole number (the `AgentState.turnNumber` seed writes). */
-function isTurnNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
-}
-
-/** A non-empty list of `{ what, why? }` coverage items, both strings — the shape the rule files. */
-function isCoverageList(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length >= 1 &&
-    value.every(
-      (item: unknown) =>
-        item !== null &&
-        typeof item === 'object' &&
-        typeof (item as { what?: unknown }).what === 'string' &&
-        ((item as { why?: unknown }).why === undefined ||
-          typeof (item as { why?: unknown }).why === 'string'),
-    )
-  );
 }
 
 /**
@@ -865,7 +481,9 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
     );
   }
+  const toolTurnEvidence = admitToolTurnEvidence(c);
   const sourceEvidence = sourceEvidenceOf(c);
+  const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(c);
   // Optional fields are validated only when PRESENT — absence is the ordinary
   // pre-SG-C checkpoint and must keep deserializing byte-identically.
   if (c.skillCursor !== undefined && typeof c.skillCursor !== 'string') {
@@ -902,58 +520,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       );
     }
   }
-  // The findings ledger (9.101.0), by the same present-only rule: a checkpoint
-  // without the key is every pre-ledger conversation and deserializes
-  // byte-identically. When present it must be the shape `recordFindings`
-  // writes, because a continued run re-seeds it VERBATIM into
-  // `AgentState.findingsLedger` and the next `foldLedger` reads the fields
-  // below without looking: a row that names a known `kind` but lacks the
-  // fields that kind's reader consumes (`standing` without `assertions`,
-  // say) would fail deep inside that fold. So the door checks the fields the
-  // fold consumes, per kind — never the values the model wrote.
-  if (c.findingsLedger !== undefined) {
-    let ledger: readonly unknown[] | undefined;
-    try {
-      ledger = ownConfigArray(c.findingsLedger, Number.MAX_SAFE_INTEGER);
-    } catch {
-      // A saved array cannot run a getter/iterator to choose the rows admitted.
-    }
-    if (ledger === undefined || !ledger.every(ledgerRowIsWellFormed)) {
-      throw new TypeError(
-        '[resumeOnError] checkpoint `findingsLedger` must be an array of ledger rows when ' +
-          "present — each a plain object whose `kind` is 'basis' (with toolCallId, toolName, " +
-          "iteration, basis), 'standing' (with toolCallId, standing, assertions[], declaredOn, " +
-          "iteration), 'reference-refusal' (with declaredOn, iteration, a refusal reason and optional bounded diagnostic), 'conflict' (with key, witnesses[], iteration), 'judgment' (with " +
-          "toolCallId, standing, iteration), 'judgment-error' (with toolCallId, iteration) or " +
-          "'contingent' (with declaredOn, value, at least one carrier { toolCallId, standing: " +
-          "open | noise | ruled-out }, iteration) or 'unsettled-by-absence' (with toolCallId, " +
-          'iteration, and optional non-empty notChecked / cannotCover lists of { what, why? } ' +
-          "and a non-empty tryInstead string) or 'argument' (with toolCallId, toolName, " +
-          'argument, iteration, turn, and a source or an asked in its vocabulary) or ' +
-          "'period' (with toolCallId, toolName, iteration, turn, and a verdict of covered, " +
-          'partly-held, not-held, unknown or undeclared) or ' +
-          "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
-          "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
-          'total, action: accepted | cut-short) or ' +
-          "'script-shown' (with turn, iteration, block, a script label or 'unmatched' with a " +
-          "reason) or 'integrity-finding' (with turn, iteration, a finding kind, seam) or " +
-          "'claim-unsettled' (with turn, iteration, field) or " +
-          "'script' (with toolCallId, tool, argument, bytes, lines, a script outcome, turn, " +
-          'iteration, and text only as long as bytes says, within the bound) or ' +
-          "'clock' (with turn, iteration, now, nowSource, zone, zoneSource) or " +
-          "'clock-on-resume' (with turn, iteration, passed, kept) or " +
-          "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt) or " +
-          "'time-reading' (with turn, iteration, reader, tzdata, mentions and, per mention, " +
-          'mention with quote, parses, candidates and choice, or refused) or ' +
-          "'time-answer' (with turn, iteration, mention, from, to, zone, how: confirmed | edited); " +
-          "or 'claim-verification' (the closed scoped-comparison protocol); " +
-          "or 'negative-claim' / 'negative-claim-note' (bounded observe-only prose findings); " +
-          'a row of any kind may carry a numeric turn. ' +
-          'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
-          're-seeded verbatim on continuation.',
-      );
-    }
-  }
+  validateCheckpointLedger(c);
   // The two checkpoint carriers use one admission rule. Only a present opted-in
   // carrier is copied/validated; every old checkpoint keeps its return identity.
   let claimVerification: ClaimVerificationState | undefined;
@@ -966,42 +533,31 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   // present-only rule: a checkpoint without the key is every conversation
   // stored without a layer armed. When present it is a turn — a positive
   // whole number — because the next run's turn stamp starts from it.
-  if (c.turnNumber !== undefined && !isTurnNumber(c.turnNumber)) {
+  const turn = c.turnNumber;
+  if (turn !== undefined && (!Number.isSafeInteger(turn) || turn < 1)) {
     throw new TypeError(
       `[resumeOnError] checkpoint \`turnNumber\` must be a positive whole number when present ` +
-        `(got ${JSON.stringify(c.turnNumber) ?? typeof c.turnNumber}). It is the conversation ` +
+        `(got ${JSON.stringify(turn) ?? typeof turn}). It is the conversation ` +
         `turn the stored history ends on, written while an honesty layer is armed.`,
     );
   }
-  // The conversation itself, message by message (8.18.0). `Array.isArray` was
-  // the whole check, one field away from `originalInput.message` — which HAS
-  // been string-checked since this function was written. A checkpoint that
-  // round-tripped through a store, a hand edit, or an older writer could carry
-  // a turn with no `content`, deserialize cleanly, and take the run down on
-  // its first composition with a TypeError naming neither the checkpoint nor
-  // the turn. A persisted artifact is checked at the door it comes in.
-  for (const [i, msg] of (c.history as readonly unknown[]).entries()) {
-    if (!msg || typeof msg !== 'object') {
-      throw new TypeError(
-        `[resumeOnError] checkpoint history[${i}] is not a message (got ${
-          msg === null ? 'null' : typeof msg
-        }). Each entry must be { role, content }.`,
-      );
-    }
-    const m = msg as { role?: unknown; content?: unknown };
-    if (typeof m.role !== 'string' || typeof m.content !== 'string') {
-      throw new TypeError(
-        `[resumeOnError] checkpoint history[${i}] is missing text: \`role\` is ${typeof m.role}, ` +
-          `\`content\` is ${
-            m.content === undefined ? 'missing' : typeof m.content
-          }. Every turn in a stored conversation must carry { role: string, content: string } — ` +
-          `a turn without content cannot be composed into the next request, and the failure ` +
-          `would otherwise surface deep inside the run rather than here.`,
-      );
-    }
-  }
+  admitStoredHistory(c.history, c.folded);
+  innerCallPolicyReferences(c.history);
+  admitFoldedInnerCallPolicy(c.folded);
+  const innerCallPolicyArgs = innerCallPolicyOf(c);
   negativeCheckpointOf(c);
-  return checkpointWithCarriers(c, claimVerification, sourceEvidence);
+  if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
+  const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
+  return sourceDeclarationCorrection === undefined &&
+    innerCallPolicyArgs === undefined &&
+    toolTurnEvidence === undefined
+    ? checkpoint
+    : {
+        ...checkpoint,
+        ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
+        ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
+        ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
+      };
 }
 
 /**

@@ -38,6 +38,7 @@ import type {
   ClaimUnsettledRow,
   GroundedRow,
   ScriptShownRow,
+  StepSkippedRow,
   StepsUnfinishedRow,
 } from '../assessment/witness.js';
 import type { IntegrityFindingRow } from '../../../integrity/finding/row.js';
@@ -55,9 +56,10 @@ import type {
 } from '../../../time/rows.js';
 import type { CoverageItem } from '../../../semantics/coverage/types.js';
 import type { ClaimVerificationRow } from './verificationTypes.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
-/** The reserved optional property every SERVED tool schema carries when armed. */
-export const RESERVED_ARGUMENT = '_findings' as const;
+/** Reserved metadata: optional observations; source-armed ASK declarations require our envelope. */
+export { RESERVED_ARGUMENT } from '../sourceContract.js';
 /** The reserved top-level key a JSON answer may carry its standings under. */
 export const RESERVED_ANSWER_KEY = '_findings' as const;
 
@@ -139,12 +141,15 @@ export interface FindingsDeclaration {
 }
 
 /** Where a standing was declared: on a later tool call, or on the answer. */
-export type DeclaredOn = { readonly toolCallId: string } | 'answer';
+export type DeclaredOn =
+  | { readonly toolCallId: string; readonly callOccurrenceKey?: CallOccurrenceKey }
+  | 'answer';
 
 /** The model's basis for ONE tool call, filed before the call runs. */
 export interface BasisRow {
   readonly kind: 'basis';
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly iteration: number;
   readonly basis: Basis;
@@ -177,13 +182,14 @@ export interface StandingRow {
   readonly kind: 'standing';
   /** The PREVIOUS result's id — the result being judged, not the judging call. */
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /**
    * From the identified result (`offer.ts · knownResults`: the served
    * history's tool messages plus the previous batch); absent when the id
    * named none (`unknownId`), or when the served message carried no name.
    */
   readonly toolName?: string;
-  /** The placement ticket's `art_` ref when the result was placed (`isPlacedToolResult`). */
+  /** The placement ticket's `art_` ref when the placement is backed by the library receipt. */
   readonly ref?: string;
   readonly standing: Standing;
   readonly sought?: boolean;
@@ -216,6 +222,7 @@ export interface StandingRow {
 /** One witness of a conflict — identities only, never the value. */
 export interface ConflictWitness {
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly subject: { readonly kind: string; readonly id: string };
   readonly predicate: string;
 }
@@ -267,6 +274,7 @@ export interface JudgmentRow {
   readonly kind: 'judgment';
   /** The RESULT judged — the tool call's id, the same key `StandingRow` uses. */
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly source: 'judge';
   /** The classifier's port name and the provider's resolved model string. */
@@ -302,6 +310,7 @@ export interface JudgmentRow {
 export interface JudgmentErrorRow {
   readonly kind: 'judgment-error';
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly toolName: string;
   readonly source: 'judge';
   /** The classifier's port name; the model string is unknown when the call failed. */
@@ -429,6 +438,7 @@ export interface UnsettledByAbsenceRow {
   readonly kind: 'unsettled-by-absence';
   /** The ruled-out RESULT — the key of the standing this row is beside. */
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /**
    * The SERVED envelope's `not_checked` (the served result's leading JSON
    * object — a framework note joined after it is not part of it) — a
@@ -483,12 +493,13 @@ export type FindingsRow =
   // The results layer's verdict on one call's period (honesty layer 3, step
   // 7b) — filed by the `sf-results` subflow at the loop head, not by the model.
   | PeriodRow
-  // The answer layer's committed witnesses (honesty layer 4) — two verdicts
-  // the Route decider computes that were events only: the evidence gate's
-  // clean pass, and an answer given before its declared steps finished.
+  // The answer layer's committed witnesses (honesty layer 4): the evidence
+  // gate's clean pass, an answer before its declared steps finished, and an
+  // accepted skip that moved past a declared step.
   // Filed only while the answer layer is armed (`assessment/witness.ts`).
   | GroundedRow
   | StepsUnfinishedRow
+  | StepSkippedRow
   // One filed integrity finding, and a `.claims()` field no tool settled — filed
   // only while the answer layer is armed, so the answer's standing can read them.
   | IntegrityFindingRow

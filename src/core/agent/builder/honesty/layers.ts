@@ -1,9 +1,14 @@
-import { answerLayerArm } from '../../assessment/answerLayerOptions.js';
-import type { StandingLineWhen } from '../../assessment/compose.js';
+import { readInputsLayerOption, type InputsLayerOptions } from '../../honesty/armed.js';
+import {
+  answerLayerArm,
+  type AnswerLayerArm,
+  type AnswerLayerOptions,
+} from '../../assessment/answerLayerOptions.js';
 
 export interface InputsLayerPort {
   inputsLayerValue: boolean;
   inputsLayerSourcesValue: boolean;
+  inputsLayerCorrectionValue?: 'once';
 }
 
 export interface ResultsLayerPort {
@@ -11,12 +16,12 @@ export interface ResultsLayerPort {
 }
 
 export interface AnswerLayerPort {
-  answerLayerValue?: { readonly standingLine?: StandingLineWhen };
+  answerLayerValue?: AnswerLayerArm | false;
 }
 
 export function configureInputsLayer<TReceiver extends InputsLayerPort>(
   self: TReceiver,
-  options: { readonly argumentSources?: boolean } | undefined,
+  options: InputsLayerOptions | undefined,
   original: object,
 ): object {
   if (self.inputsLayerValue) {
@@ -37,6 +42,9 @@ export function configureInputsLayer<TReceiver extends InputsLayerPort>(
         `${JSON.stringify(argumentSources)}.`,
     );
   }
+  const read = readInputsLayerOption(options ?? true);
+  if (read?.declarationCorrection !== undefined)
+    self.inputsLayerCorrectionValue = read.declarationCorrection;
   self.inputsLayerValue = true;
   self.inputsLayerSourcesValue = argumentSources === true;
   return original;
@@ -58,13 +66,7 @@ export function configureResultsLayer<TReceiver extends ResultsLayerPort>(
 
 export function configureAnswerLayer<TReceiver extends AnswerLayerPort>(
   self: TReceiver,
-  options:
-    | {
-        readonly standingLine?:
-          | boolean
-          | { readonly when: 'always' | 'unless-consistent' | 'not-sure-or-ask' };
-      }
-    | undefined,
+  options: Exclude<AnswerLayerOptions, true> | undefined,
   original: object,
 ): object {
   if (self.answerLayerValue !== undefined) {
@@ -73,11 +75,15 @@ export function configureAnswerLayer<TReceiver extends AnswerLayerPort>(
         'a second call has nothing left to add. Drop it (pass { standingLine: true } once).',
     );
   }
+  if (options === false) {
+    self.answerLayerValue = false;
+    return original;
+  }
   if (options !== undefined && (typeof options !== 'object' || options === null)) {
     throw new Error(
       'AgentBuilder.answerLayer: options must be an object — ' +
         "{ standingLine?: boolean | { when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } } " +
-        '— or omitted.',
+        '— or omitted. Pass false to turn the layer off.',
     );
   }
   self.answerLayerValue = answerLayerArm(options ?? {}, 'AgentBuilder.answerLayer');

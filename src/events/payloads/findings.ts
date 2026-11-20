@@ -6,6 +6,7 @@ import type {
   Basis,
   Expect,
   Standing,
+  ToolCallEventIdentity,
 } from './dependencyTypes.js';
 
 // ─── findings (the model's standings on the record — `.findings()`) ────
@@ -24,7 +25,7 @@ import type {
  * Fired by `recordFindings`, one per basis row, BEFORE `stream.tool_start`
  * for the same `toolCallId`. Never fired on an agent without `.findings()`.
  */
-export interface FindingsDeclaredPayload {
+export interface FindingsDeclaredPayload extends Pick<ToolCallEventIdentity, 'callOccurrenceKey'> {
   readonly toolName: string;
   /** The provider's id for the call — what a reader joins to `tool_start`. */
   readonly toolCallId: string;
@@ -66,7 +67,7 @@ export interface FindingsDeclaredPayload {
  *
  * Fired by `recordFindings`, one per standing row, in declaration order.
  */
-export interface FindingsStandingPayload {
+export interface FindingsStandingPayload extends Pick<ToolCallEventIdentity, 'callOccurrenceKey'> {
   /** The id of the tool RESULT this standing is about. */
   readonly toolCallId: string;
   /** Absent when `unknownId` — the batch had no result to name. */
@@ -101,10 +102,8 @@ export interface FindingsStandingPayload {
  * one per judgment row, once the result's `toolResults` entry exists and
  * before the next model call. Never fired without a configured judge.
  */
-export interface FindingsJudgedPayload {
-  readonly toolCallId: string;
+export interface FindingsJudgedPayload extends ToolCallEventIdentity {
   readonly toolName: string;
-  readonly iteration: number;
   readonly against: 'proposition' | 'question';
   readonly standing: Standing;
   readonly confidence: number;
@@ -119,10 +118,8 @@ export interface FindingsJudgedPayload {
  * spent. The error text lives on the `JudgmentErrorRow`; no standing is
  * guessed, and the run continues — the judge is advisory.
  */
-export interface FindingsJudgeFailedPayload {
-  readonly toolCallId: string;
+export interface FindingsJudgeFailedPayload extends ToolCallEventIdentity {
   readonly toolName: string;
-  readonly iteration: number;
   readonly status?: number;
   readonly latencyMs: number;
 }
@@ -142,7 +139,8 @@ export interface FindingsJudgeFailedPayload {
  * dispatch, after the call's basis row and before `stream.tool_start`.
  * Never fired unless BOTH doors are armed.
  */
-export interface FindingsContingentPayload {
+export interface FindingsContingentPayload
+  extends Pick<ToolCallEventIdentity, 'callOccurrenceKey'> {
   readonly iteration: number;
   readonly declaredOn: 'tool-call' | 'answer';
   /** The dispatching call, when the value rode its arguments; absent for the answer. */
@@ -167,10 +165,8 @@ export interface FindingsContingentPayload {
  * host counts "1 assumed" from these events. The standing fold never reads
  * them (it reads the committed rows).
  */
-export interface FindingsArgumentPayload {
-  readonly toolCallId: string;
+export interface FindingsArgumentPayload extends ToolCallEventIdentity {
   readonly toolName: string;
-  readonly iteration: number;
   /** The conversation turn the row was filed in. */
   readonly turn: number;
   readonly argument: string;
@@ -179,6 +175,8 @@ export interface FindingsArgumentPayload {
   readonly source?: ArgumentSource;
   readonly asked?: ArgumentAsked;
   readonly claimed?: ArgumentClaim;
+  readonly correction?: 'source-declaration-required';
+  readonly withheld?: 'batch-preempted';
   readonly matched?: 'quote' | 'phrase' | 'spelling' | 'mention';
   readonly reading?: true;
   readonly earlier?: true;
@@ -203,6 +201,7 @@ export interface FindingsArgumentPayload {
  * never reads them (it reads the committed rows).
  */
 export interface FindingsPeriodPayload {
+  readonly callOccurrenceKey?: import('../../lib/callOccurrence.js').CallOccurrenceKey;
   readonly toolCallId: string;
   readonly toolName: string;
   readonly iteration: number;

@@ -81,7 +81,9 @@ import {
   FINDINGS_INSTRUCTION,
   FINDINGS_SOURCES_SCHEMA,
   findingsInstructionFor,
+  withSourcesArgument,
 } from '../src/core/agent/findings/reserved.js';
+import { projectSourceInstructions } from '../src/core/agent/sourceContract.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
 import { heldLine, UNKNOWN_ZONE_LINE } from '../src/semantics/coverage/timeLimits.js';
 import {
@@ -151,6 +153,14 @@ import {
   PARK_CARD,
   type Surface,
 } from './helpers/modelFacingClaims.js';
+
+import {
+  correctionFixture as sourceCorrectionFixture,
+  batch as sourceCorrectionBatch,
+  proposal as sourceCorrectionProposal,
+  QUESTION as SOURCE_CORRECTION_QUESTION,
+  VM as SOURCE_CORRECTION_VM,
+} from './core/agent/arguments/sourceCorrectionHarness.js';
 
 /** One model-facing producer, and how to make it speak. */
 interface ModelFacingProducer {
@@ -664,7 +674,13 @@ const traceToolpackResults = async (): Promise<readonly string[]> => {
   // The descent's two "no record here" arms: a lookup holding OTHER records,
   // and a lookup holding none at all.
   const stocked = innerRunStore(4);
-  stocked.keep({ toolCallId: 'c9', toolName: 'weather_advice', outcome: 'ok', steps: 4 });
+  stocked.keep({
+    toolCallId: 'c9',
+    toolName: 'weather_advice',
+    outcome: 'ok',
+    steps: artifacts.snapshot.commitLog.length,
+    recording: { snapshot: artifacts.snapshot },
+  });
   return [
     // The never-dispatched arm (9.113.0): a call the paused batch settled.
     await callTraceTool(traceToolpack(await settledBatchArtifacts()), 'inspect_tool_call', {
@@ -712,16 +728,12 @@ const stepNudges = (): readonly string[] => {
 };
 
 /**
- * The findings ledger's two model-facing strings (9.101.0, `.findings()`).
- *
- * Both ride the REQUEST, never `history`: the `_findings` property is rebuilt
- * onto every served schema by `withFindingsArgument` at the committed tool
- * list (`buildToolsSlot`, the seed fallback), and the instruction is a
- * system piece registered through `defineInstruction` — recomposed by the
- * injection engine on every pass. Neither is written into a `role: 'tool'`
- * or `role: 'user'` message, so a later call re-reads a fresh copy, not a
- * stale one. `test/core/agent/findings/reserved.test.ts` judges the same two
- * strings at the STRICTEST lifetime as well; the rows here name the real one.
+ * Live findings guidance rides the stable `_findings` tool schema and the
+ * system instruction recomposed by the injection engine. The changing offer
+ * and folded ledger ride a request-only user-role DATA frame from
+ * `findings/context.ts` after committed history and cache breakpoints.
+ * `test/core/agent/findings/reserved.test.ts` also checks the guidance
+ * strings under the persistent-history rules.
  */
 const RESERVED_ARGUMENT_DESCRIPTION: Surface = {
   channel: 'tool-description',
@@ -731,9 +743,8 @@ const ALWAYS_ON_INSTRUCTION: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
 };
-/** The SERVED piece (step 3): composed per request from the committed
- *  `findingsLedger` key and joined into `systemPieces` only — never an
- *  injection, never a `history` turn. */
+/** Request-only system text for live ontology and the legacy findings piece
+ *  reconstructed from compatible saved requests. */
 const LEDGER_PIECE: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
@@ -1095,7 +1106,7 @@ function ruledRefusals(): string[] {
 }
 
 /**
- * A ledger that reaches EVERY arm of the piece's grammar: a conflict (two
+ * A ledger that reaches EVERY arm of the legacy piece's grammar: a conflict (two
  * facts on one key), a placed fact, an open row with `settles`, a ruled-out
  * row, noise, an undeclared served result, a bucket past its cap (`+K more`)
  * and a line past its width (`…[clipped N chars]`).
@@ -1142,9 +1153,8 @@ function findingsPieces(): string[] {
   return [findingsLedgerPiece(ledger, served)!.rawContent];
 }
 
-/** The piece under `findings({ answerAsk: 'quote-facts' })` (9.103.0): the
- *  same ledger with `FINDINGS_ANSWER_ASK` as its last section — composed by
- *  the real function, so the row reads the ask where the model reads it. */
+/** The legacy piece with `FINDINGS_ANSWER_ASK` as its last section. The live
+ *  `quote-facts` option puts its sentence in the findings instruction. */
 function findingsAskPieces(): string[] {
   const ledger: FindingsLedger = [
     {
@@ -1168,7 +1178,7 @@ function findingsAskPieces(): string[] {
   return [findingsLedgerPiece(ledger, ['call_1', 'call_2'], 'quote-facts')!.rawContent];
 }
 
-/** The piece with a `contingent:` section (9.110.0): a ledger holding one
+/** The legacy piece's `contingent:` section: a ledger holding one
  *  set-aside standing and two contingent rows — one filed at the answer, one
  *  at a dispatch with two carriers — composed by the real function. */
 function findingsContingentPieces(): string[] {
@@ -1213,7 +1223,7 @@ function findingsContingentPieces(): string[] {
   return [findingsLedgerPiece(ledger, ['call_1', 'call_4', 'call_7'])!.rawContent];
 }
 
-/** The piece with an `unsettled by absence:` section (9.113.0): two
+/** The legacy piece's `unsettled by absence:` section: two
  *  ruled-out standings, each with the row the rule files beside it — an
  *  absence quoting every part of its envelope, and an absence that declared
  *  no boundary and no way out — composed by the real function. */
@@ -1364,6 +1374,48 @@ function emptyDataRefusals(): readonly string[] {
       }),
     ),
   ];
+}
+
+/** Compose both persistent correction arms through the actual admitted Agent wire. */
+async function sourceDeclarationFeedback(): Promise<readonly string[]> {
+  let siblingRuns = 0;
+  const siblingName = 'source_correction_sibling';
+  const sibling = defineTool({
+    name: siblingName,
+    description: 'Synthetic sibling held by the native barrier.',
+    execute() {
+      siblingRuns++;
+      return 'Synthetic sibling ran.';
+    },
+  });
+  const fixture = sourceCorrectionFixture(
+    [
+      sourceCorrectionBatch(
+        sourceCorrectionProposal('declaration-omitted', { vm: SOURCE_CORRECTION_VM }),
+        { id: 'held-sibling', name: siblingName, args: {} },
+      ),
+      'Held.',
+    ],
+    { extraTools: [sibling] },
+  );
+  try {
+    expect(await fixture.agent.run(SOURCE_CORRECTION_QUESTION)).toBe(
+      'Held.\n\n---\n\nNot sure — calls were refused.',
+    );
+    expect(fixture.ran).toEqual([]);
+    expect(siblingRuns).toBe(0);
+    const notices = (fixture.requests[1]?.messages ?? []).filter(
+      (message) => message.role === 'tool',
+    );
+    expect(notices.map((message) => message.toolCallId)).toEqual([
+      'declaration-omitted',
+      'held-sibling',
+    ]);
+    for (const notice of notices) expect(notice.content).not.toContain(SOURCE_CORRECTION_VM);
+    return notices.map((message) => message.content);
+  } finally {
+    await fixture.agent.shutdown();
+  }
 }
 
 // ─── The registry ────────────────────────────────────────────────────
@@ -1681,7 +1733,10 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     ],
     // Both span arms: the range and the single step. They are one ternary
     // apart, and only one of them can be reached by any single fixture.
-    reaches: [/Steps 1–3 of 'refund' had not run/, /Step 3 of 'refund' had not run/],
+    reaches: [
+      /Steps 1–3 of 'refund' had not been completed/,
+      /Step 3 of 'refund' had not been completed/,
+    ],
     compose: async () => stepNudges(),
   },
   {
@@ -1736,15 +1791,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => [FINDINGS_INSTRUCTION],
   },
   {
-    id: 'findings ledger — the SERVED piece (step 3)',
+    id: 'findings ledger — the legacy system piece for replay',
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      '`callLLM · buildCallLLMStage` composes it per request by `findingsLedgerPiece` from the ' +
-      'committed `findingsLedger` key and joins it into `systemPieces` ONLY (after the recovery ' +
-      'piece) — never pushed into `systemPromptInjections`, never written into `history`; the ' +
-      'model reads a fresh composition on each call, `servedView/findings.ts · findingsAt` recomposes the ' +
-      'same one from the record, and the receipt hashes it per request',
+      '`servedView/findings.ts · findingsAt` recomposes the original request-only system piece ' +
+      'with `findingsLedgerPiece` from the committed ledger and served result IDs for compatible ' +
+      'records without a layout discriminator. Live requests carry findings in the request-only DATA frame.',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1772,15 +1825,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => findingsPieces(),
   },
   {
-    id: 'findings ledger — the answer-turn ASK appended to the served piece (9.103.0)',
+    id: 'findings ledger — the answer-turn ask appended in legacy replay',
     module: 'src/core/agent/findings/reserved.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      "a constant (`FINDINGS_ANSWER_ASK`) that `findingsLedgerPiece` appends as the piece's last " +
-      "section ONLY under `findings({ answerAsk: 'quote-facts' })` — the same request-only " +
-      'system piece as the row above, composed per request, joined into `systemPieces` only, ' +
-      'never an injection and never a `history` turn; `servedView/findings.ts · findingsAt` re-appends it ' +
-      'from the run constant `findingsAnswerAsk`',
+      '`servedView/findings.ts · findingsAt` reads the legacy run constant `findingsAnswerAsk`. ' +
+      'For `quote-facts`, `findingsLedgerPiece` appends `FINDINGS_ANSWER_ASK` as the final section ' +
+      'of the request-only system piece. Live runs put the ask in the findings instruction.',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1826,16 +1877,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => [findingsInstructionFor({ contingent: true })],
   },
   {
-    id: 'findings ledger — the served `contingent:` section (9.110.0)',
+    id: 'findings ledger — the legacy `contingent:` section for replay',
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      'the same request-only system piece as the SERVED piece row: `findingsLedgerPiece` quotes ' +
-      'every `ContingentRow` of the committed `findingsLedger` under the heading `contingent (read ' +
-      'off the record):` — the one section the header\'s "what the model itself declared" does not ' +
-      "cover, named as the library's join so the header stays true — " +
-      'composed per request, joined into `systemPieces` only, never an injection and never a ' +
-      '`history` turn; `servedView/findings.ts · findingsAt` recomposes it from the record',
+      'in the legacy request-only system piece, `findingsLedgerPiece` quotes the committed ' +
+      '`ContingentRow` entries as library observations under `contingent (read off the record):`. ' +
+      '`servedView/findings.ts · findingsAt` recomposes that piece from compatible saved records.',
     drivenBy: [
       'test/core/agent/findings/contingent.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1853,16 +1901,13 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => findingsContingentPieces(),
   },
   {
-    id: 'findings ledger — the served `unsettled by absence:` section (9.113.0)',
+    id: 'findings ledger — the legacy `unsettled by absence:` section for replay',
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      'the same request-only system piece as the SERVED piece row: `findingsLedgerPiece` quotes ' +
-      'the `UnsettledByAbsenceRow`s the ledger fold keeps (`foldLedger(...).unsettled`) under the ' +
-      "heading `unsettled by absence (read off the record):` — the library's reading of the " +
-      'result a ruled-out standing rests on, named as such so the header stays true — composed ' +
-      'per request, joined into `systemPieces` only, never an injection and never a `history` ' +
-      'turn; `servedView/findings.ts · findingsAt` recomposes it from the record',
+      'in the legacy request-only system piece, `findingsLedgerPiece` quotes the retained ' +
+      '`UnsettledByAbsenceRow` entries under `unsettled by absence (read off the record):`. ' +
+      '`servedView/findings.ts · findingsAt` recomposes that piece from compatible saved records.',
     drivenBy: [
       'test/core/agent/findings/unsettled.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1897,10 +1942,30 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /If left out, the tool's rule fills 50, recorded as assumed\./,
       /fills a declared value \(hidden by the tool's view\)/,
       /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it\.$/m,
-      // Step 5 (declared sources): the same rule, and where the model says the person gave it.
-      /^Look-back period\. The tool's rule asks the person for this value; leave it out unless the person gave it, and then quote their words for it in `_findings\.from`\.$/m,
+      // The source arm states the consumed namespace and all four verified origin kinds.
+      /^Look-back period\. For a supplied value, declare its actual source in `_findings\.from`: 'user': the person's quoted words; 'result': a named tool result; 'turn': an earlier answered input; 'app': app-supplied context\. The runtime checks the claim; otherwise leave this value out for the person\. Put from inside the call argument _findings object, never at the call root\.$/m,
     ],
     compose: async () => ruledSchemaDescriptions(),
+  },
+  {
+    id: 'source contract — the required ASK instruction on the final offered cohort',
+    module: 'src/core/agent/sourceContract.ts',
+    surface: ALWAYS_ON_INSTRUCTION,
+    lifetimeBecause:
+      'the final request projects only the native findings instruction against the actual ' +
+      'offered schema; receipt and saved-request readers use the same pure projection',
+    drivenBy: ['test/core/agent/arguments/source-contract-projection.test.ts'],
+    reaches: [
+      /where _findings is required/,
+      /in `_findings\.from` inside that call argument object/,
+      /root from is not the declaration/,
+      /Observations on other calls remain optional/,
+    ],
+    compose: async () =>
+      projectSourceInstructions(
+        [{ source: 'instructions', sourceId: 'findings-ledger', rawContent: FINDINGS_INSTRUCTION }],
+        [withSourcesArgument({ name: 'read_source', inputSchema: { type: 'object' } }, true)],
+      ).map((piece) => piece.rawContent),
   },
   {
     id: 'time layer — the person’s windows, served late at the decision point (TQ13, step T6b)',
@@ -2165,6 +2230,20 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
         },
       ]),
     ],
+  },
+  {
+    id: 'inputs layer — one source-declaration correction holds the whole native batch',
+    module: 'src/core/agent/findings/sourceContractFeedback.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      'Each fixed role-tool notice is correlated to a withheld proposal and remains in native history; both arms are persistent facts about that past call and batch.',
+    drivenBy: [
+      'test/core/agent/arguments/source-declaration-correction.test.ts',
+      'test/core/agent/arguments/source-correction-privacy.test.ts',
+      'test/core/agent/arguments/source-contract-feedback.test.ts',
+    ],
+    reaches: [/"path":\["_findings","from"\]/, /"declarationSchema"/, /another call/],
+    compose: sourceDeclarationFeedback,
   },
   {
     id: 'inputs layer — the refusals of a ruled call (honesty layer 2)',
@@ -2466,7 +2545,10 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'the assistant turn a continued conversation carries (`agent.checkpoint()` keeps the ' +
       'answer) and every later call of that conversation re-reads it — it says what the ' +
       'record held when this answer was given, never what is true of the world',
-    drivenBy: ['test/core/agent/assessment/answer-layer.test.ts'],
+    drivenBy: [
+      'test/core/agent/assessment/answer-layer.test.ts',
+      'src/core/agent/assessment/callOutcomes.test.ts',
+    ],
     reaches: [
       /^Not sure — window = "2h" was assumed by search_logs's rule, not given by you/m,
       /its value is hidden by the tool's view/,
@@ -2480,6 +2562,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /^Consistent with the run's record — 1 check ran and did not fire: argument rules\./m,
       /^Known — the app's answer checks passed this exact answer\.$/m,
       /^Not assessed — no check applied to this answer\.$/m,
+      /Catalog search did not complete \(refused\) and a call failed/,
       /a tool's data does not reach the time the question asked about/,
       /^Consistent with the run's record — 1 check ran and did not fire: the time each result covered\./m,
       /^Ask — the run stopped to ask a question before it could answer\.$/m,
@@ -2487,6 +2570,26 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => {
       const base = { assessment: 'unknown' as const, checked: [] };
       return [
+        standingLineOf(
+          { ...base, standing: 'not-sure', reasons: ['call-not-completed'] },
+          [],
+          false,
+          {
+            sources: new Map([
+              [
+                'call-not-completed',
+                {
+                  kind: 'calls',
+                  calls: [
+                    { toolCallId: 'c1', toolName: 'search_catalog', outcome: 'refused' },
+                    { toolCallId: 'c2', toolName: 'list_items', outcome: 'failed' },
+                  ],
+                },
+              ],
+            ]),
+            displayNames: new Map([['search_catalog', 'Catalog search']]),
+          },
+        ),
         standingLineOf(
           { ...base, standing: 'not-sure', reasons: ['argument-assumed', 'empty-undeclared'] },
           [
@@ -2609,15 +2712,14 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     compose: async () => [ONTOLOGY_INSTRUCTION],
   },
   {
-    id: 'ontology — the SERVED piece (9.106.0)',
+    id: 'ontology — the final live system piece',
     module: 'src/ontology/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      '`callLLM · buildCallLLMStage` composes it per request by `ontologyPiece` from the run ' +
-      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece, ' +
-      'before the findings piece) — never pushed into `systemPromptInjections`, never written ' +
-      'into `history`; `servedView/ontology.ts · ontologyAt` recomposes the same one from the record and the ' +
-      'receipt hashes it per request',
+      '`callLLM · buildCallLLMStage` composes it by `ontologyPiece` from the run constant ' +
+      '`ontology` and that request’s hidden skills, after the optional recovery piece. Live ' +
+      'findings DATA rides in the request messages. `servedView/ontology.ts · ontologyAt` ' +
+      'recomposes the ontology piece from the record, and the receipt hashes it per request.',
     drivenBy: [
       'test/core/agent/ontology.test.ts',
       'test/ontology/serve.test.ts',

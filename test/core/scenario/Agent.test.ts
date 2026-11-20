@@ -153,7 +153,7 @@ describe('Agent — maxIterations guard', () => {
     // This provider ignores the withholding, but the wrap-up is latched to
     // once per turn, so `final` follows immediately.
     expect(routes).toEqual(['tool-calls@1', 'tool-calls@2', 'wrap-up@3', 'final@4']);
-    expect(out).toBe('thinking...');
+    expect(out).toBe('thinking...\n\n---\n\nNot sure — the run stopped before the model finished.');
   });
 });
 

@@ -4,7 +4,7 @@ title: UnsettledByAbsenceRow
 
 # Interface: UnsettledByAbsenceRow
 
-Defined in: [src/core/agent/findings/types.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L428)
+Defined in: [src/core/agent/findings/types.ts:437](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L437)
 
 A `ruled-out` standing whose ONLY witness is an absence (9.113.0) — the
 library's row BESIDE the model's, never a rewrite of it. "Nothing was
@@ -63,11 +63,19 @@ is the MODEL's word on an `open` standing and calling the tool's sentence
 
 ## Properties
 
+### callOccurrenceKey?
+
+> `readonly` `optional` **callOccurrenceKey?**: `CallOccurrenceKey`
+
+Defined in: [src/core/agent/findings/types.ts:441](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L441)
+
+***
+
 ### cannotCover?
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/findings/types.ts:441](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L441)
+Defined in: [src/core/agent/findings/types.ts:451](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L451)
 
 The served envelope's `cannot_cover`, by the same rule. Present only when non-empty.
 
@@ -77,7 +85,7 @@ The served envelope's `cannot_cover`, by the same rule. Present only when non-em
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:449](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L449)
+Defined in: [src/core/agent/findings/types.ts:459](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L459)
 
 The standing's iteration — the moment the check ran.
 
@@ -87,7 +95,7 @@ The standing's iteration — the moment the check ran.
 
 > `readonly` **kind**: `"unsettled-by-absence"`
 
-Defined in: [src/core/agent/findings/types.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L429)
+Defined in: [src/core/agent/findings/types.ts:438](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L438)
 
 ***
 
@@ -95,7 +103,7 @@ Defined in: [src/core/agent/findings/types.ts:429](https://github.com/footprintj
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/core/agent/findings/types.ts:439](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L439)
+Defined in: [src/core/agent/findings/types.ts:449](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L449)
 
 The SERVED envelope's `not_checked` (the served result's leading JSON
 object — a framework note joined after it is not part of it) — a
@@ -109,7 +117,7 @@ ground is left out. Present only when non-empty.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:431](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L431)
+Defined in: [src/core/agent/findings/types.ts:440](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L440)
 
 The ruled-out RESULT — the key of the standing this row is beside.
 
@@ -119,7 +127,7 @@ The ruled-out RESULT — the key of the standing this row is beside.
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:447](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L447)
+Defined in: [src/core/agent/findings/types.ts:457](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L457)
 
 The served absence's `try_instead`, the STRING byte for byte — never
 parsed, never trimmed, never read for a tool name. Present only when
@@ -131,7 +139,7 @@ that string is non-blank.
 
 > `readonly` `optional` **turn?**: `number`
 
-Defined in: [src/core/agent/findings/types.ts:456](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L456)
+Defined in: [src/core/agent/findings/types.ts:466](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L466)
 
 The conversation turn the row was filed in (`AgentState.turnNumber`) —
 stamped by the one writer while an honesty layer is armed (the inputs

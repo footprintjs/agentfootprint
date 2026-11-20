@@ -44,6 +44,7 @@ import { xrayObservability } from '../../src/adapters/observability/xray';
 import { agUiSerializer } from '../../src/ag-ui/serializer';
 import { deriveTranscript } from '../../src/bug-report/transcript';
 import type { AgentfootprintEvent, AgentfootprintEventMap } from '../../src/events/registry';
+import type { CallOccurrenceKey } from '../../src/lib/callOccurrence';
 
 type EventType = keyof AgentfootprintEventMap;
 type PayloadOf<T extends EventType> = AgentfootprintEventMap[T]['payload'];
@@ -184,6 +185,8 @@ export const EVENT_CONTENT = {
   'agentfootprint.skill.route_conflict': 'structure',
   // the step note the app declared
   'agentfootprint.skill.step_advanced': 'structure',
+  // the step note the app declared, and the status word its tool declared
+  'agentfootprint.skill.step_held': 'structure',
   'agentfootprint.skill.step_skipped': 'shape',
   // the step notes the app declared
   'agentfootprint.skill.steps_unfinished': 'structure',
@@ -221,6 +224,7 @@ export const EVENT_CONTENT = {
   'agentfootprint.tools.request_attempts': 'structure',
   'agentfootprint.tools.resource_restore': 'structure',
   'agentfootprint.tools.result_refused': 'structure',
+  'agentfootprint.tools.rowset_checked': 'structure',
   'agentfootprint.tools.semantics_declared': 'shape',
   'agentfootprint.tools.session_close_failed': 'fields',
   // `label`: never user data, by its contract
@@ -255,6 +259,10 @@ const window = (canary: string, at: string) => ({
   from: leaf(canary, `${at}.from`),
   to: leaf(canary, `${at}.to`),
 });
+
+const ORDERS_CALL_OCCURRENCE: CallOccurrenceKey = [1, 2, 3, 4, 0];
+const REFUND_CALL_OCCURRENCE: CallOccurrenceKey = [1, 2, 3, 4, 1];
+const EMAIL_CALL_OCCURRENCE: CallOccurrenceKey = [5, 6, 7, 8, 0];
 
 /** What the library composed for a search tool: references and its own words — no canary. */
 const COMPOSITION = {
@@ -385,6 +393,7 @@ const CANARY_PAYLOAD: {
       label: leaf(c, 'snapshot.label'),
     },
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     iteration: 1,
   }),
   'agentfootprint.artifacts.refused': (c) => ({
@@ -397,16 +406,19 @@ const CANARY_PAYLOAD: {
   'agentfootprint.checkin.decision': (c) => ({
     toolName: 'refund_order',
     toolCallId: 'call-2',
+    callOccurrenceKey: REFUND_CALL_OCCURRENCE,
     iteration: 1,
     requestId: 'req-1',
     approved: true,
     by: 'approver-7',
     note: leaf(c, 'note'),
+    hiddenArgs: ['account'],
     componentId: 'approve-card',
   }),
   'agentfootprint.checkin.request': (c) => ({
     toolName: 'refund_order',
     toolCallId: 'call-2',
+    callOccurrenceKey: REFUND_CALL_OCCURRENCE,
     iteration: 1,
     request: { question: leaf(c, 'request.question'), amount: leaf(c, 'request.amount') },
   }),
@@ -470,6 +482,7 @@ const CANARY_PAYLOAD: {
     tool: 'orders_search',
     errorClass: 'TypeError',
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     iteration: 1,
   }),
   'agentfootprint.fallback.triggered': (c) => ({
@@ -495,6 +508,7 @@ const CANARY_PAYLOAD: {
       },
     ],
     predicate: 'status',
+    rowset: 'declared-rowset',
     epoch: 1,
     synthetic: true,
     advisory: true,
@@ -561,8 +575,10 @@ const CANARY_PAYLOAD: {
     moment: 'before-tool',
     at: 'tool',
     phase: 'input',
+    personApproved: false,
     toolName: 'refund_order',
     toolCallId: 'call-2',
+    callOccurrenceKey: REFUND_CALL_OCCURRENCE,
     iteration: 1,
     outcome: 'ask',
     changed: false,
@@ -578,11 +594,13 @@ const CANARY_PAYLOAD: {
     actor: 'agent',
     target: 'refund_order',
     result: 'deny',
+    phase: 'resume',
     policyEngine: 'custom',
     policyRuleId: 'refund-limit',
     rationale: leaf(c, 'rationale'),
     reason: 'cost:refund-limit',
     toolCallId: 'call-2',
+    callOccurrenceKey: REFUND_CALL_OCCURRENCE,
     iteration: 1,
   }),
   'agentfootprint.permission.halt': (c) => ({
@@ -593,6 +611,7 @@ const CANARY_PAYLOAD: {
     iteration: 2,
     sequenceLength: 2,
     toolCallId: 'call-3',
+    callOccurrenceKey: EMAIL_CALL_OCCURRENCE,
   }),
   'agentfootprint.reliability.fail_fast': (c) => ({
     phase: 'post-decide',
@@ -655,6 +674,7 @@ const CANARY_PAYLOAD: {
   }),
   'agentfootprint.stream.tool_progress': (c) => ({
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     toolName: 'orders_search',
     iteration: 1,
     payload: { done: 3, note: leaf(c, 'payload.note') },
@@ -662,6 +682,7 @@ const CANARY_PAYLOAD: {
   'agentfootprint.tools.absent': (c) => ({
     toolName: 'orders_search',
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     iteration: 1,
     lookedFor: leaf(c, 'lookedFor'),
     checked: [coverageItem(c, 'checked')],
@@ -687,6 +708,7 @@ const CANARY_PAYLOAD: {
   'agentfootprint.tools.coverage_declared': (c) => ({
     toolName: 'orders_search',
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     iteration: 1,
     checked: [coverageItem(c, 'checked')],
     notChecked: [coverageItem(c, 'notChecked')],
@@ -723,6 +745,7 @@ const CANARY_PAYLOAD: {
   'agentfootprint.tools.semantics_declared': (c) => ({
     toolName: 'orders_search',
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     iteration: 1,
     semantics: {
       af_semantics: true,
@@ -797,6 +820,7 @@ const CANARY_PAYLOAD: {
   'agentfootprint.validation.args_invalid': (c) => ({
     toolName: 'orders_search',
     toolCallId: 'call-1',
+    callOccurrenceKey: ORDERS_CALL_OCCURRENCE,
     iteration: 1,
     issues: [
       {

@@ -37,7 +37,13 @@
 
 import type { LLMMessage } from '../../provider-contract/types.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../lib/saidByPerson.js';
-import { isPlacedToolResult } from '../../artifacts/placement.js';
+import {
+  isIssuedTicket,
+  issuedTicketsOf,
+  RECORDED_BEFORE_RECEIPT,
+  readPlacement,
+  type IssuedTickets,
+} from './placedTickets.js';
 import type { Tool } from '../../tools/tools.js';
 
 /** One staged parcel a spender tool could be handed. */
@@ -96,12 +102,25 @@ export function toolWantsOf(
  * A `role: 'tool'` message carrying a placed result holds the ticket as JSON
  * (`placedToolResult` is what wrote it); anything that does not parse to the
  * ticket shape is an ordinary result and is skipped without a sound.
+ *
+ * The SHAPE is not enough, because any tool can return that JSON. The line
+ * this join feeds is written by the library, so a ticket counts only when
+ * `receipt` (the committed `placedTickets` of this conversation) says the
+ * library minted that ref for that very `toolCallId` (`placedTickets.ts` ·
+ * `isIssuedTicket`). Example: a tool that returns `{ placed: true, ref, kind,
+ * reason }` itself is an ordinary result here, even when its `ref` is a
+ * well-formed `art_…` nobody minted. Only the rebuild of a recording older
+ * than the receipt passes `RECORDED_BEFORE_RECEIPT`, the rule it was sent by.
  */
 export function findStagedRefs(
   messages: readonly LLMMessage[],
   toolWants: ReadonlyMap<string, readonly string[]>,
   servedToolNames: ReadonlySet<string>,
+  receipt: unknown,
 ): StagedRefsMatch | undefined {
+  const issued: IssuedTickets =
+    receipt === RECORDED_BEFORE_RECEIPT ? receipt : issuedTicketsOf(receipt);
+  if (issued !== RECORDED_BEFORE_RECEIPT && issued.size === 0) return undefined;
   const spendersByKind = new Map<string, string[]>();
   for (const [name, kinds] of toolWants) {
     if (!servedToolNames.has(name)) continue;
@@ -119,19 +138,17 @@ export function findStagedRefs(
   let refsOmitted = 0;
   for (const message of messages) {
     if (message.role !== 'tool') continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(message.content);
-    } catch {
-      continue;
-    }
-    if (!isPlacedToolResult(parsed)) continue;
-    const kind = (parsed as { kind?: unknown }).kind;
+    const placement =
+      issued === RECORDED_BEFORE_RECEIPT
+        ? legacyTicket(message)
+        : readPlacement(message.toolCallId, message.content, issued);
+    if (placement?.issued !== true) continue;
+    const { kind, ref } = placement.ticket;
     if (typeof kind !== 'string') continue;
     const spenders = spendersByKind.get(kind);
-    if (spenders === undefined || seenRefs.has(parsed.ref)) continue;
-    seenRefs.add(parsed.ref);
-    if (refs.length < MAX_NUDGE_REFS) refs.push({ ref: parsed.ref, kind });
+    if (spenders === undefined || seenRefs.has(ref)) continue;
+    seenRefs.add(ref);
+    if (refs.length < MAX_NUDGE_REFS) refs.push({ ref, kind });
     else refsOmitted += 1;
     for (const name of spenders) if (!tools.includes(name)) tools.push(name);
   }
@@ -139,9 +156,40 @@ export function findStagedRefs(
   return { refs, refsOmitted, tools: tools.slice(0, MAX_NUDGE_TOOLS) };
 }
 
+/** Rebuild the historical whole-message parse from before the receipt. */
+function legacyTicket(message: LLMMessage) {
+  try {
+    const parsed: unknown = JSON.parse(message.content);
+    return isIssuedTicket(message.toolCallId, parsed, RECORDED_BEFORE_RECEIPT)
+      ? { issued: true as const, ticket: parsed }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Most characters of one ref a sentence prints. */
+const MAX_PRINTED_REF_CHARS = 64;
+
+/** A plain ref — what the library's minting makes (`art_` + base62). */
+const PLAIN_REF = /^[\w.:-]{1,64}$/;
+
+/**
+ * One ref as the sentence prints it. A plain one prints as it always did,
+ * `'art_x'`. Anything else — a custom store's ref with a quote or a newline
+ * in it, say — is JSON-quoted and cut at {@link MAX_PRINTED_REF_CHARS}, so it
+ * can neither close the sentence's quote nor run on for pages. The kind is
+ * printed as declared: it matched a `wants` the app's author wrote.
+ */
+function printedRef(ref: string): string {
+  if (PLAIN_REF.test(ref)) return `'${ref}'`;
+  const cut = ref.length > MAX_PRINTED_REF_CHARS ? `${ref.slice(0, MAX_PRINTED_REF_CHARS)}…` : ref;
+  return JSON.stringify(cut);
+}
+
 /** Render the matched refs for a sentence: `'art_x' (dataset/rows), …`. */
 function describeRefs(match: StagedRefsMatch): string {
-  const rendered = match.refs.map((r) => `'${r.ref}' (${r.kind})`).join(', ');
+  const rendered = match.refs.map((r) => `${printedRef(r.ref)} (${r.kind})`).join(', ');
   return match.refsOmitted > 0 ? `${rendered}, and ${match.refsOmitted} more` : rendered;
 }
 

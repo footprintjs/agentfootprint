@@ -95,7 +95,7 @@ import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
-import type { StandingLineWhen } from './assessment/compose.js';
+import type { AnswerLayerArm } from './assessment/answerLayerOptions.js';
 import type { CheckInBuilderOptions } from '../checkin.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
@@ -267,15 +267,15 @@ export class AgentBuilder {
   /** `.inputsLayer({ argumentSources: true })` (honesty layer 2): declared
    *  sources without the findings ledger. False unless asked for. */
   private inputsLayerSourcesValue = false;
+  private declare inputsLayerCorrectionValue?: 'once';
   /** `.resultsLayer()` (honesty layer 3, step 7b). False for every agent that
    *  did not ask for it; a REGISTERED tool with a `ToolPeriod` arms the layer
    *  on its own, so this is for provider-served tools and for tools that
    *  declare a period only on their results. */
   private resultsLayerValue = false;
-  /** `.answerLayer()` (honesty layer 4). Undefined for every agent that did
-   *  not ask for it — the chart, the rows, the events and the answer are then
-   *  byte-identical; `standingLine` is the prose line's own opt-in. */
-  private answerLayerValue?: { readonly standingLine?: StandingLineWhen };
+  /** The builder's explicit choice for the answer layer. Undefined leaves
+   *  the `AgentOptions` door and shared default in charge. */
+  private answerLayerValue?: AnswerLayerArm | false;
   /** `.time()` (the time layer). Undefined for every agent that did not ask —
    *  then no clock is read, no time row is filed and `time` on a run is refused. */
   private timeValue?: TimeOptions;
@@ -1423,9 +1423,9 @@ export class AgentBuilder {
    * WHICH ANSWER FIELDS ARE CLAIMS ABOUT WHICH FACTS (9.61.0) — the claim
    * seam's contract.
    *
-   * The evidence gate (`.evidence()`) grounds the answer's names and
-   * numbers: every value must appear in a tool result. Its own limit is
-   * stated in its docs — it cannot catch a false claim assembled from real
+   * The evidence gate (`.namesAndNumbersFromEvidence()`) checks extracted values
+   * against tool results and exempts values from the person, prompt context and
+   * declared defaults. It cannot catch a false claim assembled from real
    * values ("fc1/3 is healthy" when the data says the port is down uses
    * entirely grounded tokens). This closes that hole for the facts you
    * name: the run's semantic envelopes settle typed readings, and each
@@ -1850,54 +1850,51 @@ export class AgentBuilder {
   }
 
   /**
-   * Mount the INPUTS LAYER (honesty layer 2) for ruled tools the build cannot
-   * see — tools a `ToolProvider` serves.
+   * Mount the inputs layer for ruled tools a ToolProvider serves. Registered
+   * `askOrAssume` tools arm it automatically; a provider's tools are known only
+   * per iteration. A ruled tool met without the layer is refused, never run
+   * unruled. Missing declared defaults are filled, recorded as `default`,
+   * described after the result, and read as assumed by the answer's standing.
    *
-   * A tool that declares `askOrAssume` (`defineTool({ …, askOrAssume: { window:
-   * { assume: '2h' } } })`) arms the layer by itself when it is REGISTERED on
-   * the agent (`.tool()`, a skill's tools, an MCP tool registered here): the
-   * library fills a value the call leaves out, files it on the findings ledger
-   * as `default`, tells the model in a note on the result, and the answer's
-   * standing says the value was assumed. A ToolProvider's list is only known
-   * per iteration, so the build cannot see its ruled tools — and a ruled tool
-   * met on an agent without the layer is REFUSED rather than run unruled,
-   * because configured-and-inert looks exactly like configured-and-working.
-   * This one line mounts the layer so those tools' rules apply.
+   * `argumentSources: true` checks the model's `_findings.from`: a person's
+   * quote, a result ID, an earlier answer, app text or an assumed choice. It
+   * serves `from` alone without the ledger; source-armed ASK tools require our
+   * envelope. With `.findings()`, `basis` stays required; other observations stay
+   * optional. An untraced ASK value raises the existing typed human question.
    *
-   * `argumentSources: true` arms DECLARED SOURCES without the findings
-   * ledger: each ruled tool's served schema carries the reserved `_findings`
-   * argument with `from` alone — where each argument value came from (the
-   * person's words as a `quote`, a result's `id`, an earlier answer, the app,
-   * or `'assumed'`) — and the layer CHECKS each claim before the batch runs;
-   * under an `ask` rule a value the checks do not trace is asked of the
-   * person. The same checks and rows as `.findings({ argumentSources: true })`,
-   * without the ledger's `_findings` schema on every tool (about 2,500
-   * characters each) — `.findings()` beside it serves both, exactly as that
-   * door does.
+   * `declarationCorrection: 'once'` optionally holds the whole proposed batch
+   * for one missing-declaration correction before that question. It requires
+   * declared sources from either door; it never infers a source, repairs a
+   * false/malformed claim or bypasses a genuinely missing human value. A new
+   * proposal must pass the ordinary checks. The native spent marker survives
+   * same-request pause/crash recovery in pooled or recreated Agents, and resets
+   * on a genuine new human turn. Existing iteration/request bounds still apply.
    *
-   * Off → the chart is byte-identical (nothing mounted, decorated, read or
-   * written).
+   * Off: nothing new is mounted, decorated, read or written.
    *
    * @example
-   *   const agent = Agent.create({ provider, model })
-   *     .toolProvider(fleetTools)   // lists a tool that declares askOrAssume
-   *     .inputsLayer()
-   *     .build();
+   *   Agent.create({ provider, model }).toolProvider(fleetTools).inputsLayer().build();
    *
    * @example
-   *   // The model says where each ruled value came from; the library checks it.
-   *   const agent = Agent.create({ provider, model })
-   *     .tool(searchLogs)           // declares askOrAssume: { window: { ask, choices } }
-   *     .inputsLayer({ argumentSources: true })
-   *     .build();
+   *   Agent.create({ provider, model }).tool(searchLogs)
+   *     .inputsLayer({ argumentSources: true, declarationCorrection: 'once' }).build();
    */
-  inputsLayer(options?: { readonly argumentSources?: boolean }): this {
+  inputsLayer(options?: {
+    readonly argumentSources?: boolean;
+    readonly declarationCorrection?: 'once';
+  }): this {
     return configureInputsLayer(
       livePort<InputsLayerPort>({
         inputsLayerValue: {
           get: () => this.inputsLayerValue,
           set: (value) => {
             this.inputsLayerValue = value;
+          },
+        },
+        inputsLayerCorrectionValue: {
+          get: () => this.inputsLayerCorrectionValue,
+          set: (value) => {
+            this.inputsLayerCorrectionValue = value;
           },
         },
         inputsLayerSourcesValue: {
@@ -1959,7 +1956,7 @@ export class AgentBuilder {
   }
 
   /**
-   * Mount the ANSWER LAYER (honesty layer 4): every answer gets its standing,
+   * Configure the ANSWER LAYER (honesty layer 4): every answer gets its standing,
    * folded from the run's committed record — never from how sure the model
    * sounded — and served as data.
    *
@@ -1984,16 +1981,14 @@ export class AgentBuilder {
    *   given before a skill's declared steps finished (`steps-unfinished`);
    * - every row the findings ledger gets carries its conversation `turn`.
    *
-   * It is a LABEL: it never asks, never refuses and never changes the model's
-   * reply. The one exception is opt-in — `{ standingLine: true }` appends ONE
-   * line to a prose answer (`Not sure — window = "2h" was assumed by
-   * search_logs's rule, not given by you.`), after the limits separator.
-   * Refused beside `.answerValidation()` (which judges the exact bytes
-   * delivered) and beside `.outputSchema()` (a typed answer is JSON, and JSON
-   * followed by prose is not) — through this door and `AgentOptions.answerLayer`
-   * alike; the standing still travels as data there. The line, like the
-   * limits block, is appended to the answer the run returns — never streamed
-   * on `stream.token`.
+   * By default it appends one line to a prose answer with standing `not-sure`
+   * or `ask` (`Not sure — window = "2h" was assumed by search_logs's rule, not
+   * given by you.`). The default keeps the standing as data only beside
+   * `.answerValidation()` and `.outputSchema()`, where the exact answer bytes
+   * must hold. Explicitly requesting a line beside either is refused.
+   * Ordinary `stream.token` events carry the model's text; the composed answer
+   * is returned and appears on `turn_end.finalContent`. When output middleware
+   * holds tokens for admission, it emits the composed answer in one token.
    *
    * `{ standingLine: { when } }` says the line only when it matters:
    * `'always'` (what `true` means), `'unless-consistent'` (not for
@@ -2017,8 +2012,9 @@ export class AgentBuilder {
    * The in-run fold reads no app declarations: `agent.assessment(declarations)`
    * and the answer account take `rowsAt`, and can say more than the run did.
    *
-   * Off → the chart, the committed rows, the events and the answer are
-   * byte-identical.
+   * `.answerLayer(false)` restores the chart, committed rows, events and answer
+   * from before the default. `.answerLayer()` and `{ standingLine: false }`
+   * both keep the assessment data and leave the line off.
    *
    * @example
    *   const agent = Agent.create({ provider, model })
@@ -2030,11 +2026,7 @@ export class AgentBuilder {
    * @example One line to the person, too
    *   Agent.create({ provider, model }).tool(searchLogs).answerLayer({ standingLine: true }).build();
    */
-  answerLayer(options?: {
-    readonly standingLine?:
-      | boolean
-      | { readonly when: 'always' | 'unless-consistent' | 'not-sure-or-ask' };
-  }): this {
+  answerLayer(options?: Exclude<AgentOptions['answerLayer'], true>): this {
     return configureAnswerLayer(
       livePort<AnswerLayerPort>({
         answerLayerValue: {
@@ -2243,8 +2235,8 @@ export class AgentBuilder {
    *
    * WHY. A long tool-using run serves every result back in full on every
    * call, and what the model already stood on, left open, ruled out or found
-   * to be noise is nowhere but in its head. With this door every served tool
-   * schema carries a reserved optional `_findings` argument: the model
+   * to be noise is nowhere but in its head. `_findings` observations stay
+   * optional; source-armed ASK declarations require our envelope. The model
    * declares a `basis` for each call before the result exists ('direct' when
    * it expects the answer, 'exploratory' when it is looking) and, on its next
    * tool call or as a top-level `_findings.previous` on a JSON answer, the
@@ -2258,23 +2250,23 @@ export class AgentBuilder {
    * {@link Agent.findings}. Nothing infers: a call with no declaration files
    * no row, and a result nobody named has no standing — never 'open'.
    *
-   * WHAT THE ANSWER TURN IS SERVED. Once the model has declared a standing,
-   * every later call is served a request-only system piece composed from the
-   * folded ledger (`findings/serve.ts · findingsLedgerPiece` — facts,
-   * limitations, evidenceRefs and nextSteps, each marked "declared by the
-   * model"; results nobody named listed as undeclared, never open), and on
-   * the wire only — `history` never changes — a result the model judged
+   * WHAT EACH CALL IS SERVED. Every call carries one request-only
+   * `role: 'user'` DATA message after history (`findings/context.ts ·
+   * findingsContext`): the folded ledger's facts, evidenceRefs, limitations,
+   * conflicts and advisory result ids, said to be model declarations, not
+   * verified facts; entries past `maxContextBytes` are counted as omitted.
+   * On the wire only (`history` never changes) a result the model judged
    * `noise` or `ruled-out` is replaced by a ticket (`collapseJudged`).
    * `serve` chooses how much of the pile stays: `'ledger-and-facts'` (the
    * default) keeps fact, open and undeclared results verbatim beside the
-   * piece; `'ledger-only'` collapses fact results too and is BENCH-GATED —
+   * DATA; `'ledger-only'` collapses fact results too and is BENCH-GATED —
    * shipped so `bench/findings-shuffle.mjs` can measure it on a real model,
    * not a recommendation, never a default until that run shows the answer
-   * does not drift under shuffled evidence. `answerAsk` (9.103.0) appends
-   * the answer-turn ask (`findings/reserved.ts · FINDINGS_ANSWER_ASK`) to
-   * that piece under `'quote-facts'` — BENCH-GATED the same way, against
-   * the fidelity dip the real-model page's fourth run measured; `'none'`
-   * (the default) writes no key and serves the piece exactly as before.
+   * does not drift under shuffled evidence. `answerAsk: 'quote-facts'`
+   * (9.103.0) appends one sentence to the findings instruction
+   * (`findings/instruction.ts · findingsInstruction`), BENCH-GATED the same
+   * way; `'none'` (the default) writes no key. Live calls never send the old
+   * system piece or `FINDINGS_ANSWER_ASK`; replay rebuilds them for old records.
    * `keepLedgerFacts` is the ceiling
    * of fact turns the WINDOW holds under standing-aware eviction (9.102.0) —
    * the same dial as `AgentOptions.keepLedgerFacts` (that field says why and
@@ -2423,8 +2415,8 @@ export class AgentBuilder {
    * `seed` writes the whole spec once as the run constant
    * `AgentState.ontology`, every model call is served ONE request-only
    * system piece composed from that key (`ontology/serve.ts ·
-   * ontologyPiece`, joined after the recovery piece and before the findings
-   * piece, hashed on the receipt, rebuilt byte-equal by `servedAt`) and
+   * ontologyPiece`, joined after the recovery piece, hashed on the receipt,
+   * rebuilt byte-equal by `servedAt`) and
    * `agentfootprint.ontology.served` fires per call with identities and
    * counts only. Registers the always-on `ontology` instruction
    * (`ONTOLOGY_INSTRUCTION`, the `outputSchema()` twin: a system piece on
@@ -3129,6 +3121,7 @@ export class AgentBuilder {
         timeValue: { get: () => this.timeValue },
         opts: { get: () => this.opts },
         inputsLayerSourcesValue: { get: () => this.inputsLayerSourcesValue },
+        inputsLayerCorrectionValue: { get: () => this.inputsLayerCorrectionValue },
         selfExplainConfig: { get: () => this.selfExplainConfig },
         registry: { get: () => this.registry },
         evidenceGate: { get: () => this.evidenceGate },

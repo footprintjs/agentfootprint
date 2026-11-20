@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { test } from 'node:test';
+import { resolveBrowserLibraries } from '../../lib/browser-library-aliases.mjs';
 
 // Import the actual config without starting unrelated MDX content generation.
 const previousMdx = process.env._FUMADOCS_MDX;
@@ -12,8 +13,9 @@ else process.env._FUMADOCS_MDX = previousMdx;
 
 const docsRoot = resolve(import.meta.dirname, '../..');
 const libraries = ['footprintjs', 'foottrace'];
+const { agentRoot, owners: libraryOwners } = resolveBrowserLibraries(docsRoot);
 function publicDoors(name) {
-  const root = resolve(docsRoot, '../node_modules', name);
+  const root = libraryOwners[name];
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
   return Object.entries(pkg.exports)
     .filter(([door, target]) => {
@@ -28,7 +30,7 @@ function publicDoors(name) {
 }
 function webpackConfig(isServer) {
   return config.webpack(
-    { resolve: { alias: { existing: '/keep/me.js' } }, plugins: [] },
+    { resolve: { alias: { existing: '/keep/me.js' } }, module: { rules: [] }, plugins: [] },
     {
       isServer,
       defaultLoaders: { babel: {} },
@@ -36,6 +38,29 @@ function webpackConfig(isServer) {
     },
   );
 }
+
+test('the installed neighboring source shares the site’s engine and reader', () => {
+  const sourceRoot = resolve(docsRoot, '..');
+  assert.equal(agentRoot, resolve(docsRoot, 'node_modules/agentfootprint'));
+  for (const name of libraries)
+    assert.equal(libraryOwners[name], realpathSync(resolve(docsRoot, 'node_modules', name)));
+
+  const manifest = JSON.parse(readFileSync(resolve(sourceRoot, 'package.json'), 'utf8'));
+  const entry = manifest.exports['.'];
+  const files = [
+    'package.json',
+    entry.import.types,
+    entry.import.default,
+    entry.require.types,
+    entry.require.default,
+  ];
+  for (const file of files) {
+    assert.ok(
+      readFileSync(resolve(sourceRoot, file)).equals(readFileSync(resolve(agentRoot, file))),
+      `AgentFootprint changed between the root build and the docs installation: ${file}`,
+    );
+  }
+});
 
 test('every current public Foottrace door shares the library root in the client', () => {
   const aliases = webpackConfig(false).resolve.alias;

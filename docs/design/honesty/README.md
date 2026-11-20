@@ -1,7 +1,8 @@
 # Honesty layers — one structure over the model's decisions
 
 **Design, 2026-09-26, revision 2. Adopted overnight 2026-09-27 on the owner's go; the owner may
-overturn. Nothing in it is built yet: this folder is step 0 of its plan (§ 7).**
+overturn. § 7 records the status of the plan. Some behavior proposed in the last two steps
+has shipped. The source and current folder READMEs describe the implementation.**
 
 > **Status, 2026-09-27.** Every open question on the three design pages — this note's § 10, the
 > inputs page's § 10 and § 10.1 (R1–R13), and the results page's § 10 — took its recommended
@@ -55,7 +56,7 @@ overturn. Nothing in it is built yet: this folder is step 0 of its plan (§ 7).*
 5. The first new layer is inputs: per argument, the tool author says "ask the person" or "assume this default", and the record keeps where every value came from. The rules travel over MCP from the first step, because MCP is the host app's production path.
 6. No layer becomes a default until its benchmark — provoking cases, a baseline without the layer, a rule registered in advance, Haiku only, your budget — shows a gain.
 7. The ledger is also a measuring instrument: a per-model honesty profile read from the record alone. It measures claims within evidence, not truth.
-8. Thirteen decisions wait for you (§ 10). The three that shape everything: the four-valued standing, what the ask rule does before model-declared sources exist, and the answer layer's place inside the final branch.
+8. The thirteen decisions of § 10 were answered on 2026-09-27 (see the Status block above and [decisions.md](decisions.md)). Which steps of the plan are built is the Status column of § 7.
 
 ---
 
@@ -100,10 +101,13 @@ files the library's verdict beside it.
     dashboard"), inside a negation ("not the last 24h — the whole week"), or in another sentence.
     **So a membership pass never counts as support for "known".** It can only keep a reason from
     firing.
-  - *Tie checks* join a typed claim to a settled fact: a `.claims()` field that is
-    `checked-pass`, or a passed enforce `AnswerValidationReport` for these bytes
-    (`answer-validation/types.ts`). Only these support "known" — the honest-answer page's ruling
-    ([2026-09-honest-answer-ledger.md](../2026-09-honest-answer-ledger.md) § 15, R3-11).
+  - *Tie checks* join the answer's exact bytes to a check the app wrote: a passed enforce
+    `AnswerValidationReport` for these bytes (`answer-validation/types.ts`, with its
+    `candidateDigest`). It is the only row that supports "known" (`assessment/assess.ts` ·
+    `readAnswerRows` is the one place that sets `support`) — the honest-answer page's ruling
+    ([2026-09-honest-answer-ledger.md](../2026-09-honest-answer-ledger.md) § 15, R3-11). A
+    `.claims()` field that is `checked-pass` is not a tie check: it is a comparison that found no
+    conflict, so it never supports "known".
 - **The verified rate is a copying measure.** When the paper reports how often the model's quotes
   and cited ids check out, it reports how faithfully the model copies, not how honest it is.
 
@@ -763,7 +767,7 @@ or its pure half (below). The docs call it "the honesty ledger".
 
 **Why this key.** An empty write writes nothing (`recordFindings` returns on an empty list). The
 resume door already carries it (`core/runCheckpoint.ts`), and refuses malformed rows
-(`runCheckpoint.ts` · `ledgerRowIsWellFormed`). Readers select by kind (`findings/ledger.ts` ·
+(`checkpointLedger.ts` · `ledgerRowIsWellFormed`). Readers select by kind (`findings/ledger.ts` ·
 `foldLedger`; the lens's findings band and proof map skip other kinds). The model is served it only
 under `.findings()` (`stages/callLLM.ts`, `deps.hasFindingsLedger`). One writer means one event law
 and one redaction surface.
@@ -772,7 +776,7 @@ and one redaction surface.
 
 | Cost | Answer |
 |---|---|
-| **The ledger carries into the next turn.** `core/Agent.ts` · `checkpoint` puts it on the conversation checkpoint; the continue path stashes it; `stages/seed.ts` restores it. Rows carry `iteration`, which restarts at 1 every run, so a turn-1 `default` row would make a turn-2 answer that never called the tool read "not sure". Revision 1 did not see this, and the arguments note said the opposite (engineer review, a MUST-FIX). | While any layer is armed, the one writer stamps **`turn`** on every row it files: `AgentState.turnNumber`, which seed derives from the conversation (`stages/seed.ts` · `turnNumberFor`; a floor that may skip a number and never collides — the count of user messages alone repeated under a window strategy, so since step 6 it is raised to the turn the stored conversation ended on, `AgentRunCheckpoint.turnNumber`, and to the restored ledger's latest stamp; [answer.md](answer.md), decision 12). The fold reads only this turn's rows. An earlier turn's `answered` row stays readable by the inputs layer as the person's earlier answer, marked `earlier`. The checkpoint door accepts the field on every kind. Unarmed, no row changes. |
+| **The ledger carries into the next turn.** `core/Agent.ts` · `checkpoint` puts it on the conversation checkpoint; the continue path stashes it; `stages/seed.ts` restores it. Rows carry `iteration`, which restarts at 1 every run, so a turn-1 `default` row would make a turn-2 answer that never called the tool read "not sure". Revision 1 did not see this, and the arguments note said the opposite (engineer review, a MUST-FIX). | While any layer is armed, the one writer stamps **`turn`** on every row it files: `AgentState.turnNumber`, which seed derives from the conversation (`runtime/conversation/seedHistory.ts` · `turnNumberFor`; a floor that may skip a number and never collides — the count of user messages alone repeated under a window strategy, so since step 6 it is raised to the turn the stored conversation ended on, `AgentRunCheckpoint.turnNumber`, and to the restored ledger's latest stamp; [answer.md](answer.md), decision 12). The fold reads only this turn's rows. An earlier turn's `answered` row stays readable by the inputs layer as the person's earlier answer, marked `earlier`. The checkpoint door accepts the field on every kind. Unarmed, no row changes. |
 | **The restore is wired only under `.findings()`** (`core/Agent.ts`, the `this.findingsOptions !== undefined` spread), so rows written on an agent without `.findings()` would be dropped on a continued conversation. | Wire the restore whenever any layer is armed, still value-conditional (only when the checkpoint carries rows). |
 | The checkpoint door refuses unknown kinds (the judge rows were refused until 9.110.0), and an older runtime refuses a newer checkpoint that carries a new kind. | Every step adds its door arm in the same change and names the older-runtime refusal in its changelog fragment. |
 | **Each write copies and re-folds the whole ledger, and commits the whole array.** `recordFindings` builds `[...prev, ...rows]`, re-runs `foldLedger`, and assigns the root key; footprintjs's output mapping also re-sets a whole top-level array (`fp:src/lib/engine/handlers/SubflowInputMapper.ts` · `applyOutputMapping`). This is the first program that files rows without the model's help, one per ruled argument per call. | A layer writes **once per run of its subflow** — one merge per batch, never per call. Step 3 measures commit-log bytes over a 50-iteration run and the merge at 1,000 rows. An append-only merge through footprintjs's `append` verb is a separate, measured footprintjs change, taken only if those numbers ask for it. |
@@ -808,9 +812,7 @@ plus the keys above — for this turn, and returns:
 interface AnswerAssessment {
   readonly assessment: 'known' | 'unrefuted' | 'unknown' | 'not-applicable';
   readonly reasons: readonly { reason: Reason; layer: 1 | 2 | 3 | 4; witness: readonly RowRef[] }[];
-  readonly support?:
-    | { kind: 'claims'; checkedPass: readonly string[] }
-    | { kind: 'answer-validation'; reportDigest: string };
+  readonly support?: { kind: 'answer-validation'; reportDigest: string };
   /** What actually ran this turn, printed verbatim — never a fixed list. */
   readonly checked: readonly { layer: 1 | 2 | 3 | 4; check: string; ran: number; of: number }[];
 }
@@ -823,7 +825,7 @@ value for "nothing was checked"; both are gone (research review, a MUST-FIX).
 | Value | When (this turn's committed rows) |
 |---|---|
 | `known` | a **supporting** row exists for these bytes — a passed enforce `.answerValidation()` report, the only row that supports it (a `.claims()` `checked-pass` never does: it is a comparison that found no conflict, not a tie to these bytes) — and no reason fired |
-| `unrefuted` | at least one check ran, none fired, nothing supports. A check ran when this turn's record holds its verdict: a recognized coverage declaration, a readable result shape (the emptiness reading below), an argument or period verdict, the gate's witness, a claim disposition |
+| `unrefuted` | at least one check ran, none fired, nothing supports. A check ran when this turn's record holds its verdict: a recognized coverage declaration, a readable result shape (the emptiness reading below), an argument or period verdict, the gate's witness. A `.claims()` disposition is not counted here: a disagreeing or unsettled claim makes a reason fire (`unsupported-claim`, `claim-unsettled`), and a passing one adds no check, so a turn whose only check is a passing claim is `not-applicable` |
 | `unknown` | at least one reason fired |
 | `not-applicable` | no check ran on this answer — for example, a turn whose tools declared nothing and returned nothing readable |
 
@@ -833,8 +835,8 @@ value for "nothing was checked"; both are gone (research review, a MUST-FIX).
 |---|---|---|
 | `unknown` | an **ask-class** reason: the turn ended in a typed ask (the library's argument ask, or a tool's own `requestInput`), or a ruled argument was asked and never answered | *Ask — Which period should the error search cover? (1h · 24h · 7d)* |
 | `unknown` | any other reason | *Not sure — window = "2h" was assumed (the tool's rule); you did not give it.* |
-| `known` | — | *Known — the answer's claims were checked against the run's settled facts: …* |
-| `unrefuted` | — | *Consistent with the run's record — 3 checks ran, none fired: argument sources · tool coverage · names and numbers.* (never "known", never "verified") |
+| `known` | — | *Known — the app's answer checks passed this exact answer.* |
+| `unrefuted` | — | *Consistent with the run's record — 3 checks ran and none fired: argument sources · tool coverage · names and numbers. This is not a verification.* (never "known", never "verified") |
 | `not-applicable` | — | *Not assessed — no check applied to this answer.* |
 
 Precedence: **ask > not sure > known > consistent > not assessed.** `known` and `unrefuted` exclude
@@ -864,7 +866,17 @@ each other; support decides.
 7. **The model's own answer-level standing** (the answer's `_findings`) never raises or lowers the
    value; the lens shows it beside the chip (honest-answer page § 15, R3-15).
 
-**The reasons** — a closed union; each names the row it is read from.
+**The reasons, as designed** — each names the row it is read from. This table is the DESIGN, not
+the live list. The live, closed union is `core/agent/assessment/types.ts` · `AssessmentReason`, and
+its table for a reader is [`core/agent/assessment/REASONS.md`](../../../src/core/agent/assessment/REASONS.md)
+(owner: `reasons.ts` · `REASONS`). Two differences, so nobody reads this table as the code:
+
+- **Design-only reason names** (proposed in steps 8 and 9): `coverage-undeclared`, `tool-refused`,
+  `result-truncated`, `fact-not-in-result`, `expectation-missed`, `source-not-consulted`. No code
+  files these reasons today.
+- **Built, not in this table**: `period-differs-from-asked`, `period-beyond-retention`,
+  `derived-from-reading`, `script-unmatched`, `steps-unfinished`, `negative-prose-unverified`,
+  `claim-exceeds-search`, `declaration-overclaimed`, `answer-check-failed` — see REASONS.md.
 
 | Layer | Reason | Read from | Step |
 |---|---|---|---|
@@ -1153,18 +1165,18 @@ the paper uses it:
   `.changes` fragment, the docs-next page, `examples/features/NN-….ts`, then `npm run docs:regen`.
 - **Delivery.** A step is delivered only when the host re-pins and the behaviour is counted by hand.
 
-| # | Step | Ships | Arm (off ⇒ byte-identical) | Needs |
-|---|---|---|---|---|
-| 0 | **Docs skeleton** | `docs/design/honesty/` (the index + four layer pages seeded from § 3); a pointer in agentfootprint's CLAUDE.md capability section | — (no code) | — |
-| 1 | **The standing, as a pure reader ($0)** | `assessment/assess.ts` · `assessAnswer` over recordings, from EXISTING rows only (coverage, ledger, `unsupportedValues`): the four values, the rendering, the reasons marked "1" in § 4.2; the one emptiness reader `agent/emptiness.ts` · `readEmptiness`, shared with the `/observe` answer account and its described template ([results.md](results.md) § 5.2); `howSure.ts` reads it; the lens chip. **First**, before anything else in the step: the confusion table of the fold against the oracle over the retained recorded runs ([decisions memo](../2026-09-honest-answer-ledger-decisions.md) § 2.2), and the parity test with the study's frozen RQ3 on its records | none — nothing runs inside a run | — |
-| 2 | **Inputs bench and baseline** | provoking cases and controls, the unarmed baseline, the registered rule (§ 6) | bench only; owner budget | — |
-| 3 | **Inputs layer: assume** | `arguments/` (declare, resolve, rows, serve); `askOrAssume` with `assume` only — an `ask` rule is refused at definition until step 4, so no declaration promises what the library cannot yet do; `Tool.period` (`ToolPeriod`, owned by `arguments/`, arguments note R8); MCP carriage of both in `McpToolExtras`; the schema decoration at the one site (`core/slots/buildToolsSlot.ts` · `commitWire`, and `stages/seed.ts`'s `dynamicToolSchemas` twin) — `mergeWire` must also return the winning TOOL per served name (it returns only `winners`, name → party, today), and a name with no known tool is not decorated (the dispatch re-read is the guard); the inputs subflow and its mount; `appendRows`; the fills in ToolCalls; the `argument` row kind, its checkpoint arm, the widened restore and the `turn` stamp; the result note and the tool-bytes boundary the evidence index reads through (§ 3.2 (c)); the declared defaults in the gate's exempt corpus; the argument event (names and enums only); the "Assumed" line under an existing `.limitsTravelWithTheAnswer()`; the two doc-comment updates (`core/checkin.ts` · `CheckInRequest.args` now carries filled values; `agent.findings()` returns rows without `.findings()`) | a tool declares `askOrAssume` (and `.inputsLayer()` for ruled tools only a ToolProvider serves — arguments note R11, adopted 2026-09-27) | 2 |
-| 4 | **Inputs layer: ask for missing values** | the batch ask, the pause and resume inside the layer, `answered` rows, the stamp change for a batch origin, the `argumentAskContext` hook (or the statement), `build/input-requests.mdx`; the needless-ask measurement on the step-2 cases; answered values join the gate's exempt corpus (arguments note R9) | an `ask` rule | 3 |
-| 5 | **Inputs layer: declared sources** | `_findings.from` on ruled tools only; the checks; choice phrases (`said`); unverified → ask under the arm; the source checks reading through step 3's tool-bytes boundary; the one per-result reading exposed from `evidence/`; adversarial tests (a quote found only in a library frame or note; the value in a different result than the one named; a set-aside result; an evicted turn; a negation; Unicode normalisation; a number and a boolean in compact JSON) | `.findings({ argumentSources: true })` | 4 |
-| 6 | **Answer layer (run time)** | the subflow at the head of the final branch; Final's mapping carrying its rows (departed in step 6 — see [answer.md](answer.md), decisions 1–2: one stage heads the branch, and no row returns through the mapping); the committed witness rows for the gate's "grounded" and unfinished steps, filed in Route under the arm; the run constant naming the armed layers; the result field and `agentfootprint.answer.assessed`; the prose line under its own arm (refused with `.answerValidation()`); the equality test (in-run fold = read-after fold) | its own builder option | 1, and any row-producing step |
-| 7 | **Results layer: `describedResult()` and the period** | 7a (independent, may ship any time): `describedResult()` — camelCase in, the unchanged wire out, provenance a compile error, the `checkSemantics` advice naming it, `semantic()` deprecated in TSDoc. 7a′ (after 7a): the empty-data refusal names `absent()`. 7b: `period` on the three doors and `provenance` on `absent()` (one rule set in `coverage/period.ts`, refused if malformed when the envelope is built, read without repair), the coverage channel carrying `period`, the `canonical-notes.json` wire contract (so the host's Python helpers can mint it), the results subflow, the period verdict rows and reasons, the `Period:` line under an existing `.limitsTravelWithTheAnswer()`, the lens reading `period`. 7c (owner's call): the composed note. Detail: [results.md](results.md) § 7 | 7a: the new door; 7b: a result declares `period`, or its tool a `ToolPeriod` | 7b: 1, 3 |
-| 8 | **Results layer: reading checks and outcome rows** | fact-in-result (reusing step 5's check), `expectation-missed`, one outcome row per call at one landing funnel (the door, its counts, the emptiness reading, refused / errored / truncated / placed); `coverage-undeclared` ([results.md](results.md) Q5, adopted 2026-09-27) | the results layer | 5, 7b |
-| 9 | **Choice layer** | recorded omissions (attention visible, role-hidden unnamed); `source-not-consulted` | its own builder option | 1 |
+| # | Status | Step | Ships | Arm (off ⇒ byte-identical) | Needs |
+|---|---|---|---|---|---|
+| 0 | built (this design folder) | **Docs skeleton** | `docs/design/honesty/` (the index + four layer pages seeded from § 3); a pointer in agentfootprint's CLAUDE.md capability section | — (no code) | — |
+| 1 | built | **The standing, as a pure reader ($0)** | `assessment/assess.ts` · `assessAnswer` over recordings, from EXISTING rows only (coverage, ledger, `unsupportedValues`): the four values, the rendering, the reasons marked "1" in § 4.2; the one emptiness reader `agent/emptiness.ts` · `readEmptiness`, shared with the `/observe` answer account and its described template ([results.md](results.md) § 5.2); `howSure.ts` reads it; the lens chip. **First**, before anything else in the step: the confusion table of the fold against the oracle over the retained recorded runs ([decisions memo](../2026-09-honest-answer-ledger-decisions.md) § 2.2), and the parity test with the study's frozen RQ3 on its records | none — nothing runs inside a run | — |
+| 2 | built (`bench/inputs/`) | **Inputs bench and baseline** | provoking cases and controls, the unarmed baseline, the registered rule (§ 6) | bench only; owner budget | — |
+| 3 | built | **Inputs layer: assume** | `arguments/` (declare, resolve, rows, serve); `askOrAssume` with `assume` only — an `ask` rule is refused at definition until step 4, so no declaration promises what the library cannot yet do; `Tool.period` (`ToolPeriod`, owned by `arguments/`, arguments note R8); MCP carriage of both in `McpToolExtras`; the schema decoration at the one site (`core/slots/buildToolsSlot.ts` · `commitWire`, and `stages/seed.ts`'s `dynamicToolSchemas` twin) — `mergeWire` must also return the winning TOOL per served name (it returns only `winners`, name → party, today), and a name with no known tool is not decorated (the dispatch re-read is the guard); the inputs subflow and its mount; `appendRows`; the fills in ToolCalls; the `argument` row kind, its checkpoint arm, the widened restore and the `turn` stamp; the result note and the tool-bytes boundary the evidence index reads through (§ 3.2 (c)); the declared defaults in the gate's exempt corpus; the argument event (names and enums only); the "Assumed" line under an existing `.limitsTravelWithTheAnswer()`; the two doc-comment updates (`core/checkin.ts` · `CheckInRequest.args` now carries filled values; `agent.findings()` returns rows without `.findings()`) | a tool declares `askOrAssume` (and `.inputsLayer()` for ruled tools only a ToolProvider serves — arguments note R11, adopted 2026-09-27) | 2 |
+| 4 | built | **Inputs layer: ask for missing values** | the batch ask, the pause and resume inside the layer, `answered` rows, the stamp change for a batch origin, the `argumentAskContext` hook (or the statement), `build/input-requests.mdx`; the needless-ask measurement on the step-2 cases; answered values join the gate's exempt corpus (arguments note R9) | an `ask` rule | 3 |
+| 5 | built | **Inputs layer: declared sources** | `_findings.from` on ruled tools only; the checks; choice phrases (`said`); unverified → ask under the arm; the source checks reading through step 3's tool-bytes boundary; the one per-result reading exposed from `evidence/`; adversarial tests (a quote found only in a library frame or note; the value in a different result than the one named; a set-aside result; an evicted turn; a negation; Unicode normalisation; a number and a boolean in compact JSON) | `.findings({ argumentSources: true })` | 4 |
+| 6 | built | **Answer layer (run time)** | the subflow at the head of the final branch; Final's mapping carrying its rows (departed in step 6 — see [answer.md](answer.md), decisions 1–2: one stage heads the branch, and no row returns through the mapping); the committed witness rows for the gate's "grounded" and unfinished steps, filed in Route under the arm; the run constant naming the armed layers; the result field and `agentfootprint.answer.assessed`; the prose line under its own arm (refused with `.answerValidation()`); the equality test (in-run fold = read-after fold) | its own builder option | 1, and any row-producing step |
+| 7 | built: 7a, 7a′, 7b; 7c is the owner's call ([results.md](results.md) § 10) | **Results layer: `describedResult()` and the period** | 7a (independent, may ship any time): `describedResult()` — camelCase in, the unchanged wire out, provenance a compile error, the `checkSemantics` advice naming it, `semantic()` deprecated in TSDoc. 7a′ (after 7a): the empty-data refusal names `absent()`. 7b: `period` on the three doors and `provenance` on `absent()` (one rule set in `coverage/period.ts`, refused if malformed when the envelope is built, read without repair), the coverage channel carrying `period`, the `canonical-notes.json` wire contract (so the host's Python helpers can mint it), the results subflow, the period verdict rows and reasons, the `Period:` line under an existing `.limitsTravelWithTheAnswer()`, the lens reading `period`. 7c (owner's call): the composed note. Detail: [results.md](results.md) § 7 | 7a: the new door; 7b: a result declares `period`, or its tool a `ToolPeriod` | 7b: 1, 3 |
+| 8 | Partial. Bounded result and outcome evidence ships. | **Results layer: reading checks and outcome rows** | fact-in-result (reusing step 5's check), `expectation-missed`, one outcome row per call at one landing funnel (the door, its counts, the emptiness reading, refused / errored / truncated / placed); `coverage-undeclared` ([results.md](results.md) Q5, adopted 2026-09-27) | the results layer | 5, 7b |
+| 9 | Partial. Window omission receipts ship. | **Choice layer** | recorded omissions (attention visible, role-hidden unnamed); `source-not-consulted` | its own builder option | 1 |
 
 **Why this order.** Step 1 needs nothing and gives the paper its library port. Step 3 needs step 2's
 baseline, or nothing can show a gain. Step 4 needs step 3's layer. The unverified → ask rule waits

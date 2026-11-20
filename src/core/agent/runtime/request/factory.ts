@@ -5,6 +5,7 @@ import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import { retainReplayRetirements } from '../../../runCheckpoint.js';
 import { buildCallLLMStage } from '../../stages/callLLM.js';
 import type { AgentConfiguration } from '../configuration/types.js';
+import type { buildSlots } from '../slots/buildSlots.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface RequestEnvironment {
@@ -23,6 +24,10 @@ export interface RequestEnvironment {
   readonly toolGrounding: NonNullable<Parameters<typeof buildCallLLMStage>[0]['toolGrounding']>;
   readonly toolWants: NonNullable<Parameters<typeof buildCallLLMStage>[0]['toolWants']>;
   readonly toolColumns: ReadonlyMap<string, unknown>;
+  readonly toolRowsets: ReturnType<typeof buildSlots>['toolRowsets'];
+  readonly rowsetDeclaringToolsForValues: ReturnType<
+    typeof buildSlots
+  >['rowsetDeclaringToolsForValues'];
   revisionWithholdsTools(): boolean;
 }
 
@@ -47,7 +52,7 @@ export function requestFactory(environment: RequestEnvironment) {
       ...(environment.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
       // The findings ledger (9.101.0): the choice seam and `postValidate`
       // read peeled args / content under `findings`; the SERVING (step 3) —
-      // the ledger piece after the recovery piece, the wire-only collapse of
+      // the DATA message after history, the wire-only collapse of
       // judged results — rides `hasFindingsLedger` with its mode, the same
       // value seed records as the run constant `findingsServe`. One gate,
       // the `hasEvidenceRecovery` grammar: an unarmed agent hands the stage
@@ -57,8 +62,8 @@ export function requestFactory(environment: RequestEnvironment) {
         hasFindingsLedger: true as const,
         findingsServe: environment.configuration.findingsOptions.serve ?? 'ledger-and-facts',
         findingsContextBytes: environment.configuration.findingsOptions.maxContextBytes,
-        // The answer-turn ask (9.103.0): the same value seed records, so the
-        // wire and the rebuild append it from one fact; absent on `'none'`.
+        // The answer-turn ask (9.103.0): the same value seed records; replay
+        // of a pre-DATA record reads it there. Absent on `'none'`.
         ...(environment.configuration.findingsOptions.answerAsk === 'quote-facts' && {
           findingsAnswerAsk: 'quote-facts' as const,
         }),
@@ -137,8 +142,18 @@ export function requestFactory(environment: RequestEnvironment) {
       // value-conditional law: this stage owns only the "no declaring tool
       // was called this response" not-applicable notes.
       ...(environment.configuration.checkColumnTypes !== 'off' &&
-        environment.toolColumns.size > 0 && {
-          columnDeclaringTools: new Set(environment.toolColumns.keys()),
+        (environment.toolColumns.size > 0 ||
+          environment.toolRowsets.size > 0 ||
+          environment.configuration.externalToolProvider !== undefined) && {
+          columnDeclaringTools:
+            environment.toolRowsets.size === 0 &&
+            environment.configuration.externalToolProvider === undefined
+              ? new Set(environment.toolColumns.keys())
+              : (names: readonly string[]) =>
+                  new Set([
+                    ...environment.toolColumns.keys(),
+                    ...environment.rowsetDeclaringToolsForValues(run.value, names),
+                  ]),
         }),
       integrityLedger: run.value.integrityLedger,
       ...(environment.configuration.reliabilityConfig !== undefined && {

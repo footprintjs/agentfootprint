@@ -21,7 +21,7 @@
  *   stream.token                       → TEXT_MESSAGE_START/CONTENT/END
  *   stream.llm_end (no agent around)   → one whole TEXT message (an LLM call that streams nothing)
  *   stream.thinking_delta/_end         → REASONING_START … REASONING_END   (only with `reasoning: true`)
- *   stream.tool_start                  → TOOL_CALL_START + TOOL_CALL_ARGS + TOOL_CALL_END
+ *   stream.tool_start                  → TOOL_CALL_START + TOOL_CALL_ARGS (the view) + TOOL_CALL_END
  *   stream.tool_end                    → TOOL_CALL_RESULT
  *   pause.request + settle('paused')   → RUN_FINISHED { outcome: interrupt }
  *   settle('paused', awaiting caller)  → RUN_FINISHED { outcome: success, pendingToolCallIds }
@@ -61,21 +61,23 @@
  * scope answers that call under its own id — or, for a tool the client ran, is
  * not written at all, because the client holds the result it sent.
  *
- * TEXT. The reply is what the record streamed (`stream.token`) — the channel
- * `toSSE({ format: 'text' })` and a hosted reply read. An agent turn whose
- * answer streamed no token (a provider without `stream()`) is written whole
- * from `turn_end.finalContent`, unless the record marks it refused. An
- * agent's `llm_end.content` is a DRAFT the library may be holding back
- * (answer validation, an output policy) and is never written.
+ * TEXT in record-only mode comes from `stream.token`, then from the rest of
+ * `turn_end.finalContent` as its own message. A marked root `turn_end` can
+ * deliver the answer even when this reader joined after the turn started.
+ * `unstreamedText` uses the same prefix rule as `toSSE({ format: 'text' })`.
+ * Refused final content and an agent's draft `llm_end.content` stay off the wire.
  */
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import type { RunTranslation } from '../hosting/protocolAdapter.js';
+import { unstreamedText } from '../hosting/unstreamedText.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
-import { newScope, type Scope, type OpenText, type AgUiOpenCall } from './translationScope.js';
+import { newScope, takeCall, type Scope, type OpenText } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
+import { failedCallWords } from './toolResultWords.js';
+import { argsShownOf, checkInHiddenNamesOf } from './shownArgs.js';
 import {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,
@@ -94,7 +96,7 @@ export type { AgUiCustomContext, AgUiCustomProjection } from './customEvents.js'
 export interface AgUiSerializerOptions {
   /** Explicit host delivery: withhold candidate text at every depth until the authorized final output. Record-only is the default. */
   readonly delivery?: 'host';
-  /** Optional served-only argument projection; default keeps the recorded arguments. */
+  /** Optional served-only projection for calls without a protected argument view. */
   readonly toolArguments?: AgUiCustomProjection;
   /** Optional served-only result projection; fixed failed-tool words still take precedence. */
   readonly toolResults?: AgUiCustomProjection;
@@ -117,9 +119,11 @@ export interface AgUiSerializerOptions {
    */
   readonly reasoning?: boolean;
   /**
-   * What a FAILED tool call's result says. Default `'withheld'`: the fixed words
-   * "The tool failed." — the record's result for a failed call is the thrown
-   * text, which may hold a connection string, a path or a provider's response.
+   * What a FAILED tool call's result says. Default `'withheld'`: fixed words
+   * (`toolResultWords.ts`) — "The tool failed.", or "The call was not executed."
+   * for a call that never reached its tool (an unknown name, rejected
+   * arguments) — as the record's result for a failed call is the thrown text,
+   * which may hold a connection string, a path or a provider's response.
    * `'served'` sends the record's own result (still the served value: the
    * placeholder wherever a redaction policy selected one).
    */
@@ -151,9 +155,6 @@ export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
    */
   suspension(awaiting?: 'person' | 'caller'): AgUiSuspension | undefined;
 }
-
-/** Said by `TOOL_CALL_RESULT` for a failed call, unless `toolErrors: 'served'`. */
-export const AG_UI_TOOL_FAILED = 'The tool failed.';
 
 /** Said by `RUN_ERROR` when the run's `error.fatal` is not one of the record's fixed sentences. */
 export const AG_UI_RUN_FAILED = 'The run failed.';
@@ -249,6 +250,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
   /** The record's own words for a failure — the last served `error.fatal`. */
   let fatal: string | undefined;
   let pause: { readonly event: AgentfootprintEvent; readonly scope: Scope } | undefined;
+  /** Text already shown from the root's last complete-only call before its turn was known. */
+  let rootCallText: string | undefined;
   /** The root agent's answer as the record serves it — `RUN_FINISHED.result`. */
   let rootResult: string | undefined;
   /** What a continuation needs — set when the run settles paused. */
@@ -436,10 +439,10 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         return;
       }
       case 'agentfootprint.agent.turn_end': {
-        const scope = scopeOf(path);
-        if (!scope.isAgent) {
-          // A turn this translation never saw open (it subscribed late): its
-          // answer has no scope to end, and the root's must not be guessed.
+        const rootEnd = !hostDelivery && event.meta.rootTurn === true;
+        const scope = rootEnd ? root : scopeOf(path);
+        if (!scope.isAgent && !rootEnd) {
+          // This reader missed the open, and the record doesn't name it as root.
           pushCustom(event, scope, out);
           return;
         }
@@ -447,8 +450,11 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         closeReasoning(scope, out);
         const refused = payload.refused !== undefined;
         const answer = refused ? undefined : text(payload.finalContent);
-        if (!hostDelivery && !scope.streamed && answer !== undefined && answer.length > 0)
-          wholeText(scope, answer, event, out);
+        if (!hostDelivery && answer !== undefined) {
+          const written = scope.streamedText ?? (rootEnd ? rootCallText : undefined);
+          const rest = unstreamedText(written, answer);
+          if (rest !== undefined) wholeText(scope, rest, event, out);
+        }
         if (scope === root) {
           rootResult = answer;
           closeSteps(scope, out);
@@ -482,7 +488,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const scope = scopeOf(path);
         closeText(scope, out);
         closeReasoning(scope, out);
-        scope.streamed = false;
+        if (scope === root) rootCallText = undefined;
+        scope.streamedText = undefined;
         scope.callMessageId = undefined;
         scope.llmAddress = address;
         return;
@@ -511,7 +518,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         } else {
           open.lastTokenIndex = index;
         }
-        scope.streamed = true;
+        scope.streamedText = (scope.streamedText ?? '') + content;
         out.push({
           type: 'TEXT_MESSAGE_CONTENT',
           messageId: (scope.text as OpenText).id,
@@ -524,12 +531,14 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const scope = scopeOf(path);
         if (hostDelivery) return;
         closeText(scope, out);
-        // Inside an agent's turn the content is a draft; the turn's answer comes
-        // at turn_end. With no agent around (an LLMCall, a merge by LLM) it IS
-        // the answer — written whole when it streamed nothing.
+        // A scope that did not see an agent turn open can already have written
+        // the text of a complete-only call by the time its root end arrives.
         const content = text(payload.content);
-        if (!scope.isAgent && !scope.streamed && payload.contentWithheld !== true && content)
+        const quiet = scope.streamedText === undefined && payload.contentWithheld !== true;
+        if (!scope.isAgent && quiet && content) {
           wholeText(scope, content, event, out);
+          if (scope === root) rootCallText = content;
+        }
         return;
       }
       case 'agentfootprint.stream.thinking_delta': {
@@ -607,8 +616,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       }
       case 'agentfootprint.stream.tool_start': {
         const scope = scopeOf(path);
-        // The call's arguments are complete before it runs: a model's text
-        // message for this call is over, and so is its reasoning.
+        // The call's arguments are complete: its text message and its reasoning are over.
         closeText(scope, out);
         closeReasoning(scope, out);
         // Every call of one LLM response belongs to ONE assistant message: the
@@ -619,25 +627,19 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const { id, n } = ids.next('tool', address);
         scope.calls.push({ id, n, address, servedId: payload.toolCallId });
         const toolCallName = text(payload.toolName) ?? '';
+        const view = argsShownOf(payload, id, options.toolArguments);
         out.push({
           type: 'TOOL_CALL_START',
           toolCallId: id,
           toolCallName,
           parentMessageId: scope.callMessageId,
           ...owned(scope, event),
-          metadata: addressOf(event, { toolCallId: text(payload.toolCallId) }),
+          metadata: addressOf(event, view.address),
         });
         out.push({
           type: 'TOOL_CALL_ARGS',
           toolCallId: id,
-          delta: toWireJson(
-            options.toolArguments === undefined
-              ? payload.args
-              : options.toolArguments(payload, {
-                  toolCallId: id,
-                  ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
-                }),
-          ),
+          delta: toWireJson(view.args),
           ...owned(scope, event),
         });
         out.push({ type: 'TOOL_CALL_END', toolCallId: id, ...owned(scope, event) });
@@ -667,7 +669,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
             call.n < 0 ? ids.next('result', address).id : ids.at('result', call.n, call.address),
           toolCallId: call.id,
           content: failed
-            ? AG_UI_TOOL_FAILED
+            ? failedCallWords(payload)
             : resultText(
                 options.toolResults === undefined
                   ? payload.result
@@ -696,29 +698,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         pushCustom(event, scopeOf(path), out);
     }
   };
-
-  /**
-   * The open call a `tool_end` closes. One agent runs its calls one at a time,
-   * so the open call at the result's stage execution is the one it answers;
-   * where the record still names the call (no redaction policy), the id
-   * decides among several.
-   */
-  function takeCall(scope: Scope, address: string, servedId: unknown): AgUiOpenCall | undefined {
-    let at = -1;
-    for (let i = scope.calls.length - 1; i >= 0; i--) {
-      const call = scope.calls[i] as AgUiOpenCall;
-      if (call.address !== address) continue;
-      if (at < 0) at = i;
-      if (typeof servedId === 'string' && call.servedId === servedId) {
-        at = i;
-        break;
-      }
-    }
-    // The call a paused run left open is answered by the first result in its
-    // scope: the continuation's stage executions are new, so no address matches.
-    if (at < 0) at = scope.calls.findIndex((call) => call.resumed === true);
-    return at < 0 ? undefined : scope.calls.splice(at, 1)[0];
-  }
 
   /**
    * Re-open what the paused run left open — the scopes (same `subagentRunId`),
@@ -876,7 +855,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       ...(message !== undefined && { message }),
       ...(call !== undefined && { toolCallId: call.id }),
       ...(scope.subagentRunId !== undefined && { subagentRunId: scope.subagentRunId }),
-      metadata: addressOf(event),
+      metadata: addressOf(event, checkInHiddenNamesOf(payload)),
     };
   };
 

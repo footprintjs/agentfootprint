@@ -36,7 +36,10 @@ stronger and true) and made the boundary something the index can actually measur
 
 1. **which values the index could ground** — the gate computes that already, for every armed agent;
 2. **which turn each was last served in** — one number, stamped during the walk that was already
-   happening. A turn starts at each `role: 'user'` message the library did not author.
+   happening. A turn starts at each `role: 'user'` message the library did not author — the one
+   authorship rule, `lib/saidByPerson.ts` · `isSaidByPerson`. So a budget wrap-up frame, a drop
+   notice or a compaction summary that lands after this turn's result never starts a new turn,
+   and an answer read from that result is not filed as prior-turn evidence.
 
 When every grounded value's newest source is older than the turn being answered, the answer was
 assembled from the conversation rather than from anything this turn went and looked at.
@@ -113,6 +116,17 @@ all sourced every value from history *by construction* — no index required. Th
 of the identical fact, not a different defect, so it rides as its own witness and as a clause in the
 message ("This turn called no tool and served no result…") rather than fragmenting one class by how
 easily it was noticed.
+
+**Not covered: a person's message that opens like one of the library's own lines.** Where this
+turn begins is read by `lib/saidByPerson.ts` · `isSaidByPerson`, and for a message with no
+structural mark that rule still reads who wrote it from the LOOK of its text: a `role: 'user'`
+message opening with one of the library's registered prefixes (`[staged data`, `[compacted
+history]`, …) is taken for the library's. So a person who writes `[staged data] how is array
+performance?` does not start a turn, and a stale answer to it files nothing — the check fails
+toward silence. Tool results cannot do this (they are `role: 'tool'`), and a message an Injection
+delivers carries `injectedBy`, which is structural. The fix is a structural mark on every library
+frame, so authorship is read from where a message came from for every reader at once; it is a
+separate change.
 
 **Runnable example.**
 

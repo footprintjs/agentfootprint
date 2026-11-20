@@ -34,7 +34,9 @@
  * A value is an envelope iff it is a plain object whose keys are a subset of
  * `{ content, effects, status }`, `content` is present, `effects` is an
  * array, and EVERY element carries one of the two known `kind`s (an empty
- * `effects: []` needs a valid `status` to say anything at all). Everything
+ * `effects: []` needs a valid `status` to say anything at all; the word is
+ * read by `toolOutcome.ts` · `readToolResultStatus`, so `'FAILURE'` and
+ * `' failure '` both name `'failure'`). Everything
  * else — every shape any tool has ever returned — takes the exact path it
  * always took, byte for byte. The two `kind` strings are therefore RESERVED
  * vocabulary on the tool-result wire; a recognized envelope whose fields are
@@ -61,7 +63,8 @@ export type { ToolResultStatus } from './toolOutcome.js';
 export { TOOL_RESULT_STATUSES } from './toolOutcome.js';
 
 import type { ToolResultStatus } from './toolOutcome.js';
-import { TOOL_RESULT_STATUSES } from './toolOutcome.js';
+import { readToolResultStatus, TOOL_RESULT_STATUSES } from './toolOutcome.js';
+import { plainLineOf } from '../lib/plainLine.js';
 
 // ─── The two effect kinds ──────────────────────────────────────────────
 
@@ -133,8 +136,29 @@ export interface ReadToolResultEnvelope {
   }>;
 }
 
-function isToolResultStatus(v: unknown): v is ToolResultStatus {
-  return typeof v === 'string' && (TOOL_RESULT_STATUSES as readonly string[]).includes(v);
+/**
+ * The envelope's SHAPE, everything but the status word: a plain object whose
+ * keys are envelope keys, with `content`, and an `effects` array whose every
+ * element names a known `kind`. One check, read by the recognizer and by
+ * `unknownStatusOf`, so "an envelope but for its status" means exactly that.
+ */
+function envelopeShaped(result: unknown): Record<string, unknown> | undefined {
+  if (typeof result !== 'object' || result === null || Array.isArray(result)) return undefined;
+  const record = result as Record<string, unknown>;
+  if (!Object.keys(record).every((k) => ENVELOPE_KEYS.has(k))) return undefined;
+  if (!('content' in record)) return undefined;
+  const rawEffects = record.effects;
+  if (!Array.isArray(rawEffects)) return undefined;
+  // Every element must speak the reserved vocabulary, or the whole value is
+  // data (a domain object that happens to have an `effects` array must keep
+  // its bytes).
+  const allKnownKinds = rawEffects.every(
+    (e) =>
+      typeof e === 'object' &&
+      e !== null &&
+      EFFECT_KINDS.has((e as { kind?: unknown }).kind as string),
+  );
+  return allKnownKinds ? record : undefined;
 }
 
 /**
@@ -144,26 +168,16 @@ function isToolResultStatus(v: unknown): v is ToolResultStatus {
  * it is strict.
  */
 export function readToolResultEnvelope(result: unknown): ReadToolResultEnvelope | undefined {
-  if (typeof result !== 'object' || result === null || Array.isArray(result)) return undefined;
-  const record = result as Record<string, unknown>;
-  const keys = Object.keys(record);
-  if (!keys.every((k) => ENVELOPE_KEYS.has(k))) return undefined;
-  if (!('content' in record)) return undefined;
-  const rawEffects = record.effects;
-  if (!Array.isArray(rawEffects)) return undefined;
-  // Every element must speak the reserved vocabulary, or the whole value is
-  // data (a domain object that happens to have an `effects` array must keep
-  // its bytes). An EMPTY effects array is an envelope only when the status
-  // says something — `{ content, effects: [] }` alone declares nothing.
-  const allKnownKinds = rawEffects.every(
-    (e) =>
-      typeof e === 'object' &&
-      e !== null &&
-      EFFECT_KINDS.has((e as { kind?: unknown }).kind as string),
-  );
-  if (!allKnownKinds) return undefined;
-  const status = record.status;
-  if (status !== undefined && !isToolResultStatus(status)) return undefined;
+  const record = envelopeShaped(result);
+  if (record === undefined) return undefined;
+  const rawEffects = record.effects as readonly unknown[];
+  // The status word is read once (`toolOutcome.ts` · `readToolResultStatus`):
+  // 'FAILURE' or ' failure ' is 'failure'; a word that names none of the
+  // seven makes the whole value data. An EMPTY effects array is an envelope
+  // only when the status says something — `{ content, effects: [] }` alone
+  // declares nothing.
+  const status = record.status === undefined ? undefined : readToolResultStatus(record.status);
+  if (record.status !== undefined && status === undefined) return undefined;
   if (rawEffects.length === 0 && status === undefined) return undefined;
 
   const effects: ProposedEffect[] = [];
@@ -231,7 +245,7 @@ export function readToolResultEnvelope(result: unknown): ReadToolResultEnvelope 
   return {
     content: record.content,
     effects,
-    ...(status !== undefined && { status: status as ToolResultStatus }),
+    ...(status !== undefined && { status }),
     malformed,
   };
 }
@@ -254,12 +268,65 @@ export function explainStatusOnlyNearMiss(result: unknown): string | undefined {
   const keys = Object.keys(record);
   if (!keys.every((k) => ENVELOPE_KEYS.has(k))) return undefined;
   if (!('content' in record) || 'effects' in record) return undefined;
-  if (!isToolResultStatus(record.status)) return undefined;
+  const status = readToolResultStatus(record.status);
+  if (status === undefined) return undefined;
   return (
-    `the result { content, status: '${record.status}' } looks like a status-only ` +
+    `the result { content, status: '${status}' } looks like a status-only ` +
     `envelope missing its marker — an envelope REQUIRES the effects array, so this ` +
     `value was treated as data: the status was not recorded and no onToolStatus edge ` +
-    `can fire on it. Opt in with { content, effects: [], status: '${record.status}' }, ` +
+    `can fire on it. Opt in with { content, effects: [], status: '${status}' }, ` +
     `or rename the keys if this is a domain object.`
+  );
+}
+
+/** The seven words as a sentence fragment, for the warning below. */
+const TOOL_RESULT_STATUSES_TEXT = TOOL_RESULT_STATUSES.map((w) => `'${w}'`).join(', ');
+
+/** The longest unknown status word told back, in characters; longer is cut. */
+const MAX_UNKNOWN_STATUS_CHARS = 40;
+
+/**
+ * The status word of a value that is an envelope in every way but its
+ * status — the envelope keys, `content`, a well-formed `effects` array (the
+ * marker), and a `status` that names none of the seven words — cleaned for
+ * quoting (`lib/plainLine.ts` · `plainLineOf`: no control, separator or
+ * invisible format character, at most 40 characters). `undefined` for every
+ * other value, including a real envelope and a value with no marker.
+ *
+ * Why: such a value is data (the recognizer's law is unchanged), so the call
+ * declared no status — but its tool plainly tried to, and a procedure step
+ * that advanced on it must not tell the model "no status" as if the tool had
+ * said nothing. The step names the word instead (`skill.step_advanced`
+ * `unknownStatus`, and the step sentence). The marker is required for the
+ * same reason the recognizer requires it: `{ content, status: 'draft' }` is
+ * a shape a domain object can have.
+ *
+ * Diagnosis only — never changes what any value does.
+ *
+ * @example unknownStatusOf({ content: 'x', effects: [], status: 'oops' })   // 'oops'
+ * @example unknownStatusOf({ content: 'x', effects: [], status: 'FAILURE' }) // undefined (a known word)
+ */
+export function unknownStatusOf(result: unknown): string | undefined {
+  const record = envelopeShaped(result);
+  if (record === undefined) return undefined;
+  const raw = record.status;
+  if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean')
+    return undefined;
+  if (readToolResultStatus(raw) !== undefined) return undefined;
+  const word = plainLineOf(String(raw), MAX_UNKNOWN_STATUS_CHARS);
+  return word.length > 0 ? word : undefined;
+}
+
+/**
+ * The dev-mode teaching sentence for a word `unknownStatusOf` returned —
+ * beside `explainStatusOnlyNearMiss`, for the near-miss that does carry the
+ * marker. Diagnosis only.
+ */
+export function unknownStatusWarning(word: string): string {
+  return (
+    `the result is an effects envelope in every way but its status ${JSON.stringify(word)}, ` +
+    `which is not one of the seven status words (${TOOL_RESULT_STATUSES_TEXT}) — so this ` +
+    `value was treated as data: no status was recorded, no onToolStatus edge can fire on ` +
+    `it, and a procedure step it ran advanced without being held.`
   );
 }

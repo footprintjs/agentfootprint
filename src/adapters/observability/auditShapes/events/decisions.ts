@@ -88,6 +88,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.validation.args_invalid': eventShape<'agentfootprint.validation.args_invalid'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -131,12 +132,14 @@ export function decisionsShapes() {
 
     'agentfootprint.stream.tool_progress': eventShape<'agentfootprint.stream.tool_progress'>({
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       toolName: str,
       iteration: num,
       payload: keysMarker,
     }),
 
     'agentfootprint.checkin.request': eventShape<'agentfootprint.checkin.request'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -144,6 +147,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.checkin.decision': eventShape<'agentfootprint.checkin.decision'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -151,18 +155,23 @@ export function decisionsShapes() {
       approved: bool,
       by: str,
       note: charsMarker,
+      // Argument NAMES the tool's view hid from the person — never values —
+      // or the fixed word for a pause stored before the list existed.
+      hiddenArgs: either(listOf(str), oneOf('not-recorded')),
       componentId: str,
     }),
 
     'agentfootprint.middleware.decision': eventShape<'agentfootprint.middleware.decision'>({
+      callOccurrenceKey: listOf(num),
       middleware: str,
       moment: oneOf('after-tool', 'before-tool', 'input', 'output', 'window'),
       at: oneOf('message', 'tool'),
-      phase: oneOf('input', 'output'),
+      phase: oneOf('input', 'output', 'resume'),
       toolName: str,
       toolCallId: str,
       iteration: num,
-      outcome: oneOf('allow', 'ask', 'deny'),
+      outcome: oneOf('allow', 'ask', 'deny', 'refused'),
+      personApproved: bool,
       changed: bool,
       why: charsMarker,
       componentId: str,
@@ -213,6 +222,7 @@ export function decisionsShapes() {
       tool: str,
       errorClass: str,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -280,11 +290,37 @@ export function decisionsShapes() {
         }),
       ),
       predicate: str,
+      rowset: str,
       epoch: num,
       synthetic: bool,
       advisory: bool,
       message: charsMarker,
       iteration: num,
+    }),
+
+    'agentfootprint.tools.rowset_checked': eventShape<'agentfootprint.tools.rowset_checked'>({
+      toolName: str,
+      toolCallId: str,
+      iteration: num,
+      rowset: str,
+      source: oneOf('inline', 'published-dataset'),
+      disposition: oneOf('checked-pass', 'checked-fail', 'not-applicable', 'unavailable'),
+      reason: oneOf(
+        'rows',
+        'empty',
+        'declared-absence',
+        'unsupported-shape',
+        'source-missing',
+        'publication-unavailable',
+        'publication-changed',
+        'wrong-kind',
+        'source-over-bound',
+        'result-withheld',
+        'result-capped',
+        'source-aborted',
+        'store-unavailable',
+      ),
+      delivery: oneOf('unchanged', 'refused'),
     }),
 
     'agentfootprint.tools.effect': eventShape<'agentfootprint.tools.effect'>({
@@ -337,6 +373,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.artifacts.presented': eventShape<'agentfootprint.artifacts.presented'>({
+      callOccurrenceKey: listOf(num),
       ref: str,
       as: str,
       snapshot: shapeOf<PayloadOf<'agentfootprint.artifacts.presented'>['snapshot']>({
@@ -395,11 +432,13 @@ export function decisionsShapes() {
       actor: str,
       target: str,
       result: oneOf('allow', 'deny', 'gate_open', 'halt'),
+      phase: oneOf('resume'),
       policyEngine: oneOf('cerbos', 'custom', 'opa'),
       policyRuleId: str,
       rationale: charsMarker,
       reason: policyReasonTag,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -411,6 +450,7 @@ export function decisionsShapes() {
       iteration: num,
       sequenceLength: num,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
     }),
 
     // A router's `{ reason }` is its model's words; `decide()` evidence is the engine's.

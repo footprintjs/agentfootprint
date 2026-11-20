@@ -68,6 +68,11 @@ otherwise.
 to two different files. A checker that said only _"something is off with
 logical_unit_number"_ would have helped with neither.
 
+"In a row" means the row's OWN key (`check.ts` · `hasColumn`). Every plain row
+inherits `constructor` and `toString` from `Object.prototype`; a declared
+`constructor` column that no row delivered is `missing-column`, not a column
+"holding a function".
+
 ## The vocabulary
 
 `number | string | boolean | date` — **not invented**: it is the column-type

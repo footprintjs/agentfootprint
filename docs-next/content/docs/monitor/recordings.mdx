@@ -55,6 +55,20 @@ the run facts, an optional privacy statement and an optional `configuration`
 override; `run` is a `RecordingRunFacts` — the half of the truth the library
 cannot derive.
 
+## Read a value's type and array length
+
+By default, `getSnapshot()`, `getLastSnapshot()`, and snapshots saved by `recordRun(agent)` include a `contextShapes` index when a served initial state and complete commit log are available. It describes the initial top-level values and records changes at their commit positions. An array description carries its length. Import `contextShapeAt` from `agentfootprint/observe` to look up a path in this index without loading the values. Pass its commit index, or `-1` for the initial state. A path is an array of literal keys.
+
+<CodeFile path="examples/observability/29-recorded-value-shapes.ts" region="history" title="Read the recorded length of the message history" />
+
+To track a nested array such as `inventory.rows`, pass `{ contextShapes: { paths: [['inventory', 'rows']] } }` to the recorder or live snapshot getter. Supplying a path reads just that field. `scan: 'full'` opts into visiting nested entries of initial and newly assigned values and can increase recording size significantly. If you hash or compare stored bytes, pass `{ contextShapes: false }` to the snapshot getter or to `recordRun` to keep the previous format.
+
+The public `ContextShapeIndex` holds the initial observations and commit changes. Each `ShapeEntry` identifies an observed path. `contextShapeAt` returns a `RecordedContextShape` with the element count for arrays. Hidden and deleted values read as `['unknown']`. Use `ContextShapeOptions` to type the paths and scan mode passed to the recorder.
+
+An older recording or an incomplete log can have no index. Individual paths can also be unavailable, for example when a redaction hides a value or an array merge would require inspecting its items. Treat a missing length as unknown. A recorded zero means an empty array.
+
+The default index withholds both the type and the length of a redacted field. If its shape was previously visible, the index records the change to `unknown` at that commit. When the shape was already unknown, the index can omit the entry. The field stays unknown through partial updates until a later public write replaces it. If a masked array update leaves the final position of a hidden item ambiguous, the index withholds element details. The array can still have a recorded length. The recorder also treats the literal strings `REDACTED` and `[REDACTED]` as redaction markers, so their type is unknown.
+
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its
@@ -329,6 +343,22 @@ values as `AnswerAccountShownLeaf`s, keyed by `answerAccountPointerKey(pointer)`
 an allow-listed leaf of the record, a derived row count (never the rows), or
 the reason it is withheld.
 
+The account says a tool ran only when the record shows it ran. A call that
+ended in an error before its tool was reached — a tool name that does not
+exist, arguments the schema rejected, a blocked credential — reads "It asked
+to run reboot_host; the call was not executed.", read from
+`stream.tool_end.entered`. A tool that ran and threw reads "It ran crash, and
+the tool reported an error.". A recording made before `entered` existed does
+not say which, so an error there reads "It asked to run crash; the call ended
+in an error.". The "Anything wrong" count says such a call as "not executed",
+never "failed": "1 tool call did not run cleanly: 0 failed, 1 not executed, 0
+refused by a rule, 0 declined by a person, 0 not run.".
+
+A call can run and still return a status such as failure, denial, partial work
+or pending work. The account reports that status alongside the fact that the
+tool ran. An invalid result is shown as recorded because the library can also
+mark a result invalid.
+
 ## How far an answer stands
 
 The account's "How sure" row — and anything else that needs one word for an
@@ -349,8 +379,18 @@ committed rows, so the two agree:
 
 <CodeFile path="examples/features/73-answer-standing.ts" region="answer-standing" title="examples/features/73-answer-standing.ts (region: answer-standing)" />
 
-The reasons, each read from one committed row: a tool declared ground it did not
-check (`coverage-gap`); a tool declared that nothing matched (`declared-absent`,
+Each reason points to a committed row. A tool call recorded as refused or failed
+adds `call-not-completed`. A later completed call of the same tool with equal
+recorded arguments clears it for the earlier call. If the recording lacks the
+arguments for comparison, the reason stays. The standing line names the tool
+when it has a `displayName` and reports whether the call was refused or failed.
+
+An admitted tool result that reports `partial` or `pending` adds `work-not-finished` when the call has no recorded failure or refusal. The same retry rule clears this warning when a later call completes with the same recorded tool and arguments. A tool's plain result text supplies no status for this check.
+
+With the answer layer armed, `step-skipped` counts declared steps the procedure advanced past after a skip. Under the hold policy the request stays on the record and the step stays required.
+
+Other reasons include a tool declaring ground it did not check (`coverage-gap`)
+or declaring that nothing matched (`declared-absent`,
 which includes an empty rowset inside a `coverage()` boundary); an empty rowset
 that said nothing about what it searched (`empty-undeclared` — silence recorded
 as silence); a result's store does not hold the period its read asked about
@@ -437,11 +477,16 @@ Gotchas:
   projection can carry it). `turn_end` carries `standingLineNames` — the words the
   line used — only when it named a call.
 
-### The standing, in the run — `.answerLayer()`
+### The standing during a run
 
-`.answerLayer()` runs the same fold INSIDE the run — as the first stage of the
-final branch, after every check has filed its verdict — and serves the result the
-moment the answer exists:
+Every agent folds the standing from the committed record by default. The fold
+runs at the start of the final branch, after the checks have filed their verdicts.
+When the answer's standing is `not-sure` or `ask`, a prose answer includes a line
+explaining why. The standing travels as data for every delivered answer.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-standing-default" title="A tool reports pending work" />
+
+The answer layer serves the standing in these places:
 
 - `turn_end.answerAssessment` and one `agentfootprint.answer.assessed` event carry
   the value, its word, the reason kinds and the checks that ran — never a value
@@ -451,14 +496,15 @@ moment the answer exists:
   and a `StepsUnfinishedRow`, members of `FindingsRow` that `agent.findings()`
   returns, each stamped with its conversation turn (the gate's pass is the check
   having RUN — it lifts "not assessed" to "consistent", never to "known");
-- `{ standingLine: true }` appends one line to a prose answer, after the
-  separator. It is refused beside `.answerValidation()` (the checks judge the
-  exact bytes) and beside `.outputSchema()` (a typed answer is JSON) — the
-  standing still travels as data there.
+- With `.answerValidation()` or `.outputSchema()`, the default supplies the
+  standing as data and preserves the answer's format. Those configurations
+  reject an explicit request for a standing line at build time.
 - `{ standingLine: { when } }` says the line only when it matters:
-  `'always'` (what `true` means), `'unless-consistent'` (not for "consistent with
-  the run's record"), or `'not-sure-or-ask'` (only "not sure" and "ask"). `ask` is
-  said in every mode.
+  `'always'` (also `true`), `'unless-consistent'`, or `'not-sure-or-ask'`
+  (the default, covering "not sure" and "ask"). `ask` is included in every mode.
+- Call `.answerLayer()` or `.answerLayer({ standingLine: false })` for data only.
+  Call `.answerLayer(false)` to turn the layer off. You can also set these
+  options through `AgentOptions.answerLayer`.
 
 <CodeFile path="examples/features/117-standing-line-modes.ts" region="standing-line-modes" title="examples/features/117-standing-line-modes.ts (region: standing-line-modes)" />
 
@@ -481,8 +527,13 @@ Gotchas:
   the turn it ended on (`turnNumber`), and the next run continues from it — so a
   continued conversation never folds an earlier turn's rows as its own, even when
   a window strategy trims the stored history.
-- **The line is not streamed.** Like the limits block, it is appended to the
-  answer the run returns; `stream.token` carries the model's text.
+- **Streaming.** In an ordinary stream, `stream.token` carries the model's text
+  as it arrives. The returned answer and `turn_end.finalContent` carry the
+  completed text, including the line. If output admission holds the provider's
+  chunks, it delivers the composed answer as a single token, including the line.
+  Update your final message from `turn_end.finalContent` if you render tokens
+  yourself. The `agentfootprint.answer.assessed` event supplies the standing and
+  reason codes for a separate display.
 - **A mode changes the line, nothing else.** The standing travels as data in every
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With
@@ -492,8 +543,62 @@ Gotchas:
   tells the two apart (`standing`, `checked`). If your app hides both the line and
   the data, the person cannot tell "checked" from "not assessed"; the limits block,
   the answer's material limitations, stays visible in every mode.
-- **Off by default.** Without `.answerLayer()` the chart, the committed rows, the
-  events and the answer are exactly what they were.
+
+## Read the completed turn before filing
+
+Attach `recordRun(agent)` for the invocation, then stop it after the run settles
+and before returning a pooled agent. Read its recording in memory or load the
+same recording later. Both readers take the exact run ID from the turn or its
+recording envelope. Import the readers from `agentfootprint/observe`.
+
+`TurnEvidenceSource` is the served snapshot and event list from `recordRun`.
+The readers accept the recording directly, in memory or after loading it.
+
+New recordings use `callOccurrenceKey` to connect a tool's results, events and
+evidence rows when a provider repeats a call ID. Treat the key as opaque. Where
+the key's result is out of the retained history, the reader can still identify
+the call if its proposal remains. Older recordings use the evidence they kept.
+The key contains no argument values or caller identity. It links records about
+the same call, so apply your recording's redaction policy to the relevant
+fields or containers if that link should be hidden.
+
+<CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="completed-turn" title="Keep the finished turn's record" />
+
+### Coverage declarations per call
+
+`readTurnCoverage` counts committed declarations and their checked, not-checked
+and cannot-cover items before merging. It reads the current leg after a resume.
+It works with prose and typed answers independently of the limits block. An
+empty result means the readable leg declared nothing. Each `TurnCallCoverage`
+row counts declarations and the three item lists. A row without a definite call
+association keeps its counts and omits `toolCallId`.
+
+Coverage returns `undefined` if the snapshot is missing or belongs to another
+run, either end of the leg's state is unreadable, the starting ledger cannot be
+matched to the beginning of the final ledger, or a declaration is malformed or
+lacks any of its three item lists.
+
+<CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="coverage" title="Read unmerged coverage counts" />
+
+### The final evidence verdict
+
+`readTurnEvidenceVerdict` reads the finished turn's final served check, including
+the check after a revision. `TurnEvidenceVerdict` has status `clean`, `disabled`,
+`not-checked`, or `unsupported`. Unsupported items carry the recorded value and
+shape. If the verdict is visible but its item list is unavailable, `items` is
+`null`.
+The verdict uses events alone. An unreadable terminal iteration or a missing
+or unreadable final check yields `not-checked` unless the record establishes
+that the gate was disabled.
+
+<CodeFile path="examples/observability/28-completed-turn-evidence.ts" region="verdict" title="Read the served evidence verdict" />
+
+Both readers need one terminal event with a readable component path for the
+named run. A recording with no terminal, such as a paused run, or more than one
+terminal for that ID returns `undefined` for coverage and `not-checked` for the
+verdict. Independently invoked child agents have their own run IDs. Native
+compositions can retain multiple agent completions under one run ID. Record the
+Agent invocation you intend to read.
 
 ## Next steps
 

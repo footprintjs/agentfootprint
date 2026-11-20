@@ -4,7 +4,7 @@
  * Pattern: composed by the FRAMEWORK, not requested from the model. Pure
  *          function of the run's declarations; the stage that calls it is a
  *          two-line wrapper (see `stages/prepareFinal.ts`).
- * Role:    core/ layer, pure.
+ * Role:    semantics/ layer (L1), pure.
  * Emits:   N/A.
  *
  * ## Why this is an append and not a check
@@ -51,6 +51,7 @@ import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 import { isRegExpWhitespace, trimTrailing } from '../../lib/linearText.js';
 import { namedCalls } from '../../lib/displayName.js';
+import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
 
 /**
  * One declaring call's period, as the answer's limits carry it (honesty step
@@ -187,9 +188,14 @@ function itemSource(
   const seen = new Set<string>();
   for (const row of declared) {
     if (!row[key].some((i) => sameItem(i, item))) continue;
-    if (row.toolCallId !== undefined) {
-      if (seen.has(row.toolCallId)) continue;
-      seen.add(row.toolCallId);
+    const occurrence = readCallOccurrenceKey(row);
+    const source =
+      occurrence === undefined && row.toolCallId !== undefined
+        ? `provider:${row.toolCallId}`
+        : occurrence;
+    if (typeof source === 'string') {
+      if (seen.has(source)) continue;
+      seen.add(source);
     }
     calls.push({ toolName: row.toolName });
   }
@@ -255,7 +261,7 @@ function periodsOf(declared: readonly DeclaredCoverage[]): AnswerPeriod[] {
 
 /**
  * The in-progress items the run's declarations carried, one entry per
- * DECLARING call, in declaration order. Fresh plain objects.
+ * DECLARING call, in declaration order. `inProgress.ts` reads individual markers.
  */
 function inProgressOf(declared: readonly DeclaredCoverage[]): AnswerInProgress[] {
   const out: AnswerInProgress[] = [];

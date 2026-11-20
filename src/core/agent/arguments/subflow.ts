@@ -33,11 +33,14 @@
  * staging a second copy of the model's quotes.
  */
 
+import type { PlacedTicket } from '../placedTickets.js';
 import type { TypedScope } from 'footprintjs';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 
 import { turnWindowsOf } from '../../../time/bind.js';
 import type { CallWindowRow, ClockRow, TimeAnswerRow, TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
 import type { SourceCorpus } from './checks.js';
 import type { KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
@@ -57,6 +60,7 @@ import {
   type ToolOf,
 } from './resolve.js';
 import type { CallSources } from './sources.js';
+import { omissionRows } from './sourceCorrection.js';
 import { markPrivateResolutions, privateAnswersInPlay } from './privateAnswers.js';
 
 /**
@@ -79,6 +83,8 @@ export interface SourceInputs {
   }[];
   /** The run's message came from a composition, not a person (`AgentInput.messageFrom`). */
   readonly composed?: true;
+  /** The tickets the library placed (`AgentState.placedTickets`) — who placed a result. */
+  readonly placedTickets?: readonly PlacedTicket[];
 }
 
 /**
@@ -120,6 +126,7 @@ export interface InputsLayerState {
   argumentPlan?: readonly PlannedCall[];
   argumentChecks?: readonly CheckedArgument[];
   argumentRows?: readonly ArgumentRow[];
+  argumentSourceOmissionRows?: readonly ArgumentRow[];
   /** Under `.time()` only: one `call-window` row per call to a tool whose period declares forms. */
   argumentWindowRows?: readonly CallWindowRow[];
   argumentResolutions?: readonly ArgumentResolution[];
@@ -127,6 +134,7 @@ export interface InputsLayerState {
 
 /** What the stages are handed from outside the folder — closures, never scope. */
 export interface InputsLayerDeps {
+  readonly declarationCorrection?: 'once';
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
   /** The evidence gate's revision turns the tools off — present only then;
@@ -171,13 +179,15 @@ export interface InputsLayerDeps {
   };
 }
 
-/** The calls' declared sources, by call id — `undefined` when the arm is off. */
+/** The calls' declared sources, by batch address — `undefined` when the arm is off. */
 function declaredOf(
   deps: InputsLayerDeps,
   calls: readonly BatchCall[],
-): ReadonlyMap<string, CallSources> | undefined {
+): ReadonlyMap<BatchAddress, CallSources> | undefined {
   if (deps.sources === undefined) return undefined;
-  return new Map(deps.sources.declaredOf(calls).map((d) => [d.toolCallId, d]));
+  return new Map(
+    deps.sources.declaredOf(calls).map((d) => [batchAddress(d.toolCallId, d.callOccurrenceKey), d]),
+  );
 }
 
 /**
@@ -186,7 +196,7 @@ function declaredOf(
  * build-time fact: a registered tool with an argument view, or a ToolProvider).
  */
 function armOf(
-  declared: ReadonlyMap<string, CallSources> | undefined,
+  declared: ReadonlyMap<BatchAddress, CallSources> | undefined,
   corpus?: SourceCorpus,
   argumentViews?: true,
 ): SourcesArm | undefined {
@@ -249,6 +259,7 @@ function callsOf(scope: TypedScope<InputsLayerState>): readonly BatchCall[] {
   return [...((scope.calls as readonly BatchCall[] | undefined) ?? [])].map((c) => ({
     id: c.id,
     name: c.name,
+    ...callOccurrenceField(c.callOccurrenceKey),
     args: { ...(c.args ?? {}) },
     ...(c.argumentsFailure !== undefined && { argumentsFailure: { ...c.argumentsFailure } }),
   }));
@@ -328,6 +339,7 @@ function detached(inputs: SourceInputs): SourceInputs {
     ...(inputs.ledger !== undefined && { ledger: [...inputs.ledger] }),
     ...(inputs.previousBatch !== undefined && { previousBatch: [...inputs.previousBatch] }),
     ...(inputs.composed === true && { composed: true as const }),
+    ...(inputs.placedTickets !== undefined && { placedTickets: [...inputs.placedTickets] }),
   });
 }
 
@@ -363,8 +375,15 @@ export function recordArgumentsStage(
           armOf(declaredOf(deps, calls)),
           decisions,
         );
-  scope.argumentRows = rows;
-  if (rows.length > 0) deps.emitRows(scope, rows);
+  const deferred =
+    deps.declarationCorrection === 'once'
+      ? omissionRows(rows, checked, calls, declaredOf(deps, calls) ?? new Map())
+      : [];
+  const pending = new Set(deferred);
+  const filed = deferred.length > 0 ? rows.filter((row) => !pending.has(row)) : rows;
+  scope.argumentRows = filed;
+  if (deps.declarationCorrection === 'once') scope.argumentSourceOmissionRows = deferred;
+  if (filed.length > 0) deps.emitRows(scope, filed);
   if (time !== undefined) scope.argumentWindowRows = callWindowRowsOf(decisions, calls, stamp);
 }
 

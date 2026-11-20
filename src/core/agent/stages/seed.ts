@@ -1,4 +1,6 @@
+import { sourceSchemasOnWire } from '../sourceContract.js';
 import { withoutEarlierScriptText } from '../scripts/rows.js';
+import { seedStagedRefs } from './stagedRefsNudge.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 /**
@@ -22,19 +24,18 @@ import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
  */
 
 import type { TypedScope } from 'footprintjs';
-import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types.js';
+import type { LLMToolSchema } from '../../../provider-contract/types.js';
 import type { MemoryStore } from '../../../memory/store/index.js';
-import { resolveTurnNumber } from '../../../memory/turn/index.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentInput, AgentState, RunConfig } from '../types.js';
-import type { EvidenceRecoveryCheckpoint } from '../../runCheckpoint.js';
+import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from '../../runCheckpoint.js';
 import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
-import { carriesRules } from '../../../tools/declare.js';
 import type { HonestyLayers } from '../honesty/armed.js';
+import { seedToolEvidence } from '../honesty/settledToolCalls.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../../tools/tools.js';
@@ -46,8 +47,13 @@ import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../m
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
 import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
-import { historyForTurn } from '../runtime/conversation/seedHistory.js';
+import {
+  anchorTurnNumber,
+  historyForTurn,
+  seedConversationTurn,
+} from '../runtime/conversation/seedHistory.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
+import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
 
 export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
@@ -82,6 +88,8 @@ export interface SeedStageDeps {
   readonly consumePendingResumeHistory: () => PendingResumeHistory | undefined;
   /** Same-request recovery only. A new human turn never supplies this state. */
   readonly consumePendingEvidenceRecovery?: () => EvidenceRecoveryCheckpoint | undefined;
+  readonly sourceDeclarationCorrection?: 'once';
+  readonly consumePendingSourceDeclarationCorrection?: () => AgentRunCheckpoint['sourceDeclarationCorrection'];
   /**
    * The agent keeps a tool-call ledger for `answerValidation`
    * (`AgentState.toolCallLedger`). Seed starts it on every run: a `resumeOnError` leg
@@ -294,8 +302,8 @@ export interface SeedStageDeps {
    * threads nothing for the default `'none'`, so an armed agent on the
    * default hands this stage exactly the deps it did before the dial and
    * commits exactly the keys it did. Seeded for the `findingsServe` reason:
-   * the rebuild appends `FINDINGS_ANSWER_ASK` to the piece the way the wire
-   * did, reading the dial from the RECORD.
+   * replay of a record made before the DATA layout appends
+   * `FINDINGS_ANSWER_ASK` to the old piece, reading the dial from the RECORD.
    */
   readonly findingsAnswerAsk?: 'quote-facts';
   /**
@@ -332,84 +340,6 @@ export interface SeedStageDeps {
    * the same three inputs the stage used.
    */
   readonly toolWantsByName?: Readonly<Record<string, readonly string[]>>;
-}
-
-/**
- * How many user turns the conversation already contains, this one included.
- * At least 1 — a run always IS a turn.
- */
-function countUserTurns(history: readonly LLMMessage[]): number {
-  let count = 0;
-  for (const message of history) if (message.role === 'user') count++;
-  return Math.max(1, count);
-}
-
-/** A stamp that counts as a turn: a positive whole number. */
-const isTurn = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
-
-/**
- * WHICH TURN THIS IS, while an honesty layer is armed — the stamp every
- * ledger row of this turn carries (`findings/ledger.ts` · `recordFindings`)
- * and the one the answer's standing reads "this turn" by, so it must never
- * repeat in one conversation. `countUserTurns` cannot promise that on its
- * own: a window strategy or a compaction trims the stored history, and the
- * count of the user messages left repeats and goes backwards — an earlier
- * turn's verdict would then be folded as a later turn's.
- *
- * Two floors raise the count, each a lower bound of the true turn (the rule
- * `memory/turn/resolveTurnNumber.ts` applies to a store: whichever source
- * knows more wins, and none drags the conversation backwards):
- *   - the turn the stored history ENDS on (`AgentRunCheckpoint.turnNumber`):
- *     a continued conversation is the turn after it, a `resumeOnError` retry
- *     the same turn again;
- *   - the latest turn stamped on the restored ledger — for a conversation
- *     stored before the checkpoint carried its turn: a continued
- *     conversation comes after every stamped row, a retry at or after them.
- *
- * With neither — a fresh run, or no layer armed — the count, as always.
- */
-function turnNumberFor(
-  history: readonly LLMMessage[],
-  resume: PendingResumeHistory | undefined,
-  ledger: FindingsLedger | undefined,
-  stamped: boolean,
-): number {
-  const counted = countUserTurns(history);
-  if (!stamped || resume === undefined) return counted;
-  const next = resume.appendsUserTurn ? 1 : 0;
-  let turn = counted;
-  if (isTurn(resume.turn)) turn = Math.max(turn, resume.turn + next);
-  for (const row of ledger ?? []) {
-    const stamp = (row as { readonly turn?: unknown }).turn;
-    if (isTurn(stamp)) turn = Math.max(turn, stamp + next);
-  }
-  return turn;
-}
-
-/**
- * Raise `scope.turnNumber` to what the conversation's own stores know.
- *
- * The turn number is the KEY memory writes stamp on their entries, so two
- * turns of one conversation must never share it. In-process counting cannot
- * provide that: the shape seen in a production field deployment builds a
- * fresh `Agent` per turn against a stable `conversationId`, so every run
- * starts counting from scratch while the store holds the whole history.
- *
- * Runs after `seedFrom`, because it needs the identity that stage resolves.
- * A store that throws is not swallowed — a memory whose store is unreachable
- * fails at its next read anyway, and a guessed turn number is how a
- * conversation quietly overwrites itself.
- */
-async function anchorTurnNumber(
-  scope: TypedScope<AgentState>,
-  stores: readonly MemoryStore[],
-): Promise<void> {
-  scope.turnNumber = await resolveTurnNumber({
-    stores,
-    identity: scope.runIdentity,
-    hostTurn: scope.turnNumber,
-  });
 }
 
 /** The inputs layer's schema decoration (`arguments/serve/schema.ts` · `withArgumentRules`). */
@@ -559,19 +489,27 @@ function seedFrom(
   // `resumeOnError`, folded spans, the findings ledger, the skill cursor, the
   // evidence recovery) belongs to the agent's OWN next run, and a member must
   // neither read another caller's conversation nor take it from them. The run
-  // is looked up by its link in `memberRun.ts`'s private registry; a
-  // `parentRun` that is not a live link is refused there, by name.
+  // is resolved and checked by `memberRun.ts`.
   const parentRun = resolveParentRun(args, 'Agent (composition member)');
   const mounted = parentRun !== undefined || deps.isOwnRun?.(scope) === false;
 
   // If `run({ continueFrom })` or `resumeOnError(...)` set the side channel,
   // restore the stored conversation; this turn's user entry is `message` —
   // the input chain's verdict — on every path (`historyForTurn`). The
-  // accessor clears the field, so a later run without a continuation starts
-  // fresh.
+  // accessor clears the handoff for the next run.
   const resume = mounted ? undefined : deps.consumePendingResumeHistory();
+  const correction = mounted ? undefined : deps.consumePendingSourceDeclarationCorrection?.();
+  if (
+    deps.sourceDeclarationCorrection === 'once' &&
+    resume !== undefined &&
+    !resume.appendsUserTurn &&
+    correction?.spent === true
+  )
+    scope.sourceDeclarationCorrectionSpent = true;
   const history = historyForTurn(resume, message);
   scope.history = history;
+  seedToolEvidence(scope, deps, resume);
+  restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means
   // "not observed" (a checkpoint from before) and the view fails closed.
@@ -691,13 +629,13 @@ function seedFrom(
   // honesty layer is armed the count is raised to what the stored
   // conversation already stamped (`turnNumberFor`): a window strategy trims
   // the stored history, and the count alone repeats.
-  const turnNumber = turnNumberFor(
+  const turnNumber = seedConversationTurn(
+    scope,
     history,
     resume,
     resumeLedger,
     deps.honestyLayers !== undefined || deps.negativeClaimsArmed === true,
   );
-  scope.turnNumber = turnNumber;
   // THE SCRIPT RECORD'S BOUND, at the turn boundary: a restored `script` row
   // of an EARLIER turn keeps its facts — ids, counts, outcome — and loses its
   // text (`scripts/rows.ts` · `withoutEarlierScriptText`), so the eligible
@@ -771,16 +709,14 @@ function seedFrom(
   // Declared sources (honesty layer 2): a ruled tool's decoration carries `from` —
   // inside the ledger's `_findings` under `.findings()`, or as the reserved
   // argument's only property without it (the slot's `sourcesOnWire` twin).
-  const isRuled = (s: LLMToolSchema): boolean =>
-    deps.argumentSources === true && carriesRules(ruledTools?.get(s.name));
-  const planted = (s: LLMToolSchema): LLMToolSchema =>
-    isRuled(s) ? withFindingsArgument(s, { from: true }) : withFindingsArgument(s);
-  scope.dynamicToolSchemas =
-    deps.findings === true
-      ? ruled.map((s) => planted(s))
-      : deps.argumentSources === true && ruled.some(isRuled)
-      ? ruled.map((s) => (isRuled(s) ? withSourcesArgument(s) : s))
-      : ruled;
+  scope.dynamicToolSchemas = sourceSchemasOnWire(
+    ruled,
+    ruledTools,
+    deps.findings === true,
+    deps.argumentSources === true,
+    withFindingsArgument,
+    withSourcesArgument,
+  );
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and
   // only when a layer is armed.
   if (deps.honestyLayers !== undefined) scope.honestyLayers = deps.honestyLayers;
@@ -839,12 +775,8 @@ function seedFrom(
       ...(tools !== undefined && { tools }),
     };
   }
-  // The `wants` declarations (9.88.0) — the third input to the staged-refs
-  // nudge, and the only one that was build-time-only. Value-conditional in the
-  // same way, and under the same condition request assembly uses.
-  if (deps.toolWantsByName !== undefined) {
-    scope.toolWantsByName = deps.toolWantsByName;
-  }
+  // The staged-refs nudge's record inputs: `wants` and the ticket receipt.
+  seedStagedRefs(scope, deps.toolWantsByName, resume?.placedTickets);
   // Messages-slot delivery ledger (7.21) — empty at the start of every run.
   // A resumed run rebuilds it from the markers in the restored window rather
   // than trusting this, so an empty ledger never means "deliver it again".

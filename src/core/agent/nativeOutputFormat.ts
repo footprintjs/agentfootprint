@@ -160,6 +160,11 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/** Keep the configured provider schema read-only, including after request cloning. */
+export function freezeNativeOutputFormat(format: NativeOutputFormat): NativeOutputFormat {
+  return deepFreeze(format);
+}
+
 // ─── Refusals that need the whole schema: $ref resolution ─────────────
 
 function resolvePointer(root: Json, ref: string): unknown {
@@ -443,5 +448,5 @@ export function nativeOutputFormat(
   // And again on what is SENT: a reference into a path the copy renamed or
   // moved would dangle on the wire, a 400 on every call.
   assertReferencesExpressible(schema, 'wire');
-  return deepFreeze({ type: 'json_schema' as const, schema });
+  return freezeNativeOutputFormat({ type: 'json_schema', schema });
 }

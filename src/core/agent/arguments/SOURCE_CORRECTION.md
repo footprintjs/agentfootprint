@@ -1,0 +1,24 @@
+## One omitted source declaration, corrected natively
+
+`inputsLayer({ argumentSources: true, declarationCorrection: 'once' })` optionally holds the whole current batch for one source-declaration correction per human request. It only recognizes absence through the existing reserved reader; it never infers a claim, repairs a false claim, or bypasses a real missing human value/time confirmation. The ordinary off path stays unchanged.
+
+`sourceCorrection.ts` is the pure eligibility/settlement leaf. Under the new arm, RECORD defers only already masked omission rows as native working data. The existing ToolCalls barrier settles them once through the ledger writer: actual correction, actual human question, or known native preemption. No append-only row is rewritten, and no early `asked`/`source` verdict is fabricated. Framework feedback uses genuine call correlations, zero producer bytes and the existing `not-entered` origin; normal provider request projection removes these internal fields.
+
+The spent marker is separate from evidence and output repair. The native checkpoint/seed owner preserves it for same-request recovery and resets it for a new human turn. Both dynamic charts keep inputs and ToolCalls on their outer native scope, so these working fields require no phantom mapping through the grouped model/context subflow. See `docs-next/content/docs/debug/source-declaration-correction.mdx` and runnable example `examples/features/122-source-declaration-correction.ts`.
+
+Native refusals discovered during current time/origin admission settle only their own pending candidate members before an early return or a human pause. The correction decision reads those same current native entries. Other unasked members stay staged until their actual question; no earlier refusal is silently cleared by a later inputs pass.
+
+The actual omission notice carries a closed JSON body inside the existing native frame. `findings/sourceContractFeedback.ts` derives the immutable minimal error schema from the reserved owner's frozen required `basis`/`from` members (or sources-only `from`), under the literal `_findings` property. It is protocol data, not another tool decoration or declaration reader. The same pure leaf projects only actual missing argument names; it never reads values, quotes, result offers or corpora. The sibling held notice stays unchanged. Every framed notice counts toward 8 KiB UTF-8 and the whole batch toward 64 KiB; each call has at most the canonical 32 ask names. A batch that cannot be represented reaches the ordinary human ask before spending or settling correction. The existing feedback bounds and source admission remain unchanged.
+
+The composer groups omissions by the proposal's accepted position. If a provider repeats an ID, only the occurrence with an omission gets the missing-argument notice. The outgoing message keeps its provider ID and does not carry the recorded occurrence field.
+
+
+## One canonical served source contract
+
+`../sourceContract.ts` owns the immutable source vocabulary, served ASK envelope, property hint, current-cohort instruction projection and minimal error schema. Existing `argumentSources: true` makes only actual ASK implementations require the library-owned `_findings` container and its `from` list, independently of correction allowance. Ledger mode retains `basis`; sources-only mode requires `from` alone. All actual accepted user/result/turn/app origins are taught together. App-supplied context is evidence only under existing checks, never instruction authority. A business parameter named `from` remains a business parameter.
+
+The current winning implementation supplies eligibility at both native decoration doors. Unruled, assume-only, source-off and author-owned `_findings` keep their prior schema bytes. Missing business values still reach the human ask; empty `from` is structural data, not a verified source. No source claim is inferred, moved from root `from`, or repaired.
+
+A closed, versioned `$comment` inside our envelope records only whether its root `required` entry pre-existed, was added to an array, or was added to an absent key. It permits exact unplanting after a JSON clone, preserving author order, duplicates and absence. It is benign projection metadata, never dispatch, permission or source authority.
+
+The system slot precedes final provider discovery, so the final request projects only the native findings instruction against its actual offered schemas. The same pure projection feeds the provider request, cache, receipt and saved-request view; no history is rewritten. Withheld tools restore ordinary optional observations. If privacy hides the actual schema, replay omits only the native instruction whose projection it cannot determine and retains the existing privacy gap. Visible legacy and unknown-marker pieces stay unrewritten.

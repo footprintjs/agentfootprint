@@ -128,7 +128,8 @@ describe('answerValidation — context.toolCalls', () => {
       calls: [
         { name: 'search', callId: 'c1', outcome: 'ok' },
         { name: 'run_code', callId: 'c2', outcome: 'ok' },
-        { name: 'not_a_tool', callId: 'c3', outcome: 'error' },
+        // An unknown tool name never reaches a tool: not-run, though its call ended in an error.
+        { name: 'not_a_tool', callId: 'c3', outcome: 'not-run' },
       ],
       complete: true,
     });
@@ -440,11 +441,11 @@ describe('answerValidation — context.toolCalls', () => {
   });
 
   it('a tool that declares it failed is an error; a missing ledger is never "nothing ran"', async () => {
-    expect(toolOutcomeOf({ status: 'failure' }, true)).toBe('error');
-    expect(toolOutcomeOf({ status: 'invalid' }, true)).toBe('error');
-    expect(toolOutcomeOf({ status: 'partial' }, true)).toBe('ok');
-    // A call a person declined: no error, did not run.
-    expect(toolOutcomeOf({}, false)).toBe('not-run');
+    expect(toolOutcomeOf({ status: 'failure' })).toBe('error');
+    expect(toolOutcomeOf({ status: 'invalid' })).toBe('error');
+    expect(toolOutcomeOf({ status: 'partial' })).toBe('ok');
+    // A call a person declined: no error, did not run — the bracket says so (`entered: false`).
+    expect(toolOutcomeOf({ entered: false })).toBe('not-run');
     expect(toolCallsView(undefined, 10)).toEqual({ calls: [], complete: false });
   });
 
@@ -752,11 +753,13 @@ describe('the list fails closed — a check that reads an incomplete list cannot
 
 describe('tool-call ledger primitives', () => {
   it('reads the outcome a tool_end bracket states', () => {
-    expect(toolOutcomeOf({}, true)).toBe('ok');
-    expect(toolOutcomeOf({ error: true }, true)).toBe('error');
-    expect(toolOutcomeOf({ notExecuted: true }, false)).toBe('not-run');
+    expect(toolOutcomeOf({})).toBe('ok');
+    // The tool ran and threw: an error. It never ran (an unknown name): not-run, error or not.
+    expect(toolOutcomeOf({ error: true, entered: true })).toBe('error');
+    expect(toolOutcomeOf({ error: true, entered: false })).toBe('not-run');
+    expect(toolOutcomeOf({ notExecuted: true })).toBe('not-run');
     expect(
-      toolOutcomeOf({ notDispatched: { pausedCall: { toolCallId: 'p', toolName: 'q' } } }, false),
+      toolOutcomeOf({ notDispatched: { pausedCall: { toolCallId: 'p', toolName: 'q' } } }),
     ).toBe('not-run');
   });
 

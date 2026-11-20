@@ -75,6 +75,7 @@ export function createTurnRunner({
       return lane.writer?.capture({
         sessionId,
         runId: invocation.runId,
+        identity: invocation.identity,
         state: () => invocation.view.liveState(),
       });
     };
@@ -456,7 +457,7 @@ export function createTurnRunner({
     // The snapshot just persisted names the run that answered — the same id
     // the run's own recording carries on its `origin` — so stamping a host's
     // filing costs no second snapshot.
-    await offerTurnArtifacts(runner, reply, offer, () => conversation?.runId);
+    await offerTurnArtifacts(runner, reply, offer, () => conversation?.runId, completed.recording);
     reply.complete(typeof output === 'string' ? output : String(output));
   }
   return answerOne;

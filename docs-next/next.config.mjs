@@ -1,6 +1,7 @@
 import { createMDX } from 'fumadocs-mdx/next';
 import { relative, resolve } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { resolveBrowserLibraries } from './lib/browser-library-aliases.mjs';
 
 // Static export for GitHub Pages is opt-in via EXPORT=true so local `dev`/`build`
 // stay as a normal Next app. basePath comes from NEXT_PUBLIC_BASE_PATH (also read by
@@ -8,49 +9,23 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const isExport = process.env.EXPORT === 'true';
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
-// ONE engine and ONE record implementation in the browser. docs-next links the
-// library (`agentfootprint: file:..`), so its dist resolves from ../node_modules,
-// while everything installed HERE (the lens, explainable-ui) resolves it from
-// ./node_modules — two directories, so two copies in every demo bundle whatever
-// the two versions say (the site shipped 9.10.0 beside 9.21.1 for months; the
-// numbers are in scripts/check-site-budget.mjs, the entry after 9.94.1). Two
-// engines is not only bytes: a trace the library writes with one and the lens
-// reads with the other shares no class, symbol or WeakMap. The root's copy is
-// the one the library was built and tested against, so every browser request
-// for `footprintjs`, `foottrace` or their doors is pointed at that package's root
-// copy. Foottrace owns the extracted record implementation; aliasing only the
-// engine still lets Lens load a second record copy. The doors come from each
-// package's own `exports` field — never a hand list that a new door would
-// silently miss — and the `import` condition is the one a browser bundle takes.
+// ONE engine and ONE record implementation. Follow the AgentFootprint package
+// the docs resolve. npm packs the built file:.. source into the docs install.
+// Its natural browser dependencies own every public engine/reader door; refuse
+// divergent docs, AF or engine reader roots rather than mask them with aliases.
+// Resolve entries and their package manifests, never guess a dist or parent path.
+// The doors come from each package's own exports, including future public doors.
 // Webpack applies these aliases only to its client compiler: the demos mount
 // with `ssr: false`, and the server compiler externalizes node_modules, where
 // an absolute ESM path would be `require`d. Turbopack's existing global alias
 // policy also covers Foottrace, using relative paths to the same root files.
-const browserLibraryAliases = Object.fromEntries(
-  ['footprintjs', 'foottrace'].flatMap((name) => {
-    const root = resolve(import.meta.dirname, '../node_modules', name);
-    const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
-    return Object.entries(manifest.exports)
-      .filter(([subpath, target]) => subpath !== './package.json' && target?.import?.default)
-      .map(([subpath, target]) => [
-        subpath === '.' ? name : `${name}/${subpath.slice(2)}`,
-        resolve(root, target.import.default),
-      ]);
-  }),
-);
+const { aliases: browserLibraryAliases } = resolveBrowserLibraries(import.meta.dirname);
 
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  // The live "Try it" demos run the REAL agent in the browser with a mock provider.
-  // The lens is a sibling package imported client-side, so Turbopack must bundle it.
-  transpilePackages: ['agentfootprint-lens', 'storydeck'],
   turbopack: {
-    // Root = the agentfootprint repo (the parent), NOT docs-next. The live "Try it"
-    // demos import `agentfootprint` client-side, and npm links it as a symlink to the
-    // parent repo (docs-next is nested inside it). Turbopack only bundles modules
-    // INSIDE the root, so the root must contain the parent — otherwise the symlinked
-    // agent runtime can't be bundled for the browser.
+    // Use the parent repository as the root for the docs site and its source.
     root: resolve(import.meta.dirname, '..'),
     // agentfootprint's lazyRequire does a CALL-TIME-only `node:module` access (Node-only;
     // never reached by a browser mock agent). Vite/webpack stub node: builtins
@@ -108,9 +83,7 @@ const config = {
         browserNodeStub,
       ),
     );
-    // DOCS_WEBPACK_STATS=1 writes a per-module stats file per compiler so
-    // scripts/demo-chunk-modules.mjs can say WHICH library modules a chunk
-    // carries — the number check-site-budget.mjs ratchets is only the sum.
+    // DOCS_WEBPACK_STATS=1 writes per-module stats for inspecting bundle contents.
     if (process.env.DOCS_WEBPACK_STATS === '1') {
       config.plugins.push({
         apply(compiler) {
@@ -123,10 +96,8 @@ const config = {
               nestedModules: true,
               // Under `all: false` webpack also defaults `cachedModules` to
               // false, and a WARM .next/cache marks every unchanged module
-              // cached — so a second build in a row collapsed the whole
-              // library into one nameless "cached modules" group and
-              // demo-chunk-modules.mjs printed 0 modules. Cached is a build
-              // fact, not a bundle fact: list them.
+              // cached, which can otherwise collapse a warm build into one
+              // nameless "cached modules" group. Keep those modules visible.
               cachedModules: true,
               ids: true,
               source: false,

@@ -14,10 +14,11 @@ It found:
   third did not run, so it found nothing.  ⟨found.notDispatched@1 · library · recorded⟩
   Before the pause, the model read what came back from first.  ⟨found.beforePause.result@1 · library · recorded · before the pause — read from the state this record holds⟩
 How sure:
-  Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
+  Not sure — the record holds 1 reason this answer may not stand:  ⟨howSure.standing.notSure@1 · library · recorded⟩
+    • 1 call did not run.  ⟨howSure.reason.callNotDispatched@1 · library · recorded⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
-  1 tool call did not run cleanly: 0 failed, 0 refused by a rule, 0 declined by a person, 1 not run.  ⟨wrong.errors@1 · library · recorded⟩
+  1 tool call did not run cleanly: 0 failed, 0 not executed, 0 refused by a rule, 0 declined by a person, 1 not run.  ⟨wrong.errors@2 · library · recorded⟩
   None of the checks this report looks for could be run on this record.  ⟨wrong.unreachable.all@1 · library · not-recorded · not recorded⟩
     • It cannot be told whether the result of second was empty: its shape is not declared.  ⟨unreachable.empty@1 · library · not-recorded⟩
   The part before the pause is read from the state this record holds. That part's events are not in this record, so what was in front of the model then, and whether a call then failed or was refused by a rule, cannot be told here.  ⟨wrong.beforePause.held.events@1 · library · not-recorded · before the pause — read from the state this record holds⟩

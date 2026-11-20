@@ -25,11 +25,18 @@
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { callOccurrenceField, readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { completeClock } from '../../../time/clock.js';
 import { granularityMsOf } from '../../../time/convert.js';
 import { driftAtDispatch } from '../../../time/drift.js';
 import { checkReading, type TimeReading } from '../../../time/reader.js';
-import { answeredZoneOf, callWindowOfCall, clockOf, readingsOf } from '../../../time/rows.js';
+import {
+  answeredZoneOf,
+  callWindowOfCall,
+  clockOf,
+  readingsOf,
+  type TimeCallIdentity,
+} from '../../../time/rows.js';
 import { callRow, clockOnResumeRow, clockRow, timeReadingRows } from '../../../time/rowsBuild.js';
 import { timeContextOf, type TimeContext } from '../../../time/wire.js';
 import { tzdataVersion, type ZoneName } from '../../../time/zone.js';
@@ -135,20 +142,36 @@ export function readTimeWords(
  * absolute form (`args` comes back redrawn), and any other look-back runs as
  * sent and is recorded shifted. Filed through the one writer; no event (the
  * row is the record).
+ *
+ * `redraw` is the same redraw as a function, for the call's OTHER copy of its
+ * arguments — the record's (`CallArguments.chainedArgs`), which
+ * `tool_end.changedArgKeys` is judged on. Redrawn, the tool runs with
+ * `{ start_time, end_time }` and without `window`, so those are the keys the
+ * record must name; not redrawn, it hands back the same object.
  */
 export function timeAtDispatch(
   scope: TypedScope<AgentState>,
-  call: { readonly toolCallId: string; readonly toolName: string },
+  call: TimeCallIdentity,
   iteration: number,
   tool: RuledToolLike | undefined,
   args: Readonly<Record<string, unknown>>,
   appZone: ZoneName | undefined,
-): { readonly context: TimeContext | undefined; readonly args: Readonly<Record<string, unknown>> } {
+): {
+  readonly context: TimeContext | undefined;
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly redraw: (args: Readonly<Record<string, unknown>>) => Readonly<Record<string, unknown>>;
+} {
   const atMs = Date.now();
   const dispatchedAt = new Date(atMs).toISOString();
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
-  const window = callWindowOfCall(ledger, call.toolCallId, turn);
+  const key = readCallOccurrenceKey(call);
+  const window = callWindowOfCall(
+    ledger,
+    call.toolCallId,
+    turn,
+    (row) => key !== null && readCallOccurrenceKey(row) === key,
+  );
   const clock = clockOf(ledger);
   const rules = window !== undefined && clock !== undefined ? rulesOf(tool) : undefined;
   const drift =
@@ -171,10 +194,20 @@ export function timeAtDispatch(
       ? { byMs: drift.byMs, outcome: 'redrawn', form: drift.form }
       : { byMs: drift.byMs, outcome: 'shifted' },
   );
-  recordFindings(scope, [row]);
-  const redrawn =
-    drift?.outcome === 'redrawn' ? redrawnArgs(args, tool, window?.form, drift.values) : args;
-  return { context: callTimeContext(scope, call.toolCallId, row.dispatchedAt), args: redrawn };
+  recordFindings(scope, [{ ...row, ...callOccurrenceField(call.callOccurrenceKey) }]);
+  const redraw =
+    drift?.outcome === 'redrawn'
+      ? (sent: Readonly<Record<string, unknown>>) =>
+          redrawnArgs(sent, tool, window?.form, drift.values)
+      : (sent: Readonly<Record<string, unknown>>) => sent;
+  return {
+    context:
+      window !== undefined && clock !== undefined
+        ? structuredClone(timeContextOf(window, clock, row.dispatchedAt))
+        : undefined,
+    args: redraw(args),
+    redraw,
+  };
 }
 
 /** `args` with the look-back form's argument dropped and the absolute form's values written — a fresh object. */
@@ -190,27 +223,6 @@ function redrawnArgs(
   const next: Record<string, unknown> = { ...args };
   if (lookback !== undefined && lookback.kind === 'lookback') delete next[lookback.argument];
   return { ...next, ...values };
-}
-
-/**
- * `ctx.time` for one call (`time/wire.ts` · `TimeContext`, time design
- * § 7.5) — present only when the inputs layer filed a `call-window` row for
- * it this turn (its tool's period declares forms) and the turn has a clock:
- * the range the call asks for, the person's zone, the frozen `now` and the
- * dispatch moment just recorded. Read from the committed ledger, never
- * recomputed.
- */
-export function callTimeContext(
-  scope: TypedScope<AgentState>,
-  toolCallId: string,
-  dispatchedAt: string,
-): TimeContext | undefined {
-  const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const window = callWindowOfCall(ledger, toolCallId, scope.turnNumber as number);
-  if (window === undefined) return undefined;
-  const clock = clockOf(ledger);
-  if (clock === undefined) return undefined;
-  return structuredClone(timeContextOf(window, clock, dispatchedAt));
 }
 
 /**

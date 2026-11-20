@@ -1,6 +1,6 @@
 import { HttpAgent } from '@ag-ui/client';
 import { describe, expect, it } from 'vitest';
-import { Agent, defineTool, Sequence } from '../../src/index.js';
+import { Agent, defineTool, inMemoryArtifacts, Sequence } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
 import { readPausedRun } from '../../src/hosting/envelope.js';
 import { mock } from '../../src/llm-providers.js';
@@ -75,6 +75,8 @@ describe('AG-UI on the standing host', () => {
   it('uses one pooled agent and one server conversation across both wires; complete owns the answer', async () => {
     let builds = 0;
     const seen: LLMRequest[] = [];
+    const store = inMemoryArtifacts();
+    const receipts: string[] = [];
     const base = httpHost({
       name: 'test',
       wire: legacy,
@@ -98,6 +100,9 @@ describe('AG-UI on the standing host', () => {
         base.serve((request, reply) =>
           handler(request, {
             ...reply,
+            turnArtifacts(turn) {
+              if (turn.bound && turn.recording) receipts.push(turn.recording.ref);
+            },
             complete: () => {
               reply.custom?.('app.done', { stamp: 'checked', unlisted: 'not for the wire' });
               reply.complete('HOST CHECKED');
@@ -113,6 +118,8 @@ describe('AG-UI on the standing host', () => {
         builds++;
         return Agent.create({
           model: 'm',
+          artifacts: { store, recordings: true },
+          redact: { keys: ['ref'] },
           provider: mock({
             chunkDelayMs: 0,
             respond: (req) => {
@@ -129,7 +136,12 @@ describe('AG-UI on the standing host', () => {
         { delta: 'HOST CHECKED' },
       ]);
       expect(first.at(-1)).toMatchObject({ type: 'RUN_FINISHED', result: 'HOST CHECKED' });
-      expect(JSON.stringify(first)).not.toContain('NATIVE ANSWER');
+      const payload = JSON.stringify(first);
+      const recorded = (await store.list({ conversationId: 'one' })).artifacts;
+      expect(recorded).toHaveLength(1);
+      expect(receipts).toEqual([recorded[0]!.ref]);
+      expect(payload).not.toContain(recorded[0]!.ref);
+      expect(payload).not.toContain('NATIVE ANSWER');
       expect(first.find((e) => e.type === 'CUSTOM')).toMatchObject({
         name: 'app.done',
         value: { stamp: 'checked' },

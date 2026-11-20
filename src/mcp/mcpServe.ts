@@ -44,12 +44,12 @@
  *     one the tool would run with `ctx.credential` undefined.
  *
  * ── Declarations travel; execution does not (9.71.0) ─────────────────
- * A served tool's DECLARATIONS — `argumentsFrom`, `resultKind`, `owner`,
- * `resultClass`, `resultCeiling` — are written into MCP's own `_meta` bag
- * under one namespaced key, so an agentfootprint client arms the checks and
- * rails that read them exactly as it would for a local `defineTool`. The
- * execution-side fields never go: see `toolExtras.ts` for the bar and the
- * reasoning. A tool declaring none of the five lists exactly as before.
+ * A served tool's DECLARATIONS — every field of `McpToolExtras` in
+ * `toolExtras.ts` — go into MCP's own `_meta` bag under one namespaced key, so
+ * an agentfootprint client arms the checks and rails that read them exactly as
+ * it would for a local `defineTool`. Execution-side fields never go (see
+ * `toolExtras.ts`). A tool declaring none of them lists exactly as before; one
+ * declaring any (only `gates`, say) gets a `_meta.agentfootprint` bag.
  *
  * ── Schemas ──────────────────────────────────────────────────────────
  * Tools already carry JSON Schema in `schema.inputSchema`, and MCP's

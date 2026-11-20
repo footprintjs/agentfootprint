@@ -12,8 +12,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { invariantViolationsOf } from '../../src/integrity/invariant-violation/check.js';
-import { dedupeContextErrors } from '../../src/integrity/finding/types.js';
+import {
+  composeViolationsOf,
+  invariantViolationsOf,
+} from '../../src/integrity/invariant-violation/check.js';
+import { contextErrorIdentity, dedupeContextErrors } from '../../src/integrity/finding/types.js';
 
 const parked = {
   mapId: 'zone-audit',
@@ -46,6 +49,47 @@ describe('functional: the recorded suspended-tools contradiction', () => {
     ).flat();
     expect(filings).toHaveLength(10);
     expect(dedupeContextErrors(filings)).toHaveLength(1);
+  });
+});
+
+describe('contract: the compose backstop files at the compose seam, identity included', () => {
+  // The tools slot's backstop used to compute the seen-list identity from the
+  // write-seam finding and only then relabel it 'compose', so the id it
+  // stored (`@write`) was not the id of the event it emitted (`@compose`).
+  // It now hands these findings to the one rail (`fileIntegrityFindings`),
+  // which computes the identity from exactly what it files.
+  const maps = [
+    { id: 'zone-audit', toolNames: ['t1', 't2'] },
+    { id: 'idle', toolNames: ['t9'] },
+  ];
+
+  it('each finding is the compose seam, and so is its identity', () => {
+    const { findings, compared } = composeViolationsOf(
+      maps,
+      new Set(['t1', 't2']),
+      wire('t1', 'screen_open'),
+      4,
+    );
+    expect(compared).toBe(true);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.seam).toBe('compose');
+    expect(contextErrorIdentity({ ...findings[0]!, epoch: undefined })).toMatch(
+      /^invariant-violation @compose /,
+    );
+  });
+
+  it('a pass with no parked map compares nothing — the not-applicable case', () => {
+    expect(composeViolationsOf(maps, new Set(), wire('t1'), 4)).toEqual({
+      findings: [],
+      compared: false,
+    });
+  });
+
+  it('a parked map whose tools left the wire is compared and clean', () => {
+    expect(composeViolationsOf(maps, new Set(['t9']), wire('t1'), 4)).toEqual({
+      findings: [],
+      compared: true,
+    });
   });
 });
 

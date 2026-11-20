@@ -138,6 +138,12 @@ export function createExplainability(
           'agentfootprint.permission.actor': bound(p.actor),
           ...(p.target !== undefined && { 'agentfootprint.permission.target': bound(p.target) }),
           'agentfootprint.permission.result': bound(p.result),
+          ...(p.phase === 'resume' && {
+            'agentfootprint.permission.phase': p.phase,
+            ...(typeof p.toolCallId === 'string' && {
+              'agentfootprint.permission.tool_call_id': bound(p.toolCallId),
+            }),
+          }),
           ...(p.policyRuleId !== undefined && {
             'agentfootprint.permission.policy_rule_id': bound(p.policyRuleId),
           }),

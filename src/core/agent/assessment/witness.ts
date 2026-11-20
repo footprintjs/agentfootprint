@@ -1,27 +1,26 @@
 /**
- * assessment/witness — the answer layer's committed witness rows: two verdicts
- * the Route decider computes that were EVENTS only until the answer layer
- * (honesty layer 4) needed them on the record.
+ * assessment/witness — the answer layer's committed witness rows (honesty layer 4).
  *
  * Pattern: Map. The answer layer's row types, their builders and their
  *          well-formedness check — the one owner of the `grounded`,
- *          `steps-unfinished`, `script-shown` and `claim-unsettled` row kinds
+ *          `steps-unfinished`, `step-skipped`, `script-shown` and
+ *          `claim-unsettled` row kinds
  *          (`integrity/finding/row.ts` owns `integrity-finding`'s shape).
  *          `findings/types.ts` · `FindingsRow` imports the types; the rows
  *          are filed through the one writer (`findings/ledger.ts` ·
- *          `recordFindings`) by the Route decider, and ONLY while the answer
- *          layer is armed (`stages/route.ts` · `judgeEvidence`,
- *          `judgeUnfinishedSteps`).
+ *          `recordFindings`) by the Route decider and ToolCalls, and ONLY while
+ *          the answer layer is armed.
  * Role:    core/ layer leaf of the answer layer. Static on purpose: the
- *          checkpoint door (`core/runCheckpoint.ts` · `validateCheckpoint`,
+ *          checkpoint ledger (`core/checkpointLedger.ts` · `ledgerRowIsWellFormed`,
  *          a synchronous door) asks `witnessRowIsWellFormed`, so this module
- *          imports nothing but the script labels (`../scripts/label.ts`, a
- *          leaf) and the finding table (`integrityReasons.ts`, data) and stays
- *          small.
+ *          keeps its imports static and few: the finding table
+ *          (`integrityReasons.ts`, data), the integrity-finding row type, the
+ *          script types and `../scripts/match.ts · blockVerdictOf` (which
+ *          itself imports `evidence/codeRegions.ts`).
  * Emits:   N/A. A witness row emits nothing of its own — the verdict's event
  *          (`agentfootprint.agent.evidence_checked`,
- *          `agentfootprint.skill.steps_unfinished`) already fired, beside the
- *          row, from the same stage.
+ *          `agentfootprint.skill.steps_unfinished`, `agentfootprint.skill.step_skipped`)
+ *          already fired, beside the row, from the same stage.
  *
  * ## Why a row, when the event already says it
  *
@@ -109,6 +108,21 @@ export interface StepsUnfinishedRow {
   readonly action: 'accepted' | 'cut-short';
 }
 
+/** One accepted skip that moved the procedure past a declared step. */
+export interface StepSkippedRow {
+  readonly kind: 'step-skipped';
+  readonly turn: number;
+  readonly iteration: number;
+  readonly skillId: string;
+  /** The step's one-based position in the procedure. */
+  readonly index: number;
+  readonly total: number;
+  readonly tool: string;
+  /** The call to `skip_step` that moved past this step. */
+  readonly toolCallId: string;
+  readonly policy: 'advance';
+}
+
 /**
  * One fenced block the answer SHOWED, and the script match's verdict on it
  * (`.namesAndNumbersFromEvidence({ code: 'match' })`, `scripts/match.ts`) —
@@ -156,10 +170,11 @@ export interface ClaimUnsettledRow {
   readonly field: string;
 }
 
-/** Either witness row. */
+/** The witness row kinds this module checks. */
 export type AnswerWitnessRow =
   | GroundedRow
   | StepsUnfinishedRow
+  | StepSkippedRow
   | ScriptShownRow
   | IntegrityFindingRow
   | ClaimUnsettledRow;
@@ -235,15 +250,38 @@ export function stepsUnfinishedRowFrom(verdict: {
   };
 }
 
+/** The committed step and call facts, without the model's reason or the step's note. */
+export function stepSkippedRowFrom({
+  turn,
+  iteration,
+  skillId,
+  index,
+  total,
+  tool,
+  toolCallId,
+}: Omit<StepSkippedRow, 'kind' | 'policy'>): StepSkippedRow {
+  return {
+    kind: 'step-skipped',
+    turn,
+    iteration,
+    skillId,
+    index,
+    total,
+    tool,
+    toolCallId,
+    policy: 'advance',
+  };
+}
+
 const isCount = (value: unknown): boolean =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
 /**
  * Whether a value read from a stored checkpoint is a witness row this library
  * could have written: the kind, a numeric `turn` and `iteration`, and every
- * other field in its own shape. The checkpoint door's two arms
- * (`core/runCheckpoint.ts`). An older runtime refuses a checkpoint that
- * carries either kind.
+ * other field in its own shape. The witness arms of `core/checkpointLedger.ts` ·
+ * `ledgerRowIsWellFormed` call this. An older runtime refuses a checkpoint
+ * carrying an unfamiliar kind.
  */
 export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {
   if (typeof r.turn !== 'number' || typeof r.iteration !== 'number') return false;
@@ -285,6 +323,20 @@ export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): bo
           isCount((s as { index?: unknown }).index) &&
           typeof (s as { tool?: unknown }).tool === 'string',
       )
+    );
+  }
+  if (r.kind === 'step-skipped') {
+    return (
+      typeof r.skillId === 'string' &&
+      typeof r.index === 'number' &&
+      Number.isSafeInteger(r.index) &&
+      r.index >= 1 &&
+      typeof r.total === 'number' &&
+      Number.isSafeInteger(r.total) &&
+      r.total >= r.index &&
+      typeof r.tool === 'string' &&
+      typeof r.toolCallId === 'string' &&
+      r.policy === 'advance'
     );
   }
   return false;

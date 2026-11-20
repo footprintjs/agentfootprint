@@ -3,10 +3,17 @@
  *
  * Pattern: a run constant, seeded once by `stages/seed.ts` (the
  *          `findingsServe` precedent) and never written again during the run.
- * Role:    core/ layer leaf. A reader of the RECORD — the standing fold, a
- *          lens, a bench — tells "this layer was armed and filed nothing" from
- *          "this layer was never armed" by this key alone, never by guessing
- *          from the rows.
+ * Role:    core/ layer leaf. The key a reader of the RECORD uses to tell
+ *          "this layer was armed and filed nothing" from "this layer was never
+ *          armed", instead of guessing from the rows. Who reads it today: the
+ *          inputs bench (`bench/inputs/harness.mjs` refuses a recording without
+ *          `honestyLayers.argumentSources`) and the Agent's checkpoint
+ *          (`runtime/conversation/owner.ts` · `turnNumberOf` stamps the turn
+ *          only while a layer is armed or `.negativeClaims()` is
+ *          configured). The standing fold does NOT read it:
+ *          `assessment/assess.ts` folds the same state to the same standing
+ *          with or without this key, so the fold cannot tell an armed layer
+ *          that filed nothing from one never armed.
  * Emits:   N/A.
  *
  * Absent on a run with no layer armed, so an agent that armed nothing commits
@@ -25,6 +32,7 @@ export interface HonestyLayers {
    * exactly when `.findings()` did.
    */
   readonly argumentSources?: true;
+  readonly declarationCorrection?: 'once';
   /** The results layer (honesty layer 3, step 7b) — `sf-results` is mounted at the loop head. */
   readonly results?: true;
   /**
@@ -37,8 +45,8 @@ export interface HonestyLayers {
 
 /**
  * The object form of `AgentOptions.inputsLayer` — `AgentBuilder.inputsLayer(options)`.
- * Written inline on the public option (no new export, no new API page); this
- * is the reader's name for it.
+ * Shared structural declaration for the public option and its native readers.
+ * It adds no root export or separate configuration owner.
  */
 export interface InputsLayerOptions {
   /**
@@ -47,6 +55,8 @@ export interface InputsLayerOptions {
    * the layer checks every claim before the batch runs. Default off.
    */
   readonly argumentSources?: boolean;
+  /** One native correction of an omitted source declaration per human request. Default off. */
+  readonly declarationCorrection?: 'once';
 }
 
 /**
@@ -61,14 +71,16 @@ export function readInputsLayerOption(value: unknown): InputsLayerOptions | unde
   if (value === true) return {};
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(
-      `Agent: inputsLayer must be true, false or { argumentSources?: boolean }, got ` +
+      `Agent: inputsLayer must be true, false or { argumentSources?: boolean, declarationCorrection?: 'once' }, got ` +
         `${JSON.stringify(value)}.`,
     );
   }
-  const unknown = Object.keys(value).filter((k) => k !== 'argumentSources');
+  const unknown = Object.keys(value).filter(
+    (k) => k !== 'argumentSources' && k !== 'declarationCorrection',
+  );
   if (unknown.length > 0) {
     throw new Error(
-      `Agent: inputsLayer takes { argumentSources?: boolean } only — unknown key ` +
+      `Agent: inputsLayer takes { argumentSources?: boolean, declarationCorrection?: 'once' } only — unknown key ` +
         `${unknown.map((k) => `'${k}'`).join(', ')}.`,
     );
   }
@@ -78,7 +90,14 @@ export function readInputsLayerOption(value: unknown): InputsLayerOptions | unde
       `Agent: inputsLayer.argumentSources must be true or false, got ${JSON.stringify(sources)}.`,
     );
   }
-  return sources === true ? { argumentSources: true } : {};
+  const correction = (value as { readonly declarationCorrection?: unknown }).declarationCorrection;
+  if (correction !== undefined && correction !== 'once') {
+    throw new Error("Agent: inputsLayer.declarationCorrection must be 'once' or omitted.");
+  }
+  return {
+    ...(sources === true && { argumentSources: true }),
+    ...(correction === 'once' && { declarationCorrection: 'once' as const }),
+  };
 }
 
 /**
@@ -99,6 +118,7 @@ export function readInputsLayerOption(value: unknown): InputsLayerOptions | unde
 export function honestyLayersOf(armed: {
   readonly inputs: boolean;
   readonly argumentSources?: boolean;
+  readonly declarationCorrection?: 'once';
   readonly results?: boolean;
   readonly answer: boolean;
 }): HonestyLayers | undefined {
@@ -106,6 +126,10 @@ export function honestyLayersOf(armed: {
   return {
     ...(armed.inputs && { inputs: true as const }),
     ...(armed.inputs && armed.argumentSources === true && { argumentSources: true as const }),
+    ...(armed.inputs &&
+      armed.declarationCorrection !== undefined && {
+        declarationCorrection: armed.declarationCorrection,
+      }),
     ...(armed.results === true && { results: true as const }),
     ...(armed.answer && { answer: true as const }),
   };

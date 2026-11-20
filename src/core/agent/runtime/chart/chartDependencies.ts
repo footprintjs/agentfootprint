@@ -13,7 +13,7 @@ import { makeRouteTurnStage } from '../../stages/routeTurn.js';
 import { buildOutputRetryStage } from '../../stages/outputRetry.js';
 import { negativeRecheckStage } from '../../negativeClaims/recheck.js';
 import { buildToolResolver } from '../../stages/toolResolver.js';
-import { answerFoldReads } from '../../honesty/mounts.js';
+import { answerFoldReads } from '../../honesty/answerFoldReads.js';
 import { carriesArgumentView } from '../../../toolShownArgs.js';
 import { buildAgentChart } from '../../buildAgentChart.js';
 import { buildToolRegistry } from '../../buildToolRegistry.js';
@@ -129,6 +129,9 @@ export function chartDependencies(
     // the chain's rewrites (a rewritten fill is not what the call ran with).
     ...(environment.inputsArmed && {
       inputsLayer: {
+        ...(this.configuration.sourceDeclarationCorrection !== undefined && {
+          declarationCorrection: this.configuration.sourceDeclarationCorrection,
+        }),
         ...(this.configuration.findingsOptions !== undefined && { findings: true as const }),
         // Route's sixth dispatch value, read only by an agent whose revision
         // turns the tools off (an enforcing answer validation).

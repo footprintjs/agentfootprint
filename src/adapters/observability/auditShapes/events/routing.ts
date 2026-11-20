@@ -1,6 +1,16 @@
 import type { At, ItemOf, PayloadOf } from '../vocabulary.js';
 import { appReasonWord, declaredValue } from '../../auditKeptByContract.js';
-import { bool, listOf, nullOr, num, oneOf, orList, shapeOf, str } from '../../auditBounding.js';
+import {
+  bool,
+  charsMarker,
+  listOf,
+  nullOr,
+  num,
+  oneOf,
+  orList,
+  shapeOf,
+  str,
+} from '../../auditBounding.js';
 import { eventShape } from '../vocabulary.js';
 
 export function routingShapes() {
@@ -103,9 +113,27 @@ export function routingShapes() {
         tool: str,
         note: str,
       }),
+      outcome: oneOf('not-reported', 'succeeded'),
+      status: oneOf('absent', 'success'),
+      // A word the TOOL wrote (its result's data), so only its size is kept.
+      unknownStatus: charsMarker,
       iteration: num,
       toolCallId: str,
       completed: bool,
+    }),
+
+    'agentfootprint.skill.step_held': eventShape<'agentfootprint.skill.step_held'>({
+      skillId: str,
+      step: shapeOf<At<PayloadOf<'agentfootprint.skill.step_held'>, 'step'>>({
+        index: num,
+        total: num,
+        tool: str,
+        note: str,
+      }),
+      outcome: oneOf('failed', 'not-finished'),
+      status: oneOf('denied', 'failure', 'invalid', 'partial', 'pending'),
+      iteration: num,
+      toolCallId: str,
     }),
 
     'agentfootprint.skill.steps_unfinished': eventShape<'agentfootprint.skill.steps_unfinished'>({
@@ -151,6 +179,7 @@ export function routingShapes() {
       service: str,
       mode: oneOf('machine', 'user'),
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -159,6 +188,7 @@ export function routingShapes() {
       kind: str,
       expiresAt: num,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
     }),
 
@@ -167,6 +197,7 @@ export function routingShapes() {
         service: str,
         sessionId: str,
         toolCallId: str,
+        callOccurrenceKey: listOf(num),
         iteration: num,
       }),
   };

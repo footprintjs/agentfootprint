@@ -47,8 +47,8 @@ function normalize(events: readonly AgentfootprintEvent[]): string {
   );
 }
 
-function agent() {
-  return Agent.create({
+function agent(legacy: boolean) {
+  const builder = Agent.create({
     provider: mock({
       chunkDelayMs: 0,
       replies: [
@@ -80,14 +80,14 @@ function agent() {
         inputSchema: { type: 'object', properties: { ssn: { type: 'string' } } },
         execute: ({ ssn }) => askHuman({ question: `Is ${ssn} right?` }),
       }),
-    )
-    .build();
+    );
+  return (legacy ? builder.answerLayer(false) : builder).build();
 }
 
 /** The normalized event stream of the scenario. */
-export async function noPolicyStream(): Promise<string> {
+export async function noPolicyStream(legacy: boolean): Promise<string> {
   const events: AgentfootprintEvent[] = [];
-  const a = agent();
+  const a = agent(legacy);
   a.on('*', (e) => events.push(e));
   const outcome = await a.run({ message: 'Check SSN-NOPOLICY-1 for me.' });
   if (!isPaused(outcome)) throw new Error('the scenario must pause');
@@ -99,11 +99,9 @@ export async function noPolicyStream(): Promise<string> {
     { ref: 'art_1', via: 'get', kind: 'table', bytes: 10 },
     { sessionId: 's', runId },
   );
+  const step = Agent.create({ provider: mock({ chunkDelayMs: 0, reply: 'step one' }), model: 'm' });
   const sequence = Sequence.create()
-    .step(
-      'first',
-      Agent.create({ provider: mock({ chunkDelayMs: 0, reply: 'step one' }), model: 'm' }).build(),
-    )
+    .step('first', (legacy ? step.answerLayer(false) : step).build())
     .build();
   sequence.on('*', (e) => events.push(e));
   await sequence.run({ message: 'compose' });

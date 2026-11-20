@@ -76,6 +76,7 @@ import { stringLeaves } from '../../../integrity/argumentLeaves.js';
 import type { EvidenceCorpus } from '../evidence/evidenceIndex.js';
 import { candidateForms, extractCandidates } from '../evidence/extract.js';
 import { canonicalForm } from '../../../lib/normalize.js';
+import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import type { GroundedValue, ResolvedEvidenceGate } from '../evidence/types.js';
 import {
   CONTINGENT_VALUE_CHARS,
@@ -146,7 +147,10 @@ export function contingentRowsOf(
   iteration: number,
 ): ContingentRow[] {
   if (corpus.truncated) return [];
-  const on: DeclaredOn = declaredOn === 'answer' ? 'answer' : { toolCallId: declaredOn.toolCallId };
+  const on: DeclaredOn =
+    declaredOn === 'answer'
+      ? 'answer'
+      : { toolCallId: declaredOn.toolCallId, ...callOccurrenceField(declaredOn.callOccurrenceKey) };
   const rows: ContingentRow[] = [];
   const seen = new Set<string>();
   for (const { value, forms } of values) {

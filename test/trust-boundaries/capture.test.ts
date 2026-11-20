@@ -16,6 +16,49 @@ function send(source: EventDispatcher, event: unknown) {
 }
 
 describe('trust boundary capture', () => {
+  it('preserves the human answer and chronological resume verdicts as separate facts', () => {
+    const source = new EventDispatcher();
+    const recorder = trustBoundaryRecorder();
+    recorder.subscribe(source);
+    const call = { toolCallId: 'sample-1', iteration: 2 };
+    const middleware = {
+      ...call,
+      middleware: 'sample-rule',
+      moment: 'before-tool',
+      changed: false,
+    };
+    send(
+      source,
+      fact('agentfootprint.middleware.decision', {
+        ...middleware,
+        outcome: 'allow',
+        personApproved: true,
+        why: 'details',
+      }),
+    );
+    send(
+      source,
+      fact('agentfootprint.middleware.decision', {
+        ...middleware,
+        outcome: 'deny',
+        phase: 'resume',
+        why: 'details',
+      }),
+    );
+    send(
+      source,
+      fact(undefined, { ...call, phase: 'resume', result: 'halt', rationale: 'details' }),
+    );
+    const facts = recorder.toSnapshot().data.facts;
+    expect(facts).toMatchObject([
+      { ...call, seq: 1, outcome: 'allow', personApproved: true },
+      { ...call, seq: 2, outcome: 'deny', phase: 'resume' },
+      { ...call, seq: 3, result: 'halt', phase: 'resume' },
+    ]);
+    expect(facts[1]).not.toHaveProperty('personApproved');
+    expect(JSON.stringify(facts)).not.toContain('details');
+  });
+
   it('captures a whitelisted fact, without asserting that an allowed operation executed', () => {
     const source = new EventDispatcher();
     const recorder = trustBoundaryRecorder();

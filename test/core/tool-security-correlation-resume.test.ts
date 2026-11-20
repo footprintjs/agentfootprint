@@ -127,6 +127,12 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
       ]);
     }
     expect(payloads(resumed.events, 'agentfootprint.permission.check')).toEqual([
+      expect.objectContaining({
+        toolCallId: FIRST,
+        iteration: 1,
+        phase: 'resume',
+        result: 'allow',
+      }),
       expect.objectContaining({ toolCallId: SECOND, iteration: 2 }),
     ]);
     expect(JSON.stringify([...before, ...resumed.events])).not.toContain(TOKEN);
@@ -148,7 +154,9 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
           CredentialConsentRequiredError,
         );
       } else {
-        await expect(resumed.agent.resume(paused.checkpoint, undefined)).resolves.toBe('done');
+        await expect(resumed.agent.resume(paused.checkpoint, undefined)).resolves.toBe(
+          'done\n\n---\n\nNot sure — a call was refused.',
+        );
       }
       expect(resumed.executed).toEqual([]);
       expect(payloads(resumed.events, 'agentfootprint.credential.requested')).toEqual([
@@ -176,7 +184,7 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
         paused.checkpoint,
         checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
       ),
-    ).resolves.toBe('done');
+    ).resolves.toBe('done\n\n---\n\nNot sure — a call failed.');
     expect(resumed.executed).toEqual([FIRST]);
     expect(payloads(resumed.events, 'agentfootprint.credential.failed')).toEqual([
       expect.objectContaining({ toolCallId: FIRST, iteration: 1, tool: 'pay_invoice' }),
@@ -189,17 +197,15 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
 
   it('attributes a later permission halt to the new call, not the resumed one', async () => {
     const state = { mode: 'consent' as VaultMode };
-    let halted = false;
     const checker: PermissionChecker = {
       name: 'halt-later',
-      check: async () =>
-        halted ? { result: 'halt', reason: 'review-required' } : { result: 'allow' },
+      check: async ({ iteration }) =>
+        iteration === 2 ? { result: 'halt', reason: 'review-required' } : { result: 'allow' },
     };
     const initial = makeAgent(vault(state), { nextCall: true, checker });
     const paused = await initial.agent.run({ message: 'Pay invoices' });
     if (!isPaused(paused)) throw new Error('Expected real credential-consent pause');
     state.mode = 'issued';
-    halted = true;
     const resumed =
       kind === 'same' ? initial : makeAgent(vault(state), { nextCall: true, checker });
     resumed.events.length = 0;
@@ -208,6 +214,12 @@ describe.each(['same', 'fresh'] as const)('security correlation on %s-agent resu
     );
     expect(resumed.executed).toEqual([FIRST]);
     expect(payloads(resumed.events, 'agentfootprint.permission.check')).toEqual([
+      expect.objectContaining({
+        toolCallId: FIRST,
+        iteration: 1,
+        phase: 'resume',
+        result: 'allow',
+      }),
       expect.objectContaining({ toolCallId: SECOND, iteration: 2, result: 'halt' }),
     ]);
     expect(payloads(resumed.events, 'agentfootprint.permission.halt')).toEqual([

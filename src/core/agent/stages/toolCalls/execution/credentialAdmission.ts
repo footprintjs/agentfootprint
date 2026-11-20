@@ -13,9 +13,12 @@ import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.j
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { errorClassOf } from '../decorators/reportingCredentials.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { pauseGatePolicy } from '../access/resumePolicyRecord.js';
+import { takeArguments } from '../../../innerCallArguments.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -48,7 +51,10 @@ interface AdmitToolCredentialFrame {
 /** Existing credentialAdmission body; original guard and native pause return stay with the handler. */
 export async function admitToolCredential(
   scope: TypedScope<AgentState>,
-  deps: Pick<ToolCallsHandlerDeps, 'clearConsentOutstanding' | 'reportConsentOutstanding'>,
+  deps: Pick<
+    ToolCallsHandlerDeps,
+    'clearConsentOutstanding' | 'reportConsentOutstanding' | 'permissionChecker' | 'toolMiddleware'
+  >,
   frame: AdmitToolCredentialFrame,
 ) {
   frame.emitSecurity('agentfootprint.credential.requested', {
@@ -90,18 +96,29 @@ export async function admitToolCredential(
       // ask, there is no second pause to give: the model is told, as
       // under `'tell-model'` (`oneQuestionAsked`).
       if (frame.onAuthorizationRequired === 'pause' && !frame.oneQuestionAsked) {
+        const pending = takeArguments(frame.callArguments.chainedArgs);
+        if (pending.kind !== 'copied') {
+          frame.outcome.error = true;
+          frame.outcome.result = `Tool '${frame.tc.name}' could not safely store its arguments for consent.`;
+          return undefined;
+        }
         // Consent is unfinished work, and unfinished work is a pause
         // — the same wire the check-in gate and a middleware `ask`
         // ride. Commit partial state so resume() finds history
         // intact; the proposed args ride the checkpoint so the tool
         // can run once the person has consented.
-        scope.history = frame.newHistory;
+        commitSettledToolHistory(scope, frame.newHistory);
         scope.pausedToolCallId = frame.tc.id;
         scope.pausedToolName = frame.tc.name;
         scope.pausedToolStartMs = frame.startMs;
         scope.pausedCredential = true;
-        scope.pausedCredentialArgs = frame.callArguments.callArgs;
+        scope.pausedCredentialArgs = pending.args;
         scope.pausedCredentialService = frame.need.credential;
+        scope.pausedGatePolicy = pauseGatePolicy(deps, {
+          gate: 'credential',
+          toolCallId: frame.tc.id,
+          iteration: frame.iteration,
+        });
         // Same carrier as the middleware-ask pause (9.92.0).
         if (frame.resolved.party !== undefined) scope.pausedToolParty = frame.resolved.party;
         // Open until the person consents: `submitted`, without the text.

@@ -13,6 +13,18 @@
  *          which loads with the layer — so this module is never on a plain
  *          agent's graph.
  * Emits:   N/A.
+ *
+ * ONE CEILING, TWO METERS. `evidenceIndex.ts` · `MAX_INDEX_TOKENS` is one
+ * number read by two meters. The index counts DISTINCT forms across the WHOLE
+ * history (a repeated form is free). The per-result readers that share the
+ * number — this module (`leavesOf`) and the argument-sources check
+ * (`arguments/checks.ts` · `contains`) — count EVERY token, repeats included,
+ * of ONE result, because they match token SEQUENCES and need the positions.
+ * So past the number they can disagree: a result of one token repeated more
+ * times than the ceiling is complete for the index and `uncheckable` here,
+ * and a history the index marks truncated can still be read in full, result
+ * by result, here. Each says `uncheckable` / `truncated` honestly by its own
+ * meter; neither borrows the other's verdict.
  */
 
 import { MAX_INDEX_TOKENS, readResult } from './evidenceIndex.js';

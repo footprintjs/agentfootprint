@@ -395,10 +395,8 @@ export interface FoldedSpan {
    * Fingerprint of the summary message this span was folded into — the join
    * key back to the message sitting in `history`.
    *
-   * It is a hash of the message's full content (authored frame included), so
-   * it costs no extra bytes on the wire and cannot be forged by a summary that
-   * merely copies the frame's opening words: different content, different
-   * fingerprint, no match.
+   * This 32-bit FNV-1a hash covers the summary's full content, including
+   * the authored frame. It adds no wire bytes and carries no authentication guarantee.
    */
   readonly summaryFingerprint: string;
   /**

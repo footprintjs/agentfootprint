@@ -5,6 +5,7 @@ import {
   foldedSpansOf,
   findingsLedgerOf,
   sourceEvidenceOf,
+  sourceDeclarationCorrectionOf,
 } from '../conversation/checkpointParts.js';
 import type { AgentAroundTurnFailedPayload } from '../../../../events/payloads/agent.js';
 import { isTerminalRunError } from '../../run/terminalRunError.js';
@@ -300,6 +301,13 @@ export async function runLeg(
         this.configuration.sourceEvidenceConfig === undefined
           ? undefined
           : sourceEvidenceOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        sourceDeclarationCorrectionOf(
+          this.native.liveSnapshot()?.sharedState as Partial<AgentState>,
+          'sourceDeclarationCorrectionSpent',
+        ),
+        // …and the receipt of the tickets the library placed, as `checkpoint()` keeps it.
+        (this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)?.placedTickets,
+        this.native.liveSnapshot()?.sharedState,
       );
       throw new RunCheckpointError(cause, checkpoint);
     }
@@ -327,6 +335,7 @@ export async function runLeg(
     invocation.value.pendingResumeFindingsLedger = undefined;
     invocation.value.pendingResumeSkillCursor = undefined;
     invocation.value.pendingEvidenceRecovery = undefined;
+    invocation.value.pendingSourceDeclarationCorrection = undefined;
     invocation.value.pendingResumeSourceEvidence = undefined;
   }
 }

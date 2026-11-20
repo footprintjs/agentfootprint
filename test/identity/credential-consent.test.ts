@@ -10,10 +10,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { normalizeCallOccurrences } from '../helpers/normalizeCallOccurrences.js';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { recordRun } from '../../src/recorders/observability/recordRun.js';
 import { isPaused } from '../../src/core/pause.js';
+import type { PermissionChecker } from '../../src/provider-contract/types.js';
 import {
   CredentialConsentRequiredError,
   type AuthorizationRequiredMode,
@@ -57,6 +59,7 @@ function buildAgent(
   vault: CredentialProvider,
   mode?: AuthorizationRequiredMode,
   replies?: readonly unknown[],
+  permissionChecker?: PermissionChecker,
 ): Harness {
   let ran = false;
   const payInvoice = defineTool({
@@ -84,6 +87,7 @@ function buildAgent(
     maxIterations: 4,
     credentials: vault,
     ...(mode && { onAuthorizationRequired: mode }),
+    ...(permissionChecker && { permissionChecker }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)
     .tools([payInvoice])
@@ -190,7 +194,8 @@ describe('3LO consent — the URL never reaches a channel the caller did not ask
     const h = buildAgent(consentVault({ granted: false, calls: 0 }));
     await h.agent.run({ message: 'go' });
     const ev = h.events.find((e) => e.name === 'agentfootprint.credential.authorization_required');
-    expect(ev?.payload).toEqual({
+    expect(normalizeCallOccurrences(ev?.payload)).toEqual({
+      callOccurrenceKey: [0, 0, 0, 1, 0],
       service: 'billing',
       sessionId: SESSION_ID,
       toolCallId: 'c1',
@@ -213,12 +218,20 @@ describe('3LO consent — the run behaves honestly', () => {
     expect((history ?? []).filter((m) => m.role === 'tool')).toHaveLength(0);
   });
 
-  it('resume after consent runs the tool that was waiting, in the SAME run', async () => {
+  it('resume after consent rechecks permission and runs the tool that was waiting', async () => {
     const state = { granted: false, calls: 0 };
-    const h = buildAgent(consentVault(state), undefined, [
-      { content: 'paying', toolCalls: [{ id: 'c1', name: 'pay_invoice', args: { id: 'INV-42' } }] },
-      { content: 'Invoice INV-42 is paid.', toolCalls: [] },
-    ]);
+    const h = buildAgent(
+      consentVault(state),
+      undefined,
+      [
+        {
+          content: 'paying',
+          toolCalls: [{ id: 'c1', name: 'pay_invoice', args: { id: 'INV-42' } }],
+        },
+        { content: 'Invoice INV-42 is paid.', toolCalls: [] },
+      ],
+      { name: 'sample-policy', check: () => ({ result: 'allow' }) },
+    );
     const out = await h.agent.run({ message: 'go' });
     expect(isPaused(out)).toBe(true);
 
@@ -230,6 +243,12 @@ describe('3LO consent — the run behaves honestly', () => {
 
     expect(h.ran()).toBe(true);
     expect(String(final)).toBe('Invoice INV-42 is paid.');
+    expect(
+      h.events.filter((event) => event.name === 'agentfootprint.permission.check'),
+    ).toMatchObject([
+      { payload: { toolCallId: 'c1', result: 'allow' } },
+      { payload: { toolCallId: 'c1', result: 'allow', phase: 'resume' } },
+    ]);
     const history = (
       h.agent.getSnapshot()?.sharedState as { history?: { role: string; content: string }[] }
     )?.history;

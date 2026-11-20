@@ -319,6 +319,7 @@ describe('functional: a contradiction found beside an unreachable claim is repor
     await agent.run(ASK);
     const assessed = await agent.assessment();
     expect(assessed?.reasons.map((r) => r.reason)).toEqual([
+      'unsupported-claim',
       'answer-check-failed',
       'check-unreachable',
     ]);
@@ -390,6 +391,7 @@ describe('functional: a found contradiction does not depend on the host validato
     expect(agent.answerValidation()).toMatchObject({ status: 'failed', reason: 'validator-error' });
     const assessed = await agent.assessment();
     expect(assessed?.reasons.map((r) => r.reason)).toEqual([
+      'unsupported-claim',
       'answer-check-failed',
       'check-unreachable',
     ]);
@@ -1799,7 +1801,7 @@ describe('security: agreeing with an unscoped fact never verifies an answer', ()
     expect(outcomes[0]).toEqual({
       status: 'failed',
       claim: 'checked-fail',
-      reasons: ['answer-check-failed'],
+      reasons: ['unsupported-claim', 'answer-check-failed'],
     });
     expect(outcomes[1]).toEqual(outcomes[0]);
   });

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -11,9 +12,7 @@ import { gzipSync } from 'node:zlib';
 // copy of this check record the wiring of their day.
 
 const outputRoot = path.resolve(process.argv[2] ?? 'out');
-const projectRoot = path.resolve(import.meta.dirname, '..');
 const failures = [];
-const routeInitialAssets = new Map();
 
 const ROUTES = [
   {
@@ -345,254 +344,6 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_550_000, records: 2_000 };
 // have zero duplicate RSC bytes. 242,000,000 B is ~2% above the measured feature.
 // File-count, duplicates, route/runtime and deferred-demo limits remain fixed.
 const OUTPUT_LIMITS = { bytes: 242_000_000, files: 8_270, duplicateRscBytes: 0 };
-// Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
-// `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
-// whole transitive graph ride this chunk — and this release added the
-// Context Integrity family (five checks, the assertion algebra, the
-// disposition ledger) to that graph. The growth is real library surface,
-// not chunking noise: the payload is the same 16 async assets, each a
-// little heavier.
-//
-// Worth stating plainly, because the number is the evidence: the integrity
-// family is NOT tree-shaken out for a browser consumer who enables none of
-// it. `zero-delta` is a promise about what a run DOES, never about what a
-// bundle WEIGHS, and these are different axes. Making the checks reachable
-// only through a dynamic import is the fix if this keeps climbing.
-//
-// Headroom stays deliberately thin (the ratchet's whole point), so the next
-// unnoticed jump still trips it.
-//
-// Raised for 9.78.0: 403.7 KB → 408.9 KB measured, still across the same 16
-// async assets, so this is the 9.61.0 story repeating rather than a chunking
-// change — three more families landed in the main entry's transitive graph
-// (9.76.0 runbookAsTool, 9.77.0 and 9.78.0 the integrity rows) and the demo
-// imports `defineTool` from 'agentfootprint', so it carries them:
-//   9.75.0  403.7 KB  GREEN      9.76.0  405.1 KB  <- crosses, by 0.1 KB
-//   9.76.1  405.1 KB             9.77.0  406.0 KB
-//   9.78.0  408.9 KB
-// Crossing by 0.1 KB blocked the deploy for four days just as thoroughly as
-// crossing by 50 MB would have — a gate nobody watches fails the same whether
-// it misses by a hair or a mile, which is the argument for the publish-path
-// gate now wired in .github/workflows/publish.yml. The fix named in 9.61.0
-// (reach the checks only through a dynamic import) is still the fix if this
-// keeps climbing.
-//
-// NOT lowered for 9.81.0, unlike the three above it. The export prune deletes
-// whole .txt payloads and touches no chunk, so this measured 408.9 KB before it
-// and 408.9 KB after — same 16 async assets, same bytes. The ceiling is already
-// ~1% over that, which is as tight as the others now are; moving it would be
-// pretending the prune bought headroom here that it did not.
-//
-// Raised for 9.88.0: 408.9 KB -> 416.4 KB measured, still the same 16 async
-// assets. The demo imports `defineTool` from 'agentfootprint', so the receipt
-// family (composeRequest, epochs, keyedFold, receipt, servedView) rides the
-// main entry's transitive graph the same way the 9.61.0/9.78.0 families did —
-// this is that story again, not a chunking change. Fix, if this keeps
-// climbing, is still the one named in 9.61.0: reach the checks only through a
-// dynamic import.
-//
-// Raised for 9.92.1: 416.4 KB -> 421.0 KB measured (the 9.92.0 publish failed
-// this gate by 0.4 KB, exactly the 9.87.0 shape). 9.92.0's tool-resolution
-// family (toolClaimants, mergeWire, resolveTool, the two events) rides the same
-// main-entry graph as the receipt family because the demo imports
-// `defineTool`. Set ~2% over the measurement, as the others are. This is the
-// FOURTH time this ceiling has moved for a library family the demo never calls;
-// the dynamic-import fix from 9.61.0 is now overdue, and the next raise should
-// be that fix instead.
-//
-// LOWERED for 9.94.0 — the fix the four paragraphs above kept naming, and one
-// they could not have named. Measured on this commit, same build:
-//   before  421.3 KB  16 async assets   library chunk 199.6 KB
-//   after   382.4 KB  15 async assets   library chunk 171.4 KB
-// Two root causes, both in the library, so every browser consumer gets the same
-// cut (a plain `import { Agent, defineTool }`: 219.3 KB -> 199.7 KB gzip):
-//   1. `.selfExplain()`'s trace toolpack — 47 KB minified, the largest module in
-//      the package — was on the DEFAULT graph: `AgentBuilder` imported it for a
-//      list of eleven names it reserves at build. It is now reached through an
-//      `import()` on the first iteration the skill is active (`selfExplain.ts` ·
-//      `lazilyMountedTraceTools`), and the names live in a module of their own.
-//   2. `sideEffects` NEVER REACHED THE ESM BUILD. A bundler reads that flag from
-//      the closest package.json, and `dist/esm/package.json` was a bare
-//      `{"type":"module"}` — so every module under dist/esm was presumed to run
-//      something at load, kept whenever a barrel named it, and a dynamic
-//      `import()` of a module a barrel also re-exports (the toolpack, through
-//      the `/observe` door the lens imports) landed in the parent chunk instead
-//      of its own. scripts/postbuild-esm.mjs now carries the root list across,
-//      rebased; the list was widened only where it is TRUE (the root entry and
-//      the injection-engine barrel, each of which imports a module-level
-//      registration), and test/trace-toolpack/browserGraph.test.ts proves
-//      at the graph that every registration still survives.
-//
-// THE LAW this number ratchets from here on: AN OPTIONAL FAMILY IS LOADED WHEN
-// ITS OPTION IS ENABLED, NEVER BEFORE — and the demo bundle measures the
-// library's DEFAULT graph, not its whole surface. A family that only exists
-// behind a builder option or a tool declaration reaches the bundle through
-// `import()` at the point that option is enabled, where the enabling path is
-// already async (a tool provider's `list()`, a tool's `execute`, a run). The
-// families this release could NOT move, and why, so the next raise is argued
-// on the record and not rediscovered: the integrity checks (~5 KB gzip upper
-// bound) run inside SYNCHRONOUS helpers of four stages — `callLLM.ts` ·
-// `postValidate`, `route.ts` · `judgeEvidence`/`judgeClaims`, the column/lookup/
-// claim helpers in `toolCalls.ts`, `buildToolsSlot.ts` — and one of them
-// (`wireViolationsOf`) runs unconditionally; the observability recorders
-// (~30 KB minified: BoundaryRecorder, FlowchartRecorder, the voice templates)
-// sit behind `enable.flowchart()` / `enable.localObservability()`, which return
-// their handle SYNCHRONOUSLY, and behind `build()`'s voice defaults. Moving
-// either means a public sync path becomes async — a behaviour change, not a
-// packaging one. When this number climbs again, the question is which family
-// walked onto the default graph and whether its option's path is async; the
-// per-module answer is `DOCS_WEBPACK_STATS=1 EXPORT=true npm run build` then
-// `node scripts/demo-chunk-modules.mjs`. Ceiling ~2% over the measurement, as
-// every entry above.
-//
-// Raised after 9.94.1 — the lens catch-up — and this is NOT the law above
-// breaking: no library family walked onto the default graph. What moved is the
-// pins in docs-next/package.json, which had sat at agentfootprint-lens ^0.31.1
-// / footprint-explainable-ui ^0.28.0 / footprintjs ^9.10.0 since the 9.x door
-// renames, twenty lens releases behind. The consequence was worse than bytes:
-// the site's own demos had never shown the Served tab, the Served graph,
-// Bookmarks or the tag picker (lens 0.47–0.52) — the site documented a lens it
-// did not run — and every demo bundle carried TWO footprintjs engines, the
-// root's 9.21.1 (the library's peer, through `agentfootprint: file:..`) and
-// docs-next's own 9.10.0, because two node_modules directories are two module
-// paths whatever the two versions say. Measured on this commit, same build,
-// three ways (`DOCS_WEBPACK_STATS=1 EXPORT=true npm run build`, then
-// `node scripts/demo-chunk-modules.mjs`, split by footprintjs path):
-//   old pins                        382.4 KB  15 assets  fp 9.10.0 (76 mod) + 9.21.1 (76 mod)
-//   new pins, two engines           517.8 KB  18 assets  fp 9.23.1 (18 mod) + 9.21.1 (88 mod)
-//   new pins, ONE engine (shipped)  514.0 KB  18 assets  fp 9.21.1 (94 mod)
-// The one-engine rule lives in next.config.mjs (`footprintjsAliases`: every
-// browser request for footprintjs or one of its doors is pointed at the root's
-// copy, doors read from the package's own `exports`). Its byte saving is 3.8 KB
-// — 9.23.1 tree-shakes to 18 modules where 9.10.0 brought all 76 — its value is
-// that a trace the library writes and the lens reads share one class, one
-// symbol, one WeakMap. So +131.6 KB is the lens itself, 0.31.1 -> 0.52.1, and
-// TWO lens-side defects make it that large for a demo that mounts no <Lens>:
-//   1. agentfootprint-lens declares no `sideEffects`, and `SkillGraphFlow` is
-//      exported ONLY from its root barrel — so this demo's one import keeps
-//      every chunk of the barrel: Lens, Served, Bookmarks, time-travel.
-//   2. `BugReportButton.tsx` does `import * as afObserve from
-//      'agentfootprint/observe'` and hands the NAMESPACE OBJECT to a reader —
-//      webpack must keep every export of `/observe`, which is how the trace
-//      toolpack (155 KB pre-minify, the family the paragraph above moved off
-//      the default graph), context-bisect (178 KB), af time-travel (109 KB)
-//      and bug-report are back on this chunk: af's share went 1.20 MB -> 3.72 MB
-//      pre-minify, all of it reached through the lens, none through the demo.
-// Both are fixed in the lens, not here, and the next move of this number
-// should be that fix DOWN, not another raise: a `sideEffects` flag (or a door
-// that exports `SkillGraphFlow` alone) and named imports from `/observe`.
-// Ceiling ~2% over the 514.0 KB measurement, as every entry above.
-//
-// CORRECTED the same day, before this ever shipped: the 514.0 KB above was the
-// current Lens with NO sideEffects flag and a bug-report button that imported
-// the whole /observe door. agentfootprint-lens 0.52.2 declared the flag (audited
-// across all 196 modules, pinned by a packaging test) and opens that door on
-// click. Re-measured on 0.52.2: 413.8 KB gzip across 15 async assets, ONE
-// footprintjs — i.e. 31 KB ABOVE the 382.4 KB two-engine/old-Lens baseline for
-// the whole Served tab, Served graph, bookmarks and tag picker the site now
-// actually shows. Set ~2% over that. The three-way story: 382.4 (old Lens, two
-// engines) → 514.0 (current Lens, no flag) → 413.8 (current Lens, flagged).
-//
-// RAISED for 9.105.0 (2026-09-17, owner's call), and measured. 413.8 KB was
-// the flagged Lens before the findings ledger existed. Five minors of
-// DEFAULT-GRAPH wiring since — the ledger (9.101.0), served from the ledger
-// (9.101.1), the hold (9.102.0), the answer ask (9.103.0), the judge (9.104.0)
-// and tool choice (9.105.0) — took the demo chunk to 422.4 KB: builder
-// validation, the charts' mappers, the stages' gates and the registry's event
-// strings, none of it movable behind an import() (the armed tails already are:
-// judge.ts and toolChoice/compose.ts load lazily and are NOT in these assets;
-// the last 0.4 KB is the wiring that decides whether to load them). Ceiling
-// ~2% over the 422.4 KB measurement, as every entry above; the next move is a
-// measured shrink or the next family, never a raise for a single feature.
-//
-// RAISED again (2026-09-25, owner's call — a stopgap) to 441 KB when the
-// 9.114.2 findings fix (4025063: one answer-text scanner, findings/answerText.ts)
-// took the demo chunk from under 431.0 KB to 432.4 KB gzip, with the scanner
-// wired on the default graph although only `.findings()` agents use it.
-//
-// LOWERED to 436 KB (2026-09-25): the owed shrink landed. The scanner now
-// sits behind `findings/peel.ts`, loaded through import() by callLLM and route
-// only under the arm — the judge.ts / toolChoice/compose.ts pattern — and
-// test/trace-toolpack/browserGraph.test.ts pins it off the root sync
-// closure. Measured 430.4 KB gzip across 17 async assets (from 433.5 KB); the
-// same day's AnswerAccount release (#17, 9.116.0) then grew the default graph
-// by 1.5 KB, re-measured together at 431.9 KB. Ceiling ~1% over that — thinner
-// than the ~2% rule above, because the stopgap is paid back, not kept.
-//
-// RAISED to 450 KB (2026-09-27) — owner-approved raise 2026-09-27; docs-site
-// cleanup planned by the owner. The growth is the honesty inputs layer
-// (`askOrAssume`, honesty step 3, #26). Measured by CI's docs job with
-// EXPORT=true, 17 async assets every time:
-//   before  ceiling 436.0 KB; main at the merge base (cfcebe11)   434.7 KB
-//           the branch before the import() split (8e6ae1a7)       441.8 KB
-//   after   the split, main merged in (d8d7d689)                  441.1 KB
-// The layer's run-time half already loads through import() under the arm
-// (`arguments/dispatch.ts`, `arguments/serve.ts`, `arguments/subflow.ts`,
-// `arguments/resolve.ts`, `middleware/rewrites.ts` — none of them in the
-// demo's assets). That split took the branch from 441.8 to 441.1 KB while main
-// grew 0.5 KB under it (449193f0 measured 434.2 KB). What cannot move is the
-// half a SYNCHRONOUS door needs: `tools/tools.ts` · `defineTool` validates
-// `askOrAssume` rules at definition (`tools/declare.ts` ·
-// `assertAskOrAssume`), so declare.ts, rows.ts (the checkpoint check
-// `validateCheckpoint` runs), the mount, the arm and the turn stamp stay on the
-// default graph: +6.4 KB over the merge base. The full list is in
-// src/core/agent/arguments/README.md, "What a plain agent carries". A local
-// EXPORT=true build of d8d7d689 measured 439.8 KB. Local builds read about
-// 1.3 KB under CI on this number (dd076f68 saw 1.5 KB), so CI's figure is the
-// basis. Ceiling ~2% over CI's 441.1 KB, as every raise here.
-//
-// RAISED to 460 KB (2026-09-28) — owner-approved raise; docs-site cleanup
-// planned. The growth is the footprintjs 9.28.0 dependency bump (resume walks
-// the real chart), which the demo's engine carries on the default graph. A
-// local EXPORT=true build of the 9.125.0 library on footprintjs 9.28.0
-// measured 450.7 KB gzip across 17 async assets against the 450.0 KB ceiling.
-// The same branch's compaction-summary fix adds ~0.1 KB gzip to the demo's
-// modules (`evidenceIndex`, `composeRequest`, each minified alone), so the
-// branch reads ~450.8 KB locally; local builds read ~1.3 KB under CI, so CI
-// should land near 452 KB. Ceiling ~2% over that.
-//
-// RAISED to 481 KB (2026-09-30) — owner-approved raise; docs-site cleanup
-// planned. The growth is the time layer (`.time()`, PR #42), and the shrink
-// came FIRST. The branch as opened measured 480.3 KB on CI (478.7 KB in a
-// local EXPORT=true build) because its run-time half sat on the default graph:
-// seed and ToolCalls imported the resolver, the period conversions, the drift
-// check and the row builders statically, and the coverage `Period:` line
-// imported the renderer. The clean shrink moved all of it behind `import()`
-// under the arm — `core/agent/stages/timeLayer.ts` (seed's clock stamp and
-// reading, ToolCalls' dispatch moment, `clock-on-resume`), prepareFinal's
-// in-zone line loading `time/present.ts` and handing coverage a bound
-// renderer — and split each time module a synchronous door shares with the
-// run into its record half and its engine (`resolveRecord.ts` / `resolve.ts`,
-// `periodForm.ts` / `convert.ts`, `rows.ts` / `rowsBuild.ts`, `ask.ts` /
-// `readingAsk.ts`): a bundler puts a whole FILE on the sync graph when any
-// sync module imports it, so a lazy function sharing a file with a sync one
-// rides along. Local EXPORT=true build, 17 async assets every time:
-//   main at a04f07c4                                      456.6 KB
-//   the branch as opened (5f7a7a2e)                       478.7 KB  (CI 480.3)
-//   after the shrink                                      470.3 KB  (CI ~471.9)
-// What cannot move is what a SYNCHRONOUS door needs before any run starts:
-// `defineTool({ period })` judges period forms at definition
-// (`tools/declare.ts` -> `time/periodForm.ts`), `requestInput` and
-// the resume door judge a time `format` (`tools/inputRequest.ts` ->
-// `time/ask.ts`, with the catalog `locales/timeAsk.ts`), the checkpoint
-// door checks time rows (`runCheckpoint.ts` · `validateCheckpoint`, also the
-// hosting envelopes' sync validators -> `time/rows.ts`,
-// `resolveRecord.ts`), and `.time()` reads its options at build (`clock.ts`),
-// with their leaves (`instant.ts`, `zone.ts`, `range.ts`, `duration.ts`,
-// `reader.ts`). Moving any of them makes a public sync door async — a
-// behaviour change, not a packaging one. The law is pinned at the graph by
-// test/trace-toolpack/browserGraph.test.ts (the time layer's case) and
-// listed in src/time/README.md, "What a plain agent carries". Ceiling ~2%
-// over CI's expected ~471.9 KB (local builds read ~1.6 KB under CI on this
-// branch: 478.7 vs 480.3), as every raise here.
-// 2026-10-02: footprintjs 9.29.0 (copy-on-write commit) adds its own engine
-// code to the demo chunk (`privatise`, `detachBase`): CI measured 482.1 KB
-// against 481.0 (main 480.7); local EXPORT=true builds read 480.8 on 9.28.0 and
-// 482.2 on 9.29.0, a +1.4 KB move from the dependency alone — nothing on the
-// agentfootprint side to shrink. Raised ~2% over the new measurement; owner-
-// approved raise (2026-09-27 ruling: raise when it bites, docs-site cleanup
-// planned).
-const DEMO_ASYNC_GZIP_LIMIT = 492_000;
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;
@@ -641,6 +392,27 @@ function uniqueAssetBytes(urls, label, gzip = true) {
   return [...files].reduce((sum, file) => sum + (gzip ? gzipFile(file) : statSync(file).size), 0);
 }
 
+function hasLocalLink(html, route) {
+  return [...html.matchAll(/<a\b[^>]*>/gi)].some(([tag]) => {
+    const url = attribute(tag, 'href')?.replaceAll('&amp;', '&');
+    return url?.startsWith('/') && !url.startsWith('//') && url.endsWith(`/${route}`);
+  });
+}
+
+function hasEagerDemoAssets(html, demoPath) {
+  return html.includes(`/${demoPath}assets/`) ||
+    [...html.matchAll(/<(?:script|link|iframe)\b[^>]*>/gi)].some(([tag]) =>
+      attribute(tag, 'rel') !== 'canonical' &&
+      [attribute(tag, 'href'), attribute(tag, 'src')].some((url) => url?.includes(`/${demoPath}`)),
+    );
+}
+
+function staticFallbackSection(html, id) {
+  return [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/gi)]
+    .map(([section]) => section)
+    .find((section) => attribute(section.slice(0, section.indexOf('>') + 1), 'id') === id);
+}
+
 function analyzeRoute(route) {
   const htmlFile = path.join(outputRoot, route.file);
   if (!existsSync(htmlFile)) {
@@ -670,11 +442,6 @@ function analyzeRoute(route) {
   const htmlBytes = gzipSync(html, { level: 9 }).byteLength;
   const criticalRequests =
     1 + new Set(scriptUrls).size + new Set(styleUrls).size + imagePreloadTags.length;
-
-  routeInitialAssets.set(
-    route.name,
-    new Set([...scriptUrls, ...styleUrls].map(resolveOutputAsset).filter(Boolean)),
-  );
 
   const h1Count = (html.match(/<h1\b/gi) ?? []).length;
   if (h1Count !== 1) fail(`${route.name}: expected exactly one H1, found ${h1Count}`);
@@ -729,6 +496,403 @@ function analyzeRoute(route) {
       );
     }
     assertAtMost(`${route.name} image preload bytes`, preloadBytes, route.imagePreloads.bytes);
+  }
+}
+
+function analyzeQuickStartFlowchart() {
+  const guidePath = 'docs/getting-started/quick-start/';
+  const fallbackPath = 'demo/quick-start/';
+  const anchor = 'the-run-as-a-flowchart';
+  const routes = [
+    { path: guidePath, href: fallbackPath },
+    { path: fallbackPath, href: `${guidePath}#${anchor}` },
+  ];
+  for (const route of routes) {
+    const file = requiredOutputAsset(`${route.path}index.html`, 'Quick Start');
+    if (!file) continue;
+    const html = readFileSync(file, 'utf8');
+    const links = [...html.matchAll(/<a\b[^>]*>/gi)].map(([tag]) => attribute(tag, 'href'));
+    if (!links.some((url) => url?.endsWith(`/${route.href}`))) {
+      fail(`Quick Start: missing link from ${route.path} to ${route.href}`);
+    }
+    if (route.path === guidePath && !html.includes(`id="${anchor}"`)) {
+      fail('Quick Start: missing flowchart anchor');
+    }
+    if (route.path === fallbackPath && !html.includes('The interactive viewer is unavailable')) {
+      fail('Quick Start: missing static fallback explanation');
+    }
+    const diagramImages = [...html.matchAll(/<img\b[^>]*>/gi)]
+      .map(([tag]) => tag)
+      .filter((tag) => attribute(tag, 'src')?.includes('/assets/quick-start-flowchart-'));
+    if (diagramImages.length !== 2 || diagramImages.some((tag) =>
+      !attribute(tag, 'alt') || !attribute(tag, 'width') || !attribute(tag, 'height'),
+    )) {
+      fail(`Quick Start: ${route.path} needs both static diagrams with alt text and dimensions`);
+    }
+    if (html.includes(`/${fallbackPath}assets/`)) {
+      fail(`Quick Start: ${route.path} eagerly references the separate viewer assets`);
+    }
+  }
+  const figures = ['light', 'dark'].map((theme) => `/assets/quick-start-flowchart-${theme}.svg`);
+  const bytes = uniqueAssetBytes(figures, 'Quick Start diagram');
+  console.log(`Quick Start diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+  assertAtMost('Quick Start diagrams gzip', bytes, 15_000);
+}
+
+function analyzeSkillGraphFigures() {
+  const fallbackPath = 'demo/quick-start/';
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const appVersion = manifest.dependencies.agentfootprint;
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'skill graph fallback');
+  if (!fallbackFile) return;
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  if (!fallback.includes('The interactive viewer is unavailable on this deployment.')) {
+    fail('skill graphs: missing static fallback explanation');
+  }
+
+  const views = [
+    { slug: 'skill-graph-quickstart', anchor: 'you-can-see-it' },
+    { slug: 'skills-explained', anchor: 'routing-between-skills--the-skill-graph' },
+  ];
+  const figureUrls = [];
+  for (const { slug, anchor } of views) {
+    const guidePath = `docs/build/${slug}/`;
+    const guideFile = requiredOutputAsset(`${guidePath}index.html`, slug);
+    if (!guideFile) continue;
+    const link = `${fallbackPath}?view=${slug}&agentfootprint=${appVersion}#${slug}`;
+    const guide = readFileSync(guideFile, 'utf8');
+    const figures = ['light', 'dark'].map((theme) => `/assets/${slug}-${theme}.svg`);
+    figureUrls.push(...figures);
+    const images = [...guide.matchAll(/<img\b[^>]*>/gi)].map(([tag]) => tag);
+    for (const figure of figures) {
+      const image = images.find((tag) => attribute(tag, 'src')?.endsWith(figure));
+      if (
+        !image ||
+        !attribute(image, 'alt') ||
+        !attribute(image, 'width') ||
+        !attribute(image, 'height')
+      ) {
+        fail(`${slug}: ${guidePath} needs ${figure} with alt text and dimensions`);
+      }
+    }
+
+    const pages = [
+      { html: guide, path: guidePath, section: anchor, link },
+      { html: fallback, path: fallbackPath, section: slug, link: `${guidePath}#${anchor}` },
+    ];
+    for (const page of pages) {
+      if (!page.html.includes(`id="${page.section}"`)) {
+        fail(`${slug}: missing anchor #${page.section} in ${page.path}`);
+      }
+      if (!hasLocalLink(page.html, page.link)) {
+        fail(`${slug}: missing link from ${page.path} to ${page.link}`);
+      }
+      if (hasEagerDemoAssets(page.html, fallbackPath)) {
+        fail(`${slug}: ${page.path} eagerly references the separate viewer assets`);
+      }
+    }
+  }
+  const bytes = uniqueAssetBytes(figureUrls, 'Skill graph diagram');
+  console.log(
+    `Skill graph diagrams ${formatBytes(bytes)} gzip across ${figureUrls.length} theme assets`,
+  );
+}
+
+function analyzeDynamicReact() {
+  const guidePath = 'docs/build/dynamic-react/';
+  const fallbackPath = 'demo/quick-start/';
+  const guideFile = requiredOutputAsset(`${guidePath}index.html`, 'Dynamic ReAct guide');
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Dynamic ReAct fallback');
+  if (!guideFile || !fallbackFile) return;
+  const guide = readFileSync(guideFile, 'utf8');
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const recorded = JSON.parse(
+    readFileSync(new URL('../lib/dynamic-react-figure.json', import.meta.url)),
+  );
+  const appVersion = manifest.dependencies.agentfootprint;
+  const views = [
+    { view: 'dynamic-react', anchor: 'try-it-live' },
+    { view: 'dynamic-react-subflows', anchor: 'how-every-iteration-actually-works' },
+  ];
+  for (const { view, anchor } of views) {
+    const query = new URLSearchParams({ view, agentfootprint: appVersion });
+    if (
+      !guide.includes(`id="${anchor}"`) ||
+      !hasLocalLink(guide, `${fallbackPath}?${query}#${view}`)
+    ) {
+      fail(`Dynamic ReAct: missing #${anchor} or its versioned ${view} launch link`);
+    }
+    const section = staticFallbackSection(fallback, view);
+    if (
+      !section?.includes('The interactive viewer is unavailable') ||
+      !hasLocalLink(section, `${guidePath}#${anchor}`)
+    ) {
+      fail(`Dynamic ReAct: missing static #${view} fallback text or return link`);
+    }
+  }
+  if (hasEagerDemoAssets(guide, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+    fail('Dynamic ReAct: guide or fallback HTML eagerly references the separate viewer assets');
+  }
+  const images = [...guide.matchAll(/<img\b[^>]*>/gi)].map(([tag]) => tag);
+  const figures = ['light', 'dark'].map((theme) => `/assets/dynamic-react-context-${theme}.svg`);
+  for (const figure of figures) {
+    const image = images.find((tag) => attribute(tag, 'src')?.endsWith(figure));
+    if (
+      !image || !attribute(image, 'alt') ||
+      attribute(image, 'width') !== String(recorded.figure.width) ||
+      attribute(image, 'height') !== String(recorded.figure.height)
+    ) {
+      fail(`Dynamic ReAct: ${guidePath} needs ${figure} with alt text and recorded dimensions`);
+    }
+  }
+  const captions = [...guide.matchAll(/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/gi)];
+  const recordedCaptions = captions.filter(([caption]) =>
+    caption.includes(`/commit/${recorded.commit}`) &&
+    recorded.cohort.every((member) => caption.includes(member)),
+  );
+  if (recordedCaptions.length !== 2) {
+    fail('Dynamic ReAct: both recordings must show their recorded commit and cohort');
+  }
+  if (!guide.includes(recorded.recording.result)) {
+    fail('Dynamic ReAct: missing the final mock answer in the guide');
+  }
+  const bytes = uniqueAssetBytes(figures, 'Dynamic ReAct diagram');
+  console.log(`Dynamic ReAct diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+}
+
+function analyzeReplayArtifacts(guide) {
+  for (const anchor of [
+    'step-2a--render-it-in-why-lens-the-agent-view',
+    'step-2b--render-it-in-flow-lens-the-pipeline-view',
+  ]) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Offline replay: missing the #${anchor} anchor`);
+  }
+  const figureRecord = JSON.parse(
+    readFileSync(new URL('../lib/offline-replay-figure.json', import.meta.url)),
+  );
+  const { figure, meta, commit, cohort, traceSha256 } = figureRecord;
+  const figures = ['light', 'dark'].map((theme) => `/assets/${figure.asset}-${theme}.svg`);
+  const images = [...guide.matchAll(/<img\b[^>]*>/gi)].map(([tag]) => tag);
+  for (const file of figures) {
+    const image = images.find((tag) => attribute(tag, 'src')?.endsWith(file));
+    if (
+      !image || !attribute(image, 'alt') ||
+      attribute(image, 'width') !== String(figure.width) ||
+      attribute(image, 'height') !== String(figure.height)
+    ) {
+      fail(`Offline replay: ${file} needs alt text and recorded dimensions`);
+    }
+  }
+  const captions = [...guide.matchAll(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi)];
+  if (!captions.some(([, caption]) => {
+    // React may insert empty comments between adjacent text nodes.
+    const recording = caption.match(
+      /^Rebuilt from a saved Trace with (?:<!-- -->)?(\d+)(?:<!-- -->)? events and <code>([^<]+)<\/code> redaction\. /,
+    );
+    if (!recording || recording[1] !== String(meta.events) || recording[2] !== meta.redaction) {
+      return false;
+    }
+    const source = caption.slice(recording[0].length).match(
+      /^The mock run used (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.$/,
+    );
+    return source && source[1] === cohort.join(', ') && source[3] === commit.slice(0, 12) &&
+      attribute(source[2], 'href')?.endsWith(`/commit/${commit}`);
+  })) {
+    fail('Offline replay: missing the figure caption with saved event count, redaction, commit and cohort');
+  }
+
+  const traceUrl = '/assets/offline-replay-trace.json';
+  const downloadLink = [...guide.matchAll(/<a\b[^>]*>/gi)].some(([tag]) => {
+    const href = attribute(tag, 'href');
+    return /\sdownload(?=[\s=>])/i.test(tag) &&
+      href?.startsWith('/') && !href.startsWith('//') && href.endsWith(traceUrl);
+  });
+  if (!downloadLink) {
+    fail('Offline replay: missing the local Trace download');
+  }
+  const traceFile = requiredOutputAsset(traceUrl, 'Offline replay Trace');
+  if (traceFile) {
+    const bytes = readFileSync(traceFile);
+    if (createHash('sha256').update(bytes).digest('hex') !== traceSha256) {
+      fail('Offline replay: the exported Trace differs from the recorded artifact');
+    }
+    const trace = JSON.parse(bytes.toString('utf8'));
+    if (trace.redaction !== 'pii' || trace.events?.length !== meta.events || !trace.structure) {
+      fail('Offline replay: Trace is missing the redacted events or chart structure');
+    }
+    console.log(`Offline replay Trace ${formatBytes(gzipFile(traceFile))} gzip`);
+  }
+  const bytes = uniqueAssetBytes(figures, 'Offline replay diagram');
+  console.log(`Offline replay diagrams ${formatBytes(bytes)} gzip across ${figures.length} theme assets`);
+
+  const rawFile = requiredOutputAsset('llms.mdx/docs/debug/offline-replay', 'Offline replay Markdown');
+  if (rawFile) {
+    const raw = readFileSync(rawFile, 'utf8');
+    const snippets = [...raw.matchAll(/^```tsx[^\S\r\n]*\r?\n([\s\S]*?)^```[^\S\r\n]*$/gm)];
+    for (const markers of [
+      ['observeRecording(recording)', '<Lens '],
+      ['<ExplainableShell', 'structureGraphFromSpec(recording.structure)', 'overlayFromSnapshot(recording.snapshot)'],
+      ['<Replay trace={trace}', 'ReplayProps'],
+    ]) {
+      if (!snippets.some(([, code]) => markers.every((marker) => code.includes(marker)))) {
+        fail(`Offline replay: machine-readable guide is missing the ${markers[0]} code sample`);
+      }
+    }
+  }
+}
+
+function analyzeReplayDemos() {
+  const fallbackPath = 'demo/quick-start/';
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Replay demo fallback');
+  if (!fallbackFile) return;
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const views = [
+    {
+      view: 'offline-replay',
+      guide: 'docs/debug/offline-replay/',
+      anchor: 'replay-trace--the-chart-only-subset',
+    },
+    { view: 'how-to-build-lens', guide: 'how-to-build/', anchor: 'debug' },
+  ];
+  for (const { view, guide, anchor } of views) {
+    const guideFile = requiredOutputAsset(`${guide}index.html`, view);
+    if (!guideFile) continue;
+    const html = readFileSync(guideFile, 'utf8');
+    const query = new URLSearchParams({ view, agentfootprint: manifest.dependencies.agentfootprint });
+    if (!html.includes(`id="${anchor}"`) || !hasLocalLink(html, `${fallbackPath}?${query}#${view}`)) {
+      fail(`${view}: missing the #${anchor} anchor or its versioned launch link`);
+    }
+    const section = staticFallbackSection(fallback, view);
+    if (!section?.includes('The interactive viewer is unavailable') || !hasLocalLink(section, `${guide}#${anchor}`)) {
+      fail(`${view}: missing static fallback text or return link`);
+    }
+    if (hasEagerDemoAssets(html, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+      fail(`${view}: guide or fallback HTML eagerly references the separate viewer assets`);
+    }
+    if (view === 'offline-replay') {
+      analyzeReplayArtifacts(html);
+    } else if (![...html.matchAll(/<pre\b[^>]*>[\s\S]*?<\/pre>/gi)].some(([code]) =>
+      code.includes('lensRecorder()') && code.includes('Hello!') && code.includes('Hi!'),
+    )) {
+      fail('How to Build: missing the Hello Lens code sample');
+    }
+  }
+}
+
+function analyzeContextWalkthrough() {
+  const guidePath = 'context-engineering/';
+  const fallbackPath = 'demo/quick-start/';
+  const view = 'context-walkthrough';
+  const guideFile = requiredOutputAsset(`${guidePath}index.html`, 'Context Engineering');
+  const fallbackFile = requiredOutputAsset(`${fallbackPath}index.html`, 'Context walkthrough fallback');
+  if (!guideFile || !fallbackFile) return;
+  const guide = readFileSync(guideFile, 'utf8');
+  const fallback = readFileSync(fallbackFile, 'utf8');
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../docs-demo/package.json', import.meta.url)),
+  );
+  const recorded = JSON.parse(
+    readFileSync(new URL('../lib/context-walkthrough-figure.json', import.meta.url)),
+  );
+  // Bind each exported claim to its stop independently of the generated excerpts.
+  const answerSteps = {
+    question: ['Run start', 'Start with the question.', [], ['is empty']],
+    selection: ['Route 1', 'The model requests scoped summaries.',
+      ['userMessage', 'llmLatestToolCalls'], ['mock model requests node_summaries']],
+    reference: ['Tool call 1', 'The tool returns the source and rows.',
+      ['lastToolResult'], ['nodes@v1 source metadata', 'all four rows']],
+    prepare: ['Iteration 2', 'The next iteration carries the tool result.',
+      ['iteration', 'lastToolResult'], ['carries forward', 'all four rows']],
+    model: ['Route 2', 'The mock model proposes a finding.',
+      ['llmLatestContent'], ['mock provider supplies a structured finding']],
+    finding: ['Answer 1', 'The proposed finding passes three checks.',
+      ['answerValidation'],
+      ['source reference matches', 'maximum appears in a retained row', 'selection revision matches']],
+    answer: ['Run end', 'The run ends with the checked finding.',
+      ['finalContent'], ['structured finding proposed at Route 2']],
+  };
+  const stories = {
+    answer: Object.keys(answerSteps),
+    conflict: ['same-claim', 'conflict', 'pause', 'repair', 'check-output', 'checked-answer'],
+  };
+  const version = manifest.dependencies.agentfootprint;
+  if (recorded.agentFootprintVersion !== version ||
+    Object.keys(recorded.steps).length !== stories.answer.length) {
+    fail('Context Engineering: outdated cohort version or incomplete recorded steps');
+  }
+  for (const anchor of ['cx-layers-title', 'cx-boundary-title', 'context-answer-story', 'context-conflict-story']) {
+    if (!guide.includes(`id="${anchor}"`)) fail(`Context Engineering: missing #${anchor}`);
+  }
+  const answerHeader = guide.match(/<h2 id="context-answer-story-title">Build an answer<\/h2>([\s\S]*?)<\/header>/i)?.[1] ?? '';
+  if (!answerHeader.includes('production design in which a backend ranks the rows and a host renders the answer') ||
+    !answerHeader.includes('In the saved mock run, the tool returns all four rows and the mock model supplies the two-node finding')) {
+    fail('Context Engineering: the answer story must identify the production design and the saved mock run');
+  }
+  const source = /<p class="cx-source">Recorded with (?:<!-- -->)?([^<]+?)(?:<!-- -->)? from AgentFootprint commit(?:<!-- -->)? (<a\b[^>]*>)<code>([^<]+)<\/code><\/a>\.<\/p>/i.exec(answerHeader);
+  if (!source || source[1] !== recorded.cohort.join(', ') ||
+    source[3] !== recorded.commit.slice(0, 12) ||
+    !attribute(source[2], 'href')?.endsWith(`/commit/${recorded.commit}`)) {
+    fail('Context Engineering: missing visible recorded cohort or commit link');
+  }
+  const listItems = new Map([...guide.matchAll(/(<li\b[^>]*>)([\s\S]*?)<\/li>/gi)]
+    .map(([, tag, body]) => [attribute(tag, 'id'), body]));
+  const answerAnchors = [...listItems.keys()].filter((id) => id?.startsWith('context-answer-'));
+  if (answerAnchors.join(' ') !== stories.answer.map((id) => `context-answer-${id}`).join(' ')) {
+    fail('Context Engineering: the answer steps must appear in recorded order');
+  }
+  const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' };
+  let previousStop = -1;
+  for (const [story, ids] of Object.entries(stories)) {
+    for (const step of ids) {
+      const anchor = `context-${story}-${step}`;
+      const item = listItems.get(anchor);
+      const summary = story === 'answer' ? 'Recorded context excerpt' : 'Illustrative context JSON';
+      const code = item?.match(/<pre\b[^>]*><code>([\s\S]*?)<\/code><\/pre>/i)?.[1];
+      if (!item?.includes('class="cx-visual"') || !item.includes('cx-scene') ||
+        !item.includes(`<summary>${summary}</summary>`) || !code ||
+        !guide.includes(`href="#${anchor}"`)) {
+        fail(`Context Engineering: #${anchor} needs navigation, an illustration and its context`);
+        continue;
+      }
+      if (story === 'answer') {
+        const excerpt = recorded.steps[step];
+        const [label, title, keys, claims] = answerSteps[step];
+        const description = item.match(/<p class="cx-description">([\s\S]*?)<\/p>/i)?.[1];
+        if (!item.includes(`<h3 id="${anchor}-title">${title}</h3>`) ||
+          !claims.every((claim) => description?.includes(claim)) ||
+          !item.includes('<figcaption class="cx-caption">Illustrative production design</figcaption>')) {
+          fail(`Context Engineering: #${anchor} needs the ${label} claim and an illustration marked as production design`);
+        }
+        if (excerpt?.label !== label || !Number.isInteger(excerpt.index) || excerpt.index <= previousStop ||
+          JSON.stringify(Object.keys(excerpt.values ?? {}).sort()) !== JSON.stringify([...keys].sort()) ||
+          !item.includes(`<p>Stop ${excerpt.index + 1} · ${label}</p>`)) {
+          fail(`Context Engineering: #${anchor} needs the chronological ${label} stop and its recorded fields`);
+        }
+        previousStop = excerpt?.index ?? previousStop;
+        const query = new URLSearchParams({ view, agentfootprint: version, step });
+        const expected = excerpt && JSON.stringify(excerpt.values, null, 2)
+          .replace(/[&<>"']/g, (character) => entities[character]);
+        if (!hasLocalLink(item, `${fallbackPath}?${query}#${view}`) || !expected || code !== expected) {
+          fail(`Context Engineering: #${anchor} needs the recorded values and versioned inspector link`);
+        }
+      }
+    }
+  }
+  const section = staticFallbackSection(fallback, view);
+  if (!section?.includes('The interactive viewer is unavailable') ||
+    !hasLocalLink(section, `${guidePath}#context-answer-story`)) {
+    fail('Context Engineering: missing static fallback text or return link');
+  }
+  if (hasEagerDemoAssets(guide, fallbackPath) || hasEagerDemoAssets(fallback, fallbackPath)) {
+    fail('Context Engineering: lesson or fallback eagerly references the separate viewer assets');
   }
 }
 
@@ -818,38 +982,6 @@ function analyzeOutput() {
   assertAtMost('duplicate sibling RSC bytes', duplicateRscBytes, OUTPUT_LIMITS.duplicateRscBytes);
 }
 
-function analyzeDeferredDemo() {
-  const manifestFile = path.join(projectRoot, '.next/react-loadable-manifest.json');
-  if (!existsSync(manifestFile)) {
-    fail('deferred demo: missing React loadable manifest');
-    return;
-  }
-  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
-  const entry = Object.entries(manifest).find(([key]) => key.includes('SkillGraphTryItInner'))?.[1];
-  if (!entry?.files) {
-    fail('deferred demo: SkillGraphTryItInner is not listed in the React loadable manifest');
-    return;
-  }
-  const files = [...new Set(entry.files.map((file) => path.join(outputRoot, '_next', file)))];
-  for (const file of files) {
-    if (!existsSync(file))
-      fail(`deferred demo: manifest asset is missing: ${path.relative(outputRoot, file)}`);
-  }
-  const existingFiles = files.filter((file) => existsSync(file));
-  const bytes = existingFiles.reduce((sum, file) => sum + gzipFile(file), 0);
-  const initialSkillsAssets = routeInitialAssets.get('skills guide') ?? new Set();
-  const eagerFiles = existingFiles.filter((file) => initialSkillsAssets.has(file));
-  console.log(
-    `deferred demo ${formatBytes(bytes)} gzip across ${existingFiles.length} async assets`,
-  );
-  if (eagerFiles.length > 0) {
-    fail(
-      `deferred demo: ${eagerFiles.length} async assets also appear in the skills page's initial tags`,
-    );
-  }
-  assertAtMost('deferred demo async payload', bytes, DEMO_ASYNC_GZIP_LIMIT);
-}
-
 if (!existsSync(outputRoot)) {
   console.error(`Static export not found: ${outputRoot}`);
   process.exit(1);
@@ -857,9 +989,13 @@ if (!existsSync(outputRoot)) {
 
 console.log(`Checking static-site budgets in ${outputRoot}`);
 for (const route of ROUTES) analyzeRoute(route);
+analyzeQuickStartFlowchart();
+analyzeSkillGraphFigures();
+analyzeDynamicReact();
+analyzeReplayDemos();
+analyzeContextWalkthrough();
 analyzeSearch();
 analyzeOutput();
-analyzeDeferredDemo();
 
 if (failures.length > 0) {
   console.error(

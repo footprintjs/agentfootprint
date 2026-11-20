@@ -7,11 +7,14 @@ per-sentence catch). No reader reads another row's lines.
 | `common.ts` | the shared context (`say`, the size budgets), pointers, vars; the model's view of a result through the ONE emptiness reader (`core/agent/emptiness.ts`) |
 | `asked.ts` | You asked |
 | `understood.ts` | It understood — and check 1, decided-delivered (non-delivery needs a complete record) |
-| `calls.ts` | the calls of THIS run: outcome (before-tool refusals only), coverage, emptiness |
+| `calls.ts` | the calls of THIS run: event correlation, coverage, emptiness |
+| `callOutcome.ts` | reads tool entry, human answers and policy refusal for an exact call, including calls resumed without a start bracket |
+| `errorCounts.ts` | the "Anything wrong" counts (`facts.errors` and the `wrong.errors` line read the one tally; a call that never reached its tool is "not executed", never "failed") |
 | `checked.ts` | It checked / It did not check — and the calls before a pause |
 | `inView.ts` | earlier answers' results in front of the model — the witness rule, distance ≥ 1 |
 | `found.ts` | It found |
-| `howSure.ts` | How sure — the answer's standing from the one fold (`core/agent/assessment/assess.ts`), or "no answer on this record" when there is no `turn_end` and no pause; then the expectations and the evidence check beside it |
+| `standing.ts` | The standing and its witnesses from the one fold (`core/agent/assessment/assess.ts`), read for both the How sure row and reconstruction of the appended standing line |
+| `howSure.ts` | How sure — the standing, followed by the expectations and the evidence check |
 
 Example — the witness rule on the real recording selects `events[64]` (the
 turn-1 `powerstore_get_volumes` result) and never `events[68]` (this run's own

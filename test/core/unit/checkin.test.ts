@@ -156,4 +156,24 @@ describe('check-in helpers — assemblers', () => {
     expect(ev.drivers).toBeUndefined();
     expect(ev.trail).toBeUndefined();
   });
+
+  it('reports a recorded policy refusal as unsuccessful, without attributing a human decline', async () => {
+    const ev = await standardEvidenceAssembler({
+      tool: { name: 'sample', description: 'Read the next sample' },
+      args: {},
+      iteration: 2,
+      history: [
+        {
+          role: 'tool',
+          toolName: 'previous_sample',
+          toolCallId: 'sample-1',
+          outcome: 'refused',
+          content: 'The call was refused by policy after the wait.',
+        },
+      ],
+      scorer: lexicalDriverScorer,
+    });
+    expect(ev.trail).toMatchObject({ toolCalls: [{ name: 'previous_sample', ok: false }] });
+    expect(JSON.stringify(ev.trail)).not.toContain('decline');
+  });
 });

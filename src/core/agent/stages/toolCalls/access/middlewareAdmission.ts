@@ -6,8 +6,10 @@ import type { buildToolArtifactsOperations } from '../execution/artifactsOperati
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { runToolChain } from '../../../../../tools/runChain.js';
+import { pauseGatePolicy } from './resumePolicyRecord.js';
 import {
   mintConsentRequest,
   type GatedCall,
@@ -52,7 +54,7 @@ interface AdmitMiddlewareCallFrame {
 /** Existing middlewareAdmission body; the owning handler retains its admission guard and native pause return. */
 export async function admitMiddlewareCall(
   scope: TypedScope<AgentState>,
-  deps: Pick<ToolCallsHandlerDeps, 'toolMiddleware'>,
+  deps: Pick<ToolCallsHandlerDeps, 'toolMiddleware' | 'permissionChecker'>,
   frame: AdmitMiddlewareCallFrame,
 ) {
   const chain = await runToolChain(deps.toolMiddleware!, {
@@ -77,6 +79,14 @@ export async function admitMiddlewareCall(
     chain.kind === 'ask'
       ? deps.toolMiddleware!.slice(chain.index).map((link) => link.name)
       : undefined;
+  const policy =
+    chain.kind === 'ask'
+      ? pauseGatePolicy(
+          deps,
+          { gate: 'ask', toolCallId: frame.tc.id, iteration: frame.iteration },
+          chain.payload,
+        )
+      : undefined;
   // The request the person would be asked (`core/consentRequest.ts`):
   // an id their decision must quote, bound to a detached copy of this
   // exact call — the args AS TRANSFORMED SO FAR, where the chain
@@ -94,6 +104,7 @@ export async function admitMiddlewareCall(
             middleware: chain.middleware,
             askIndex: chain.index,
             chain: askChain,
+            policy,
           } satisfies GatedCall,
           frame.decisionLedger,
         )
@@ -111,6 +122,7 @@ export async function admitMiddlewareCall(
   recordDecisions(
     scope,
     frame.inputs !== undefined ? frame.inputs.decisionsToRecord(frame.tool, chainRows) : chainRows,
+    frame.tc.callOccurrenceKey,
   );
   frame.callArguments.callArgs = chain.args;
   frame.callArguments.chainedArgs = chain.args;
@@ -160,7 +172,7 @@ export async function admitMiddlewareCall(
     // pauseHere / check-in path does the same). The TRANSFORMED args
     // ride the checkpoint — the bound copy: a person approves what the
     // chain produced, not what the model originally proposed.
-    scope.history = frame.newHistory;
+    commitSettledToolHistory(scope, frame.newHistory);
     scope.pausedToolCallId = frame.tc.id;
     scope.pausedToolName = frame.tc.name;
     scope.pausedToolStartMs = frame.startMs;
@@ -170,6 +182,7 @@ export async function admitMiddlewareCall(
     scope.pausedAskMiddleware = chain.middleware;
     scope.pausedAskChain = askChain;
     scope.pausedRequest = bound.request;
+    scope.pausedGatePolicy = policy;
     // The party this call was resolved against (9.92.0) — so a resume
     // in a FRESH instance dispatches to the same party, never to the
     // build-time map's first holder. Pause-path-only.

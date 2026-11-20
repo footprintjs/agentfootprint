@@ -64,27 +64,30 @@ const SCRIPTS: readonly (readonly unknown[])[] = [
 ];
 
 /** Run the fixed script; every response, in order. */
-export async function defaultWire(): Promise<Exchange[]> {
+export async function defaultWire(legacy: boolean): Promise<Exchange[]> {
   let built = 0;
   const handle = streamHandler({
     agent: ({ tools }) => {
       const at = built++;
       if (at === SCRIPTS.length) {
         // The composition turn: two agents in sequence, each a sub-agent.
-        const step = (reply: string) =>
-          Agent.create({ provider: mock({ chunkDelayMs: 0, reply }), model: 'm' })
-            .system('s')
-            .build();
+        const step = (reply: string) => {
+          const builder = Agent.create({
+            provider: mock({ chunkDelayMs: 0, reply }),
+            model: 'm',
+          }).system('s');
+          return (legacy ? builder.answerLayer(false) : builder).build();
+        };
         return Sequence.create().step('first', step('one')).step('second', step('two')).build();
       }
       const replies = SCRIPTS[at] ?? ['(no script)'];
-      return Agent.create({
+      const builder = Agent.create({
         provider: mock({ chunkDelayMs: 0, replies: replies as never }),
         model: 'm',
       })
         .system('s')
-        .tools([weather, approve, ...tools])
-        .build();
+        .tools([weather, approve, ...tools]);
+      return (legacy ? builder.answerLayer(false) : builder).build();
     },
     adapter: agUi({
       frontendTools: {

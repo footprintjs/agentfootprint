@@ -305,8 +305,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
     },
     {
       kind: 'unrepaired',
-      count: 2,
-      why: 'two unknown-tool-call RESULT corrections carry standing navigation imperatives; correctly flagged and unchanged by the file split',
+      count: 3,
+      why: 'two unknown-tool-call corrections and the retained-inner-record link carry navigation imperatives in tool results',
+    },
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the boundary line reports the absence of an inner record for the call in the current tool result',
     },
   ],
   'src/trace-toolpack/traceToolpack/innerRecords.ts': [
@@ -737,8 +742,15 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/pause.ts': [
     {
       kind: 'not-model-facing',
-      count: 5,
-      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape, or with a decision that does not answer the paused request (ResumeDecisionError, its `closed-by-host` sentence included — served as a 409 body, never on a model`s wire)',
+      count: 2,
+      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape (DecisionRequiredError, PauseAnswerRequiredError — never on a model`s wire)',
+    },
+  ],
+  'src/core/resumeDecisionMessage.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 4,
+      why: 'ResumeDecisionError`s sentences, moved out of pause.ts, for a decision that does not answer the paused request — its `closed-by-host` and `view-changed` sentences included — thrown to the caller of resume() and served as a 409 body, never on a model`s wire',
     },
   ],
   'src/core/runCheckpoint.ts': [
@@ -747,6 +759,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 1,
       why: 'a checkpoint-ownership error thrown to the host',
     },
+  ],
+  'src/core/checkpointLedger.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
@@ -935,6 +949,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the runtime-capability error thrown when node:sqlite is missing',
     },
   ],
+  'src/mcp/toolExtras.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the static MCP metadata-ingest warning hint goes to console while invalid declarations are dropped, never into a native tool reply',
+    },
+  ],
   'src/memory/asRoleRefusal.ts': [
     {
       kind: 'not-model-facing',
@@ -1003,6 +1024,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 3,
       why: 'the answer account\'s template table — sentences rendered for a PERSON reading "Explain this answer" (the lens pane, the print report); `accountForAnswer` is a read-time fold over a finished recording and no model ever reads its output',
+    },
+  ],
+  'src/tools/resultRowsets.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'invalid rowset metadata is refused to the host at definition/registration or catalog discovery; native dispatch reads the already-held declaration rather than serving this diagnostic as a tool reply',
     },
   ],
   'src/tools/skillScopedTools.ts': [
@@ -1422,12 +1450,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 128,
-        total: 210,
+        // The combined ledger includes the resume sentence and journal links.
+        // The checkpoint ledger split moved one host-only refusal to a new file.
+        files: 132,
+        total: 215,
         registry: 8,
-        ephemeral: 27,
-        unrepaired: 35,
-        notModelFacing: 140,
+        ephemeral: 28,
+        unrepaired: 36,
+        notModelFacing: 143,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

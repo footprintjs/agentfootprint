@@ -67,7 +67,7 @@ jobs:
   # Vitest splits by file count, not by time. To change N, edit the `shard` list
   # and the `/4` together; test/docs/ci-test-shards.test.ts refuses a mismatch.
   test-shard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       # Every shard finishes, so one run shows every failure.
@@ -94,7 +94,7 @@ jobs:
   # What runs around the test suite, on both Node versions: the contract, the
   # compiler and the package as it would ship.
   test-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -103,11 +103,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The candidate receipt reads the PR head, a parent of the tested merge.
+          fetch-depth: 2
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+
+      - name: Context package contract input and guard tests
+        run: node --test scripts/context-package-contract/*.test.mjs scripts/publish-archive/candidate.test.mjs scripts/publish-archive/publishedDependency.test.mjs scripts/publish-archive/verify-staged-candidate.test.mjs
 
       - run: npm ci
       - run: npm ls foottrace
@@ -126,10 +132,49 @@ jobs:
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
 
+      # One unchanged, source-bound package for downstream checks. This is a
+      # retained CI artifact, never a publication or a version-staged archive.
+      - name: Retain original source candidate
+        if: matrix.node-version == 24
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir "$RUNNER_TEMP/af-source-candidate"
+          npm pack --ignore-scripts --offline --json --pack-destination "$RUNNER_TEMP/af-source-candidate" > "$RUNNER_TEMP/af-source-pack.json"
+          node scripts/publish-archive/candidate.cjs "$RUNNER_TEMP/af-source-candidate" "$SOURCE_HEAD"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: matrix.node-version == 24
+        with:
+          name: agentfootprint-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/af-source-candidate/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+      - name: Compare the same-run source and RC-staged packs
+        if: matrix.node-version == 24
+        run: node scripts/publish-archive/verify-staged-candidate.mjs "$RUNNER_TEMP/af-source-candidate"
+
+      - name: Four strict native context roots and public producer identities
+        id: native_context
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/check-context-package-strict.mjs "$RUNNER_TEMP/af-strict-context" "$SOURCE_HEAD"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && (steps.native_context.outcome == 'success' || steps.native_context.outcome == 'failure')
+        with:
+          name: agentfootprint-native-context-${{ matrix.node-version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/af-strict-context/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
   # Every example, typechecked AND run end-to-end against mock providers — the
   # code people copy. Once per commit (on Node 22) is enough.
   test-examples:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,7 +202,7 @@ jobs:
   test:
     if: always()
     needs: [test-shard, test-package, test-examples]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       fail-fast: false
@@ -177,7 +222,7 @@ jobs:
   # Also the two checks the Release workflow runs that nothing else in CI did —
   # a PR green here must not go red at release time.
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -223,10 +268,12 @@ jobs:
       !(github.event_name == 'pull_request' &&
         github.head_ref == 'release/next' &&
         github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -236,17 +283,16 @@ jobs:
             package-lock.json
             docs-next/package-lock.json
 
-      - name: Install root deps (docs-next resolves agentfootprint via a local dep)
-        run: npm ci
+      - name: Install root deps
+        run: npm ci --no-audit
 
-      # docs-next's prebuild generators (gen-agent-flowchart / gen-replay-trace) import
-      # agentfootprint at runtime → need dist/esm. Build the library first, like docs.yml.
+      # docs-next's prebuild generators import the built library through file:...
       - name: Build library (dist for the docs generators)
         run: npm run build
 
       - name: Install docs-next deps
         working-directory: docs-next
-        run: npm ci
+        run: npm ci --strict-peer-deps --no-audit
 
       # The "Try it live" embed runs this builder in the reader's browser. The
       # deploy (docs.yml) checks it too — too late: npm already has the version.
@@ -261,6 +307,7 @@ jobs:
         working-directory: docs-next
         env:
           EXPORT: 'true'
+          NEXT_PUBLIC_BASE_PATH: ''
         run: npm run build
 
       # Site-budget RATCHET, on every PR and push — where site growth is caught:
@@ -281,12 +328,15 @@ jobs:
         working-directory: docs-next
         run: npm run check:site-budget
 
+      - name: Compare regenerated API pages
+        run: git diff --exit-code HEAD -- docs-next/content/docs/api
+
   # Generated files are committed, so they must be regenerated WITH the change
   # that made them stale: the API mirror, the docs-truth report, the examples
   # README, the AI-instruction copies. `docs:check` regenerates everything and
   # fails on any diff — the fix is always `npm run docs:regen` + commit.
   generated:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -311,7 +361,7 @@ jobs:
       github.event_name == 'pull_request' &&
       !(github.head_ref == 'release/next' &&
         github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -329,9 +379,9 @@ jobs:
   # lib/remark-doc-links.mjs); this re-derives the id->route index from the
   # filesystem and fails on any dead id or stale #anchor. A page moved between
   # taxonomy folders, or a reworded heading, can therefore never ship a broken
-  # link. Self-contained: github-slugger is the script's only external dep.
+  # link. github-slugger is already pinned by the root lockfile.
   docs-links:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -339,8 +389,9 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          cache: npm
 
-      - run: npm install --no-save github-slugger
+      - run: npm ci --ignore-scripts --no-audit
       - run: node scripts/check-doc-links.mjs --strict
 
   # Docs-truth RATCHET — asks "do the docs describe what the code actually does?"
@@ -358,7 +409,7 @@ jobs:
   #
   # Needs the build: the DECLARED column reads dist/, i.e. what actually ships.
   docs-truth:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -379,7 +430,7 @@ jobs:
   # blob, and `coverage` below merges them. A shard's own log prints only its
   # partial figures; the merged figures are the ones that count.
   coverage-shard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -418,7 +469,7 @@ jobs:
   coverage:
     if: always()
     needs: coverage-shard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Every shard succeeded
@@ -464,7 +515,7 @@ jobs:
   # annotation: any process in any job, an install script included, can print
   # one of those.
   tested-tree:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

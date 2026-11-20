@@ -27,10 +27,13 @@
  * Lives under its own tsconfig (`npm run test:types`) so the compiler checks
  * the assignments, while the `.test.ts` name lets vitest run the assertions.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { defineTool, type Tool } from '../../src/index';
 import type { LLMToolSchema } from '../../src/provider-contract/types';
+import type { ToolCallEventIdentity } from '../../src/events/types';
+import type { CallOccurrenceKey } from '../../src/lib/callOccurrence';
+import type { TimeCallIdentity } from '../../src/time/rows';
 import type { CachePolicy, CachePolicyContext } from '../../src/cache/types';
 import type {
   SkillCachePolicy,
@@ -43,6 +46,15 @@ import type {
 import { TOOL_RESULT_STATUSES, type ToolResultStatus } from '../../src/doors/skill-graph';
 import type { ToolResultStatus as StatusFromLoop } from '../../src/semantics/toolEffects';
 import type { InjectionContent } from '../../src/doors/skill-graph';
+
+it('keeps the dependency-free event and time call addresses equal to the recorded address', () => {
+  expectTypeOf<
+    NonNullable<ToolCallEventIdentity['callOccurrenceKey']>
+  >().toEqualTypeOf<CallOccurrenceKey>();
+  expectTypeOf<
+    NonNullable<TimeCallIdentity['callOccurrenceKey']>
+  >().toEqualTypeOf<CallOccurrenceKey>();
+});
 
 describe('SkillToolSchema is LLMToolSchema, spelled without the adapter', () => {
   it('assigns in both directions without a cast', () => {

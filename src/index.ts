@@ -572,8 +572,7 @@ export {
   type ColumnViolation,
   type RowsetReading,
 } from './integrity/column-types/check.js';
-// The declaration's own vocabulary, so an app assembling `Tool` objects by
-// hand (or typing a config) can name the words the library judges by.
+// Column declaration vocabulary for apps assembling `Tool` objects or typed config.
 export {
   COLUMN_TYPES,
   assertResultColumns,
@@ -581,6 +580,7 @@ export {
   type ColumnType,
   type ToolResultColumns,
 } from './integrity/column-types/types.js';
+export type { ToolResultRowset, ToolResultRowsetSource } from './tools/resultRowsets.js';
 // The claim seam's RECENCY advisory (9.83.0) — `AgentOptions.
 // noticePriorTurnEvidence` beside `.namesAndNumbersFromEvidence()`. The
 // CEILING is exported for the same reason the two above are: it is quoted

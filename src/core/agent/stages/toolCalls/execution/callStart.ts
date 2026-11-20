@@ -11,6 +11,7 @@ import type { SplitFindings } from '../../../findings/reserved.js';
 import { recordFindings, basisRowFrom } from '../../../findings/ledger.js';
 import { contingentRowsOf, groundedArgumentValues } from '../../../findings/contingent.js';
 import { frozenView, isSealed } from '../../../../../lib/frozenCopy.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
@@ -26,7 +27,7 @@ interface CallStartLinks {
 
 /** Start one call with its original proposal, frozen views, records and clock. */
 export function buildCallStart(
-  deps: Pick<ToolCallsHandlerDeps, 'findings'>,
+  deps: Pick<ToolCallsHandlerDeps, 'findings' | 'toolMiddleware'>,
   links: CallStartLinks,
 ) {
   const beginDispatchCall = (
@@ -40,9 +41,14 @@ export function buildCallStart(
     frozenTurn: LLMMessage | undefined,
     callbackHistory: () => LLMMessage[],
     frozenArgsAt: (at: number) => ToolArgs | undefined,
+    inputsCanFill: boolean,
   ) => {
     const { resolveTool, peelCall, programOfCall, turnStampOf, emitToolStart } = links;
-    const emitSecurity = bindToolSecurityEvents(scope, { toolCallId: tc.id, iteration });
+    const call = {
+      toolCallId: tc.id,
+      ...callOccurrenceField(tc.callOccurrenceKey),
+    };
+    const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
     const resolved = resolveTool(tc.name);
     const tool = resolved.tool;
     // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`
@@ -82,7 +88,7 @@ export function buildCallStart(
           groundedArgumentValues(args, towers.gate, towers.corpus, towers.exempt),
           towers.corpus,
           towers.standingOf,
-          { toolCallId: tc.id },
+          call,
           iteration,
         ),
         turnStampOf(scope),
@@ -121,12 +127,19 @@ export function buildCallStart(
       if (frozenTurn === undefined || isSealed(frozenTurn)) callHistory = made;
       return made;
     };
-    emitToolStart(scope, {
-      toolName: tc.name,
-      toolCallId: tc.id,
-      args: viewOf(args) ?? args,
-      ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
-    });
+    emitToolStart(
+      scope,
+      {
+        toolName: tc.name,
+        ...call,
+        args: viewOf(args) ?? args,
+        ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
+      },
+      tool,
+      // This bracket precedes both input fills and middleware. Their output can
+      // change a conditional argument view before the approval is shown.
+      inputsCanFill || (deps.toolMiddleware?.length ?? 0) > 0,
+    );
     const startMs = Date.now();
     const findingsRefusal = findingsRefusals[callIndex];
     const invalidateViews = (): void => {

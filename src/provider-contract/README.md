@@ -13,10 +13,23 @@ see; the agent composes the request, an adapter carries it.
   (`forcedToolChoiceFor`, `nativeOutputSchemaFor`) and the one typed refusal
   each, for a model that does not take a forced tool choice or a native output
   schema.
+- `permissionDecision.ts` — `readPermissionDecision`, THE ONE READER of a
+  permission checker's answer (whether the checker is asked at all stays
+  `types.ts` · `checkerGoverns`, inside that allow-listed leaf of the
+  skill-graph fence, which must gain no import). Only `'allow'` /
+  `'gate_open'` allow; `'deny'` / `'halt'` keep their meanings; anything else
+  (`'ask'`, `{}`, `'ALLOW'`, `'deny '`) is a refusal whose rationale says the
+  answer was not recognised. The tool gate, the capability gate and the skill
+  menu all ask it, so one answer cannot allow a tool and hide a skill.
+  Example: `readPermissionDecision({ result: 'ask' }).kind` is `'unrecognised'`.
 - `requestRefusal.ts` — the narrow shared classifier for terminal
   request-contract refusals, not transport failures or arbitrary application
   errors.
 - `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.
+- `typedAnswerMark.ts` — `TypedAnswerMark`, the type of `LLMMessage.answersAsk`:
+  the library's mark on a person's typed answer, with its whole explanation
+  (who writes it, how checkpoints restore it, and why the store is trusted). Its own
+  file so `types.ts` stays within its size limit; `types.ts` re-exports it.
 - `codeSandbox.ts` — the code-session port's refusals (`CodeSandboxError`, one
   `reason` per refusal) and its ONE path rule, `sandboxPath`: a session path is
   relative to the working directory and never above it. Both code adapters call

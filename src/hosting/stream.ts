@@ -18,11 +18,11 @@ import type { Runner } from '../core/runner.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import { runnerLive } from '../core/runnerLive.js';
 import { toWireJson } from '../lib/wireJson.js';
+import { unstreamedText } from './unstreamedText.js';
 
 /**
  * Hand the runner this iterable's caller before calling `runner.run()`.
- * Yields SSE-formatted strings until the run finishes (success, error,
- * or pause). Each event becomes:
+ * Yields chunks until the stream closes. Each full-format event becomes:
  *
  *   event: <event name>
  *   data: <JSON payload>
@@ -53,11 +53,25 @@ export interface ToSSEOptions {
    *   - 'full' (default) — each event is JSON-serialized verbatim: the run's
    *     RECORD, so under an agent's `redact` policy it is the served event
    *     (the placeholder wherever the policy selected a value).
-   *   - 'text' — only `agentfootprint.stream.token.content` is yielded,
-   *     in plain text form (no event/data prefix). Useful for piping
-   *     directly into a chat UI. This is the REPLY to the person who asked —
-   *     the caller's own answer, like `run()`'s return — so a redaction
-   *     policy never masks it.
+   *   - 'text' — the answer as plain text (no event/data prefix), for
+   *     piping straight into a chat UI: token content from the owning Agent,
+   *     then the rest of its `turn_end.finalContent`. Tokens marked
+   *     `meta.mountedTurn: true` stay in the record and out of the text.
+   *     Older records need an observed root start to append the rest.
+   *     Events with no metadata are treated as one root. A filter that
+   *     drops only trailing tokens gets them back with the rest, such as
+   *     the limits block or the standing line. When the provider emits no
+   *     tokens or the filter drops them all, the stream writes the whole
+   *     answer. A gap that leaves the written text different from the
+   *     answer's prefix, a rewritten prefix, or a refused answer produces
+   *     no additional text. The caller's own answer stays unredacted.
+   *
+   * Both formats close a live Agent's stream at a fatal error or an
+   * `agent.turn_end` marked `meta.rootTurn: true`. A stream opened on
+   * resume also closes at the next pause. A stream opened before the turn
+   * starts stays open across pauses. Older records and compositions close
+   * at the first `agent.turn_end` or fatal error. Use the returned outcome
+   * for a composition's full reply.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -152,7 +166,9 @@ export async function* toSSE<TIn, TOut>(
   const heartbeatMs = options.heartbeatMs ?? 0;
   const framing = framingOf(options);
 
-  // The public event port is sufficient; native private state stays encapsulated.
+  // Both formats use native turn ownership. Only text reads real event values.
+  const native = runnerLive(runner);
+  const ownsTurn = native?.turn !== undefined;
 
   // Bounded queue: events drained as the consumer iterates.
   const queue: AgentfootprintEvent[] = [];
@@ -175,11 +191,18 @@ export async function* toSSE<TIn, TOut>(
   // `runnerLive`) — matched to its served event by the token's address (its
   // stage, iteration and index, none of which a policy selects), so a served
   // token that never arrives cannot shift the ones after it — and never
-  // handed to consumer code. A runner that is not a RunnerBase has no
-  // redaction and no live taps: its events are the record and the reply at once.
-  const live = format === 'text' ? runnerLive(runner) : undefined;
+  // handed to consumer code. The answer and refusal status come from the
+  // same `turn_end` event, paired by the stage that ended the turn. A runner
+  // that is not a RunnerBase has no redaction and no live taps: its events
+  // are the record and the reply at once.
+  const live = format === 'text' ? native : undefined;
   const replies = new Map<string, string[]>();
+  const answers = new Map<string, string | undefined>();
   const offReplies = live?.onRealEvent((event) => {
+    if (event.type === 'agentfootprint.agent.turn_end') {
+      answers.set(event.meta?.runtimeStageId ?? '', unrefusedAnswerOf(event));
+      return;
+    }
     if (event.type !== 'agentfootprint.stream.token') return;
     const content = (event as { payload?: { content?: unknown } }).payload?.content;
     const key = tokenAddress(event);
@@ -195,29 +218,81 @@ export async function* toSSE<TIn, TOut>(
     if (waiting !== undefined && waiting.length === 0) replies.delete(key);
     return text;
   };
+  /**
+   * Use only the real, unrefused answer of a root turn. For older metadata,
+   * an observed root start and no matching inner mount identify it.
+   */
+  const answerFor = (
+    event: AgentfootprintEvent,
+    rootEnd: boolean,
+    mounted: boolean,
+  ): string | undefined => {
+    const key = event.meta?.runtimeStageId ?? '';
+    const answer = live === undefined ? unrefusedAnswerOf(event) : answers.get(key);
+    answers.delete(key);
+    if (
+      mounted ||
+      (!rootEnd &&
+        (ownsTurn ||
+          (event.meta !== undefined && !rootTurnOpen) ||
+          innerTurns.some((mount) => leads(mount, pathOf(event)))))
+    ) {
+      return undefined;
+    }
+    rootTurnOpen = false;
+    return answer;
+  };
+  let rootTurnOpen = false;
+  let closesOnPause = false;
+  const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
-    // Taken before the filter, so a filtered-out token still consumes its text.
+    const mounted = ownsTurn && event.meta?.mountedTurn === true;
+    // These boundaries establish scope even when the output filter drops them.
+    if (
+      (ownsTurn || format === 'text') &&
+      !mounted &&
+      event.type === 'agentfootprint.agent.turn_start'
+    ) {
+      const path = pathOf(event);
+      if (path.length === 0) rootTurnOpen = true;
+      else if (!ownsTurn) innerTurns.push(path);
+    }
+    if (event.type === 'agentfootprint.pause.resume' && ownsTurn && !rootTurnOpen) {
+      // A stream opened on resume closes again if that leg pauses.
+      closesOnPause = true;
+    }
+    const turnEnd = event.type === 'agentfootprint.agent.turn_end';
+    const rootEnd = turnEnd && event.meta?.rootTurn === true;
+    // Completion follows the run boundary even when no output is admitted.
+    const fatal = event.type === 'agentfootprint.error.fatal';
+    const terminal =
+      fatal ||
+      (ownsTurn ? rootEnd : turnEnd) ||
+      (closesOnPause && event.type === 'agentfootprint.pause.request');
+    if (terminal) {
+      done = true;
+      wakeup();
+    }
+    // Consume paired values before applying either output filter.
     const reply =
       live !== undefined && event.type === 'agentfootprint.stream.token'
         ? replyFor(event)
         : undefined;
+    const answer = format === 'text' && turnEnd ? answerFor(event, rootEnd, mounted) : undefined;
     if (filter && !filter(event)) return;
+    // Mounted call boundaries leave the root answer's streamed prefix intact.
+    if (format === 'text' && mounted) return;
     queue.push(
       reply !== undefined
         ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+        : format === 'text' && turnEnd
+        ? ({
+            type: event.type,
+            payload: { finalContent: answer },
+          } as unknown as AgentfootprintEvent)
         : event,
     );
     wakeup();
-    // `agent.turn_end` (or composition exit on the outermost runner)
-    // ends the stream naturally; the consumer's `for await` finishes
-    // when the iterator returns.
-    if (
-      event.type === 'agentfootprint.agent.turn_end' ||
-      event.type === 'agentfootprint.error.fatal'
-    ) {
-      done = true;
-      wakeup();
-    }
   };
   const offRecord: Unsubscribe = runner.on('*', listener);
   const unsub = (): void => {
@@ -235,6 +310,8 @@ export async function* toSSE<TIn, TOut>(
 
   /** Frames written to THIS stream so far — the {@link SseFramePosition} of the next one. */
   let written = 0;
+  /** 'text': what this stream wrote since the last `llm_start`; `undefined` = nothing. */
+  let streamed: string | undefined;
   try {
     while (!done || queue.length > 0) {
       while (queue.length > 0) {
@@ -246,9 +323,18 @@ export async function* toSSE<TIn, TOut>(
           continue;
         }
         if (format === 'text') {
-          if (event.type === 'agentfootprint.stream.token') {
+          if (event.type === 'agentfootprint.stream.llm_start') streamed = undefined;
+          else if (event.type === 'agentfootprint.stream.token') {
             const payload = (event as { payload?: { content?: string } }).payload;
-            if (payload?.content) yield payload.content;
+            if (payload?.content) {
+              streamed = (streamed ?? '') + payload.content;
+              yield payload.content;
+            }
+          } else if (event.type === 'agentfootprint.agent.turn_end') {
+            const answer = unrefusedAnswerOf(event);
+            const rest = answer === undefined ? undefined : unstreamedText(streamed, answer);
+            streamed = undefined;
+            if (rest !== undefined) yield rest;
           }
         } else {
           const frame = framing.frame(event, { sequence: written + 1 });
@@ -324,6 +410,27 @@ function framingOf(options: ToSSEOptions): SseFraming<AgentfootprintEvent> {
     );
   }
   return framing;
+}
+
+/**
+ * Where an event stands — its `meta.subflowPath`. A runner whose events carry
+ * no `meta` (not a RunnerBase) is one run with no mounts: `[]`.
+ */
+function pathOf(event: AgentfootprintEvent): readonly string[] {
+  return event.meta?.subflowPath ?? [];
+}
+
+/** Whether `mount` is `path` or one of its ancestors. */
+function leads(mount: readonly string[], path: readonly string[]): boolean {
+  return mount.length <= path.length && mount.every((segment, i) => segment === path[i]);
+}
+
+/** A turn's answer, if the event carrying it did not mark it refused. */
+function unrefusedAnswerOf(event: AgentfootprintEvent): string | undefined {
+  const payload = event.payload as { finalContent?: unknown; refused?: unknown } | undefined;
+  return payload?.refused === undefined && typeof payload?.finalContent === 'string'
+    ? payload.finalContent
+    : undefined;
 }
 
 /**

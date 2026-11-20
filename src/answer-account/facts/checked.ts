@@ -7,8 +7,7 @@
  * A resumed leg never says "did not run any tools": the calls answered before
  * the pause are read from the committed state this record holds
  * (`pausedLeg.ts` · `readPausedLeg`) — each with what its tool declared, from
- * its `coverageDeclared` rows — and, when the record holds no committed
- * history, said to be out of this record.
+ * its `coverageDeclared` rows. A mismatched history is reported as unreadable.
  */
 
 import { chip, MAX_VAR_CHARS, n, v } from '../render.js';
@@ -24,7 +23,7 @@ import {
   type CoverageSectionKey,
 } from './calls.js';
 import { at, FACT_TEXT_CHARS, historyAt, takeItem, type ReadContext } from './common.js';
-import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
+import { unmatchedBeforePause, type BeforePauseCall, type PausedLegRead } from './pausedLeg.js';
 
 /** Calls listed per row before folding. */
 export const MAX_LISTED_CALLS = 5;
@@ -63,8 +62,10 @@ export const heldChip = (): Chip => chip('before-pause', 'chip.beforePause.held'
 function rulePointer(call: CallRead): RecordPointer | undefined {
   const e = call.ruleEvent;
   if (e === undefined) return undefined;
-  if (e.type.endsWith('middleware.decision')) return at(e, 'middleware');
-  if (e.type.endsWith('permission.check')) return at(e, 'policyRuleId');
+  if (e.type.endsWith('middleware.decision'))
+    return at(e, e.payload.outcome === 'refused' ? 'outcome' : 'middleware');
+  if (e.type.endsWith('permission.check'))
+    return at(e, call.fact.refusedBy === undefined ? 'result' : 'policyRuleId');
   if (e.type.endsWith('checkin.decision')) return at(e, 'approved');
   return at(e, 'notExecuted');
 }
@@ -147,14 +148,59 @@ function checkedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
   const rule = rulePointer(call);
   const endPointers = call.fact.pointers;
   switch (call.fact.outcome) {
+    // "It ran" only when the record shows the tool ran (`entered: true`).
     case 'failed':
       return [
         ctx.say('checked.failed', {
+          vars: { tool },
+          pointers: call.end ? [at(call.end, 'error'), at(call.end, 'entered')] : [],
+        }),
+      ];
+    case 'not-executed':
+      return [ctx.say('checked.notExecuted', { vars: { tool }, pointers: endPointers })];
+    // A record that does not say whether the tool ran: words true either way.
+    case 'ended-in-error':
+      return [
+        ctx.say('checked.endedInError', {
           vars: { tool },
           pointers: call.end ? [at(call.end, 'error')] : [],
         }),
       ];
     case 'refused':
+      if (call.approvalEvent !== undefined && rule !== undefined) {
+        const proof = at(
+          call.approvalEvent,
+          call.approvalEvent.type.endsWith('checkin.decision') ? 'approved' : 'personApproved',
+        );
+        if (by !== undefined && call.ruleEvent?.payload.outcome !== 'refused')
+          return [
+            ctx.say('checked.refusedAfterApproval.named', {
+              vars: { tool, by: v(by, 'library', rule) },
+              pointers: [proof, rule],
+            }),
+          ];
+        return [
+          ctx.say(
+            call.ruleEvent?.payload.outcome === 'refused'
+              ? 'checked.refusedAfterApproval.library'
+              : 'checked.refusedAfterApproval.rule',
+            {
+              vars: { tool },
+              pointers: [proof, rule],
+            },
+          ),
+        ];
+      }
+      if (
+        call.ruleEvent?.payload.phase === 'resume' &&
+        call.ruleEvent.payload.outcome === 'refused'
+      )
+        return [
+          ctx.say('checked.refusedOnResume.library', {
+            vars: { tool },
+            pointers: rule ? [rule] : endPointers,
+          }),
+        ];
       return [
         by !== undefined && rule !== undefined
           ? ctx.say('checked.refused', { vars: { tool, by: v(by, 'library', rule) } })
@@ -309,6 +355,23 @@ function notCheckedBlock(
   return lines;
 }
 
+/**
+ * Outcomes that prove a call's tool never ran. "None of the tool calls ran"
+ * is said only when every call has one of them; a call that ended in an
+ * error may have run (`failed` did; `ended-in-error` cannot be told), so
+ * then the line says only that no call returned a result.
+ */
+const NOT_RUN: ReadonlySet<CallRead['fact']['outcome']> = new Set([
+  'refused',
+  'declined',
+  'not-dispatched',
+  'not-executed',
+]);
+
+/** Every one of `calls` is known not to have run. */
+export const knownNotRun = (calls: readonly CallRead[]): boolean =>
+  calls.every((c) => NOT_RUN.has(c.fact.outcome));
+
 export interface CheckedRows {
   readonly checked: readonly Sentence[];
   readonly checkedMore?: Sentence;
@@ -396,7 +459,11 @@ export function readCheckedRows(
         ]
       : notCheckedBlock(ctx, declaredOf(c)),
   );
-  if (ctx.resumedLeg && pausedLeg.stateHeld) {
+  if (pausedLeg.historyUnmatched) {
+    const unmatched = unmatchedBeforePause(ctx);
+    checked.push(unmatched);
+    notChecked.push(unmatched);
+  } else if (ctx.resumedLeg && pausedLeg.stateHeld) {
     // The part before the pause, read from the committed state this record holds.
     const before = pausedLeg.calls;
     const shown = before.slice(0, MAX_LISTED_CALLS);
@@ -435,16 +502,18 @@ export function readCheckedRows(
       ctx.say('notChecked.noCalls', { status: 'not-applicable', pointers: anchorPointer(ctx) }),
     );
   } else if (ranAll.length === 0) {
+    // No call returned a result. "None ran" only when that is known of every one.
     notChecked.push(
-      ctx.say('notChecked.noneRan', {
+      ctx.say(knownNotRun(calls.all) ? 'notChecked.noneRan' : 'notChecked.noResults', {
         status: 'not-applicable',
         pointers: calls.all.flatMap((c) => c.fact.pointers.slice(-1)),
       }),
     );
   } else if (notChecked.length === 0) {
-    // Calls ran, but none of the LISTED ones did: say where they are, never "none ran".
+    // Calls returned results, but none of the LISTED ones did: say where they are. "None of
+    // the listed ran" only when that is known of every listed call.
     notChecked.push(
-      ctx.say('notChecked.notListed', {
+      ctx.say(knownNotRun(listed) ? 'notChecked.notListed' : 'notChecked.notListed.noResults', {
         vars: { n: n(ranAll.length) },
         pointers: ranAll.flatMap((c) => c.fact.pointers.slice(0, 1)),
       }),

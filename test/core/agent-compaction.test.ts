@@ -739,8 +739,12 @@ describe('.compaction() — checkpoints carry the summary as an ordinary message
       .tool(looker as never)
       .compaction({ thresholdTokens: 250, summarizer: sum.provider, model: 'summarizer-model' })
       .build();
+    // A completed checkpoint carries the window but has no same-request error proof.
+    expect(checkpoint!.toolTurnEvidence).toBeUndefined();
     const answer = await revived.resumeOnError(checkpoint);
-    expect(answer).toBe('final answer');
+    expect(answer).toBe(
+      'final answer\n\n---\n\nNot sure — the record could not establish tool entry for every checked call.',
+    );
     expect(
       next.requests[0]!.messages.some((m) => m.content.startsWith(COMPACTED_FRAME_PREFIX)),
     ).toBe(true);

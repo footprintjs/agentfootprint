@@ -1,10 +1,14 @@
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
+import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import { type DecisionLedger, spendDecision } from '../../../../consentRequest.js';
 import { buildToolResolver } from '../../toolResolver.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { boundArgsOf } from '../access/bindings.js';
+import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
@@ -13,10 +17,19 @@ import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
-import { appendBatchResult } from '../batch/settle.js';
+import { appendBatchResult, missingResultFields } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolResultExecutionField,
+} from '../execution/outcomeField.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
-import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
+import type {
+  ResumedInvocation,
+  ResumedPolicyHalt,
+} from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
 import type { ToolArtifactsOperations } from '../contracts/operations/artifacts.js';
 import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
@@ -27,6 +40,8 @@ import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
+import { innerCallsFieldOf } from '../../../innerToolCalls.js';
+import { haltResumedCall } from '../routing/policyHalt.js';
 
 interface ResumeCheckInLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -51,6 +66,8 @@ export function buildResumeCheckIn(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
+    | 'resultsLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -64,6 +81,7 @@ export function buildResumeCheckIn(
     frame: ResumeConsentFrame,
   ): Promise<void> => {
     const { consentDecision, runSignal, toolName, toolCallId, startMs } = frame;
+    const occurrence = callOccurrenceField(frame.callOccurrenceKey);
 
     const iteration = scope.iteration as number;
     // The copy the person approved, detached (`boundArgsOf`).
@@ -89,7 +107,12 @@ export function buildResumeCheckIn(
     // stays exactly what it was — a structured `CheckInDecision`, never
     // parsed from prose — and the record now says which surface asked.
     const answeredVia = scope.pausedComponentId as string | undefined;
+    // The names the person was told were hidden — kept with the request and
+    // bound into its id, never worked out again from the tool as it is now
+    // (`checkInHiddenArgs.ts`); `'not-recorded'` for a pause stored before.
+    const hiddenArgs = recordedHiddenArgs(scope.pausedRequest);
     typedEmit(scope, 'agentfootprint.checkin.decision', {
+      ...occurrence,
       toolName,
       toolCallId,
       iteration,
@@ -97,198 +120,266 @@ export function buildResumeCheckIn(
       approved: decision.approved,
       by: decision.by,
       ...(decision.note !== undefined && { note: decision.note }),
+      ...((typeof hiddenArgs === 'string' || hiddenArgs.length > 0) && { hiddenArgs }),
       ...(answeredVia !== undefined && { componentId: answeredVia }),
     });
 
     let result: unknown;
     /** What the model reads — see the ask path above. */
     let modelResult: unknown;
+    let toolResultDisposition: LLMMessage['toolResultDisposition'];
     let error: boolean | undefined;
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
     let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
+    let resumedHalt: ResumedPolicyHalt | undefined;
     /** What the approved call's `execute` saw — its script row reads it. */
-    const scriptSeen: ResumedCallFacts = {};
-    if (decision.approved) {
-      const env = scope.$getEnv();
-      // Resolved against the party the checkpoint carries (9.92.0).
-      const resolved = links.resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
-      const tool = resolved.tool;
-      const dispatched = await links.resolveCredentialAndExecute(
-        scope,
-        resolved,
-        toolName,
-        args,
-        toolCallId,
-        iteration,
-        env,
-        'checkIn',
-        scriptSeen,
-      );
-      negativeResultId = dispatched.negativeResultId;
-      result = dispatched.result;
-      error = dispatched.error;
-      toolRan = dispatched.executed === true;
-      // Same ceiling law as the ask path: ran ≠ completed a step (9.20.0).
-      stepToolRan =
-        dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
-      if (dispatched.executed === true && error !== true) {
-        resumeEnvelope = dispatched.envelope;
-      }
-      // Consent moved the execution to this side of the pause; the rules
-      // about results move with it.
-      if (dispatched.executed === true) {
-        modelResult = await links.afterMoment(scope, {
-          ...(tool && { tool }),
+    const scriptSeen: ResumedCallFacts = { ...occurrence };
+    try {
+      if (decision.approved) {
+        const env = scope.$getEnv();
+        // Resolved against the party the checkpoint carries (9.92.0).
+        const resolved = links.resolveTool(
           toolName,
+          scope.pausedToolParty as ToolParty | undefined,
+        );
+        const tool = resolved.tool;
+        const dispatched = await links.resolveCredentialAndExecute(
+          scope,
+          resolved,
+          toolName,
+          args,
           toolCallId,
           iteration,
-          args,
-          result,
-          negativeResultId,
-          ...(scriptSeen.sourceCapture && { onSourceWithheld: scriptSeen.sourceCapture.withheld }),
-          ...(error === true && { error: true }),
-          history: [...(scope.history as readonly LLMMessage[])],
-          ...(scope.runIdentity && { identity: scope.runIdentity }),
-          ...(env.signal && { signal: env.signal }),
-        });
+          env,
+          'checkIn',
+          scriptSeen,
+        );
+        resumedHalt = dispatched.halt;
+        negativeResultId = dispatched.negativeResultId;
+        result = dispatched.result;
+        error = dispatched.error;
+        toolRan = dispatched.executed === true;
+        // Same ceiling law as the ask path: ran ≠ completed a step (9.20.0).
+        stepToolRan =
+          dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
+        if (dispatched.executed === true && error !== true) {
+          resumeEnvelope = dispatched.envelope;
+          resumeUnknownStatus = dispatched.unknownStatus;
+        }
+        // Consent moved the execution to this side of the pause; the rules
+        // about results move with it.
+        if (dispatched.executed === true) {
+          ({ modelResult, toolResultDisposition } = await links.afterMoment(scope, {
+            returned: scriptSeen.toolResultExecution === 'returned' && stepToolRan,
+            ...occurrence,
+            ...(tool && { tool }),
+            toolName,
+            toolCallId,
+            iteration,
+            args,
+            result,
+            negativeResultId,
+            ...(scriptSeen.resultFinalizer && {
+              onSourceWithheld: scriptSeen.resultFinalizer.withheld,
+            }),
+            ...(error === true && { error: true }),
+            history: [...(scope.history as readonly LLMMessage[])],
+            ...(scope.runIdentity && { identity: scope.runIdentity }),
+            ...(env.signal && { signal: env.signal }),
+          }));
+        }
+      } else {
+        result = declinedResult(decision.note);
       }
-    } else {
-      result = declinedResult(decision.note);
-    }
 
-    if (modelResult === undefined) modelResult = result;
-    // Placement then the truncation net — the batch loop's precedence.
-    const decisionPlaced = await links.placeResults(
-      scope,
-      { toolName, toolCallId, iteration },
-      { result, modelResult },
-      stepToolRan,
-    );
-    const decisionCapped = links.capResults(toolName, decisionPlaced);
-    modelResult = decisionCapped.modelResult;
-    if (scriptSeen.sourceCapture)
-      await scriptSeen.sourceCapture(modelResult, {
-        eligible: stepToolRan && modelResult === decisionPlaced.modelResult,
+      if (modelResult === undefined) modelResult = result;
+      // Placement then the truncation net — the batch loop's precedence.
+      const decisionPlaced = await links.placeResults(
+        scope,
+        { toolName, toolCallId, iteration, ...occurrence },
+        { result, modelResult },
+        stepToolRan,
+      );
+      let decisionCapped = links.capResults(toolName, decisionPlaced);
+      modelResult = decisionCapped.modelResult;
+      if (scriptSeen.resultFinalizer) {
+        const uncapped = modelResult === decisionPlaced.modelResult;
+        const finalized = await finalizeResumedResult(
+          scope,
+          scriptSeen.resultFinalizer,
+          toolName,
+          decisionCapped,
+          {
+            eligible: stepToolRan && uncapped,
+            ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope?.status }),
+            ...(!uncapped && { unavailableReason: 'result-capped' as const }),
+          },
+          links.capResults,
+          negativeResultId,
+        );
+        decisionCapped = finalized.values;
+        modelResult = decisionCapped.modelResult;
+        if (finalized.refused) {
+          result = decisionCapped.result;
+          stepToolRan = false;
+          resumeEnvelope = { content: result, effects: [], status: 'invalid', malformed: [] };
+        }
+      }
+      scriptSeen.resultFinalizer?.assertFinalized();
+      const sourceHalt = sourceEvidenceHaltOf(scope);
+      if (sourceHalt && resumedHalt === undefined)
+        scope.$break(`policy-halt: ${sourceHalt.reason}`);
+      let decisionResultStr =
+        typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+      const decisionToolChars = decisionResultStr.length;
+      if (deps.negativeClaimsArmed === true)
+        decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
+      // How the call settled — read by the step and by the message's `outcome`.
+      const decisionSettled: DispatchSettlement = {
+        ran: toolRan,
+        clean: stepToolRan,
+        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+        ...(resumeUnknownStatus !== undefined && { unknownStatus: resumeUnknownStatus }),
+      };
+      if (deps.stepPlanFor) {
+        decisionResultStr = links.applyStepReturn(
+          scope,
+          { toolName, toolCallId, iteration, ...occurrence, settled: decisionSettled },
+          decisionResultStr,
+        );
+      }
+      // Typed tool effects (9.19.0) — an approved consequential call may
+      // carry them too; judged exactly as inline.
+      if (resumeEnvelope !== undefined) {
+        const decisionTransition: TransitionBatchState = { losers: [] };
+        decisionResultStr += links.applyToolEffects(
+          scope,
+          { toolName, toolCallId, iteration, ...occurrence },
+          resumeEnvelope,
+          decisionTransition,
+        );
+        links.emitTransitionConflict(scope, iteration, decisionTransition);
+      }
+      // The batch settlement (9.113.0) — the ask path's twin.
+      const decisionSettlement = links.settleBatch(
+        [
+          ...(scope.history as readonly LLMMessage[]),
+          {
+            role: 'tool',
+            content: decisionResultStr,
+            ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
+            toolCallId,
+            toolName,
+            ...occurrence,
+            ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+            ...toolResultExecutionField(
+              deps.answerLayer,
+              scriptSeen.toolResultExecution,
+              !stepToolRan ||
+                resumedHalt !== undefined ||
+                sourceHalt !== undefined ||
+                !Object.is(modelResult, decisionPlaced.modelResult),
+            ),
+            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+            ...innerCallsFieldOf(scope, toolCallId, iteration),
+            // A decline ran nothing → 'refused'; read by the check-in trail.
+            ...outcomeField(decisionSettled),
+            ...reportedStatusField(decisionSettled),
+          },
+        ],
+        { toolName, toolCallId, ...occurrence },
+      );
+      const decisionHistory = decisionSettlement.history;
+      commitSettledToolHistory(scope, decisionHistory);
+      // Drives `on-tool-return` triggers, same as the execute path.
+      scope.lastToolResult = {
+        toolName,
+        result: decisionResultStr,
+        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+      };
+      appendBatchResult(scope, {
+        toolName,
+        result: decisionResultStr,
+        toolCallId,
+        ...occurrence,
+        ...(deps.resultsLayer === true && missingResultFields(toolRan, scriptSeen.threw)),
         ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
       });
-    const sourceHalt = sourceEvidenceHaltOf(scope);
-    if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
-    let decisionResultStr =
-      typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
-    const decisionToolChars = decisionResultStr.length;
-    if (deps.negativeClaimsArmed === true)
-      decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
-    // Step boundary (9.18.0) — an approved consequential step (a checkIn
-    // tool CAN be a step's tool) advances on the resumed dispatch.
-    if (deps.stepPlanFor && stepToolRan) {
-      decisionResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
-    }
-    // Typed tool effects (9.19.0) — an approved consequential call may
-    // carry them too; judged exactly as inline.
-    if (resumeEnvelope !== undefined) {
-      const decisionTransition: TransitionBatchState = { losers: [] };
-      decisionResultStr += links.applyToolEffects(
+      await judgeLanded(
         scope,
-        { toolName, toolCallId, iteration },
-        resumeEnvelope,
-        decisionTransition,
+        deps.findingsJudge,
+        toolRan,
+        { toolName, result: decisionResultStr, toolCallId, ...occurrence },
+        iteration,
+        links.turnStampOf(scope),
       );
-      links.emitTransitionConflict(scope, iteration, decisionTransition);
-    }
-    // The batch settlement (9.113.0) — the ask path's twin.
-    const decisionSettlement = links.settleBatch(
-      [
-        ...(scope.history as readonly LLMMessage[]),
-        {
-          role: 'tool',
-          content: decisionResultStr,
-          ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
-          toolCallId,
-          toolName,
-          ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
-        },
-      ],
-      { toolName, toolCallId },
-    );
-    const decisionHistory = decisionSettlement.history;
-    scope.history = decisionHistory;
-    // Drives `on-tool-return` triggers, same as the execute path.
-    scope.lastToolResult = {
-      toolName,
-      result: decisionResultStr,
-      ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
-    };
-    appendBatchResult(scope, {
-      toolName,
-      result: decisionResultStr,
-      toolCallId,
-      ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
-    });
-    await judgeLanded(
-      scope,
-      deps.findingsJudge,
-      toolRan,
-      { toolName, result: decisionResultStr, toolCallId },
-      iteration,
-      links.turnStampOf(scope),
-    );
-    links.fileResumedScript(scope, {
-      toolName,
-      toolCallId,
-      iteration,
-      carried: args,
-      entered: toolRan,
-      seen: scriptSeen,
-    });
-    links.emitToolEnd(
-      scope,
-      toolName,
-      {
+      links.fileResumedScript(scope, {
+        toolName,
         toolCallId,
-        result: decisionCapped.result,
-        durationMs: Date.now() - startMs,
-        ...(error === true && { error: true }),
-        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
-        ...(decisionCapped.modelResult !== decisionCapped.result && {
-          modelResult: decisionCapped.modelResult,
-        }),
-      },
-      toolRan,
-      undefined,
-      negativeResultId,
-      args,
-    );
-    links.bracketSettled(scope, decisionSettlement);
-    typedEmit(scope, 'agentfootprint.agent.iteration_end', {
-      turnIndex: 0,
-      iterIndex: iteration,
-      // The brackets this leg closed — see the ask path's twin.
-      toolCallCount: 1 + decisionSettlement.settled.length,
-      history: decisionHistory,
-    });
-    if (deps.inputsLayer === true) scope.argumentAsk = undefined;
-    scope.iteration = iteration + 1;
-    // Clear ALL pause checkpoint fields (shared + check-in).
-    await links.endCall(scope);
-    scope.pausedToolCallId = '';
-    scope.pausedToolName = '';
-    scope.pausedToolStartMs = 0;
-    scope.pausedCheckIn = false;
-    scope.pausedCheckInArgs = undefined;
-    // The request was answered — and spent — by this resume.
-    scope.pausedRequest = undefined;
-    // Cleared ONLY when it was set — see the ask path's twin note.
-    if (answeredVia !== undefined) scope.pausedComponentId = undefined;
-    // The served party the checkpoint carried is consumed with it (9.92.0);
-    // written back only when it was there, so an older checkpoint's resume
-    // commits exactly what it always did.
-    if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
-    return;
+        iteration,
+        carried: args,
+        entered: toolRan,
+        seen: scriptSeen,
+      });
+      links.emitToolEnd(
+        scope,
+        toolName,
+        {
+          toolCallId,
+          ...occurrence,
+          result: decisionCapped.result,
+          durationMs: Date.now() - startMs,
+          ...(error === true && { error: true }),
+          ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          ...(decisionCapped.modelResult !== decisionCapped.result && {
+            modelResult: decisionCapped.modelResult,
+          }),
+        },
+        toolRan,
+        undefined,
+        negativeResultId,
+        args,
+      );
+      links.bracketSettled(scope, decisionSettlement);
+      typedEmit(scope, 'agentfootprint.agent.iteration_end', {
+        turnIndex: 0,
+        iterIndex: iteration,
+        // The brackets this leg closed — see the ask path's twin.
+        toolCallCount: 1 + decisionSettlement.settled.length,
+        history: decisionHistory,
+      });
+      if (deps.inputsLayer === true) scope.argumentAsk = undefined;
+      scope.iteration = iteration + 1;
+      // Clear ALL pause checkpoint fields (shared + check-in).
+      await links.endCall(scope);
+      scope.pausedToolCallId = '';
+      scope.pausedToolName = '';
+      scope.pausedToolStartMs = 0;
+      scope.pausedCheckIn = false;
+      scope.pausedCheckInArgs = undefined;
+      // The request was answered — and spent — by this resume.
+      scope.pausedRequest = undefined;
+      scope.pausedGatePolicy = undefined;
+      // Cleared ONLY when it was set — see the ask path's twin note.
+      if (answeredVia !== undefined) scope.pausedComponentId = undefined;
+      // The served party the checkpoint carried is consumed with it (9.92.0);
+      // written back only when it was there, so an older checkpoint's resume
+      // commits exactly what it always did.
+      if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
+      if (resumedHalt !== undefined) haltResumedCall(scope, resumedHalt, iteration);
+      return;
+    } catch (error) {
+      scriptSeen.resultFinalizer?.withheld();
+      throw error;
+    } finally {
+      scriptSeen.resultFinalizer?.close();
+    }
   };
   return { resumeCheckIn };
 }

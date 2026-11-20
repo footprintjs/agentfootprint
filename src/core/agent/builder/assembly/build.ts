@@ -64,6 +64,7 @@ export interface AssemblyPort extends ContractsPort, StepsPort, DeferredPort {
   timeValue?: TimeOptions;
   readonly opts: AgentOptions;
   inputsLayerSourcesValue: boolean;
+  inputsLayerCorrectionValue?: 'once';
   selfExplainConfig?: Parameters<SelfExplainExtension['binding']>[0];
   readonly registry: ToolRegistryEntry[];
   evidenceGate?: ResolvedEvidenceGate;
@@ -95,6 +96,8 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
   construct: (parts: BuildParts) => TAgent,
 ): TAgent {
   const { negativeClaims, negativeSchema, answerLayer } = checkContracts(self);
+  const overrideAnswerLayer =
+    answerLayer !== undefined && (answerLayer !== false || self.answerLayerValue !== undefined);
   // Resolve the voice config: bundled defaults + consumer overrides.
   // Templates flow through the same barrel exports the rest of the
   // library uses, so a future locale-pack swap is a single import.
@@ -114,7 +117,7 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
     self.ontologyValue !== undefined ||
     self.inputsLayerValue ||
     self.resultsLayerValue ||
-    answerLayer !== undefined ||
+    overrideAnswerLayer ||
     self.timeValue !== undefined
       ? {
           ...self.opts,
@@ -132,22 +135,22 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
           // armed by either stay armed, and a malformed option is still refused
           // by the one reader rather than silently replaced by the door's value.
           ...(self.inputsLayerValue && {
-            inputsLayer:
-              self.inputsLayerSourcesValue ||
-              readInputsLayerOption(self.opts.inputsLayer)?.argumentSources === true
-                ? { argumentSources: true }
-                : true,
+            inputsLayer: mergeInputsLayerOption(
+              self.opts.inputsLayer,
+              self.inputsLayerSourcesValue,
+              self.inputsLayerCorrectionValue,
+            ),
           }),
           // The results layer (honesty layer 3), the same door grammar.
           ...(self.resultsLayerValue && { resultsLayer: true }),
           // The answer layer (honesty layer 4), the same door grammar — the
           // value resolved above, whichever door set it.
-          ...(answerLayer !== undefined && {
+          ...(overrideAnswerLayer && {
             answerLayer:
-              answerLayer.standingLine === undefined
+              answerLayer === false
+                ? false
+                : answerLayer.standingLine === undefined
                 ? true
-                : answerLayer.standingLine === 'always'
-                ? { standingLine: true }
                 : { standingLine: { when: answerLayer.standingLine } },
           }),
           // The time layer, the same door grammar — the builder's value wins
@@ -482,4 +485,21 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
     agent.bindSelfExplain(selfExplainBinding);
   }
   return agent;
+}
+
+/** Validate the direct door even when the builder also arms inputs; preserve both options. */
+function mergeInputsLayerOption(
+  value: AgentOptions['inputsLayer'],
+  sources: boolean,
+  correction: 'once' | undefined,
+): NonNullable<AgentOptions['inputsLayer']> {
+  const direct = readInputsLayerOption(value);
+  const argumentSources = sources || direct?.argumentSources === true;
+  const declarationCorrection = correction ?? direct?.declarationCorrection;
+  return argumentSources || declarationCorrection !== undefined
+    ? {
+        ...(argumentSources && { argumentSources: true }),
+        ...(declarationCorrection !== undefined && { declarationCorrection }),
+      }
+    : true;
 }

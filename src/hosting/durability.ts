@@ -47,8 +47,10 @@
 import type { CombinedRecorder, CommitEvent } from 'footprintjs';
 
 import { installDurabilityBarrier } from '../core/durabilityBarrier.js';
+import { SessionNotFoundError, SessionOwnershipConflictError } from './errors.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { DurabilityMode } from './types.js';
 
 /** What the writer needs from the composer around it. */
@@ -69,6 +71,15 @@ export interface DurableInvocation {
   readonly sessionId: string | undefined;
   /** The run id to stamp on the conversation, for correlating back to the run. */
   readonly runId: () => string | undefined;
+  /**
+   * WHO the conversation belongs to: the identity this invocation's finished
+   * checkpoint carries (`conversationOwner`). Stamped on every save in the
+   * middle of the run, because a store and a verifying door read the owner
+   * off the stored conversation (`envelopeOwner`): a save that dropped it left
+   * a row its owner could no longer open and an anonymous caller could
+   * (r3-45-hosting-1).
+   */
+  readonly identity: () => MemoryIdentity | undefined;
   /**
    * This invocation's committed root state, live, through its captured native view. The
    * conversation is READ here, at the commit that moved it — never off the
@@ -138,6 +149,13 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
           failure = undefined;
         },
         (err: unknown) => {
+          // The store can refuse a different owner or a session whose owner it
+          // cannot determine (r3-45-hosting-1, r3-56-adapters-hosting-2).
+          // Both reach the caller by name in every durability mode.
+          if (err instanceof SessionOwnershipConflictError || err instanceof SessionNotFoundError) {
+            failure = err;
+            return;
+          }
           failure = new Error(
             `[hosting] the session store did not accept this run's progress, so nothing ` +
               `after this point may proceed as if it had` +
@@ -159,6 +177,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
     history: readonly LLMMessage[],
     userMessage: string,
     iteration: number,
+    identity: MemoryIdentity | undefined,
   ): void {
     queued = {
       sessionId,
@@ -172,12 +191,13 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
         lastCompletedIteration: iteration,
         originalInput: { message: userMessage },
         checkpointedAt: Date.now(),
+        ...(identity !== undefined && { identity: structuredClone(identity) }),
       },
     };
     pump();
   }
 
-  const capture = ({ sessionId, runId, state }: DurableInvocation): CombinedRecorder => ({
+  const capture = ({ sessionId, runId, identity, state }: DurableInvocation): CombinedRecorder => ({
     id: 'af-hosting-durability',
     // INLINE, always. A write delivered one beat behind is a write that can be
     // lost by the very crash it exists to survive — and under `'sync'` the
@@ -207,6 +227,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
         history as readonly LLMMessage[],
         typeof userMessage === 'string' ? userMessage : '',
         typeof iteration === 'number' ? iteration : 0,
+        identity(),
       );
     },
   });

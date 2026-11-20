@@ -1,5 +1,36 @@
+import type { FindingsLedger } from '../../findings/types.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { NegativeCheckpoint } from '../../negativeClaims/checkpoint.js';
+import type { AgentState } from '../../types.js';
+import type { TypedScope } from 'footprintjs';
+import type { MemoryStore } from '../../../../memory/store/index.js';
+import { resolveTurnNumber } from '../../../../memory/turn/index.js';
+import type { ToolTurnEvidence } from '../../recordedCalls/toolTurnCheckpoint.js';
+
+/**
+ * Raise `scope.turnNumber` to what the conversation's own stores know.
+ *
+ * The turn number is the KEY memory writes stamp on their entries, so two
+ * turns of one conversation must never share it. In-process counting cannot
+ * provide that: the shape seen in a production field deployment builds a
+ * fresh `Agent` per turn against a stable `conversationId`, so every run
+ * starts counting from scratch while the store holds the whole history.
+ *
+ * Runs after `seedFrom`, because it needs the identity that stage resolves.
+ * A store that throws is not swallowed — a memory whose store is unreachable
+ * fails at its next read anyway, and a guessed turn number is how a
+ * conversation quietly overwrites itself.
+ */
+export async function anchorTurnNumber(
+  scope: TypedScope<AgentState>,
+  stores: readonly MemoryStore[],
+): Promise<void> {
+  scope.turnNumber = await resolveTurnNumber({
+    stores,
+    identity: scope.runIdentity,
+    hostTurn: scope.turnNumber,
+  });
+}
 
 /**
  * A stored conversation handed to the next run — what
@@ -30,7 +61,11 @@ export interface PendingResumeHistory {
    * history's count, and the restored ledger's stamps, are all it has.
    */
   readonly turn?: number;
+  readonly toolTurnEvidence?: ToolTurnEvidence;
   readonly negatives?: NegativeCheckpoint;
+  readonly innerCallPolicyArgs?: import('../../../../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
+  /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */
+  readonly placedTickets?: readonly import('../../placedTickets.js').PlacedTicket[];
 }
 
 /**
@@ -59,4 +94,70 @@ export function historyForTurn(
   if (resume === undefined) return [entry];
   if (resume.appendsUserTurn) return [...resume.history, entry];
   return resume.history.length > 0 ? [...resume.history] : [entry];
+}
+
+/**
+ * How many user turns the conversation already contains, this one included.
+ * At least 1 — a run always IS a turn.
+ */
+function countUserTurns(history: readonly LLMMessage[]): number {
+  let count = 0;
+  for (const message of history) if (message.role === 'user') count++;
+  return Math.max(1, count);
+}
+
+/** A stamp that counts as a turn: a positive whole number. */
+const isTurn = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+
+/**
+ * WHICH TURN THIS IS, while an honesty layer is armed — the stamp every
+ * ledger row of this turn carries (`findings/ledger.ts` · `recordFindings`)
+ * and the one the answer's standing reads "this turn" by, so it must never
+ * repeat in one conversation. `countUserTurns` cannot promise that on its
+ * own: a window strategy or a compaction trims the stored history, and the
+ * count of the user messages left repeats and goes backwards — an earlier
+ * turn's verdict would then be folded as a later turn's.
+ *
+ * Two floors raise the count, each a lower bound of the true turn (the rule
+ * `memory/turn/resolveTurnNumber.ts` applies to a store: whichever source
+ * knows more wins, and none drags the conversation backwards):
+ *   - the turn the stored history ENDS on (`AgentRunCheckpoint.turnNumber`):
+ *     a continued conversation is the turn after it, a `resumeOnError` retry
+ *     the same turn again;
+ *   - the latest turn stamped on the restored ledger — for a conversation
+ *     stored before the checkpoint carried its turn: a continued
+ *     conversation comes after every stamped row, a retry at or after them.
+ *
+ * With neither — a fresh run, or no layer armed — the count, as always.
+ */
+export function turnNumberFor(
+  history: readonly LLMMessage[],
+  resume: PendingResumeHistory | undefined,
+  ledger: FindingsLedger | undefined,
+  stamped: boolean,
+): number {
+  const counted = countUserTurns(history);
+  if (!stamped || resume === undefined) return counted;
+  const next = resume.appendsUserTurn ? 1 : 0;
+  let turn = counted;
+  if (isTurn(resume.turn)) turn = Math.max(turn, resume.turn + next);
+  for (const row of ledger ?? []) {
+    const stamp = (row as { readonly turn?: unknown }).turn;
+    if (isTurn(stamp)) turn = Math.max(turn, stamp + next);
+  }
+  return turn;
+}
+
+/** Start the numbered turn. */
+export function seedConversationTurn(
+  scope: TypedScope<AgentState>,
+  history: readonly LLMMessage[],
+  resume: PendingResumeHistory | undefined,
+  ledger: FindingsLedger | undefined,
+  stamped: boolean,
+): number {
+  const turn = turnNumberFor(history, resume, ledger, stamped);
+  scope.turnNumber = turn;
+  return turn;
 }

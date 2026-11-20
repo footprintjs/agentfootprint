@@ -20,7 +20,7 @@ export const meta: ExampleMeta = {
   title: 'Prose negatives — observe a warning without rewriting the answer',
   group: 'features',
   description:
-    'A native search has a source gap; the model overclaims, a bounded warning fires, and the original answer is delivered unchanged.',
+    'A native search has a source gap. The model overclaims, the observer emits a finding, and the default standing line explains the doubt.',
   defaultInput: 'Check incidents for payments.',
   providerSlots: [],
   tags: ['features', 'tools', 'observability'],
@@ -104,10 +104,15 @@ export async function run(input: string): Promise<string> {
       conversationId: 'prose-example',
     },
   });
-  // The warning observes the source gap; it cannot rewrite, block or verify prose.
+  // The observer records the gap. The answer layer appends the standing line.
   console.log(answer);
   // #endregion observe
-  if (answer !== modelAnswer) throw new Error('Prose observation must preserve the answer.');
+  const expected =
+    `${modelAnswer}\n\n---\n\n` +
+    'Not sure — a tool said there is ground it did not check or cannot cover; ' +
+    'a tool said nothing matched; model prose was not verified for negative claims.';
+  if (answer !== expected)
+    throw new Error('Expected the model text followed by the standing line.');
   if (
     warnings.length !== 1 ||
     warnings[0].kind !== 'negative-claim' ||

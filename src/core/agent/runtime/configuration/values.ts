@@ -35,6 +35,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare findingsOptions?: AgentConfiguration['findingsOptions'];
   declare inputsLayerOption?: AgentConfiguration['inputsLayerOption'];
   declare argumentSourcesArmed?: AgentConfiguration['argumentSourcesArmed'];
+  declare sourceDeclarationCorrection?: AgentConfiguration['sourceDeclarationCorrection'];
   declare argumentAskContext?: AgentConfiguration['argumentAskContext'];
   declare resultsLayerOption?: AgentConfiguration['resultsLayerOption'];
   declare answerLayerOption?: AgentConfiguration['answerLayerOption'];

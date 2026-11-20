@@ -41,18 +41,10 @@
  */
 
 import { isMissing } from '../../../tools/declare.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
-/** Where the model says a value came from. */
-export type DeclaredSourceKind = 'user' | 'result' | 'turn' | 'app' | 'assumed';
-
-/** The five, in the order the served schema enumerates them. */
-export const DECLARED_SOURCE_KINDS: readonly DeclaredSourceKind[] = Object.freeze([
-  'user',
-  'result',
-  'turn',
-  'app',
-  'assumed',
-]);
+import { DECLARED_SOURCE_KINDS, type DeclaredSourceKind } from '../sourceContract.js';
+export { DECLARED_SOURCE_KINDS, type DeclaredSourceKind } from '../sourceContract.js';
 
 /** One `_findings.from` entry, as the reader kept it. */
 export interface DeclaredSource {
@@ -145,6 +137,34 @@ export function readSources(raw: unknown, args: PlainObject): ReadSources {
  */
 export interface CallSources {
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly from: readonly DeclaredSource[];
   readonly malformed?: number;
+  /** Full parser fault, irrespective of which native row owns the display count. Correction arm only. */
+  readonly declarationMalformed?: true;
+}
+
+/** The free arguments (no rule) a call's `from` entries name, in declared order. */
+export function freeNamed(
+  declared: CallSources | undefined,
+  ruled: readonly { readonly argument: string }[],
+): string[] {
+  const from = declared?.from ?? [];
+  const ruledNames = new Set(ruled.map((r) => r.argument));
+  return from.filter((e) => !ruledNames.has(e.argument)).map((e) => e.argument);
+}
+
+/**
+ * The quotes the model declared as the person's (`source: 'user'`) for a
+ * call's period arguments — `undefined` when declared sources are off for the
+ * call (the arm is off, or the call declares nothing). Read from the entries
+ * alone, so every stage (with or without the corpora) decides alike.
+ */
+export function periodQuotesOf(
+  declared: CallSources | undefined,
+  periodArguments: ReadonlySet<string>,
+): readonly string[] | undefined {
+  return declared?.from
+    .filter((e) => e.source === 'user' && e.quote !== undefined && periodArguments.has(e.argument))
+    .map((e) => e.quote as string);
 }

@@ -105,6 +105,7 @@ export type {
   ToolsSessionCloseFailedPayload,
 } from './payloads/toolSessionPayloads.js';
 export type { ValidationArgsInvalidPayload } from './payloads/validation.js';
+export type { ToolRowsetCheckedPayload, ToolRowsetCheckReason } from './payloads/toolRowsets.js';
 export type {
   SkillTurnRoutedPayload,
   SkillActivatedPayload,
@@ -114,6 +115,7 @@ export type {
   SkillRejectedPayload,
   SkillRouteConflictPayload,
   SkillStepAdvancedPayload,
+  SkillStepHeldPayload,
   SkillStepSkippedPayload,
   SkillStepsUnfinishedPayload,
   SkillEscalatedPayload,

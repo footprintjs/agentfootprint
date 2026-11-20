@@ -12,6 +12,9 @@ const NODE_WRITE_CAP = 20;
 
 const NODE_READ_CAP = 30;
 
+/** Possible sources shown for one read, including the before-window candidate. */
+const NODE_READ_SOURCE_CAP = 8;
+
 const NARRATIVE_LINE_CHAR_CAP = 400;
 
 const UNKNOWN_ID_SUGGESTION_CAP = 8;
@@ -74,6 +77,7 @@ export {
   OVERVIEW_DESCRIPTION_CAP,
   NODE_WRITE_CAP,
   NODE_READ_CAP,
+  NODE_READ_SOURCE_CAP,
   NARRATIVE_LINE_CHAR_CAP,
   UNKNOWN_ID_SUGGESTION_CAP,
   KEY_SUGGESTION_CAP,

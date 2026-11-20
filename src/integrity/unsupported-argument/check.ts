@@ -65,12 +65,12 @@
 import { MIN_CHECKED_LENGTH, clipValue, stringLeaves } from '../argumentLeaves.js';
 import type { Assertion, SubjectRef } from '../assertion/types.js';
 import type { ContextError } from '../finding/types.js';
+import type { IntegrityCallWitness } from '../finding/row.js';
+import { callOccurrenceField } from '../../lib/callOccurrence.js';
 
 /** One tool call the model chose to make, with the arming that makes it checkable. */
-export interface ArgumentChoice {
+export interface ArgumentChoice extends IntegrityCallWitness {
   readonly toolName: string;
-  /** The provider's id for this call — what the witness points a reader at. */
-  readonly toolCallId: string;
   readonly args: Readonly<Record<string, unknown>>;
   /** `Tool.argumentsFrom` — the tools whose results were meant to ground these arguments. */
   readonly argumentsFrom: readonly string[];
@@ -129,6 +129,8 @@ export interface ChoiceCorpus {
 /** What the choice-seam check found — the findings AND the excusals. */
 export interface UnsupportedArguments {
   readonly findings: readonly ContextError[];
+  /** Exact occurrences of the findings, separate from the incident payloads. */
+  readonly occurrences: ReadonlyMap<ContextError, IntegrityCallWitness>;
   /** Values an app-asserted external ground excused, with their sources. */
   readonly externalGroundings: readonly ExternalGrounding[];
 }
@@ -185,8 +187,9 @@ export function unsupportedArgumentsOf(
   epoch: number,
 ): UnsupportedArguments {
   const findings: ContextError[] = [];
+  const occurrences = new Map<ContextError, IntegrityCallWitness>();
   const externalGroundings: ExternalGrounding[] = [];
-  if (calls.length === 0) return { findings, externalGroundings };
+  if (calls.length === 0) return { findings, externalGroundings, occurrences };
   const served = corpus.grounded.map((text) => text.toLowerCase());
   const written = corpus.assistant.map((text) => text.toLowerCase());
   // The external entries, lowered once and kept only when both halves are
@@ -262,7 +265,7 @@ export function unsupportedArgumentsOf(
         },
       ];
 
-      findings.push({
+      const finding: ContextError = {
         kind: 'unsupported-argument',
         seam: 'choice',
         subjects: [subject],
@@ -287,8 +290,13 @@ export function unsupportedArgumentsOf(
             `in any message from the user, not in any tool result. Nothing served it, so ` +
             `nothing in this run can say what it refers to. To ground it, ${refetch}. Nothing ` +
             `here blocked the call.`,
+      };
+      findings.push(finding);
+      occurrences.set(finding, {
+        toolCallId: call.toolCallId,
+        ...callOccurrenceField(call.callOccurrenceKey),
       });
     }
   }
-  return { findings, externalGroundings };
+  return { findings, externalGroundings, occurrences };
 }

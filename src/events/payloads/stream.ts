@@ -1,6 +1,7 @@
 import type {
   LLMMessage,
   LLMProviderName,
+  ToolCallEventIdentity,
   ToolProtocol,
   ToolResultStatus,
 } from './dependencyTypes.js';
@@ -102,10 +103,25 @@ export interface LLMTokenPayload {
   readonly content: string;
 }
 
-export interface ToolStartPayload {
+export interface ToolStartPayload
+  extends Pick<ToolCallEventIdentity, 'toolCallId' | 'callOccurrenceKey'> {
   readonly toolName: string;
-  readonly toolCallId: string;
+  /**
+   * The arguments as the model proposed them — the REAL values, also for a
+   * tool whose argument view hides some ({@link shownArgs}). Only the run's
+   * redaction policy masks them here.
+   */
   readonly args: Readonly<Record<string, unknown>>;
+  /**
+   * The approval-safe display of the proposal for AG-UI `TOOL_CALL_ARGS`.
+   * An unsupported view, or a proposal that can be rewritten before
+   * admission, displays placeholders for every available argument name.
+   * A valid view that withholds nothing omits this field.
+   */
+  readonly shownArgs?: Readonly<Record<string, unknown>>;
+  /** Names withheld from the proposal's display, in argument order. A check-in
+   * records the names withheld from the bound call it actually shows. */
+  readonly hiddenArgs?: readonly string[];
   readonly parallelCount?: number;
   readonly protocol?: ToolProtocol;
   /**
@@ -131,7 +147,7 @@ export interface ToolStartPayload {
  * by `ctx.progress(payload)` from within `tool.execute`, in call order, always
  * BETWEEN this call's `stream.tool_start` and its `stream.tool_end`.
  *
- * The split is deliberate: the three identity fields are stamped by the
+ * The split is deliberate: the identity fields are stamped by the
  * FRAMEWORK from the dispatch it is already holding (a tool cannot claim to be
  * another call, another tool, or another iteration), and `payload` is the tool
  * author's data forwarded verbatim. Nothing here is ever shown to the model —
@@ -140,7 +156,7 @@ export interface ToolStartPayload {
  * Absent entirely for every tool that never reports: a run whose tools call
  * nothing files no `tool_progress` events at all.
  */
-export interface ToolProgressPayload {
+export interface ToolProgressPayload extends Pick<ToolCallEventIdentity, 'callOccurrenceKey'> {
   /** The invocation this report belongs to — matches `stream.tool_start.toolCallId`. */
   readonly toolCallId: string;
   /** The tool that reported. */
@@ -156,11 +172,40 @@ export interface ToolProgressPayload {
   readonly payload: unknown;
 }
 
-export interface ToolEndPayload {
-  readonly toolCallId: string;
+export interface ToolEndPayload
+  extends Pick<ToolCallEventIdentity, 'toolCallId' | 'callOccurrenceKey'> {
   readonly result: unknown;
   readonly error?: boolean;
   readonly durationMs: number;
+  /**
+   * Whether the tool's own function (`execute`) was entered — written from
+   * the dispatch's own fact by the door every bracket of the Agent's tool-call
+   * stages passes (`core/agent/stages/toolCalls/observation/
+   * observationsOperations.ts` · `emitToolEnd`), read by
+   * `semantics/toolRan.ts` · `toolRanOf`. The demo chart
+   * `buildAgentMessageApiChart` emits its own brackets without it: it runs
+   * no tool function, so its brackets prove nothing about a tool.
+   *
+   * WHY: `error: true` alone is the same bytes for a tool that ran and threw
+   * and for a call that never reached its tool (an unknown tool name,
+   * arguments the schema rejected, a `wants` or credential block), so a
+   * reader could not tell "it ran and failed" from "it never ran".
+   *
+   * What it proves, on a record written by this version:
+   * - `false`: the function was never entered. On every bracket of such a
+   *   call, with or without `error` — except one that already says so with
+   *   `notExecuted` (a rule refused it) or `notDispatched` (a paused batch
+   *   settled it), which keeps the bytes it had.
+   * - `true`: the function was entered, whether it returned or threw.
+   *
+   * A bracket with no `entered`, `notExecuted` or `notDispatched` does not
+   * say whether the tool ran. Recordings made before this field existed
+   * have no entry stamp. A saved `entered` value that is not a boolean (a
+   * hand-edited record, a placeholder) also leaves entry unrecorded.
+   *
+   * @example { toolCallId: 'c1', result: "Unknown tool 'reboot_host'…", durationMs: 0, error: true, entered: false }
+   */
+  readonly entered?: boolean;
   /**
    * The tool's OWN declared outcome (9.19.0) — present only when the tool
    * returned a result envelope carrying `status`. Normalized vocabulary
@@ -215,7 +260,10 @@ export interface ToolEndPayload {
    * `core/toolShownArgs.ts` · `shownArgsOf`). Names only, never values: a
    * link may ADD a value (a server-side key) the model never saw, and an event
    * goes to every sink attached, each serializing what it gets. Taken BEFORE
-   * the tool runs, so nothing the tool writes into its arguments reaches it.
+   * the tool runs, and judged once more after it returns only when the time
+   * layer redrew a look-back at dispatch — on the record's copy, a fresh
+   * object the tool is never handed — so nothing the tool writes into its
+   * arguments reaches it.
    * A reader exporting the call's arguments shows these keys' values as
    * withheld. Absent when the tool ran with the proposal as it was.
    *
@@ -231,9 +279,12 @@ export interface ToolEndPayload {
    *
    * NOT a general "never ran" marker, and its absence proves nothing: a call
    * that could not run with no rule involved (an unknown tool name, an args
-   * rejection, a `wants` or credential block) carries `error: true` instead,
-   * a settled bracket carries `notDispatched`, and a resumed leg's bracket
-   * carries neither. Batch-dispatch bracket only.
+   * rejection, a `wants` or credential block) carries `error: true` and
+   * `entered: false` instead, a settled bracket carries `notDispatched`, and
+   * a resumed leg's bracket of a call that did not run (a person declined,
+   * a credential was blocked) carries `entered: false`. The general answer is
+   * `entered`, read through `semantics/toolRan.ts` · `toolRanOf`.
+   * Batch-dispatch bracket only.
    */
   readonly notExecuted?: true;
 }

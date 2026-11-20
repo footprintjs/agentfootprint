@@ -1929,9 +1929,11 @@
         "asksInProse": false
       },
       "standing": {
-        "standing": "not-assessed",
-        "assessment": "not-applicable",
-        "reasons": []
+        "standing": "not-sure",
+        "assessment": "unknown",
+        "reasons": [
+          "call-not-completed"
+        ]
       },
       "argumentRows": {
         "total": 0,
@@ -2140,9 +2142,11 @@
         "asksInProse": false
       },
       "standing": {
-        "standing": "not-assessed",
-        "assessment": "not-applicable",
-        "reasons": []
+        "standing": "not-sure",
+        "assessment": "unknown",
+        "reasons": [
+          "call-not-completed"
+        ]
       },
       "argumentRows": {
         "total": 0,
@@ -2823,9 +2827,11 @@
         "asksInProse": false
       },
       "standing": {
-        "standing": "not-assessed",
-        "assessment": "not-applicable",
-        "reasons": []
+        "standing": "not-sure",
+        "assessment": "unknown",
+        "reasons": [
+          "call-not-completed"
+        ]
       },
       "argumentRows": {
         "total": 0,
@@ -3479,11 +3485,12 @@
           },
           "standing": {
             "consistent": 10,
-            "not-assessed": 9,
-            "not-sure": 1
+            "not-assessed": 8,
+            "not-sure": 2
           },
           "reasons": {
-            "empty-undeclared": 1
+            "empty-undeclared": 1,
+            "call-not-completed": 1
           },
           "periodRuns": 20,
           "argumentReasonRuns": 0,
@@ -3621,10 +3628,12 @@
             "meant": 0
           },
           "standing": {
-            "not-assessed": 2,
+            "not-sure": 2,
             "consistent": 3
           },
-          "reasons": {},
+          "reasons": {
+            "call-not-completed": 2
+          },
           "periodRuns": 3,
           "argumentReasonRuns": 0,
           "askedRuns": 0,
@@ -3692,11 +3701,12 @@
           },
           "standing": {
             "consistent": 22,
-            "not-assessed": 19,
-            "not-sure": 3
+            "not-assessed": 16,
+            "not-sure": 6
           },
           "reasons": {
-            "empty-undeclared": 3
+            "empty-undeclared": 3,
+            "call-not-completed": 3
           },
           "periodRuns": 39,
           "argumentReasonRuns": 0,
@@ -4322,10 +4332,12 @@
             "meant": 0
           },
           "standing": {
-            "not-assessed": 1,
+            "not-sure": 1,
             "consistent": 2
           },
-          "reasons": {},
+          "reasons": {
+            "call-not-completed": 1
+          },
           "periodRuns": 2,
           "argumentReasonRuns": 0,
           "askedRuns": 0,
@@ -4392,10 +4404,12 @@
             "meant": 0
           },
           "standing": {
-            "not-assessed": 1,
+            "not-sure": 1,
             "consistent": 1
           },
-          "reasons": {},
+          "reasons": {
+            "call-not-completed": 1
+          },
           "periodRuns": 1,
           "argumentReasonRuns": 0,
           "askedRuns": 0,
@@ -4604,9 +4618,12 @@
             "meant": 5
           },
           "standing": {
-            "not-assessed": 3
+            "not-assessed": 2,
+            "not-sure": 1
           },
-          "reasons": {},
+          "reasons": {
+            "call-not-completed": 1
+          },
           "periodRuns": 3,
           "argumentReasonRuns": 0,
           "askedRuns": 0,
