@@ -1,0 +1,39 @@
+.dynamic-react-form {
+  margin: 1.15rem 0;
+}
+
+.dynamic-react-form .controls {
+  margin-top: 0.25rem;
+}
+
+.dynamic-react-form input {
+  flex: 1 1 20rem;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+
+.dynamic-react-form button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.dynamic-react-answer {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.dynamic-react-answer strong {
+  margin-right: 0.35rem;
+}
+
+.dynamic-react-capture {
+  height: clamp(35rem, 72vh, 58rem);
+}

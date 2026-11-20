@@ -4,7 +4,7 @@ title: CallWindowRow
 
 # Interface: CallWindowRow
 
-Defined in: [src/time/rows/types.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L171)
+Defined in: [src/time/rows/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L179)
 
 Which window one call to a tool that declares period forms carries (time
 design § 7.3) — one row per such call (two when the time ask filled it, below), filed by the inputs layer beside the
@@ -34,13 +34,17 @@ before the ask, then `filled` with `person.source: 'answered'` when the
 answer is bound (`arguments/ask.ts` · `bindAnswer`). The LATEST row of a
 call is the window it runs with (`callWindowOfCall`).
 
+## Extends
+
+- `TimeCallIdentity`
+
 ## Properties
 
 ### argument?
 
 > `readonly` `optional` **argument?**: `string`
 
-Defined in: [src/time/rows/types.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L195)
+Defined in: [src/time/rows/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L201)
 
 On a `dst-gap` refusal: the argument whose wall time the zone skips.
 
@@ -50,7 +54,7 @@ On a `dst-gap` refusal: the argument whose wall time the zone skips.
 
 > `readonly` `optional` **asked?**: [`TimeRange`](/docs/api/interfaces/TimeRange)
 
-Defined in: [src/time/rows/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L180)
+Defined in: [src/time/rows/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L186)
 
 ***
 
@@ -58,7 +62,19 @@ Defined in: [src/time/rows/types.ts:180](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **by?**: `"quote"` \| `"value"`
 
-Defined in: [src/time/rows/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L182)
+Defined in: [src/time/rows/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L188)
+
+***
+
+### callOccurrenceKey?
+
+> `readonly` `optional` **callOccurrenceKey?**: `CallOccurrenceKey`
+
+Defined in: [src/time/rows/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L43)
+
+#### Inherited from
+
+`TimeCallIdentity.callOccurrenceKey`
 
 ***
 
@@ -66,7 +82,7 @@ Defined in: [src/time/rows/types.ts:182](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **differs?**: `object`
 
-Defined in: [src/time/rows/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L188)
+Defined in: [src/time/rows/types.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L194)
 
 A widened fill the tool does not trim: the parts read but not asked.
 
@@ -80,7 +96,7 @@ A widened fill the tool does not trim: the parts read but not asked.
 
 > `readonly` `optional` **form?**: `number`
 
-Defined in: [src/time/rows/types.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L179)
+Defined in: [src/time/rows/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L185)
 
 The index of the tool's form the call used (filled into, or read back from).
 
@@ -90,7 +106,7 @@ The index of the tool's form the call used (filled into, or read back from).
 
 > `readonly` **how**: `"refused"` \| `"model"` \| `"filled"` \| `"bound"` \| `"model-chosen"` \| `"unread"` \| `"not-filled"`
 
-Defined in: [src/time/rows/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L177)
+Defined in: [src/time/rows/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L183)
 
 ***
 
@@ -98,7 +114,7 @@ Defined in: [src/time/rows/types.ts:177](https://github.com/footprintjs/agentfoo
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L174)
+Defined in: [src/time/rows/types.ts:182](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L182)
 
 ***
 
@@ -106,7 +122,7 @@ Defined in: [src/time/rows/types.ts:174](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"call-window"`
 
-Defined in: [src/time/rows/types.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L172)
+Defined in: [src/time/rows/types.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L180)
 
 ***
 
@@ -114,7 +130,7 @@ Defined in: [src/time/rows/types.ts:172](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **partlyBeyondRetention?**: `true`
 
-Defined in: [src/time/rows/types.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L191)
+Defined in: [src/time/rows/types.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L197)
 
 ***
 
@@ -122,7 +138,7 @@ Defined in: [src/time/rows/types.ts:191](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **person?**: [`PersonWindow`](/docs/api/interfaces/PersonWindow)
 
-Defined in: [src/time/rows/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L181)
+Defined in: [src/time/rows/types.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L187)
 
 ***
 
@@ -130,7 +146,7 @@ Defined in: [src/time/rows/types.ts:181](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **refused?**: `TimeRefusal`
 
-Defined in: [src/time/rows/types.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L193)
+Defined in: [src/time/rows/types.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L199)
 
 Why the call was refused before dispatch.
 
@@ -140,7 +156,7 @@ Why the call was refused before dispatch.
 
 > `readonly` `optional` **rounded?**: `true`
 
-Defined in: [src/time/rows/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L183)
+Defined in: [src/time/rows/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L189)
 
 ***
 
@@ -148,7 +164,7 @@ Defined in: [src/time/rows/types.ts:183](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **sent?**: [`TimeRange`](/docs/api/interfaces/TimeRange)
 
-Defined in: [src/time/rows/types.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L186)
+Defined in: [src/time/rows/types.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L192)
 
 A widened fill: the range the tool reads with the sent values.
 
@@ -158,7 +174,11 @@ A widened fill: the range the tool reads with the sent values.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/time/rows/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L175)
+Defined in: [src/time/rows/types.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L41)
+
+#### Inherited from
+
+`TimeCallIdentity.toolCallId`
 
 ***
 
@@ -166,7 +186,11 @@ Defined in: [src/time/rows/types.ts:175](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/time/rows/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L176)
+Defined in: [src/time/rows/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L42)
+
+#### Inherited from
+
+`TimeCallIdentity.toolName`
 
 ***
 
@@ -174,7 +198,7 @@ Defined in: [src/time/rows/types.ts:176](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **trimmedByTool?**: `true`
 
-Defined in: [src/time/rows/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L190)
+Defined in: [src/time/rows/types.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L196)
 
 A widened fill to a tool that declares `filtersToAsked`.
 
@@ -184,7 +208,7 @@ A widened fill to a tool that declares `filtersToAsked`.
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L173)
+Defined in: [src/time/rows/types.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L181)
 
 ***
 
@@ -192,4 +216,4 @@ Defined in: [src/time/rows/types.ts:173](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **why?**: `"no-window"` \| `"several-mentions"` \| `"open-reading"` \| `"no-exact-form"`
 
-Defined in: [src/time/rows/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L184)
+Defined in: [src/time/rows/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L190)

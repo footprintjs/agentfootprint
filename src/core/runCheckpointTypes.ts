@@ -66,6 +66,8 @@ export interface AgentRunCheckpoint {
   /** One source-declaration correction was spent on this request. Same-request
    * recovery retains it; a new human turn resets it. Contains no source values. */
   readonly sourceDeclarationCorrection?: { readonly spent: true };
+  /** Bounded, private tool proof from the failed request, used only by `resumeOnError`. */
+  readonly toolTurnEvidence?: import('./agent/recordedCalls/toolTurnCheckpoint.js').ToolTurnEvidence;
   /**
    * Every span this conversation folded into a summary, oldest first — what
    * makes a compacted conversation still a provable one after the process

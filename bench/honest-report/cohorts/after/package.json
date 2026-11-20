@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "agentfootprint": "15.0.0",
+    "agentfootprint": "15.0.1",
     "footprintjs": "14.0.0",
     "foottrace": "2.1.0"
   }

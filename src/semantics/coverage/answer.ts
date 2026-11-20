@@ -51,6 +51,7 @@ import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 import { isRegExpWhitespace, trimTrailing } from '../../lib/linearText.js';
 import { namedCalls } from '../../lib/displayName.js';
+import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
 
 /**
  * One declaring call's period, as the answer's limits carry it (honesty step
@@ -187,9 +188,14 @@ function itemSource(
   const seen = new Set<string>();
   for (const row of declared) {
     if (!row[key].some((i) => sameItem(i, item))) continue;
-    if (row.toolCallId !== undefined) {
-      if (seen.has(row.toolCallId)) continue;
-      seen.add(row.toolCallId);
+    const occurrence = readCallOccurrenceKey(row);
+    const source =
+      occurrence === undefined && row.toolCallId !== undefined
+        ? `provider:${row.toolCallId}`
+        : occurrence;
+    if (typeof source === 'string') {
+      if (seen.has(source)) continue;
+      seen.add(source);
     }
     calls.push({ toolName: row.toolName });
   }

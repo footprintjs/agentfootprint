@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { deskIntegrityViolation, runOne } from './benchmark.mjs';
+import { deskIntegrityViolation, recordedCallWitnesses, runOne } from './benchmark.mjs';
 import { loadCohort } from './cohorts.mjs';
 import { hiddenTasks } from './hiddenTasks.mjs';
 import { limits } from './plan.mjs';
@@ -239,3 +239,20 @@ for (const [description, fields, expected] of [
     assert.deepEqual(appended.map(({ type }) => type), ['request', 'response']);
   });
 }
+
+test('pending witnesses need the recorded reason, matching declared status and delivered tool name', () => {
+  const pending = { toolCallId: 'pending', toolName: 'file_card', reportedStatus: 'pending' };
+  const reason = { reason: 'work-not-finished', source: { kind: 'calls', calls: [
+    pending, { ...pending, toolCallId: 'partial', reportedStatus: 'partial' },
+    { ...pending, toolCallId: 'failed', outcome: 'failed' },
+    { ...pending, toolCallId: 'unknown-display', toolName: 'other' },
+    { ...pending, toolCallId: undefined },
+  ] } };
+  const names = { file_card: 'File catalog card' };
+  const line = 'File catalog card reported unfinished work (pending).';
+  const witness = { toolCallId: 'pending', toolName: 'file_card' };
+  assert.deepEqual(recordedCallWitnesses([reason], names, line, true), [witness]);
+  assert.deepEqual(recordedCallWitnesses([reason], names, line, false), []);
+  assert.deepEqual(recordedCallWitnesses([reason], names, 'A call reported unfinished work.', true), []);
+  assert.deepEqual(recordedCallWitnesses([{ ...reason, reason: 'unrelated' }], names, line, true), []);
+});

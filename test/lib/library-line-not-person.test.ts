@@ -245,7 +245,7 @@ describe('the answer account’s "current request" is the person’s', () => {
   } as unknown as ReadContext;
 
   it('names the calls answered before the pause even when a library frame follows them', () => {
-    const before = readPausedLeg(ctx, { ids: new Set<string>() } as never).calls;
+    const before = readPausedLeg(ctx, { historyIndices: new Set() }).calls;
     expect(before.map((c) => c.toolCallId)).toEqual(['p1', 'p2']);
   });
 

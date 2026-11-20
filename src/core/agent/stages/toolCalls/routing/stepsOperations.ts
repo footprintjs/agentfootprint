@@ -1,6 +1,8 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { stepSkippedRowFrom } from '../../../assessment/witness.js';
+import { recordFindings } from '../../../findings/ledger.js';
 import {
   type StepPointer,
   type StepPlan,
@@ -23,7 +25,7 @@ import { stepOutcomeOf } from './stepOutcome.js';
 
 /** Compose the existing steps callbacks once for this handler. */
 export function buildToolStepsOperations(
-  deps: Pick<ToolCallsHandlerDeps, 'stepPlanFor' | 'escalation'>,
+  deps: Pick<ToolCallsHandlerDeps, 'stepPlanFor' | 'escalation' | 'answerLayer'>,
 ): ToolStepsOperations {
   // ── Step-procedure boundary (9.18.0) — ONE implementation, five sites ──
   // The batch loop and the four resume paths all finalize results; each
@@ -95,6 +97,19 @@ export function buildToolStepsOperations(
       skipped: [...ptr.skipped, ptr.step],
     };
     scope.stepPointer = [next];
+    if (deps.answerLayer === true) {
+      recordFindings(scope, [
+        stepSkippedRowFrom({
+          turn: scope.turnNumber as number,
+          iteration: call.iteration,
+          skillId: ptr.skillId,
+          index: ptr.step,
+          total: ptr.total,
+          tool: step.tool,
+          toolCallId: call.toolCallId,
+        }),
+      ]);
+    }
     return skipAdvanceSentence(ptr.step, reason, next, plan);
   };
 

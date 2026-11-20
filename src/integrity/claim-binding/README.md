@@ -85,14 +85,13 @@ Part of this layer runs on every armed call; the rest is not mounted. The
 README used to call the whole layer "not mounted", which was wrong.
 
 **Live, with no option set.** The result-identity codec, `capture.ts ·
-resultIdentityOf` and `readResultIdentity`, is in use. Every call to a tool
-that declares `search`, and every negative-claims call while `.negativeClaims()`
-is armed, reserves a result identity through
+resultIdentityOf` and `readResultIdentity`, is in use. Search calls that reach
+execution and armed negative-claim capture reserve result identities through
 `core/agent/findings/verificationState.ts · createVerificationState` /
 `reserveResultIdentity`. The reservation writes the `resultIdentities` carrier
 to shared state and gives the coverage row an ID such as
 `claim-result/<namespace>/<runId>/1`. `scope.ts · ownConfigArray` is used by
-`core/runCheckpoint.ts`; `admit.ts · readEvidenceSnapshot` runs at a run's first
+`core/checkpointLedger.ts` · `validateCheckpointLedger`. `admit.ts · readEvidenceSnapshot` runs at a run's first
 reservation, at the first reservation under a new run id
 (`verificationState.ts · continueVerificationState`) and when a saved carrier is
 read back; `admit.ts · validateCoverage` runs when a stored verification row is read back.

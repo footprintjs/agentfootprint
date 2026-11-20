@@ -206,7 +206,9 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       ]);
 
       const done = await agent.resume(stored(paused), replyTo(paused, { f1: '24h' }));
-      expect(done).toBe('No errors on either.');
+      expect(done).toBe(
+        'No errors on either.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([
         { service: 'checkout', window: '24h' },
         { service: 'payments', window: '24h' },
@@ -242,6 +244,23 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
         [undefined, 'answered'],
         [undefined, 'answered'],
       ]);
+      const [first, second] = starts.map((event) => event.payload.callOccurrenceKey);
+      expect(first).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+      expect(second).toEqual(Array.from({ length: 5 }, () => expect.any(Number)));
+      expect(first).not.toEqual(second);
+      expect(argumentRows(agent).map((row) => row.callOccurrenceKey)).toEqual([
+        first,
+        second,
+        first,
+        second,
+      ]);
+      expect(rowEvents.map((event) => event.payload.callOccurrenceKey)).toEqual([
+        first,
+        second,
+        first,
+        second,
+      ]);
+      expect(toolMessages.every((message) => !('callOccurrenceKey' in message))).toBe(true);
       // After the answer, nothing is waiting: no ask reason.
       expect((await agent.assessment())?.reasons.map((r) => r.reason) ?? []).not.toContain(
         'argument-asked',
@@ -272,7 +291,9 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
       .tool(searchLogs(ran))
       .build();
     const out = await agent.run({ message: 'errors this week?' });
-    expect(out).toBe('ok');
+    expect(out).toBe(
+      'ok\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(argumentRows(agent)).toEqual([
       expect.objectContaining({ argument: 'window', rule: 'ask', source: 'model', value: '7d' }),
@@ -312,6 +333,54 @@ describe('the batch ask — ONE ask for everything the batch left out, before an
 // ─── INTEGRATION ─────────────────────────────────────────────────────
 
 describe('resume — a fresh agent, a serialized checkpoint', () => {
+  it('binds a saved answer to the occurrence that asked and keeps the sibling value', async () => {
+    const ran: Record<string, unknown>[] = [];
+    const first = Agent.create({
+      provider: scripted([
+        batch(
+          { id: 'first', name: 'search_logs', args: { service: 'checkout', window: '24h' } },
+          { id: 'asked', name: 'search_logs', args: { service: 'payments' } },
+        ),
+      ]).provider,
+      model: 'm',
+    })
+      .tool(searchLogs(ran))
+      .build();
+    const paused = await first.run({ message: 'errors on both services?' });
+    expect(ran).toEqual([]);
+    if (!isInputPause(paused)) throw new Error('expected the batch ask');
+    expect(paused.awaitingInput.fields.map((field) => field.id)).toEqual(['f1']);
+    expect(paused.awaitingInput.origin.toolCallId).toBe('asked');
+    expect(argumentRows(first).map((row) => [row.callOccurrenceKey?.[4], row.asked])).toEqual([
+      [0, undefined],
+      [1, 'missing'],
+    ]);
+
+    const second = Agent.create({ provider: scripted([answer('Done.')]).provider, model: 'm' })
+      .tool(searchLogs(ran))
+      .build();
+    const seen = events(second);
+    expect(await second.resume(stored(paused), replyTo(paused, { f1: '7d' }))).toBe(
+      'Done.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; ' +
+        'a tool did not say what time its result covers.',
+    );
+    expect(ran).toEqual([
+      { service: 'checkout', window: '24h' },
+      { service: 'payments', window: '7d' },
+    ]);
+    const answered = argumentRows(second).find((row) => row.source === 'answered');
+    const answeredEvents = seen.filter(
+      ({ type, payload }) =>
+        type === 'agentfootprint.findings.argument' && payload.source === 'answered',
+    );
+    const toolResults = second.checkpoint()?.history.filter((message) => message.role === 'tool');
+    expect(toolResults?.map((message) => message.callOccurrenceKey?.[4])).toEqual([0, 1]);
+    expect(answered?.callOccurrenceKey).toEqual(toolResults?.[1]?.callOccurrenceKey);
+    expect(answeredEvents.map(({ payload }) => payload.callOccurrenceKey)).toEqual([
+      answered?.callOccurrenceKey,
+    ]);
+  });
+
   it('a new agent instance resumes the stored ask and runs the batch', async () => {
     const ran: Record<string, unknown>[] = [];
     const script = [
@@ -330,7 +399,9 @@ describe('resume — a fresh agent, a serialized checkpoint', () => {
     })
       .tool(searchLogs(ran))
       .build();
-    expect(await second.resume(cp, reply)).toBe('Done.');
+    expect(await second.resume(cp, reply)).toBe(
+      'Done.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
   });
 });
@@ -388,7 +459,9 @@ describe('the hosted path — render, answer, cancel', () => {
         sessionId: 's',
         decision: { requestId: pending!.requestId, values: { f1: '1h' } },
       });
-      expect(done.output).toBe('No errors.');
+      expect(done.output).toBe(
+        'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+      );
       expect(ran).toEqual([{ service: 'checkout', window: '1h' }]);
     } finally {
       await handle.close();
@@ -493,7 +566,9 @@ describe('one human question per resume — a later pause in the SAME batch is r
       .build();
     const paused = await agent.run({ message: 'go' });
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '1h' }));
-    expect(done).toBe('ok');
+    expect(done).toBe(
+      'ok\n\n---\n\nNot sure — a call failed; a tool did not say what time its result covers.',
+    );
     const result = m.requests[1]!.messages.find(
       (msg) => msg.role === 'tool' && msg.toolCallId === 'c2',
     );
@@ -528,7 +603,9 @@ describe('one human question per resume — a later pause in the SAME batch is r
       requestId: second.awaitingInput.requestId,
       values: { year: 2026 },
     });
-    expect(done).toBe('Got the year.');
+    expect(done).toBe(
+      'Got the year.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
   });
 });
 
@@ -589,7 +666,9 @@ describe('the readers of a pause', () => {
       (agent.getSnapshot()?.sharedState as { pausedToolCallId?: string }).pausedToolCallId,
     ).toBe('');
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '7d' }));
-    expect(done).toBe('done');
+    expect(done).toBe(
+      'done\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '7d' },
       { service: 'payments', window: '1h' },
@@ -660,7 +739,9 @@ describe('a composition — Sequence(agent) resumes the ask with a raw reply', (
       requestId: paused.awaitingInput.requestId,
       values: { f1: '24h' },
     });
-    expect(done).toBe('No errors.');
+    expect(done).toBe(
+      'No errors.\n\n---\n\nNot sure — a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([{ service: 'checkout', window: '24h' }]);
   });
 });
@@ -766,7 +847,7 @@ describe('PROPERTY — every answer inside the declared choices', () => {
       ARGUMENT_REASK_QUESTION,
       ARGUMENT_REASK_QUESTION,
     ]);
-    expect(out).toBe('could not run it');
+    expect(out).toBe('could not run it\n\n---\n\nNot sure — a call was refused.');
     expect(ran).toEqual([]);
     expect(argumentRows(agent).map((r) => r.asked ?? r.source)).toEqual([
       'missing',

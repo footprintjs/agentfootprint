@@ -122,7 +122,9 @@ describe('failure phase is OBSERVED, not guessed (8.14.0)', () => {
       .maxIterations(8)
       .build();
 
-    await expect(agent.run({ message: 'go' })).resolves.toBe('FINAL');
+    await expect(agent.run({ message: 'go' })).resolves.toBe(
+      'FINAL\n\n---\n\nNot sure — calls failed.',
+    );
   });
 
   it('the bracket CLOSES — a later LLM failure is never blamed on the last tool', async () => {

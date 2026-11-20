@@ -95,6 +95,15 @@ export {
   type RecordRunOptions,
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
+export {
+  contextShapeAt,
+  type RecordedContextShape,
+} from './recorders/observability/contextShapes/read.js';
+export type {
+  ContextShapeIndex,
+  ContextShapeOptions,
+  ShapeEntry,
+} from './recorders/observability/contextShapes.js';
 
 export {
   recordContextRun,
@@ -166,6 +175,14 @@ export {
 // indexed access. See src/core/agent/assessment/README.md.
 export { assessAnswer } from './core/agent/assessment/assess.js';
 export type { AnswerAssessment } from './core/agent/assessment/types.js';
+
+export {
+  readTurnCoverage,
+  readTurnEvidenceVerdict,
+  type TurnCallCoverage,
+  type TurnEvidenceSource,
+  type TurnEvidenceVerdict,
+} from './core/agent/turnEvidence.js';
 
 // The recording ENVELOPE — the versioned contract that makes a recording
 // archivable. `recordRun` freezes a run; this states which run it is, how much

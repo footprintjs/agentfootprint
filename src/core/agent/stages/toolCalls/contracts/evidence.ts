@@ -108,11 +108,11 @@ export interface ToolEvidencePort {
    */
   readonly negativeClaimsArmed?: boolean;
   /**
-   * THE ANSWER LAYER IS ARMED (honesty layer 4, `.answerLayer()`) — the ONE
-   * thing it changes here is the turn stamp: while any honesty layer is armed
+   * THE ANSWER LAYER IS ARMED (honesty layer 4, `.answerLayer()`). While any honesty layer is armed
    * the one writer stamps every row it files with the conversation turn
    * (adopted Q6), so the rows this handler files (basis, standing, judgment,
    * contingent) carry `turn`. Absent → the rows are filed as they always were.
+   * The answer layer also records tool entry and return on each landed result.
    */
   readonly answerLayer?: true;
   /**

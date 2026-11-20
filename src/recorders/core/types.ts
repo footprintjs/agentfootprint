@@ -6,6 +6,7 @@
  *          recorders (which OBSERVE those writes and emit grouped events).
  */
 
+import type { CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import type {
   ContextLifetime,
   ContextRecency,
@@ -34,6 +35,8 @@ export interface InjectionRecord {
   readonly source: ContextSource;
   /** Optional source-specific identifier (retriever id, skill id, ...). */
   readonly sourceId?: string;
+  /** The recorded occurrence of a baseline tool result in the messages slot. */
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   /** Upstream event reference (runtimeStageId that produced the content). */
   readonly upstreamRef?: string;
   /** Why this was injected. */

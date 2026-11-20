@@ -116,6 +116,10 @@ Turn it off with `wrapUpAtMaxIterations: false` (the fact is still recorded, as
 `action: 'cut-short'`). A turn that never runs out of budget is byte-identical either way —
 same calls, same events, same committed state.
 
+By default, the completed answer after budget exhaustion carries a standing line
+about the limit. The example also runs with wrap-up and the answer layer both
+disabled to reproduce the historical fragment.
+
 <CodeFile path="examples/features/67-out-of-budget-wrap-up.ts" region="wrap-up" title="examples/features/67-out-of-budget-wrap-up.ts (region: wrap-up)" />
 
 ## Identity for multi-tenant memory
@@ -363,7 +367,7 @@ agent.findings()?.filter((row) => row.kind === 'unsettled-by-absence');
 //    iteration: 2 }]
 ```
 
-From the next call on, a ruled-out result is a ticket on the wire, so the row is how the envelope's boundary still reaches the model: the findings DATA serves it under `unsettledByAbsence` — the `toolCallId`, and the envelope's `notChecked`, `cannotCover` and `tryInstead` as recorded. The model's own ruled-out line stays in `limitations`, quoted as declared, and a row is served only while that result's current standing is still `ruled-out` — in practice for the rest of the run, since a ruled-out result leaves the offer. No event and no instruction line ship with it, and the door's coverage rows are read only for a ruling-out on a result served as an absence, so an agent whose model never rules out such a result records the bytes it always did; the checkpoint carries the row into a continued conversation.
+From the next call on, a ruled-out result is a ticket on the wire, so the row is how the envelope's boundary still reaches the model: the findings DATA serves it under `unsettledByAbsence` — the `toolCallId`, and the envelope's `notChecked`, `cannotCover` and `tryInstead` as recorded. The model's own ruled-out line stays in `limitations`, quoted as declared, and a row is served only while that result's current standing is still `ruled-out`. A result can still be identified by its ticket after it leaves the advisory offer. No event and no instruction line ship with it, and the door's coverage rows are read only for a ruling-out on a result served as an absence, so an agent whose model never rules out such a result records the bytes it always did; the checkpoint carries the row into a continued conversation.
 
 ### Tool choice by classifier — `.toolChoice()`
 

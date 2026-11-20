@@ -624,7 +624,9 @@ describe('zero-delta: the dial absent', () => {
     // unarmed runs — the declaration alone changes not one byte.
     expect(dialOff.answer).toBe(undeclared.answer);
     expect(dialOff.served).toEqual(undeclared.served);
-    expect(dialOff.answer).toBe(armed.answer);
+    expect(armed.answer).toBe(
+      `${dialOff.answer}\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.`,
+    );
     // And the ledger rows agree too: registered, and honestly not-applicable.
     for (const check of ['column-type-mismatch', 'missing-column']) {
       expect(rowFor(dialOff.rows, check)).toEqual(rowFor(undeclared.rows, check));

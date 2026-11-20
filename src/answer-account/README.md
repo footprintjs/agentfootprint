@@ -42,9 +42,12 @@ pinned in `test/answer-account/golden/turn2.A.txt`:
 
 The "How sure" row opens with the answer's STANDING — the one fold,
 `core/agent/assessment/assess.ts` · `assessAnswer`, over the recording's
-committed state (never its events): known · consistent with the record · not
-sure (each reason a line, counting CALLS — one `coverage(absent(…))` files two
-rows and is one call) · ask · not assessed. Two cases are settled before the
+committed state: known · consistent with the record · not sure (each reason a
+line, counting CALLS — one `coverage(absent(…))` files two rows and is one
+call) · ask · not assessed. The account also uses recorded declaration events
+to pair committed rows with calls. State supplies the declarations and reasons
+in both reads. The state-only assessment can leave a row unplaced that the
+account can place from its events. Two cases are settled before the
 fold, and they are the only ones the row settles itself:
 
 - the run PAUSED (any kind — a typed input, `askHuman`, a check-in, a middleware
@@ -133,7 +136,10 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
    `summary.resumed.held`). "The routing happened before the pause and is not
    in this record" is printed only when the state holds no verdict either, and
    "what happened before the pause is not in this record" only when the record
-   holds no paused state (an older or trimmed recording).
+   holds no paused state (an older or trimmed recording). If the final history
+   no longer begins with the paused history, the account says it cannot match
+   the earlier tool results. The checks that need them are unreachable, and
+   any routing verdict held by the paused state remains readable.
 
    ```ts
    // a resumed `.time()` leg: the person confirmed "6:25 to 6:45 AM" (test/answer-account/paused-leg.test.ts)
@@ -302,6 +308,19 @@ name:
   reboot_host did not run, so it found nothing.  ⟨found.notExecuted@1 · library · recorded⟩
   1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.  ⟨wrong.errors@2 · library · recorded⟩
 ```
+
+A tool that ran can report `failure`, `denied`, `invalid`, `partial` or
+`pending`. Its fact keeps `outcome: 'ran'` and carries `reportedStatus` from
+the normalized `stream.tool_end.status`. The "It found" line names both facts.
+A library refusal can also record `invalid`, so the line reports the recorded
+status without attributing that word to the tool. Declared absence keeps its
+coverage wording. The "Anything wrong" row consults the same completion rule
+as committed history before saying no call failed or was refused. It also
+counts every call with a reported result status, including calls omitted from
+the displayed list. "How sure" points to the committed `reportedStatus` of
+unfinished work and to the finding filed when the procedure advances past a
+declared step. Rebuilding the appended line requires the recorded witnesses
+and the complete display names it used.
 
 When a saved bracket has a non-boolean `error`, `entered` or `notExecuted`,
 `toolRanOf` returns `not-recorded` even beside a valid entry stamp. With a

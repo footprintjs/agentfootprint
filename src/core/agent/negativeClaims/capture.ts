@@ -7,13 +7,19 @@ import { isDevMode, type TypedScope } from 'footprintjs';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { SearchTool, TurnCall, TurnRecord } from '../../../integrity/negative-claim/types.js';
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { sameName } from '../../../lib/normalize.js';
 import { isJsonFaithful } from '../../../lib/jsonFaithful.js';
 import { stableJson } from '../../../lib/stableJson.js';
 import { runKeepsOut } from '../../../redaction/runRedaction.js';
 import { readSemantics } from '../../../semantics/envelope.js';
 import { clockOf } from '../../../time/rows.js';
-import { refusalIssues } from '../../../semantics/overclaim.js';
+import {
+  hasOverclaim,
+  refusalOverclaims,
+  returnedDeclarationOf,
+  type NegativeOverclaim,
+} from './overclaims.js';
 import { readToolResultEnvelope } from '../../../semantics/toolEffects.js';
 import { namesFacetOf } from '../../../semantics/coverage/among.js';
 import {
@@ -40,6 +46,7 @@ import type { SearchDispatch } from '../stages/searchCoverage.js';
 import type { AgentState } from '../types.js';
 
 export interface NegativeRuntimeCall extends TurnCall {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly trustedContext: boolean;
 }
 
@@ -51,11 +58,7 @@ export interface NegativeRuntimeState {
   readonly tools: Readonly<Record<string, SearchTool>>;
   readonly pending: readonly string[];
   readonly pausedResultId?: string;
-  readonly overclaims: readonly {
-    readonly tool: string;
-    readonly code: 'refusal-asserts-absence';
-    readonly turn: number;
-  }[];
+  readonly overclaims: readonly NegativeOverclaim[];
   /** Operational carrier only, never served or emitted. */
   readonly ownerIdentity?: MemoryIdentity;
   /** A per-run namespace synthesized with no caller/session/composition identity. */
@@ -195,6 +198,7 @@ export function startNegativeCall(
     party?: ToolParty;
     args: Readonly<Record<string, unknown>>;
     toolCallId: string;
+    callOccurrenceKey?: CallOccurrenceKey;
     iteration: number;
     runId?: string;
     dispatch?: SearchDispatch;
@@ -264,6 +268,7 @@ export function startNegativeCall(
   const call: NegativeRuntimeCall = {
     resultId: dispatch.resultId,
     toolCallId: input.toolCallId,
+    ...callOccurrenceField(input.callOccurrenceKey),
     toolName: tool.schema.name,
     turn: scope.turnNumber,
     batch: input.iteration,
@@ -428,7 +433,8 @@ export function captureNegativeResult(
     const notRead =
       envelope?.status !== undefined &&
       ['invalid', 'denied', 'failure', 'pending'].includes(envelope.status);
-    if (notRead) captureNegativeRefusal(scope, tool.schema.name, raw, dispatch.args);
+    if (notRead)
+      captureNegativeRefusal(scope, tool.schema.name, raw, dispatch.args, dispatch.resultId);
     replace(scope, dispatch.resultId, (call) => {
       if (call.keptOut) return call;
       const among = amongRow(call, raw, dispatch.handle, tool);
@@ -507,21 +513,15 @@ export function captureNegativeRefusal(
   tool: string,
   value: unknown,
   args?: Readonly<Record<string, unknown>>,
+  returnedResultId?: string,
 ): void {
   const state = stateOf(scope);
   if (state === undefined) return;
   try {
-    const direct = refusalIssues(value, 'result');
-    const text = typeof value === 'string' ? value : JSON.stringify(value);
-    const contextual = Object.entries(args ?? {}).some(
-      ([argument, sent]) =>
-        refusalIssues(
-          { text, argument, ...(typeof sent === 'string' && { value: sent }) },
-          'result',
-        ).length > 0,
-    );
-    if (direct.length === 0 && !contextual) return;
-    if (state.overclaims.some((row) => row.turn === scope.turnNumber && row.tool === tool)) return;
+    if (!refusalOverclaims(value, args)) return;
+    const turn = scope.turnNumber;
+    const occurrence = returnedDeclarationOf(state.calls, returnedResultId, tool, turn);
+    if (hasOverclaim(state.overclaims, tool, turn, occurrence)) return;
     if (state.overclaims.length >= MAX_CALLS) {
       publish(scope, { ...state, complete: false });
       return;
@@ -536,7 +536,7 @@ export function captureNegativeRefusal(
       ...state,
       overclaims: [
         ...state.overclaims,
-        { tool, code: 'refusal-asserts-absence', turn: scope.turnNumber },
+        { tool, code: 'refusal-asserts-absence', turn, ...occurrence },
       ],
     });
   } catch {

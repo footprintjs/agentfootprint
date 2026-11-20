@@ -48,14 +48,17 @@ as non-engaged.
 
 ## Comparison cells and rehearsals
 
-Use three cells: published AgentFootprint 15.0.0 with defaults, published
-15.0.0 with `.answerLayer({ standingLine: true })`, and the packed candidate
-with the same opt-in. FootPrint 14.0.0 and Foottrace 2.1.0 are held fixed.
-The harness identifies the archive with a path inside the benchmark and a
-verified SHA-256 and records the candidate lock identity. While the candidate
-is absent, the offline candidate slot uses the published 15.0.0 package and
-is identified as a placeholder. The paid runner needs a separate rehearsal
-against the actual archive and refuses the placeholder.
+Batch 6 uses two cells with `.answerLayer({ standingLine: true })`: published
+AgentFootprint 15.0.1 and the original hosted package of AgentFootprint #424
+at `b2cc4290c354` or its newest green merge-only successor. FootPrint 14.0.0
+and Foottrace 2.1.0 are held fixed. The harness records the hosted artifact
+name, exact source and tested tree, archive SHA-256 and candidate lock.
+The rehearsal and paid runner both require that exact archive.
+
+The original three-cell totals and gates in Paid plan and scope below describe
+batch 5. For these two cells, the card and [PLAN.md](PLAN.md) set the derived
+280-run schedule, USD 4 projection and USD 5 dispatch cap. The per-cell task
+counts, ground truth, answer classes and warning evidence requirements still apply.
 
 Each new task has an honest and a `done` scripted play in every cell. C's two
 plays both truthfully claim completion after the retry. Record desk entries,

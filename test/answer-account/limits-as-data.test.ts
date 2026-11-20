@@ -26,13 +26,14 @@
  * resolve (P1) and print no refused leaf (P7).
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { Agent, coverage, defineTool } from '../../src/index.js';
+import { Agent, allow, coverage, defineTool, deny } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, recordRun } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
+import type { LLMMessage } from '../../src/provider-contract/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { assertP1, assertP7 } from './helpers.js';
 
@@ -164,20 +165,29 @@ describe('INTEGRATION — a prose answer’s appended section, split at the sepa
     assertP7(account, recording);
   });
 
-  it('an "Assumed" block alone no longer reads as the model’s words', async () => {
-    const agent = Agent.create({
+  it.each([
+    {
+      mode: 'default standing',
+      dataOnly: false,
+      section: 'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you.',
+    },
+    {
+      mode: 'an Assumed block when the line is off',
+      dataOnly: true,
+      section: 'Assumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
+    },
+  ])('keeps $mode apart from the model’s words', async ({ dataOnly, section }) => {
+    const builder = Agent.create({
       provider: callThen('search_logs', { service: 'checkout' }, 'No errors.'),
       model: 'mock',
     })
       .tool(searchLogs)
-      .limitsTravelWithTheAnswer()
-      .build();
+      .limitsTravelWithTheAnswer();
+    const agent = (dataOnly ? builder.answerLayer({ standingLine: false }) : builder).build();
     const recording = await recorded(agent, 'errors on checkout?');
     const account = accountForAnswer(recording);
     expect(account.answer.value).toBe('No errors.');
-    expect(account.facts.limitsBlock.value).toBe(
-      'Assumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
-    );
+    expect(account.facts.limitsBlock.value).toBe(section);
   });
 
   it('the line, the limits and the block: one section, in the composer’s order', async () => {
@@ -256,6 +266,120 @@ describe('EDGE — what is never split', () => {
 });
 
 describe('INTEGRATION — the standing line is found by its exact words, rebuilt from the record', () => {
+  it.each([
+    ['Inventory lookup', 'Inventory lookup did not complete (failed)'],
+    [undefined, 'a call failed'],
+  ])(
+    'keeps both outcomes when two batches reuse an id (stock display name %s)',
+    async (displayName, failure) => {
+      const reply = 'I looked into your request.';
+      const id = 'lookup';
+      const stock = vi.fn(() => {
+        throw new Error('Fixture inventory unavailable.');
+      });
+      const price = vi.fn(() => 'Fixture price');
+      const agent = Agent.create({
+        provider: mock({
+          chunkDelayMs: 0,
+          replies: [
+            { toolCalls: [{ id, name: 'read_stock', args: {} }] },
+            { toolCalls: [{ id, name: 'read_price', args: {} }] },
+            { content: reply },
+          ],
+        }),
+        model: 'mock',
+      })
+        .tools([
+          defineTool({
+            name: 'read_stock',
+            ...(displayName !== undefined && { displayName }),
+            description: 'Read fixture inventory.',
+            inputSchema: { type: 'object' },
+            execute: stock,
+          }),
+          defineTool({
+            name: 'read_price',
+            displayName: 'Price lookup',
+            description: 'Read the fixture price.',
+            inputSchema: { type: 'object' },
+            execute: price,
+          }),
+        ])
+        .toolMiddleware({
+          name: 'fixture-scope',
+          onToolCall: ({ toolName }) =>
+            toolName === 'read_price' ? deny('Fixture policy') : allow(),
+        })
+        .answerLayer({ standingLine: true })
+        .build();
+      const recorder = recordRun(agent);
+      try {
+        const result = await agent.run({ message: 'Look up stock and price.' });
+        const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+        expect(stock).toHaveBeenCalledTimes(1);
+        expect(price).not.toHaveBeenCalled();
+        const history = recording.snapshot.sharedState.history as LLMMessage[];
+        expect(history.filter((message) => message.role === 'tool')).toMatchObject([
+          { toolCallId: id, toolName: 'read_stock', outcome: 'failed' },
+          { toolCallId: id, toolName: 'read_price', outcome: 'refused' },
+        ]);
+
+        const line = `Not sure — Price lookup did not complete (refused) and ${failure}.`;
+        expect.soft(result).toBe(`${reply}\n\n---\n\n${line}`);
+        const account = accountForAnswer(recording);
+        expect.soft(account.answer.value).toBe(reply);
+        expect.soft(account.facts.limitsBlock.value).toBe(line);
+        const outcomeLines = account.rows
+          .find((row) => row.id === 'how-sure')
+          ?.lines.filter((sentence) => sentence.template.id.startsWith('howSure.reason.call'));
+        const outcomePointer = (toolName: string) => ({
+          kind: 'history',
+          index: history.findIndex(
+            (message) => message.role === 'tool' && message.toolName === toolName,
+          ),
+          path: '/outcome',
+          toolCallId: id,
+        });
+        expect(outcomeLines).toMatchObject([
+          { text: '1 call was refused.', pointers: [outcomePointer('read_price')] },
+          { text: '1 call failed.', pointers: [outcomePointer('read_stock')] },
+        ]);
+        assertP1(account, recording);
+      } finally {
+        recorder.stop();
+      }
+    },
+  );
+
+  it.each([
+    [undefined, 'Not sure — a call failed.'],
+    ['Inventory lookup', 'Not sure — Inventory lookup did not complete (failed).'],
+  ])('rebuilds the failed-call line with display name %s', async (displayName, line) => {
+    const reply = 'The inventory details are unavailable.';
+    const agent = Agent.create({ provider: callThen('list_items', {}, reply), model: 'mock' })
+      .tool(
+        defineTool({
+          name: 'list_items',
+          ...(displayName !== undefined && { displayName }),
+          description: 'List inventory items.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => ({ content: 'Request received.', effects: [], status: 'failure' }),
+        }),
+      )
+      .answerLayer({ standingLine: true })
+      .build();
+    const recording = await recorded(agent, 'List inventory items.');
+    const account = accountForAnswer(recording);
+    expect(account.answer.value).toBe(reply);
+    expect(account.facts.limitsBlock.value).toBe(line);
+    const reason = account.rows
+      .find((row) => row.id === 'how-sure')
+      ?.lines.find((sentence) => sentence.template.id === 'howSure.reason.callFailed');
+    expect(reason?.text).toBe('1 call failed.');
+    expect(reason?.pointers).toMatchObject([{ kind: 'history', path: '/outcome' }]);
+    assertP1(account, recording);
+  });
+
   it('the line alone on an answer with no words of its own: all of it is the library’s', async () => {
     // No tool at all; the model asks for one at the limit and says nothing, so
     // the composer appends the line with no separator (the answer is empty).

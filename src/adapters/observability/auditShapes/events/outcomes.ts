@@ -104,6 +104,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.declared': eventShape<'agentfootprint.findings.declared'>({
+      callOccurrenceKey: listOf(num),
       toolName: str,
       toolCallId: str,
       iteration: num,
@@ -114,6 +115,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.standing': eventShape<'agentfootprint.findings.standing'>({
+      callOccurrenceKey: listOf(num),
       toolCallId: str,
       toolName: str,
       iteration: num,
@@ -126,6 +128,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.judged': eventShape<'agentfootprint.findings.judged'>({
+      callOccurrenceKey: listOf(num),
       toolCallId: str,
       toolName: str,
       iteration: num,
@@ -138,6 +141,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.judge_failed': eventShape<'agentfootprint.findings.judge_failed'>({
+      callOccurrenceKey: listOf(num),
       toolCallId: str,
       toolName: str,
       iteration: num,
@@ -146,6 +150,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.contingent': eventShape<'agentfootprint.findings.contingent'>({
+      callOccurrenceKey: listOf(num),
       iteration: num,
       declaredOn: oneOf('answer', 'tool-call'),
       toolCallId: str,
@@ -155,6 +160,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.argument': eventShape<'agentfootprint.findings.argument'>({
+      callOccurrenceKey: listOf(num),
       toolCallId: str,
       toolName: str,
       iteration: num,
@@ -191,6 +197,7 @@ export function outcomesShapes() {
     }),
 
     'agentfootprint.findings.period': eventShape<'agentfootprint.findings.period'>({
+      callOccurrenceKey: listOf(num),
       toolCallId: str,
       toolName: str,
       iteration: num,

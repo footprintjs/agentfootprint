@@ -246,6 +246,42 @@ describe('judgeResult — the row', () => {
     expect(bare.events[0]!.payload).not.toHaveProperty('agrees');
   });
 
+  it('compares a standing with its own judgment when the provider ID is reused', async () => {
+    const { scope, events } = scopeWith();
+    const earlier = [1, 2, 3, 4, 0] as const;
+    await judgeResult(
+      scope,
+      mockClassifier([PROBE]),
+      { toolName: 't', result: 'r', toolCallId: 'c1', callOccurrenceKey: earlier },
+      1,
+    );
+    const judged = scope.findingsLedger?.find((row) => row.kind === 'judgment');
+    if (judged === undefined) throw new Error('expected judgment');
+    recordFindings(scope, [
+      { ...judged, callOccurrenceKey: [5, 6, 7, 8, 0], standing: 'fact', iteration: 2 },
+    ]);
+    const standing: StandingRow = {
+      kind: 'standing',
+      toolCallId: 'c1',
+      toolName: 't',
+      standing: 'noise',
+      assertions: [],
+      declaredOn: 'answer',
+      iteration: 3,
+    };
+    recordFindings(scope, [
+      { ...standing, callOccurrenceKey: earlier },
+      { ...standing, callOccurrenceKey: [9, 10, 11, 12, 0] },
+      standing,
+    ]);
+    expect(
+      events
+        .filter((event) => event.name === 'agentfootprint.findings.standing')
+        .map((event) => (event.payload as { agrees?: boolean }).agrees),
+    ).toEqual([true, undefined, undefined]);
+    expect(foldLedger(scope.findingsLedger ?? []).judgments.get('c1')?.standing).toBe('fact');
+  });
+
   it('a second judgment on one result is a second row; the fold takes the last', async () => {
     const { scope } = scopeWith([BASIS]);
     const fact: ClassifyResult = {

@@ -21,11 +21,11 @@
  *   4. Property     — random validation outcomes preserve invariants
  *   5. Security     — feedback callback throw doesn't kill the run
  *                     ephemeral messages don't leak to scope.history
- *   6. Performance  — 100 successful runs (no validation fail) under bound
+ *   6. Success path — validation and attempt counts across runs and retry budgets
  *   7. ROI          — RefundBot Instructor-shape end-to-end
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Agent, type LLMMessage, type LLMResponse, type LLMToolSchema } from '../../src/index.js';
 import {
   ReliabilityFailFastError,
@@ -34,7 +34,6 @@ import {
   type ReliabilityRule,
   type ReliabilityScope,
 } from '../../src/doors/resilience.js';
-import { expectWithinTimes, measureAsync } from '../helpers/perf.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────
 
@@ -305,35 +304,49 @@ describe('strict-output — security: ephemeral messages never leak to scope.his
   });
 });
 
-// ─── 6. PERFORMANCE — happy-path overhead bound ──────────────────
+// ─── 6. SUCCESS PATH — schema validations, attempts, retries and waits ─
 
-describe('strict-output — performance: 50 successful runs without validation fail under 5s', () => {
-  it(
-    'happy-path retry-config adds negligible overhead when validation always passes',
-    { timeout: 30_000, retry: 2 },
-    async () => {
-      // "Negligible" measured against the thing it is negligible next to: the
-      // same fifty runs with no reliability rules configured, timed on this
-      // machine moments earlier. When nothing ever fails validation, the retry
-      // config should cost almost nothing — 3× is generous headroom, and a
-      // loaded runner slows both halves equally.
-      const runs = async (withRules: boolean): Promise<void> => {
-        for (let i = 0; i < 8; i++) {
-          const llm = scriptedLLM([{ content: '{"ok":true}' }]);
-          const parser = { parse: () => ({ ok: true }) };
-          const builder = Agent.create({ provider: llm, model: 'mock' })
-            .system('s')
-            .outputSchema(parser);
-          if (withRules) builder.reliability({ postDecide: baseRules(3) });
-          await builder.build().run({ message: 'go' });
+describe('strict-output — successful runs', () => {
+  it.each([
+    { runs: 1, retryBudget: 0 },
+    { runs: 8, retryBudget: 0 },
+    { runs: 1, retryBudget: 3 },
+    { runs: 8, retryBudget: 3 },
+    { runs: 8, retryBudget: 30 },
+  ])(
+    'bounds work for retry budget $retryBudget over $runs successful run(s)',
+    async ({ runs, retryBudget }) => {
+      const content = '{"ok":true}';
+      const llm = scriptedLLM([{ content }]);
+      const parse = vi.fn((value: unknown) => value);
+      const builder = Agent.create({ provider: llm, model: 'mock' })
+        .system('s')
+        .outputSchema({ parse });
+      if (retryBudget > 0) builder.reliability({ postDecide: baseRules(retryBudget) });
+      const agent = builder.build();
+
+      const retried = vi.fn();
+      agent.on('agentfootprint.reliability.retried', retried);
+      agent.on('agentfootprint.agent.output_schema_retry', retried);
+
+      const scheduledWait = vi.spyOn(globalThis, 'setTimeout');
+      try {
+        for (let run = 0; run < runs; run++) {
+          expect(await agent.run({ message: 'go' })).toBe(content);
         }
-      };
-      await expectWithinTimes({
-        baseline: () => runs(false),
-        subject: () => runs(true),
-        times: 3,
-        why: 'retry rules must be free when validation always passes',
-      });
+
+        // The reliability gate validates the provider reply before retry decisions.
+        // The output contract judges the delivered answer after the message chain.
+        const validationsPerRun = retryBudget > 0 ? 2 : 1;
+        expect(parse, 'extra schema validation on successful runs').toHaveBeenCalledTimes(
+          runs * validationsPerRun,
+        );
+        expect(llm.getCalls(), 'extra provider attempt on successful runs').toBe(runs);
+        expect(retried, 'retry triggered on successful runs').not.toHaveBeenCalled();
+        expect(scheduledWait, 'retry wait scheduled on successful runs').not.toHaveBeenCalled();
+      } finally {
+        scheduledWait.mockRestore();
+      }
     },
   );
 });

@@ -13,7 +13,8 @@ per-sentence catch). No reader reads another row's lines.
 | `checked.ts` | It checked / It did not check — and the calls before a pause |
 | `inView.ts` | earlier answers' results in front of the model — the witness rule, distance ≥ 1 |
 | `found.ts` | It found |
-| `howSure.ts` | How sure — the answer's standing from the one fold (`core/agent/assessment/assess.ts`), or "no answer on this record" when there is no `turn_end` and no pause; then the expectations and the evidence check beside it |
+| `standing.ts` | The standing and its witnesses from the one fold (`core/agent/assessment/assess.ts`), read for both the How sure row and reconstruction of the appended standing line |
+| `howSure.ts` | How sure — the standing, followed by the expectations and the evidence check |
 
 Example — the witness rule on the real recording selects `events[64]` (the
 turn-1 `powerstore_get_volumes` result) and never `events[68]` (this run's own

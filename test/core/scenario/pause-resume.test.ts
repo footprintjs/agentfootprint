@@ -10,6 +10,8 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
+import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
 import { Agent } from '../../../src/core/Agent.js';
 import { isPaused, pauseHere } from '../../../src/core/pause.js';
 import { allow, deny } from '../../../src/core/agent/middleware/outcomes.js';
@@ -461,13 +463,26 @@ describe('scenario — the history fallback never re-injects `_findings` (9.101.
       role: string;
       toolCalls?: readonly { args: unknown }[];
     }[];
-    expect(history.find((m) => m.role === 'assistant')?.toolCalls?.[0]?.args).toEqual(DECLARED);
+    const proposal = history.find((m) => m.role === 'assistant')?.toolCalls?.[0];
+    expect(proposal?.args).toEqual(DECLARED);
+    const occurrence = readCallOccurrenceKey(proposal ?? {});
+    expect(occurrence).toMatch(/\.0$/);
 
     await agent.resume(asLegacy(paused.checkpoint) as never, 'answered');
 
     expect(seen).toEqual([{ topic: 'refund', amount: 500 }]);
-    expect(agent.findings()).toEqual([
-      { kind: 'basis', toolCallId: 't1', toolName: 'ask_person', iteration: 1, basis: 'direct' },
+    const findings = agent.findings();
+    expect(readCallOccurrenceKey(findings?.[0] ?? {})).toBe(occurrence);
+    expect(normalizeCallOccurrences(findings)).toEqual([
+      {
+        callOccurrenceKey: [0, 0, 0, 1, 0],
+        kind: 'basis',
+        toolCallId: 't1',
+        toolName: 'ask_person',
+        iteration: 1,
+        basis: 'direct',
+        turn: 1,
+      },
     ]);
   });
 

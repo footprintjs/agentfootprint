@@ -91,6 +91,7 @@ export function initializeAgent(
           );
           bindScopeComputation(scope, {
             owner: component,
+            ownsTurn: run.own,
             retired: () => run.retired,
             emit: observers.emit,
           });

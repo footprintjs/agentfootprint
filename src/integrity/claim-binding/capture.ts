@@ -1,7 +1,7 @@
 /**
  * Internal dispatch/return/delivery receipt boundary. Only part of it is live.
- * The result-identity codec (`resultIdentityOf`, `readResultIdentity`) runs on
- * every `search` tool call and every armed negative-claims call: the coverage
+ * The result-identity codec (`resultIdentityOf`, `readResultIdentity`) supports
+ * searches that reach execution and armed negative-claim capture. The coverage
  * row's `claim-result/<namespace>/<runId>/<n>` ID comes from it. The capture
  * functions (`captureDispatch`, `captureReturnedEvidence`, `finalizeEvidence`,
  * `evidenceSnapshot`) are not mounted in the Agent; only tests call them. The

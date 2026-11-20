@@ -45,6 +45,7 @@
  */
 
 import type { LLMMessage } from '../../../provider-contract/types.js';
+import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 
 /**
  * The tool a `role: 'tool'` message came from, or `undefined`. A settled
@@ -60,11 +61,15 @@ export function toolNameOfMessage(
 ): string | undefined {
   if (msg.role !== 'tool' || msg.notDispatched !== undefined) return undefined;
   if (msg.toolName !== undefined && msg.toolName.length > 0) return msg.toolName;
+  // Modern results carry their own name. If a served view keeps it out,
+  // borrowing the label from a same-ID proposal would undo the omission.
+  if (readCallOccurrenceKey(msg) !== undefined) return undefined;
   const id = msg.toolCallId;
   if (id === undefined || id.length === 0) return undefined;
   for (const other of context) {
     for (const call of other.toolCalls ?? []) {
-      if (call.id === id && call.name.length > 0) return call.name;
+      if (call.id === id && call.name.length > 0 && readCallOccurrenceKey(call) === undefined)
+        return call.name;
     }
   }
   return undefined;

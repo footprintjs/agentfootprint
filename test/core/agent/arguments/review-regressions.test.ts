@@ -118,6 +118,9 @@ function searchLogs(ran: Record<string, unknown>[], result: unknown = []): Tool 
 const NOTE_2H =
   '\n\n[window was not in the search_logs call this result answers; the call ran with "2h", ' +
   "the value the tool's rule assumes — recorded as assumed, not as the person's.]";
+const ASSUMED_2H_STANDING =
+  'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you; ' +
+  'a lookup came back empty without saying what it searched; a tool did not say what time its result covers.';
 
 const UNMOUNTED_REFUSAL =
   'search_logs was not run on that call: it declares argument rules this agent was not built to apply.';
@@ -173,7 +176,10 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
     expect(lastToolMessage(m.requests).content).toBe('[]');
     expect(committedToolMessage(agent)).not.toHaveProperty('toolChars');
     // The person's answer names no value the call did not run with.
-    expect(String(out)).toBe('No errors.');
+    expect(String(out)).toBe(
+      'No errors.\n\n---\n\nNot sure — a before-tool rule set a value a call ran with and did not say where it came from; ' +
+        'a lookup came back empty without saying what it searched; a tool did not say what time its result covers.',
+    );
     // The row stays the layer's verdict; the standing reads the rewrite (no
     // declared origin → assumed) AND the empty result the rewrite ran on.
     expect(argumentRows(agent)).toMatchObject([{ source: 'default', value: '2h' }]);
@@ -214,9 +220,7 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
     expect(ran).toEqual([{ service: 'checkout', window: '2h' }]);
     expect(lastToolMessage(m.requests).content).toBe(`[]${NOTE_2H}`);
     expect(committedToolMessage(agent).toolChars).toBe(2);
-    expect(String(out)).toBe(
-      'No errors.\n\n---\n\nAssumed (a tool\'s rule, not your words):\n- window = "2h" (search_logs)',
-    );
+    expect(String(out)).toBe('No errors.\n\n---\n\n' + ASSUMED_2H_STANDING);
   });
 
   it('a rewrite to the SAME value keeps the clause — the call ran with the fill', async () => {
@@ -228,7 +232,7 @@ describe('a before-tool middleware rewrites an argument the layer FILLED', () =>
       .build();
     const out = await agent.run({ message: 'any errors on checkout?' });
     expect(lastToolMessage(m.requests).content).toBe(`[]${NOTE_2H}`);
-    expect(String(out)).toContain('- window = "2h" (search_logs)');
+    expect(out).toBe(`No errors.\n\n---\n\n${ASSUMED_2H_STANDING}`);
   });
 });
 
@@ -316,29 +320,54 @@ describe('a call the inputs layer refuses is never put to a person', () => {
     expect(warn.mock.calls.filter((c) => String(c[0]).includes('.inputsLayer()'))).toHaveLength(1);
   });
 
-  it('the ask-resume door: a checkpoint whose entry refused the paused call is refused there', async () => {
-    const ran: Record<string, unknown>[] = [];
-    const m = scripted([call('c1', 'search_logs', { service: 'a' }), answer('could not')]);
-    const agent = Agent.create({ provider: m.provider as never, model: 'm' })
-      .tool(searchLogs(ran))
-      .toolMiddleware(approveEveryCall)
-      .build();
-    const paused = await agent.run({ message: 'errors on a?' });
-    expect(isPaused(paused)).toBe(true);
-    if (!isPaused(paused)) return;
-    // The shape a runtime that decided the refusal AFTER the chain left on
-    // its checkpoint: the layer's entry refuses the call the ask paused on.
-    const refused = unreadableRulesRefusal('search_logs', 'askOrAssume.window.assume — "9h"');
-    const state = (paused.checkpoint as unknown as { sharedState: Record<string, unknown> })
-      .sharedState;
-    state.argumentResolutions = [{ toolCallId: 'c1', iteration: 1, refused }];
-    await agent.resume(
-      paused.checkpoint,
-      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
-    );
-    expect(ran).toEqual([]);
-    expect(lastToolMessage(m.requests).content).toBe(refused);
-  });
+  it.each(['keyed', 'legacy'] as const)(
+    'the ask-resume door: a %s checkpoint whose entry refused the paused call is refused there',
+    async (format) => {
+      const ran: Record<string, unknown>[] = [];
+      const m = scripted([call('c1', 'search_logs', { service: 'a' }), answer('could not')]);
+      const agent = Agent.create({ provider: m.provider as never, model: 'm' })
+        .tool(searchLogs(ran))
+        .toolMiddleware(approveEveryCall)
+        .build();
+      const paused = await agent.run({ message: 'errors on a?' });
+      expect(isPaused(paused)).toBe(true);
+      if (!isPaused(paused)) return;
+      // The shape a runtime that decided the refusal AFTER the chain left on
+      // its checkpoint: the layer's entry refuses the call the ask paused on.
+      const refused = unreadableRulesRefusal('search_logs', 'askOrAssume.window.assume — "9h"');
+      const checkpoint: typeof paused.checkpoint =
+        format === 'keyed'
+          ? paused.checkpoint
+          : JSON.parse(
+              JSON.stringify(paused.checkpoint, (key, value) =>
+                key === 'callOccurrenceKey' ? undefined : value,
+              ),
+            );
+      const state = (checkpoint as unknown as { sharedState: Record<string, unknown> }).sharedState;
+      const history = state.history as readonly LLMMessage[];
+      const proposal = history
+        .flatMap((message) => message.toolCalls ?? [])
+        .find((call) => call.id === 'c1');
+      expect(proposal).toBeDefined();
+      const key = proposal?.callOccurrenceKey;
+      if (format === 'keyed') expect(key).toHaveLength(5);
+      else expect(key).toBeUndefined();
+      state.argumentResolutions = [
+        {
+          toolCallId: 'c1',
+          iteration: 1,
+          refused,
+          ...(key !== undefined && { callOccurrenceKey: key }),
+        },
+      ];
+      await agent.resume(
+        checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+      );
+      expect(ran).toEqual([]);
+      expect(lastToolMessage(m.requests).content).toBe(refused);
+    },
+  );
 });
 
 // ─── INTEGRATION — every reader reads the tool's own bytes ──────────
@@ -553,7 +582,7 @@ describe('an entry applies to its own batch; the "Assumed" block to its own turn
     ]);
   });
 
-  it('turn 2 that calls nothing carries no "Assumed" block from turn 1', async () => {
+  it('turn 2 that calls nothing carries no assumed-value warning from turn 1', async () => {
     const first = Agent.create({
       provider: scripted([call('c1', 'search_logs', { service: 'a' }), answer('none')])
         .provider as never,
@@ -562,9 +591,7 @@ describe('an entry applies to its own batch; the "Assumed" block to its own turn
       .tool(searchLogs([]))
       .limitsTravelWithTheAnswer()
       .build();
-    expect(String(await first.run({ message: 'errors?' }))).toContain(
-      '- window = "2h" (search_logs)',
-    );
+    expect(await first.run({ message: 'errors?' })).toBe(`none\n\n---\n\n${ASSUMED_2H_STANDING}`);
     const second = Agent.create({
       provider: scripted([answer('hello again')]).provider as never,
       model: 'm',

@@ -11,7 +11,9 @@
  *   `source: 'tool-result'`, `sourceId: <toolCallId>` whose
  *   `meta.runtimeStageId` equals that of the `context.slot_composed` with
  *   `slot: 'messages'` and `iteration: N`.
- * The content is parsed from the matching `history` message (by `toolCallId`).
+ * The content is parsed from the matching `history` message. The witness's
+ * occurrence key identifies that message; legacy witnesses use the provider
+ * id or the recorded position and content hash.
  *
  * Only EARLIER answers' results: `distance` (messages a PERSON wrote after the
  * result, up to and including the current one — `lib/saidByPerson.ts` · `isPersonEntry`,
@@ -21,11 +23,12 @@
  * must never become an in-view line.
  */
 
+import { historyCallForWitness, readHistoryCalls } from '../../core/agent/recordedCalls.js';
+import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
 import type { InViewFact, SentenceVar } from '../types.js';
 import {
-  isRecord,
   keptOut as isFieldKeptOut,
   num,
   str,
@@ -73,11 +76,13 @@ export function witnessesOf(view: RecordingView, iteration: number | undefined):
   const composed = view
     .ofType('context.slot_composed')
     .filter((e) => e.payload.slot === 'messages' && e.payload.iteration === iteration);
-  const stage = str(composed[composed.length - 1]?.meta.runtimeStageId);
+  const compose = composed[composed.length - 1];
+  const stage = str(compose?.meta.runtimeStageId);
   if (stage === undefined) return [];
   return view.ofType('context.injected').filter(
     (e) =>
       e.meta.runtimeStageId === stage &&
+      e.meta.runId === compose?.meta.runId &&
       e.payload.slot === 'messages' &&
       e.payload.source === 'tool-result' &&
       // A witness whose call id the record keeps out is still a witness: a
@@ -100,8 +105,9 @@ export interface InViewAll {
   readonly keptOut: number;
 }
 
-export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InViewAll {
+export function readInView(ctx: ReadContext, currentResults: ReadonlySet<number>): InViewAll {
   const history = historyOf(ctx.view);
+  const calls = readHistoryCalls(history);
   const historyKeptOut = ctx.view.isStateKeptOut('history');
   const windowed = typeof ctx.view.first('agent.run_configured')?.payload.window === 'string';
   const reads: InViewRead[] = [];
@@ -114,18 +120,20 @@ export function readInView(ctx: ReadContext, callIds: ReadonlySet<string>): InVi
       continue;
     }
     const id = witness.payload.sourceId as string;
-    if (callIds.has(id)) continue;
     if (historyKeptOut) {
       keptOut += 1;
       continue;
     }
-    const historyIndex = history.findIndex(
-      (m) => isRecord(m) && m.role === 'tool' && m.toolCallId === id,
-    );
-    if (historyIndex < 0) continue;
-    const message = history[historyIndex] as Record<string, unknown>;
-    const toolName = str(message.toolName);
-    if (toolName === undefined) continue;
+    const key = isFieldKeptOut(witness, 'callOccurrenceKey')
+      ? null
+      : readCallOccurrenceKey(witness.payload);
+    const occurrence =
+      key === undefined
+        ? historyCallForWitness(calls, id, witness.payload.position, witness.payload.contentHash)
+        : historyCallForWitness(calls, id, undefined, undefined, key);
+    if (occurrence === undefined) continue;
+    const { index: historyIndex, message, toolName } = occurrence;
+    if (currentResults.has(historyIndex) || toolName === undefined) continue;
     const distance = history.slice(historyIndex + 1).filter((m) => isPersonEntry(m)).length;
     if (distance < 1) continue;
     // An EARLIER answer's result: its run's door is not in this record, so the one reader's strict

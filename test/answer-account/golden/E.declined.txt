@@ -11,7 +11,8 @@ It found:
   act did not run, so it found nothing.  ⟨found.declined@1 · library · recorded⟩
   No tool result from before the pause is in this record's history.  ⟨beforePause.noResults@1 · library · not-recorded · before the pause — read from the state this record holds⟩
 How sure:
-  Not assessed — this record's committed state holds no verdict the standing can rest on.  ⟨howSure.standing.notAssessed@1 · library · not-applicable⟩
+  Not sure — the record holds 1 reason this answer may not stand:  ⟨howSure.standing.notSure@1 · library · recorded⟩
+    • 1 call was refused.  ⟨howSure.reason.callRefused@1 · library · recorded⟩
   The library was not set to check the answer's names and numbers.  ⟨howSure.evidence.off@1 · library · not-applicable⟩
 Anything wrong:
   1 tool call did not run cleanly: 0 failed, 0 not executed, 0 refused by a rule, 1 declined by a person, 0 not run.  ⟨wrong.errors@2 · library · recorded⟩

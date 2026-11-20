@@ -2,6 +2,10 @@ import { splitFindings } from '../../../findings/reserved.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import {
+  readCallOccurrenceKey,
+  type CallOccurrenceKey,
+} from '../../../../../lib/callOccurrence.js';
 
 /**
  * The args a `pauseHere` / `askHuman` call was running with, read back on the
@@ -30,12 +34,19 @@ export function argsForPausedCall(
   scope: TypedScope<AgentState>,
   toolCallId: string,
   peel = false,
+  callOccurrenceKey?: CallOccurrenceKey,
 ): Readonly<Record<string, unknown>> {
   const carried = scope.pausedToolArgs as Readonly<Record<string, unknown>> | undefined;
   if (carried !== undefined) return { ...carried };
-  for (const message of scope.history as readonly LLMMessage[]) {
+  const history = scope.history as readonly LLMMessage[];
+  if (callOccurrenceKey !== undefined) {
+    const proposal = proposalWithOccurrence(history, toolCallId, callOccurrenceKey);
+    const recovered = { ...proposal?.args };
+    return peel ? splitFindings(recovered).args : recovered;
+  }
+  for (const message of history) {
     for (const call of message.toolCalls ?? []) {
-      if (call.id === toolCallId) {
+      if (call.id === toolCallId && readCallOccurrenceKey(call) === undefined) {
         const recovered = { ...call.args };
         return peel ? splitFindings(recovered).args : recovered;
       }
@@ -46,6 +57,24 @@ export function argsForPausedCall(
 
 /** One call the model proposed on an assistant turn (`LLMMessage.toolCalls`). */
 export type ProposedCall = NonNullable<LLMMessage['toolCalls']>[number];
+
+export function proposalWithOccurrence(
+  history: readonly LLMMessage[],
+  toolCallId: string,
+  callOccurrenceKey: CallOccurrenceKey,
+): ProposedCall | undefined {
+  const key = readCallOccurrenceKey({ callOccurrenceKey });
+  if (typeof key !== 'string') return undefined;
+  for (let index = history.length - 1; index >= 0; index--) {
+    const message = history[index];
+    if (message?.role !== 'assistant') continue;
+    const proposal = message.toolCalls?.find(
+      (call) => call.id === toolCallId && readCallOccurrenceKey(call) === key,
+    );
+    if (proposal !== undefined) return proposal;
+  }
+  return undefined;
+}
 
 /**
  * THE PAUSED BATCH (9.113.0) — the turn that proposed the paused call, and
@@ -68,9 +97,9 @@ export type ProposedCall = NonNullable<LLMMessage['toolCalls']>[number];
  * settles the same way. The window never removes the turn holding the paused
  * call (`../../../window/turns.ts` · `refusalFor`, its `paused-tool` arm).
  *
- * The LATEST turn proposing the id is the paused one — the pause site commits
- * that turn last, and a provider may reuse an id across turns. No such turn:
- * `size: 0` and nothing to settle, the only answer a missing turn supports.
+ * The kept occurrence identifies the paused call. For a keyless checkpoint
+ * use the latest proposal with the paused ID as before. No matching turn
+ * leaves nothing to settle.
  *
  * A call after the paused one that history ALREADY answers — a `role: 'tool'`
  * message for its id after that turn — is not un-dispatched, whoever wrote
@@ -82,19 +111,34 @@ export type ProposedCall = NonNullable<LLMMessage['toolCalls']>[number];
 export function pausedBatchOf(
   history: readonly LLMMessage[],
   pausedToolCallId: string,
+  callOccurrenceKey?: CallOccurrenceKey,
 ): { readonly size: number; readonly undispatched: readonly ProposedCall[] } {
+  const key =
+    callOccurrenceKey === undefined ? undefined : readCallOccurrenceKey({ callOccurrenceKey });
+  if (key === null) return { size: 0, undispatched: [] };
   for (let i = history.length - 1; i >= 0; i--) {
     const message = history[i];
     if (message?.role !== 'assistant') continue;
     const proposed = message.toolCalls ?? [];
-    const at = proposed.findIndex((call) => call.id === pausedToolCallId);
-    if (at < 0) continue;
-    const answered = new Set(
-      history.slice(i + 1).flatMap((m) => (m.role === 'tool' ? [m.toolCallId] : [])),
+    const at = proposed.findIndex(
+      (call) => call.id === pausedToolCallId && readCallOccurrenceKey(call) === key,
     );
+    if (at < 0) continue;
+    const answered = new Set<string | undefined>();
+    for (const message of history.slice(i + 1)) {
+      if (message.role !== 'tool') continue;
+      const occurrence = readCallOccurrenceKey(message);
+      if (key === undefined && occurrence === undefined) answered.add(message.toolCallId);
+      if (key !== undefined && typeof occurrence === 'string') answered.add(occurrence);
+    }
     return {
       size: proposed.length,
-      undispatched: proposed.slice(at + 1).filter((call) => !answered.has(call.id)),
+      undispatched: proposed.slice(at + 1).filter((call) => {
+        const occurrence = readCallOccurrenceKey(call);
+        return key === undefined
+          ? occurrence === undefined && !answered.has(call.id)
+          : typeof occurrence === 'string' && !answered.has(occurrence);
+      }),
     };
   }
   return { size: 0, undispatched: [] };

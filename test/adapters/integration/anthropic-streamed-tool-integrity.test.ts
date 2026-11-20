@@ -304,7 +304,7 @@ describe('official SDK + public Agent optional-argument recovery', () => {
       const ends: Payloads.ToolEndPayload[] = [];
       agent.on('agentfootprint.stream.tool_end', (event) => ends.push(event.payload));
       await expect(agent.run({ message: 'Read the optional-argument lookup.' })).resolves.toBe(
-        'Recovered.',
+        'Recovered.\n\n---\n\nNot sure — a call was refused.',
       );
       expect(executionsAtSend).toEqual([0, 0, 1]);
       expect(execute).toHaveBeenCalledTimes(1);
@@ -427,7 +427,9 @@ describe('official SDK + public Agent mixed-batch recovery ordering', () => {
       .build();
     const ends: Payloads.ToolEndPayload[] = [];
     agent.on('agentfootprint.stream.tool_end', (event) => ends.push(event.payload));
-    await expect(agent.run({ message: 'Read the local records.' })).resolves.toBe('Recovered.');
+    await expect(agent.run({ message: 'Read the local records.' })).resolves.toBe(
+      'Recovered.\n\n---\n\nNot sure — calls were refused.',
+    );
     expect(executionsAtSend).toEqual([0, 1]);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(ends).toMatchObject([

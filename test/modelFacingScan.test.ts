@@ -759,6 +759,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 1,
       why: 'a checkpoint-ownership error thrown to the host',
     },
+  ],
+  'src/core/checkpointLedger.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
@@ -1449,7 +1451,8 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
         // The combined ledger includes the resume sentence and journal links.
-        files: 131,
+        // The checkpoint ledger split moved one host-only refusal to a new file.
+        files: 132,
         total: 215,
         registry: 8,
         ephemeral: 28,

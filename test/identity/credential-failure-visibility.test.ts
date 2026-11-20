@@ -21,6 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { readCallOccurrenceKey } from '../../src/lib/callOccurrence.js';
 
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
@@ -229,7 +230,9 @@ describe('what this event may never carry', () => {
     const serialized = JSON.stringify(failed?.payload ?? {});
     expect(serialized).not.toContain(SECRET);
     expect(serialized).not.toContain(URL_);
+    expect(readCallOccurrenceKey(failed?.payload ?? {})).toMatch(/\.0$/);
     expect(Object.keys(failed?.payload ?? {}).sort()).toEqual([
+      'callOccurrenceKey',
       'errorClass',
       'iteration',
       'reason',

@@ -4,7 +4,7 @@ title: TimeReadingRow
 
 # Interface: TimeReadingRow
 
-Defined in: [src/time/rows/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L79)
+Defined in: [src/time/rows/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L87)
 
 One mention the armed reader found in the person's message (time design
 § 5.2) — or, with `mentions: 0` and no mention fields, the record that the
@@ -17,7 +17,7 @@ retry of the same turn find these rows and do not call the reader.
 
 > `readonly` `optional` **candidates?**: readonly [`TimeCandidate`](/docs/api/interfaces/TimeCandidate)[]
 
-Defined in: [src/time/rows/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L97)
+Defined in: [src/time/rows/types.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L105)
 
 Every window `resolve.ts` made of the parts.
 
@@ -27,7 +27,7 @@ Every window `resolve.ts` made of the parts.
 
 > `readonly` `optional` **choice?**: [`ReadingChoice`](/docs/api/type-aliases/ReadingChoice)
 
-Defined in: [src/time/rows/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L99)
+Defined in: [src/time/rows/types.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L107)
 
 How the reading settled under the policy — `open` waits for the person.
 
@@ -37,7 +37,7 @@ How the reading settled under the policy — `open` waits for the person.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L82)
+Defined in: [src/time/rows/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L90)
 
 ***
 
@@ -45,7 +45,7 @@ Defined in: [src/time/rows/types.ts:82](https://github.com/footprintjs/agentfoot
 
 > `readonly` **kind**: `"time-reading"`
 
-Defined in: [src/time/rows/types.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L80)
+Defined in: [src/time/rows/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L88)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: [src/time/rows/types.ts:80](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **mention?**: `number`
 
-Defined in: [src/time/rows/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L89)
+Defined in: [src/time/rows/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L97)
 
 This row's mention, 0-based — absent on the `mentions: 0` row.
 
@@ -63,7 +63,7 @@ This row's mention, 0-based — absent on the `mentions: 0` row.
 
 > `readonly` **mentions**: `number`
 
-Defined in: [src/time/rows/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L87)
+Defined in: [src/time/rows/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L95)
 
 How many mentions the reading held.
 
@@ -73,7 +73,7 @@ How many mentions the reading held.
 
 > `readonly` `optional` **parses?**: readonly [`TimeParts`](/docs/api/interfaces/TimeParts)[]
 
-Defined in: [src/time/rows/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L92)
+Defined in: [src/time/rows/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L100)
 
 ***
 
@@ -81,7 +81,7 @@ Defined in: [src/time/rows/types.ts:92](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **problem?**: `"unreadable"`
 
-Defined in: [src/time/rows/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L93)
+Defined in: [src/time/rows/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L101)
 
 ***
 
@@ -89,7 +89,7 @@ Defined in: [src/time/rows/types.ts:93](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **quote?**: `string`
 
-Defined in: [src/time/rows/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L91)
+Defined in: [src/time/rows/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L99)
 
 A verbatim substring of the person's message.
 
@@ -99,7 +99,7 @@ A verbatim substring of the person's message.
 
 > `readonly` **reader**: [`TimeReaderStamp`](/docs/api/interfaces/TimeReaderStamp)
 
-Defined in: [src/time/rows/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L83)
+Defined in: [src/time/rows/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L91)
 
 ***
 
@@ -107,7 +107,7 @@ Defined in: [src/time/rows/types.ts:83](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **refused?**: `MentionRefusal`
 
-Defined in: [src/time/rows/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L95)
+Defined in: [src/time/rows/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L103)
 
 Why the mention was refused — its quote was not in the message, or its parts were malformed. It keeps no text.
 
@@ -117,7 +117,7 @@ Why the mention was refused — its quote was not in the message, or its parts w
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L81)
+Defined in: [src/time/rows/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L89)
 
 ***
 
@@ -125,6 +125,6 @@ Defined in: [src/time/rows/types.ts:81](https://github.com/footprintjs/agentfoot
 
 > `readonly` **tzdata**: `string`
 
-Defined in: [src/time/rows/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L85)
+Defined in: [src/time/rows/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L93)
 
 The tz database the candidates were resolved with (`process.versions.tz`), else `'unknown'`.

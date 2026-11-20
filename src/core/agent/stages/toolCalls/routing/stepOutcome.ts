@@ -1,4 +1,4 @@
-import type { DispatchSettlement } from '../execution/callOutcome.js';
+import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
 
 /**
  * How a finished call bears on the procedure step it ran.
@@ -44,7 +44,7 @@ export type StepOutcome =
  * the procedure on, offered the next step's tool, and the model read
  * "Step 1 of 2 done." The step is done only when its tool says so.
  *
- * It reads the facts every door already hands `execution/callOutcome.ts` ·
+ * It reads the facts every door already hands `semantics/toolOutcome.ts` ·
  * `callOutcomeOf` (the reading behind `LLMMessage.outcome`) and agrees with
  * it: a call that function records as failed or refused never completes a
  * step (pinned by `stepOutcome.test.ts`). It answers a different question,

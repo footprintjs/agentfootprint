@@ -19,9 +19,12 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
+import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
-import { type DispatchSettlement, outcomeField } from './callOutcome.js';
+import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
+import { outcomeField, reportedStatusField, toolResultExecutionField } from './outcomeField.js';
+import { missingResultFields } from '../batch/settle.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -58,7 +61,12 @@ export function landCallResult(
   scope: TypedScope<AgentState>,
   deps: Pick<
     ToolCallsHandlerDeps,
-    'negativeClaimsArmed' | 'stepPlanFor' | 'repeatedCallNudge' | 'findings'
+    | 'negativeClaimsArmed'
+    | 'stepPlanFor'
+    | 'repeatedCallNudge'
+    | 'findings'
+    | 'resultsLayer'
+    | 'answerLayer'
   >,
   frame: LandCallResultFrame,
 ): void {
@@ -226,13 +234,28 @@ export function landCallResult(
         )
       : '';
   if (layerNote !== '') frame.delivery.resultStr += layerNote;
+  const occurrence = callOccurrenceField(frame.tc.callOccurrenceKey);
   frame.newHistory.push({
     role: 'tool',
     content: frame.delivery.resultStr,
     toolCallId: frame.tc.id,
     toolName: frame.tc.name,
+    ...occurrence,
     ...(deps.findings === true &&
       !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
+    ...toolResultExecutionField(
+      deps.answerLayer,
+      frame.execution.toolResultExecution,
+      frame.outcome.error === true ||
+        frame.execution.denied ||
+        frame.execution.ceilingRefused ||
+        frame.execution.haltContext !== undefined ||
+        frame.skillRoute.skillRejected ||
+        frame.delivery.modelResultCapped,
+    ),
+    ...(frame.delivery.toolResultDisposition !== undefined && {
+      toolResultDisposition: frame.delivery.toolResultDisposition,
+    }),
     ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },
@@ -240,6 +263,7 @@ export function landCallResult(
     // The inner calls its tool made that ran — read by `extractSequence`.
     ...innerCallsFieldOf(scope, frame.tc.id, frame.iteration),
     ...outcomeField(settled),
+    ...reportedStatusField(settled),
   });
 
   // ── Dynamic ReAct wiring ───────────────────────────────
@@ -260,6 +284,9 @@ export function landCallResult(
     toolName: frame.tc.name,
     result: frame.delivery.resultStr,
     toolCallId: frame.tc.id,
+    ...occurrence,
+    ...(deps.resultsLayer === true &&
+      missingResultFields(frame.execution.executed, frame.execution.executeThrew)),
     ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
   });
   scope.toolResults = [...frame.batchResults];

@@ -61,6 +61,10 @@ export type AssessmentPointer =
  *   record holds no row for the call, in the result's own envelope;
  * - `empty-undeclared` — an empty rowset that said nothing about what it
  *   searched: silence recorded as silence;
+ * - `call-not-completed` — a tool call of this turn recorded as refused or
+ *   failed, with no later completion of the same call by recorded arguments;
+ * - `work-not-finished` — an admitted tool result of this turn recorded partial or
+ *   pending work, with no later completion of the same call by recorded arguments;
  * - `sources-conflict` — two readings the model stood on disagree (a
  *   `ConflictRow` naming a call of this turn, or stamped with this turn while
  *   the record does not place every reading in an earlier turn — a reading it
@@ -70,6 +74,7 @@ export type AssessmentPointer =
  * - `value-survived-revision` — the same, after the one revision the gate
  *   asked for;
  * - `stopped-early` — a limit cut the turn short (`stoppedEarly`);
+ * - `step-skipped` — a committed witness shows the procedure advanced past a declared step;
  * - `answer-check-failed` — the app's answer checks (`.answerValidation()`)
  *   failed this answer;
  * - `check-unreachable` — an armed check could not reach a verdict (the
@@ -154,6 +159,9 @@ export type AssessmentReason =
   | 'declared-absent'
   | 'coverage-gap'
   | 'empty-undeclared'
+  | 'call-not-completed'
+  | 'result-withheld'
+  | 'work-not-finished'
   | 'period-not-held'
   | 'period-partly-held'
   | 'period-unknown'
@@ -167,6 +175,7 @@ export type AssessmentReason =
   | 'script-unmatched'
   | 'stopped-early'
   | 'steps-unfinished'
+  | 'step-skipped'
   | 'negative-prose-unverified'
   | 'invariant-violation'
   | 'unsupported-argument'
@@ -236,7 +245,8 @@ export type HonestyLayer = 1 | 2 | 3 | 4;
  *   the record does not name in full (no call id, or no tool name for it),
  *   present only when there is one — so a `calls` reason with an empty list
  *   still says it rests on calls, and an empty list never stands for "the
- *   run";
+ *   run"; `unplaced` points to evidence rows without a definite call.
+ *   Those rows establish no additional count of calls;
  * - `answer` — the answer itself: a value in it no evidence carried, a claim
  *   in it, a check on its bytes;
  * - `run` — the run as a whole: it paused for a person, a limit stopped it,
@@ -249,8 +259,16 @@ export type HonestyLayer = 1 | 2 | 3 | 4;
 export type AssessmentReasonSource =
   | {
       readonly kind: 'calls';
-      readonly calls: readonly { readonly toolCallId: string; readonly toolName: string }[];
+      readonly calls: readonly {
+        readonly toolCallId: string;
+        readonly toolName: string;
+        /** The recorded outcome for a call behind `call-not-completed`. */
+        readonly outcome?: 'refused' | 'failed';
+        /** The committed unfinished status behind work-not-finished. */
+        readonly reportedStatus?: 'partial' | 'pending';
+      }[];
       readonly unnamed?: number;
+      readonly unplaced?: readonly AssessmentPointer[];
     }
   | { readonly kind: 'answer' }
   | { readonly kind: 'run' };
@@ -332,6 +350,8 @@ export interface AnswerAssessment {
 export interface AssessmentRecord {
   /** The run's snapshot — `recording.snapshot`, `agent.getLastSnapshot()`. Its `sharedState` is read. */
   readonly snapshot?: unknown;
+  /** Earlier recordings can use a scoped tool-end as proof of tool entry. */
+  readonly events?: unknown;
   /**
    * A paused run's checkpoint (`RunnerPauseOutcome.checkpoint`) — for a host
    * that kept only that: its `sharedState` is read when no snapshot is given.

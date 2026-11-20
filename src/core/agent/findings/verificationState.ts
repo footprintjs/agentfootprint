@@ -1,9 +1,8 @@
 /**
  * Private, immutable evidence carrier for the explicit findings verifier.
  * Role: reservation and bounded retention; no schema or events.
- * Partly live: `createVerificationState` / `reserveResultIdentity` run on every
- * call to a tool that declares `search` (stages/searchCoverage.ts) and every
- * armed negative-claims call (negativeClaims/capture.ts), writing the
+ * `createVerificationState` / `reserveResultIdentity` run when a declared
+ * search reaches execution and during armed negative-claim capture, writing the
  * `resultIdentities` carrier. `reserveClaimIdentity` and
  * `retainVerificationEvidence` have no caller outside tests.
  * The checkpoint owner authenticates provenance and supplies the ledger's

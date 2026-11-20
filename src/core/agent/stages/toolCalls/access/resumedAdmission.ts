@@ -1,3 +1,4 @@
+import { callOccurrenceField, type CallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
@@ -45,6 +46,7 @@ type ResumedAdmission =
 const refused = (refusal: ResumedCallResult): ResumedAdmission => ({ allowed: false, refusal });
 
 interface ResumeGateFrame {
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly gate: PausedGatePolicy['gate'];
   readonly tool: Tool;
   readonly toolName: string;
@@ -103,7 +105,7 @@ function isApprovedQuestion(
 
 export function recordResumedRefusal(
   scope: TypedScope<AgentState>,
-  call: Pick<ResumeGateFrame, 'toolName' | 'toolCallId' | 'iteration'>,
+  call: Pick<ResumeGateFrame, 'toolName' | 'toolCallId' | 'iteration' | 'callOccurrenceKey'>,
   why: string,
 ): void {
   recordDecisions(scope, [
@@ -127,9 +129,14 @@ export async function recheckResumedCall(
   frame: ResumeGateFrame,
 ): Promise<ResumedAdmission> {
   const { gate, tool, toolName, toolCallId, iteration, env } = frame;
+  const occurrence = callOccurrenceField(frame.callOccurrenceKey);
   const read = (key: string): unknown => scope.$getValue(key);
   const policy = pausedGatePolicyOf(read('pausedGatePolicy'), { gate, toolCallId, iteration });
-  const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration }, 'resume');
+  const emitSecurity = bindToolSecurityEvents(
+    scope,
+    { toolCallId, iteration, ...occurrence },
+    'resume',
+  );
   const permissionRefusal = (rationale: string): ResumedAdmission => {
     emitSecurity('agentfootprint.permission.check', {
       capability: 'tool_call',
@@ -233,9 +240,10 @@ export async function recheckResumedCall(
     recordDecisions(
       scope,
       rows.map((row) => ({ ...row, phase: 'resume' })),
+      frame.callOccurrenceKey,
     );
   const refuse = (why: string, result: string): ResumedAdmission => {
-    recordResumedRefusal(scope, { toolName, toolCallId, iteration }, why);
+    recordResumedRefusal(scope, { toolName, toolCallId, iteration, ...occurrence }, why);
     return refused({ result, error: true });
   };
   const middleware = deps.toolMiddleware;

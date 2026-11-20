@@ -974,6 +974,15 @@
   ],
   "source": "library"
  },
+ "beforePause.unmatched@1": {
+  "text": "This record cannot match tool results from before the pause to its final history.",
+  "parts": [
+   {
+    "text": "This record cannot match tool results from before the pause to its final history."
+   }
+  ],
+  "source": "library"
+ },
  "beforePause.keptOut@1": {
   "text": "This record keeps the run's history out, so what came back before the pause cannot be told.",
   "parts": [
@@ -1765,11 +1774,92 @@
   ],
   "source": "library"
  },
+ "howSure.reason.unplacedEvidence@1": {
+  "text": "2 evidence rows could not be matched to a call.",
+  "parts": [
+   {
+    "text": "2 evidence rows could not be matched to a call."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.resultUnavailable@1": {
+  "text": "The call result is unavailable in the retained history for 2 evidence rows.",
+  "parts": [
+   {
+    "text": "The call result is unavailable in the retained history for 2 evidence rows."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callAddressUnreadable@1": {
+  "text": "The recorded call address is unreadable for 2 evidence rows.",
+  "parts": [
+   {
+    "text": "The recorded call address is unreadable for 2 evidence rows."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.emptyUndeclared@1": {
   "text": "2 calls returned nothing and did not say what they searched.",
   "parts": [
    {
     "text": "2 calls returned nothing and did not say what they searched."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callNotDispatched@1": {
+  "text": "2 calls did not run.",
+  "parts": [
+   {
+    "text": "2 calls did not run."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callNotCompleted@1": {
+  "text": "2 calls did not complete.",
+  "parts": [
+   {
+    "text": "2 calls did not complete."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callRefused@1": {
+  "text": "2 calls were refused.",
+  "parts": [
+   {
+    "text": "2 calls were refused."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.callFailed@1": {
+  "text": "2 calls failed.",
+  "parts": [
+   {
+    "text": "2 calls failed."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.resultWithheld@1": {
+  "text": "A result was kept out by a rule.",
+  "parts": [
+   {
+    "text": "A result was kept out by a rule."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.workNotFinished@1": {
+  "text": "2 calls reported unfinished work.",
+  "parts": [
+   {
+    "text": "2 calls reported unfinished work."
    }
   ],
   "source": "library"
@@ -1891,6 +1981,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.stepSkipped@1": {
+  "text": "2 declared steps were skipped.",
+  "parts": [
+   {
+    "text": "2 declared steps were skipped."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.negativeProseUnverified@1": {
   "text": "Model prose was not verified for negative claims.",
   "parts": [
@@ -1977,6 +2076,15 @@
   "parts": [
    {
     "text": "The app's answer checks failed this answer."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.dispatchProofUnavailable@1": {
+  "text": "The record could not establish tool entry for every checked call.",
+  "parts": [
+   {
+    "text": "The record could not establish tool entry for every checked call."
    }
   ],
   "source": "library"
@@ -2127,6 +2235,39 @@
    },
    {
     "text": " ended in an error, not a result."
+   }
+  ],
+  "source": "library"
+ },
+ "found.reportedStatus@1": {
+  "text": "lookup_volumes ran. The tool reported a status of status value.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran. The tool reported a status of status value."
+   }
+  ],
+  "source": "tool:lookup_volumes"
+ },
+ "found.invalidStatus@1": {
+  "text": "lookup_volumes ran. The result was recorded as invalid.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ran. The result was recorded as invalid."
+   }
+  ],
+  "source": "library"
+ },
+ "wrong.reportedStatus@1": {
+  "text": "2 calls ran and had a reported result status other than success.",
+  "parts": [
+   {
+    "text": "2 calls ran and had a reported result status other than success."
    }
   ],
   "source": "library"

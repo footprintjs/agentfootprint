@@ -49,7 +49,9 @@ for (const [shape, calls] of [
       (value) => ({ value }),
       (error: unknown) => ({ error }),
     );
-    expect(outcome).toEqual({ value: 'corrected' });
+    expect(outcome).toEqual({
+      value: 'corrected\n\n---\n\nNot sure — a call was refused.',
+    });
     expect(ran).toBe(0);
     expect(starts).toEqual([]);
     expect(requests).toHaveLength(2);

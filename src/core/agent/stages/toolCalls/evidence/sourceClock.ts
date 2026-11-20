@@ -1,7 +1,8 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { FindingsLedger } from '../../../findings/types.js';
-import { sourceClocksOf, sourceClockRow } from '../../../../../time/rows.js';
+import { sourceClocksOf, sourceClockRow, type TimeCallIdentity } from '../../../../../time/rows.js';
+import { readCallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
 import { recordFindings } from '../../../findings/ledger.js';
 
 /**
@@ -11,16 +12,16 @@ import { recordFindings } from '../../../findings/ledger.js';
  */
 export function recordSourceClock(
   scope: TypedScope<AgentState>,
-  call: { readonly toolCallId: string; readonly toolName: string },
+  call: TimeCallIdentity,
   zone: string,
 ): void {
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
+  const row = sourceClockRow(call, { turn, iteration: scope.iteration as number }, zone);
+  const key = readCallOccurrenceKey(row);
   const filed = sourceClocksOf(ledger, turn).some(
-    (r) => r.toolCallId === call.toolCallId && r.zone === zone,
+    (r) => r.toolCallId === call.toolCallId && r.zone === zone && readCallOccurrenceKey(r) === key,
   );
   if (filed) return;
-  recordFindings(scope, [
-    sourceClockRow(call, { turn, iteration: scope.iteration as number }, zone),
-  ]);
+  recordFindings(scope, [row]);
 }

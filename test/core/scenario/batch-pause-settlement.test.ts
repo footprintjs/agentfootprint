@@ -73,6 +73,7 @@ import {
 import { stripFrameworkFields } from '../../../src/core/agent/composeRequest.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../../src/security/extractSequence.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
+import { readCallOccurrenceKey } from '../../../src/lib/callOccurrence.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
@@ -156,6 +157,8 @@ function build(
   let builder = Agent.create({
     provider,
     model: 'mock',
+    // Preserve the historical settlement record comparison.
+    answerLayer: false,
     ...(kind === 'consent' && { credentials }),
   }).tools(tools);
   if (kind === 'ask') {
@@ -175,20 +178,30 @@ function build(
 async function pauseAndResume(
   h: Harness,
   kind: PauseKind,
-): Promise<{ answer: unknown; resumedFrom: number; requestId?: string }> {
+): Promise<{
+  answer: unknown;
+  resumedFrom: number;
+  checkpointHistory: readonly LLMMessage[];
+  requestId?: string;
+}> {
   const paused = await h.agent.run({ message: 'go' });
   expect(isPaused(paused)).toBe(true);
   if (!isPaused(paused)) throw new Error('expected a pause');
   const resumedFrom = h.events.length;
+  const checkpointHistory = paused.checkpoint.sharedState.history as readonly LLMMessage[];
   if (kind === 'input') {
     if (!isInputPause(paused)) throw new Error('expected an input pause');
     const requestId = paused.awaitingInput.requestId;
     const answer = await h.agent.resume(paused.checkpoint, { requestId, values: { year: 2026 } });
-    return { answer, resumedFrom, requestId };
+    return { answer, resumedFrom, checkpointHistory, requestId };
   }
   if (kind === 'consent') {
     h.vault.granted = true; // the person consented, out of band
-    return { answer: await h.agent.resume(paused.checkpoint, undefined), resumedFrom };
+    return {
+      answer: await h.agent.resume(paused.checkpoint, undefined),
+      resumedFrom,
+      checkpointHistory,
+    };
   }
   return {
     answer: await h.agent.resume(
@@ -196,6 +209,7 @@ async function pauseAndResume(
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     ),
     resumedFrom,
+    checkpointHistory,
   };
 }
 
@@ -224,6 +238,46 @@ const sharedState = (h: Harness) =>
     lastToolResult?: { toolName: string };
   };
 
+function expectRecordedBatch(h: Harness, checkpointHistory: readonly LLMMessage[]) {
+  const proposed = checkpointHistory.flatMap((message) => message.toolCalls ?? []);
+  const keys = proposed.map(readCallOccurrenceKey);
+  expect(proposed.map((call) => call.id)).toEqual(IDS);
+  expect(keys).toEqual(IDS.map(() => expect.any(String)));
+  expect(new Set(keys).size).toBe(IDS.length);
+  const byId = new Map(proposed.map((call, index) => [call.id, keys[index]]));
+  const state = sharedState(h);
+  const history = state.history ?? [];
+  expect(history.flatMap((message) => message.toolCalls ?? []).map(readCallOccurrenceKey)).toEqual(
+    keys,
+  );
+  expect(history.filter((message) => message.role === 'tool').map(readCallOccurrenceKey)).toEqual(
+    keys,
+  );
+  for (const result of state.toolResults ?? []) {
+    expect(readCallOccurrenceKey(result)).toBe(byId.get(result.toolCallId));
+  }
+  for (const event of h.events) {
+    if (
+      event.type === 'agentfootprint.stream.tool_start' ||
+      event.type === 'agentfootprint.stream.tool_end'
+    ) {
+      expect(readCallOccurrenceKey(event.payload)).toBe(byId.get(String(event.payload.toolCallId)));
+    } else if (
+      event.type === 'agentfootprint.agent.iteration_end' &&
+      Array.isArray(event.payload.history)
+    ) {
+      const projection = event.payload.history as readonly LLMMessage[];
+      expect(
+        projection.flatMap((message) => message.toolCalls ?? []).map(readCallOccurrenceKey),
+      ).toEqual(keys);
+      expect(
+        projection.filter((message) => message.role === 'tool').map(readCallOccurrenceKey),
+      ).toEqual(keys);
+    }
+  }
+  return proposed;
+}
+
 // ─── 1. SCENARIO — every door settles the siblings after the paused call ──
 
 describe('batch settlement — a paused batch settles its un-dispatched siblings on every door', () => {
@@ -231,8 +285,10 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
     '%s: a three-call batch paused on its MIDDLE call settles the third on resume',
     async (kind) => {
       const h = build(kind, 1);
-      const { answer, resumedFrom } = await pauseAndResume(h, kind);
+      const { answer, resumedFrom, checkpointHistory } = await pauseAndResume(h, kind);
       expect(answer).toBe('done');
+      const proposed = expectRecordedBatch(h, checkpointHistory);
+      const callOccurrenceKey = proposed[2]?.callOccurrenceKey;
 
       // Nothing is dispatched on resume: the third tool never ran.
       expect(h.ran).not.toContain('third');
@@ -265,10 +321,23 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
       const start = forCall(h, 'agentfootprint.stream.tool_start', 'c3');
       const end = forCall(h, 'agentfootprint.stream.tool_end', 'c3');
       expect(start.map((e) => e.payload)).toEqual([
-        { toolName: 'third', toolCallId: 'c3', args: {}, parallelCount: 3, notDispatched: MARKER },
+        {
+          toolName: 'third',
+          toolCallId: 'c3',
+          callOccurrenceKey,
+          args: {},
+          parallelCount: 3,
+          notDispatched: MARKER,
+        },
       ]);
       expect(end.map((e) => e.payload)).toEqual([
-        { toolCallId: 'c3', result: sentence, durationMs: 0, notDispatched: MARKER },
+        {
+          toolCallId: 'c3',
+          callOccurrenceKey,
+          result: sentence,
+          durationMs: 0,
+          notDispatched: MARKER,
+        },
       ]);
       expect('error' in end[0]!.payload).toBe(false);
       // Absent on every other bracket of the run, both legs: the field is
@@ -321,7 +390,8 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
       // it (`composeRequest.ts` · `stripFrameworkFields`).
       expect((state.history ?? []).filter((m) => m.role === 'tool').length).toBe(3);
       const stored = (state.history ?? []).find((m) => m.role === 'tool' && m.toolCallId === 'c3');
-      expect(stored).toEqual({ ...settled, notDispatched: MARKER });
+      expect(stored).toEqual({ ...settled, callOccurrenceKey, notDispatched: MARKER });
+      expect(stripFrameworkFields([stored!])[0]).toEqual(settled);
       // ONE fact, one shape: the history message and both brackets agree.
       expect(stored?.notDispatched).toEqual(start[0]!.payload.notDispatched);
       expect(stored?.notDispatched).toEqual(end[0]!.payload.notDispatched);
@@ -405,6 +475,7 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
         );
       }
       expect(answer).toBe('done');
+      expectRecordedBatch(restored, checkpoint.sharedState.history as readonly LLMMessage[]);
       expect(restored.ran).not.toContain('third');
       const { uses, results } = usesAndResults(restored.requests[0]!);
       expect(uses).toEqual(['c1', 'c2', 'c3']);
@@ -581,8 +652,24 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
 
 const REFERENCE = resolve(__dirname, 'reference/batch-pause-last-call.json');
 
-/** Everything a consumer can see of one pause-and-resume, timing removed and
- *  the run-minted request id replaced by a placeholder. */
+function withoutOccurrence<T extends object>(record: T) {
+  const { callOccurrenceKey: _key, ...rest } = record as T & {
+    readonly callOccurrenceKey?: unknown;
+  };
+  return rest;
+}
+
+function legacyHistory(history: readonly LLMMessage[]) {
+  return history.map((message) => {
+    if (message.role === 'tool') return withoutOccurrence(message);
+    return message.role === 'assistant' && message.toolCalls !== undefined
+      ? { ...message, toolCalls: message.toolCalls.map(withoutOccurrence) }
+      : message;
+  });
+}
+
+/** Historical projection of one pause and resume, with timing removed,
+ *  the request ID replaced and library occurrence addresses projected out. */
 function recordOf(h: Harness, requestId: string | undefined): unknown {
   const record = {
     requests: h.requests.map((r) => r.messages),
@@ -596,10 +683,16 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
       )
       .map((e) => {
         const { durationMs: _timing, ...rest } = e.payload;
-        return { type: e.type, payload: rest };
+        const payload =
+          e.type !== 'agentfootprint.agent.iteration_end'
+            ? withoutOccurrence(rest)
+            : Array.isArray(rest.history)
+            ? { ...rest, history: legacyHistory(rest.history as readonly LLMMessage[]) }
+            : rest;
+        return { type: e.type, payload };
       }),
-    history: sharedState(h).history ?? [],
-    toolResults: sharedState(h).toolResults ?? [],
+    history: legacyHistory(sharedState(h).history ?? []),
+    toolResults: (sharedState(h).toolResults ?? []).map(withoutOccurrence),
   };
   const text = JSON.stringify(record);
   return JSON.parse(requestId === undefined ? text : text.split(requestId).join('<requestId>'));
@@ -608,8 +701,9 @@ function recordOf(h: Harness, requestId: string | undefined): unknown {
 describe('batch settlement — the pinned record when the last call pauses', () => {
   it.each(KINDS)('%s', async (kind) => {
     const h = build(kind, 2);
-    const { answer, requestId } = await pauseAndResume(h, kind);
+    const { answer, requestId, checkpointHistory } = await pauseAndResume(h, kind);
     expect(answer).toBe('done');
+    expectRecordedBatch(h, checkpointHistory);
     const record = recordOf(h, requestId);
     const all = existsSync(REFERENCE)
       ? (JSON.parse(readFileSync(REFERENCE, 'utf8')) as Record<string, unknown>)
@@ -803,8 +897,8 @@ describe('batch settlement — the sentence, and the marker that says the same t
     });
 
     it('an id proposed twice on ONE turn: each settlement answers its own call, in call order', () => {
-      // A later turn's call that RAN under the same id gives the id a result,
-      // so only the pairing — not the in-flight check — keeps both out.
+      // Both recorded settlements stay with their proposals when the id
+      // is reused by a later completed call.
       const twice: LLMMessage = {
         role: 'assistant',
         content: '',
@@ -867,18 +961,11 @@ describe('batch settlement — the sentence, and the marker that says the same t
         turn(['transfer_funds', 'c3']), // in flight: the permission check's view
       ];
       expect(names(history)).not.toContain('verify_identity');
-      // The whole sequence, the in-flight limit included: process A's
-      // collect_x and other were never answered, and they count because
-      // calls that ran reuse their ids — the limit stated in
-      // `src/security/extractSequence.ts`'s header, `src/security/README.md`
-      // and `src/core/README.md` · "Not covered yet". Pinned here so those
-      // statements and the code cannot drift apart.
-      expect(names(history)).toEqual(['collect_x', 'other', 'collect', 'lookup', 'lookup']);
+      // The older unanswered proposals have no result of their own.
+      expect(names(history)).toEqual(['collect', 'lookup', 'lookup']);
     });
 
-    it('with no settlement anywhere, a reused id pairs as it always did — both proposals count', () => {
-      // The additive law: a history the settlement never touched reads
-      // exactly as it did before 9.113.0, reuse included.
+    it('keeps both answered proposals when they share an id and neither is settled', () => {
       expect(
         names([proposing, ranResult('a'), ranResult('b'), ranResult('c'), reusing, lookupRan]),
       ).toEqual(['t_a', 't_b', 't_c', 'lookup']);
@@ -894,80 +981,6 @@ describe('batch settlement — the sentence, and the marker that says the same t
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
     };
-
-    /** The rule this file had before 9.113.0: by id, the latest message decides. */
-    const byIdAsBefore = (history: readonly LLMMessage[], iteration: number) => {
-      const latest = new Map<string, string>();
-      for (const m of history)
-        if (m.role === 'tool' && m.toolCallId) latest.set(m.toolCallId, m.content);
-      const sequence: { name: string; args: Record<string, unknown>; iteration: number }[] = [];
-      let turn = 1;
-      for (const m of history) {
-        if (m.role !== 'assistant' || !m.toolCalls || m.toolCalls.length === 0) continue;
-        for (const call of m.toolCalls) {
-          const result = call.id ? latest.get(call.id) : undefined;
-          if (result === undefined || result.startsWith(SYNTHETIC_DENY_PREFIX)) continue;
-          sequence.push({ name: call.name, args: call.args, iteration: turn });
-        }
-        turn += 1;
-      }
-      const last = sequence.at(-1)?.iteration;
-      if (last !== undefined && iteration > turn - 1) {
-        for (let i = sequence.length - 1; i >= 0 && sequence[i]!.iteration === last; i--) {
-          sequence[i]!.iteration = iteration;
-        }
-      }
-      return sequence;
-    };
-
-    it('property: with no marker anywhere, the sequence is the by-id rule it always was (400 seeded histories)', () => {
-      // Reused ids across and within turns, an empty id, denied calls, calls
-      // still in flight, a result given twice, user turns and text-only turns.
-      const ids = ['k1', 'k2', 'k3', ''];
-      let reused = 0;
-      for (let seed = 1; seed <= 400; seed++) {
-        const next = seeded(seed);
-        const pick = <T>(from: readonly T[]): T => from[Math.floor(next() * from.length)]!;
-        const history: LLMMessage[] = [];
-        for (let turn = 0, turns = 1 + Math.floor(next() * 7); turn < turns; turn++) {
-          const kind = next();
-          if (kind < 0.15) {
-            history.push(
-              kind < 0.1
-                ? { role: 'user', content: 'and then?' }
-                : { role: 'assistant', content: '…' },
-            );
-            continue;
-          }
-          const calls = Array.from({ length: 1 + Math.floor(next() * 3) }, () => ({
-            id: pick(ids),
-            name: pick(['verify', 'transfer', 'lookup']),
-            args: {},
-          }));
-          history.push({ role: 'assistant', content: '', toolCalls: calls });
-          for (const call of calls) {
-            const answer = next();
-            if (answer < 0.15) continue; // still in flight
-            const content = answer < 0.35 ? `${SYNTHETIC_DENY_PREFIX} ${call.name}]` : 'ok';
-            history.push({ role: 'tool', content, toolCallId: call.id, toolName: call.name });
-            if (next() < 0.05) {
-              history.push({
-                role: 'tool',
-                content: 'ok',
-                toolCallId: call.id,
-                toolName: call.name,
-              });
-            }
-          }
-        }
-        const proposed = history.flatMap((m) => (m.toolCalls ?? []).map((c) => c.id));
-        if (new Set(proposed).size < proposed.length) reused++;
-        const iteration = 1 + (seed % 6);
-        expect(extractSequence(history, iteration)).toEqual(byIdAsBefore(history, iteration));
-      }
-      // The generator did exercise reuse — the case the positional pairing is for.
-      expect(reused).toBeGreaterThan(200);
-    });
 
     it('property: histories as the library writes them — each call ran or was settled, ids reused within and across turns — hold exactly the calls that ran (400 seeds)', () => {
       // Every proposal is answered right after its turn, in call order, the
@@ -1110,7 +1123,9 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       },
     };
     const { agent, ran } = precondition({ checker });
-    expect(await answerTheInput(agent)).toBe('done');
+    expect(await answerTheInput(agent)).toBe(
+      'done\n\n---\n\nNot sure — a call was refused and a call did not run.',
+    );
     expect(sequences.transfer_funds).toEqual(['collect_input']);
     // So the transfer was refused: nothing but the input door ever executed.
     expect(ran).toEqual([]);
@@ -1297,7 +1312,9 @@ describe('batch settlement — a settled call is not a call that ran, to every r
       requestId: paused.awaitingInput.requestId,
       values: { acct: 7 },
     });
-    expect(answer).toBe('transfer refused');
+    expect(answer).toBe(
+      'transfer refused\n\n---\n\nNot sure — a call was refused and a call did not run.',
+    );
 
     // The precondition: the verify was settled, and the fresh process minted
     // its id again for a lookup that really ran.
@@ -1430,7 +1447,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it('the offer after the resume lists calls that ran, excluding settled and refused notices', async () => {
     const { agent, answer, requests } = await judgedRun();
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused and a call did not run.');
     expect(requests).toHaveLength(4);
     // Request 3 (the first after the resume) carries all three results on
     // the wire — one per tool_use — and offers only the two that are results.
@@ -1511,7 +1528,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it("the window's record never lists it among the dropped results", async () => {
     const { answer, state } = await judgedRun('evicting');
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused and a call did not run.');
     const dropped = (state.compactions ?? []).flatMap((r) => r.droppedStandings ?? []);
     // The batch turn left: its results are listed with the standing the model
     // declared (or none) — and the settled call, which had no result, is not.
@@ -1586,7 +1603,7 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
           requestId: paused.awaitingInput.requestId,
           values: { year: 2026 },
         }),
-      ).toBe('done');
+      ).toBe(withSettled ? 'done\n\n---\n\nNot sure — a call did not run.' : 'done');
       // The window's last visit, after d1 filed both standings.
       return seen.find((turn) => turn.ids.includes('c1'));
     };

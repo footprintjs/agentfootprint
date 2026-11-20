@@ -11,7 +11,7 @@
 
 import { isDevMode } from 'footprintjs';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
-import { emitServed } from '../../redaction/runRedaction.js';
+import { emitServed, markRootTurnEnd } from '../../redaction/runRedaction.js';
 
 /**
  * Minimal scope surface we need to emit — structurally compatible with
@@ -81,4 +81,13 @@ export function typedEmit<K extends AgentfootprintEventType>(
   devWarnIfUnclonable(type, payload);
   if (servedPayload !== undefined) devWarnIfUnclonable(type, servedPayload);
   emitServed(scope, type, payload, servedPayload);
+}
+
+/** The final capture stamps native ownership before sending the two event views. */
+export function emitTurnEnd(
+  scope: EmitableScope,
+  payload: AgentfootprintEventMap['agentfootprint.agent.turn_end']['payload'],
+): void {
+  markRootTurnEnd(scope);
+  typedEmit(scope, 'agentfootprint.agent.turn_end', payload);
 }

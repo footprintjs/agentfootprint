@@ -59,7 +59,7 @@ describe('maxIterations with pending tool calls (8.14.0)', () => {
 
     const answer = await agent.run({ message: 'hi' });
 
-    expect(answer).toBe('');
+    expect(answer).toBe('Not sure — the run stopped before the model finished.');
     expect(hits).toHaveLength(1);
     expect(hits[0]!.kind).toBe('max_iterations');
     expect(hits[0]!.limit).toBe(2);
@@ -116,7 +116,9 @@ describe('maxIterations with pending tool calls (8.14.0)', () => {
       .tool(looker as never)
       .maxIterations(2)
       .build();
-    await expect(agent.run({ message: 'hi' })).resolves.toBe('');
+    await expect(agent.run({ message: 'hi' })).resolves.toBe(
+      'Not sure — the run stopped before the model finished.',
+    );
   });
 
   it('a model that returned CONTENT alongside its tool calls keeps that answer', async () => {
@@ -141,7 +143,9 @@ describe('maxIterations with pending tool calls (8.14.0)', () => {
 
     const answer = await agent.run({ message: 'hi' });
     // The partial answer is real and is returned. It is still an early stop.
-    expect(answer).toBe('here is what I have so far');
+    expect(answer).toBe(
+      'here is what I have so far\n\n---\n\nNot sure — the run stopped before the model finished.',
+    );
     expect(stoppedEarlyOf(agent)!.answerWasEmpty).toBe(false);
   });
 

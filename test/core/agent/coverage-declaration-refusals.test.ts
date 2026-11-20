@@ -374,7 +374,7 @@ describe('integration: the model-visible tool message starts with the refusal, a
     expect(toolEnd.error).toBe(true);
     expect(text).not.toContain('size_tb');
     // The run went on: the model got its next turn and answered.
-    expect(content).toBe('I could not get that data.');
+    expect(content).toBe('I could not get that data.\n\n---\n\nNot sure — a call failed.');
   });
 
   it('an envelope with no provenance at all: "refused: this result carries series/facts with no …"', async () => {
@@ -382,7 +382,7 @@ describe('integration: the model-visible tool message starts with the refusal, a
       describedResult({ facts: [{ entity: 'vm-01', size_tb: 12 }] }),
     );
     expect(text).toMatch(/^refused: this result carries series\/facts with no `provenance`/);
-    expect(content).toBe('I could not get that data.');
+    expect(content).toBe('I could not get that data.\n\n---\n\nNot sure — a call failed.');
   });
 
   it('a JS-fed not_checked: the model reads the refusal and the spelling meant, not a trimmed ledger', async () => {

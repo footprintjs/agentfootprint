@@ -9,7 +9,8 @@ it imports only `lib/` leaves and `time/`): `coverage/` (the two field-invented
 result primitives, `absent()` and `coverage()`, and the period a result
 declares — its own README), `toolEffects.ts` (the tool-result envelope grammar:
 the two effect kinds and `unknownStatusOf`), `toolOutcome.ts` (the outcome
-words a route edge keys on and `readToolResultStatus`, the shared status reader),
+words a route edge keys on, the shared status reader `readToolResultStatus`, and
+the settlement rule `callOutcomeOf` shared by dispatch and answer accounts),
 and `toolRan.ts` (the writer of `tool_end.entered` and its reader, `toolRanOf`).
 `readToolResultEnvelope({ content: 'x', effects: [], status: 'Denied' })?.status`
 is `'denied'`, and `unknownStatusOf({ content: 'x', effects: [], status: 'queued' })`
@@ -292,9 +293,9 @@ absences, and `authoritative-names` for every `among.authoritative`. The laws:
   (`invalid`, `denied`, `failure`). `authoritative-names` is a review item and
   stays a warning.
 - **Closed, versioned phrase lists**, matched after NFC, case and apostrophe
-  folding. A phrasing they miss is a missed finding, never a pass. The version
-  (`OVERCLAIM_PHRASES_VERSION`, on no public door) is bumped with every list
-  change. The version is metadata for the phrase lists and is absent from `OverclaimIssue` findings.
+  folding. A phrasing they miss is a missed finding, never a pass. Update
+  `OVERCLAIM_PHRASES_VERSION` when editing either list. This internal version
+  is metadata for the phrase lists and is absent from `OverclaimIssue` findings.
 - **The library's own refusal sentences are pinned** to carry no absence, no
   non-existence claim beside the value asked for
   (`test/semantics/refusal-sentences.test.ts`).

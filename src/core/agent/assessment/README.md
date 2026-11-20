@@ -27,7 +27,7 @@ answer one question — a bare `[]` reads "not sure" (`empty-undeclared`), an
 (`coverage-gap`, `declared-absent`), and rows with nothing declared read
 "consistent with the record" — never "known".
 
-## In the run — the answer layer (`.answerLayer()`)
+## In the run — the answer layer
 
 The same fold, run INSIDE the run, as the first stage of the final branch — after
 the Route decider's checks filed their verdicts, before the turn is captured — and
@@ -37,7 +37,6 @@ served as data the moment the answer exists:
 const agent = Agent.create({ provider, model })
   .tool(listDownPorts)
   .namesAndNumbersFromEvidence({ posture: 'assist' })
-  .answerLayer({ standingLine: true }) // `{}` / no argument: the data only
   .build();
 
 agent.on('agentfootprint.answer.assessed', (e) => e.payload.standing); // 'not-sure'
@@ -49,7 +48,7 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **One stage** — `stage.ts` · `assessAnswerStage`, mounted by `honesty/mounts.ts` ·
   `startFinalBranch` (the one helper both chart builders call) and loaded through
   `import()` on the first armed answer. It reads ONLY the committed keys the fold
-  reads that this agent's arms can write (`honesty/mounts.ts` · `answerFoldReads`),
+  reads that this agent's arms can write (`honesty/answerFoldReads.ts` · `answerFoldReads`),
   folds them, files the projection for PrepareFinal (`answerAssessment`, committed in
   the final branch's own state — its subflow result keeps that copy — never in the
   run's state; the copy is a hand-off, not a source: every reader re-folds) and fires
@@ -69,14 +68,18 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
 - **The turn stamp never repeats** — "this turn" is read by `turn`, so seed continues
   the stamp from the turn the stored conversation ended on
   (`AgentRunCheckpoint.turnNumber`, carried while a layer is armed) and from the
-  restored ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`): a window
+  restored ledger's latest stamp (`runtime/conversation/seedHistory.ts` · `turnNumberFor`): a window
   strategy trims the stored history, and its count of user messages repeats.
-- **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` (or a
-  mode, below) only, on a PROSE answer only (refused beside `.answerValidation()` and
-  `.outputSchema()` at build, in every mode). Appended after the limits separator by
-  the one composer; beside `.limitsTravelWithTheAnswer()` it names the assumed values
-  itself and the "Assumed" block is not appended too — the block is appended whenever
-  no line was. An assumed value is printed only in the tool's own view.
+- **The line** — `compose.ts` · `standingLineOf` renders the line for eligible prose
+  answers. The default selects `'not-sure-or-ask'` and serves data alone beside
+  `.answerValidation()` or `.outputSchema()`. An explicit line still fails to
+  build beside either. The composer puts the line after the limits separator.
+  Beside `.limitsTravelWithTheAnswer()`, the line names assumed values when it
+  appears. The "Assumed" block supplies them when the line is absent. Values
+  appear only in the tool's own view.
+- **Delivery** — ordinary tokens carry the model's text. When output admission
+  holds provider chunks, PrepareFinal emits the composed answer in one token.
+  In either case, `turn_end.finalContent` carries the completed answer.
 - **THE EQUALITY LAW** — the in-run standing equals `assessAnswer()` over the same
   recording read afterwards: one pure function over the same committed rows, at the one
   moment nothing after it can change them. Pinned by
@@ -85,11 +88,15 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   cut the turn short, an agent mounted in a composition, and 40 generated
   configurations.
 
-The runnable example is `examples/features/76-answer-layer.ts`.
+See `examples/features/123-answer-standing-default.ts` for the default and the
+opt-out, and `examples/features/76-answer-layer.ts` for an explicit line.
 
 ### When the line is said — `standingLine: { when }`
 
-**The rule.** `standingLine` is `true` (= `{ when: 'always' }`) or `{ when }`:
+**The rule.** Omit `.answerLayer()` to use the default. Call `.answerLayer()` or
+`.answerLayer({ standingLine: false })` to serve data only, or `.answerLayer(false)`
+to remove the layer. Set `standingLine` to `true` (equivalent to
+`{ when: 'always' }`) or `{ when }` to select a mode explicitly.
 
 | `when` | The line is appended for | Left off for |
 |---|---|---|
@@ -160,7 +167,10 @@ filed against the superseded answer stays and may over-report; it never hides.
 
 The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row
-carries its `turn` — and the last row per (call, argument) is the current one.
+carries its `turn`. A later observation replaces one for the same argument at
+the same proved result address. With no retained compatible result, only an
+explicit library pre-dispatch row can replace the prior observation of the
+same turn, tool and call ID. Ordinary observations without an address are kept.
 When the layer filed any, `checked` gains `argument-rules` (layer 2): every row
 is a verdict, so `ran` equals `of`. Under declared sources
 (`.findings({ argumentSources: true })`) `checked` gains `argument-sources` too:
@@ -264,23 +274,23 @@ it never hides.
 
 ## What a reason rests on — `reasons[].source`
 
-**The rule.** Every reason carries `source`, one of `{ kind: 'calls', calls:
-{ toolCallId, toolName }[], unnamed? }`, `{ kind: 'answer' }` or `{ kind: 'run' }`.
-The KIND is declared once per reason in `REASONS` (`reasons.ts`), never decided
-per run; the calls of a `calls` reason are read off the very rows its witnesses
-point at (`sources.ts` · `reasonSourceOf`) — a result's own call, a coverage,
-argument, period or middleware row's own call, a conflict's readings, the results
-a contingent value came from, every call this turn of a tool an answer check names
-(`declaration-overclaimed`: it may over-report, it never hides). A call the record
-does not name in full — no id, or no tool name for it — is counted in `unnamed`,
-never dropped and never guessed. Names and ids only: never an argument, a result
-or a value.
+**The rule.** Every reason carries `source`, one of `{ kind: 'calls', calls: {
+toolCallId, toolName }[], unnamed? }`, `{ kind: 'answer' }` or `{ kind: 'run' }`. The
+KIND comes from `REASONS` (`reasons.ts`). When the model's value came from a
+result it had set aside, the witness says whether the value reached a call's
+inputs or the answer itself. The fold reads the calls off the admitted witness
+rows (`sources.ts` · `reasonSourceOf`): a result's own call, a coverage,
+argument, period or middleware row's call, a conflict's readings, or the
+exact call a native declaration check names. A call the record does not name
+in full is counted in `unnamed`. Names and IDs only, with the recorded outcome
+when one is available for `call-not-completed`. Each outcome belongs to one
+history occurrence. The provider can use the same ID again.
 
 | Rests on | Reasons |
 |---|---|
-| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
-| `answer` | `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
-| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
+| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
+| `answer` | `value-contingent` (answer witness), `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
+| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `step-skipped`, `result-withheld`, `check-unreachable` |
 
 **Why.** "Not sure — a tool said nothing matched" did not say which tool: when an
 answer rested on one call's rows and another call reported no matching results, a reader could not
@@ -289,26 +299,14 @@ which claim depends on which call is NOT on the record, so naming a source never
 says the rest of the answer is unaffected, and it never moves the standing. An
 empty list of calls never stands for "the run": that is a kind of its own.
 
-**Every field the fold reads is on the row the run commits — one name, one
-row.** A `.negativeClaims()` verdict reaches the record twice: whole on
-`answerNegatives.checks` (its `code`, its `tools`), and as a check row on the
-answer-check report, `answerValidation.checks` — the row the fold reads: for
-`declaration-overclaimed`, its `reason` and its `tools`. The ONE projection
-between them (`negativeClaims/delivery.ts` · `reportWithNegatives`) writes the
-code as `reason` and keeps `tools` under that name, so the fold reads one field
-for each fact, off one row. A field the projection dropped would read as "a
-call the record cannot name" on every real run, so the source is pinned on a
-real run, never only on a hand-built row (`reason-sources.test.ts`):
-
-```ts
-// .negativeClaims({ field: 'negatives', tools: ['read_incidents'] }) — read_incidents threw
-// "Service payments does not exist.": a refused call read nothing, so its refusal overclaims.
-agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaimed');
-// { id: 'agent:negative-claims:declaration:0', path: '/', disposition: 'not-applicable',
-//   reason: 'declaration-overclaimed', tools: ['read_incidents'] }
-(await agent.assessment())?.reasons.find((r) => r.reason === 'declaration-overclaimed')?.source;
-// { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
-```
+**A declaration check identifies its exact return.** `.negativeClaims()`
+records its audit checks. A check on the native result also carries the ID,
+name and iteration of that call in the host's validation report
+(`negativeClaims/delivery.ts` · `reportWithNegatives`). The public standing
+reads the check only when the record binds it to an occurrence and establishes
+that the tool's return reached the model. A throw or a framework refusal
+can still be reported in the audit. A host rewrite is assessed from what it
+served to the model.
 
 **A list on a row is read by index — never through its own iterator or index
 getters.** Every list the fold reads off a row — a conflict's readings, a
@@ -321,7 +319,7 @@ handed to `assessAnswer` may be host-built, so a list can be SPARSE, carry its
 own iterator or put a getter at an index; the reader never calls the iterator
 or the getter. Unless the value is a Proxy, what it cannot read is counted,
 never dropped and never a throw (a Proxy, and a getter on an entry object, are
-outside this: see Not covered, below):
+outside this: see [Not covered](./LIMITS.md#not-covered)):
 
 - a hole, or an entry behind a getter, is one entry that names no call;
 - the entries past the bound are counted, never walked (a `length` is the
@@ -385,6 +383,8 @@ column changes, so this table can lag it but the code cannot:
 | `declared-absent` | a tool said nothing matched | {who} reported no matching results |
 | `coverage-gap` | a tool said there is ground it did not check or cannot cover | {who} declared ground that was not checked or cannot be covered |
 | `empty-undeclared` | a lookup came back empty without saying what it searched | {who} came back empty without saying what was searched |
+| `call-not-completed` | a call was refused / a call failed | {who} did not complete (refused) / {who} did not complete (failed) |
+| `result-withheld` | a result was kept out by a rule | Same wording for every tool |
 | `period-not-held` | a tool's data does not reach the time the question asked about | {who} read data that does not reach the time the question asked about |
 | `period-partly-held` | a tool's data covers only part of the time the question asked about | {who} read data that covers only part of the time the question asked about |
 | `period-unknown` | a tool could not say what time its data covers | {who} could not say what time the data covers |
@@ -409,7 +409,7 @@ The standing is about an answer, so the turn's end is settled first:
 |---|---|---|---|
 | in an answer | the fold | the fold | the fold |
 | in a pause (any kind — the library's own batch ask included, `argument-asked`) | `ask` | `ask` | "Ask — the run stopped to ask a question before it could answer:" |
-| in an error before any answer (it threw, or a rule halted it — a policy halt, a fail-fast, an input denial) | `undefined` | not settled — see Not covered | "How sure cannot be told: this record does not show the run giving an answer." (no `turn_end`) |
+| in an error before any answer (it threw, or a rule halted it — a policy halt, a fail-fast, an input denial) | `undefined` | not settled — see [Not covered](./LIMITS.md#not-covered) | "How sure cannot be told: this record does not show the run giving an answer." (no `turn_end`) |
 | in an answer a rule then refused (`UnsupportedValuesError`, `AnswerValidationError`, …) | `undefined` — `run()` returned no answer; the typed error carries the verdict | the fold | the fold — the record holds the answer (a `turn_end`), and the account explains that one |
 
 A pause is read from the committed state every pause leaves —
@@ -459,13 +459,13 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
 
 | Clause | Here |
 |---|---|
-| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; the layer's own arm, `.answerLayer()` |
+| DECLARE | existing: `.answerValidation()`, `.namesAndNumbersFromEvidence()`, `.claims()`; the tools' `absent()` / `coverage()` / `describedResult()`; `.answerLayer()` configures the default layer |
 | VERIFY | existing: the Route decider's checks (`core/agent/stages/route.ts` · `judgeClaims`), `core/agent/evidence/gate.ts` · `checkAnswer`, `answer-validation/validate.ts` · `executeAnswerValidation` |
 | RECORD | the existing committed keys, and — under the layer's arm — the two witness rows (`witness.ts`), filed by the Route decider (`core/agent/stages/route.ts` · `judgeEvidence`, `judgeUnfinishedSteps`) |
-| RESOLVE | label only: the fold never asks, refuses or rewrites; the one opt-in line is appended after the answer, never into it |
+| RESOLVE | the fold labels the answer and appends a line for the selected standings |
 | FOLD | `assess.ts` · `assessAnswer` — pure, committed rows only, one function for every reader, in the run and after it |
-| SERVE | after the run: `agent.assessment()` (async: it loads this fold through `import()` on first use, so an agent that never asks does not carry it — pinned by `test/trace-toolpack/browserGraph.test.ts`), `assessAnswer` on `agentfootprint/observe`, the answer account's "How sure" row (`answer-account/facts/howSure.ts` · `readHowSure`); in the run (armed): `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and the line under `{ standingLine: true }` |
-| ARM + MEASURE | `.answerLayer()`; off → byte-identical (every reference under `test/core/tools/reference/` unchanged; `agent-answer-layer` is the armed one); this README's last section |
+| SERVE | after the run: `agent.assessment()`, `assessAnswer` on `agentfootprint/observe`, and the answer account's "How sure" row. In the run: `turn_end.answerAssessment`, `agentfootprint.answer.assessed`, and a line for selected standings |
+| ARM + MEASURE | enabled by default; `.answerLayer(false)` restores the prior off behavior |
 
 ## Parity with the study's RQ3 rule
 
@@ -474,7 +474,7 @@ transcription of the study's registered RQ3 algorithm (standing per turn from
 recorded EVENTS) over the same recorded runs: ASKED ↔ `ask`, NOT-COVERED ↔
 `coverage-gap`, DECLARED-ABSENT ↔ `declared-absent`, FOUND ↔ `unrefuted` (never
 `known`), UNKNOWN ↔ "the record cannot vouch" (`not-applicable`, or only
-`empty-undeclared`). Three differences are named and pinned, all in one
+`empty-undeclared` or `call-not-completed` reasons). Three differences are named and pinned, all in one
 direction — the fold says more, never less: RQ3 scopes to the entity the
 question names and the fold reads every call of the turn (`entity-scope`); RQ3's
 DECLARED-ABSENT reads only the last lookup and the fold reads every one
@@ -485,95 +485,7 @@ it at the study's freeze (adopted Q12).
 
 ## Not covered
 
-- **A host-built record's top-level lists.** The lists ON a row go through
-  `rowList`. The record's own keys — `history`, `findingsLedger`,
-  `coverageDeclared`, `answerValidation.checks`, `middlewareDecisions` (and the
-  `changedKeys` the shared reader `middleware/rewrites.ts` ·
-  `argumentRewritesOf` walks) — are read with the array's own length and
-  elements: never through `history`'s iterator or the checks' own `entries`, but
-  a getter at an index runs, an overridden `forEach` runs, and a very long
-  sparse list costs its length. A record the library committed, or a saved
-  recording read with `JSON.parse`, holds none of these.
-- **A Proxy, and a getter on an entry object.** `rowList`'s guarantee covers an
-  ordinary (non-Proxy) array and its own index accessors and iterator, nothing
-  more. A Proxy around an array passes `Array.isArray`, and its traps
-  (`getPrototypeOf`, `getOwnPropertyDescriptor`) run code inside the reader and
-  can throw out of it; a revoked Proxy throws from `Array.isArray` itself. An
-  entry is handed on as it is, so a getter on an entry object runs when the
-  fold reads that property. A record the library committed, or a saved
-  recording read with `JSON.parse`, holds neither.
-- **Verdicts that exist only as events.** A `.claims()` `checked-pass` (so a
-  claims-supported "known") is not on the committed record. The fold never reads
-  events; the step that needs a verdict commits one row, and its reason joins
-  `REASONS` then. The gate's clean pass, unfinished steps, integrity findings and
-  unsettled claims are committed only while the answer layer is armed; on an agent
-  without it they stay events, and the fold does not read them.
-- **A run that threw, read by `assessAnswer` directly.** No committed row says a
-  turn ended in an error in this version, so the fold folds what the crashed run
-  left, as if it had answered. `agent.assessment()` (which knows) resolves to
-  `undefined` and the answer account (which reads the recording's `turn_end`)
-  says the record shows no answer; a caller of `assessAnswer` checks the run's
-  outcome first. Step 6 did not settle it: the answer layer's stage runs inside
-  the final branch, whose output mapping receives the answer string, never the
-  branch's scope, so it cannot commit an "answered" row to the run's state; a row
-  filed by the Route decider could, and it needs the fold's return shape to say
-  "no answer" — a decision of its own (`docs/design/honesty/answer.md`).
-- **A row lost AND its envelope gone.** A record that lost a call's coverage row
-  is still read from the envelope in `history` — `fold-real-record.test.ts` pins
-  the account's reduced fixture reading the same standing as the full record. A
-  record that dropped the history too has nothing left to read.
-- **Evicted results.** Under `.window()`, a window strategy can remove this
-  turn's early results from `history`; the commit log still has them, but the
-  fold reads the final state, so an evicted undeclared `[]` fires nothing.
-- **Rows from an earlier turn that reuse a call id — on an agent without an
-  honesty layer.** Without a turn stamp, the fold places a ledger row in this
-  turn by the call ids it names, and a provider that reuses ids across turns
-  (numbering each response's calls from `0`, say) makes an earlier turn's row
-  look like this turn's in three places: a carried conflict row whose witness
-  shares an id with a call of this turn reads `sources-conflict`
-  (`readConflicts`); a contingent row declared on such a call reads
-  `value-contingent`; and `firstRowOfTurn` — which finds where this turn's rows
-  begin as the first unstamped row naming a call of this turn — can stop at an
-  EARLIER turn's row that named the reused id, so every contingent row declared
-  on the answer after it, an earlier turn's answer included, is read as this
-  turn's. Each over-reports ("not sure") and never hides. The cheap guard —
-  start the search after the last row naming an id that only earlier turns
-  called — does not help a provider that reuses every id, so it is not built.
-  While the inputs layer is armed, the one writer stamps every row with its
-  conversation `turn` (honesty step 3), and a stamped row counts only in its own
-  turn.
-- **An unstamped contingent row declared on the ANSWER, on a later turn the
-  ledger cannot place** (an agent without the inputs layer). Such a row names no
-  call of its own, and the ledger crosses turns on a continued conversation, so
-  on a turn after the first it counts only when it follows — or is — a row the
-  ledger shows to be this turn's: one stamped with this turn, or one that names
-  a call of this turn (a row cannot name a call before the call exists; a reused
-  id is the bullet above). A later turn that made no call and filed nothing else
-  leaves it unread: it may be an earlier turn's answer, and an earlier answer
-  must never make this one "not sure". Arm the inputs layer and every row
-  carries its turn.
-- **Subject placement.** Which entity the question names is on hold, so the fold
-  reads every call of the turn.
-- **A finished step procedure** files no row, so it cannot count as a check that
-  ran — only an unfinished one is on the record.
-- **The line's reasons carry no counts** — it names which kinds of reason fired;
-  `agent.assessment()` and the account have the counts and the rows.
-- **Where a declared name does not reach yet.** The before-tool rewrite clause
-  ("a before-tool rule set a value a call ran with …") stays anonymous: its reason
-  mixes rewrite and default rows, and the line does not split them. The time
-  layer's own limits lines (`Period:` checks, `Clocks`, under `.time()`) keep the
-  registered name. A typed answer's limits as data (`turn_end.answerCoverage`)
-  carry no per-item source. A reason's `source` is not on the event or on
-  `turn_end.answerAssessment` — their fields are pinned and unchanged; read
-  `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
-  can carry it.
-- **In the run, no app declarations.** The layer folds without `rowsAt`;
-  `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
-  account take them and can say more about the same run.
-- **Where the event does not reach** — a composition that mounts the agent reads
-  `turn_end.answerAssessment` (its dispatcher does not bridge `answer.*`); the line
-  is never streamed. The rest of the layer's gaps: `docs/design/honesty/answer.md`,
-  "Not covered".
+See [assessment limits](./LIMITS.md#not-covered).
 
 ## What it lets you measure
 

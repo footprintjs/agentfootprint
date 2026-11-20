@@ -20,6 +20,7 @@ export function contentShapes(toolRan: (name: string) => boolean) {
     'agentfootprint.tools.absent': eventShape<'agentfootprint.tools.absent'>({
       toolName: str,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
       lookedFor: charsMarker,
       checked: listOf(boundCoverageItem),
@@ -42,6 +43,7 @@ export function contentShapes(toolRan: (name: string) => boolean) {
     'agentfootprint.tools.coverage_declared': eventShape<'agentfootprint.tools.coverage_declared'>({
       toolName: str,
       toolCallId: str,
+      callOccurrenceKey: listOf(num),
       iteration: num,
       checked: listOf(boundCoverageItem),
       notChecked: listOf(boundCoverageItem),
@@ -55,6 +57,7 @@ export function contentShapes(toolRan: (name: string) => boolean) {
       eventShape<'agentfootprint.tools.semantics_declared'>({
         toolName: str,
         toolCallId: str,
+        callOccurrenceKey: listOf(num),
         iteration: num,
         semantics: boundSemantics,
       }),

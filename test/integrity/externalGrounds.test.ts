@@ -258,7 +258,9 @@ describe('negative: a misbehaving provider never touches the run', () => {
       throw new Error('viewer state not ready');
     });
     const result = await agent.run({ message: TASK });
-    expect(result).toBe('done');
+    expect(result).toBe(
+      'done\n\n---\n\nNot sure — a value a call ran with appears nowhere the run served the model.',
+    );
     // Nothing grounded, so the honest verdict stands: one finding.
     expect(argumentFindings(captured)).toHaveLength(1);
     expect(captured.excusals).toEqual([]);
@@ -269,14 +271,18 @@ describe('negative: a misbehaving provider never touches the run', () => {
       (() => 'garbage') as unknown as ExternalGroundsProvider,
     );
     const result = await agent.run({ message: TASK });
-    expect(result).toBe('done');
+    expect(result).toBe(
+      'done\n\n---\n\nNot sure — a value a call ran with appears nowhere the run served the model.',
+    );
     expect(argumentFindings(captured)).toHaveLength(1);
   });
 
   it('a provider yielding an empty list is byte-identical to no provider', async () => {
     const { agent, captured } = selectionAgent(() => []);
     const result = await agent.run({ message: TASK });
-    expect(result).toBe('done');
+    expect(result).toBe(
+      'done\n\n---\n\nNot sure — a value a call ran with appears nowhere the run served the model.',
+    );
     expect(argumentFindings(captured)).toHaveLength(1);
     expect(captured.excusals).toEqual([]);
   });

@@ -81,7 +81,7 @@ describe('security — LLM provider misbehavior', () => {
     agent.on('agentfootprint.stream.tool_end', (e) => toolEnds.push(e.payload));
 
     const out = await agent.run({ message: 'go' });
-    expect(out).toBe('recovered');
+    expect(out).toBe('recovered\n\n---\n\nNot sure — a call was refused.');
     expect(toolEnds).toHaveLength(1);
     expect((toolEnds[0] as { error?: boolean }).error).toBe(true);
   });
@@ -109,7 +109,7 @@ describe('security — tool misbehavior', () => {
     );
 
     const out = await agent.run({ message: 'go' });
-    expect(out).toBe('survived');
+    expect(out).toBe('survived\n\n---\n\nNot sure — a call failed.');
     expect(toolEnds[0].error).toBe(true);
     expect(String(toolEnds[0].result)).toMatch(/tool exploded/);
   });
@@ -202,9 +202,9 @@ describe('security — iteration budget enforcement', () => {
 
     const out = await agent.run({ message: 'hi' });
     // The wrap-up call went out with no tools; this hostile provider answers
-    // the same way regardless, so `'partial'` is still what comes back — and
-    // the loop still stops, because the wrap-up is spent.
-    expect(out).toBe('partial');
+    // the same way regardless, so the partial answer still comes back with its warning.
+    // The loop stops once it spends the wrap-up.
+    expect(out).toBe('partial\n\n---\n\nNot sure — the run stopped before the model finished.');
     expect(routes).toEqual(['wrap-up', 'final']);
   });
 });

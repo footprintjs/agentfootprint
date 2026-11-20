@@ -5,8 +5,10 @@ import { resolveJsonSchema } from '../../outputEnforcement.js';
 import { negativeClaimsSchema, type ResolvedNegativeClaims } from '../../negativeClaims/config.js';
 import type { ResolvedEvidenceGate } from '../../evidence/types.js';
 import { type ResolvedOutputFallback } from '../../../outputFallback.js';
-import { answerLayerFromOptions } from '../../assessment/answerLayerOptions.js';
-import type { StandingLineWhen } from '../../assessment/compose.js';
+import {
+  answerLayerFromOptions,
+  type AnswerLayerArm,
+} from '../../assessment/answerLayerOptions.js';
 import type { AgentOptions } from '../../types.js';
 export interface ContractsPort {
   assertOutputFallbackCoherent(): void;
@@ -18,7 +20,7 @@ export interface ContractsPort {
   answerValidationConfig?: ResolvedAnswerValidation;
   claimsContract?: Readonly<Record<string, { entity: string; field: string }>>;
   evidenceGate?: ResolvedEvidenceGate;
-  answerLayerValue?: { readonly standingLine?: StandingLineWhen };
+  answerLayerValue?: AnswerLayerArm | false;
   readonly opts: AgentOptions;
 }
 
@@ -51,12 +53,11 @@ export function checkContracts(self: ContractsPort) {
   // builder's `.answerLayer()` wins; otherwise `AgentOptions.answerLayer`,
   // checked by the same rules — so the refusals below and the arm `Agent`
   // receives can never read two different values.
-  const answerLayer =
-    self.answerLayerValue ?? answerLayerFromOptions(self.opts.answerLayer as unknown);
+  const answerLayer = self.answerLayerValue ?? answerLayerFromOptions(self.opts.answerLayer);
   // The answer layer's line appends prose to the answer — refused where the
   // answer's bytes are judged or must parse. The standing itself still
   // travels as data on both (`turn_end.answerAssessment`).
-  if (answerLayer?.standingLine !== undefined) {
+  if (answerLayer && answerLayer.standingLine !== undefined) {
     if (self.answerValidationConfig !== undefined) {
       throw new Error(
         'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +

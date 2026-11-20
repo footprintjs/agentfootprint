@@ -1,12 +1,15 @@
 /** Map — omission eligibility and one settlement of already masked native rows.
  * This leaf receives the ledger writer; it never imports findings or dispatch.
  */
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
+import { batchAddress, type BatchAddress } from './batchAddress.js';
 import type { ArgumentRow } from './rows.js';
 import type { BatchCall, CheckedArgument } from './resolve.js';
 import type { CallSources } from './sources.js';
 
 export interface AskedArgument {
   readonly toolCallId: string;
+  readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly argument: string;
 }
 
@@ -15,13 +18,16 @@ export function omissionRows(
   rows: readonly ArgumentRow[],
   checked: readonly CheckedArgument[],
   calls: readonly BatchCall[],
-  declared: ReadonlyMap<string, CallSources>,
+  declared: ReadonlyMap<BatchAddress, CallSources>,
 ): readonly ArgumentRow[] {
-  const byCall = new Map(calls.map((call) => [call.id, call]));
-  const candidates = new Map<string, Set<string>>();
+  const byCall: ReadonlyMap<BatchAddress, BatchCall> = new Map(
+    calls.map((call) => [batchAddress(call.id, call.callOccurrenceKey), call]),
+  );
+  const candidates = new Map<BatchAddress, Set<string>>();
   for (const item of checked) {
-    const source = declared.get(item.toolCallId);
-    const value = byCall.get(item.toolCallId)?.args[item.argument];
+    const address = batchAddress(item.toolCallId, item.callOccurrenceKey);
+    const source = declared.get(address);
+    const value = byCall.get(address)?.args[item.argument];
     const primitive =
       typeof value === 'string' ||
       typeof value === 'boolean' ||
@@ -36,11 +42,11 @@ export function omissionRows(
       source.from.some((claim) => claim.argument === item.argument)
     )
       continue;
-    const names = candidates.get(item.toolCallId) ?? new Set<string>();
+    const names = candidates.get(address) ?? new Set<string>();
     names.add(item.argument);
-    candidates.set(item.toolCallId, names);
+    candidates.set(address, names);
   }
-  return rows.filter((row) => candidates.get(row.toolCallId)?.has(row.argument) === true);
+  return rows.filter((row) => includesArgument(candidates, row));
 }
 
 export interface PendingOmissions {
@@ -63,14 +69,24 @@ export function pendingOmissions(
 }
 
 /** Index schema names separately; never concatenate possibly colliding identities. */
-function namesByCall(rows: readonly AskedArgument[]): ReadonlyMap<string, ReadonlySet<string>> {
-  const byCall = new Map<string, Set<string>>();
+function namesByCall(
+  rows: readonly AskedArgument[],
+): ReadonlyMap<BatchAddress, ReadonlySet<string>> {
+  const byCall = new Map<BatchAddress, Set<string>>();
   for (const row of rows) {
-    const names = byCall.get(row.toolCallId) ?? new Set<string>();
+    const address = batchAddress(row.toolCallId, row.callOccurrenceKey);
+    const names = byCall.get(address) ?? new Set<string>();
     names.add(row.argument);
-    byCall.set(row.toolCallId, names);
+    byCall.set(address, names);
   }
   return byCall;
+}
+
+function includesArgument(
+  names: ReadonlyMap<BatchAddress, ReadonlySet<string>>,
+  { toolCallId, callOccurrenceKey, argument }: AskedArgument,
+): boolean {
+  return names.get(batchAddress(toolCallId, callOccurrenceKey))?.has(argument) === true;
 }
 
 /** Every actual ask member must be an omission; a real human obligation takes precedence. */
@@ -78,6 +94,7 @@ export function onlyOmissions(
   rows: readonly ArgumentRow[],
   asks: readonly {
     readonly toolCallId: string;
+    readonly callOccurrenceKey?: CallOccurrenceKey;
     readonly ask: readonly string[];
     readonly window?: true;
   }[],
@@ -85,11 +102,10 @@ export function onlyOmissions(
   if (rows.length === 0 || asks.length === 0 || asks.some((ask) => ask.window === true))
     return false;
   const names = namesByCall(rows);
-  return asks.every(
-    (ask) =>
-      ask.ask.length > 0 &&
-      ask.ask.every((argument) => names.get(ask.toolCallId)?.has(argument) === true),
-  );
+  return asks.every((ask) => {
+    const argumentsForCall = names.get(batchAddress(ask.toolCallId, ask.callOccurrenceKey));
+    return ask.ask.length > 0 && ask.ask.every((argument) => argumentsForCall?.has(argument));
+  });
 }
 
 /** Settle once through the existing writer. No append-only row is rewritten or replaced. */
@@ -105,15 +121,13 @@ export function settleOmissions(
   const memberNames = members === undefined ? undefined : namesByCall(members);
   const selected =
     memberNames !== undefined
-      ? pending.filter((row) => memberNames.get(row.toolCallId)?.has(row.argument) === true)
+      ? pending.filter((row) => includesArgument(memberNames, row))
       : pending;
   if (selected.length === 0) return;
   const settledNames = namesByCall(selected);
   state.argumentSourceOmissionRows = [...(state.argumentSourceOmissionRows ?? [])].filter(
     (row) =>
-      row.turn !== turn ||
-      row.iteration !== iteration ||
-      settledNames.get(row.toolCallId)?.has(row.argument) !== true,
+      row.turn !== turn || row.iteration !== iteration || !includesArgument(settledNames, row),
   );
   if (outcome === 'discard') return;
   const rows = selected.map((row): ArgumentRow => {

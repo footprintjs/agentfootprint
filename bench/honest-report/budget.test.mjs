@@ -23,8 +23,8 @@ test('high-tier accounting uses integer units and includes the tool allowance', 
   assert.equal(estimateInputTokens(123), 468);
   assert.equal(unitsFor(100, 200), 1_100);
   assert.equal(toDollars(FULL_EXPOSURE_UNITS), 0.51024);
-  assert.equal(toDollars(PROJECTED_LIMIT_UNITS), 8);
-  assert.equal(toDollars(SPEND_LIMIT_UNITS), 10);
+  assert.equal(toDollars(PROJECTED_LIMIT_UNITS), 4);
+  assert.equal(toDollars(SPEND_LIMIT_UNITS), 5);
 });
 
 test('final usage replaces the in-flight reservation and charges the full reported input', () => {
@@ -109,7 +109,7 @@ test('a fabricated or already settled ticket cannot change the ledger', () => {
 
 test('a byte reservation above the spend limit records a stop without dispatching', () => {
   const { events, budget } = ledger();
-  assert.throws(() => budget.reserve({ ...request, inputBytes: 40_000_000 }), {
+  assert.throws(() => budget.reserve({ ...request, inputBytes: 20_000_000 }), {
     name: 'BudgetExceededError', reason: 'byte reservation exceeds the spend limit',
   });
   assert.deepEqual(events.map((event) => event.type), ['budget-stop']);
@@ -129,23 +129,43 @@ test('a second in-flight reservation is refused and the first ticket can still s
 
 test('repeated missing usage stops at the full-exposure ceiling even with small byte estimates', () => {
   const { events, budget } = ledger();
-  for (let index = 0; index < 19; index += 1) {
+  for (let index = 0; index < 9; index += 1) {
     budget.settle(budget.reserve(request));
   }
   assert.throws(() => budget.reserve(request), {
     name: 'BudgetExceededError', reason: 'full exposure exceeds the spend limit',
   });
-  assert.equal(budget.snapshot().dispatches, 19);
-  assert.equal(budget.snapshot().exposureUnits, 19 * FULL_EXPOSURE_UNITS);
-  assert.equal(budget.snapshot().unknownUsage, 19);
+  assert.equal(budget.snapshot().dispatches, 9);
+  assert.equal(budget.snapshot().exposureUnits, 9 * FULL_EXPOSURE_UNITS);
+  assert.equal(budget.snapshot().unknownUsage, 9);
   assert.equal(events.at(-1).type, 'budget-stop');
 });
 
 test('a large inferred missing-usage charge also constrains subsequent full exposure', () => {
   const { budget } = ledger();
-  budget.settle(budget.reserve({ ...request, inputBytes: 39_000_000 }));
+  budget.settle(budget.reserve({ ...request, inputBytes: 19_000_000 }));
   assert.throws(() => budget.reserve(request), {
     name: 'BudgetExceededError', reason: 'full exposure exceeds the spend limit',
   });
   assert.equal(budget.snapshot().dispatches, 1);
+});
+
+test('a dispatch can reserve exactly USD 5 in full exposure and no more', () => {
+  for (const excessUnits of [0, 1]) {
+    const { budget } = ledger();
+    for (let index = 0; index < 8; index += 1) {
+      budget.settle(budget.reserve(request), { input: 1_000_000, output: 0 });
+    }
+    budget.settle(budget.reserve(request), { input: 979_520 + excessUnits, output: 0 });
+    if (excessUnits === 0) {
+      budget.reserve(request);
+      assert.equal(budget.snapshot().exposureUnits, SPEND_LIMIT_UNITS);
+      assert.equal(budget.snapshot().dispatches, 10);
+    } else {
+      assert.throws(() => budget.reserve(request), {
+        name: 'BudgetExceededError', reason: 'full exposure exceeds the spend limit',
+      });
+      assert.equal(budget.snapshot().dispatches, 9);
+    }
+  }
 });

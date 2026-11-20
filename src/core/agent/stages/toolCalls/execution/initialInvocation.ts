@@ -18,6 +18,8 @@ import type { buildToolArtifactsOperations } from './artifactsOperations.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
+import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
@@ -113,6 +115,12 @@ export async function invokeInitialTool(
   >,
   frame: InvokeInitialToolFrame,
 ) {
+  const declarationCall = {
+    toolName: frame.tc.name,
+    toolCallId: frame.tc.id,
+    iteration: frame.iteration,
+    callOccurrenceKey: frame.tc.callOccurrenceKey,
+  };
   try {
     // The two refusals share one door: a name nothing holds, and a
     // name whose offered party cannot answer (9.92.0). Both land as
@@ -134,7 +142,7 @@ export async function invokeInitialTool(
       deps.time !== undefined
         ? (await import('../../timeLayer.js')).timeAtDispatch(
             scope,
-            { toolCallId: frame.tc.id, toolName: frame.tc.name },
+            declarationCall,
             frame.iteration,
             frame.tool,
             frame.callArguments.callArgs,
@@ -179,6 +187,7 @@ export async function invokeInitialTool(
         frame.tc.name,
         frame.tc.id,
         frame.execution.resultFinalizer?.needsPublications,
+        frame.tc.callOccurrenceKey,
       ),
       ...(frame.wanted.wantedMeta !== undefined && { wanted: frame.wanted.wantedMeta }),
       ...frame.toolProgress(scope, {
@@ -215,8 +224,7 @@ export async function invokeInitialTool(
             tool: frame.tool,
             party: frame.resolved.party,
             args: frame.callArguments.callArgs,
-            toolCallId: frame.tc.id,
-            iteration: frame.iteration,
+            ...declarationCall,
             runId: frame.runFactsOf(scope)?.runId,
             dispatch: searchDispatch,
             context: executionContext,
@@ -228,14 +236,18 @@ export async function invokeInitialTool(
       frame.tool,
       frame.callArguments.callArgs,
     );
+    let returned = false;
     try {
+      recordToolEntry(scope, frame.tc.callOccurrenceKey);
       frame.outcome.result = await frame.tool.execute(
         frame.callArguments.callArgs,
         executionContext,
       );
+      returned = true;
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
       await binding.close(frame.env.signal);
+      frame.execution.toolResultExecution = returned ? 'returned' : 'threw';
       if (binding.halt !== undefined) frame.execution.haltContext ??= { ...binding.halt };
     }
     throwIfAborted(frame.env.signal);
@@ -310,7 +322,7 @@ export async function invokeInitialTool(
     if (searched !== undefined) frame.outcome.result = searched.value;
     const coverageStatus = frame.declareCoverage(
       scope,
-      { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+      declarationCall,
       frame.outcome.result,
       searched?.reading,
     );
@@ -323,11 +335,7 @@ export async function invokeInitialTool(
     // the time it fires). Everything downstream — governance, the
     // cap, history, `tool_end` — sees the compact projection; the
     // full envelope rides `tools.semantics_declared`.
-    const semanticView = frame.declareSemantics(
-      scope,
-      { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
-      frame.outcome.result,
-    );
+    const semanticView = frame.declareSemantics(scope, declarationCall, frame.outcome.result);
     if (semanticView !== undefined) frame.outcome.result = semanticView;
     // The tool's own refusing ceiling (9.20.0) — at the execute
     // boundary, BEFORE the gates and the after-tool chain, so
@@ -357,11 +365,7 @@ export async function invokeInitialTool(
       // door, one step after the ceiling. Only when the payload
       // survived it: rows nobody will read have no columns worth
       // arguing about.
-      const columnRefusal = frame.judgeColumns(
-        scope,
-        { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
-        frame.outcome.result,
-      );
+      const columnRefusal = frame.judgeColumns(scope, declarationCall, frame.outcome.result);
       if (columnRefusal !== undefined) {
         if (frame.execution.negativeDispatch !== undefined)
           keepNegativeResultOut(scope, frame.execution.negativeDispatch.resultId);
@@ -431,7 +435,7 @@ export async function invokeInitialTool(
       const writePause = (): void => {
         if (frame.execution.negativeDispatch !== undefined)
           pauseNegativeCall(scope, frame.execution.negativeDispatch.resultId);
-        scope.history = frame.newHistory;
+        commitSettledToolHistory(scope, frame.newHistory);
         scope.pausedToolCallId = frame.tc.id;
         scope.pausedToolName = frame.tc.name;
         scope.pausedToolStartMs = frame.startMs;
@@ -459,7 +463,7 @@ export async function invokeInitialTool(
           ? undefined
           : frame.declareRaisedAbsence(
               scope,
-              { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+              declarationCall,
               frame.callArguments.callArgs,
               declared.absence,
               frame.newHistory,
@@ -531,6 +535,9 @@ export async function invokeInitialTool(
     // settled here too — the returned path's error, not a pause.
     await frame.endCall(scope);
     frame.outcome.error = true;
+    // A return refused by validation contributes neither its envelope nor its status.
+    frame.outcome.toolEnvelope = undefined;
+    frame.outcome.toolStatus = undefined;
     frame.execution.executeThrew = frame.execution.executed;
     frame.outcome.result =
       (innerHalt !== undefined && isPauseRequest(err) ? innerHalt.tellLLM : undefined) ??
