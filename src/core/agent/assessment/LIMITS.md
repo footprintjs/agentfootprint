@@ -106,6 +106,9 @@
 - **Withheld results.** The standing emits one anonymous reason when this turn's record proves that a returned result was withheld, including after eviction and a same-request resume. Public standing gives no count, tool name or result facts. The raw `accountForAnswer` still reads native declarations for a denied result until card 9.
 - **Integrity findings without a resolved call.** Standing omits a finding when the record cannot resolve it to one call occurrence.
 - **Older recordings.** Without the settlement ledger, the assessment derives delivery and outcomes from retained history, so a warning can go unreported once its message has left the window.
+- **Compositions.** Standing is available only per Agent turn, with the final
+  answer carrying the line of the Agent that produced it and earlier warnings
+  reaching that Agent only as text from prior members.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.
