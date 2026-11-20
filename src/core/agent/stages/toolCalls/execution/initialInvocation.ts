@@ -244,9 +244,9 @@ export async function invokeInitialTool(
       );
       returned = true;
     } finally {
-      frame.execution.toolResultExecution = returned ? 'returned' : 'threw';
       // Keep the verdict of an admission already in flight before landing a result or pause.
       await binding.close(frame.env.signal);
+      frame.execution.toolResultExecution = returned ? 'returned' : 'threw';
       if (binding.halt !== undefined) frame.execution.haltContext ??= { ...binding.halt };
     }
     throwIfAborted(frame.env.signal);

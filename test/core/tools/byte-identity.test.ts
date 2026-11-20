@@ -6,6 +6,9 @@
  * these additions in `reference/call-occurrence/additions.json`; each older capture
  * remains the exact reference for every other field. Only the four random batch
  * words are normalized, by order of appearance, keeping co-reference and slot.
+ * The standing-evidence overlay adds 30 exact entry-ledger writes and their ordered
+ * trace rows across 11 named cases, plus one returned-tool marker. Every served
+ * view and all prior captures are unchanged.
  *
  * Migration14: native component ownership has a named expected record baseline
  * for28scenarios; three retain direct historical equality. Old JSON is preserved.
@@ -613,6 +616,7 @@ import {
   assertNativeReadWindowMetadata,
   type NativeWindowAddition,
 } from './native-cohort-metadata.js';
+import { standingEvidenceCases, withStandingEvidence } from './standing-evidence-reference.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -1708,8 +1712,14 @@ describe('byte-identity — exact whole-record contract for native component own
           throw new Error(
             `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
           );
-        const additions = occurrenceAdditions(observed);
-        expect(observed).toEqual(withOccurrenceAdditions(reference, additions));
+        // Entry ledger addresses are owned by the standing-evidence overlay.
+        const additions = occurrenceAdditions(observed).filter(
+          ([path]) =>
+            !(path[0] === 'commitLog' && path[2] === 'overwrite' && path[3] === 'enteredToolCalls'),
+        );
+        expect(observed).toEqual(
+          withStandingEvidence(withOccurrenceAdditions(reference, additions), name),
+        );
         if (additions.length === 0) return;
         const digest = (value: string) => createHash('sha256').update(value).digest('hex');
         mkdirSync(OCCURRENCE_REFERENCE_DIR, { recursive: true });
@@ -1720,9 +1730,27 @@ describe('byte-identity — exact whole-record contract for native component own
         );
         return;
       }
-      expect(observed).toEqual(withOccurrenceAdditions(reference, prior[name] ?? []));
+      expect(observed).toEqual(
+        withStandingEvidence(withOccurrenceAdditions(reference, prior[name] ?? []), name),
+      );
     });
   }
+
+  it('qualifies exactly the named standing-evidence cases', () => {
+    expect(standingEvidenceCases).toEqual([
+      'agent-answer-layer',
+      'agent-arguments-ask',
+      'agent-arguments-ask-resumed',
+      'agent-arguments-assume',
+      'agent-arguments-assume-limits',
+      'agent-arguments-sources',
+      'agent-arguments-sources-only',
+      'agent-findings',
+      'agent-findings-contingent',
+      'agent-findings-judge',
+      'agent-findings-window',
+    ]);
+  });
 
   it('the normalisation is stable: two runs of one configuration project identically', async () => {
     // The guard on the guard. If a run-minted value slipped past the

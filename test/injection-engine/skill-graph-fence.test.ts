@@ -197,6 +197,10 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'calls a tool made through `ctx.tools` that ran). One interface, no imports.',
   ],
   [
+    'src/provider-contract/toolResultRecord.ts',
+    'The tool result fields of the provider port. One interface with no imports or runtime code.',
+  ],
+  [
     'src/provider-contract/wireRole.ts',
     'The provider port’s existing wire-role type and immutable defaults. No imports.',
   ],

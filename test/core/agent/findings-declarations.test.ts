@@ -130,18 +130,21 @@ describe('findings declarations — the run constant `findingsServe` (seed, arme
     expect(new Set(servedModeAtEveryEpoch(agent))).toEqual(new Set([undefined]));
   });
 
-  it('the arm adds its serve constant and request-local identity witness, without a ledger', async () => {
+  it('seeds empty entry evidence and request metadata without model findings', async () => {
     const off = await ran((b) => b);
     const on = await ran((b) => b.findings());
     expect(keysOf(on)).toEqual(
       [
         ...keysOf(off),
+        'enteredToolCalls',
         'findingsRequest',
         'findingsServe',
         'findingsLayout',
         'findingsContextBytes',
       ].sort(),
     );
+    const state = on.getLastSnapshot()?.sharedState as Partial<AgentState> | undefined;
+    expect(state?.enteredToolCalls).toEqual({ entries: [], complete: true });
     expect(keysOf(on)).not.toContain('findingsLedger');
   });
 });
@@ -180,7 +183,7 @@ describe('findings declarations — AgentOptions.findings.answerAsk and the run 
     expect(new Set(answerAskAtEveryEpoch(agent))).toEqual(new Set(['quote-facts']));
   });
 
-  it("armed on the default — absent or an explicit 'none' — writes NO key: the armed key set is 9.102.0's", async () => {
+  it("the default and explicit 'none' leave the answerAsk key absent", async () => {
     const off = await ran((b) => b);
     const absent = await ran((b) => b.findings());
     const none = await ran((b) => b.findings({ answerAsk: 'none' }));
@@ -189,6 +192,7 @@ describe('findings declarations — AgentOptions.findings.answerAsk and the run 
     expect(keysOf(absent)).toEqual(
       [
         ...keysOf(off),
+        'enteredToolCalls',
         'findingsRequest',
         'findingsServe',
         'findingsLayout',
@@ -205,19 +209,10 @@ describe('findings declarations — AgentOptions.findings.answerAsk and the run 
     expect(new Set(answerAskAtEveryEpoch(agent))).toEqual(new Set([undefined]));
   });
 
-  it('the dial adds exactly one key beside `findingsServe`, and only under the arm', async () => {
-    const off = await ran((b) => b);
+  it('quote-facts adds only the answerAsk key to default findings', async () => {
+    const absent = await ran((b) => b.findings());
     const on = await ran((b) => b.findings({ answerAsk: 'quote-facts' }));
-    expect(keysOf(on)).toEqual(
-      [
-        ...keysOf(off),
-        'findingsAnswerAsk',
-        'findingsRequest',
-        'findingsServe',
-        'findingsLayout',
-        'findingsContextBytes',
-      ].sort(),
-    );
+    expect(keysOf(on)).toEqual([...keysOf(absent), 'findingsAnswerAsk'].sort());
     expect(keysOf(on)).not.toContain('findingsLedger');
   });
 

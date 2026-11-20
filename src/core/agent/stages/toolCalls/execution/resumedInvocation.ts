@@ -345,8 +345,8 @@ export function buildResumedInvocation(
         result = await tool.execute(args, executionContext);
         returned = true;
       } finally {
-        if (seen !== undefined) seen.toolResultExecution = returned ? 'returned' : 'threw';
         await binding.close(env.signal);
+        if (seen !== undefined) seen.toolResultExecution = returned ? 'returned' : 'threw';
       }
       ended = runEndedBy(env.signal);
       if (ended !== undefined) throw ended;

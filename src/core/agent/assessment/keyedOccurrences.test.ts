@@ -82,9 +82,16 @@ describe('argument standing from a recorded call key', () => {
       result: 'cleared',
     },
     {
-      label: 'first never returned, second landed clean',
+      label: 'first proposal lacks entry proof, second landed clean',
       history: [firstProposal, secondProposal, secondResult],
       rows: [failed, clean],
+      result: 'cleared',
+    },
+    {
+      label: 'first entered without returning, second landed clean',
+      history: [firstProposal, secondProposal, secondResult],
+      rows: [failed, clean],
+      entered: [firstKey],
       result: 'placed',
     },
     {
@@ -97,19 +104,27 @@ describe('argument standing from a recorded call key', () => {
       label: 'first result evicted, second kept',
       history: [secondProposal, secondResult],
       rows: [failed, clean],
+      entered: [firstKey],
       result: 'unplaced',
     },
     {
       label: 'first result evicted, second withheld for correction',
       history: [secondProposal],
       rows: [failed, withheld],
+      entered: [firstKey],
       result: 'unplaced',
     },
-  ])('keeps the exact witness when $label', ({ history, rows, paused, result }) => {
+  ])('keeps the exact witness when $label', ({ history, rows, entered, paused, result }) => {
     const state = {
       turnNumber: 1,
       history: [request, ...history],
       findingsLedger: rows,
+      ...(entered && {
+        enteredToolCalls: {
+          complete: true,
+          entries: entered.map((callOccurrenceKey) => ({ callOccurrenceKey, entered: true })),
+        },
+      }),
       ...(paused && { pausedToolCallId: toolCallId }),
     };
     const assessment = foldState(state, undefined, false);
@@ -150,20 +165,24 @@ describe('argument standing from a recorded call key', () => {
     expect(reason?.source).toEqual({ kind: 'calls', calls: [{ toolCallId, toolName }] });
   });
 
-  it('keeps keyed source attribution independent of event-derived declaration addresses', () => {
+  it('never attributes a result declaration to an occurrence named only by the event', () => {
+    const declaration = { kind: 'ledger', toolCallId, toolName, notChecked: [{}] };
     const state = {
       history: [request, secondProposal, secondResult],
-      coverageDeclared: [
-        { kind: 'ledger', toolCallId, toolName, callOccurrenceKey: firstKey, notChecked: [{}] },
-      ],
+      coverageDeclared: [{ ...declaration, callOccurrenceKey: firstKey }],
     };
     const assessment = foldState(state, undefined, false);
     const recorded = foldState(state, undefined, false, undefined, new Map([[0, 2]]));
     expect(recorded).toEqual(assessment);
-    expect(assessment.reasons.find((row) => row.reason === 'coverage-gap')?.source).toEqual({
+    expect(assessment.reasons.find((row) => row.reason === 'coverage-gap')).toBeUndefined();
+    const matched = foldState(
+      { ...state, coverageDeclared: [{ ...declaration, callOccurrenceKey: secondKey }] },
+      undefined,
+      false,
+    );
+    expect(matched.reasons.find((row) => row.reason === 'coverage-gap')?.source).toEqual({
       kind: 'calls',
-      calls: [],
-      unplaced: [{ kind: 'state', key: 'coverageDeclared', path: '/0/kind' }],
+      calls: [{ toolCallId, toolName }],
     });
   });
 });
