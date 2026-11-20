@@ -11,7 +11,12 @@ import defaultAnswerShapes from '../../test/redaction/fixtures/context-shapes/pr
 
 it('with shapes off nothing changes; the default adds the pinned index for a public answer', async () => {
   const mock = scripted([answer('Public answer')]);
-  const agent = Agent.create({ provider: mock.provider as never, model: 'fixture' }).build();
+  // Pin the context-shape index independently of the default answer policy.
+  const agent = Agent.create({
+    provider: mock.provider as never,
+    model: 'fixture',
+    answerLayer: false,
+  }).build();
   try {
     await agent.run({ message: 'Public question' });
     const raw = runnerLive(agent)?.liveSnapshot();

@@ -73,8 +73,8 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
           const outcome: unknown = await agent.run(QUESTION).catch((error: unknown) => error);
           expect(outcome).toBe(
             earlier
-              ? "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares."
-              : 'Done.',
+              ? "Done.\n\n---\n\nNot sure — a call was refused; a tool's rows hold a different type than the tool declares."
+              : 'Done.\n\n---\n\nNot sure — a call was refused.',
           );
           expect(executions).toEqual(Array.from({ length: earlier ? 2 : 1 }, () => ({ vm: VM })));
           expect(beforeRequest).toEqual([

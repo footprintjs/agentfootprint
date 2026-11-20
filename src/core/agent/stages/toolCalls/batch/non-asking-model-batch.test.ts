@@ -6,17 +6,18 @@ const call = (id: unknown, name: unknown = 'collect') => ({ id, name, args: { ye
 const unsourced = 'a value a call ran with came from the model, with no source on the record';
 const refused = 'a call was refused';
 const incomplete = 'a call did not complete';
+const missingEntry = 'the record could not establish tool entry for every checked call';
 const cases = [
   ['duplicate', [call('same'), call('same')], 2, '', unsourced],
   ['empty id', [call('')], 1, '', unsourced],
-  ['numeric id', [call(7)], 1, '', ''],
+  ['numeric id', [call(7)], 1, '', unsourced],
   ['long id', [call('x'.repeat(1025))], 1, '', unsourced],
   [
     'large batch',
     Array.from({ length: 1025 }, (_, index) => call(String(index))),
     1025,
-    '',
-    unsourced,
+    missingEntry,
+    `${unsourced}; ${missingEntry}`,
   ],
   [
     'unknown name',

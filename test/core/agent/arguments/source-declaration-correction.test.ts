@@ -162,7 +162,7 @@ describe('failure-first: native source declaration correction is an explicit inp
       try {
         const out = await f.agent.run({ message: QUESTION });
         expect(isPaused(out)).toBe(false); // Canonical baseline pauses here, with zero dispatch.
-        expect(out).toBe('Completed synthetic lookup.');
+        expect(out).toBe('Completed synthetic lookup.\n\n---\n\nNot sure — a call was refused.');
         expect(f.requests).toHaveLength(3);
         expect(f.atRequest).toEqual([0, 0, 1]);
         expect(f.executions).toEqual([{ tool: TOOL, args: { vm: VM } }]);
@@ -211,7 +211,9 @@ describe('failure-first: native source declaration correction is an explicit inp
       'Done.',
     ]);
     try {
-      expect(await f.agent.run({ message: QUESTION })).toBe('Done.');
+      expect(await f.agent.run({ message: QUESTION })).toBe(
+        'Done.\n\n---\n\nNot sure — a call was refused.',
+      );
       expect(f.atRequest).toEqual([0, 0, 1]);
       expectCorrectionNotice(f.agent, f.requests[1], ['missing-entry']);
       expect(f.executions).toEqual([
@@ -230,7 +232,9 @@ describe('failure-first: native source declaration correction is an explicit inp
       'Done.',
     ]);
     try {
-      expect(await f.agent.run({ message: QUESTION })).toBe('Done.');
+      expect(await f.agent.run({ message: QUESTION })).toBe(
+        'Done.\n\n---\n\nNot sure — a call was refused.',
+      );
       expect(f.atRequest).toEqual([0, 0, 2]);
       expect(f.executions.map((entry) => entry.tool)).toEqual(['write_synthetic_marker', TOOL]);
       expectCorrectionNotice(f.agent, f.requests[1], ['held-sibling', 'held-disks']);
@@ -291,7 +295,7 @@ describe('failure-first: native source declaration correction is an explicit inp
     );
     try {
       expect(await f.agent.run({ message: QUESTION })).toBe(
-        "Done.\n\n---\n\nNot sure — a tool's rows hold a different type than the tool declares.",
+        "Done.\n\n---\n\nNot sure — a call was refused; a tool's rows hold a different type than the tool declares.",
       );
       expect(f.atRequest).toEqual([0, 1, 1, 2]);
       expect(f.executions).toHaveLength(2);

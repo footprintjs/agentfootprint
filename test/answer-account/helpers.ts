@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect } from 'vitest';
 
+import { REASON_WITNESS_CLASSES } from '../../src/core/agent/assessment/reasonClasses.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import type {
   AnswerAccount,
@@ -276,6 +277,9 @@ function allowedValues(recording: Recording, declarations: AnswerAccountDeclarat
   // beside "…declares a period argument.") is printed by the words, not read from the state.
   for (const t of Object.values(ANSWER_ACCOUNT_TEMPLATES)) out.add(t.text);
   for (const id of ['decided-delivered', 'existence', 'empty-results']) out.add(id);
+  // A fixed reason code can occur both in settlement data and in the public
+  // account. It uses the closed library vocabulary.
+  for (const { reason } of REASON_WITNESS_CLASSES) out.add(reason);
   // History rows show their tool name and call id (never their content).
   for (const m of Array.isArray(state.history) ? state.history : []) {
     if (!isObj(m)) continue;

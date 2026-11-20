@@ -552,9 +552,7 @@ describe('prose evidence remains native', () => {
           onToolResult: () => allow(value, 'Replace model-visible tool text.'),
         });
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(
-        source === 'after-tool-text' ? withStanding(text, NO_MATCH) : text,
-      );
+      expect(await agent.run(INPUT)).toBe(text);
       expect(f.read).toHaveBeenCalledTimes(1);
       expect(rows(agent)).toEqual([]);
       expect(f.warnings).toEqual([]);

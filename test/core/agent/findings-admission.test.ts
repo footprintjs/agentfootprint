@@ -2,7 +2,14 @@ import { findingsFrame } from '../../helpers/findingsData.js';
 import { conversationRedaction } from '../../../src/redaction/conversation.js';
 /** Phase A: reference admission changes invocation, never schema/cache layout. */
 import { describe, expect, it, vi } from 'vitest';
-import { Agent, ask, checkInApproved, defineTool, isPaused } from '../../../src/index.js';
+import {
+  Agent,
+  ask,
+  checkInApproved,
+  defineTool,
+  isPaused,
+  RunCheckpointError,
+} from '../../../src/index.js';
 import { mock } from '../../../src/providers.js';
 import { bearer } from '../../../src/identity.js';
 import { withFallback, withRetry } from '../../../src/resilience/index.js';
@@ -30,7 +37,7 @@ const call = (id: string, refs: string[] = []) => ({
 const turn = (...calls: ReturnType<typeof call>[]) => ({ content: '', toolCalls: calls });
 
 function fixture(
-  turns: (Partial<LLMResponse> | string)[],
+  turns: (Partial<LLMResponse> | string | Error)[],
   options: {
     reactMode?: 'dynamic' | 'dynamic-grouped' | 'classic';
     recordReceipt?: boolean;
@@ -50,7 +57,9 @@ function fixture(
     provider: mock({
       respond: (request) => {
         requests.push(JSON.parse(JSON.stringify(request)) as LLMRequest);
-        return turns[at++] ?? 'done';
+        const next = turns[at++];
+        if (next instanceof Error) throw next;
+        return next ?? 'done';
       },
     }),
     model: 'mock',
@@ -730,10 +739,11 @@ it('provider retries bind the accepted attempt request and do not union a discar
 });
 
 it('a fresh continuation and error-resume accept a checkpoint containing a refused declaration', async () => {
-  const f = fixture([turn(call('refused', ['ghost'])), 'done']);
+  const f = fixture([turn(call('refused', ['ghost'])), new Error('Synthetic provider failure')]);
   const agent = f.builder.build();
-  await agent.run({ message: 'read' });
-  const checkpoint = agent.checkpoint()!;
+  const failure = await agent.run({ message: 'read' }).catch((cause: unknown) => cause);
+  if (!(failure instanceof RunCheckpointError)) throw new Error('Expected an error checkpoint.');
+  const { checkpoint } = failure;
   expect(checkpoint.findingsLedger).toContainEqual(
     expect.objectContaining({ kind: 'reference-refusal' }),
   );

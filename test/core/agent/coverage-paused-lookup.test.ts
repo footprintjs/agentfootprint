@@ -764,7 +764,8 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         values: { fabric: 'A' },
       });
       expect(done).toBe(
-        'done\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+        'done\n\n---\n\nNot sure — a call did not run; ' +
+          'a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
       );
 
       // The settlement is unchanged: c3 never ran, and its result is the sentence.

@@ -360,7 +360,10 @@ describe('resume — a fresh agent, a serialized checkpoint', () => {
       .tool(searchLogs(ran))
       .build();
     const seen = events(second);
-    expect(await second.resume(stored(paused), replyTo(paused, { f1: '7d' }))).toBe('Done.');
+    expect(await second.resume(stored(paused), replyTo(paused, { f1: '7d' }))).toBe(
+      'Done.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; ' +
+        'a tool did not say what time its result covers.',
+    );
     expect(ran).toEqual([
       { service: 'checkout', window: '24h' },
       { service: 'payments', window: '7d' },

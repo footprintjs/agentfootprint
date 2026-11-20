@@ -215,7 +215,7 @@ describe('mounted retained-source recovery after strict findings refusal', () =>
         expect(readSeen).toBe(mode === 'retained');
         expect(output).toBe(
           mode === 'retained'
-            ? 'Inspected.'
+            ? 'Inspected.\n\n---\n\nNot sure — a call was refused.'
             : 'Unavailable.\n\n---\n\nNot sure — a call was refused.',
         );
       } finally {

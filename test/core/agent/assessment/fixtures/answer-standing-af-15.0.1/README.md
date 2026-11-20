@@ -10,9 +10,19 @@ a newline and two spaces.
 their original order. The chart is unchanged by the capture and the answer
 is hashed directly as UTF-8. The commit and event hashes replace only generated
 run identities, clocks, durations and the receipt digests salted with the run
-ID. Each masked path is named in the code. The suite compares these hashes
-against the corresponding output with the answer layer explicitly off through
-each public configuration door.
+ID. Each masked path is named in the code.
+
+`current-main.json` pins the commit log and event bytes from main
+`05fdfdeee419ca4717b2c138d1bd12f13df1b906` for the same scenario. Against
+the published run, #441 adds `rootTurn: true` to the terminal event and
+#443 adds the same call occurrence address at the ten listed paths.
+#446 and #445 introduce no additional differences in this scenario.
+The chart and answer still match the published capture exactly.
+
+Both public off switches must match the complete main capture after
+the existing per-run masks and normalization of the occurrence batch
+address. That normalization keeps the slot and co-reference. Removing
+only the listed additions must also reproduce all four published hashes.
 
 `checkpoint.json` is the untouched serialized output of a separate 15.0.1 run
 that paused on the tool's question. The writer's clock was fixed to make the

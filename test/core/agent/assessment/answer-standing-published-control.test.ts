@@ -4,6 +4,7 @@ import { expect, it } from 'vitest';
 import { Agent, askHuman, defineTool, slidingWindow } from '../../../../src/index.js';
 import { mock } from '../../../../src/llm-providers.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
+import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 import { captureDigests } from './fixtures/answer-standing-af-15.0.1/capture.js';
 import {
   askingBuilder,
@@ -13,9 +14,20 @@ import {
   QUESTION,
   RESUMED_ANSWER,
 } from './fixtures/answer-standing-af-15.0.1/scenarios.js';
+import main from './fixtures/answer-standing-af-15.0.1/current-main.json';
 import published from './fixtures/answer-standing-af-15.0.1/published.json';
 
 const library = { Agent, askHuman, defineTool, mock };
+
+function removeMainAddition(control: object, path: readonly (string | number)[], value: unknown) {
+  type Fields = Record<string | number, unknown>;
+  const owner = path
+    .slice(0, -1)
+    .reduce<Fields>((record, key) => record[key] as Fields, control as Fields);
+  const field = path.at(-1)!;
+  expect(owner[field], path.join('/')).toEqual(value);
+  delete owner[field];
+}
 
 it('PROPERTY — generated build configurations preserve admission from published 15.0.1', () => {
   expect(published.admission).toHaveLength(24);
@@ -24,11 +36,21 @@ it('PROPERTY — generated build configurations preserve admission from publishe
 });
 
 it.each(['builder', 'options'] as const)(
-  'REGRESSION — answer layer off through %s matches the published 15.0.1 bytes',
+  'REGRESSION — answer layer off through %s matches main and the published 15.0.1 bytes after reversing upstream additions',
   async (door) => {
     const builder = controlBuilder(library, door === 'options' ? { answerLayer: false } : {});
     const agent = (door === 'builder' ? builder.answerLayer(false) : builder).build();
-    expect(captureDigests(await captureControl(agent))).toEqual(published.capture);
+    const observed = await captureControl(agent);
+    const current = normalizeCallOccurrences(observed) as typeof observed;
+    expect(captureDigests(current)).toEqual({ ...published.capture, ...main.capture });
+
+    // Verify the historical capture after reversing only the audited main additions.
+    const historical = JSON.parse(JSON.stringify(current)) as typeof observed;
+    removeMainAddition(historical, main.rootTurnField, true);
+    for (const path of main.occurrenceFields) {
+      removeMainAddition(historical, path, [0, 0, 0, 1, 0]);
+    }
+    expect(captureDigests(historical)).toEqual(published.capture);
   },
 );
 
