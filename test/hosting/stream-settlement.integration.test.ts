@@ -127,9 +127,7 @@ function reportBuilder(observerDelivery: AgentOptions['observerDelivery'] = 'inl
     }),
     model: 'm',
     observerDelivery,
-  })
-    .tool(pendingReport)
-    .answerLayer({ standingLine: true });
+  }).tool(pendingReport);
 }
 
 function specialistMemory(child: Agent): MemoryDefinition {
@@ -635,4 +633,138 @@ describe('toSSE with served records and the owning Agent', () => {
       expect(views[0]).toEqual(views[1]);
     },
   );
+});
+
+/** Normalize the clock and generated run namespaces before comparing full frame bytes. */
+function comparableStartFrames(chunks: readonly string[]): string[] {
+  const runs = new Map<string, number>();
+  const callNamespaces = new Map<string, number>();
+  const timingFields = new Set(['wallClockMs', 'runOffsetMs', 'durationMs']);
+  const runFields = new Set(['runId', 'engineRunId', 'logRunId']);
+  function numberFor(book: Map<string, number>, value: string): number {
+    const existing = book.get(value);
+    if (existing !== undefined) return existing;
+    const next = book.size + 1;
+    book.set(value, next);
+    return next;
+  }
+  return chunks.map((chunk) => {
+    const data = chunk.split('\n')[1];
+    if (data === undefined || !data.startsWith('data: ')) throw new Error('Expected an SSE frame');
+    const event = JSON.parse(data.slice('data: '.length)) as AgentfootprintEvent;
+    const json = JSON.stringify(event, (key, value: unknown) => {
+      if (timingFields.has(key) && typeof value === 'number') return 0;
+      if (runFields.has(key) && typeof value === 'string') return `run-${numberFor(runs, value)}`;
+      if (key === 'callOccurrenceKey' && Array.isArray(value) && value.length === 5) {
+        return [numberFor(callNamespaces, value.slice(0, 4).join('.')), 0, 0, 0, value[4]];
+      }
+      return value;
+    });
+    return `event: ${event.type}\ndata: ${json}\n\n`;
+  });
+}
+
+describe('toSSE start coordinator probes', () => {
+  const lookup = defineTool({
+    name: 'lookup_order',
+    description: 'Read the order.',
+    inputSchema: { type: 'object', properties: {} },
+    execute: () => [{ order: 42 }],
+  });
+
+  it.each([
+    {
+      name: 'Agent with one tool round',
+      ends: 1,
+      answer: 'The order is 42.',
+      text: 'The order is 42.',
+      make: (delivery: AgentOptions['observerDelivery']) =>
+        Agent.create({
+          provider: mock({
+            replies: [
+              { toolCalls: [{ id: 'c1', name: lookup.schema.name, args: {} }] },
+              'The order is 42.',
+            ],
+            chunkDelayMs: 0,
+          }),
+          model: 'm',
+          observerDelivery: delivery,
+        })
+          .tool(lookup)
+          .build(),
+    },
+    {
+      name: 'Agent with the default standing line',
+      ends: 1,
+      answer: ROOT + WARNING,
+      text: ROOT + WARNING,
+      make: (delivery: AgentOptions['observerDelivery']) => reportBuilder(delivery).build(),
+    },
+    {
+      name: 'Sequence of two Agents',
+      ends: 2,
+      answer: 'Second says done.',
+      text: 'First says hello.Second says done.',
+      make: (delivery: AgentOptions['observerDelivery']) => {
+        // The Sequence owns the observers. Child delivery options do not change its tier.
+        const member = (reply: string) =>
+          Agent.create({
+            provider: mock({ reply, chunkDelayMs: 0 }),
+            model: 'm',
+            observerDelivery: delivery,
+          }).build();
+        return Sequence.create()
+          .step('first', member('First says hello.'))
+          .step('second', member('Second says done.'))
+          .build();
+      },
+    },
+  ])('preserves full frames and text across delivery options for $name', async (shape) => {
+    async function run(delivery: AgentOptions['observerDelivery']) {
+      const result = [];
+      for (const format of formats) {
+        const runner = shape.make(delivery);
+        try {
+          const observed = await observe(runner, 'start', format);
+          expect(observed.closed).toBe(true);
+          expect(observed.outcome).toEqual({ status: 'fulfilled', value: shape.answer });
+          expect(observed.events.filter((event) => event.type === END)).toHaveLength(shape.ends);
+          if (format === 'full') {
+            expectAll(observed, format);
+            result.push(comparableStartFrames(observed.chunks));
+          } else {
+            expect(observed.chunks.join('')).toBe(shape.text);
+            result.push(observed.chunks);
+          }
+        } finally {
+          await runner.shutdown();
+        }
+      }
+      return result;
+    }
+
+    expect(await run('deferred')).toEqual(await run('inline'));
+  });
+
+  it('serves only token placeholders when a Sequence member redacts text', async () => {
+    const runner = Sequence.create()
+      .step(
+        'draft',
+        Agent.create({
+          provider: mock({ reply: 'Secret draft 4411.', chunkDelayMs: 0 }),
+          model: 'm',
+          redact: conversationRedaction(),
+        }).build(),
+      )
+      .step('summary', streaming('Public summary.'))
+      .build();
+    try {
+      const observed = await observe(runner, 'start', 'text');
+      expect(observed.outcome).toEqual({ status: 'fulfilled', value: 'Public summary.' });
+      expectAll(observed, 'text');
+      expect(observed.chunks).toEqual(Array<string>(5).fill('[REDACTED]'));
+    } finally {
+      await runner.shutdown();
+    }
+  });
 });
