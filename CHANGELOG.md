@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.0.2] - 2026-11-20
+
+### Fixed
+
+- **Close SSE streams when a composition fails.** Both `toSSE()` formats now close
+  on a composition's fatal error, including when the first step fails before any
+  Agent turn ends. The run's promise still rejects with its error.
+
 ## [16.0.1] - 2026-11-20
 
 ### Security
