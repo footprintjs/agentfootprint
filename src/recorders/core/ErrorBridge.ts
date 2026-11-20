@@ -48,18 +48,26 @@ export interface ErrorBridgeOptions {
   /** Recorder id — must be unique among attached recorders. */
   readonly id?: string;
   readonly getRunContext: () => RunContext;
+  /** Use run-level wording when no provider-specific wording matches. */
+  readonly fallback?: 'run';
 }
 
 export class ErrorBridge implements CombinedRecorder {
   readonly id: string;
   private readonly dispatcher: EventDispatcher;
   private readonly getRunContext: () => RunContext;
+  private readonly fallback: ErrorBridgeOptions['fallback'];
   private projectedFailure?: FailureProjection;
 
   constructor(options: ErrorBridgeOptions) {
     this.dispatcher = options.dispatcher;
     this.id = options.id ?? 'agentfootprint.error-bridge';
     this.getRunContext = options.getRunContext;
+    this.fallback = options.fallback;
+  }
+
+  clear(): void {
+    this.projectedFailure = undefined;
   }
 
   /**
@@ -78,7 +86,7 @@ export class ErrorBridge implements CombinedRecorder {
 
   onRunFailed(event: FlowRunFailedEvent | DeferredPayloadSummary): void {
     const failure = isDeferredPayloadSummary(event) ? this.projectedFailure : projectFailure(event);
-    this.projectedFailure = undefined;
+    this.clear();
     if (failure === undefined) return;
     const meta = buildEventMeta(
       { runtimeStageId: failure.runtimeStageId, subflowPath: failure.subflowPath },
@@ -96,7 +104,7 @@ export class ErrorBridge implements CombinedRecorder {
     this.dispatcher.dispatch({
       type: 'agentfootprint.error.fatal',
       payload: {
-        error: humanizeLLMError({ message: failure.message }),
+        error: humanizeLLMError({ message: failure.message }, this.fallback),
         stage: failure.stage,
         scope: 'run',
       },

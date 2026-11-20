@@ -41,7 +41,7 @@ export const LLM_ERROR_SENTENCES = Object.freeze({
 } as const);
 
 /** Map a thrown provider/SDK error to a friendly, actionable sentence. */
-export function humanizeLLMError(err: unknown): string {
+export function humanizeLLMError(err: unknown, fallback?: 'run'): string {
   const e = (err ?? {}) as ErrorLike;
   const raw = (e.message ?? String(err ?? '')).toString();
   const status = e.status ?? e.statusCode;
@@ -92,6 +92,9 @@ export function humanizeLLMError(err: unknown): string {
   }
 
   // Fallback: keep the raw text but frame it so it doesn't read as a crash.
+  if (fallback === 'run') {
+    return raw ? `The run failed: ${raw}` : 'The run failed for an unknown reason.';
+  }
   return raw ? `The AI call failed: ${raw}` : LLM_ERROR_SENTENCES.unknown;
 }
 

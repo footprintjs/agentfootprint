@@ -200,6 +200,9 @@ export function prepareAgentRun(
   const terminalFailure = errorBridge({ dispatcher, getRunContext: getRunCtx });
   if (clonesObserverEmits) {
     attachments.push({ recorder: terminalFailure.preserveFailureForDeferredCapture() });
+    // The native queue flushes before finalization. Release any projection whose
+    // observer was detached or whose terminal envelope was dropped.
+    invocation.run.onFinalize(() => terminalFailure.clear());
   }
   attachObserver(terminalFailure);
   // The cost bridge is ALWAYS attached since 8.14.0. It used to be gated on

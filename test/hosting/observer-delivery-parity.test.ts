@@ -4,6 +4,7 @@
  * text streams so the original regression reports a failure and releases its
  * subscriptions.
  */
+import { FlowChartExecutor, flowChart } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 import {
   absent,
@@ -34,6 +35,8 @@ import { encodeSSE } from '../../src/hosting/stream.js';
 import { swarm } from '../../src/patterns/index.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import { compositionRecorder } from '../../src/recorders/core/CompositionRecorder.js';
+import { isDeferredPayloadSummary } from '../../src/recorders/core/deferredPayload.js';
+import { errorBridge } from '../../src/recorders/core/ErrorBridge.js';
 import {
   approval,
   call,
@@ -129,8 +132,7 @@ function incidentAgent(delivery: Delivery, { negatives = true, pause = false, tu
         },
       },
       { jsonSchema: incidentAnswerSchema },
-    )
-    .answerLayer();
+    );
   if (negatives) builder.negativeClaims({ field: 'negatives', tools: [READ_INCIDENTS] });
   if (turns > 1) builder.window(slidingWindow({ keepRecentTurns: 1 }));
   return builder.build();
@@ -222,7 +224,7 @@ describe('typed observer delivery parity — Agent legs', () => {
       answer: REPORT,
     },
     {
-      name: 'standing-line report',
+      name: 'default standing-line report',
       build: (delivery: Delivery) =>
         reportBuilder(REPORT, false, deliveryOptions(delivery)).build(),
       answer: REPORT + WARNING,
@@ -242,7 +244,7 @@ describe('typed observer delivery parity — Agent legs', () => {
       expect(leg.stream.chunks.join('')).toBe(answer);
       const ends = turnEnds(leg.events);
       expect(ends.filter((event) => event.meta.rootTurn)).toHaveLength(1);
-      if (name === 'standing-line report') {
+      if (name === 'default standing-line report') {
         expect(eventTypes(leg.events)).toContain('agentfootprint.answer.assessed');
       }
       if (name === 'mounted typed Agent') {
@@ -388,6 +390,54 @@ const compositions = [
 ] as const;
 
 describe('typed observer delivery parity — composition fixtures', () => {
+  it.each(['inline', 'deferred'] as const)(
+    'uses neutral wording for a composition failure under %s delivery',
+    async (delivery) => {
+      const failure = new Error('Unable to combine the member outputs', {
+        cause: () => 'application callback',
+      });
+      const member = flowChart(
+        'Reject the merge',
+        () => {
+          throw failure;
+        },
+        'merge',
+      ).build();
+      const chart = flowChart('Composition', () => undefined, 'composition')
+        .addSubFlowChartNext('member', member, 'Member')
+        .build();
+      // Public composition runners attach their bridges inline. Use a native
+      // composition here so the same bridge can receive a real clone summary.
+      const executor = new FlowChartExecutor(chart);
+      const dispatcher = new EventDispatcher();
+      const events: AgentfootprintEvent[] = [];
+      dispatcher.on('agentfootprint.error.fatal', (event) => events.push(event));
+      const fatal = errorBridge({
+        dispatcher,
+        getRunContext: () => ({ runId: 'composition', runStartMs: 0, compositionPath: [] }),
+        fallback: 'run',
+      });
+      const summaries: boolean[] = [];
+      if (delivery === 'deferred') {
+        executor.attachCombinedRecorder(fatal.preserveFailureForDeferredCapture());
+      }
+      executor.attachCombinedRecorder(fatal, { delivery });
+      executor.attachFlowRecorder(
+        {
+          id: 'native-failure-delivery',
+          onRunFailed: (event) => summaries.push(isDeferredPayloadSummary(event)),
+        },
+        { delivery },
+      );
+      await expect(executor.run()).rejects.toBe(failure);
+      expect(summaries).toEqual([delivery === 'deferred']);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        payload: { error: 'The run failed: Unable to combine the member outputs', scope: 'run' },
+      });
+    },
+  );
+
   it.each(compositions)('preserves ordered typed events for $name', async ({ build, boundary }) => {
     const run = async (delivery: Delivery) => {
       const agent = mountReport(build(), deliveryOptions(delivery));

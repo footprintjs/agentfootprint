@@ -43,8 +43,7 @@ export function reportBuilder(
   const replies = [call('pending_report'), ...(pause ? [call('ask_approval', 'c2')] : []), answer];
   return Agent.create({ provider: mock({ replies, chunkDelayMs: 0 }), model: 'm', ...options })
     .tool(pendingReport)
-    .tool(approval)
-    .answerLayer({ standingLine: true });
+    .tool(approval);
 }
 
 export function mountReport(
