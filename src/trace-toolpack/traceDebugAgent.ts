@@ -28,7 +28,7 @@ import {
   TRACE_HYPOTHESIS_MODE,
 } from './debugPrompt.js';
 import { traceToolpack } from './traceToolpack.js';
-import type { TraceToolpackArtifacts, TraceToolpackOptions } from './types.js';
+import type { ModelTraceToolpackOptions, TraceToolpackArtifacts } from './types.js';
 
 export interface TraceDebugAgentOptions {
   /** The completed run's evidence — `{ snapshot, controlDeps?, narrative? }`. */
@@ -43,7 +43,7 @@ export interface TraceDebugAgentOptions {
   /** Appended to the methodology system prompt (domain hints, tone). */
   readonly instruction?: string;
   /** Bounding dials forwarded to the toolpack. */
-  readonly toolpack?: TraceToolpackOptions;
+  readonly toolpack?: ModelTraceToolpackOptions;
   /** Display name in events/metrics. Default 'TraceDebugAgent'. */
   readonly name?: string;
 }
@@ -71,6 +71,6 @@ export function traceDebugAgent(options: TraceDebugAgentOptions): Agent {
     maxIterations: options.maxIterations ?? 8,
   })
     .system(system)
-    .tools(traceToolpack(options.artifacts, options.toolpack))
+    .tools(traceToolpack(options.artifacts, { ...options.toolpack, showWithheldResults: false }))
     .build();
 }
