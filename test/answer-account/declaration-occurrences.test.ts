@@ -20,12 +20,16 @@ const readShelf = defineTool({
 });
 
 function asLegacy(recording: Recording): Recording {
+  const modernFields = new Set([
+    'callOccurrenceKey',
+    'enteredToolCalls',
+    'enteredToolCallsComplete',
+    'settledToolCalls',
+    'settledToolCallsComplete',
+    'toolResultExecution',
+  ]);
   return JSON.parse(
-    JSON.stringify(recording, (key, value: unknown) =>
-      ['callOccurrenceKey', 'enteredToolCalls', 'toolResultExecution'].includes(key)
-        ? undefined
-        : value,
-    ),
+    JSON.stringify(recording, (key, value: unknown) => (modernFields.has(key) ? undefined : value)),
   ) as Recording;
 }
 
@@ -102,8 +106,8 @@ it.each([
 
     expect.soft(standingLines(withoutDeclarationEvents)).not.toContain(unmatched);
 
-    // Exercise the historical shape by removing only the library field from
-    // this closed fixture. With no declaration event it still has no address.
+    // Exercise the historical shape without keys or the newer turn evidence.
+    // Without a declaration event the historical row still has no address.
     const legacyFull = asLegacy(recording);
     expect.soft(accountForAnswer(legacyFull).facts.standing).toEqual(account.facts.standing);
     expect.soft(standingLines(legacyFull)).toEqual(lines);
