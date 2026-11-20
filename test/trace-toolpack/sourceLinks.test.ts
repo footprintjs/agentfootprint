@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -12,8 +13,17 @@ import {
   type SourceLinkRowLocation,
   type SourceLinkWrite,
 } from 'foottrace/cause';
-import { FlowChartExecutor, flowChart } from 'footprintjs';
+import { FlowChartExecutor, flowChart, type RuntimeSnapshot } from 'footprintjs';
+import type { StageSnapshot } from 'footprintjs/advanced';
 import { describe, expect, it } from 'vitest';
+import {
+  Agent,
+  defineTool,
+  inMemoryArtifacts,
+  isPlacedToolResult,
+  placedResultKind,
+} from '../../src/index.js';
+import { mock } from '../../src/llm-providers.js';
 import { sourceLinksOf } from '../../src/trace-toolpack/sourceLinks.js';
 
 const servedKey = 'sourceLinkServedRows';
@@ -167,14 +177,41 @@ describe('the packed source-link contract', () => {
     expect(reads).toBe(0);
   });
 
-  it('projects at most 256 rows and marks a remaining candidate as budget exhausted', () => {
+  it('keeps the first 256 bindable witnesses from a saved scope with 257 candidates', () => {
     const scope = fixtureScope(fixture.witnessRow, {
       rows: Array.from({ length: 257 }, () => structuredClone(fixture.witnessRow)),
     });
-    const sourceLinks = sourceLinksOf(scope);
+    const savedScope = JSON.parse(JSON.stringify(scope)) as RecordScope;
+    const sourceLinks = sourceLinksOf(savedScope);
     expect(sourceLinks).toMatchObject({ status: 'partial', limitations: ['budget-exhausted'] });
-    expect(sourceLinks?.links).toHaveLength(256);
-    expect(sourceLinks?.links.at(-1)?.witness.element).toBe(255);
+    expect(sourceLinks?.links.map(({ witness }) => witness.element)).toEqual(
+      Array.from({ length: 256 }, (_, index) => index),
+    );
+  });
+
+  it('keeps the original witness positions around a locator with no binding', () => {
+    const row = fixture.witnessRow;
+    const missingOutput = { ...row, output: { ...row.output, key: 'unwritten' } };
+    const scope = fixtureScope(row, {
+      rows: [row, missingOutput, row].map((entry) => structuredClone(entry)),
+    });
+    const sourceLinks = sourceLinksOf(scope);
+    expect(sourceLinks).toMatchObject({ status: 'captured', limitations: [] });
+    expect(sourceLinks?.links.map(({ witness }) => witness.element)).toEqual([0, 2]);
+  });
+
+  it('reports an empty partial channel when admission spends the budget before the first binding', () => {
+    const scope = fixtureScope(fixture.witnessRow);
+    const overBudget = {
+      ...scope,
+      initialState: { ...scope.initialState, other: Array<unknown>(1_000_001) },
+    };
+    expect(sourceLinksOf(overBudget)).toEqual({
+      version: 1,
+      status: 'partial',
+      links: [],
+      limitations: ['budget-exhausted'],
+    });
   });
 
   it('reports a later consumer’s protected history even after the witness budget is spent', () => {
@@ -367,3 +404,94 @@ it.each(['delta', 'full'] as const)(
     }
   },
 );
+
+function trackedScope(snapshot: RuntimeSnapshot): RecordScope {
+  const { logAddress, commitLog, executionTree, initialState } = snapshot;
+  assert(logAddress);
+  const reads: Record<string, readonly string[]> = {};
+  function visit(stage: StageSnapshot | undefined): void {
+    if (stage === undefined) return;
+    if (stage.runtimeStageId && stage.stageReads)
+      reads[stage.runtimeStageId] = Object.keys(stage.stageReads);
+    for (const child of stage.children ?? []) visit(child);
+    visit(stage.next);
+  }
+  visit(executionTree);
+  return { address: logAddress, commitLog, initialState, reads };
+}
+
+it('keeps the answered prefix when binding a real artifact recording exhausts the scope budget', async () => {
+  const redemptions = 90;
+  const store = inMemoryArtifacts();
+  const getReport = defineTool({
+    name: 'get_report',
+    description: 'Get a report',
+    execute: () => 'fixture payload '.repeat(200),
+  });
+  const consumeReport = defineTool({
+    name: 'consume_report',
+    description: 'Consume a report from an artifact',
+    inputSchema: {
+      type: 'object',
+      properties: { report: { type: 'string' } },
+      required: ['report'],
+    },
+    wants: { report: placedResultKind('get_report') },
+    execute: () => 'consumed',
+  });
+  let step = 0;
+  const provider = mock({
+    respond: (request) => {
+      const current = step++;
+      if (current >= redemptions * 2) return { content: 'done', toolCalls: [] };
+      if (current % 2 === 0) {
+        return {
+          content: '',
+          toolCalls: [{ id: `get-${current}`, name: 'get_report', args: {} }],
+        };
+      }
+      const result = request.messages.filter(({ role }) => role === 'tool').at(-1);
+      assert(result && typeof result.content === 'string');
+      const placed: unknown = JSON.parse(result.content);
+      assert(isPlacedToolResult(placed));
+      return {
+        content: '',
+        toolCalls: [{ id: `use-${current}`, name: 'consume_report', args: { report: placed.ref } }],
+      };
+    },
+  });
+  const agent = Agent.create({
+    provider,
+    model: 'mock',
+    maxIterations: 500,
+    artifacts: { store, placement: { maxInlineChars: 1600 } },
+  })
+    .tool(getReport)
+    .tool(consumeReport)
+    .build();
+  try {
+    expect(await agent.run({ message: 'Fetch and consume the reports' })).toBe('done');
+    const snapshot = agent.getLastSnapshot();
+    assert(snapshot);
+    const rows = snapshot.sharedState[witnessKey] as readonly SourceLinkRow[] | undefined;
+    assert(rows);
+    expect(rows).toHaveLength(redemptions);
+
+    const scope = trackedScope(snapshot);
+    const result = sourceLinksOf(scope);
+    assert(result);
+    expect(result).toMatchObject({ status: 'partial', limitations: ['budget-exhausted'] });
+    expect(result.links.length).toBeGreaterThan(0);
+    expect(result.links.length).toBeLessThan(redemptions);
+    expect(result.links.map(({ consumer }) => consumer.runtimeStageId)).toEqual(
+      rows.slice(0, result.links.length).map(({ consumer }) => consumer),
+    );
+    expect(
+      result.links.every(
+        ({ linkBasis, check }) => linkBasis === 'reference' && check === 'redeemed',
+      ),
+    ).toBe(true);
+  } finally {
+    await agent.shutdown();
+  }
+}, 30_000);

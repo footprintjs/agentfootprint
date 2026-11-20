@@ -64,6 +64,20 @@ export function withServedRowAdditions<T>(record: T, additions: readonly ServedR
   return record;
 }
 
+/** Check the exact served-row envelope before comparing with an older digest. */
+export function withoutServedRows<T>(record: T): T {
+  const additions = servedRowAdditions(record);
+  const previous = structuredClone(record);
+  const log = logOf(previous);
+  for (const [commit, trace] of additions) {
+    const bundle = log[commit]!;
+    delete bundle.overwrite[key];
+    bundle.trace.splice(trace, 1);
+  }
+  expect(withServedRowAdditions(structuredClone(previous), additions)).toEqual(record);
+  return previous;
+}
+
 export function servedRowReferenceText(cases: Record<string, ServedRowAddition[]>): string {
   const entries = Object.keys(cases)
     .sort()
