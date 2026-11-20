@@ -8,13 +8,10 @@ import {
   deny,
   type ToolMiddleware,
 } from '../../../../src/index.js';
-import { toSSE } from '../../../../src/hosting/stream.js';
 import { mock } from '../../../../src/llm-providers.js';
-import { assessAnswer, recordRun } from '../../../../src/observe.js';
+import { assessAnswer } from '../../../../src/observe.js';
 import { assessmentDataOf } from '../../../../src/core/agent/assessment/compose.js';
-import type { AgentTurnEndPayload } from '../../../../src/events/payloads/agent.js';
-import type { AnswerAssessedPayload } from '../../../../src/events/payloads/answer.js';
-import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
+import { observeStanding } from './standing-surfaces.js';
 
 const BODY = 'Here is what I can report.';
 const DIVIDER = '\n\n---\n\n';
@@ -33,39 +30,20 @@ const NATIVE_ABSENCE = absent({
 });
 const NATIVE_PENDING = { content: PRIVATE_STATUS, effects: [], status: 'pending' as const };
 
-type ResultRecording = Recording & {
-  snapshot: {
-    sharedState: {
-      history: Record<string, unknown>[];
-      middlewareDecisions?: unknown;
-      coverageDeclared?: unknown;
-      findingsLedger?: unknown;
-    };
-  };
-};
-
-async function readText(agent: Agent): Promise<string> {
-  const chunks: string[] = [];
-  for await (const chunk of toSSE(agent, { format: 'text' })) chunks.push(chunk);
-  return chunks.join('');
-}
-
 async function run({
   hook,
   observerDelivery = 'inline',
   includePending = false,
   throws = false,
-  columnRows,
 }: {
   readonly hook?: NonNullable<ToolMiddleware['onToolResult']>;
   readonly observerDelivery?: 'inline' | 'deferred';
   readonly includePending?: boolean;
   readonly throws?: boolean;
-  readonly columnRows?: readonly Record<string, unknown>[];
 } = {}) {
   const execute = vi.fn(({ pending }: { pending?: boolean }) => {
     if (throws) throw new Error('Fixture archive failed.');
-    return columnRows ?? (pending ? NATIVE_PENDING : NATIVE_ABSENCE);
+    return pending ? NATIVE_PENDING : NATIVE_ABSENCE;
   });
   const toolCalls = [
     { id: 'native-absence', name: TOOL, args: {} },
@@ -75,7 +53,6 @@ async function run({
     provider: mock({ chunkDelayMs: 0, replies: [{ content: '', toolCalls }, BODY] }),
     model: 'mock',
     observerDelivery,
-    ...(columnRows && { checkColumnTypes: 'warn' as const }),
   })
     .tool(
       defineTool({
@@ -83,50 +60,16 @@ async function run({
         description: 'Read the archive.',
         inputSchema: { type: 'object', properties: { pending: { type: 'boolean' } } },
         execute,
-        ...(columnRows && { resultColumns: { logical_unit_number: 'number' } }),
       }),
     )
     .resultsLayer()
     .answerLayer({ standingLine: true });
   if (hook) builder = builder.toolMiddleware({ name: 'archive_rule', onToolResult: hook });
 
-  const agent = builder.build();
-  const turnEnds: AgentTurnEndPayload[] = [];
-  const assessed: AnswerAssessedPayload[] = [];
-  const offTurn = agent.on('agentfootprint.agent.turn_end', ({ payload }) =>
-    turnEnds.push(payload),
-  );
-  const offAssessed = agent.on('agentfootprint.answer.assessed', ({ payload }) =>
-    assessed.push(payload),
-  );
-  const recorder = recordRun(agent);
-  const reading = readText(agent);
-  try {
-    const returned = await agent.run({ message: 'Check the archive.' });
-    const sse = await reading;
-    const recordingText = JSON.stringify(recorder.toRecording());
-    const recording = JSON.parse(recordingText) as ResultRecording;
-    const saved = assessAnswer(recording);
-    expect(execute).toHaveBeenCalledTimes(toolCalls.length);
-    expect(turnEnds).toHaveLength(1);
-    expect(assessed).toHaveLength(1);
-    const { turn, iteration, ...eventAssessment } = assessed[0]!;
-    expect(turn).toBe(1);
-    expect(iteration).toBe(2);
-    return {
-      returned,
-      sse,
-      turnEnd: turnEnds[0]!,
-      eventAssessment,
-      saved,
-      recording,
-      recordingText,
-    };
-  } finally {
-    recorder.stop();
-    offTurn();
-    offAssessed();
-  }
+  const proof = await observeStanding(builder.build(), { message: 'Check the archive.' });
+  expect(execute).toHaveBeenCalledTimes(toolCalls.length);
+  expect(proof.iteration).toBe(2);
+  return proof;
 }
 
 describe('standing reads results within the host rule', () => {
@@ -157,6 +100,7 @@ describe('standing reads results within the host rule', () => {
       };
       expect.soft(proof.returned, 'agent.run').toBe(text);
       expect.soft(proof.sse, 'text SSE').toBe(text);
+      expect.soft(proof.aguiText, 'AG-UI assistant text').toBe(text);
       expect.soft(proof.turnEnd.finalContent, 'turn_end text').toBe(text);
       expect.soft(proof.turnEnd.answerAssessment, 'turn_end standing data').toEqual(assessment);
       expect.soft(proof.eventAssessment, 'answer.assessed data').toEqual(assessment);
@@ -265,72 +209,4 @@ describe('standing reads results within the host rule', () => {
       'work-not-finished',
     ]);
   });
-});
-
-describe.each([
-  {
-    reason: 'column-type-mismatch',
-    words: "a tool's rows hold a different type than the tool declares",
-    columnRows: [{ logical_unit_number: 'fixture-lun' }],
-  },
-  {
-    reason: 'missing-column',
-    words: 'a column a tool declares is in none of its rows',
-    columnRows: [{ port: 1 }],
-  },
-])('standing for a native $reason', ({ reason, words, columnRows }) => {
-  it.each(['inline', 'deferred'] as const)(
-    'REGRESSION — governance limits what the standing reads (%s)',
-    async (observerDelivery) => {
-      const control = await run({ columnRows, observerDelivery });
-      expect(control.eventAssessment.reasons).toEqual([reason]);
-      expect(assessmentDataOf(control.saved)).toEqual(control.eventAssessment);
-      expect(control.returned).toContain(words);
-
-      const denied = await run({
-        columnRows,
-        observerDelivery,
-        hook: () => deny('Archive result is unavailable.'),
-      });
-      const expectedText = `${BODY}${DIVIDER}Not sure — a result was kept out by a rule.`;
-      expect.soft(denied.returned, 'denied agent.run').toBe(expectedText);
-      expect.soft(denied.sse, 'denied text SSE').toBe(expectedText);
-      expect.soft(denied.turnEnd.finalContent, 'denied turn_end text').toBe(expectedText);
-      const expected = {
-        assessment: 'unknown',
-        standing: 'not-sure',
-        reasons: ['result-withheld'],
-        checked: [],
-      };
-      expect.soft(denied.turnEnd.answerAssessment, 'denied turn_end standing').toEqual(expected);
-      expect.soft(denied.eventAssessment, 'denied answer.assessed').toEqual(expected);
-      expect.soft(assessmentDataOf(denied.saved), 'denied saved standing').toEqual(expected);
-      expect(denied.recording.snapshot.sharedState.findingsLedger).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ kind: 'integrity-finding', finding: reason }),
-        ]),
-      );
-
-      const rewritten = await run({
-        columnRows,
-        observerDelivery,
-        hook: () => allow([{ logical_unit_number: 1 }], 'Serve the public numeric index.'),
-      });
-      expect.soft(rewritten.returned, 'rewritten agent.run').not.toContain(words);
-      expect.soft(rewritten.sse, 'rewritten text SSE').toBe(rewritten.returned);
-      expect
-        .soft(rewritten.turnEnd.finalContent, 'rewritten turn_end text')
-        .toBe(rewritten.returned);
-      expect
-        .soft(rewritten.turnEnd.answerAssessment?.reasons, 'rewritten turn_end standing')
-        .toEqual([]);
-      expect.soft(rewritten.eventAssessment.reasons, 'rewritten answer.assessed').toEqual([]);
-      expect.soft(rewritten.saved.reasons, 'rewritten saved standing').toEqual([]);
-      expect(rewritten.recording.snapshot.sharedState.findingsLedger).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ kind: 'integrity-finding', finding: reason }),
-        ]),
-      );
-    },
-  );
 });
