@@ -169,7 +169,7 @@ describe('middleware — scenario', () => {
 
     const answer = await agent.run({ message: 'ship it' });
 
-    expect(answer).toBe('done'); // the run continued — a denial is not a crash
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.'); // the run continued — a denial is not a crash
     expect(seen).toEqual([]); // the tool never ran
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toBe('writes to prod need a change ticket');
@@ -257,7 +257,7 @@ describe('middleware — scenario', () => {
 
     const answer = await agent.run({ message: 'go' });
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toContain("middleware 'broken' threw: policy service unreachable");
@@ -352,7 +352,7 @@ describe('middleware — integration', () => {
       checkInDeclined({ request: pausedRequest(paused), by: 'alice', note: 'not this one' }),
     );
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toBe('declined by human: not this one');
@@ -670,7 +670,7 @@ describe('middleware — integration', () => {
       checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
     );
 
-    expect(answer).toBe('done');
+    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused.');
     expect(seen).toEqual([]);
     const toolResult = spy.requests[1]?.messages.find((m) => m.role === 'tool');
     expect(toolResult?.content).toContain("the current policy requires a person's answer again");
@@ -1932,6 +1932,7 @@ describe('middleware — the onToolCall chain sees the PEELED args under .findin
         iteration: 1,
         basis: 'direct',
         callOccurrenceKey,
+        turn: 1,
       },
     ]);
   });

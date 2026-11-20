@@ -73,6 +73,7 @@ function expectIncomplete(
   assessment: AnswerAssessment,
   id = 'read-1',
   standing: AnswerAssessment['standing'] = 'not-sure',
+  checks: readonly string[] = ['tool-coverage', 'result-shape'],
 ) {
   expect(assessment.standing).toBe(standing);
   const reason = assessment.reasons.find((entry) => entry.reason === NOT_COMPLETED);
@@ -81,7 +82,11 @@ function expectIncomplete(
     witness: [{ kind: 'history', path: '/outcome', toolCallId: id }],
     source: { kind: 'calls', calls: [{ toolCallId: id, toolName: TOOL }] },
   });
-  expect(assessment.checked.map((entry) => entry.check)).toEqual(['tool-coverage', 'result-shape']);
+  expect(assessment.checked.map((entry) => entry.check)).toEqual(checks);
+}
+
+function expectSettlementOnly(assessment: AnswerAssessment) {
+  expectIncomplete(assessment, 'read-1', 'not-sure', []);
 }
 
 function expectLine(result: unknown, outcome: 'refused' | 'failed') {
@@ -116,7 +121,7 @@ describe('the standing for a committed call outcome', () => {
     );
     expect(execute).not.toHaveBeenCalled();
     expectOutcome(run.history, 'read-1', 'refused');
-    expectIncomplete(run.assessment);
+    expectSettlementOnly(run.assessment);
     expectLine(run.result, 'refused');
   });
 
@@ -129,7 +134,7 @@ describe('the standing for a committed call outcome', () => {
     const run = await leg(agent);
     expect(execute).not.toHaveBeenCalled();
     expectOutcome(run.history, 'read-1', 'refused');
-    expectIncomplete(run.assessment);
+    expectSettlementOnly(run.assessment);
     expectLine(run.result, 'refused');
   });
 
@@ -148,7 +153,8 @@ describe('the standing for a committed call outcome', () => {
       .build();
     const run = await leg(agent);
     expectOutcome(run.history, 'read-1', 'failed');
-    expectIncomplete(run.assessment);
+    if (ceiling === undefined) expectIncomplete(run.assessment);
+    else expectSettlementOnly(run.assessment);
     expectLine(run.result, 'failed');
   });
 

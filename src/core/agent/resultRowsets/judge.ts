@@ -7,6 +7,7 @@ import type {
   ToolRowsetCheckReason,
 } from '../../../events/payloads/toolRowsets.js';
 import { columnTypesOf, type ColumnCheckMode } from '../../../integrity/column-types/check.js';
+import type { IntegrityCallWitness } from '../../../integrity/finding/row.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import type { ToolCallsHandlerDeps } from '../stages/toolCalls/contracts/handlerDeps.js';
@@ -20,9 +21,8 @@ export const UNAVAILABLE_ROWSET_REFUSAL =
 /** One native wait budget for all published bindings in this final tool call. */
 const ROWSET_READ_BUDGET_MS = 5000;
 
-export interface RowsetCall {
+export interface RowsetCall extends IntegrityCallWitness {
   readonly toolName: string;
-  readonly toolCallId: string;
   readonly iteration: number;
 }
 
@@ -127,9 +127,11 @@ export async function judgeGovernedRowsets(
           : 'checked-pass';
       ledger?.current?.note(kind, 'write', checkDisposition, fired ? Date.now() : undefined);
     }
-    fileIntegrityFindings(scope, encounter.findings, call.iteration, ledger);
+    fileIntegrityFindings(scope, encounter.findings, call.iteration, ledger, () => call);
     const payload: ToolRowsetCheckedPayload = {
-      ...call,
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
       rowset: declaration.key,
       source: declaration.source.kind,
       disposition,

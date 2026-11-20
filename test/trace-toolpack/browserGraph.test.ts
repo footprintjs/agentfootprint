@@ -171,8 +171,8 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
   it('LAW: the results layer’s stage bodies are off the root sync closure — the mount loads them on first use', async () => {
     // Only an agent with a `ToolPeriod` tool (or `.resultsLayer()`) mounts
     // `sf-results`; its stage bodies load through `import()` from the mount.
-    // What the mount's synchronous input mapping needs (`batchToJudge`) lives
-    // in the mount itself, so it pulls nothing of the layer onto the graph.
+    // The mount's synchronous input mapping lives in resultsInput, so
+    // pulling in batchToJudge does not load the results layer's stage bodies.
     const graph = await splitGraph(resolve(DIST, 'index.js'));
     expect(graph.syncInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(false);
     expect(graph.dynamicInputs.has('dist/esm/core/agent/results/subflow.js')).toBe(true);
@@ -226,7 +226,7 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
   });
 
   it('LAW: the answer layer’s run-time half is off the root sync closure — the mount loads it on the first armed answer', async () => {
-    // Only an agent with `.answerLayer()` starts its final branch with the
+    // An agent with the answer layer enabled starts its final branch with the
     // layer's stage; its body, the fold it runs and the line's composer are
     // reached through `import()` from the mount (`honesty/mounts.ts` ·
     // `startFinalBranch`). What stays static is what a synchronous door needs

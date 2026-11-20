@@ -116,6 +116,10 @@ Turn it off with `wrapUpAtMaxIterations: false` (the fact is still recorded, as
 `action: 'cut-short'`). A turn that never runs out of budget is byte-identical either way —
 same calls, same events, same committed state.
 
+By default, the completed answer after budget exhaustion carries a standing line
+about the limit. The example also runs with wrap-up and the answer layer both
+disabled to reproduce the historical fragment.
+
 <CodeFile path="examples/features/67-out-of-budget-wrap-up.ts" region="wrap-up" title="examples/features/67-out-of-budget-wrap-up.ts (region: wrap-up)" />
 
 ## Identity for multi-tenant memory

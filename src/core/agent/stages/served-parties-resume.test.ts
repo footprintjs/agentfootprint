@@ -152,7 +152,7 @@ it('an ask resume keeps off-wire call ownership separate from wire membership an
       requestId: first.awaitingInput.requestId,
       values: { f1: '24h' },
     }),
-  ).toBe('done');
+  ).toBe('done\n\n---\n\nNot sure — a call was refused.');
   expect(ran).toEqual(['read_rows', 'hidden_tool']);
   expect(off).toEqual(['hidden_tool']);
   const unknown = s.requests

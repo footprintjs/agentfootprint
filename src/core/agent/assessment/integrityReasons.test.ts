@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ContextError } from '../../../integrity/finding/types.js';
 import { integrityFindingRowOf } from '../../../integrity/finding/row.js';
+import type { CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { validateCheckpoint } from '../../runCheckpoint.js';
 import { assessAnswer } from './assess.js';
 import { INTEGRITY_FINDINGS, isIntegrityFindingKind } from './integrityReasons.js';
@@ -57,6 +58,18 @@ const DECIDED: Readonly<Record<string, string>> = {
   'duplicate-execution': 'note',
 };
 
+const callOccurrenceKey: CallOccurrenceKey = [1, 2, 3, 4, 0];
+const secondOccurrenceKey: CallOccurrenceKey = [1, 2, 3, 4, 1];
+const keyedWitness = { toolCallId: 'c1', callOccurrenceKey, tools: ['lookup'] };
+const returned = (key: CallOccurrenceKey) => ({
+  role: 'tool',
+  toolCallId: 'c1',
+  toolName: 'lookup',
+  content: '[{"a":1}]',
+  callOccurrenceKey: key,
+  toolResultExecution: 'returned',
+});
+
 const row = (finding: unknown, extra: Record<string, unknown> = {}) => ({
   kind: 'integrity-finding',
   turn: 1,
@@ -67,11 +80,15 @@ const row = (finding: unknown, extra: Record<string, unknown> = {}) => ({
 });
 
 /** A record on which one check ran and fired nothing: the "consistent" baseline. */
-const consistent = (ledger: readonly unknown[]): Record<string, unknown> => ({
-  history: [
-    { role: 'user', content: 'q' },
-    { role: 'tool', toolCallId: 'c1', toolName: 'lookup', content: '[{"a":1}]' },
-  ],
+const consistent = (
+  ledger: readonly unknown[],
+  keys: readonly CallOccurrenceKey[] = [callOccurrenceKey],
+): Record<string, unknown> => ({
+  history: [{ role: 'user', content: 'q' }, ...keys.map(returned)],
+  enteredToolCalls: {
+    complete: true,
+    entries: keys.map((callOccurrenceKey) => ({ callOccurrenceKey, entered: true })),
+  },
   turnNumber: 1,
   findingsLedger: ledger,
 });
@@ -124,7 +141,11 @@ describe('UNIT — each kind through the fold', () => {
   it.each(Object.entries(DECIDED).filter(([, effect]) => effect !== 'note'))(
     '%s lowers the standing to not sure, with its witness',
     (kind, reason) => {
-      const a = fold(consistent([row(kind)]));
+      const callBound =
+        kind === 'unsupported-argument' ||
+        kind === 'column-type-mismatch' ||
+        kind === 'missing-column';
+      const a = fold(consistent([row(kind, callBound ? keyedWitness : {})]));
       expect(a.standing).toBe('not-sure');
       expect(a.reasons.map((r) => r.reason)).toEqual([reason]);
       expect(a.reasons[0]!.witness).toEqual([
@@ -179,7 +200,7 @@ describe('UNIT — each kind through the fold', () => {
 
   it('a row of another turn says nothing about this answer', () => {
     const earlier = consistent([
-      row('missing-column', { turn: 1 }),
+      row('missing-column', keyedWitness),
       row('empty-lookup', { turn: 1 }),
       { kind: 'claim-unsettled', turn: 1, iteration: 1, field: 'x' },
     ]);
@@ -188,23 +209,39 @@ describe('UNIT — each kind through the fold', () => {
     expect('notes' in a).toBe(false);
   });
 
-  it('a record with no turn number reads every row: it may over-report, it never hides', () => {
-    const { turnNumber: _unused, ...state } = consistent([row('missing-column', { turn: 9 })]);
+  it('a record with no turn number can still admit an exact returned witness', () => {
+    const { turnNumber: _unused, ...state } = consistent([
+      row('missing-column', { ...keyedWitness, turn: 9 }),
+    ]);
     void _unused;
-    expect(fold(state).standing).toBe('not-sure');
+    const a = fold(state);
+    expect(a.standing).toBe('not-sure');
+    expect(a.reasons.map(({ reason }) => reason)).toEqual(['missing-column']);
   });
 
-  it("a calls reason names every call of the row's tool this turn", () => {
-    const a = fold(consistent([row('missing-column', { tools: ['lookup'] })]));
-    expect(a.reasons[0]!.source).toEqual({
-      kind: 'calls',
-      calls: [{ toolCallId: 'c1', toolName: 'lookup' }],
-    });
+  it('a calls reason names its one occurrence even when the tool and id recur', () => {
+    const a = fold(
+      consistent([row('missing-column', keyedWitness)], [callOccurrenceKey, secondOccurrenceKey]),
+    );
+    expect(a.reasons.map(({ reason, source }) => ({ reason, source }))).toEqual([
+      {
+        reason: 'missing-column',
+        source: { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'lookup' }] },
+      },
+    ]);
   });
 
-  it('a calls reason whose tool ran no call this turn counts it, never drops it', () => {
-    const a = fold(consistent([row('unsupported-argument', { tools: ['gone'] })]));
-    expect(a.reasons[0]!.source).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+  it('a name or an unresolved key cannot identify the call that used the argument', () => {
+    for (const witness of [
+      { tools: ['gone'] },
+      { tools: ['lookup'] },
+      { toolCallId: 'c1', tools: ['lookup'] },
+      { ...keyedWitness, callOccurrenceKey: secondOccurrenceKey },
+    ]) {
+      const a = fold(consistent([row('unsupported-argument', witness)]));
+      expect(a.standing).toBe('consistent');
+      expect(a.reasons).toEqual([]);
+    }
   });
 
   it('every new reason declares its layer and source once, in the table', () => {
@@ -325,19 +362,27 @@ describe('PROPERTY — malformed rows never throw and never raise the standing',
     }
   });
 
-  it('a tools list that is not a plain list cannot throw or name a call', () => {
+  it('a malformed tools list cannot supply the identity of a call', () => {
     for (const tools of [null, 'lookup', 7, {}, [null, 7, {}], { length: 1, 0: 'lookup' }]) {
-      const a = fold(consistent([row('missing-column', { tools })]));
-      expect(a.standing).toBe('not-sure');
-      const source = a.reasons[0]!.source;
-      expect(source.kind === 'calls' && source.calls).toEqual([]);
+      const unplaced = fold(consistent([row('missing-column', { tools })]));
+      expect(unplaced.standing).toBe('consistent');
+      expect(unplaced.reasons).toEqual([]);
+
+      const placed = fold(consistent([row('missing-column', { ...keyedWitness, tools })]));
+      expect(placed.standing).toBe('not-sure');
+      expect(placed.reasons[0]?.source).toEqual({
+        kind: 'calls',
+        calls: [{ toolCallId: 'c1', toolName: 'lookup' }],
+      });
     }
   });
 
   it('the saved form reads as the live form', () => {
-    const state = consistent([row('missing-column', { tools: ['lookup'] }), row('empty-lookup')]);
+    const state = consistent([row('missing-column', keyedWitness), row('empty-lookup')]);
+    const live = fold(state);
+    expect(live.reasons.map(({ reason }) => reason)).toEqual(['missing-column']);
     const saved = JSON.parse(JSON.stringify({ snapshot: { sharedState: state } }));
-    expect(assessAnswer(saved)).toEqual(fold(state));
+    expect(assessAnswer(saved)).toEqual(live);
   });
 });
 

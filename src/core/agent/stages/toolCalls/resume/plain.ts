@@ -1,8 +1,10 @@
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
+import { toolResultExecutionField } from '../execution/outcomeField.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { PauseAnswerRequiredError } from '../../../../pause.js';
 import { argsForPausedCall } from '../batch/paused.js';
 import { pausedNegativeResultId } from '../../../negativeClaims/capture.js';
@@ -43,6 +45,7 @@ export function buildResumePlain(
   deps: Pick<
     ToolCallsHandlerDeps,
     | 'inputsLayer'
+    | 'answerLayer'
     | 'resources'
     | 'negativeClaimsArmed'
     | 'stepPlanFor'
@@ -96,7 +99,8 @@ export function buildResumePlain(
       frame.callOccurrenceKey,
     );
     // No `error` flag: a human's answer is not a tool failure.
-    const rawPauseResult = await links.afterMoment(scope, {
+    const { modelResult: rawPauseResult, toolResultDisposition } = await links.afterMoment(scope, {
+      returned: true,
       ...occurrence,
       ...(tool && { tool }),
       toolName,
@@ -169,6 +173,12 @@ export function buildResumePlain(
           toolCallId,
           toolName,
           ...occurrence,
+          ...toolResultExecutionField(
+            deps.answerLayer,
+            'returned',
+            !Object.is(modelResult, pausePlaced.modelResult),
+          ),
+          ...(toolResultDisposition !== undefined && { toolResultDisposition }),
           ...(answersAsk !== undefined && { answersAsk }),
           ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
@@ -176,7 +186,7 @@ export function buildResumePlain(
       { toolName, toolCallId, ...occurrence },
     );
     const newHistory = pauseSettlement.history;
-    scope.history = newHistory;
+    commitSettledToolHistory(scope, newHistory);
     // Drives `on-tool-return` triggers, same as every other dispatch path.
     scope.lastToolResult = { toolName, result: resultStr };
     appendBatchResult(scope, { toolName, result: resultStr, toolCallId, ...occurrence });

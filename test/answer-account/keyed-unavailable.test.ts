@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
 import { Agent, coverage, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer, recordRun, type Recording } from '../../src/observe.js';
+import { accountForAnswer, assessAnswer, recordRun, type Recording } from '../../src/observe.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
 
-it('names a missing or conflicting keyed result distinctly from legacy unmatched evidence', async () => {
+it('standing keeps a recorded settlement when its history is missing or conflicting', async () => {
   const inventory = defineTool({
     name: 'inventory',
     description: 'Read fixture shelves.',
@@ -35,24 +35,36 @@ it('names a missing or conflicting keyed result distinctly from legacy unmatched
         ?.lines.map(({ text }) => text);
 
     const original = state.history;
+    const noVerdict =
+      "Not assessed — this record's committed state holds no verdict the standing can rest on.";
+    expect(standingText(recording)?.some((line) => line.includes('declared ground'))).toBe(true);
+
     state.history = original.filter(
       (entry) => entry.role !== 'tool' && entry.toolCalls === undefined,
     );
-    expect(standingText(recording)).toContain(
-      'The call result is unavailable in the retained history for 1 evidence row.',
-    );
+    expect(assessAnswer(recording).reasons.map(({ reason }) => reason)).toEqual(['coverage-gap']);
     const legacy = JSON.parse(
       JSON.stringify(recording, (name, value: unknown) =>
-        name === 'callOccurrenceKey' ? undefined : value,
+        [
+          'callOccurrenceKey',
+          'enteredToolCalls',
+          'enteredToolCallsComplete',
+          'settledToolCalls',
+          'settledToolCallsComplete',
+        ].includes(name)
+          ? undefined
+          : value,
       ),
     ) as Recording;
-    expect(standingText(legacy)).toContain('1 evidence row could not be matched to a call.');
-    expect(standingText(recording)).not.toContain('1 evidence row could not be matched to a call.');
+    expect(standingText(legacy)).toContain(noVerdict);
 
     state.history = [...original, { ...result! }];
-    expect(standingText(recording)).toContain(
-      'The recorded call address is unreadable for 1 evidence row.',
-    );
+    expect(assessAnswer(recording).reasons.map(({ reason }) => reason)).toEqual(['coverage-gap']);
+    const olderKeyed = JSON.parse(JSON.stringify(recording)) as Recording;
+    const olderState = olderKeyed.snapshot.sharedState as Record<string, unknown>;
+    delete olderState.settledToolCalls;
+    delete olderState.settledToolCallsComplete;
+    expect(standingText(olderKeyed)).toContain(noVerdict);
   } finally {
     recorder.stop();
   }

@@ -21,6 +21,12 @@ import type {
 } from '../../../integrity/negative-claim/types.js';
 import type { AnswerCheck, AnswerValidationReport } from '../../../answer-validation/types.js';
 import { copyJson } from '../../../lib/boundedJson.js';
+import { storedCallOccurrenceField } from '../../../lib/callOccurrence.js';
+import {
+  DECLARATION_CHECK_PREFIX,
+  overclaimCheckOf,
+  type NegativeOverclaim,
+} from './overclaims.js';
 
 export interface NegativeDeliveryConfig {
   readonly field: string;
@@ -330,24 +336,36 @@ export function renderNegativeCandidate(
  * Merge negative verdicts without manufacturing a successful host comparison.
  *
  * THE ONE PROJECTION of a negative row onto the report: its code becomes the
- * check's `reason`, and the tools it names stay `tools` — the answer's fold
- * reads both off this row (`assessment/assess.ts` · `readAnswerRows`,
- * `assessment/sources.ts` · `callsOfCheck`), so a field it reads is never
- * left behind here. A row that names no tool carries no `tools`.
+ * check's `reason`, the tools stay `tools`, and an overclaim from a tool's
+ * native return names its exact occurrence. Only the host report preserves
+ * multiple occurrences of a tool's overclaim.
  */
 export function reportWithNegatives(
   report: AnswerValidationReport,
   answer: AnswerNegatives,
   allowed: boolean,
+  declarations: readonly NegativeOverclaim[] = [],
 ): AnswerValidationReport {
-  const rows: AnswerCheck[] = answer.checks.map((row) => ({
+  const reportCheck = (row: AnswerNegatives['checks'][number]): AnswerCheck => ({
     id: row.id,
     path: row.path,
     disposition: row.disposition,
     reason: row.code,
     ...(row.tools.length > 0 && { tools: [...row.tools] }),
+  });
+  const rows = answer.checks
+    .filter((row) => declarations.length === 0 || !row.id.startsWith(DECLARATION_CHECK_PREFIX))
+    .map(reportCheck);
+  const declarationRows = declarations.map((row, index) => ({
+    ...reportCheck(overclaimCheckOf(row.tool, index)),
+    ...(row.toolCallId !== undefined &&
+      row.iteration !== undefined && {
+        toolCallId: row.toolCallId,
+        iteration: row.iteration,
+        ...storedCallOccurrenceField(row),
+      }),
   }));
-  const checks = [...report.checks, ...rows];
+  const checks = [...report.checks, ...rows, ...declarationRows];
   const failed = checks.filter((row) => row.disposition === 'checked-fail').length;
   const unreachable = checks.filter((row) => row.disposition === 'unreachable').length;
   return {

@@ -57,11 +57,7 @@
 import type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from '../thinking/replay.js';
-import {
-  applyReplayRetirements,
-  replayRetirements,
-  type ReplayRetirement,
-} from '../thinking/replayHistory.js';
+import { replayRetirements, type ReplayRetirement } from '../thinking/replayHistory.js';
 import {
   isContextWindowExceeded,
   looksLikeContextWindowExceeded,
@@ -78,8 +74,12 @@ import {
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
-import { admitStoredHistory } from './checkpointHistory.js';
+import { admitStoredHistory, checkpointReplayHistory } from './checkpointHistory.js';
 import { validateCheckpointLedger } from './checkpointLedger.js';
+import {
+  admitToolTurnEvidence,
+  toolTurnEvidenceFrom,
+} from './agent/recordedCalls/toolTurnCheckpoint.js';
 import {
   admitFoldedInnerCallPolicy,
   innerCallPolicyFor,
@@ -387,14 +387,6 @@ export function retainReplayRetirements(
   tracker.replayRetirements = [...(tracker.replayRetirements ?? []), ...structuredClone(edits)];
 }
 
-/** Read only approved replay edits onto the history each checkpoint already owns. */
-export function checkpointReplayHistory(
-  history: readonly LLMMessage[],
-  tracker?: RunCheckpointTracker,
-): readonly LLMMessage[] {
-  return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
-}
-
 /** Build a storage checkpoint from committed history and failure observations. @internal */
 export function buildCheckpoint(
   tracker: RunCheckpointTracker,
@@ -413,7 +405,7 @@ export function buildCheckpoint(
   sourceEvidence?: SourceEvidenceIndex,
   sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
   placed?: unknown,
-  innerPolicyState?: unknown,
+  state?: unknown,
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
@@ -421,7 +413,8 @@ export function buildCheckpoint(
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
   const history = checkpointReplayHistory(tracker.history, tracker);
   const placedTickets = ticketsStillServed(placed, history);
-  const innerCallPolicyArgs = innerCallPolicyFor(innerPolicyState, history);
+  const innerCallPolicyArgs = innerCallPolicyFor(state, history);
+  const toolTurnEvidence = toolTurnEvidenceFrom(state);
   return {
     version: 1,
     runId: tracker.runId,
@@ -431,6 +424,7 @@ export function buildCheckpoint(
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
+    ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
     ...(folded !== undefined && folded.length > 0 && { folded }),
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
@@ -487,6 +481,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
     );
   }
+  const toolTurnEvidence = admitToolTurnEvidence(c);
   const sourceEvidence = sourceEvidenceOf(c);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(c);
   // Optional fields are validated only when PRESENT — absence is the ordinary
@@ -553,12 +548,15 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   negativeCheckpointOf(c);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
-  return sourceDeclarationCorrection === undefined && innerCallPolicyArgs === undefined
+  return sourceDeclarationCorrection === undefined &&
+    innerCallPolicyArgs === undefined &&
+    toolTurnEvidence === undefined
     ? checkpoint
     : {
         ...checkpoint,
         ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
         ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
+        ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
       };
 }
 

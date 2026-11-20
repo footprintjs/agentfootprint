@@ -23,6 +23,7 @@
  */
 
 import { clockLines, periodCheckLine, type PeriodRow } from './period.js';
+import { beyondRetentionLine } from '../../time/retentionRefusals.js';
 import { bindPresentation, type BoundPresentation } from '../../time/present.js';
 import type { TimeLimitLines } from './answer.js';
 import {
@@ -115,6 +116,7 @@ export function renderTimeLimits(
     const holds = audience === 'model' ? heldLine(row, presentation) : undefined;
     if (holds !== undefined) held.push(holds);
   }
+  for (const toolName of facts.retentionRefusals ?? []) period.push(beyondRetentionLine(toolName));
   // The person reads every wall-clock source; the model only the label that two differ — one
   // declared clock is compared as instants and changes nothing the answer states.
   const clocks = [

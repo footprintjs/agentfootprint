@@ -9,6 +9,7 @@ const WORDS: { readonly [R in AssessmentReason]: true } = {
   'argument-unverified': true,
   asked: true,
   'call-not-completed': true,
+  'result-withheld': true,
   'work-not-finished': true,
   'check-unreachable': true,
   'claim-exceeds-search': true,

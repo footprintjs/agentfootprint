@@ -65,7 +65,7 @@ async function run(armed: boolean, calls: number) {
   })
     .tool(lookup)
     .namesAndNumbersFromEvidence({ posture: 'assist' });
-  const agent = (armed ? b.answerLayer() : b).build();
+  const agent = (armed ? b.answerLayer() : b.answerLayer(false)).build();
   agent.on('agentfootprint.answer.assessed', (e) => events.push(e.payload));
   await agent.run({ message: 'which ports are down?' });
   return { snapshot: agent.getSnapshot()!, events };

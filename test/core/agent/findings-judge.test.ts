@@ -390,7 +390,7 @@ describe('only a result the TOOL produced is judged', () => {
       events.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
     );
     const answer = await agent.run({ message: 'why is fc1/7 down?' });
-    expect(answer).toBe('the port is down');
+    expect(answer).toBe('the port is down\n\n---\n\nNot sure — calls were refused.');
     // Neither the policy refusal c1 nor the invalid citation c2 enters
     // execute or buys a judgment. Only independent c3 supplies a result.
     expect(executed).toEqual(['c3']);

@@ -1,6 +1,6 @@
 /**
  * 123 — Keep an SSE stream open through both steps of a Sequence.
- * Run: npm run example examples/features/123-sse-start.ts
+ * Run: npm run example examples/features/124-sse-start.ts
  */
 
 import { Agent, Sequence } from '../../src/index.js';
@@ -9,7 +9,7 @@ import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/123-sse-start',
+  id: 'features/124-sse-start',
   title: 'Bind a stream to one invocation',
   group: 'features',
   description: 'Stream the tokens of both Sequence steps and keep the final answer separately.',

@@ -102,11 +102,18 @@ function neverFinishes(seen: Shot[]) {
   });
 }
 
+const STOPPED_EARLY_WARNING = 'Not sure — the run stopped before the model finished.';
+const withStoppedEarlyWarning = (answer: string) => `${answer}\n\n---\n\n${STOPPED_EARLY_WARNING}`;
+
 function agentThatRunsOut(seen: Shot[], opts: { wrapUp?: false } = {}): Agent {
   return Agent.create({
     provider: neverFinishes(seen),
     model: 'm',
-    ...(opts.wrapUp === false && { wrapUpAtMaxIterations: false as const }),
+    // The legacy no-wrap-up fixture pins the historical fragment byte for byte.
+    ...(opts.wrapUp === false && {
+      wrapUpAtMaxIterations: false as const,
+      answerLayer: false as const,
+    }),
   })
     .tool(looker as never)
     .maxIterations(2)
@@ -193,7 +200,7 @@ describe('the exhausted turn spends one more call, with the tools withheld', () 
   it('hands back the wrap-up answer, not the fragment — the defect, closed', async () => {
     const seen: Shot[] = [];
     const answer = await agentThatRunsOut(seen).run({ message: 'audit the findings' });
-    expect(answer).toBe(WRAP_UP_ANSWER);
+    expect(answer).toBe(withStoppedEarlyWarning(WRAP_UP_ANSWER));
     expect(answer).not.toContain('Let me check');
   });
 
@@ -263,7 +270,7 @@ describe('the record says the budget ran out AND what the run did about it', () 
   it('stamps turn_end, the event a dashboard already reads for the outcome', async () => {
     const rows = await runCollecting(agentThatRunsOut([]));
     const end = rows.find((r) => r.type === 'agentfootprint.agent.turn_end');
-    expect(end?.payload.finalContent).toBe(WRAP_UP_ANSWER);
+    expect(end?.payload.finalContent).toBe(withStoppedEarlyWarning(WRAP_UP_ANSWER));
     expect(end?.payload.stoppedEarly).toEqual({
       reason: 'max-iterations',
       iteration: 2,
@@ -304,7 +311,7 @@ describe('the record says the budget ran out AND what the run did about it', () 
       .build();
 
     const answer = await agent.run({ message: 'audit the findings' });
-    expect(answer).toBe('');
+    expect(answer).toBe(STOPPED_EARLY_WARNING);
     expect(stoppedEarlyOf(agent)).toMatchObject({ answerWasEmpty: true, wrappedUp: true });
     const lines = warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('stopped at'));
     expect(lines).toHaveLength(1);
@@ -339,7 +346,7 @@ describe('the fact survives the recording envelope', () => {
 
     const end = envelope.recording.events.find((e) => e.type === 'agentfootprint.agent.turn_end');
     expect(end?.payload.stoppedEarly).toMatchObject({ wrappedUp: true });
-    expect(end?.payload.finalContent).toBe(WRAP_UP_ANSWER);
+    expect(end?.payload.finalContent).toBe(withStoppedEarlyWarning(WRAP_UP_ANSWER));
   });
 });
 
@@ -462,7 +469,7 @@ describe("reactMode 'dynamic-grouped' — the withholding crosses the sf-llm-cal
     const answer = await agent.run({ message: 'audit the findings' });
     expect(seen).toHaveLength(3);
     expect(seen[2]!.tools).toEqual([]);
-    expect(answer).toBe(WRAP_UP_ANSWER);
+    expect(answer).toBe(withStoppedEarlyWarning(WRAP_UP_ANSWER));
     expect(agent.stoppedEarly()).toMatchObject({ wrappedUp: true });
   });
 });
@@ -489,7 +496,7 @@ describe('a halting costBudget is NOT wrapped up — the person capped the money
     );
     const answer = await agent.run({ message: 'audit the findings' });
 
-    expect(answer).toBe(FRAGMENT);
+    expect(answer).toBe(withStoppedEarlyWarning(FRAGMENT));
     expect(seen.every((r) => r.tools.length === 1)).toBe(true);
     const hits = rows.filter((r) => r.type === 'agentfootprint.agent.budget_exhausted');
     expect(hits).toHaveLength(1);
