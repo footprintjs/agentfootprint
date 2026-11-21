@@ -240,12 +240,13 @@ answer by a reading the record does not show to be today's.
 
 **Older recordings.** A keyless record can predate occurrence and settlement
 evidence. In the absence of settlement, tool-entry or middleware evidence and
-of withheld calls, a conflict placed in this turn with a readable list of at
-least two readings, one or more of them unplaced, yields the run-level reason
-`check-unreachable`. The line says the record holds a conflict whose readings
-it cannot place. A served placeholder entry is an unplaced reading. A row
-with fewer than two readings is outside this rule because the writer files
-conflicts only with at least two readings. Keyed and delivery-governed records
+of withheld calls, a conflict placed in this turn yields the run-level reason
+`check-unreachable` if the list cannot be read whole or if it has at least two
+readings and one or more are unplaced. The line says the record holds a conflict
+whose readings it cannot place. A served placeholder entry is an unplaced
+reading, and a placeholder replacing the entire list leaves it unreadable.
+A fully read list of fewer than two entries is outside the rule because the
+writer files conflicts only with at least two readings. Keyed and delivery-governed records
 still need the existing admission proof, as does any `sources-conflict` reason
 that attributes the conflict to results.
 

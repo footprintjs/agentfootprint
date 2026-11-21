@@ -376,7 +376,7 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     subject: { kind: 'host', id: 'h1' },
     predicate: 'state',
   });
-  const conflict = (witnesses: readonly unknown[], turn?: number) => ({
+  const conflict = (witnesses: unknown, turn?: number) => ({
     kind: 'conflict',
     key: 'host h1 · state',
     witnesses,
@@ -450,6 +450,21 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     { case: 'current stamp', stamp: 2, witnesses: mixed, uncertain: true },
     { case: 'unstamped with a current reading', witnesses: mixed, uncertain: true },
     { case: 'served under a policy', stamp: 2, served: true, witnesses: mixed, uncertain: true },
+    { case: 'raw placeholder list', stamp: 2, witnesses: '[REDACTED]', uncertain: true },
+    {
+      case: 'served placeholder list',
+      stamp: 2,
+      served: true,
+      witnesses: '[REDACTED]',
+      uncertain: true,
+    },
+    { case: 'unreadable list without a turn anchor', witnesses: '[REDACTED]', uncertain: false },
+    {
+      case: 'list past the read bound',
+      stamp: 2,
+      witnesses: Array.from({ length: MAX_ROW_LIST_ENTRIES + 1 }, () => reading('c2')),
+      uncertain: true,
+    },
     {
       case: 'served placeholder reading',
       stamp: 2,
@@ -532,16 +547,14 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
   });
 
   it('keeps strict admission when the record has delivery policy or settlement evidence', () => {
-    const base = {
-      turnNumber: 2,
-      history,
-      findingsLedger: [conflict([reading('c2'), reading('missing')], 2)],
-    };
-    for (const fields of [
-      { middlewareDecisions: [] },
-      { settledToolCalls: [], settledToolCallsComplete: true },
-    ])
-      expect(reasonsOf(run({ ...base, ...fields }))).not.toContain('check-unreachable');
+    for (const witnesses of [mixed, '[REDACTED]']) {
+      const base = { turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] };
+      for (const fields of [
+        { middlewareDecisions: [] },
+        { settledToolCalls: [], settledToolCallsComplete: true },
+      ])
+        expect(reasonsOf(run({ ...base, ...fields }))).not.toContain('check-unreachable');
+    }
   });
 
   it('missing and nonplain witness lists cannot support a conflict', () => {
@@ -553,15 +566,9 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
           history,
           findingsLedger: [{ ...conflict([], stamp), witnesses }],
         });
-        expect(reasonsOf(a)).toEqual([]);
+        expect(reasonsOf(a)).toEqual(stamp === 2 ? ['check-unreachable'] : []);
       }
     }
-  });
-
-  it('a stamp and a current reading cannot vouch for entries past the list bound', () => {
-    const witnesses = Array.from({ length: MAX_ROW_LIST_ENTRIES + 1 }, () => reading('c2'));
-    const a = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
-    expect(reasonsOf(a)).toEqual([]);
   });
 });
 

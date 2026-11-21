@@ -37,10 +37,9 @@ export function readConflicts(
     if (!legacyConflictCheck) return;
     const refs = rowList(row.witnesses);
     if (
-      refs !== undefined &&
-      refs.unread === 0 &&
-      refs.entries.length >= 2 &&
-      refs.entries.some((ref) => place(ref) === undefined)
+      refs === undefined ||
+      refs.unread > 0 ||
+      (refs.entries.length >= 2 && refs.entries.some((ref) => place(ref) === undefined))
     ) {
       fire(g, 'check-unreachable', witness);
     }

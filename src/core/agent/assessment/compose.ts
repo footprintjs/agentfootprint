@@ -59,6 +59,8 @@ export {
  * version-2 line is unchanged. 4: the integrity findings' and the unsettled
  * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
+ * 7: dispatch proof gaps. 8: older conflicts with unplaced readings.
+ * 9: independent check causes are shown together, and replay keeps older attribution.
  */
 export const STANDING_LINE_VERSION = 9;
 
