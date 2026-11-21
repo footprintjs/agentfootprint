@@ -126,6 +126,53 @@ describe('ContextRecorder — injection emit', () => {
     expect(fn.mock.calls[1][0].payload.contentHash).toBe('b');
   });
 
+  it('derives message recency before dropping previously emitted hashes', () => {
+    const dispatcher = new EventDispatcher();
+    const listener = vi.fn();
+    dispatcher.on('agentfootprint.context.injected', listener);
+    const recorder = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+    const early = injection({ slot: 'messages', contentHash: 'early', position: 0 });
+    const last = injection({
+      slot: 'messages',
+      contentHash: 'last',
+      position: 1,
+      asRole: 'assistant',
+      rawContent: '',
+    });
+
+    recorder.onSubflowEntry(subflowEntry(SUBFLOW_IDS.MESSAGES));
+    recorder.onWrite(writeEvent(INJECTION_KEYS.MESSAGES, [last], SUBFLOW_IDS.MESSAGES));
+    recorder.onWrite(writeEvent(INJECTION_KEYS.MESSAGES, [early, last], SUBFLOW_IDS.MESSAGES));
+
+    const events = listener.mock.calls.map(([event]) => event.payload);
+    expect(events).toEqual([
+      { ...last, asRecency: 'latest' },
+      { ...early, asRecency: 'earlier' },
+    ]);
+    expect(last).not.toHaveProperty('asRecency');
+    expect(early).not.toHaveProperty('asRecency');
+  });
+
+  it('preserves custom recency and leaves rows without a position alone', () => {
+    const dispatcher = new EventDispatcher();
+    const listener = vi.fn();
+    dispatcher.on('agentfootprint.context.injected', listener);
+    const recorder = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+    const unpositioned = injection({ slot: 'messages', contentHash: 'unpositioned' });
+    const explicit = injection({
+      slot: 'messages',
+      contentHash: 'explicit',
+      position: 1,
+      asRecency: 'earlier',
+    });
+
+    recorder.onWrite(
+      writeEvent(INJECTION_KEYS.MESSAGES, [unpositioned, explicit], SUBFLOW_IDS.MESSAGES),
+    );
+
+    expect(listener.mock.calls.map(([event]) => event.payload)).toEqual([unpositioned, explicit]);
+  });
+
   it('ignores writes when no slot subflow is active', () => {
     const dispatcher = new EventDispatcher();
     const fn = vi.fn();
