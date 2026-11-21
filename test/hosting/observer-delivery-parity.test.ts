@@ -48,13 +48,13 @@ import {
   WARNING,
 } from './fixtures/streamReport.js';
 
-type Delivery = 'inline' | 'deferred' | 'ref';
+type Delivery = 'inline' | 'deferred' | 'ref' | 'summary';
 
 function deliveryOptions(
   delivery: Delivery,
 ): Pick<AgentOptions, 'observerDelivery' | 'observerDeliveryOptions'> {
-  return delivery === 'ref'
-    ? { observerDelivery: 'deferred', observerDeliveryOptions: { capture: 'ref' } }
+  return delivery === 'ref' || delivery === 'summary'
+    ? { observerDelivery: 'deferred', observerDeliveryOptions: { capture: delivery } }
     : { observerDelivery: delivery };
 }
 
@@ -638,23 +638,41 @@ describe('typed observer delivery parity — result and terminal controls', () =
           });
         }
         const agent = builder.build();
+        const nativeOrder: ('emit' | 'fatal')[] = [];
+        const detach = agent.attach({
+          id: 'fatal-order-witness',
+          onEmit: () => void nativeOrder.push('emit'),
+        });
+        const unsubscribe = agent.on('agentfootprint.error.fatal', () => {
+          nativeOrder.push('fatal');
+        });
         const leg = await captureTextLeg(agent, () =>
           agent
             .run({ message: 'Check the fixture.' }, { signal: abort.signal })
-            .catch((error: unknown) => error),
-        );
+            .catch((error: unknown) => ({ error, nativeOrderAtRejection: [...nativeOrder] })),
+        ).finally(() => {
+          unsubscribe();
+          detach();
+        });
 
-        expect(leg.outcome).toBeInstanceOf(Error);
-        expect(leg.stream).toEqual({ closed: true, chunks: [] });
-        expect(turnEnds(leg.events)).toHaveLength(0);
+        expect(leg.outcome).toMatchObject({ error: expect.any(Error) });
         const fatal = eventsOfType(leg.events, 'agentfootprint.error.fatal');
         expect(fatal).toHaveLength(1);
         expect(fatal[0]?.payload.scope).toBe('run');
+        expect(nativeOrder.indexOf('fatal')).toBeGreaterThan(0);
+        expect(nativeOrder.at(-1)).toBe('fatal');
+        expect(leg.outcome).toMatchObject({ nativeOrderAtRejection: nativeOrder });
+        expect(leg.stream).toEqual({ closed: true, chunks: [] });
+        expect(turnEnds(leg.events)).toHaveLength(0);
         const types = eventTypes(leg.events);
-        expect(types.indexOf('agentfootprint.stream.llm_start')).toBeGreaterThanOrEqual(0);
-        expect(types.indexOf('agentfootprint.error.fatal')).toBeGreaterThan(
-          types.indexOf('agentfootprint.stream.llm_start'),
-        );
+        if (delivery === 'summary') {
+          expect(types).not.toContain('agentfootprint.stream.llm_start');
+        } else {
+          expect(types.indexOf('agentfootprint.stream.llm_start')).toBeGreaterThanOrEqual(0);
+          expect(types.indexOf('agentfootprint.error.fatal')).toBeGreaterThan(
+            types.indexOf('agentfootprint.stream.llm_start'),
+          );
+        }
         expect(JSON.stringify(leg.events)).not.toContain(privateValue);
         return {
           types: eventTypes(leg.events),
@@ -664,6 +682,11 @@ describe('typed observer delivery parity — result and terminal controls', () =
       };
       const inline = await run('inline', 'PRIVATE-TERMINAL-ALPHA');
       expect(await run('deferred', 'PRIVATE-TERMINAL-BRAVO')).toEqual(inline);
+      expect(await run('ref', 'PRIVATE-TERMINAL-CHARLIE')).toEqual(inline);
+      expect(await run('summary', 'PRIVATE-TERMINAL-DELTA')).toMatchObject({
+        payload: inline.payload,
+        stage: inline.stage,
+      });
     },
   );
 });

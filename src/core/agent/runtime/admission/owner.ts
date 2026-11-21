@@ -198,7 +198,7 @@ export function prepareAgentRun(
   // Deferral-safe: the reject-boundary terminal flush delivers error.fatal
   // before the rejection reaches the caller.
   const terminalFailure = errorBridge({ dispatcher, getRunContext: getRunCtx });
-  if (clonesObserverEmits) {
+  if (deferredOpts !== undefined) {
     attachments.push({ recorder: terminalFailure.preserveFailureForDeferredCapture() });
     // The native queue flushes before finalization. Release any projection whose
     // observer was detached or whose terminal envelope was dropped.
