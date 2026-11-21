@@ -504,6 +504,20 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     expect(line).toBe('Not sure — the record holds a conflict whose readings it cannot place.');
   });
 
+  it('says both an unplaced conflict and an independently unverified answer check', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict(mixed, 2)],
+      answerValidation: { status: 'unverified' },
+    });
+    expect(reasonsOf(a)).toEqual(['check-unreachable']);
+    expect(standingLineOf(assessmentDataOf(a), [], false, standingFactsOf(a, new Map()))).toBe(
+      'Not sure — the record holds a conflict whose readings it cannot place; ' +
+        "the app's answer checks could not reach a verdict on this answer.",
+    );
+  });
+
   it('a sparse legacy row cannot supply a conflict or identify its missing witness', () => {
     const witnesses = [reading('c2')];
     witnesses.length = 2;

@@ -13,9 +13,9 @@ import { assumedLinesFor } from '../core/agent/arguments/serve.js';
 import {
   assessmentDataFrom,
   assumedValuesSourceOf,
+  recordedStandingLinesOf,
   rewrittenBehind,
   standingFactsOf,
-  standingLineOf,
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
 import { scriptRowsOfTurn, scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
@@ -145,8 +145,8 @@ const BLOCK_HEADINGS: readonly string[] = [
 ];
 
 /**
- * The standing line THIS run appended, rebuilt from its record — or
- * `undefined` when the record says none could be there.
+ * Standing-line candidates rebuilt from the record. The exact match below
+ * selects the wording held by this recorded answer.
  *
  * The line opens with the owner's plain words ("Not sure — ", "Known — "),
  * which a model can write too, so an opening proves nothing. The record does:
@@ -160,22 +160,22 @@ const BLOCK_HEADINGS: readonly string[] = [
  * The account leaves the line unclaimed when required committed state or the
  * complete recorded display names are unavailable.
  */
-function appendedStandingLine(end: ViewEvent, view: RecordingView): string | undefined {
+function appendedStandingLine(end: ViewEvent, view: RecordingView): readonly string[] {
   const data = assessmentDataFrom(end.payload.answerAssessment);
-  if (data === undefined) return undefined;
+  if (data === undefined) return [];
   const displayNames = recordedStandingNames(end, view);
-  if (displayNames === null) return undefined;
+  if (displayNames === null) return [];
   if (displayNames === undefined && !data.reasons.some((reason) => WITNESSED_REASONS.has(reason))) {
-    return standingLineOf(data, [], false);
+    return recordedStandingLinesOf(data, [], false);
   }
   const assessed = recordedStandingWitnesses(view, data.reasons);
   const { state } = view;
-  if (assessed === undefined || state === undefined) return undefined;
+  if (assessed === undefined || state === undefined) return [];
   const source = assumedValuesSourceOf(assessed, state);
   const assumed =
     source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
   const facts = standingFactsOf(assessed, displayNames ?? new Map(), view.stateAsRecorded);
-  return standingLineOf(data, assumed, rewrittenBehind(assessed), facts);
+  return recordedStandingLinesOf(data, assumed, rewrittenBehind(assessed), facts);
 }
 
 /**
@@ -232,10 +232,10 @@ function appendedScriptsOpenings(
 /** Whether `text` opens the framework's appended section: the run's own line, a block's heading, or its scripts. */
 function opensAppended(
   text: string,
-  line: string | undefined,
+  lines: readonly string[],
   scripts: readonly string[] = [],
 ): boolean {
-  if (line !== undefined && (text === line || text.startsWith(`${line}\n\n`))) return true;
+  if (lines.some((line) => text === line || text.startsWith(`${line}\n\n`))) return true;
   if (scripts.some((opening) => opening !== '' && text.startsWith(opening))) return true;
   return BLOCK_HEADINGS.some((heading) => text.startsWith(heading));
 }
@@ -250,16 +250,16 @@ function opensAppended(
  */
 function splitAppended(
   content: string,
-  line: string | undefined,
+  lines: readonly string[],
   scripts: readonly string[] = [],
 ): { readonly model: string; readonly appended?: string } {
   let at = content.lastIndexOf(APPENDED_SEPARATOR);
   while (at >= 0) {
     const rest = content.slice(at + APPENDED_SEPARATOR.length);
-    if (opensAppended(rest, line, scripts)) return { model: content.slice(0, at), appended: rest };
+    if (opensAppended(rest, lines, scripts)) return { model: content.slice(0, at), appended: rest };
     at = at === 0 ? -1 : content.lastIndexOf(APPENDED_SEPARATOR, at - 1);
   }
-  return opensAppended(content, line, scripts)
+  return opensAppended(content, lines, scripts)
     ? { model: '', appended: content }
     : { model: content };
 }

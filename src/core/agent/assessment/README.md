@@ -249,6 +249,12 @@ conflicts only with at least two readings. Keyed and delivery-governed records
 still need the existing admission proof, as does any `sources-conflict` reason
 that attributes the conflict to results.
 
+If the same record also shows an unverified answer check, the standing line
+and the answer account state both causes. During replay, a saved line that
+states only the older answer-check wording is still credited to the library
+when the record independently supports that check and the text exactly matches
+the appended section.
+
 ```ts
 // turnNumber: 2; history: [person 't1', result of old1, person 't2', result of c2]
 const reading = (toolCallId?: string) => ({ toolCallId, subject: { kind: 'host', id: 'h1' }, predicate: 'state' });

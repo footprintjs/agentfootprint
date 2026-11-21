@@ -50,13 +50,12 @@ import {
 import type {
   AnswerAssessment,
   AssessmentCheck,
+  AssessmentPointer,
   AssessmentReason,
   AssessmentReasonSource,
 } from './types.js';
 
 export { assumedValuesSourceOf } from './assumedValues.js';
-export { legacyConflictWitness } from './conflicts.js';
-export { dispatchProofWitness } from './entryEvidence.js';
 export { settledSiblingWitness } from './callStandingWords.js';
 
 /**
@@ -68,7 +67,7 @@ export { settledSiblingWitness } from './callStandingWords.js';
  * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
  */
-export const STANDING_LINE_VERSION = 8;
+export const STANDING_LINE_VERSION = 9;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -349,6 +348,7 @@ export interface StandingNames {
   readonly evictedOutcomes?: EvictedCallOutcomes;
   readonly dispatchProofGap?: true;
   readonly legacyConflictGap?: true;
+  readonly answerValidationGap?: true;
 }
 
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
@@ -378,6 +378,17 @@ export function sourcesByReason(
   return new Map(a.reasons.map((r) => [r.reason, r.source] as const));
 }
 
+/** Each recorded cause of an unreachable check owns its witness pointers. */
+export function unreachableWitnessGroups(witnesses: readonly AssessmentPointer[]) {
+  return {
+    conflict: witnesses.filter(legacyConflictWitness),
+    dispatch: witnesses.filter(dispatchProofWitness),
+    validator: witnesses.filter(
+      (pointer) => pointer.kind === 'state' && pointer.key === 'answerValidation',
+    ),
+  };
+}
+
 /** The committed facts the live and rebuilt line share. */
 export function standingFactsOf(
   assessment: AnswerAssessment,
@@ -395,6 +406,7 @@ export function standingFactsOf(
       pointer.toolCallId === undefined,
   );
   const unreachable = assessment.reasons.find((r) => r.reason === 'check-unreachable')?.witness;
+  const gaps = unreachable === undefined ? undefined : unreachableWitnessGroups(unreachable);
   return {
     sources: sourcesByReason(assessment),
     displayNames,
@@ -402,8 +414,9 @@ export function standingFactsOf(
     ...(batchRefused && { batchRefused: true as const }),
     ...(settledSiblings !== undefined && { settledSiblings }),
     ...(evictedOutcomes !== undefined && { evictedOutcomes }),
-    ...(unreachable?.some(dispatchProofWitness) && { dispatchProofGap: true as const }),
-    ...(unreachable?.some(legacyConflictWitness) && { legacyConflictGap: true as const }),
+    ...(gaps?.dispatch.length && { dispatchProofGap: true as const }),
+    ...(gaps?.conflict.length && { legacyConflictGap: true as const }),
+    ...(gaps?.validator.length && { answerValidationGap: true as const }),
   };
 }
 
@@ -462,6 +475,8 @@ function assumedClauses(
   return out;
 }
 
+const DISPATCH_PROOF_WORDS = 'the record could not establish tool entry for every checked call';
+
 /** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
 function reasonClause(
   reason: Exclude<AssessmentReason, 'argument-assumed'>,
@@ -470,10 +485,13 @@ function reasonClause(
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
   if (reason === 'check-unreachable' && names?.legacyConflictGap) {
-    return 'the record holds a conflict whose readings it cannot place';
+    const causes = ['the record holds a conflict whose readings it cannot place'];
+    if (names.dispatchProofGap) causes.push(DISPATCH_PROOF_WORDS);
+    if (names.answerValidationGap) causes.push(REASON_WORDS[reason]);
+    return causes.join('; ');
   }
   if (reason === 'check-unreachable' && names?.dispatchProofGap) {
-    return 'the record could not establish tool entry for every checked call';
+    return DISPATCH_PROOF_WORDS;
   }
   if (reason === 'value-contingent' && source?.kind === 'answer') {
     return 'a value in the answer came from a result the model had set aside';
@@ -597,4 +615,25 @@ export function standingLineOf(
     case 'not-assessed':
       return `${opening}no check applied to this answer.`;
   }
+}
+
+/** Exact line candidates for a saved answer, including the older wording
+ * when its independent evidence could have produced that line on its own.
+ */
+export function recordedStandingLinesOf(
+  data: AnswerAssessmentData,
+  assumed: readonly StandingAssumedValue[],
+  rewritten: boolean,
+  names?: StandingNames,
+): readonly string[] {
+  const current = standingLineOf(data, assumed, rewritten, names);
+  if (names === undefined) return [current];
+  const { legacyConflictGap, ...earlierFacts } = names;
+  if (
+    !legacyConflictGap ||
+    !data.reasons.includes('check-unreachable') ||
+    (!names.dispatchProofGap && !names.answerValidationGap)
+  )
+    return [current];
+  return [current, standingLineOf(data, assumed, rewritten, earlierFacts)];
 }
