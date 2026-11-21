@@ -208,7 +208,7 @@ stays the verdict when both exist. A `steps-unfinished` row fires the reason of 
 name and files no check: the record holds only the unfinished verdict.
 
 **A conflict whose readings the record cannot place — the incomplete-record
-policy** (`assess.ts` · `conflictOfThisTurn`). Each reading of a conflict row
+policy** (`assessment/conflicts.ts` · `conflictOfThisTurn`). Each reading of a conflict row
 (`witnesses`) is placed by the call it names, as the record shows it:
 
 - **current** — a call of this turn;
@@ -326,8 +326,8 @@ outside this: see [Not covered](./LIMITS.md#not-covered)):
   record's own claim);
 - a value that is not a plain array is not trusted as a list: one call the
   record cannot name, and — for a conflict — no placement shown elsewhere, so
-  a row stamped with this turn keeps its doubt (`assess.ts` ·
-  `conflictOfThisTurn`, below).
+  a row stamped with this turn keeps its doubt (`assessment/conflicts.ts` ·
+  `conflictOfThisTurn`).
 
 **Why.** `Array.from` and `for…of` run a list's own iterator: an empty one hid a
 named reading (the source read `{ calls: [], unnamed: 1 }`), and a getter would

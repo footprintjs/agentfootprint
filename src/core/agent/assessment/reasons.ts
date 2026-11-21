@@ -220,7 +220,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assess.ts · conflictOfThisTurn)',
+      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assessment/conflicts.ts · conflictOfThisTurn)',
   },
   {
     reason: 'column-type-mismatch',
