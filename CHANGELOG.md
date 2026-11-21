@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.2.0] - 2026-11-21
+
+### Added
+
+- Recordings made with receipts enabled can now include `sourceLinkServedRows`. The key holds the current turn’s rows, which contain only the positions of complete history entries offered in each request.
+
+### Fixed
+
+- A typed run with negative claims no longer leaves a stream open under deferred delivery. A failed run delivers its terminal error even with explicit summary capture. If a native emit is delivered as a summary, the run's observer statistics now report it separately from queue overflow.
+
 ## [16.1.0] - 2026-11-21
 
 ### Added
