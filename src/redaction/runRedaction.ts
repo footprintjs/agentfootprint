@@ -64,6 +64,7 @@ import {
 import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
 import { createRunEventRelay } from './runEventRelay.js';
+import { prepareNativeEmit } from './toolEndCapture.js';
 import {
   carryPrivateRuleNames,
   createPrivateRun,
@@ -90,7 +91,11 @@ export interface RunRedaction {
   /** Native attachments that mark a served record and retire its live rule. */
   readonly recorders: readonly CombinedRecorder[];
   /** Tie an already-created native scope to this exact run and its rule. */
-  bindScope(scope: unknown, context: Parameters<ScopeFactory>[0]): void;
+  bindScope(
+    scope: unknown,
+    context: Parameters<ScopeFactory>[0],
+    clonesObserverEmits?: boolean,
+  ): void;
   /** Enable mounted-turn marks for an owning Agent's execution leg. */
   trackMountedTurns(): void;
   /** The ownership metadata shared by a served event and its real-value twin. */
@@ -140,6 +145,7 @@ interface ScopeServing {
   readonly run: ScopeRun;
   readonly stageId: string;
   readonly privateBinding?: ScopePrivateBinding;
+  readonly clonesObserverEmits?: boolean;
 }
 
 interface NativePrivateRule {
@@ -254,7 +260,7 @@ export function createRunRedaction(args: {
       else queue.push(written);
     },
   };
-  const bindScope = (scope: unknown, context: Parameters<ScopeFactory>[0]): void => {
+  const bindScope: RunRedaction['bindScope'] = (scope, context, clonesObserverEmits): void => {
     const own = context?.getRedactionRule?.();
     if (own !== undefined) {
       if (nativeBinding?.rule.rule !== own) {
@@ -271,6 +277,7 @@ export function createRunRedaction(args: {
         serving: {
           run,
           stageId: context?.runtimeStageId ?? '',
+          clonesObserverEmits,
           ...(own !== undefined &&
             nativeBinding !== undefined && { privateBinding: nativeBinding.port }),
         },
@@ -524,10 +531,16 @@ export function emitServed(
     return;
   }
   entry.run.real(type, payload, entry.stageId);
-  scope.$emit(
+  const served = entry.run.serving.payload(
     type,
-    entry.run.serving.payload(type, servedPayload === undefined ? payload : servedPayload),
+    servedPayload === undefined ? payload : servedPayload,
   );
+  scope.$emit(type, prepareNativeEmit(type, served, entry.clonesObserverEmits));
+}
+
+/** Use the capture mode of the native execution that made this scope, including mounts. */
+export function scopeClonesObserverEmits(scope: object): boolean {
+  return scopeRuns.get(scope)?.serving?.clonesObserverEmits === true;
 }
 
 /** A scope that can set a value — structurally footprintjs's `TypedScope` `$setValue`. */

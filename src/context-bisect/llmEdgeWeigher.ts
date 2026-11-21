@@ -145,20 +145,22 @@ function cap(text: string, maxChars: number): string {
  * Keys a step commits that are BOOKKEEPING ABOUT the step rather than output
  * FROM it. They are skipped by {@link stepOutputText} — see the note there.
  */
-const NOT_OUTPUT_KEYS: ReadonlySet<string> = new Set([RECEIPT_KEY]);
+const NOT_OUTPUT_KEYS: ReadonlySet<string> = new Set([RECEIPT_KEY, 'sourceLinkServedRows']);
 
 /**
  * Default child text: everything the step committed, `key=value` in trace
  * order. For an agent's LLM call this carries the assistant content +
  * tool-call intents — the step's observable OUTPUT.
  *
- * WITH ONE EXCLUSION (9.88.0). The receipt an LLM call commits is a
+ * The receipt an LLM call commits (9.88.0) is a
  * FINGERPRINT of the request, not something the step said: run-salted hex
  * digests, which are by construction semantically empty. Left in, they are
  * hundreds of characters of noise inside a `maxChars` budget that then has
  * less room for the assistant's actual words — measured, that alone reordered
  * the localizer's suspects and demoted a planted fact below a tool. A text
  * corpus scored by an embedder must contain only text somebody wrote.
+ * The served rows are likewise positions in the request, so they stay out
+ * of the output text while remaining available in the commit log.
  */
 export function stepOutputText(
   commitLog: readonly CommitBundle[],

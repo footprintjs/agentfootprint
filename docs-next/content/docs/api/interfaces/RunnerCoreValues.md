@@ -12,7 +12,7 @@ Defined in: [src/core/runnerCoreValues.ts:8](https://github.com/footprintjs/agen
 
 > `optional` **parentIdentity?**: `MemoryIdentity`
 
-Defined in: [src/core/runnerCoreValues.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L14)
+Defined in: [src/core/runnerCoreValues.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L16)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/core/runnerCoreValues.ts:14](https://github.com/footprintjs/age
 
 > `optional` **parentRequest?**: `RequestContext`
 
-Defined in: [src/core/runnerCoreValues.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L15)
+Defined in: [src/core/runnerCoreValues.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L17)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/core/runnerCoreValues.ts:15](https://github.com/footprintjs/age
 
 > `optional` **parentRun?**: `ParentRunRecord`
 
-Defined in: [src/core/runnerCoreValues.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L16)
+Defined in: [src/core/runnerCoreValues.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L18)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/core/runnerCoreValues.ts:16](https://github.com/footprintjs/age
 
 > `optional` **privateFields?**: `PrivateRecordFields`
 
-Defined in: [src/core/runnerCoreValues.ts:11](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L11)
+Defined in: [src/core/runnerCoreValues.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L13)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/core/runnerCoreValues.ts:11](https://github.com/footprintjs/age
 
 > `optional` **recordMarks?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/runnerCoreValues.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L13)
+Defined in: [src/core/runnerCoreValues.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L15)
 
 Conservative native marks remain record-only, never caller-policy provenance.
 
@@ -54,6 +54,16 @@ Conservative native marks remain record-only, never caller-policy provenance.
 
 > `optional` **redaction?**: `RunRedaction`
 
-Defined in: [src/core/runnerCoreValues.ts:10](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L10)
+Defined in: [src/core/runnerCoreValues.ts:12](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L12)
 
 Private policy/serving for this execution; never tracked chart state.
+
+***
+
+### summarizedEmits?
+
+> `optional` **summarizedEmits?**: `number`
+
+Defined in: [src/core/runnerCoreValues.ts:10](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runnerCoreValues.ts#L10)
+
+Native emit envelopes delivered as summaries on this execution's observer queue.

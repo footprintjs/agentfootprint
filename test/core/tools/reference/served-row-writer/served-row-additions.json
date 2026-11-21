@@ -1,0 +1,128 @@
+{
+  "agent-answer-layer": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]]
+  ],
+  "agent-arguments-ask": [
+    [17,1,"set",[[0,1]]]
+  ],
+  "agent-arguments-ask-resumed": [
+    [17,1,"append",[[0,3]]]
+  ],
+  "agent-arguments-assume": [
+    [17,1,"set",[[0,1]]],
+    [38,1,"append",[[0,3]]]
+  ],
+  "agent-arguments-assume-limits": [
+    [17,1,"set",[[0,1]]],
+    [38,1,"append",[[0,3]]]
+  ],
+  "agent-arguments-sources": [
+    [17,1,"set",[[0,1]]],
+    [38,1,"append",[[0,3]]]
+  ],
+  "agent-arguments-sources-only": [
+    [17,1,"set",[[0,1]]],
+    [38,1,"append",[[0,3]]]
+  ],
+  "agent-dynamic-graph-hop": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]]
+  ],
+  "agent-dynamic-static-tool": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]]
+  ],
+  "agent-findings": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]],
+    [49,1,"append",[[0,5]]]
+  ],
+  "agent-findings-contingent": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]],
+    [49,1,"append",[[0,2],[3,5]]]
+  ],
+  "agent-findings-judge": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]],
+    [49,1,"append",[[0,5]]]
+  ],
+  "agent-findings-window": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]],
+    [70,1,"append",[[0,4],[5,7]]],
+    [88,1,"append",[[0,7]]],
+    [106,1,"append",[[0,6],[7,9]]],
+    [124,1,"append",[[0,9]]],
+    [142,1,"append",[[0,9]]],
+    [160,1,"append",[[0,9]]]
+  ],
+  "agent-from-active-skill": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]]
+  ],
+  "agent-ontology": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]]
+  ],
+  "agent-parked-map": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]]
+  ],
+  "agent-provider-three-sources": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]],
+    [70,1,"append",[[0,7]]]
+  ],
+  "agent-results-period": [
+    [17,1,"set",[[0,1]]],
+    [36,1,"append",[[0,3]]],
+    [55,1,"append",[[0,5]]]
+  ],
+  "agent-scoped-provider": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]],
+    [70,1,"append",[[0,7]]]
+  ],
+  "agent-script-artifact": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]]
+  ],
+  "agent-shared-tool-reference": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]],
+    [70,1,"append",[[0,7]]],
+    [88,1,"append",[[0,9]]]
+  ],
+  "agent-stepped-skill": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]]
+  ],
+  "agent-time-clock": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]],
+    [49,1,"append",[[0,5]]]
+  ],
+  "agent-tool-choice": [
+    [16,1,"set",[[0,1]]],
+    [34,1,"append",[[0,3]]],
+    [52,1,"append",[[0,5]]],
+    [70,1,"append",[[0,7]]]
+  ],
+  "agent-tool-forced": [
+    [15,1,"set",[[0,1]]]
+  ],
+  "agent-wrap-up": [
+    [15,1,"set",[[0,1]]],
+    [32,1,"append",[[0,3]]],
+    [49,1,"append",[[0,4]]]
+  ]
+}
