@@ -336,7 +336,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'run',
     reads:
-      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish)",
+      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish). findingsLedger: a legacy conflict row of this turn whose readings cannot all be placed",
   },
 ]);
 

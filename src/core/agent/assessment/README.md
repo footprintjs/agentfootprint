@@ -223,8 +223,8 @@ Which turn the row belongs to is decided in this order:
 2. a current reading places the row here, stamped or not (the call-id rule);
 3. a row stamped with THIS turn stays this turn's unless EVERY reading is
    earlier. An unresolved reading, no readings at all, or a list the fold cannot
-   read whole (`rowList`, above) establishes no placement elsewhere, and its
-   source counts those readings in `unnamed`;
+   read whole (`rowList`, above) establishes no placement elsewhere. When
+   admitted, the source counts readings it cannot name in `unnamed`;
 4. an UNSTAMPED row is placed only by a current reading, and so is any row of a
    record with no `turnNumber`.
 
@@ -238,13 +238,24 @@ it cannot name — and lifts the stamp only on a placement the record establishe
 The reverse stays refused: an unstamped conflict is never attached to today's
 answer by a reading the record does not show to be today's.
 
+**Older recordings.** A keyless record can predate occurrence and settlement
+evidence. In the absence of settlement, tool-entry or middleware evidence and
+of withheld calls, a conflict placed in this turn with a readable list of at
+least two readings, one or more of them unplaced, yields the run-level reason
+`check-unreachable`. The line says the record holds a conflict whose readings
+it cannot place. A served placeholder entry is an unplaced reading. A row
+with fewer than two readings is outside this rule because the writer files
+conflicts only with at least two readings. Keyed and delivery-governed records
+still need the existing admission proof, as does any `sources-conflict` reason
+that attributes the conflict to results.
+
 ```ts
 // turnNumber: 2; history: [person 't1', result of old1, person 't2', result of c2]
 const reading = (toolCallId?: string) => ({ toolCallId, subject: { kind: 'host', id: 'h1' }, predicate: 'state' });
 const filedNow = (witnesses: unknown[]) => ({ kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 });
 const fold = (witnesses: unknown[]) =>
   assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [filedNow(witnesses)] } } });
-fold([reading('missingA'), reading('missingB')]).reasons[0].source; // { kind: 'calls', calls: [], unnamed: 2 }
+fold([reading('missingA'), reading('missingB')]).reasons[0].source; // { kind: 'run' } for check-unreachable
 fold([reading('old1'), reading('missingB')]).standing;               // 'not-sure' — one earlier, one unresolved
 fold([reading(), reading()]).standing;                               // 'not-sure' — no ids at all
 fold([reading('old1')]).standing;                                    // 'consistent' — every reading earlier
@@ -342,7 +353,7 @@ witnesses.length = 3; // index 2 is a hole
 Object.defineProperty(witnesses, Symbol.iterator, { value: function* () {} }); // never called
 const conflict = { kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 };
 assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [conflict] } } })
-  .reasons[0].source; // { kind: 'calls', calls: [{ toolCallId: 'c2', toolName: 'lookup' }], unnamed: 2 }
+  .reasons[0].source; // { kind: 'run' } on a legacy record with no delivery evidence
 ```
 
 **The app's words for a reason's calls.** A tool may declare `displayName`

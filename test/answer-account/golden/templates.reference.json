@@ -2089,6 +2089,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.conflictReadingsUnplaced@1": {
+  "text": "The record holds a conflict whose readings it cannot place.",
+  "parts": [
+   {
+    "text": "The record holds a conflict whose readings it cannot place."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.checkUnreachable@1": {
   "text": "The app's answer checks could not reach a verdict on this answer.",
   "parts": [

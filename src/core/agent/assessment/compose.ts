@@ -38,6 +38,7 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import { legacyConflictWitness } from './conflicts.js';
 import { dispatchProofWitness } from './entryEvidence.js';
 import {
   callNotCompletedClause,
@@ -54,6 +55,7 @@ import type {
 } from './types.js';
 
 export { assumedValuesSourceOf } from './assumedValues.js';
+export { legacyConflictWitness } from './conflicts.js';
 export { dispatchProofWitness } from './entryEvidence.js';
 export { settledSiblingWitness } from './callStandingWords.js';
 
@@ -66,7 +68,7 @@ export { settledSiblingWitness } from './callStandingWords.js';
  * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
  */
-export const STANDING_LINE_VERSION = 7;
+export const STANDING_LINE_VERSION = 8;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -346,6 +348,7 @@ export interface StandingNames {
   readonly settledSiblings?: number;
   readonly evictedOutcomes?: EvictedCallOutcomes;
   readonly dispatchProofGap?: true;
+  readonly legacyConflictGap?: true;
 }
 
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
@@ -391,9 +394,7 @@ export function standingFactsOf(
       pointer.path === '/toolResultExecution' &&
       pointer.toolCallId === undefined,
   );
-  const dispatchProofGap = assessment.reasons
-    .find((r) => r.reason === 'check-unreachable')
-    ?.witness.some(dispatchProofWitness);
+  const unreachable = assessment.reasons.find((r) => r.reason === 'check-unreachable')?.witness;
   return {
     sources: sourcesByReason(assessment),
     displayNames,
@@ -401,7 +402,8 @@ export function standingFactsOf(
     ...(batchRefused && { batchRefused: true as const }),
     ...(settledSiblings !== undefined && { settledSiblings }),
     ...(evictedOutcomes !== undefined && { evictedOutcomes }),
-    ...(dispatchProofGap && { dispatchProofGap: true as const }),
+    ...(unreachable?.some(dispatchProofWitness) && { dispatchProofGap: true as const }),
+    ...(unreachable?.some(legacyConflictWitness) && { legacyConflictGap: true as const }),
   };
 }
 
@@ -467,6 +469,9 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  if (reason === 'check-unreachable' && names?.legacyConflictGap) {
+    return 'the record holds a conflict whose readings it cannot place';
+  }
   if (reason === 'check-unreachable' && names?.dispatchProofGap) {
     return 'the record could not establish tool entry for every checked call';
   }

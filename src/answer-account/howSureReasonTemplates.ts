@@ -115,6 +115,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.dispatchProofUnavailable': t(
     'The record could not establish tool entry for every checked call.',
   ),
+  'howSure.reason.conflictReadingsUnplaced': t(
+    'The record holds a conflict whose readings it cannot place.',
+  ),
   'howSure.reason.checkUnreachable': t(
     "The app's answer checks could not reach a verdict on this answer.",
   ),

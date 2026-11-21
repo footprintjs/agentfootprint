@@ -14,11 +14,42 @@ import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
-import { assertP1 } from './helpers.js';
+import { assertP1, fixtureA } from './helpers.js';
 
 const REPLY = 'The request was received.';
 const call = (id: string, name: string, args: Record<string, unknown> = {}) => ({
   toolCalls: [{ id, name, args }],
+});
+
+it('the explanation names a legacy conflict gap in a served recording', () => {
+  const account = accountForAnswer({
+    events: fixtureA().events.filter(({ type }) => type === 'agentfootprint.agent.turn_end'),
+    structure: undefined,
+    snapshot: {
+      recorders: [{ id: REDACTION_MARKER_ID }],
+      sharedState: {
+        turnNumber: 2,
+        history: [
+          { role: 'user', content: 'What changed?' },
+          { role: 'tool', toolName: 'lookup', toolCallId: 'c2', content: '[1]' },
+        ],
+        findingsLedger: [
+          {
+            kind: 'conflict',
+            witnesses: [{ toolCallId: 'c2' }, '[REDACTED]'],
+          },
+        ],
+      },
+    },
+  });
+  const lines = account.rows.find(({ id }) => id === 'how-sure')?.lines ?? [];
+  expect(account.facts.standing.value).toBe('not-sure');
+  expect(
+    lines.find(({ template }) => template.id === 'howSure.reason.conflictReadingsUnplaced'),
+  ).toMatchObject({ text: 'The record holds a conflict whose readings it cannot place.' });
+  expect(
+    lines.some(({ template }) => template.id === 'howSure.reason.dispatchProofUnavailable'),
+  ).toBe(false);
 });
 
 async function recorded(agent: Agent) {

@@ -10,6 +10,7 @@ import {
 import { foldState } from '../../core/agent/assessment/assess.js';
 import {
   dispatchProofWitness,
+  legacyConflictWitness,
   settledSiblingWitness,
   standingNamesFrom,
 } from '../../core/agent/assessment/compose.js';
@@ -338,22 +339,25 @@ export function standingLines(
           if (r.reason === 'call-not-completed') return callOutcomeLines(ctx, r);
           const unplaced = r.source.kind === 'calls' ? r.source.unplaced ?? [] : [];
           const count = COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length;
+          let template: TemplateId = REASON_LINES[r.reason];
+          if (r.reason === 'check-unreachable') {
+            if (r.witness.some(legacyConflictWitness)) {
+              template = 'howSure.reason.conflictReadingsUnplaced';
+            } else if (r.witness.some(dispatchProofWitness)) {
+              template = 'howSure.reason.dispatchProofUnavailable';
+            }
+          }
           const line =
             unplaced.length > 0 && count === 0
               ? []
               : [
-                  ctx.say(
-                    r.reason === 'check-unreachable' && r.witness.some(dispatchProofWitness)
-                      ? 'howSure.reason.dispatchProofUnavailable'
-                      : REASON_LINES[r.reason],
-                    {
-                      ...(COUNTED.has(r.reason) && {
-                        vars: { n: n(count) },
-                      }),
-                      ...recordedAt(pointersOf(r.witness)),
-                      item: true,
-                    },
-                  ),
+                  ctx.say(template, {
+                    ...(COUNTED.has(r.reason) && {
+                      vars: { n: n(count) },
+                    }),
+                    ...recordedAt(pointersOf(r.witness)),
+                    item: true,
+                  }),
                 ];
           if (unplaced.length === 0) return line;
           resolve ??= historyCallResolver(readHistoryCalls(historyOf(ctx.view)));

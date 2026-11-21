@@ -35,7 +35,7 @@
     "src/core/agent/AgentBuilder.ts": 3228,
     "src/core/agent/arguments/README.md": 718,
     "src/core/agent/arguments/resolve.ts": 915,
-    "src/core/agent/assessment/assess.ts": 772,
+    "src/core/agent/assessment/assess.ts": 767,
     "src/core/agent/buildAgentChart.ts": 812,
     "src/core/agent/buildDynamicAgentChart.ts": 1063,
     "src/core/agent/buildToolRegistry.ts": 603,

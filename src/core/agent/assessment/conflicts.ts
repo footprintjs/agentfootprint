@@ -2,8 +2,18 @@ import { fire, type Gathered } from './gathered.js';
 import { statePointer } from './pointer.js';
 import { isRecord } from './recordValues.js';
 import { rowList } from './sources.js';
+import type { AssessmentPointer } from './types.js';
 
 type PlaceCall = (ref: unknown) => 'current' | 'earlier' | undefined;
+
+/** A witness for a conflict whose readings could not all be placed. */
+export function legacyConflictWitness(pointer: AssessmentPointer): boolean {
+  return (
+    pointer.kind === 'state' &&
+    pointer.key === 'findingsLedger' &&
+    /^\/\d+\/kind$/.test(pointer.path ?? '')
+  );
+}
 
 /**
  * Layer 3, the model's readings: a conflict row of THIS turn
@@ -24,7 +34,7 @@ export function readConflicts(
     if (!isRecord(row) || row.kind !== 'conflict' || !conflictOfThisTurn(row, turn, place)) return;
     const witness = statePointer('findingsLedger', index, 'kind');
     if (fire(g, 'sources-conflict', witness)) return;
-    if (!legacyConflictCheck || turn === undefined || row.turn !== turn) return;
+    if (!legacyConflictCheck) return;
     const refs = rowList(row.witnesses);
     if (
       refs !== undefined &&
@@ -55,8 +65,8 @@ export function readConflicts(
  *   reads — `sources.ts` · `rowList`), establish none either;
  * - an UNSTAMPED row is never placed by a reading that is not current: an
  *   earlier turn's conflict whose ids are gone, or unresolved, stays out of
- *   this turn. Nor is any row of a record with no `turnNumber`, where no stamp
- *   can be read against the turn.
+ *   this turn. Without a `turnNumber`, only a current reading can place the
+ *   row because there is no turn number to compare a stamp with.
  */
 function conflictOfThisTurn(
   row: Readonly<Record<string, unknown>>,

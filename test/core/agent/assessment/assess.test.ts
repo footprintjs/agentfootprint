@@ -21,6 +21,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
+import {
+  assessmentDataOf,
+  standingFactsOf,
+  standingLineOf,
+} from '../../../../src/core/agent/assessment/compose.js';
 import { REASONS, reasonEntry } from '../../../../src/core/agent/assessment/reasons.js';
 import { MAX_ROW_LIST_ENTRIES } from '../../../../src/core/agent/assessment/sources.js';
 import type {
@@ -426,7 +431,7 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
         history: repeated,
         findingsLedger: [conflict([reading('old1'), reading('c2')], stamp)],
       });
-      expect(reasonsOf(a)).toEqual(stamp === 2 ? ['check-unreachable'] : []);
+      expect(reasonsOf(a)).toEqual(stamp === 1 ? [] : ['check-unreachable']);
     }
   });
 
@@ -440,28 +445,63 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     expect(reasonsOf(a)).toEqual([]);
   });
 
-  it.each([
-    { case: 'no readings', witnesses: [] },
-    { case: 'all unnamed', witnesses: [reading(), reading()] },
-    { case: 'one earlier and one unnamed', witnesses: [reading('old1'), reading()] },
-    { case: 'all unresolved', witnesses: [reading('missingA'), reading('missingB')] },
-    { case: 'one earlier and one unresolved', witnesses: [reading('old1'), reading('missingB')] },
-    { case: 'one current and one unresolved', witnesses: [reading('c2'), reading('missingB')] },
-  ])('$case reports only uncertainty when the legacy row is stamped current', ({ witnesses }) => {
-    const unstamped = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses)] });
-    expect(unstamped.standing).toBe('consistent');
-    const current = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
-    if (witnesses.length === 0) {
-      expect(current.standing).toBe('consistent');
-    } else {
-      expect(current.standing).toBe('not-sure');
-      expect(current.reasons).toEqual([
-        expect.objectContaining({
-          reason: 'check-unreachable',
-          source: { kind: 'run' },
-        }),
-      ]);
+  const mixed = [reading('c2'), reading('missingB')];
+  const legacyCases = [
+    { case: 'current stamp', stamp: 2, witnesses: mixed, uncertain: true },
+    { case: 'unstamped with a current reading', witnesses: mixed, uncertain: true },
+    { case: 'served under a policy', stamp: 2, served: true, witnesses: mixed, uncertain: true },
+    {
+      case: 'served placeholder reading',
+      stamp: 2,
+      served: true,
+      witnesses: [reading('c2'), '[REDACTED]'],
+      uncertain: true,
+    },
+    { case: 'one reading', stamp: 2, witnesses: [reading('missingB')], uncertain: false },
+    { case: 'no readings', stamp: 2, witnesses: [], uncertain: false },
+    { case: 'all unnamed', stamp: 2, witnesses: [reading(), reading()], uncertain: true },
+    {
+      case: 'earlier and unnamed',
+      stamp: 2,
+      witnesses: [reading('old1'), reading()],
+      uncertain: true,
+    },
+    {
+      case: 'two unplaced readings',
+      stamp: 2,
+      witnesses: [reading('missingA'), reading('missingB')],
+      uncertain: true,
+    },
+    {
+      case: 'earlier and unplaced',
+      stamp: 2,
+      witnesses: [reading('old1'), reading('missingB')],
+      uncertain: true,
+    },
+    {
+      case: 'unstamped with no current reading',
+      witnesses: [reading('old1'), reading('missingB')],
+      uncertain: false,
+    },
+  ];
+  it.each(legacyCases)('legacy conflict: $case', ({ stamp, served, witnesses, uncertain }) => {
+    const a = assessAnswer({
+      snapshot: {
+        sharedState: { turnNumber: 2, history, findingsLedger: [conflict(witnesses, stamp)] },
+        ...(served && { recorders: [{ id: 'agentfootprint.redaction' }] }),
+      },
+    });
+    const line = standingLineOf(assessmentDataOf(a), [], false, standingFactsOf(a, new Map()));
+    expect(a.standing).toBe(uncertain ? 'not-sure' : 'consistent');
+    if (!uncertain) {
+      expect(a.reasons).toEqual([]);
+      expect(line).toMatch(/^Consistent/);
+      return;
     }
+    expect(a.reasons).toEqual([
+      expect.objectContaining({ reason: 'check-unreachable', source: { kind: 'run' } }),
+    ]);
+    expect(line).toBe('Not sure — the record holds a conflict whose readings it cannot place.');
   });
 
   it('a sparse legacy row cannot supply a conflict or identify its missing witness', () => {

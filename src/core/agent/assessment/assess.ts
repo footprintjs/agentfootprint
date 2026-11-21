@@ -716,12 +716,7 @@ export function foldState(
       fire(g, 'period-beyond-retention', statePointer('findingsLedger', index, 'refused'));
     }
   }
-  readConflicts(
-    state,
-    (ref) => callPlacement(ref, places),
-    g,
-    !served && admission.legacyConflictCheck,
-  );
+  readConflicts(state, (ref) => callPlacement(ref, places), g, admission.legacyConflictCheck);
   readAnswerRows(state, g);
   const integrity = readIntegrityRows(state);
   for (const { reason, at } of integrity.fired) fire(g, reason, at);

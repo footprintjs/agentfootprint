@@ -1,6 +1,7 @@
 ---
 type: fixed
 ---
-Report an unreachable answer check when a current conflict in an older recording
-lacks enough witness evidence. Keep the conflict and its source attribution
-subject to the existing tool-result admission rules.
+**Show uncertainty when an older recording cannot place a conflict's readings.**
+An answer and its explanation now report that evidence gap when a current-turn
+conflict has missing readings. Conflict attribution still requires admitted tool
+results.

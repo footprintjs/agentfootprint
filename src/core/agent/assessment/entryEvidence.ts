@@ -62,6 +62,6 @@ export function dispatchProofWitness(pointer: AssessmentPointer): boolean {
     (pointer.key === ENTRY_EVIDENCE_KEY ||
       pointer.key === ENTRY_EVIDENCE_COMPLETE_KEY ||
       pointer.key === 'settledToolCallsComplete' ||
-      pointer.key === 'findingsLedger')
+      (pointer.key === 'findingsLedger' && /^\/\d+\/argument$/.test(pointer.path ?? '')))
   );
 }
