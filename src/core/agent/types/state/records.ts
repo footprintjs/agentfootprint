@@ -3,6 +3,9 @@ import type { DeclaredCoverage } from '../../../../semantics/coverage/index.js';
 import type { ClaimLedgerRow } from '../../../../integrity/unsupported-claim/check.js';
 
 export interface RecordsState {
+  /** Whole retained history entries sent by a model-call stage in this scope. */
+  sourceLinkServedRows?: readonly import('../../receipt/servedRow.js').ServedRow[];
+
   /**
    * Every coverage statement the run's tools declared, in the order they
    * landed — `absent(…)`'s "here is where I looked" and `coverage(…)`'s

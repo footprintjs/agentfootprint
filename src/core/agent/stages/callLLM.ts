@@ -5,7 +5,12 @@ import { groundedTextOf } from './callLLM/groundedText.js';
 import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
-import { observeRequests } from '../../../provider-contract/requestObserver.js';
+import {
+  completeObserved,
+  observeCallRequests,
+  servedRequestRecorder,
+  streamObserved,
+} from './callLLM/servedRequest.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
  *
@@ -32,7 +37,6 @@ import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { iterationsRemainingOf } from '../../../lib/iterationBudget.js';
 import type {
   LLMMessage,
-  LLMCallHooks,
   LLMRequest,
   LLMResponse,
   LLMToolSchema,
@@ -65,7 +69,7 @@ import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
-import { abortableIterable, throwIfAborted, untilAborted } from '../../../lib/abort.js';
+import { throwIfAborted } from '../../../lib/abort.js';
 import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
@@ -431,6 +435,10 @@ export function buildCallLLMStage(
     assertForcedRequestSupported(provider, baseRequest);
     const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const serving =
+      deps.recordReceipt === false
+        ? undefined
+        : servedRequestRecorder(scope, committed, messages, wireMessages, detached);
     const cachePrepared = await cacheStrategy.prepareRequest(detached.request, detached.markers, {
       iteration,
       iterationsRemaining: iterationsRemainingOf(deps.maxIterations, iteration),
@@ -620,16 +628,7 @@ export function buildCallLLMStage(
     let acceptedFindingsRequest: FindingsRequest | undefined;
     const issued = deps.findings === true ? issuedTicketsOf(scope.placedTickets) : undefined;
     const capture = (req: LLMRequest) => captureFindingsRequest(req, committed, iteration, issued);
-    // THE RUN'S SIGNAL REACHES THE WIRE. Every attempt carries it on its
-    // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
-    // provider's own HTTP request — the engine stopping the traversal leaves a
-    // call in flight running, and billing. It already holds the run's deadline
-    // (`RunnerBase · runSignalOf`). Stamped here, at the dispatch, and
-    // never on `llmRequest`: the receipt above hashes that object, and a signal
-    // is no part of what was asked. The same signal bounds every wait below,
-    // so an adapter that ignores it still cannot hold the stage open, and an
-    // answer that lands after it is refused before anything records or bills
-    // it (`lib/abort.ts`, law 4).
+    // The run signal reaches the wire. See callLLM/README.md#dispatch-lifetime.
     const runSignal = scope.$getEnv?.()?.signal;
     const dispatchFor = providerDispatchFor(
       runSignal,
@@ -644,23 +643,17 @@ export function buildCallLLMStage(
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
-      const attemptHooks =
-        deps.findings === true
-          ? observeRequests(
-              {
-                ...attempts.hooks,
-                onReplayPrepared: (
-                  preparation: Parameters<NonNullable<LLMCallHooks['onReplayPrepared']>>[0],
-                ) => {
-                  attempts.hooks.onReplayPrepared?.(preparation);
-                  candidate = capture(preparation.request);
-                },
-              },
-              (request) => {
-                candidate = capture(request);
-              },
-            )
-          : attempts.hooks;
+      if (selectedProvider !== provider) serving?.discard();
+      const attemptHooks = observeCallRequests(
+        attempts.hooks,
+        serving === undefined && deps.findings !== true
+          ? undefined
+          : (request) => {
+              serving?.beforeRequest(request);
+              if (deps.findings === true) candidate = capture(request);
+            },
+        serving?.discard,
+      );
       let resp: LLMResponse | undefined;
       let firstChunkFired = false;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
@@ -675,8 +668,10 @@ export function buildCallLLMStage(
           : undefined;
       let lastTokenIndex = -1;
       if (selectedProvider.stream) {
-        for await (const chunk of abortableIterable(
-          selectedProvider.stream(attempts.request, attemptHooks),
+        for await (const chunk of streamObserved(
+          selectedProvider,
+          attempts.request,
+          attemptHooks,
           runSignal,
         )) {
           if (chunk.done) {
@@ -745,7 +740,7 @@ export function buildCallLLMStage(
           : attempts.request;
         dispatch = describeProviderDispatch(selectedProvider, completion);
         if (deps.findings === true) candidate = capture(completion);
-        resp = await untilAborted(selectedProvider.complete(completion, attemptHooks), runSignal);
+        resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
@@ -847,8 +842,11 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
-          ...((deps.findings === true || deps.outputFormat !== undefined) && {
+          ...((deps.findings === true ||
+            deps.outputFormat !== undefined ||
+            serving !== undefined) && {
             prepareFallback: (request: LLMRequest) => {
+              serving?.discard();
               const witness = deps.findings === true ? capture(request) : undefined;
               return () => {
                 // A callback may return arbitrary text; it did not inherit

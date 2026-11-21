@@ -35,3 +35,6 @@ and the truncated digest can be ambiguous.
 - `receiptDigests.ts` — the run's memo, so each call hashes and measures only
   what it added (`test/core/agent/receipt/receipt-incremental.test.ts`).
 - `requestMeasurement.ts` — the size of the prepared request, never its text.
+- `servedRow.ts` — the value-free ranges of whole retained history entries
+  offered at the provider port. The call stage writes at most one row next to
+  its receipt. The row's consumer is the native attempt series.
