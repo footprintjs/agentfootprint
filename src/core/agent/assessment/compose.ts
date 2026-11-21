@@ -38,24 +38,18 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
-import { dispatchProofWitness } from './entryEvidence.js';
-import {
-  callNotCompletedClause,
-  evictedCallOutcomes,
-  settledSiblingWitness,
-  unfinishedWorkClause,
-  type EvictedCallOutcomes,
-} from './callStandingWords.js';
-import type {
-  AnswerAssessment,
-  AssessmentCheck,
-  AssessmentReason,
-  AssessmentReasonSource,
-} from './types.js';
+import { callNotCompletedClause, unfinishedWorkClause } from './callStandingWords.js';
+import type { StandingNames } from './standingFacts.js';
+import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
 
 export { assumedValuesSourceOf } from './assumedValues.js';
-export { dispatchProofWitness } from './entryEvidence.js';
 export { settledSiblingWitness } from './callStandingWords.js';
+export {
+  sourcesByReason,
+  standingFactsOf,
+  unreachableWitnessGroups,
+  type StandingNames,
+} from './standingFacts.js';
 
 /**
  * Bumped whenever any word of the tables below changes. 2: the named clauses
@@ -65,8 +59,10 @@ export { settledSiblingWitness } from './callStandingWords.js';
  * version-2 line is unchanged. 4: the integrity findings' and the unsettled
  * claim's clauses; every version-3 line is unchanged. 5: the recorded outcomes
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
+ * 7: dispatch proof gaps. 8: older conflicts with unplaced readings.
+ * 9: independent check causes are shown together, and replay keeps older attribution.
  */
-export const STANDING_LINE_VERSION = 7;
+export const STANDING_LINE_VERSION = 9;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -334,20 +330,6 @@ const NAMED_REASON_WORDS: Readonly<
   'missing-column': (who) => `${who} returned rows without a declared column`,
 };
 
-/**
- * The fold's sources and any display names the app declared. For calls that
- * did not complete, the source carries the outcome even without a display name.
- */
-export interface StandingNames {
-  readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
-  readonly displayNames: ReadonlyMap<string, string>;
-  readonly skippedSteps?: number;
-  readonly batchRefused?: true;
-  readonly settledSiblings?: number;
-  readonly evictedOutcomes?: EvictedCallOutcomes;
-  readonly dispatchProofGap?: true;
-}
-
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
 // consumers read this and never re-derive it: answer-account/account.ts · appendedStandingLine
 /**
@@ -366,43 +348,6 @@ export function standingNamesFrom(value: unknown): ReadonlyMap<string, string> |
     names.set(tool, read);
   }
   return names.size > 0 ? names : undefined;
-}
-
-/** The fold's sources keyed by reason — what {@link StandingNames} carries. */
-export function sourcesByReason(
-  a: AnswerAssessment,
-): ReadonlyMap<AssessmentReason, AssessmentReasonSource> {
-  return new Map(a.reasons.map((r) => [r.reason, r.source] as const));
-}
-
-/** The committed facts the live and rebuilt line share. */
-export function standingFactsOf(
-  assessment: AnswerAssessment,
-  displayNames: ReadonlyMap<string, string>,
-  state?: Readonly<Record<string, unknown>>,
-): StandingNames {
-  const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
-  const settlements = assessment.reasons.find((r) => r.reason === 'call-not-completed')?.witness;
-  const settledSiblings = settlements?.filter(settledSiblingWitness).length;
-  const evictedOutcomes = evictedCallOutcomes(settlements, state);
-  const batchRefused = settlements?.some(
-    (pointer) =>
-      pointer.kind === 'history' &&
-      pointer.path === '/toolResultExecution' &&
-      pointer.toolCallId === undefined,
-  );
-  const dispatchProofGap = assessment.reasons
-    .find((r) => r.reason === 'check-unreachable')
-    ?.witness.some(dispatchProofWitness);
-  return {
-    sources: sourcesByReason(assessment),
-    displayNames,
-    ...(skippedSteps !== undefined && { skippedSteps }),
-    ...(batchRefused && { batchRefused: true as const }),
-    ...(settledSiblings !== undefined && { settledSiblings }),
-    ...(evictedOutcomes !== undefined && { evictedOutcomes }),
-    ...(dispatchProofGap && { dispatchProofGap: true as const }),
-  };
 }
 
 // FOLD · the one choice of which display names the standing line may use
@@ -460,6 +405,8 @@ function assumedClauses(
   return out;
 }
 
+const DISPATCH_PROOF_WORDS = 'the record could not establish tool entry for every checked call';
+
 /** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
 function reasonClause(
   reason: Exclude<AssessmentReason, 'argument-assumed'>,
@@ -467,8 +414,14 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  if (reason === 'check-unreachable' && names?.legacyConflictGap) {
+    const causes = ['the record holds a conflict whose readings it cannot place'];
+    if (names.dispatchProofGap) causes.push(DISPATCH_PROOF_WORDS);
+    if (names.answerValidationGap) causes.push(REASON_WORDS[reason]);
+    return causes.join('; ');
+  }
   if (reason === 'check-unreachable' && names?.dispatchProofGap) {
-    return 'the record could not establish tool entry for every checked call';
+    return DISPATCH_PROOF_WORDS;
   }
   if (reason === 'value-contingent' && source?.kind === 'answer') {
     return 'a value in the answer came from a result the model had set aside';
@@ -592,4 +545,25 @@ export function standingLineOf(
     case 'not-assessed':
       return `${opening}no check applied to this answer.`;
   }
+}
+
+/** Exact line candidates for a saved answer, including the older wording
+ * when its independent evidence could have produced that line on its own.
+ */
+export function recordedStandingLinesOf(
+  data: AnswerAssessmentData,
+  assumed: readonly StandingAssumedValue[],
+  rewritten: boolean,
+  names?: StandingNames,
+): readonly string[] {
+  const current = standingLineOf(data, assumed, rewritten, names);
+  if (names === undefined) return [current];
+  const { legacyConflictGap, ...earlierFacts } = names;
+  if (
+    !legacyConflictGap ||
+    !data.reasons.includes('check-unreachable') ||
+    (!names.dispatchProofGap && !names.answerValidationGap)
+  )
+    return [current];
+  return [current, standingLineOf(data, assumed, rewritten, earlierFacts)];
 }

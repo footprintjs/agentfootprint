@@ -9,9 +9,9 @@ import {
 
 import { foldState } from '../../core/agent/assessment/assess.js';
 import {
-  dispatchProofWitness,
   settledSiblingWitness,
   standingNamesFrom,
+  unreachableWitnessGroups,
 } from '../../core/agent/assessment/compose.js';
 import { unplacedEvidenceKind } from '../../core/agent/assessment/sources.js';
 import type {
@@ -303,6 +303,11 @@ export function standingLines(
     return noStanding(ctx, 'howSure.standing.noAnswer');
   }
   const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
+  const { conflict, dispatch, validator } = unreachableWitnessGroups(
+    a.reasons.find(({ reason }) => reason === 'check-unreachable')?.witness ?? [],
+  );
+  const accompanyingReasons =
+    conflict.length === 0 ? 0 : Number(dispatch.length > 0) + Number(validator.length > 0);
   const ran = a.checked.filter((c) => c.ran > 0);
   const lines: Sentence[] = [];
   let resolve: ReturnType<typeof historyCallResolver> | undefined;
@@ -331,29 +336,42 @@ export function standingLines(
     case 'ask':
       lines.push(
         ctx.say(a.standing === 'ask' ? 'howSure.standing.ask' : 'howSure.standing.notSure', {
-          ...(a.standing === 'not-sure' && { vars: { n: n(a.reasons.length) } }),
+          ...(a.standing === 'not-sure' && {
+            vars: { n: n(a.reasons.length + accompanyingReasons) },
+          }),
           ...recordedAt(reasonPointers),
         }),
         ...a.reasons.flatMap((r) => {
           if (r.reason === 'call-not-completed') return callOutcomeLines(ctx, r);
           const unplaced = r.source.kind === 'calls' ? r.source.unplaced ?? [] : [];
           const count = COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length;
+          let template: TemplateId = REASON_LINES[r.reason];
+          if (r.reason === 'check-unreachable') {
+            if (conflict.length > 0) {
+              const causes = [
+                ['howSure.reason.conflictReadingsUnplaced', conflict],
+                ['howSure.reason.dispatchProofUnavailable', dispatch],
+                ['howSure.reason.checkUnreachable', validator],
+              ] as const;
+              return causes.flatMap(([id, witnesses]) =>
+                witnesses.length === 0
+                  ? []
+                  : [ctx.say(id, { ...recordedAt(pointersOf(witnesses)), item: true })],
+              );
+            }
+            if (dispatch.length > 0) template = 'howSure.reason.dispatchProofUnavailable';
+          }
           const line =
             unplaced.length > 0 && count === 0
               ? []
               : [
-                  ctx.say(
-                    r.reason === 'check-unreachable' && r.witness.some(dispatchProofWitness)
-                      ? 'howSure.reason.dispatchProofUnavailable'
-                      : REASON_LINES[r.reason],
-                    {
-                      ...(COUNTED.has(r.reason) && {
-                        vars: { n: n(count) },
-                      }),
-                      ...recordedAt(pointersOf(r.witness)),
-                      item: true,
-                    },
-                  ),
+                  ctx.say(template, {
+                    ...(COUNTED.has(r.reason) && {
+                      vars: { n: n(count) },
+                    }),
+                    ...recordedAt(pointersOf(r.witness)),
+                    item: true,
+                  }),
                 ];
           if (unplaced.length === 0) return line;
           resolve ??= historyCallResolver(readHistoryCalls(historyOf(ctx.view)));

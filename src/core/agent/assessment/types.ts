@@ -79,7 +79,8 @@ export type AssessmentPointer =
  *   failed this answer;
  * - `check-unreachable` — an armed check could not reach a verdict (the
  *   answer checks reported `unverified`, or a `failed` report also counts
- *   `unreachable` checks or names a `reason`);
+ *   `unreachable` checks or names a `reason`). Tool entry may be unproved,
+ *   or a legacy conflict of this turn may have readings the record cannot place;
  * - `argument-assumed` — a call of this turn ran on a value a tool's rule
  *   assumed (an `argument` row with `source: 'default'` — the library filled
  *   the declared default, or the model sent that same default), or a

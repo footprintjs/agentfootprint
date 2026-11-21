@@ -232,5 +232,16 @@ export function standingAdmission(
     nativeResult,
     entryIncomplete: entryEvidence?.complete === false,
     legacyEntry: entryEvidence?.legacy === true,
+    // A keyless record can predate occurrence and settlement evidence. Keep
+    // uncertainty separate from admitted result evidence, and leave records
+    // with delivery policy evidence on the existing strict path.
+    legacyConflictCheck:
+      !keyed &&
+      state.settledToolCalls === undefined &&
+      state.settledToolCallsComplete === undefined &&
+      state[ENTRY_EVIDENCE_KEY] === undefined &&
+      state[ENTRY_EVIDENCE_COMPLETE_KEY] === undefined &&
+      state.middlewareDecisions === undefined &&
+      [...calls.values()].every(({ markedWithheld }) => !markedWithheld),
   };
 }

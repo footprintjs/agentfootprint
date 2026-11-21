@@ -88,8 +88,8 @@ export const MAX_ROW_LIST_ENTRIES = 1_000;
 
 /**
  * A list on a row, as the fold reads it — THE one reader, shared by the
- * projection here and the fold's placement (`assess.ts` · `conflictOfThisTurn`,
- * `callsNamedBy`): `readOwnList` at `MAX_ROW_LIST_ENTRIES`. `undefined` when
+ * projection here and the fold's placement (`assessment/conflicts.ts` ·
+ * `conflictOfThisTurn`): `readOwnList` at `MAX_ROW_LIST_ENTRIES`. `undefined` when
  * the value is not a plain array.
  */
 export function rowList(value: unknown): OwnList | undefined {
