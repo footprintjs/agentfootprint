@@ -426,7 +426,7 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
         history: repeated,
         findingsLedger: [conflict([reading('old1'), reading('c2')], stamp)],
       });
-      expect(reasonsOf(a)).toEqual([]);
+      expect(reasonsOf(a)).toEqual(stamp === 2 ? ['check-unreachable'] : []);
     }
   });
 
@@ -447,12 +447,47 @@ describe('UNIT — conflict rows require returned readings for this turn', () =>
     { case: 'all unresolved', witnesses: [reading('missingA'), reading('missingB')] },
     { case: 'one earlier and one unresolved', witnesses: [reading('old1'), reading('missingB')] },
     { case: 'one current and one unresolved', witnesses: [reading('c2'), reading('missingB')] },
-  ])('$case cannot support standing with or without a turn stamp', ({ witnesses }) => {
-    for (const stamp of [undefined, 2]) {
-      const a = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, stamp)] });
-      expect(reasonsOf(a)).toEqual([]);
-      expect(a.standing).toBe('consistent');
+  ])('$case reports only uncertainty when the legacy row is stamped current', ({ witnesses }) => {
+    const unstamped = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses)] });
+    expect(unstamped.standing).toBe('consistent');
+    const current = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
+    if (witnesses.length === 0) {
+      expect(current.standing).toBe('consistent');
+    } else {
+      expect(current.standing).toBe('not-sure');
+      expect(current.reasons).toEqual([
+        expect.objectContaining({
+          reason: 'check-unreachable',
+          source: { kind: 'run' },
+        }),
+      ]);
     }
+  });
+
+  it('a sparse legacy row cannot supply a conflict or identify its missing witness', () => {
+    const witnesses = [reading('c2')];
+    witnesses.length = 2;
+    const standing = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
+    expect(standing.standing).toBe('not-sure');
+    expect(standing.reasons).toEqual([
+      expect.objectContaining({
+        reason: 'check-unreachable',
+        source: { kind: 'run' },
+      }),
+    ]);
+  });
+
+  it('keeps strict admission when the record has delivery policy or settlement evidence', () => {
+    const base = {
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading('c2'), reading('missing')], 2)],
+    };
+    for (const fields of [
+      { middlewareDecisions: [] },
+      { settledToolCalls: [], settledToolCallsComplete: true },
+    ])
+      expect(reasonsOf(run({ ...base, ...fields }))).not.toContain('check-unreachable');
   });
 
   it('missing and nonplain witness lists cannot support a conflict', () => {

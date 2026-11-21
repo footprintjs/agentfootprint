@@ -356,13 +356,23 @@ function readConflicts(
   state: Readonly<Record<string, unknown>>,
   places: CallPlaces,
   g: Gathered,
+  legacyConflictCheck: boolean,
 ): void {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'conflict') return;
-    if (conflictOfThisTurn(row, turn, places)) {
-      fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
+    if (!isRecord(row) || row.kind !== 'conflict' || !conflictOfThisTurn(row, turn, places)) return;
+    const witness = statePointer('findingsLedger', index, 'kind');
+    if (fire(g, 'sources-conflict', witness)) return;
+    if (!legacyConflictCheck || turn === undefined || row.turn !== turn) return;
+    const refs = rowList(row.witnesses);
+    if (
+      refs !== undefined &&
+      refs.unread === 0 &&
+      refs.entries.length >= 2 &&
+      refs.entries.some((ref) => callPlacement(ref, places) === undefined)
+    ) {
+      fire(g, 'check-unreachable', witness);
     }
   });
 }
@@ -773,7 +783,7 @@ export function foldState(
       fire(g, 'period-beyond-retention', statePointer('findingsLedger', index, 'refused'));
     }
   }
-  readConflicts(state, places, g);
+  readConflicts(state, places, g, !served && admission.legacyConflictCheck);
   readAnswerRows(state, g);
   const integrity = readIntegrityRows(state);
   for (const { reason, at } of integrity.fired) fire(g, reason, at);
