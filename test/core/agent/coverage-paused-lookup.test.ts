@@ -800,9 +800,9 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
 
 const REFERENCE = resolve(__dirname, 'reference/paused-lookup-no-absence.json');
 
-/** Expected-side clean14 metadata only; historical behavior/payload/order stay exact. */
-const nativeOwnershipKeys = (legacy: readonly string[], savedPause = false): string[] => {
-  const added = ['runIdentitySource', 'runSessionId', 'toolResourceOwner'];
+/** Expected-side recorded metadata; historical behavior, payload and order stay exact. */
+const recordedMetadataKeys = (legacy: readonly string[], savedPause = false): string[] => {
+  const added = ['runIdentitySource', 'runSessionId', 'sourceLinkServedRows', 'toolResourceOwner'];
   if (savedPause) added.push('servedToolParties');
   for (const key of added) expect(legacy).not.toContain(key);
   return [...legacy, ...added].sort();
@@ -882,8 +882,8 @@ describe('regression: a raise WITHOUT `absence` preserves the 9.113.0 record wit
       const expected = withTypedAnswerMark(withNativeResourceObservation(legacy));
       expect(record).toEqual({
         ...expected,
-        keysAtPause: nativeOwnershipKeys(legacy.keysAtPause, true),
-        keysAfterResume: nativeOwnershipKeys(legacy.keysAfterResume, true),
+        keysAtPause: recordedMetadataKeys(legacy.keysAtPause, true),
+        keysAfterResume: recordedMetadataKeys(legacy.keysAfterResume, true),
         history: withHistoryOccurrences(expected.history),
       });
     },
@@ -1025,7 +1025,7 @@ describe('regression: a malformed HAND raise fails as 9.113.0 failed, with or wi
         label,
         {
           ...record,
-          keys: nativeOwnershipKeys(record.keys),
+          keys: recordedMetadataKeys(record.keys),
           history: withHistoryOccurrences(record.history),
         },
       ]),

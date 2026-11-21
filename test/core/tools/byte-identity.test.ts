@@ -10,6 +10,12 @@
  * trace rows across 11 named cases, plus one returned-tool marker. Every served
  * view and all prior captures are unchanged.
  *
+ * The served history writer adds one value-free row and a native set/append
+ * trace entry at each proved call. Its own sidecar pins the exact ranges, verb
+ * and placement. The prior record and occurrence sidecar remain byte-for-byte.
+ * Use AF_TOOLS_REFERENCE=update-served-rows with explicit scenario names in
+ * AF_TOOLS_REFERENCE_CASES to capture only this sidecar.
+ *
  * Migration14: native component ownership has a named expected record baseline
  * for28scenarios; three retain direct historical equality. Old JSON is preserved.
  * The explicit delta includes seed identity/transport/owner writes and matching
@@ -620,6 +626,13 @@ import {
   withOccurrenceAdditions,
   type OccurrenceAddition,
 } from '../../helpers/occurrenceReference.js';
+import {
+  servedRowAdditions,
+  servedRowReferenceText,
+  withServedRowAdditions,
+  withoutServedRows,
+  type ServedRowAddition,
+} from './served-row-reference.js';
 import {
   assertNativeReadWindowMetadata,
   type NativeWindowAddition,
@@ -1653,6 +1666,7 @@ const DEFAULT_STANDING = JSON.parse(
 };
 const OCCURRENCE_REFERENCE_DIR = new URL('call-occurrence/', REFERENCE_DIR);
 const OCCURRENCE_REFERENCE = new URL('additions.json', OCCURRENCE_REFERENCE_DIR);
+const SERVED_ROW_REFERENCE = new URL('served-row-writer/served-row-additions.json', REFERENCE_DIR);
 const V15_NATIVE_REFERENCE_DIR = new URL('./reference/v15-native-cohort/', import.meta.url);
 const V15_NATIVE_CAPTURES = new Map(
   (
@@ -1732,6 +1746,7 @@ const referencePath = (name: string): URL => {
   );
 };
 const UPDATE = process.env.AF_TOOLS_REFERENCE === 'update';
+const UPDATE_SERVED_ROWS = process.env.AF_TOOLS_REFERENCE === 'update-served-rows';
 const UPDATE_CASES = new Set(
   (process.env.AF_TOOLS_REFERENCE_CASES ?? '').split(',').filter(Boolean),
 );
@@ -1753,11 +1768,27 @@ describe('byte-identity — exact whole-record contract for native component own
         ? readFileSync(OCCURRENCE_REFERENCE, 'utf8')
         : '{}';
       const prior = JSON.parse(captured) as Record<string, OccurrenceAddition[]>;
+      const servedRows = JSON.parse(
+        existsSync(SERVED_ROW_REFERENCE) ? readFileSync(SERVED_ROW_REFERENCE, 'utf8') : '{}',
+      ) as Record<string, ServedRowAddition[]>;
+      if ((UPDATE || UPDATE_SERVED_ROWS) && !UPDATE_CASES.has(name))
+        throw new Error(
+          `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
+        );
+      if (UPDATE_SERVED_ROWS) {
+        const additions = servedRowAdditions(observed);
+        const expected = withStandingEvidence(
+          withOccurrenceAdditions(reference, prior[name] ?? []),
+          name,
+        );
+        expect(observed).toEqual(withServedRowAdditions(expected, additions));
+        if (additions.length === 0) delete servedRows[name];
+        else servedRows[name] = additions;
+        writeFileSync(SERVED_ROW_REFERENCE, servedRowReferenceText(servedRows));
+        return;
+      }
+      const servedAdditions = servedRows[name] ?? [];
       if (UPDATE) {
-        if (!UPDATE_CASES.has(name))
-          throw new Error(
-            `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
-          );
         // Entry and settlement addresses are owned by the standing-evidence overlay.
         const additions = occurrenceAdditions(observed).filter(
           ([path]) =>
@@ -1767,9 +1798,8 @@ describe('byte-identity — exact whole-record contract for native component own
               (path[3] === 'enteredToolCalls' || path[3] === 'settledToolCalls')
             ),
         );
-        expect(observed).toEqual(
-          withStandingEvidence(withOccurrenceAdditions(reference, additions), name),
-        );
+        const expected = withStandingEvidence(withOccurrenceAdditions(reference, additions), name);
+        expect(observed).toEqual(withServedRowAdditions(expected, servedAdditions));
         if (additions.length === 0) return;
         const digest = (value: string) => createHash('sha256').update(value).digest('hex');
         mkdirSync(OCCURRENCE_REFERENCE_DIR, { recursive: true });
@@ -1784,7 +1814,7 @@ describe('byte-identity — exact whole-record contract for native component own
         withOccurrenceAdditions(reference, prior[name] ?? []),
         name,
       );
-      expect(observed).toEqual(expected);
+      expect(observed).toEqual(withServedRowAdditions(expected, servedAdditions));
 
       const current = await drive(Agent.create);
       if (additions) assertNativeReadWindowMetadata(current.snapshot, additions);
@@ -1793,7 +1823,7 @@ describe('byte-identity — exact whole-record contract for native component own
       if (fingerprint === undefined) {
         expect(currentProjection).toEqual(expected);
       } else {
-        const currentText = `${JSON.stringify(currentProjection, null, 2)}\n`;
+        const currentText = `${JSON.stringify(withoutServedRows(currentProjection), null, 2)}\n`;
         expect(createHash('sha256').update(currentText).digest('hex')).toBe(fingerprint);
       }
 
