@@ -36,6 +36,7 @@ export interface AgentRunValues extends RunnerCoreValues {
   resources?: ComponentResources;
   servingConversation?: string;
   hadAdmitted: boolean;
+  modelResponseCommitted: boolean;
   pauseOutcome?: RunnerPauseOutcome;
   pendingQuestion?: {
     readonly toolName?: string;
@@ -80,6 +81,7 @@ export function createAgentRunValues(options: {
 }): AgentRunValues {
   return {
     hadAdmitted: false,
+    modelResponseCommitted: false,
     integrityLedger: { current: undefined, ...(options.answerLayer && { answerLayer: true }) },
     consentOutstanding: new Map(),
     providerToolCache: { current: [] },

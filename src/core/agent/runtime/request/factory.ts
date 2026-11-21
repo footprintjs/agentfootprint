@@ -35,6 +35,9 @@ export interface RequestEnvironment {
 export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      onResponseCommitted: () => {
+        run.value.modelResponseCommitted = true;
+      },
       onReplayPrepared: (preparation) => {
         if (
           run.value.checkpointTracker !== undefined &&
