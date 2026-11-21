@@ -195,6 +195,16 @@ try {
 
 The browser consumes via `EventSource` and renders tokens into the UI as they arrive.
 
+### Bind a stream to one invocation
+
+Pass `start` to let `toSSE()` subscribe before it starts the run. The stream calls `start` once when iteration begins and watches the returned promise in either format. Return the invocation's promise from `start`, including when you use a block-bodied JavaScript callback. It sends the admitted frames in order even when the consumer reads them after the promise settles. The filter selects output independently of completion.
+
+<CodeFile path="examples/features/124-sse-start.ts" region="start-stream" title="Stream both steps and keep the final answer" />
+
+The captured promise gives you the invocation's value, pause checkpoint, or rejection. The stream adds no terminal frame. A pause settles the current invocation, so open a new stream with `start: () => runner.resume(checkpoint, answer)` to continue. Breaking out of the loop releases the subscription while the invocation continues.
+
+For a composition, `format: 'text'` with `start` is the transcript of admitted tokens in order, using the contents the record serves. When a member's redaction policy covers token text, the transcript shows `[REDACTED]` placeholders for the affected tokens. Read the composition's answer from the promise. An owning Agent's text still includes its authorized answer and any appended suffix. With an `on()`-only event source, give each stream the events of one invocation. Omit `start` to use the event-based closing rules above.
+
 ## When streaming isn't useful
 
 - **Cost-sensitive batch jobs** — `complete()` is one less per-call cost than `stream()` on most providers (negligibly).
