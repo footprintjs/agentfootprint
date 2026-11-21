@@ -6,4 +6,4 @@ title: AnswerNegatives
 
 > **AnswerNegatives** = `AnswerNegativesPayload`
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L48)
+Defined in: [src/core/agent/negativeClaims/delivery.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L51)

@@ -22,7 +22,6 @@ import {
   defineTool,
   isPaused,
   Parallel,
-  pauseHere,
   Sequence,
   type AgentOptions,
 } from '../../src/index.js';
@@ -33,7 +32,17 @@ import { runnerLive } from '../../src/core/runnerLive.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
 import type { MockReply } from '../../src/adapters/llm/MockProvider.js';
-import { readWithHeartbeat, specialistMemory } from '../helpers/hostingStreams.js';
+import {
+  approval,
+  call,
+  DRAFT,
+  mountReport,
+  readWithHeartbeat,
+  REPORT,
+  reportBuilder,
+  TURN_END,
+  WARNING,
+} from './fixtures/streamReport.js';
 
 const lookup = defineTool({
   name: 'lookup',
@@ -54,47 +63,12 @@ const archive = defineTool({
     }),
 });
 
-const approval = defineTool({
-  name: 'ask_approval',
-  description: 'Wait for approval.',
-  inputSchema: { type: 'object', properties: {} },
-  execute: () => pauseHere({ question: 'Approve?' }),
-});
-
-const pendingReport = defineTool({
-  name: 'pending_report',
-  description: 'Check whether the report is ready.',
-  inputSchema: { type: 'object', properties: {} },
-  execute: () => ({ content: 'Queued.', effects: [], status: 'pending' }),
-});
-
-const call = (name: string, id = 'c1') => ({ content: '', toolCalls: [{ id, name, args: {} }] });
-
-const REPORT = 'The report is ready.';
-const DRAFT = 'The draft is ready.';
-const WARNING = '\n\n---\n\nNot sure — a tool reported unfinished work.';
 const REPORT_CHUNKS = ['The ', 'report ', 'is ', 'ready.', WARNING];
 const DRAFT_CHUNKS = ['The ', 'draft ', 'is ', 'ready.'];
-const TURN_END = 'agentfootprint.agent.turn_end';
-
-function reportBuilder(
-  answer: string,
-  pause: boolean,
-  options: Pick<AgentOptions, 'redact' | 'observerDelivery' | 'reactMode'> = {},
-) {
-  const replies = [call('pending_report'), ...(pause ? [call('ask_approval', 'c2')] : []), answer];
-  return Agent.create({ provider: mock({ replies, chunkDelayMs: 0 }), model: 'm', ...options })
-    .tool(pendingReport)
-    .tool(approval)
-    .answerLayer({ standingLine: true });
-}
 
 function nestedReport(pause: boolean, observerDelivery?: AgentOptions['observerDelivery']) {
   const child = reportBuilder(DRAFT, pause).build();
-  const agent = reportBuilder(REPORT, false, { observerDelivery })
-    .memory(specialistMemory(child))
-    .build();
-  return { agent, child };
+  return { agent: mountReport(child, { observerDelivery }), child };
 }
 
 type Runnable = {

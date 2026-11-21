@@ -33,6 +33,10 @@ The event taxonomy:
 
 Every event arrives as an envelope `{ type, payload, meta }`. `e.payload` is typed by the event name you subscribed to; `e.meta` says where it came from (`runId`, `runtimeStageId`, `turnIndex`, `iterIndex`, `wallClockMs`, …). `.on()` returns an unsubscribe function, and `'agentfootprint.stream.*'` / `'*'` subscribe to a whole domain or to everything — see [Observability](doc:observability) for the full taxonomy.
 
+With `observerDelivery: 'deferred'`, the engine uses clone capture by default. If the engine can only deliver a summary, `getLastSnapshot()?.observerStats?.summarizedEmits` counts that native emit once. Queue overflow is accounted for separately in `drops`. With FootprintJS dev mode enabled, the first unexpected summary also logs a diagnostic. Explicit `capture: 'summary'` is for telemetry that uses summarized envelopes.
+
+For a plain tool result with a callback, inline and deferred reference listeners receive the original result, including the callback. Deferred clone listeners receive the closing event with the result's data fields and without its callable fields. Tool middleware receives the original result in every mode, and the model receives its usual serialized view.
+
 ### Token events follow the provider
 
 Without a delivery policy, token events follow the provider: a `stream()` provider emits text chunks, while a `complete()`-only provider emits the other lifecycle events without tokens. The same subscriber code works with either kind.
