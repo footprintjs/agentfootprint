@@ -51,7 +51,7 @@
  * quoted, rather than half-understood by a parser inventing a mini-language.
  *
  * Zone: HOST (it belongs to the file loader). Pure over strings all the same —
- * it reads no filesystem; `skillsFromDir.ts` hands it the parsed lines.
+ * it reads no filesystem; `skillsFromDir/frontmatter.ts` hands it the parsed lines.
  */
 
 import type { SkillGraphStep } from './skillGraph.js';
