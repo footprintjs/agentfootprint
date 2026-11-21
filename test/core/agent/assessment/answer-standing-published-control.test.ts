@@ -4,6 +4,7 @@ import { expect, it } from 'vitest';
 import { Agent, askHuman, defineTool, slidingWindow } from '../../../../src/index.js';
 import { mock } from '../../../../src/llm-providers.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
+import { legacyMessageInjectionLog } from '../../../helpers/legacyMessageInjectionLog.js';
 import { normalizeCallOccurrences } from '../../../helpers/normalizeCallOccurrences.js';
 import { servedRowAdditions, withoutServedRows } from '../../tools/served-row-reference.js';
 import { captureDigests } from './fixtures/answer-standing-af-15.0.1/capture.js';
@@ -47,7 +48,10 @@ it.each(['builder', 'options'] as const)(
       [34, 1, 'append', [[0, 3]]],
     ]);
     const { commitLog } = withoutServedRows({ commitLog: observed.commitLog });
-    const current = normalizeCallOccurrences({ ...observed, commitLog }) as typeof observed;
+    const current = normalizeCallOccurrences({
+      ...observed,
+      commitLog: legacyMessageInjectionLog(commitLog),
+    }) as typeof observed;
     expect(captureDigests(current)).toEqual({ ...published.capture, ...main.capture });
 
     // Verify the historical capture after reversing only the audited main additions.

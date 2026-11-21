@@ -87,7 +87,7 @@ interface InjectionRecord {
   slot: ContextSlot;          // WHERE — one of 3 slots
   source: ContextSource;      // FROM — rag / skill / memory / instructions / user / tool-result / custom
   asRole?: ContextRole;       // messages: system | user | assistant | tool
-  asRecency?: ContextRecency; // messages: latest | earlier
+  position?: number;          // messages: index in this composition
   sectionTag?: string;        // system-prompt: XML-ish section tag
   reason: string;             // WHY — human-readable justification
   retrievalScore?: number;    // WHY — numeric evidence
@@ -97,6 +97,10 @@ interface InjectionRecord {
   expiresAfter?: ContextLifetime;  // iteration | turn | run | persistent
 }
 ```
+
+Native message rows keep their position in the composition. The context event
+reports the last row as `latest` and every earlier row as `earlier`. Deriving
+the label when emitting an event keeps earlier rows stable when messages are appended.
 
 The `reason` + `source` + `score` fields turn "the LLM saw X" into "the LLM saw X because RAG retrieved it with score 0.92 from the customer-support index." That's the debugging gold context engineering requires.
 

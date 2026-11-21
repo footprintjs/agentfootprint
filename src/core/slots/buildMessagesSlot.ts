@@ -11,7 +11,7 @@
  * ── What this slot is, and is not ───────────────────────────────────
  * It is the OBSERVABILITY PROJECTION of the conversation: one
  * InjectionRecord per message, with the source, reason, role and
- * recency a consumer needs to see what the turn was made of. It is not
+ * position a consumer needs to see what the turn was made of. It is not
  * the wire. The request's message list comes from `scope.history`
  * directly (`stages/callLLM.ts`), because the projection flattens away
  * the LLM-protocol shape a provider needs — an assistant turn's
@@ -37,7 +37,7 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
-import type { ContextRecency, ContextRole, ContextSource } from '../../events/types.js';
+import type { ContextRole, ContextSource } from '../../events/types.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
@@ -123,7 +123,6 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
             : `conversation history [${i}]`,
           rawContent: m.content,
           asRole: m.role,
-          asRecency: (i === messages.length - 1 ? 'latest' : 'earlier') as ContextRecency,
           position: i,
           ...(by !== undefined && { sourceId: by.injectionId }),
           ...(by === undefined && m.toolCallId !== undefined && { sourceId: m.toolCallId }),

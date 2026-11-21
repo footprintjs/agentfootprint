@@ -157,10 +157,15 @@ export class ContextRecorder implements CombinedRecorder {
     const records = this.asInjectionArray(written.value);
     if (!records) return;
     const seen = this.seenInjections.get(slot) ?? new Set<string>();
-    for (const rec of records) {
+    for (const [index, rec] of records.entries()) {
       if (seen.has(rec.contentHash)) continue;
       seen.add(rec.contentHash);
-      this.emitInjected(written.keptOut ? structureOf(rec, INJECTION_STRUCTURE) : rec, event);
+      const payload =
+        slot === 'messages' ? withMessageRecency(rec, index === records.length - 1) : rec;
+      this.emitInjected(
+        written.keptOut ? structureOf(payload, INJECTION_STRUCTURE) : payload,
+        event,
+      );
     }
     this.seenInjections.set(slot, seen);
   }
@@ -216,8 +221,8 @@ export class ContextRecorder implements CombinedRecorder {
     // designed to carry exactly what ContextInjectedPayload needs, so we
     // copy through directly.
     //
-    // Redaction is never decided here. The record is the one the slot wrote
-    // (relayed when the policy selects its key — `written`), and the
+    // The slot write supplies the payload, with message recency projected
+    // from its original order. The configured key policy is relayed by `written`. The
     // dispatcher serves the event like every other: a field the policy names
     // (`rawContent`, `contentSummary`, …) at any depth of the payload is the
     // placeholder (`src/redaction/served.ts`). One rule, footprintjs's — and
@@ -290,6 +295,20 @@ export class ContextRecorder implements CombinedRecorder {
     }
     return value as readonly BudgetPressureRecord[];
   }
+}
+
+function withMessageRecency(record: InjectionRecord, latest: boolean): InjectionRecord {
+  // The public recorder also accepts custom rows with explicit recency or
+  // without a position. Native message rows always carry their position.
+  if (record.asRecency !== undefined || record.position === undefined) return record;
+
+  // Preserve the public event's field order while keeping the stored row
+  // stable as the conversation grows. Use the original array before deduplication.
+  const fields = Object.entries(record);
+  const positionIndex = fields.findIndex(([key]) => key === 'position');
+  if (positionIndex === -1) return record;
+  fields.splice(positionIndex, 0, ['asRecency', latest ? 'latest' : 'earlier']);
+  return Object.fromEntries(fields) as InjectionRecord;
 }
 
 /** A slot's write as the recorder derives events from it (`ContextRecorder · written`). */
