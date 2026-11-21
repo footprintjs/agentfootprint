@@ -32,7 +32,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Agent, defineTool, englishTimeReader, isInputPause, type Tool } from '../../src/index.js';
+import {
+  Agent,
+  defineTool,
+  englishTimeReader,
+  isInputPause,
+  type AgentOptions,
+  type Tool,
+} from '../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { TIME_LINE_SOURCE } from '../../src/core/agent/arguments/serve.js';
 import { servedAt } from '../../src/time-travel/servedView.js';
@@ -82,9 +89,18 @@ type Row = { kind: string } & Record<string, unknown>;
 const ofKind = (agent: { findings(): unknown }, kind: string): Row[] =>
   ((agent.findings() as Row[] | undefined) ?? []).filter((r) => r.kind === kind);
 
-function build(script: readonly Reply[], tools: readonly Tool[]) {
+function build(
+  script: readonly Reply[],
+  tools: readonly Tool[],
+  integrityPosture: AgentOptions['integrityPosture'] = 'observe',
+) {
   const s = scripted(script);
-  const agent = Agent.create({ provider: s.provider as never, model: 'mock', maxIterations: 6 })
+  const agent = Agent.create({
+    provider: s.provider as never,
+    model: 'mock',
+    maxIterations: 6,
+    integrityPosture,
+  })
     .tools(tools)
     .time({ zone: LA, reader: englishTimeReader() })
     .build();
@@ -163,6 +179,7 @@ describe('G1 — a reading waiting on its ZONE is open: an assume rule is asked,
     const { agent } = build(
       [call('c1', 'smb_records', { server: '10.0.0.1' }), answer('done')],
       [rangeTool(seen)],
+      'dev',
     );
     const zone = paused(
       await agent.run({

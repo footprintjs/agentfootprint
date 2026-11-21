@@ -875,7 +875,6 @@ export function buildCallLLMStage(
     // retries the same instruction. The prior committed value proves delivery.
     if (recoveryPiece !== undefined) scope.evidenceRecoveryUsed = true;
     const durationMs = Date.now() - startMs;
-
     scope.totalInputTokens = scope.totalInputTokens + response.usage.input;
     scope.totalOutputTokens = scope.totalOutputTokens + response.usage.output;
     // Cache reads as a cost (9.110.0) — VALUE-conditional: the key exists
@@ -907,6 +906,7 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
+    deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
     // Native candidates only, every call (so it is never stale): the stop reason the

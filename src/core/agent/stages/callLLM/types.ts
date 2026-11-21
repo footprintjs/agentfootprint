@@ -16,6 +16,8 @@ import type { OutputSchemaParser } from '../../../../answer-validation/outputSch
 import type { FindingsAnswerAsk, FindingsServeMode } from '../../findings/serve.js';
 
 export interface CallLLMStageDeps {
+  /** Mark the accepted model response on this native leg before checks run. */
+  readonly onResponseCommitted?: () => void;
   /** Preserve approved replay retirement for recovery before transport. */
   readonly onReplayPrepared?: LLMCallHooks['onReplayPrepared'];
   /** The LLM provider to invoke. */

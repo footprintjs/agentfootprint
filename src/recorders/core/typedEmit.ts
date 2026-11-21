@@ -11,7 +11,11 @@
 
 import { isDevMode } from 'footprintjs';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
-import { emitServed, markRootTurnEnd } from '../../redaction/runRedaction.js';
+import {
+  emitServed,
+  markRootTurnEnd,
+  scopeClonesObserverEmits,
+} from '../../redaction/runRedaction.js';
 
 /**
  * Minimal scope surface we need to emit — structurally compatible with
@@ -32,8 +36,11 @@ export interface EmitableScope {
  */
 const warnedUnclonable = new Set<string>();
 
-function devWarnIfUnclonable(type: string, payload: unknown): void {
+function devWarnIfUnclonable(scope: EmitableScope, type: string, payload: unknown): void {
   if (!isDevMode() || warnedUnclonable.has(type)) return;
+  // The native tool-end capture handles its served payload. Its bridge reports
+  // any actual delivery loss. Judging the raw result here would warn too early.
+  if (type === 'agentfootprint.stream.tool_end' && scopeClonesObserverEmits(scope)) return;
   try {
     structuredClone(payload);
   } catch {
@@ -78,8 +85,8 @@ export function typedEmit<K extends AgentfootprintEventType>(
   payload: AgentfootprintEventMap[K]['payload'],
   servedPayload?: AgentfootprintEventMap[K]['payload'],
 ): void {
-  devWarnIfUnclonable(type, payload);
-  if (servedPayload !== undefined) devWarnIfUnclonable(type, servedPayload);
+  devWarnIfUnclonable(scope, type, payload);
+  if (servedPayload !== undefined) devWarnIfUnclonable(scope, type, servedPayload);
   emitServed(scope, type, payload, servedPayload);
 }
 

@@ -83,22 +83,15 @@ export function assertIntegrityAlive(
 }
 
 /**
- * Did this run reach work a registered check should have seen?
- *
- * MEASURED, not asserted — and measured from a signal the integrity code
- * does not write. `llmLatestContent` is committed by the LLM stage's own
- * core path on every completed call, so its presence proves a call
- * happened; its absence proves the run died or paused before one, and a
- * checker that filed nothing THERE is not rot, it is a run that never got
- * started. Deriving this from the checks' own encounter counts would be
- * circular: an unhooked check would report "no work existed" and silence
- * the very alarm it should be tripping.
+ * Did this leg commit a model response the checkers should have seen?
+ * The LLM stage marks the leg before the checks run, including empty replies
+ * with zero usage. The native component creates fresh values for each leg.
+ * A seed or checkpoint can carry answer text into a leg that only asks the
+ * person another question. An independent flag also keeps a silent checker
+ * from hiding the model work the checker was expected to see.
  */
 export function integrityWorkExisted(invocation: RunnerInvocation<AgentRunValues>): boolean {
-  const state = invocation.view.snapshot()?.sharedState as
-    | { llmLatestContent?: unknown }
-    | undefined;
-  return state !== undefined && state.llmLatestContent !== undefined;
+  return invocation.value.modelResponseCommitted;
 }
 
 /**

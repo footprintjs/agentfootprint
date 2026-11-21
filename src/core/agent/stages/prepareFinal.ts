@@ -27,6 +27,7 @@
 
 import type { TypedScope } from 'footprintjs';
 import { emitTurnEnd, typedEmit } from '../../../recorders/core/typedEmit.js';
+import { deliveredNegativesOf } from '../negativeClaims/delivery.js';
 import type { AnswerAssessmentData } from '../assessment/compose.js';
 import {
   composeAnswerWithCoverage,
@@ -171,6 +172,7 @@ const captureTurnPayload = (
   // that finished normally emits the exact payload it always did.
   const cut = scope.stoppedEarly;
   const attached = SCRIPTS.get(scope);
+  const negatives = deliveredNegativesOf(scope, commitValidated);
   emitTurnEnd(scope, {
     turnIndex: 0,
     finalContent: scope.finalContent,
@@ -189,9 +191,7 @@ const captureTurnPayload = (
     // A typed answer's limits, beside it — the same value-conditional grammar:
     // a turn with nothing to carry emits the exact payload it always did.
     ...(answerCoverage !== undefined && { answerCoverage }),
-    ...(commitValidated &&
-      scope.answerValidation?.delivery !== undefined &&
-      scope.answerNegatives !== undefined && { answerNegatives: scope.answerNegatives }),
+    ...(negatives !== undefined && { answerNegatives: negatives }),
     // The answer layer's standing (honesty layer 4) — only on an agent that
     // armed it; every other turn emits the exact payload it always did.
     ...(answerAssessment !== undefined && { answerAssessment }),
