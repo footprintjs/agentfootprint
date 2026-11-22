@@ -117,8 +117,9 @@ use `readTimeAxis(meta)`, which returns absent, declared or malformed, and
 `describeTimeAxis(axis)`, which gives the one title wording ("hourly avg and max").
 For row arrays with an ISO axis and no declared zone, the built-in stores count offset-less
 values in the named column at mint. A positive count travels with the ticket as `naiveCount`.
-Malformed or missing times do not add to that count. A custom JSON encoder or accessor in the
-row or time column can change its saved value, so its dataset has no count. Older tickets omit it.
+The store captures the payload before the write yields. The count, size and optional digest
+describe those same bytes, including values produced by a JSON encoder or accessor.
+Malformed or missing times do not add to the count. Older tickets omit it.
 SQLite adds both metadata columns in place on older files. Custom stores can use the same time-axis classifier
 (`normaliseInstants(rows, axis).counts.naive`) when minting their own metadata.
 

@@ -491,7 +491,8 @@ A cut result names the tool and reports how many characters of the original reac
 The cap includes the truncation notice, so the retained text can be shorter than the configured cap.
 A result stored by reference carries a warning if no tool read that reference before the answer.
 For a staged dataset with a declared time column, the ticket and the answer report how many
-timestamps lack a zone when those values cannot be interpreted as instants.
+timestamps lack a zone when those values cannot be interpreted as instants. The count follows
+the saved rows even if the caller edits the original array while the write is pending.
 
 <CodeFile path="examples/features/123-answer-standing-default.ts" region="recorded-result-cut" title="A result cut before the model saw the final event" />
 

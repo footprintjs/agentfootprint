@@ -206,6 +206,44 @@ describe('recorded result limits in the delivered answer and saved replay', () =
     expect(run.text).toBe(answer);
   });
 
+  it.each([false, true])(
+    'live and saved standing describe the rows committed during a pending write (started in UTC: %s)',
+    async (startInUtc) => {
+      const local = '2026-11-21T03:22:04';
+      const utc = local + 'Z';
+      let storedTime: string | undefined;
+      const tool = defineTool({
+        name: 'application_events',
+        displayName: 'application events',
+        description: 'Store application timestamps and return their ticket.',
+        execute: async (_args, ctx) => {
+          const row = { timestamp: startInUtc ? utc : local };
+          const pending = ctx.artifacts.put({
+            kind: 'dataset/log',
+            mediaType: 'application/json',
+            data: [row],
+            timeAxis: { column: 'timestamp', unit: 'iso' },
+          });
+          row.timestamp = startInUtc ? local : utc;
+          const ticket = await pending;
+          const stored = await ctx.artifacts.get(ticket.ref);
+          storedTime = (stored?.data as (typeof row)[])[0]?.timestamp;
+          return { ticket };
+        },
+      });
+      const run = await replay(tool, { artifacts: inMemoryArtifacts() });
+      expect(storedTime).toBe(startInUtc ? utc : local);
+      const unzoned = storedTime === local;
+      const { ticket } = JSON.parse(run.handed);
+      expect(ticket.timeAxis).toEqual({ column: 'timestamp', unit: 'iso' });
+      expect(ticket.naiveCount).toBe(unzoned ? 1 : undefined);
+      expect(run.assessment.reasons).toEqual(unzoned ? ['times-without-zone'] : []);
+      expect(run.assessment.standing).toBe(unzoned ? 'not-sure' : 'not-assessed');
+      if (unzoned) expect(run.text).toContain('1 time in application events has no zone');
+      else expect(run.text).toBe(answer);
+    },
+  );
+
   it('keeps the zone warning when the native dataset ticket survived a cut', async () => {
     const run = await replay(dataset(false, 'after-ticket'), {
       artifacts: inMemoryArtifacts(),

@@ -232,7 +232,7 @@ describe('the axis on the time layer (T2) — integration', () => {
     );
   });
 
-  it('counts only stored time cells and omits a count for dynamically serialized rows', async () => {
+  it('counts the time cells in stored JSON, including serialized accessor values', async () => {
     const store = inMemoryArtifacts();
     const put = async (data: unknown[]) =>
       (
@@ -261,7 +261,7 @@ describe('the axis on the time layer (T2) — integration', () => {
           },
         ])
       ).naiveCount,
-    ).toBeUndefined();
+    ).toBe(2);
   });
 
   it('a stored dataset read back and viewed: UTC points, the stored bytes unchanged', async () => {

@@ -32,7 +32,7 @@ import {
   computeArtifactDigest,
   decodeArtifactData,
   type EncodedPayload,
-  encodeArtifactData,
+  envelopeOfSnapshot,
 } from './payload.js';
 import {
   assertRetention,
@@ -314,7 +314,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
       open('store an artifact');
       const ns = identityNamespace(scope);
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         (parent) => liveRow(ns, parent, readMetadataRow) !== undefined,
         retention,
@@ -337,7 +337,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
       const plan = planRetention(rows, meta.bytes, retention, at);
       if (plan.refusal !== undefined) throw new InvalidArtifactError(plan.refusal);
       for (const swept of plan.swept) remove.run(ns, swept.ref);
-      const payload = encodeArtifactData(input.data);
+      const envelope = envelopeOfSnapshot(payload);
       insert.run(
         ns,
         meta.ref,
@@ -353,8 +353,8 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
         at,
         meta.timeAxis !== undefined ? JSON.stringify(meta.timeAxis) : null,
         meta.naiveCount ?? null,
-        payload.shape,
-        payload.value,
+        envelope.shape,
+        envelope.value,
       );
       return { meta, swept: plan.swept };
     },
