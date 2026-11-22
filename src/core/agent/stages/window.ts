@@ -386,7 +386,7 @@ export function buildWindowStage(
         result.rebase.keptTailCount,
         result.rebase.insertedAtMs,
       );
-      commitWindowResultDrops(scope, result.evictions, result.window, strategy.name);
+      commitWindowResultDrops(scope, result.window, strategy.name);
       scope.history = result.window;
     }
 

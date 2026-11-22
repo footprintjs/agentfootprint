@@ -105,10 +105,14 @@ function build(shape: Shape, evicts: boolean | WindowDoor) {
   const replies = shape.replies ?? [call('lookup', 'c1'), call('filler', 'c2'), DONE];
   const historyAtRequest: string[][] = [];
   const summaryAtRequest: boolean[] = [];
+  const providerInputs: string[] = [];
   let i = 0;
   const provider = mock({
     chunkDelayMs: 0,
     respond(request) {
+      const { signal, ...input } = request;
+      void signal;
+      providerInputs.push(JSON.stringify(input));
       historyAtRequest.push(
         request.messages.flatMap((entry) =>
           entry.role === 'tool' && entry.toolCallId !== undefined ? [entry.toolCallId] : [],
@@ -150,7 +154,7 @@ function build(shape: Shape, evicts: boolean | WindowDoor) {
   }
   if (shape.rule !== undefined) builder.toolMiddleware(shape.rule);
   if (shape.memory !== undefined) builder.memory(shape.memory);
-  return { agent: builder.build(), historyAtRequest, summaryAtRequest };
+  return { agent: builder.build(), historyAtRequest, summaryAtRequest, providerInputs };
 }
 
 async function read(agent: Agent, drive = () => agent.run(QUESTION), mounted = false) {
@@ -360,6 +364,41 @@ it('does not count a strategy report for a result kept in the applied window', a
     await kept.agent.shutdown();
   }
 });
+
+it.each(['dynamic', 'dynamic-grouped'] as const)(
+  'discloses an applied removal with no strategy eviction in %s',
+  async (reactMode) => {
+    const strategy = slidingWindow({ keepRecentTurns: 1 });
+    const control = build({ options: { reactMode }, windowStrategy: strategy }, true);
+    const omitted = build(
+      {
+        options: { reactMode },
+        windowStrategy: {
+          name: strategy.name,
+          async plan(input) {
+            const result = await strategy.plan(input);
+            return result?.window === undefined ? result : { ...result, evictions: [] };
+          },
+        },
+      },
+      true,
+    );
+    try {
+      const normal = await read(control.agent);
+      const missing = await read(omitted.agent);
+      expect(omitted.providerInputs).toEqual(control.providerInputs);
+      expect(omitted.historyAtRequest.at(-1)).toEqual(['c2']);
+      expect(normal.event.reasons).toEqual([DROP_REASON]);
+      expect(missing.event.reasons).toEqual([DROP_REASON]);
+      expect(missing.saved.reasons).toEqual(normal.saved.reasons);
+      expect(missing.returned).toBe(normal.returned);
+      expect(missing.returned).toContain(dropClause(1));
+    } finally {
+      await control.agent.shutdown();
+      await omitted.agent.shutdown();
+    }
+  },
+);
 
 describe.each(windowDoors)('standing through %s', (door) => {
   it.each(doorCases)('retains the verdict for $name', async (fixture) => {
