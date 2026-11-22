@@ -309,18 +309,20 @@ describe("a 'refusal' or 'max_tokens' stop", () => {
       .outputSchema(Verdict)
       .build();
     await expect(agent.runTyped({ message: 'q' })).resolves.toEqual({ status: 'ok' });
-    expect('llmLatestStopReason' in state(agent)).toBe(false);
+    expect(state(agent).llmLatestStopReason).toBe('refusal');
   });
 });
 
 describe('review round 1', () => {
-  type Node = { stageReads?: Record<string, unknown>; next?: Node; children?: Node[] };
-  /** Every key any stage tracked a read of — an absent key read still lands here. */
-  const readKeysOf = (agent: Agent): Set<string> => {
+  type Node = { id?: string; stageReads?: Record<string, unknown>; next?: Node; children?: Node[] };
+  /** Native format enforcement is Route's job; the answer layer reads the fact separately. */
+  const routeReadKeysOf = (agent: Agent): Set<string> => {
     const keys = new Set<string>();
     const walk = (node: Node | undefined): void => {
       if (!node) return;
-      for (const key of Object.keys(node.stageReads ?? {})) keys.add(key);
+      if (node.id === 'sf-route') {
+        for (const key of Object.keys(node.stageReads ?? {})) keys.add(key);
+      }
       for (const child of node.children ?? []) walk(child);
       walk(node.next);
     };
@@ -328,7 +330,7 @@ describe('review round 1', () => {
     return keys;
   };
 
-  it('no agent without the native strategy reads the stop key (byte law); a native one does', async () => {
+  it('Route reads the committed stop key only when the response used native output', async () => {
     const instruct = Agent.create({ provider: mock({ reply: '{"status":"ok"}' }), model: 'mock' })
       .outputSchema(Verdict)
       .build();
@@ -345,9 +347,9 @@ describe('review round 1', () => {
       .outputSchema(Verdict, { strategy: 'native', jsonSchema: SCHEMA })
       .build();
     for (const agent of [instruct, validated, native]) await agent.run({ message: 'q' });
-    expect(readKeysOf(instruct).has('llmLatestStopReason')).toBe(false);
-    expect(readKeysOf(validated).has('llmLatestStopReason')).toBe(false);
-    expect(readKeysOf(native).has('llmLatestStopReason')).toBe(true);
+    expect(routeReadKeysOf(instruct).has('llmLatestStopReason')).toBe(false);
+    expect(routeReadKeysOf(validated).has('llmLatestStopReason')).toBe(false);
+    expect(routeReadKeysOf(native).has('llmLatestStopReason')).toBe(true);
   });
 
   it('the receipt names the format the port carried — type and a run-salted schema hash', async () => {

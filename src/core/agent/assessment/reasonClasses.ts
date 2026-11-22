@@ -31,6 +31,7 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'derived-from-reading': 'turn',
   'script-unmatched': 'turn',
   'stopped-early': 'turn',
+  'answer-output-limit': 'turn',
   'steps-unfinished': 'turn',
   'step-skipped': 'turn',
   'negative-prose-unverified': 'turn',

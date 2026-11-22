@@ -21,12 +21,10 @@ export interface ResponseState {
   // merge object members. Replay evidence must cross as one atomic value.
   llmLatestReplay?: readonly [NonNullable<LLMMessage['replay']>];
   /**
-   * The latest response's stop reason — written ONLY by an agent with
-   * native output or an auto native candidate, on every call, and read by
-   * the Route decider: a refusal or truncation stop does not hold the
-   * structured-output format, so that answer fails its attempt by name
-   * (`outputEnforcement.ts · nativeStopFailure`). Cleared on auto's instruction
-   * fallback; absent when no native format candidate was built.
+   * The latest accepted provider response's stop reason, cleared when a local
+   * fallback supplies the answer. The answer layer can report an output limit.
+   * For native output, Route also rejects a refusal or truncation by name
+   * (`outputEnforcement.ts · nativeStopFailure`), even when the answer parses.
    */
   llmLatestStopReason?: string;
   /** For a native format candidate: whether this answer used native structured

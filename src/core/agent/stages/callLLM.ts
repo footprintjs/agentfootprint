@@ -842,20 +842,16 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
-          ...((deps.findings === true ||
-            deps.outputFormat !== undefined ||
-            serving !== undefined) && {
-            prepareFallback: (request: LLMRequest) => {
-              serving?.discard();
-              const witness = deps.findings === true ? capture(request) : undefined;
-              return () => {
-                // A callback may return arbitrary text; it did not inherit
-                // native generation from the provider response it replaces.
-                localFallback = true;
-                acceptedFindingsRequest = witness;
-              };
-            },
-          }),
+          prepareFallback: (request: LLMRequest) => {
+            serving?.discard();
+            const witness = deps.findings === true ? capture(request) : undefined;
+            return () => {
+              // A local answer does not inherit the replaced provider's stop reason
+              // or native generation. The callback may return arbitrary text.
+              localFallback = true;
+              acceptedFindingsRequest = witness;
+            };
+          },
           ...(deps.outputFormat !== undefined && {
             isTerminalRefusal: (response: LLMResponse) =>
               answeredBy.native && response.stopReason === 'refusal',
@@ -909,12 +905,10 @@ export function buildCallLLMStage(
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
-    // Native candidates only, every call (so it is never stale): the stop reason the
-    // Route decider judges a constrained answer by — a 'refusal' or
-    // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
-    // nativeStopFailure). Absent on every other agent, so their bytes are unchanged.
+    // The accepted provider response owns this fact, never an earlier draft.
+    // Route still judges it only for a native response (nativeStopFailure).
+    scope.llmLatestStopReason = localFallback ? undefined : response.stopReason;
     if (deps.outputFormat !== undefined) {
-      scope.llmLatestStopReason = nativeOutput ? response.stopReason : undefined;
       scope.llmLatestNativeOutput = nativeOutput;
     }
     // A response owns its replay evidence, never the previous response's.

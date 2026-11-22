@@ -387,6 +387,13 @@ when it has a `displayName` and reports whether the call was refused or failed.
 
 An admitted tool result that reports `partial` or `pending` adds `work-not-finished` when the call has no recorded failure or refusal. The same retry rule clears this warning when a later call completes with the same recorded tool and arguments. A tool's plain result text supplies no status for this check.
 
+When the final provider response stops at the model's output limit,
+`answer-output-limit` makes the standing `not-sure`. An earlier draft's stop has
+no effect on a later answer. A saved recording with no committed stop reason
+does not supply this warning.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-output-limit" title="A model stops at its output limit" />
+
 With the answer layer armed, `step-skipped` counts declared steps the procedure advanced past after a skip. Under the hold policy the request stays on the record and the step stays required.
 
 Other reasons include a tool declaring ground it did not check (`coverage-gap`)
