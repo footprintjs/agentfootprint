@@ -14,7 +14,7 @@
  *          (`allow(args, why, { from })`). The layer checked the value BEFORE
  *          the chain ran, so a rewrite supersedes the layer's row: the value
  *          the call ran with is the rewrite's. Two readers must agree on that —
- *          `assessment/assess.ts` · `readArgumentVerdicts` (the standing) and
+ *          `assessment/inputs/stage.ts` · `readArgumentVerdicts` (the standing) and
  *          `arguments/serve/assumed.ts` · `assumedBlockOf` (the "Assumed" block) —
  *          and both load through `import()` (the fold on first use, the block
  *          under the arm), so neither can own the reading for the other: it
