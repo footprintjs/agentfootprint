@@ -62,6 +62,7 @@
  * a list — one call the record cannot name. Each is counted in `unnamed`.
  */
 
+import type { AttemptCategory } from 'footprintjs';
 import { readOwnList, type OwnList } from '../../../lib/boundedJson.js';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import {
@@ -112,6 +113,7 @@ interface CallRef {
   readonly unlandedKey?: string;
   readonly count?: number;
   readonly outcome?: NonNullable<ReturnType<typeof assessmentCallOutcome>>;
+  readonly category?: AttemptCategory;
   readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
 }
 
@@ -132,6 +134,7 @@ export interface SourceRead {
   readonly historyCalls?: readonly HistoryCall[];
   readonly turnBegins?: number;
   readonly declarationAddresses?: ReadonlyMap<number, number> | undefined;
+  readonly failureCategories?: ReadonlyMap<number, AttemptCategory>;
 }
 
 const arrayEntry = (rows: unknown, index: number): unknown =>
@@ -255,6 +258,7 @@ function callsOfWitness(
         : served === undefined
         ? unfinishedCallStatus(call.message)
         : served.reportedStatus;
+    const category = outcome === 'failed' ? read.failureCategories?.get(call.index) : undefined;
     const id = str(call.providerId);
     const name =
       str(call.toolName) ??
@@ -267,6 +271,7 @@ function callsOfWitness(
         ...(id !== undefined && { id }),
         ...(name !== undefined && { name }),
         ...(outcome !== undefined && { outcome }),
+        ...(category !== undefined && { category }),
         ...(reportedStatus !== undefined && { reportedStatus }),
       },
     ];
@@ -411,6 +416,7 @@ export function reasonSourceOf(
         toolCallId,
         toolName,
         ...(ref.outcome !== undefined && { outcome: ref.outcome }),
+        ...(ref.category !== undefined && { category: ref.category }),
         ...(ref.reportedStatus !== undefined && { reportedStatus: ref.reportedStatus }),
       });
     }

@@ -1,8 +1,10 @@
+import type { AttemptCategory } from 'footprintjs';
 import { readOwnList } from '../../../lib/boundedJson.js';
 import { readCallOccurrenceKey, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import type { PeriodVerdict } from '../../../semantics/coverage/period.js';
 import { MAX_ENTERED_TOOL_CALLS } from '../honesty/enteredToolCalls.js';
 import { isRecord } from './record.js';
+import { readToolFailureCategory } from './execution.js';
 
 /** The bounded, content-free result of settling one admitted call occurrence. */
 export interface RecordedToolSettlement {
@@ -10,6 +12,7 @@ export interface RecordedToolSettlement {
   readonly execution: 'not-entered' | 'threw' | 'returned' | 'returned-unserved';
   readonly delivery?: 'native' | 'rewritten' | 'withheld';
   readonly outcome?: 'refused' | 'failed' | 'settled';
+  readonly failureCategory?: AttemptCategory;
   readonly reportedStatus?: 'partial' | 'pending';
   readonly empty?: 'declared-absent' | 'empty-undeclared';
   readonly gap?: true;
@@ -58,11 +61,17 @@ function settlementRow(value: unknown): RecordedToolSettlement | undefined {
     !optional(periods, rewrittenPeriod)
   )
     return undefined;
+  // A failed read of this optional field must not erase the legacy settlement.
+  const failureCategory =
+    execution === 'threw' && outcome === 'failed'
+      ? readToolFailureCategory(Object.getOwnPropertyDescriptor(value, 'failureCategory')?.value)
+      : undefined;
   return {
     callOccurrenceKey,
     execution,
     ...(delivery !== undefined && { delivery }),
     ...(outcome !== undefined && { outcome }),
+    ...(failureCategory !== undefined && { failureCategory }),
     ...(reportedStatus !== undefined && { reportedStatus }),
     ...(empty !== undefined && { empty }),
     ...(gap === true && { gap }),

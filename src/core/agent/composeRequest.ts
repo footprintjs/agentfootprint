@@ -114,7 +114,7 @@ export function contributingPieces<T extends SystemPromptPiece>(
  * settled call's sentence; the marker is that fact for the library's readers),
  * `toolResultOrigin`, the findings-only producer notice origin,
  * `toolResultDisposition`, the after-tool rule's disposition,
- * `toolResultExecution`, the tool's entry and return, and
+ * `toolResultExecution`, the tool's entry and return, `toolFailureCategory`, and
  * `toolChars`, the tool-bytes boundary on a result the inputs layer
  * annotated (honesty layer 2 — the model reads the whole content; the boundary
  * tells the library's readers where the tool's own words end), and
@@ -201,6 +201,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
     toolResultOrigin: _resultOrigin,
     toolResultDisposition: _resultDisposition,
     toolResultExecution: _resultExecution,
+    toolFailureCategory: _failureCategory,
     toolChars: _toolBytes,
     foldedExempt: _lineage,
     answersAsk: _typedAnswer,
@@ -215,6 +216,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
   void _resultOrigin;
   void _resultDisposition;
   void _resultExecution;
+  void _failureCategory;
   void _toolBytes;
   void _lineage;
   void _typedAnswer;
@@ -242,6 +244,7 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.toolResultOrigin !== undefined ||
     message.toolResultDisposition !== undefined ||
     message.toolResultExecution !== undefined ||
+    'toolFailureCategory' in message ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
     message.answersAsk !== undefined ||

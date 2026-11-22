@@ -140,8 +140,11 @@ export async function assessAnswerStage(
   ) {
     return;
   }
-  const assessed = assessLive({ sharedState: record }, undefined, (history) =>
-    retainedStateValue(scope, 'history', history),
+  const assessed = assessLive(
+    { sharedState: record },
+    undefined,
+    (history) => retainedStateValue(scope, 'history', history),
+    (key, value) => retainedStateValue(scope, key, value),
   );
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);
@@ -168,6 +171,7 @@ export async function assessAnswerStage(
     assumed,
     rewrittenBehind(assessed),
     displayNames.size > 0 ||
+      assessed.reasons.some((reason) => reason.detail !== undefined) ||
       data.reasons.some(
         (reason) =>
           isLibraryLimit(reason) ||
@@ -177,10 +181,12 @@ export async function assessAnswerStage(
           reason === 'value-contingent' ||
           reason === 'step-skipped',
       )
-      ? standingFactsOf(assessed, displayNames, record)
+      ? standingFactsOf(assessed, displayNames, record, () =>
+          retainedStateValue(scope, 'settledToolCalls', record.settledToolCalls),
+        )
       : undefined,
   );
   // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a
-  // reader rebuilds the very line (`answer-account/account.ts` · `appendedStandingLine`).
+  // reader rebuilds the very line (`answer-account/facts/standing.ts` · `appendedStandingLine`).
   if (displayNames.size > 0) scope.answerStandingNames = Object.fromEntries(displayNames);
 }

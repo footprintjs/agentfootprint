@@ -12,6 +12,7 @@
  * the audit trail. Tools WITHOUT `checkIn` are byte-identical.
  */
 
+import { AttemptTimeoutError } from 'footprintjs';
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/core/Agent.js';
 import { defineTool } from '../../../src/tools/tools.js';
@@ -322,6 +323,31 @@ describe('check-in — decision', () => {
     expect(after).toHaveBeenCalledBefore(exec);
     expect(exec).toHaveBeenCalledTimes(1);
     expect(exec).toHaveBeenCalledWith({ amount: 500 }, expect.anything());
+  });
+
+  it('records the engine category when an approved call throws on resume', async () => {
+    const agent = Agent.create({
+      provider: refundThenFinal('I reviewed the refund.'),
+      model: 'mock',
+    })
+      .tool(
+        refundTool('always', () => {
+          throw new AttemptTimeoutError(1, 1000);
+        }),
+      )
+      .build();
+    const paused = await agent.run({ message: 'refund' });
+    if (!isCheckInPause(paused)) throw new Error('expected a check-in pause');
+
+    const final = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
+
+    expect(final).toContain('timed out');
+    expect((await agent.assessment())?.reasons).toContainEqual(
+      expect.objectContaining({ reason: 'call-not-completed', detail: { category: 'timeout' } }),
+    );
   });
 
   it('DECLINE does NOT execute; the model sees "declined by human: <note>"', async () => {

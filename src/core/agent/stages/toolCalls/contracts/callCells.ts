@@ -33,6 +33,7 @@ export interface CallExecution extends PendingDatasetLimits {
   denied: boolean;
   executed: boolean;
   toolResultExecution?: LLMMessage['toolResultExecution'];
+  toolFailureCategory?: LLMMessage['toolFailureCategory'];
   submittedProgram: unknown;
   executeThrew: boolean;
   ranCode: CodeRunFacts | undefined;

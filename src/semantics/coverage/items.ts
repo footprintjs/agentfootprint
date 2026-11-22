@@ -13,7 +13,7 @@
 
 import { isDevMode } from 'footprintjs';
 
-import { plainLineProblem } from '../../lib/plainLine.js';
+import { plainLineOf, plainLineProblem } from '../../lib/plainLine.js';
 
 import { refusal } from './refusal.js';
 import type { CoverageDeclaration, CoverageInput, CoverageItem } from './types.js';
@@ -37,6 +37,22 @@ export type CoverageKind = NonNullable<CoverageItem['kind']>;
 
 /** The longest `short` a report prints on one line. */
 export const MAX_SHORT_CHARS = 80;
+
+/** Bound the complete advice that can ride a coverage row before redaction. */
+export const MAX_RECORDED_ADVICE_CHARS = MAX_SHORT_CHARS * 4;
+
+/** The short one-line form of a longer declaration, including the omission mark. */
+export function coverageWordFragment(text: string): string | undefined {
+  const scanLimit = MAX_RECORDED_ADVICE_CHARS;
+  if (text.length <= MAX_SHORT_CHARS) return plainLineOf(text, MAX_SHORT_CHARS) || undefined;
+  const clipped = text.length > scanLimit;
+  // Four UTF-16 code units per output character leaves room for formatting
+  // that the plain-line reader removes. Do not split a pair at the scan limit.
+  const prefix = clipped ? text.slice(0, scanLimit).replace(/[\uD800-\uDBFF]$/u, '') : text;
+  const words = plainLineOf(prefix, MAX_SHORT_CHARS - 1);
+  if (words === '') return undefined;
+  return clipped && !words.endsWith('…') ? `${words}…` : words;
+}
 
 /** The closed `kind` vocabulary, tied to {@link CoverageKind}: a member the
  *  union gains, or one listed here it does not have, fails to compile. */

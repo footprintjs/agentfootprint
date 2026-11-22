@@ -7,9 +7,16 @@ import {
 } from '../../core/agent/recordedCalls.js';
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
+import { assumedLinesFor } from '../../core/agent/arguments/serve.js';
 import { foldState } from '../../core/agent/assessment/assess.js';
 import {
+  assessmentDataFrom,
+  assumedValuesSourceOf,
+  reasonUsesToolWords,
+  recordedStandingLinesOf,
+  rewrittenBehind,
   settledSiblingWitness,
+  standingFactsOf,
   standingNamesFrom,
   unreachableWitnessGroups,
 } from '../../core/agent/assessment/compose.js';
@@ -80,6 +87,41 @@ export function recordedStandingWitnesses(
       assessed.reasons.some((r) => r.reason === reason && r.witness.length > 0),
   );
   return complete ? assessed : undefined;
+}
+
+/**
+ * Standing-line candidates rebuilt from the record. The exact match below
+ * selects the wording held by this recorded answer.
+ *
+ * The line opens with the owner's plain words ("Not sure — ", "Known — "),
+ * which a model can write too, so an opening proves nothing. The record does:
+ * `turn_end.answerAssessment` exists only on a run whose answer layer folded
+ * the standing, and the line is ONE function of that projection
+ * (`assessment/compose.ts` · `standingLineOf`) — plus, when a value was
+ * assumed, of the rows `assumedValuesSourceOf` reads and the fold's rewrite
+ * witness. The account claims only the exact line in its appended position.
+ *
+ * The fold supplies the witnesses and `turn_end.standingLineNames` supplies names.
+ * The account leaves the line unclaimed when required committed state or the
+ * complete recorded display names are unavailable.
+ */
+export function appendedStandingLine(end: ViewEvent, view: RecordingView): readonly string[] {
+  const data = assessmentDataFrom(end.payload.answerAssessment);
+  if (data === undefined) return [];
+  const displayNames = recordedStandingNames(end, view);
+  if (displayNames === null) return [];
+  const needsWitnesses = data.reasons.some((reason) => WITNESSED_REASONS.has(reason));
+  const plain =
+    displayNames === undefined && !needsWitnesses ? recordedStandingLinesOf(data, [], false) : [];
+  if (plain.length > 0 && !data.reasons.some(reasonUsesToolWords)) return plain;
+  const assessed = recordedStandingWitnesses(view, data.reasons);
+  const { state } = view;
+  if (assessed === undefined || state === undefined) return plain;
+  const source = assumedValuesSourceOf(assessed, state);
+  const assumed =
+    source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
+  const facts = standingFactsOf(assessed, displayNames ?? new Map(), view.stateAsRecorded);
+  return recordedStandingLinesOf(data, assumed, rewrittenBehind(assessed), facts);
 }
 
 /** The account's standing fact: the owner's word, or "not recorded" when no committed state is. */
