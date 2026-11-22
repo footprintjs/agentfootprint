@@ -32,8 +32,10 @@ provider hooks still carry request observations and close when the invocation
 settles.
 
 `liveChunks.ts` emits an attempt's thinking and visible text in provider order.
-It uses the served-event policy and withholds live chunks when the call protects
-draft output. The call stage still owns the terminal response and cancellation.
+It applies the served-event redaction policy. Calls that protect draft output
+may opt in to classified provider summaries through `AgentOptions`. The answer
+policy still owns draft text delivery. The call stage owns the terminal response
+and cancellation.
 
 ## Dispatch lifetime
 
