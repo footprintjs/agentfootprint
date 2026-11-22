@@ -141,6 +141,9 @@ export const TOOL_BATCH_FRAME_PREFIX = '[Tool batch refusal';
 
 export const FINDINGS_DATA_FRAME_PREFIX = '[AgentFootprint findings DATA v1]';
 
+/** Request-only feedback that cannot change a native tool turn's signed system prompt. */
+export const NATIVE_RECOVERY_FRAME_PREFIX = '[AgentFootprint internal recovery feedback.';
+
 /**
  * Every opening this library puts on a `role: 'user'` message it wrote itself.
  *
@@ -171,6 +174,7 @@ export const LIBRARY_AUTHORED_PREFIXES: readonly string[] = Object.freeze([
   STAGED_DATA_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
   TOOL_BATCH_FRAME_PREFIX,
+  NATIVE_RECOVERY_FRAME_PREFIX,
 ]);
 
 /** True when this user-role message opens with a frame this library authored. */

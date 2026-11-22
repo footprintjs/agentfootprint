@@ -35,38 +35,68 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, checkInApproved, defineTool, isCheckInPause } from '../../src/index.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { prepareAnthropicReplay } from '../../src/adapters/llm/anthropicThinkingReplay.js';
-import type { AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
+import type { CacheStrategy } from '../../src/cache/types.js';
+import { RunCheckpointError, type AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
 import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
+import { recordRun } from '../../src/doors/observe.js';
+import { receiptAt, servedAt } from '../../src/time-travel/servedView.js';
 
 /** The models whose table row sets `thinkingPrefixBinding` (anthropicModels.ts). */
 const BOUND = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'];
 
 type Block = Record<string, unknown> & { type: string };
-type Body = { messages: { role: string; content: string | Block[] }[] };
+type Body = {
+  messages: { role: string; content: string | Block[] }[];
+  tools?: readonly { readonly name: string }[];
+};
+type ScriptReply =
+  | 'tool'
+  | 'text'
+  | 'outage'
+  | {
+      readonly text?: string;
+      readonly toolUse?: true;
+      readonly toolInput?: Readonly<Record<string, unknown>>;
+      readonly stopReason?: 'max_tokens';
+    };
 
-/** A stub SDK client: keeps every body; each reply thinks (signature `sig-<n>`), then a tool or text. */
-function scriptedClient(model: string, bodies: Body[], script: readonly ('tool' | 'text')[]) {
+/** A stub SDK client: keeps every body and can sign each scripted reply as `sig-<n>`. */
+function scriptedClient(
+  model: string,
+  bodies: Body[],
+  script: readonly ScriptReply[],
+  signed = true,
+) {
   let n = 0;
   const reply = (params: Body) => {
     bodies.push(JSON.parse(JSON.stringify(params)) as Body);
     const step = script[Math.min(n, script.length - 1)];
     n += 1;
-    const content: Block[] = [
-      { type: 'thinking', thinking: `reasoning ${n}`, signature: `sig-${n}` },
-      step === 'tool'
-        ? { type: 'tool_use', id: `toolu_${n}`, name: 'lookup', input: { key: `k${n}` } }
-        : { type: 'text', text: `answer ${n}` },
-    ];
+    if (step === 'outage') throw new Error('offline fixture transport unavailable');
+    const detail = typeof step === 'object' ? step : undefined;
+    const useTool = step === 'tool' || detail?.toolUse === true || detail?.toolInput !== undefined;
+    const text = step === 'text' ? `answer ${n}` : detail?.text;
+    const content: Block[] = signed
+      ? [{ type: 'thinking', thinking: `reasoning ${n}`, signature: `sig-${n}` }]
+      : [];
+    if (text !== undefined) content.push({ type: 'text', text });
+    if (useTool)
+      content.push({
+        type: 'tool_use',
+        id: `toolu_${n}`,
+        name: 'lookup',
+        input: detail?.toolInput ?? { key: `k${n}` },
+      });
     return {
       id: `msg_${n}`,
       type: 'message',
       role: 'assistant',
       model,
       content,
-      stop_reason: step === 'tool' ? 'tool_use' : 'end_turn',
+      stop_reason: useTool ? 'tool_use' : detail?.stopReason ?? 'end_turn',
       usage: { input_tokens: 10, output_tokens: 5 },
     };
   };
@@ -127,7 +157,7 @@ const lookup = defineTool<{ key: string }, string>({
   execute: async ({ key }) => `value of ${key}`,
 });
 
-function setup(model: string, mode: 'stream' | 'complete', script: readonly ('tool' | 'text')[]) {
+function setup(model: string, mode: 'stream' | 'complete', script: readonly ScriptReply[]) {
   const bodies: Body[] = [];
   const real = anthropic({ _client: scriptedClient(model, bodies, script) as never });
   // `complete` mode: the same adapter without `stream`, so the agent calls `complete`.
@@ -142,14 +172,465 @@ function setup(model: string, mode: 'stream' | 'complete', script: readonly ('to
   return { agent, bodies };
 }
 
-/** Every thinking signature the body replays, in wire order. */
-function replayedSignatures(body: Body): string[] {
+function wireBlocks(body: Body): Block[] {
   return body.messages.flatMap((m) =>
-    typeof m.content === 'string'
-      ? []
-      : m.content.filter((b) => b.type === 'thinking').map((b) => String(b.signature)),
+    typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content,
   );
 }
+
+/** Every thinking signature the body replays, in wire order. */
+function replayedSignatures(body: Body): string[] {
+  return wireBlocks(body)
+    .filter((block) => block.type === 'thinking')
+    .map((block) => String(block.signature));
+}
+
+describe('signed tool turns with native context features', () => {
+  const model = 'claude-sonnet-5-5';
+
+  it.each([false, true])(
+    'finishes the evidence guard revision after a signed tool call (findings: %s)',
+    async (findings) => {
+      const bodies: Body[] = [];
+      const corrected = 'The lookup returned a value.';
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, [
+          'tool',
+          { text: 'The lookup found 98765 objects.' },
+          { text: corrected },
+        ]) as never,
+      });
+      const builder = Agent.create({ provider, model, maxIterations: 5 })
+        .system('Answer from the lookup result.')
+        .tool(lookup)
+        .namesAndNumbersFromEvidence({ posture: 'guard' });
+      if (findings)
+        builder.inputsLayer().findings({ answerAsk: 'quote-facts', argumentSources: true });
+      const agent = builder.build();
+      const actions: string[] = [];
+      agent.on('agentfootprint.agent.evidence_checked', (event) => {
+        actions.push(event.payload.action);
+      });
+
+      try {
+        expect(await agent.run({ message: 'What did the lookup return?' })).toBe(corrected);
+        expect(actions).toEqual(['revision-asked', 'grounded']);
+        expect(bodies).toHaveLength(3);
+        expect(replayedSignatures(bodies[1]!)).toEqual(['sig-1']);
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it.each(['verified end', 'unknown end', 'protected end'] as const)(
+    'keeps enforcing evidence revisions tools-off after a %s',
+    async (end) => {
+      const bodies: Body[] = [];
+      const rejected = '{"count":98765}';
+      const corrected = '{"count":12345}';
+      const lookups: string[] = [];
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, [
+          'tool',
+          { text: rejected, ...(end === 'unknown end' && { stopReason: 'max_tokens' as const }) },
+          { text: corrected, toolUse: true },
+        ]) as never,
+      });
+      const agent = Agent.create({
+        provider,
+        model,
+        maxIterations: 5,
+        ...(end === 'protected end' && {
+          redact: { keys: ['llmLatestContent', 'evidenceRecovery', 'systemPromptText'] },
+        }),
+      })
+        .system('Use the lookup tool and answer from its result.')
+        .thinking({ budget: 2048 })
+        .tool({
+          ...lookup,
+          execute: async ({ key }) => {
+            lookups.push(key);
+            return 'The lookup found 12345 objects.';
+          },
+        })
+        .outputSchema({
+          parse(value: unknown): { count: number } {
+            if (
+              !value ||
+              typeof value !== 'object' ||
+              !('count' in value) ||
+              typeof value.count !== 'number'
+            )
+              throw new Error('Expected a numeric count.');
+            return { count: value.count };
+          },
+        })
+        .namesAndNumbersFromEvidence({ posture: 'guard' })
+        .answerValidation<{ count: number }>({
+          id: 'lookup-count',
+          version: '1',
+          mode: 'enforce',
+          agentChecks: ['names-and-numbers'],
+          validate: () => ({ checks: [{ id: 'lookup-count', disposition: 'checked-pass' }] }),
+        })
+        .build();
+      const actions: string[] = [];
+      const recording = recordRun(agent);
+      const capturedContext: unknown[] = [];
+      agent.on('agentfootprint.context.recorded', (event) => capturedContext.push(event.payload));
+      agent.on('agentfootprint.agent.evidence_checked', (event) => {
+        actions.push(event.payload.action);
+      });
+
+      try {
+        const run = agent.run({ message: 'How many objects did the lookup find?' });
+        if (end === 'unknown end') {
+          await expect(run).rejects.toMatchObject({
+            code: 'UNSAFE_THINKING_REPLAY',
+            reason: 'prefix-changed',
+          });
+          expect(bodies).toHaveLength(2);
+          expect(lookups).toEqual(['k1']);
+          return;
+        }
+        expect(await run).toBe(corrected);
+        expect(actions).toEqual(['revision-asked', 'grounded']);
+        expect(bodies).toHaveLength(3);
+        expect(replayedSignatures(bodies[1]!)).toEqual(['sig-1']);
+        expect(bodies[0]!.tools?.map((tool) => tool.name)).toContain('lookup');
+        expect(bodies[1]!.tools?.map((tool) => tool.name)).toContain('lookup');
+        expect(bodies[2]!.tools ?? []).toEqual([]);
+        expect(lookups).toEqual(['k1']);
+        const assistantHistory = agent
+          .checkpoint()!
+          .history.filter((turn) => turn.role === 'assistant');
+        expect(assistantHistory.map((turn) => turn.content)).not.toContain(rejected);
+        expect(receiptAt(agent.getLastSnapshot(), 3)?.messages.requestOnly).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ role: 'assistant', reason: 'native-turn-end' }),
+          ]),
+        );
+        const gap = servedAt(agent.getLastSnapshot(), 3)?.gaps.find(
+          (entry) => entry.gap === 'thinking-replay',
+        );
+        expect(gap?.fields).toContain('messages.requestOnly');
+        expect(gap?.why).toContain('cannot be reconstructed');
+        if (end === 'protected end') {
+          expect(JSON.stringify(recording.toRecording())).not.toContain(rejected);
+          expect(JSON.stringify(capturedContext)).not.toContain(rejected);
+        }
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it.each([false, true])('serves a later findings classification (signed: %s)', async (signed) => {
+    const bodies: Body[] = [];
+    const deliveredArgs: { key: string }[] = [];
+    const resolvedModel = signed ? model : 'claude-3-5-haiku-20241022';
+    const firstInput = { key: 'k1', _findings: { basis: 'direct' } };
+    const secondInput = {
+      key: 'k2',
+      _findings: { basis: 'direct', previous: [{ toolCallId: 'toolu_1', standing: 'noise' }] },
+    };
+    const provider = anthropic({
+      _client: scriptedClient(
+        resolvedModel,
+        bodies,
+        [{ toolInput: firstInput }, { toolInput: secondInput }, 'text'],
+        signed,
+      ) as never,
+    });
+    const builder = Agent.create({ provider, model: resolvedModel, maxIterations: 5 })
+      .system('Use the lookup tool to answer.')
+      .tool({
+        ...lookup,
+        execute: async (args) => {
+          deliveredArgs.push(args);
+          return `value of ${args.key}`;
+        },
+      })
+      .inputsLayer()
+      .findings({ answerAsk: 'quote-facts', argumentSources: true });
+    if (signed) builder.thinking({ budget: 2048 });
+    const agent = builder.build();
+
+    try {
+      expect(await agent.run({ message: 'What are k1 and k2?' })).toBe('answer 3');
+      expect(bodies).toHaveLength(3);
+      expect(replayedSignatures(bodies[1]!)).toEqual(signed ? ['sig-1'] : []);
+      expect(replayedSignatures(bodies[2]!)).toEqual(signed ? ['sig-1', 'sig-2'] : []);
+      expect(deliveredArgs).toEqual([{ key: 'k1' }, { key: 'k2' }]);
+
+      const second = wireBlocks(bodies[1]!);
+      const third = wireBlocks(bodies[2]!);
+      const rawInputs = (blocks: Block[]) =>
+        blocks
+          .filter((block) => block.type === 'tool_use')
+          .map((block) => JSON.stringify(block.input));
+      expect(rawInputs(second)).toEqual([JSON.stringify(firstInput)]);
+      expect(rawInputs(third)).toEqual([JSON.stringify(firstInput), JSON.stringify(secondInput)]);
+      const firstResult = (blocks: Block[]) =>
+        blocks.find((block) => block.type === 'tool_result' && block.tool_use_id === 'toolu_1')
+          ?.content;
+      expect(firstResult(second)).toBe('value of k1');
+      expect(firstResult(third)).toBe(
+        signed ? 'value of k1' : '{"collapsed":true,"standing":"noise","toolCallId":"toolu_1"}',
+      );
+
+      const dataPrefix = '[AgentFootprint findings DATA v1]\n';
+      const frame = third
+        .map((block) => block.text)
+        .filter((text) => typeof text === 'string' && text.startsWith(dataPrefix))
+        .at(-1);
+      if (typeof frame !== 'string')
+        throw new Error('Expected findings DATA on the third request.');
+      expect(JSON.parse(frame.slice(dataPrefix.length))).toMatchObject({
+        data: { noise: ['toolu_1'] },
+      });
+      expect(
+        agent.checkpoint()!.history.find((turn) => turn.toolCallId === 'toolu_1')?.content,
+      ).toBe('value of k1');
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
+  it('refuses to reconstruct a signed prefix after a host changes request messages', async () => {
+    const bodies: Body[] = [];
+    const provider = anthropic({
+      _client: scriptedClient(model, bodies, ['tool', 'text']) as never,
+    });
+    const rewritten = 'The cache strategy rewrote the request.';
+    const cacheStrategy: CacheStrategy = {
+      name: 'prefix-rewrite',
+      prepareRequest: async (request) => ({
+        request: {
+          ...request,
+          messages: request.messages.map((message, index) =>
+            index === 0 ? { ...message, content: rewritten } : message,
+          ),
+        },
+        markersApplied: [],
+      }),
+      extractMetrics: () => ({ kind: 'notApplicable', reason: 'fixture' }),
+    };
+    const agent = Agent.create({ provider, model, cacheStrategy, maxIterations: 5 })
+      .system('Use the lookup tool to answer.')
+      .tool(lookup)
+      .inputsLayer()
+      .findings({ answerAsk: 'quote-facts', argumentSources: true })
+      .thinking({ budget: 2048 })
+      .build();
+    try {
+      await expect(agent.run({ message: 'What is k1?' })).rejects.toMatchObject({
+        code: 'UNSAFE_THINKING_REPLAY',
+        reason: 'prefix-changed',
+      });
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]!.messages[0]!.content).toBe(rewritten);
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
+  it('replays the signed tool call made after an evidence revision starts a new turn', async () => {
+    const bodies: Body[] = [];
+    const lookups: string[] = [];
+    const rejected = 'The lookup found 98765 objects.';
+    const corrected = 'The lookup found 12345 objects.';
+    const provider = anthropic({
+      _client: scriptedClient(model, bodies, [
+        'tool',
+        { text: rejected },
+        'tool',
+        { text: corrected },
+      ]) as never,
+    });
+    const agent = Agent.create({ provider, model, maxIterations: 5 })
+      .system('Use the lookup tool to answer.')
+      .tool({
+        ...lookup,
+        execute: async ({ key }) => {
+          lookups.push(key);
+          return key === 'k3' ? corrected : 'The count was not available yet.';
+        },
+      })
+      .thinking({ budget: 2048 })
+      .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .build();
+    const actions: string[] = [];
+    agent.on('agentfootprint.agent.evidence_checked', (event) => {
+      actions.push(event.payload.action);
+    });
+
+    try {
+      expect(await agent.run({ message: 'How many objects did the lookup find?' })).toBe(corrected);
+      expect(actions).toEqual(['revision-asked', 'grounded']);
+      expect(lookups).toEqual(['k1', 'k3']);
+      expect(bodies).toHaveLength(4);
+      expect(replayedSignatures(bodies[1]!)).toEqual(['sig-1']);
+      expect(replayedSignatures(bodies[3]!)).toContain('sig-3');
+      const assistantHistory = agent
+        .checkpoint()!
+        .history.filter((turn) => turn.role === 'assistant');
+      expect(assistantHistory.map((turn) => turn.content)).not.toContain(rejected);
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
+  it.each([false, true])(
+    'keeps findings across native pause and JSON reload (protected: %s)',
+    async (protectedHistory) => {
+      const bodies: Body[] = [];
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, ['tool', 'text']) as never,
+      });
+      const heldLookup = defineTool<{ key: string }, string>({
+        name: 'lookup',
+        description: 'Look a key up in the reference table.',
+        inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] },
+        checkIn: 'always',
+        execute: async ({ key }) => `value of ${key}`,
+      });
+      const agent = Agent.create({
+        provider,
+        model,
+        maxIterations: 5,
+        ...(protectedHistory && { redact: { keys: ['history', 'findingsLedger'] } }),
+      })
+        .system('Use the lookup tool to answer.')
+        .tool(heldLookup)
+        .inputsLayer()
+        .findings({ answerAsk: 'quote-facts', argumentSources: true })
+        .build();
+      try {
+        const paused = await agent.run({ message: 'Look up the object.' });
+        if (!isCheckInPause(paused)) throw new Error('Expected a native check-in');
+        const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
+        const answer = await agent.resume(
+          checkpoint,
+          checkInApproved({ request: paused.checkIn, by: 'fixture' }),
+        );
+        expect(answer).toBe('answer 2');
+        expect(replayedSignatures(bodies[1]!)).toEqual(['sig-1']);
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
+  it.each([false, true])(
+    'restores signed findings after a transport failure and JSON checkpoint reload (protected: %s)',
+    async (protectedHistory) => {
+      const bodies: Body[] = [];
+      const lookups: string[] = [];
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, ['tool', 'outage', 'text']) as never,
+      });
+      const buildAgent = () =>
+        Agent.create({
+          provider,
+          model,
+          maxIterations: 5,
+          ...(protectedHistory && { redact: { keys: ['history', 'findingsLedger'] } }),
+        })
+          .system('Use the lookup result to answer.')
+          .tool({
+            ...lookup,
+            execute: async ({ key }) => {
+              lookups.push(key);
+              return `value of ${key}`;
+            },
+          })
+          .inputsLayer()
+          .findings({ answerAsk: 'quote-facts', argumentSources: true })
+          .build();
+      const agent = buildAgent();
+      let checkpoint: AgentRunCheckpoint;
+      try {
+        const failure = await agent
+          .run({ message: 'Look up the object.' })
+          .catch((error: unknown) => error);
+        if (!(failure instanceof RunCheckpointError))
+          throw new Error('Expected a recoverable provider error');
+        checkpoint = JSON.parse(JSON.stringify(failure.checkpoint)) as AgentRunCheckpoint;
+        expect(checkpoint.history.find((entry) => entry.toolCallId === 'toolu_1')?.content).toBe(
+          'value of k1',
+        );
+        expect(lookups).toEqual(['k1']);
+        expect(bodies).toHaveLength(2);
+        if (protectedHistory) {
+          const snapshot = agent.getLastSnapshot();
+          expect(snapshot).toBeDefined();
+          expect(JSON.stringify(snapshot)).not.toContain('[AgentFootprint findings DATA v1]');
+        }
+      } finally {
+        await agent.shutdown();
+      }
+
+      const resumed = buildAgent();
+      try {
+        const frame = checkpoint.requestReplay?.[0];
+        if (frame === undefined || !('id' in frame))
+          throw new Error('Expected a signed replay frame.');
+        await expect(
+          resumed.resumeOnError({ ...checkpoint, requestReplay: { frames: [frame] } }),
+        ).rejects.toThrow(TypeError);
+        await expect(
+          resumed.resumeOnError({
+            ...checkpoint,
+            requestReplay: [{ ...frame, id: 'a-different-provider-response' }],
+          }),
+        ).rejects.toThrow(TypeError);
+        expect(lookups).toEqual(['k1']);
+        expect(bodies).toHaveLength(2);
+
+        expect(await resumed.resumeOnError(checkpoint)).toBe('answer 3');
+        expect(lookups).toEqual(['k1']);
+        expect(bodies).toHaveLength(3);
+        expect(replayedSignatures(bodies[2]!)).toEqual(['sig-1']);
+        const resultOnResume = wireBlocks(bodies[2]!).find(
+          (block) => block.type === 'tool_result' && block.tool_use_id === 'toolu_1',
+        );
+        expect(resultOnResume?.content).toBe('value of k1');
+      } finally {
+        await resumed.shutdown();
+      }
+    },
+  );
+
+  it('appends guard feedback when the native provider did not report completion', async () => {
+    const bodies: Body[] = [];
+    const provider = anthropic({
+      _client: scriptedClient(model, bodies, [
+        'tool',
+        { text: 'I found 98765 objects.', stopReason: 'max_tokens' },
+        { text: 'I can report the lookup result.' },
+      ]) as never,
+    });
+    const agent = Agent.create({ provider, model, maxIterations: 5 })
+      .system('Use the lookup tool to answer.')
+      .tool(lookup)
+      .namesAndNumbersFromEvidence({ posture: 'guard' })
+      .build();
+    try {
+      expect(await agent.run({ message: 'How many objects did the lookup find?' })).toBe(
+        'I can report the lookup result.',
+      );
+      expect(bodies).toHaveLength(3);
+      expect(replayedSignatures(bodies[2]!)).toEqual(['sig-1']);
+      expect(JSON.stringify(bodies[2]!.messages.at(-1))).toContain(
+        'AgentFootprint internal recovery feedback',
+      );
+    } finally {
+      await agent.shutdown();
+    }
+  });
+});
 
 describe.each(['stream', 'complete'] as const)(
   'saved thinking under default caching — %s (r3-59-adapters-llm-1)',
