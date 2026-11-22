@@ -345,6 +345,7 @@ export function decisionsShapes() {
     }),
 
     'agentfootprint.artifacts.minted': eventShape<'agentfootprint.artifacts.minted'>({
+      naiveCount: num,
       ref: str,
       kind: str,
       mediaType: str,

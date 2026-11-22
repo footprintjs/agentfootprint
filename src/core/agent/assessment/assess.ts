@@ -35,10 +35,8 @@
  * this turn — one that names one of those calls, or one stamped with this turn
  * whose readings the record does not all place in earlier turns
  * (`conflictOfThisTurn`; the ledger IS carried, so rows about earlier turns'
- * calls are left out), and the
- * answer's own rows (`unsupportedValues`,
- * `stoppedEarly`, `answerValidation`). "Rests on" is every call of the turn: it
- * may over-report, it never hides.
+ * calls are left out), and the answer's own rows (`unsupportedValues`, `stoppedEarly`,
+ * `answerValidation`). "Rests on" includes every call of the turn.
  *
  * ## How the turn ended
  *
@@ -52,6 +50,7 @@ import { callIndexOf, isRecord, str } from './recordValues.js';
 import { recoveredCallOutcomes, turnResults } from './turnResults.js';
 import { argumentRows, waitingArgumentIteration, type ArgumentRowRead } from './argumentRows.js';
 import { rowsAtProblem } from '../emptiness.js';
+import { libraryResultReasons } from './results/library-did/stage.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
@@ -657,6 +656,7 @@ export function foldState(
       fire(g, 'check-unreachable', statePointer('findingsLedger', row.index, 'argument'));
     }
   }
+  for (const { reason, witness } of libraryResultReasons(state)) fire(g, reason, witness);
   readCoverageRows(coverage, g);
   readTurnCalls(reads, coverage, resultOpportunities, g);
   readContingentRows(state, places, g);

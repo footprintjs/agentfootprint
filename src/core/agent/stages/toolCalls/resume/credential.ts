@@ -1,3 +1,4 @@
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
@@ -174,7 +175,8 @@ export function buildResumeCredential(
         scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let consentResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
-      const consentToolChars = consentResultStr.length;
+      const servedToolText = consentResultStr;
+      const consentToolChars = servedToolText.length;
       if (deps.negativeClaimsArmed === true)
         consentResultStr = serveNegativeHandle(
           scope,
@@ -282,6 +284,19 @@ export function buildResumeCredential(
         entered: dispatched.executed === true,
         seen: scriptSeen,
       });
+      recordServedLimits(
+        scope,
+        { toolName, toolCallId, ...occurrence },
+        scriptSeen.toolResultExecution === 'returned' &&
+          consentSettled.ran &&
+          consentSettled.clean &&
+          !dispatched.halt &&
+          !sourceHalt,
+        toolResultDisposition,
+        consentCapped.cut,
+        scriptSeen,
+        servedToolText,
+      );
       links.emitToolEnd(
         scope,
         toolName,

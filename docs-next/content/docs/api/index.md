@@ -602,6 +602,7 @@ title: agentfootprint
 - [SwarmOptions](/docs/api/type-aliases/SwarmOptions)
 - [TeardownReason](/docs/api/type-aliases/TeardownReason)
 - [TeardownScope](/docs/api/type-aliases/TeardownScope)
+- [ThinkingDeltaKind](/docs/api/type-aliases/ThinkingDeltaKind)
 - [TimeAnswerProblem](/docs/api/type-aliases/TimeAnswerProblem)
 - [TimeAskMessageKey](/docs/api/type-aliases/TimeAskMessageKey)
 - [TimeAskMessages](/docs/api/type-aliases/TimeAskMessages)

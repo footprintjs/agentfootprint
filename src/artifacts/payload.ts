@@ -35,7 +35,10 @@ const textDecoder = new TextDecoder();
  */
 export function canonicalPayloadBytes(data: unknown): Uint8Array {
   if (data instanceof Uint8Array) return data;
-  if (typeof data === 'string') return textEncoder.encode(data);
+  return textEncoder.encode(typeof data === 'string' ? data : serializeArtifactJson(data));
+}
+
+function serializeArtifactJson(data: unknown): string {
   let serialized: string;
   try {
     // footprintjs's own encoder (9.26.0): the same bytes as JSON.stringify,
@@ -58,7 +61,7 @@ export function canonicalPayloadBytes(data: unknown): Uint8Array {
         `Uint8Array, or a JSON-serializable value.`,
     );
   }
-  return textEncoder.encode(serialized);
+  return serialized;
 }
 
 /** Payload size in bytes — UTF-8 for text/JSON, byteLength for binary. */
@@ -73,6 +76,22 @@ export function measureArtifactBytes(data: unknown): number {
  * store that guessed would hand back a different value than it was given.
  */
 export type PayloadShape = 'text' | 'binary' | 'json';
+
+/** One owned representation for a pending write. Text is retained for envelope stores. */
+export type ArtifactPayloadSnapshot =
+  | { readonly shape: 'binary'; readonly bytes: Uint8Array }
+  | {
+      readonly shape: 'text' | 'json';
+      readonly text: string;
+      readonly bytes: Uint8Array;
+    };
+
+export function snapshotArtifactPayload(data: unknown): ArtifactPayloadSnapshot {
+  if (data instanceof Uint8Array) return { shape: 'binary', bytes: new Uint8Array(data) };
+  const isText = typeof data === 'string';
+  const text = isText ? data : serializeArtifactJson(data);
+  return { shape: isText ? 'text' : 'json', text, bytes: textEncoder.encode(text) };
+}
 
 /** The shape a payload will be stored under. Total: everything that is not a
  *  string or a `Uint8Array` rides as JSON (and is refused at measure/encode if
@@ -109,7 +128,11 @@ export async function computeArtifactDigest(data: unknown): Promise<string> {
   const bytes = canonicalPayloadBytes(data);
   // `subtle.digest` wants an ArrayBuffer-backed view; copy defensively so a
   // Uint8Array over a SharedArrayBuffer cannot reach it.
-  const buffer = new Uint8Array(bytes).buffer;
+  return digestArtifactBuffer(new Uint8Array(bytes).buffer);
+}
+
+/** The snapshot owns this entire buffer, including when the caller passed a subarray. */
+export async function digestArtifactBuffer(buffer: ArrayBuffer): Promise<string> {
   const hash = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', buffer));
   let hex = '';
   for (const b of hash) hex += b.toString(16).padStart(2, '0');
@@ -134,10 +157,13 @@ export interface EncodedPayload {
 
 /** Encode for durable storage. Validates exactly as `measure` does. */
 export function encodeArtifactData(data: unknown): EncodedPayload {
-  if (data instanceof Uint8Array) return { shape: 'binary', value: toBase64(data) };
-  if (typeof data === 'string') return { shape: 'text', value: data };
-  // canonicalPayloadBytes carries the refusal for unserializable values.
-  return { shape: 'json', value: textDecoder.decode(canonicalPayloadBytes(data)) };
+  return envelopeOfSnapshot(snapshotArtifactPayload(data));
+}
+
+export function envelopeOfSnapshot(snapshot: ArtifactPayloadSnapshot): EncodedPayload {
+  return snapshot.shape === 'binary'
+    ? { shape: 'binary', value: toBase64(snapshot.bytes) }
+    : { shape: snapshot.shape, value: snapshot.text };
 }
 
 /** Decode what {@link encodeArtifactData} wrote. Total over its own output;

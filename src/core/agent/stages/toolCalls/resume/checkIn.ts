@@ -1,3 +1,4 @@
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
@@ -238,7 +239,8 @@ export function buildResumeCheckIn(
         scope.$break(`policy-halt: ${sourceHalt.reason}`);
       let decisionResultStr =
         typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
-      const decisionToolChars = decisionResultStr.length;
+      const servedToolText = decisionResultStr;
+      const decisionToolChars = servedToolText.length;
       if (deps.negativeClaimsArmed === true)
         decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
       // How the call settled — read by the step and by the message's `outcome`.
@@ -334,6 +336,15 @@ export function buildResumeCheckIn(
         entered: toolRan,
         seen: scriptSeen,
       });
+      recordServedLimits(
+        scope,
+        { toolName, toolCallId, ...occurrence },
+        scriptSeen.toolResultExecution === 'returned' && stepToolRan && !resumedHalt && !sourceHalt,
+        toolResultDisposition,
+        decisionCapped.cut,
+        scriptSeen,
+        servedToolText,
+      );
       links.emitToolEnd(
         scope,
         toolName,

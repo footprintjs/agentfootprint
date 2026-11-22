@@ -256,7 +256,7 @@ it.each(SEEDS)(
         const account = accountForAnswer(recording);
         // New templates advance the vocabulary for unmatched evidence and withheld results.
         // Compare every old sentence and pointer against the pinned version-18 account.
-        expect(account.templates).toEqual({ set: 'answer-account', version: 22 });
+        expect(account.templates).toEqual({ set: 'answer-account', version: 23 });
         const owners = GAP_CLAUSES[seed]?.[captures.length];
         const { limitsBlock } = account.facts;
         // The exact warning and reason detail are asserted before projecting the

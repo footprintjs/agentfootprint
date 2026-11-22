@@ -308,6 +308,113 @@ const sqliteAvailable = await (async (): Promise<boolean> => {
 for (const harness of HARNESSES) {
   const on = harness === sqliteHarness && !sqliteAvailable ? describe.skip : describe;
   on(`ArtifactStore conformance — ${harness.name}`, () => {
+    it.each([false, true])(
+      'the ticket describes the stored rows after a pending write (digest %s)',
+      async (digest) => {
+        const store = await harness.createStore();
+        const scope = { conversationId: 'time-axis-snapshot' };
+        const local = '2026-11-21T03:22:04';
+        const utc = local + 'Z';
+        const row = { timestamp: local };
+        try {
+          const pending = store.put(scope, {
+            kind: 'dataset/log',
+            mediaType: 'application/json',
+            timeAxis: { column: 'timestamp', unit: 'iso' },
+            data: [row],
+            ...(digest && { digest: 'sha-256' as const }),
+          });
+          row.timestamp = utc;
+          const { meta } = await pending;
+          const stored = await store.get(scope, meta.ref);
+          expect(stored?.data).toEqual([{ timestamp: local }]);
+          const bytes = Buffer.from(JSON.stringify(stored?.data));
+          expect(meta.naiveCount).toBe(1);
+          expect(meta.bytes).toBe(bytes.length);
+          expect(await store.head(scope, meta.ref)).toEqual(meta);
+          expect(stored?.meta).toEqual(meta);
+          if (digest) {
+            const sha = await crypto.subtle.digest('SHA-256', bytes);
+            expect(meta.digest).toBe(`sha-256:${Buffer.from(sha).toString('hex')}`);
+          }
+        } finally {
+          await harness.disposeStore?.(store);
+        }
+      },
+    );
+
+    it('holds a binary subarray stable while validating its parent', async () => {
+      const store = await harness.createStore();
+      const scope = { conversationId: 'binary-snapshot' };
+      try {
+        const parent = await store.put(scope, {
+          kind: 'log',
+          mediaType: 'text/plain',
+          data: 'log',
+        });
+        const source = Buffer.from([99, 10, 20, 30, 98]);
+        const pending = store.put(scope, {
+          kind: 'log/bytes',
+          mediaType: 'application/octet-stream',
+          data: source.subarray(1, 4),
+          digest: 'sha-256',
+          parentRefs: [parent.meta.ref],
+        });
+        source.fill(0);
+        const { meta } = await pending;
+        const stored = await store.get(scope, meta.ref);
+        const expected = Uint8Array.of(10, 20, 30);
+        const sha = await crypto.subtle.digest('SHA-256', expected);
+        expect(stored?.data).toEqual(expected);
+        expect(meta).toMatchObject({
+          bytes: expected.length,
+          digest: `sha-256:${Buffer.from(sha).toString('hex')}`,
+          parentRefs: [parent.meta.ref],
+        });
+        expect(stored?.meta).toEqual(meta);
+      } finally {
+        await harness.disposeStore?.(store);
+      }
+    });
+
+    it('reads a stateful timestamp accessor and custom encoder just once per put', async () => {
+      const utc = '2026-11-21T03:22:04Z';
+      const local = '2026-11-21T03:22:04';
+      let reads = 0;
+      let encodes = 0;
+      const rows = [
+        {
+          get timestamp() {
+            return ++reads === 1 ? utc : local;
+          },
+        },
+        {
+          toJSON() {
+            return { timestamp: ++encodes === 1 ? local : utc };
+          },
+        },
+      ];
+      const store = await harness.createStore();
+      const scope = { conversationId: 'encoded-time-axis-snapshot' };
+      try {
+        const { meta } = await store.put(scope, {
+          kind: 'dataset/log',
+          mediaType: 'application/json',
+          timeAxis: { column: 'timestamp', unit: 'iso' },
+          data: rows,
+          digest: 'sha-256',
+        });
+        expect({ reads, encodes }).toEqual({ reads: 1, encodes: 1 });
+        expect(meta.naiveCount).toBe(1);
+        expect((await store.get(scope, meta.ref))?.data).toEqual([
+          { timestamp: utc },
+          { timestamp: local },
+        ]);
+      } finally {
+        await harness.disposeStore?.(store);
+      }
+    });
+
     for (const testCase of artifactStoreConformance) {
       it(testCase.name, async () => {
         const outcome = await runArtifactStoreCase(testCase, harness);

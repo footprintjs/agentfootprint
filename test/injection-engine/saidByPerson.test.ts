@@ -61,8 +61,12 @@ import { buildCorrectiveTurn } from '../../src/core/agent/outputEnforcement.js';
 import { buildEvidenceCorrection } from '../../src/core/agent/evidence/gate.js';
 import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';
 import { WRAP_UP_INSTRUCTION } from '../../src/core/agent/stages/wrapUp.js';
+import { recoveryFeedback } from '../../src/core/agent/stages/callLLM/requestOnly.js';
 import { nudgeTeachingMessage } from '../../src/injection-engine/skillSteps.js';
-import { LIBRARY_AUTHORED_PREFIXES } from '../../src/lib/saidByPerson.js';
+import {
+  LIBRARY_AUTHORED_PREFIXES,
+  NATIVE_RECOVERY_FRAME_PREFIX,
+} from '../../src/lib/saidByPerson.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
 import { buildDeliverStage } from '../../src/core/agent/stages/deliver.js';
 import type { AgentState } from '../../src/core/agent/types.js';
@@ -374,11 +378,10 @@ describe('one rule, two readers', () => {
 // ── Contract: the registry is the whole answer, and it is closed ──────
 
 describe('the registry a reader is handed', () => {
-  it('holds one opening per prefixed class — ten, and every framed message in the window opens with one', () => {
+  it('holds eleven openings, including the request-only native recovery frame', () => {
     const w = windowWithEveryClass();
-    // Six history frames, and (G17) the two openings of the lines served on a request
-    // only — the library note (the time line, the figures conclusion) and the staged-refs nudge.
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
+    // The registry includes request-only lines such as the library note and staged-refs nudge.
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
     for (const msg of [
       w.compacted,
       w.notice,
@@ -393,12 +396,20 @@ describe('the registry a reader is handed', () => {
     // delivery marker, which is why the predicate needs both halves.
     expect(LIBRARY_AUTHORED_PREFIXES.some((p) => w.delivered.content.startsWith(p))).toBe(false);
     expect(isSaidByPerson(w.delivered)).toBe(false);
+
+    const { message: feedback } = recoveryFeedback('Recheck the draft against the tool results.');
+    expect(NATIVE_RECOVERY_FRAME_PREFIX).toBe('[AgentFootprint internal recovery feedback.');
+    expect(LIBRARY_AUTHORED_PREFIXES).toContain(NATIVE_RECOVERY_FRAME_PREFIX);
+    expect(feedback.role).toBe('user');
+    expect(feedback.content.startsWith(NATIVE_RECOVERY_FRAME_PREFIX)).toBe(true);
+    expect(saidByPerson(contextOver([w.said, feedback], w.said.content))).toEqual([w.said]);
+    expect(currentRequestIndexOf([feedback])).toBe(-1);
   });
 
   it('cannot be extended at runtime — a consumer holds the same array the library reads', () => {
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
   });
 });
 

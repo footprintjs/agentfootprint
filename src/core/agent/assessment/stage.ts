@@ -49,6 +49,7 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
 import { retainedStateValue } from '../../../redaction/runRedaction.js';
+import { isLibraryLimit } from './results/library-did/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
 import type { AnswerAssessment } from './types.js';
@@ -171,6 +172,7 @@ export async function assessAnswerStage(
       assessed.reasons.some((reason) => reason.detail !== undefined) ||
       data.reasons.some(
         (reason) =>
+          isLibraryLimit(reason) ||
           reason === 'check-unreachable' ||
           reason === 'call-not-completed' ||
           reason === 'work-not-finished' ||
