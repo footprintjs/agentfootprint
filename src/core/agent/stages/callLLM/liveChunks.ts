@@ -1,3 +1,4 @@
+import { throwIfAborted } from '../../../../lib/abort.js';
 import type { LLMChunk } from '../../../../provider-contract/types.js';
 import { typedEmit, type EmitableScope } from '../../../../recorders/core/typedEmit.js';
 import type { ReservedMemberFilter } from '../../findings/answerText.js';
@@ -10,8 +11,12 @@ interface LiveChunkOptions {
   readonly onFirstChunk: (() => void) | undefined;
 }
 
-/** One attempt's live output. The call stage owns the terminal response and cancellation. */
-export function liveChunkEmitter(scope: EmitableScope, options: LiveChunkOptions) {
+/** One attempt's live output, subject to the call stage's cancellation signal. */
+export function liveChunkEmitter(
+  scope: EmitableScope,
+  signal: AbortSignal | undefined,
+  options: LiveChunkOptions,
+) {
   const { providerName, iteration, suppressDraftTokens, textFilter, onFirstChunk } = options;
   let firstChunkFired = false;
   let lastTokenIndex = -1;
@@ -38,9 +43,8 @@ export function liveChunkEmitter(scope: EmitableScope, options: LiveChunkOptions
       const thinking = suppressDraftTokens ? undefined : chunk.thinkingDelta;
       const hasThinking = typeof thinking === 'string' && thinking.length > 0;
       const hasText = visible.length > 0;
-      const kind = chunk.thinkingKind;
-      const thinkingKind =
-        kind === 'provider-summary' || kind === 'raw-reasoning' ? kind : 'unclassified';
+      const kind = hasThinking ? chunk.thinkingKind : undefined;
+      throwIfAborted(signal);
       if (!firstChunkFired && (hasThinking || hasText)) {
         firstChunkFired = true;
         onFirstChunk?.();
@@ -50,9 +54,11 @@ export function liveChunkEmitter(scope: EmitableScope, options: LiveChunkOptions
         typedEmit(scope, 'agentfootprint.stream.thinking_delta', {
           iteration,
           tokenIndex,
-          kind: thinkingKind,
+          kind: kind === 'provider-summary' || kind === 'raw-reasoning' ? kind : 'unclassified',
           content: thinking,
         });
+        // An inline listener can cancel the run during delivery of this fragment.
+        throwIfAborted(signal);
       }
       if (hasText && !suppressDraftTokens) {
         const content = textFilter === undefined ? visible : textFilter.push(visible);
@@ -63,6 +69,7 @@ export function liveChunkEmitter(scope: EmitableScope, options: LiveChunkOptions
       }
     },
     finish(): void {
+      throwIfAborted(signal);
       // The scanner can hold a trailing newline or partial key through EOF.
       const content = textFilter?.end() ?? '';
       if (content.length > 0) {
@@ -71,6 +78,8 @@ export function liveChunkEmitter(scope: EmitableScope, options: LiveChunkOptions
           tokenIndex: lastTokenIndex + 1,
           content,
         });
+        // An abort here also prevents fallback completion on older streams.
+        throwIfAborted(signal);
       }
     },
   };

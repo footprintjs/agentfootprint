@@ -666,7 +666,7 @@ export function buildCallLLMStage(
         peel !== undefined && deps.suppressDraftTokens !== true
           ? peel.reservedMemberFilter()
           : undefined;
-      const liveChunks = liveChunkEmitter(scope, {
+      const liveChunks = liveChunkEmitter(scope, runSignal, {
         providerName: selectedProvider.name,
         iteration,
         suppressDraftTokens: deps.suppressDraftTokens === true,
