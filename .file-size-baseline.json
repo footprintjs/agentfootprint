@@ -54,7 +54,7 @@
     "src/core/agent/stages/seed.ts": 870,
     "src/core/agent/types.ts": 1242,
     "src/core/checkin.ts": 686,
-    "src/core/codeRunnerTool.ts": 959,
+    "src/core/codeRunnerTool.ts": 912,
     "src/core/consentRequest.ts": 1024,
     "src/core/RunnerBase.ts": 1149,
     "src/core/slots/buildToolsSlot.ts": 1173,
