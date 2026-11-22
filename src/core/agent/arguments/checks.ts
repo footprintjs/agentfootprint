@@ -38,7 +38,7 @@
  * Membership can REFUTE a claim ("those words are not in any message you
  * sent"); a pass proves nothing — the words can be there by coincidence, in a
  * negation, in another sentence. So no verdict here ever supports "known": a
- * pass only keeps a reason from firing (`assessment/inputs/stage.ts` ·
+ * pass only keeps a reason from firing (`assessment/assess.ts` ·
  * `readArgumentVerdicts`).
  *
  * ## The declared default beats the app and a result (V1)
