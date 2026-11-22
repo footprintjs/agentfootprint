@@ -79,6 +79,9 @@ export function requestFactory(environment: RequestEnvironment) {
         environment.governsOutput) && {
         suppressDraftTokens: true,
         withholdDraftContent: true,
+        ...(environment.configuration.liveThinkingWithHeldDrafts === 'provider-summary' && {
+          allowHeldProviderSummary: true as const,
+        }),
       }),
       // Tool choice by classifier (9.105.0): the outcome row after the reply.
       ...(environment.configuration.toolChoiceOptions !== undefined && {

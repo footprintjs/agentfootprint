@@ -645,14 +645,12 @@ export function buildCallLLMStage(
       // part way through the key — and the tokens join to exactly the text
       // the run hands back. A fresh scanner per attempt; unarmed, the chunks
       // go out as the provider sent them.
-      const shown =
-        peel !== undefined && deps.suppressDraftTokens !== true
-          ? peel.reservedMemberFilter()
-          : undefined;
+      const shown = deps.suppressDraftTokens === true ? undefined : peel?.reservedMemberFilter();
       const liveChunks = liveChunkEmitter(scope, runSignal, {
         providerName: selectedProvider.name,
         iteration,
         suppressDraftTokens: deps.suppressDraftTokens === true,
+        allowHeldProviderSummary: deps.allowHeldProviderSummary === true,
         textFilter: shown,
         onFirstChunk: hooks.onFirstChunk,
       });
