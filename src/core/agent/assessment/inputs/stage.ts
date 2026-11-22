@@ -30,7 +30,7 @@ import type { AssessmentPointer } from '../types.js';
  * this turn, and the `argument-sources` check when the declared-sources check
  * judged any.
  */
-export function readArgumentVerdicts(
+function readArgumentVerdicts(
   state: Readonly<Record<string, unknown>>,
   rows: readonly ArgumentRowRead[],
   resolve: CallPlaces['resolve'],
