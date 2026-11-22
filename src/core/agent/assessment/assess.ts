@@ -622,7 +622,7 @@ export function foldState(
     legacyEvents,
   );
   const g: Gathered = { admit: admission.admit, fired: new Map(), checked: [] };
-  const nativeFacts = admission.nativeResult;
+  const declarationFacts = admission.declaredResult;
   if (admission.entryIncomplete)
     fire(
       g,
@@ -645,7 +645,7 @@ export function foldState(
     state.coverageDeclared,
     (row) => callIndexOf(row, resolveCurrent),
     declarationAddresses,
-    nativeFacts,
+    declarationFacts,
   );
   const reads = readResults(
     results.filter((result) => admission.returned(result.index)),
@@ -706,7 +706,7 @@ export function foldState(
     admission.settlements === undefined,
   );
   readPeriodVerdicts(
-    periodRows(state, (row) => callIndexOf(row, resolveCurrent), nativeFacts),
+    periodRows(state, (row) => callIndexOf(row, resolveCurrent), declarationFacts),
     enteredArguments,
     g,
   );

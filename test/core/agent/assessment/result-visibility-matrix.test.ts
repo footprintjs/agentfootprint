@@ -62,6 +62,16 @@ type Proof = Awaited<ReturnType<typeof observeStanding>>;
 
 const columns = new Set<FixtureReason>(['column-type-mismatch', 'missing-column']);
 const nativeTime = new Set<FixtureReason>(['period-differs-from-asked', 'period-beyond-retention']);
+const nativeDeclarations = new Set<FixtureReason>([
+  'coverage-gap',
+  'declared-absent',
+  'period-not-held',
+  'period-partly-held',
+  'period-unknown',
+  'period-undeclared',
+  'period-differs-from-asked',
+  'period-beyond-retention',
+]);
 const deliveredRows = [{ logical_unit_number: 1 }];
 const typedReply: OutputSchemaParser<{ summary: string; negatives: unknown[] }> = {
   parse(raw) {
@@ -289,8 +299,13 @@ describe('result witness privacy through a live answer', () => {
     expect(denied.saved.checked.some(({ check }) => check === 'result-period')).toBe(false);
 
     const rewritten = await prove(reason, 'rewrite', delivery);
-    checkSurfaces(rewritten, typed ? ['check-unreachable'] : []);
+    checkSurfaces(
+      rewritten,
+      nativeDeclarations.has(reason) ? expectedControl : typed ? ['check-unreachable'] : [],
+    );
     if (typed) expect(rewritten.returned).toBe(TYPED_BODY);
+    else if (nativeDeclarations.has(reason))
+      expect(rewritten.returned).toMatch(/^Here is what I can report\.\n\n---\n\nNot sure — /);
     else
       expect(rewritten.returned).toMatch(
         /^Here is what I can report\.\n\n---\n\nConsistent with the run's record — /,

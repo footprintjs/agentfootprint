@@ -9,6 +9,17 @@ description: A typed chain around every tool dispatch and around the message bou
 
 ## Where they go
 
+An allowed `afterTool` replacement keeps the original read's declared coverage,
+absence and period limits. Declarations on the replacement add their own evidence;
+they do not overwrite those limits. The model reads the replacement's bytes.
+`accountForAnswer(recording).facts.calls` optionally names the final changing rule
+as `rewrittenBy`; its original value and reason are not part of that field.
+
+```ts
+const rewritten = accountForAnswer(recording).facts.calls.find(call => call.rewrittenBy);
+rewritten?.rewrittenBy; // the final named after-tool rule, when recorded and admitted
+```
+
 Middleware is written into [`.act()`](doc:loop-moments), the one block that says what an agent does at each moment of its loop:
 
 ```ts

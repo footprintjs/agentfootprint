@@ -61,8 +61,10 @@ function inspect(
   events: readonly AgentfootprintEvent[] | undefined,
   middlewareDecisions: readonly object[] = [],
   showWithheldResults = false,
+  servedUnderPolicy = false,
 ) {
   const snapshot = {
+    ...(servedUnderPolicy && { recorders: [{ id: 'agentfootprint.redaction' }] }),
     commitLog: [
       {
         idx: 0,
@@ -159,4 +161,39 @@ describe('inspect_tool_call from keyed saved recordings', () => {
     expect(out).toContain('outcome: ⚠ unknown');
     expect(out).not.toContain('one items');
   });
+
+  it('names the final after-tool changer from this occurrence only', async () => {
+    const after = (label: string, key: readonly number[]) => ({
+      ...rewrite(label, key),
+      moment: 'after-tool',
+      after: 'public summary',
+    });
+    const out = await inspect(
+      [proposal('one', second), result('one', second)],
+      [start('4', second), end('4', 0, second)],
+      [after('foreign', first), after('inner', second), after('outer', second)],
+      true,
+    );
+    expect(out).toContain('rewritten by: "outer-rewrite"');
+    expect(out).not.toContain('rewritten by: "inner-rewrite"');
+    expect(out).not.toContain('foreign-rewrite');
+  });
+
+  it.each([undefined, '[REDACTED]', ' \t'])(
+    'does not substitute an earlier name for an unavailable final changer (%s)',
+    async (middleware) => {
+      const rows = [
+        { ...rewrite('inner', second), moment: 'after-tool' },
+        { ...rewrite('outer', second), moment: 'after-tool', middleware },
+      ];
+      const out = await inspect(
+        [proposal('one', second), result('one', second)],
+        [start('4', second), end('4', 0, second)],
+        rows,
+        true,
+        middleware !== undefined,
+      );
+      expect(out).not.toContain('rewritten by:');
+    },
+  );
 });

@@ -17,7 +17,15 @@ export {
 } from './recordedCalls/history.js';
 export { readCallOccurrences, type CallOccurrence } from './recordedCalls/events.js';
 export { declarationOccurrences, groupOccurrenceEvidence } from './recordedCalls/evidence.js';
-export { resultDispositions } from './recordedCalls/resultDispositions.js';
+export {
+  resultDispositions,
+  lastResultRewriteIndex,
+  readResultRewriteName,
+} from './recordedCalls/resultDispositions.js';
+export {
+  indexResultRewrites,
+  type ResultRewriteIndex,
+} from './recordedCalls/resultRewriteIndex.js';
 export { readRewrittenToolResult } from './recordedCalls/rewrittenResult.js';
 export { readToolSettlements, type RecordedToolSettlement } from './recordedCalls/settlement.js';
 export {

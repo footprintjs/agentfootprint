@@ -1,5 +1,41 @@
 import type { AssessmentReason } from './types.js';
 
+/** Common pure vocabulary, shared by declaration stages without sibling-stage imports. */
+export const PERIOD_REASONS: Readonly<Record<string, AssessmentReason>> = {
+  'not-held': 'period-not-held',
+  'partly-held': 'period-partly-held',
+  unknown: 'period-unknown',
+  undeclared: 'period-undeclared',
+};
+export const PERIOD_QUALIFIERS = {
+  differs: 'period-differs-from-asked',
+  beyondRetention: 'period-beyond-retention',
+} as const satisfies Readonly<Record<string, AssessmentReason>>;
+const periodReasons = new Set<AssessmentReason>([
+  ...Object.values(PERIOD_REASONS),
+  ...Object.values(PERIOD_QUALIFIERS),
+]);
+export const isPeriodDeclarationReason = (reason: AssessmentReason): boolean =>
+  periodReasons.has(reason);
+
+/** Declaration witnesses, including a period's joined argument; all other evidence stays native. */
+export function isDeclarationWitness(
+  holder: string,
+  kind: unknown,
+  reason: AssessmentReason,
+): boolean {
+  if (holder === 'coverageDeclared')
+    return (
+      (kind === 'ledger' || kind === 'absence') &&
+      (reason === 'coverage-gap' || reason === 'declared-absent')
+    );
+  return (
+    holder === 'findingsLedger' &&
+    (kind === 'period' || kind === 'argument') &&
+    isPeriodDeclarationReason(reason)
+  );
+}
+
 export type ReasonWitnessKind = 'ordinary' | 'argument' | 'answer' | 'period' | 'retention-refusal';
 type ReasonClass = 'input' | 'result' | 'settlement' | 'turn';
 

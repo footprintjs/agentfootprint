@@ -31,6 +31,23 @@ export function readRecordedResultDecision(
   return changed === true && (outcome === 'deny' || outcome === 'refused') ? 'withheld' : 'unknown';
 }
 
+/** The final recorded changer owns attribution, even when its name is unavailable. */
+export function lastResultRewriteIndex(rows: readonly unknown[]): number | undefined {
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const disposition = readRecordedResultDecision(rows[index]);
+    if (disposition === 'rewritten') return index;
+    if (disposition === 'withheld' || disposition === 'unknown') return undefined;
+  }
+  return undefined;
+}
+
+/** After occurrence/decision admission, read its own nonblank name once, without a getter. */
+export function readResultRewriteName(row: unknown): string | undefined {
+  if (!isRecord(row)) return undefined;
+  const name = dataField(row, 'middleware');
+  return typeof name === 'string' && name.trim().length > 0 ? name : undefined;
+}
+
 export function readResultDispositionMark(message: object): Disposition | 'unknown' | undefined {
   const field = Object.getOwnPropertyDescriptor(message, 'toolResultDisposition');
   if (field === undefined) return undefined;

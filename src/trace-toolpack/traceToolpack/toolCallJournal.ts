@@ -14,6 +14,7 @@ import { defineTool } from '../../tools/tools.js';
 import { TOOL_CALL_SUGGESTION_CAP, TOOL_RESULT_PREVIEW_CHARS } from './structuralLimits.js';
 import { displayText, renderPreview, boundedPreview } from '../bounded.js';
 import { readNotDispatched, toolRanOf } from '../../semantics/toolRan.js';
+import { resultRewriteLine } from './resultRewrite.js';
 import {
   latestCallOccurrence,
   latestKeyedToolCall,
@@ -43,6 +44,7 @@ function settlementMarkerOf(value: unknown): Settlement | undefined {
 
 /** What one tool call looks like once the four sources are joined. */
 interface ToolCallFacts {
+  readonly occurrenceKey?: string;
   readonly toolName?: string;
   readonly proposedArgs?: Record<string, unknown>;
   readonly result?: unknown;
@@ -240,6 +242,7 @@ function buildToolCallReader(
       start?.payload.toolName ??
       (typeof proposal?.call.name === 'string' ? proposal.call.name : undefined);
     return {
+      ...(typeof key === 'string' && { occurrenceKey: key }),
       toolName,
       ...(args !== null &&
         typeof args === 'object' &&
@@ -491,6 +494,8 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
             `it may have been denied before it ran, or the turn ended (paused/failed) before ` +
             `it landed.`,
       );
+      const rewriteLine = resultRewriteLine(facts, artifacts.snapshot);
+      if (rewriteLine !== undefined) lines.push(rewriteLine);
 
       // Outcome + duration: the event tail is the only clock a run has,
       // read off the same `end` as above.

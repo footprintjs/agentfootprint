@@ -44,6 +44,16 @@ const REWRITTEN = {
   content: '{"publicRows":[1]}',
 };
 const NOT_SERVED = { toolResultExecution: 'returned-unserved', outcome: 'failed' };
+const NATIVE_DECLARATIONS = new Set<AssessmentReason>([
+  'coverage-gap',
+  'declared-absent',
+  'period-not-held',
+  'period-partly-held',
+  'period-unknown',
+  'period-undeclared',
+  'period-differs-from-asked',
+  'period-beyond-retention',
+]);
 
 function ledger(row: Row): Seed {
   return { state: { findingsLedger: [{ ...CALL, ...row }] } };
@@ -201,11 +211,13 @@ describe('standing reason admission by witness', () => {
           .soft(reasonsOf(seed, NOT_SERVED), 'returned without delivery')
           .toEqual(['call-not-completed']);
         expect.soft(reasonsOf(seed, DENIED), 'after-tool denial').toEqual(['result-withheld']);
-        // The model records a conflict after reading the served rewrite. The other
-        // witnesses describe native data that this replacement no longer carries.
+        // Declarations remain limits of the original read. Byte-dependent
+        // witnesses still require the view their own evidence describes.
         expect
           .soft(reasonsOf(seed, REWRITTEN), 'served rewrite')
-          .toEqual(reason === 'sources-conflict' ? [reason] : []);
+          .toEqual(
+            reason === 'sources-conflict' || NATIVE_DECLARATIONS.has(reason) ? [reason] : [],
+          );
       }
     },
   );

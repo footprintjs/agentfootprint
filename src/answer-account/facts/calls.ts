@@ -35,11 +35,14 @@
 
 import {
   declarationOccurrences,
+  indexResultRewrites,
+  type ResultRewriteIndex,
   readCallOccurrences,
   type CallOccurrence,
   type HistoryCall,
 } from '../../core/agent/recordedCalls.js';
 import { strip } from '../../semantics/coverage/read.js';
+import { deliveredDeclarationDoor } from '../../core/agent/assessment/results/coverage/declarations.js';
 import { reportedStatusOf } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
@@ -330,7 +333,11 @@ function viewOf(end: ViewEvent): ToolCallFact['view'] {
     : 'model-result';
 }
 
-function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallRead {
+function readOne(
+  ctx: ReadContext,
+  occurrence: CallOccurrence<ViewEvent>,
+  rewrites: ResultRewriteIndex,
+): CallRead {
   const { providerId: id, start, end, eventsOf, history } = occurrence;
   const coverageEvents = [...eventsOf('tools.absent'), ...eventsOf('tools.coverage_declared')];
   const coverage = readCoverage(coverageEvents, ctx.view.servedUnderPolicy);
@@ -342,6 +349,25 @@ function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallR
   const outcome = outcomeOf(ctx, occurrence, toolName);
   const status = outcome.outcome === 'ran' ? reportedStatusOf(end?.payload.status) : undefined;
   const judged = outcome.outcome === 'ran' && outcome.withheldBy === undefined && end !== undefined;
+  const rewrite =
+    judged && typeof occurrence.occurrenceKey === 'string'
+      ? rewrites.get(occurrence.occurrenceKey)
+      : undefined;
+  const rewriteName = rewrite?.kind === 'rewritten' ? rewrite.name : undefined;
+  const rewrittenBy =
+    rewriteName !== undefined &&
+    rewriteName.length > 0 &&
+    !(ctx.view.servedUnderPolicy && isKeptOut(rewriteName))
+      ? rewriteName.slice(0, FACT_TEXT_CHARS)
+      : undefined;
+  const declarationDoor = deliveredDeclarationDoor(
+    rewrite?.kind === 'rewritten' || history?.message.toolResultDisposition === 'rewritten',
+    {
+      absent: end?.payload.status === 'absent' || coverage?.kind === 'absent',
+      bounded: coverageEvents.some((e) => e.type.endsWith('tools.coverage_declared')),
+      ...(described !== undefined && { described: described.payload.semantics }),
+    },
+  );
   // The door THIS record holds for the call — its events — decides what was declared; a marker
   // in the bytes the run did not recognize (an envelope returned as JSON text) is plain data.
   // A result the record keeps out (a redaction policy left its placeholder
@@ -358,11 +384,7 @@ function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallR
         }),
         // A served record's rows key holding the placeholder is kept out, never "no list".
         ...(ctx.view.servedUnderPolicy && { keptOut: isKeptOut }),
-        door: {
-          absent: end.payload.status === 'absent' || coverage?.kind === 'absent',
-          bounded: coverageEvents.some((e) => e.type.endsWith('tools.coverage_declared')),
-          ...(described !== undefined && { described: described.payload.semantics }),
-        },
+        ...(declarationDoor !== undefined && { door: declarationDoor }),
       })
     : { emptiness: 'unknown', undeclaredShape: false };
   const findings = eventsOf('findings.declared')[0];
@@ -373,6 +395,9 @@ function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallR
   const pointers: RecordPointer[] = [
     ...(namePointer ? [namePointer] : []),
     ...(end ? [endPointer(end, emptiness)] : []),
+    ...(rewrittenBy !== undefined && rewrite !== undefined
+      ? [stateAt('middlewareDecisions', rewrite.index, 'middleware')]
+      : []),
   ];
   const fact: ToolCallFact = {
     toolCallId: id.slice(0, FACT_TEXT_CHARS),
@@ -382,6 +407,7 @@ function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallR
     ...(status !== undefined && { reportedStatus: status }),
     ...(outcome.refusedBy !== undefined && { refusedBy: outcome.refusedBy }),
     ...(outcome.withheldBy !== undefined && { withheldBy: outcome.withheldBy }),
+    ...(rewrittenBy !== undefined && { rewrittenBy }),
     emptiness: emptiness.emptiness,
     ...countedFields(emptiness),
     ...(emptiness.described !== undefined && { described: emptiness.described }),
@@ -431,7 +457,12 @@ function readOne(ctx: ReadContext, occurrence: CallOccurrence<ViewEvent>): CallR
 /** Every call of this run, first-seen order (a resumed leg's paused call has only an end). */
 export function readCalls(ctx: ReadContext): CallsRead {
   const occurrences = readCallOccurrences(ctx.view.events, historyOf(ctx.view));
-  const calls = occurrences.map((occurrence) => readOne(ctx, occurrence));
+  const ledger =
+    occurrences.length > 0 && ctx.view.state !== undefined
+      ? (Object.getOwnPropertyDescriptor(ctx.view.state, 'middlewareDecisions')?.value as unknown)
+      : undefined;
+  const rewrites = indexResultRewrites(ledger);
+  const calls = occurrences.map((occurrence) => readOne(ctx, occurrence, rewrites));
   const rows = ctx.view.stateAsRecorded?.coverageDeclared;
   const declarationAddresses = new Map<number, number>();
   if (Array.isArray(rows)) {

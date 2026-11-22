@@ -14,10 +14,11 @@ import {
   entryEvidenceOf,
   legacyEntryKeys,
 } from './entryEvidence.js';
-import { reasonClassOf, type ReasonWitnessKind } from './reasonClasses.js';
+import { reasonClassOf, isDeclarationWitness, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
 import { callAddressOf, rowList } from './sources.js';
 import type { AssessmentPointer, AssessmentReason } from './types.js';
+import { declaredResultAdmitted } from './results/coverage/declarations.js';
 
 type Resolve = ReturnType<typeof historyCallResolver>;
 type Row = Readonly<Record<string, unknown>>;
@@ -145,6 +146,13 @@ export function standingAdmission(
       entered(undefined, key)
     );
   };
+  const declarationProof = {
+    native: nativeResult,
+    returned: (address: number | undefined, key: string | null | undefined) =>
+      returned(address, false, key),
+  };
+  const declaredResult = (row: Row, address?: number): boolean =>
+    declaredResultAdmitted(row, address, declarationProof);
 
   const admit = (reason: AssessmentReason, pointer: AssessmentPointer): boolean => {
     const row = rowOf(state, pointer);
@@ -177,7 +185,12 @@ export function standingAdmission(
       return kind === 'input'
         ? !(keyed && argument.occurrenceKey === undefined) &&
             entered(argument.historyIndex, argument.occurrenceKey)
-        : returned(argument.historyIndex, true, argument.occurrenceKey);
+        : returned(
+            argument.historyIndex,
+            !isDeclarationWitness(pointer.key, row.kind, reason) ||
+              (keyed && argument.occurrenceKey === undefined),
+            argument.occurrenceKey,
+          );
     }
     const occurrence =
       row.kind === 'argument'
@@ -195,6 +208,8 @@ export function standingAdmission(
       ? entered(occurrence, key)
       : row.kind === 'contingent' && settlements !== undefined
       ? returned(occurrence, false, key)
+      : isDeclarationWitness(pointer.key, row.kind, reason)
+      ? declaredResult(row, occurrence)
       : nativeResult(row, occurrence);
   };
   // A rule can reject an error notice, even when there is no returned result.
@@ -230,6 +245,7 @@ export function standingAdmission(
           dispositions.get(index) === 'withheld' && calls.get(index)?.execution === 'returned',
       ),
     nativeResult,
+    declaredResult,
     entryIncomplete: entryEvidence?.complete === false,
     legacyEntry: entryEvidence?.legacy === true,
     // A keyless record can predate occurrence and settlement evidence. Keep
