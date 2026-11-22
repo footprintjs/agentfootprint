@@ -436,51 +436,66 @@ describe('signed tool turns with native context features', () => {
     }
   });
 
-  it('replays the signed tool call made after an evidence revision starts a new turn', async () => {
-    const bodies: Body[] = [];
-    const lookups: string[] = [];
-    const rejected = 'The lookup found 98765 objects.';
-    const corrected = 'The lookup found 12345 objects.';
-    const provider = anthropic({
-      _client: scriptedClient(model, bodies, [
-        'tool',
-        { text: rejected },
-        'tool',
-        { text: corrected },
-      ]) as never,
-    });
-    const agent = Agent.create({ provider, model, maxIterations: 5 })
-      .system('Use the lookup tool to answer.')
-      .tool({
-        ...lookup,
-        execute: async ({ key }) => {
-          lookups.push(key);
-          return key === 'k3' ? corrected : 'The count was not available yet.';
-        },
+  it.each([false, true])(
+    'replays a signed tool call made during evidence revision (field redaction: %s)',
+    async (protectedDraft) => {
+      const bodies: Body[] = [];
+      const lookups: string[] = [];
+      const rejected = 'The lookup found 98765 objects.';
+      const corrected = 'The lookup found 12345 objects.';
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, [
+          'tool',
+          { text: rejected },
+          'tool',
+          { text: corrected },
+        ]) as never,
+      });
+      const agent = Agent.create({
+        provider,
+        model,
+        maxIterations: 5,
+        ...(protectedDraft && { redact: { fields: { evidenceRecovery: ['instruction'] } } }),
       })
-      .thinking({ budget: 2048 })
-      .namesAndNumbersFromEvidence({ posture: 'guard' })
-      .build();
-    const actions: string[] = [];
-    agent.on('agentfootprint.agent.evidence_checked', (event) => {
-      actions.push(event.payload.action);
-    });
+        .system('Use the lookup tool to answer.')
+        .tool({
+          ...lookup,
+          execute: async ({ key }) => {
+            lookups.push(key);
+            return key === 'k3' ? corrected : 'The count was not available yet.';
+          },
+        })
+        .thinking({ budget: 2048 })
+        .namesAndNumbersFromEvidence({ posture: 'guard' })
+        .build();
+      const actions: string[] = [];
+      agent.on('agentfootprint.agent.evidence_checked', (event) => {
+        actions.push(event.payload.action);
+      });
 
-    try {
-      expect(await agent.run({ message: 'How many objects did the lookup find?' })).toBe(corrected);
-      expect(actions).toEqual(['revision-asked', 'grounded']);
-      expect(lookups).toEqual(['k1', 'k3']);
-      expect(bodies).toHaveLength(4);
-      expect(replayedSignatures(bodies[1]!)).toEqual(['sig-1']);
-      expect(replayedSignatures(bodies[3]!)).toContain('sig-3');
-      const assistantHistory = agent
-        .checkpoint()!
-        .history.filter((turn) => turn.role === 'assistant');
-      expect(assistantHistory.map((turn) => turn.content)).not.toContain(rejected);
-    } finally {
-      await agent.shutdown();
-    }
-  });
+      try {
+        expect(await agent.run({ message: 'How many objects did the lookup find?' })).toBe(
+          corrected,
+        );
+        expect(actions).toEqual(['revision-asked', 'grounded']);
+        expect(lookups).toEqual(['k1', 'k3']);
+        expect(bodies).toHaveLength(4);
+        expect(replayedSignatures(bodies[1]!)).toEqual(['sig-1']);
+        expect(replayedSignatures(bodies[3]!)).toContain('sig-3');
+        expect(JSON.stringify(bodies[3]!.messages)).toContain(rejected);
+        if (protectedDraft) {
+          const saved = agent.getLastSnapshot()?.sharedState;
+          expect(JSON.stringify(saved?.requestReplay ?? null)).not.toContain(rejected);
+        }
+        const assistantHistory = agent
+          .checkpoint()!
+          .history.filter((turn) => turn.role === 'assistant');
+        expect(assistantHistory.map((turn) => turn.content)).not.toContain(rejected);
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
 
   it.each([false, true])(
     'keeps findings across native pause and JSON reload (protected: %s)',
