@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   Agent,
+  allow,
   defineTool,
   type LLMChunk,
   type LLMProvider,
@@ -58,6 +59,99 @@ function reasoningEvents<T extends { type: string }>(events: readonly T[]): T[] 
 }
 
 describe('live thinking through the Agent recorder and AG-UI', () => {
+  it.each([
+    { label: 'default', enabled: false, masked: false, expected: [] },
+    { label: 'provider summaries', enabled: true, masked: false, expected: ['Checking source.'] },
+    { label: 'redacted provider summaries', enabled: true, masked: true, expected: ['[REDACTED]'] },
+  ])('holds drafts while serving $label', async ({ enabled, masked, expected }) => {
+    const readingNext = gate();
+    const releaseRead = gate();
+    const draft = 'PRIVATE_ANSWER_DRAFT';
+    const provider: LLMProvider = {
+      name: 'guarded-thinking',
+      async complete() {
+        throw new Error('the scripted stream should complete the call');
+      },
+      async *stream() {
+        yield {
+          tokenIndex: 0,
+          content: draft,
+          done: false,
+          thinkingDelta: 'Checking source.',
+          thinkingKind: 'provider-summary',
+        };
+        yield {
+          tokenIndex: 1,
+          content: '',
+          done: false,
+          thinkingDelta: 'PRIVATE_RAW',
+          thinkingKind: 'raw-reasoning',
+        };
+        yield { tokenIndex: 2, content: '', done: false, thinkingDelta: 'PRIVATE_UNCLASSIFIED' };
+        yield {
+          tokenIndex: 3,
+          content: '',
+          done: false,
+          thinkingDelta: 'PRIVATE_UNKNOWN',
+          thinkingKind: 'unknown-kind' as never,
+        };
+        yield {
+          tokenIndex: 4,
+          content: '',
+          done: false,
+          thinkingDelta: '',
+          thinkingKind: 'provider-summary',
+        };
+        readingNext.open();
+        await releaseRead.waiting;
+        yield finish(5, draft);
+      },
+    };
+    const agent = Agent.create({
+      provider,
+      model: 'fixture',
+      ...(enabled && { liveThinkingWithHeldDrafts: 'provider-summary' as const }),
+    })
+      .act({
+        output: [
+          { name: 'approve', onMessage: () => allow('Approved answer.', 'Fixture review.') },
+        ],
+      })
+      .build();
+    const recorder = recordRun(agent);
+    const run = runAsAgUi(agent, 'Read the fixture.', {
+      ...(masked && { runOptions: { redact: { keys: ['content'] } } }),
+      serializer: { reasoning: true },
+    });
+    try {
+      await readingNext.waiting;
+      const live = recorder.toRecording().events;
+      expect(thinkingDeltas(live).map(({ content }) => content)).toEqual(expected);
+      expect(eventsOfType(live, 'agentfootprint.stream.token')).toEqual([]);
+      releaseRead.open();
+
+      const result = await run;
+      expect(result.error).toBeUndefined();
+      expect(result.out).toBe('Approved answer.');
+      expect(thinkingDeltas(result.served).map(({ content }) => content)).toEqual(expected);
+      expect(
+        eventsOfType(result.events, 'REASONING_MESSAGE_CONTENT').map(({ delta }) => delta),
+      ).toEqual(expected);
+      const llmEnd = eventsOfType(result.served, 'agentfootprint.stream.llm_end')[0]?.payload;
+      expect(llmEnd).toMatchObject({ contentWithheld: true, content: masked ? '[REDACTED]' : '' });
+      const browserText = JSON.stringify(result.events);
+      expect(browserText).not.toMatch(
+        /PRIVATE_ANSWER_DRAFT|PRIVATE_RAW|PRIVATE_UNCLASSIFIED|PRIVATE_UNKNOWN/,
+      );
+      if (masked) expect(browserText).not.toContain('Checking source.');
+    } finally {
+      releaseRead.open();
+      await run;
+      recorder.stop();
+      await agent.shutdown();
+    }
+  });
+
   it('records deltas in arrival order before completion and keeps tool iterations distinct', async () => {
     const readingNext = gate();
     const releaseRead = gate();
@@ -196,7 +290,7 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
     }
   });
 
-  it('stops observing a cancelled stream even if the pending read later yields a delta', async () => {
+  it.each([false, true])('stops observing a cancelled stream (draft held: %s)', async (held) => {
     const readingNext = gate();
     const releaseLateRead = gate();
     const iteratorReturn = vi.fn(async () => ({ done: true as const, value: undefined }));
@@ -234,6 +328,7 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
                     done: false,
                     content: '',
                     thinkingDelta: tokenIndex === 0 ? 'Before cancellation.' : 'Late reasoning.',
+                    ...(held && { thinkingKind: 'provider-summary' as const }),
                   },
                 };
               },
@@ -244,7 +339,13 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
       },
     };
     const cancellation = new AbortController();
-    const agent = Agent.create({ provider, model: 'fixture' }).build();
+    const builder = Agent.create({
+      provider,
+      model: 'fixture',
+      ...(held && { liveThinkingWithHeldDrafts: 'provider-summary' as const }),
+    });
+    if (held) builder.act({ output: [{ name: 'approve', onMessage: () => allow() }] });
+    const agent = builder.build();
     const recorder = recordRun(agent);
     const run = runAsAgUi(agent, 'Hold the stream.', {
       runOptions: { env: { signal: cancellation.signal } },
@@ -253,7 +354,12 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
     try {
       await readingNext.waiting;
       expect(thinkingDeltas(recorder.toRecording().events)).toEqual([
-        { iteration: 1, tokenIndex: 0, content: 'Before cancellation.', kind: 'unclassified' },
+        {
+          iteration: 1,
+          tokenIndex: 0,
+          content: 'Before cancellation.',
+          kind: held ? 'provider-summary' : 'unclassified',
+        },
       ]);
 
       cancellation.abort(new Error('The caller ended the stream.'));
@@ -371,9 +477,38 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
     ]);
   });
 
-  it.each([false, true])(
-    'arbitrates retry after a thinking-only chunk (draft hidden: %s)',
-    async (draftHidden) => {
+  it.each([
+    {
+      label: 'open draft',
+      draftHidden: false,
+      enabled: false,
+      summary: false,
+      reported: 'unclassified',
+    },
+    {
+      label: 'held draft by default',
+      draftHidden: true,
+      enabled: false,
+      summary: true,
+      reported: undefined,
+    },
+    {
+      label: 'held draft with unknown thinking',
+      draftHidden: true,
+      enabled: true,
+      summary: false,
+      reported: undefined,
+    },
+    {
+      label: 'held draft with provider summary',
+      draftHidden: true,
+      enabled: true,
+      summary: true,
+      reported: 'provider-summary',
+    },
+  ])(
+    'arbitrates retry after a thinking-only chunk ($label)',
+    async ({ draftHidden, enabled, summary, reported }) => {
       let calls = 0;
       const thought = 'Partial thought before a transient failure.';
       const answer = JSON.stringify({ answer: 'Recovered answer.' });
@@ -391,14 +526,18 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
               done: false,
               thinkingDelta: thought,
               // A third-party JavaScript adapter can send a value outside the type.
-              thinkingKind: 'unknown-kind' as never,
+              thinkingKind: summary ? 'provider-summary' : ('unknown-kind' as never),
             };
             throw Object.assign(new Error('Service Unavailable'), { status: 503 });
           }
           yield finish(0, answer);
         },
       };
-      const builder = Agent.create({ provider, model: 'fixture' }).reliability({
+      const builder = Agent.create({
+        provider,
+        model: 'fixture',
+        ...(enabled && { liveThinkingWithHeldDrafts: 'provider-summary' as const }),
+      }).reliability({
         postDecide: [
           {
             when: (state) => state.errorKind === '5xx-transient',
@@ -418,7 +557,7 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
       const result = await runAsAgUi(builder.build(), 'Run the fixture.', {
         serializer: { reasoning: true },
       });
-      if (draftHidden) {
+      if (reported === undefined) {
         expect(result.error).toBeUndefined();
         expect(result.out).toBe(answer);
         expect(calls).toBe(2);
@@ -430,7 +569,7 @@ describe('live thinking through the Agent recorder and AG-UI', () => {
         });
         expect(calls).toBe(1);
         expect(thinkingDeltas(result.served)).toEqual([
-          { iteration: 1, tokenIndex: 0, content: thought, kind: 'unclassified' },
+          { iteration: 1, tokenIndex: 0, content: thought, kind: reported },
         ]);
       }
     },

@@ -416,6 +416,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    * wire format. Undefined = no thinking activation (default behavior).
    */
   readonly thinkingBudget?: number;
+  readonly liveThinkingWithHeldDrafts?: AgentOptions['liveThinkingWithHeldDrafts'];
 
   /** Threaded to footprintjs `flowChart()` so every node the Agent
    *  builder creates is observed by these recorders at build time. Set

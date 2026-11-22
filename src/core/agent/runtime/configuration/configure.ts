@@ -219,6 +219,13 @@ export function configureAgent(
   if (opts.contextBudget !== undefined) config.contextBudget = opts.contextBudget;
   if (opts.permissionChecker) config.permissionChecker = opts.permissionChecker;
   if (opts.toolArgValidation !== undefined) config.toolArgValidation = opts.toolArgValidation;
+  const liveThinkingWithHeldDrafts = opts.liveThinkingWithHeldDrafts;
+  if (liveThinkingWithHeldDrafts !== undefined) {
+    if (liveThinkingWithHeldDrafts !== 'provider-summary') {
+      throw new TypeError("Agent.create: liveThinkingWithHeldDrafts must be 'provider-summary'.");
+    }
+    config.liveThinkingWithHeldDrafts = liveThinkingWithHeldDrafts;
+  }
   if (opts.findings !== undefined)
     config.findingsOptions = {
       ...opts.findings,

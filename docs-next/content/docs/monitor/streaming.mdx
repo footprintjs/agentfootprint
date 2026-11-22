@@ -57,7 +57,9 @@ The event's `kind` comes from the adapter's request and provider contract:
 
 The `ThinkingDeltaKind` type names these categories. Older events can lack `kind`. Select only an explicit `provider-summary` for a summary view.
 
-<CodeFile path="examples/features/96-thinking-per-model.ts" region="live-summary" title="Collect Anthropic summaries as they arrive" />
+When output middleware or answer validation holds drafts, all live thinking deltas are held by default. Set `liveThinkingWithHeldDrafts: 'provider-summary'` on `Agent.create` when your application can share the provider's summaries before it approves the answer. Raw and unclassified deltas stay held during the model call. The answer policy still decides what answer to deliver, and the first delivered summary counts as a live chunk for [retry arbitration](doc:reliability).
+
+<CodeFile path="examples/features/96-thinking-per-model.ts" region="live-summary" title="Collect Anthropic summaries while output middleware holds the answer" />
 
 Empty or omitted thinking text yields no live delta. Anthropic signatures and redacted blocks stay out of live deltas. The event carries the fragment as served by the [run's redaction policy](doc:security#keep-personal-data-out-of-the-record). The completed `stream.thinking_end` event has its existing block payload. A summary-only view can render the selected live fragments and use the completed event for lifecycle handling.
 
