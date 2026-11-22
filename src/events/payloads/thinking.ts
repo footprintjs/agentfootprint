@@ -1,4 +1,4 @@
-import type { ThinkingBlock } from './dependencyTypes.js';
+import type { ThinkingBlock, ThinkingDeltaKind } from './dependencyTypes.js';
 
 // embedding.* (1)
 export interface EmbeddingGeneratedPayload {
@@ -12,9 +12,6 @@ export interface EmbeddingGeneratedPayload {
 }
 
 // stream.thinking.* (2) + agent.thinking.* (1) — v2.14 extended thinking
-
-/** The adapter's request-based classification, or unclassified when it cannot attest to one. */
-export type ThinkingDeltaKind = 'provider-summary' | 'raw-reasoning' | 'unclassified';
 
 /**
  * One live fragment from a provider's `LLMChunk.thinkingDelta`, served through

@@ -6,6 +6,6 @@ title: ThinkingDeltaKind
 
 > **ThinkingDeltaKind** = `"provider-summary"` \| `"raw-reasoning"` \| `"unclassified"`
 
-Defined in: [src/events/payloads/thinking.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads/thinking.ts#L17)
+Defined in: [src/thinking/types.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/thinking/types.ts#L33)
 
 The adapter's request-based classification, or unclassified when it cannot attest to one.

@@ -4,7 +4,7 @@ title: LLMChunk
 
 # Interface: LLMChunk
 
-Defined in: [src/provider-contract/types.ts:457](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L457)
+Defined in: [src/provider-contract/types.ts:456](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L456)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:457](https://github.com/footprintjs/
 
 > `readonly` **content**: `string`
 
-Defined in: [src/provider-contract/types.ts:460](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L460)
+Defined in: [src/provider-contract/types.ts:459](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L459)
 
 Token text. Empty for the terminal chunk (`done: true`).
 
@@ -22,7 +22,7 @@ Token text. Empty for the terminal chunk (`done: true`).
 
 > `readonly` **done**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:462](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L462)
+Defined in: [src/provider-contract/types.ts:461](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L461)
 
 True only for the final chunk in a stream.
 
@@ -32,7 +32,7 @@ True only for the final chunk in a stream.
 
 > `readonly` `optional` **response?**: [`LLMResponse`](/docs/api/interfaces/LLMResponse)
 
-Defined in: [src/provider-contract/types.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L475)
+Defined in: [src/provider-contract/types.ts:474](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L474)
 
 Authoritative response payload, populated ONLY on the final chunk
 (`done: true`). Carries `toolCalls`, `usage`, `stopReason` — the
@@ -51,7 +51,7 @@ authoritative payload in that case.
 
 > `readonly` `optional` **thinkingDelta?**: `string`
 
-Defined in: [src/provider-contract/types.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L481)
+Defined in: [src/provider-contract/types.ts:480](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L480)
 
 Live thinking text. Nonempty fragments on nonterminal chunks drive
 `agentfootprint.stream.thinking_delta` events under the run's redaction policy.
@@ -63,7 +63,7 @@ Adapters keep signatures, redacted blocks and private data out of this field.
 
 > `readonly` `optional` **thinkingKind?**: [`ThinkingDeltaKind`](/docs/api/type-aliases/ThinkingDeltaKind)
 
-Defined in: [src/provider-contract/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L483)
+Defined in: [src/provider-contract/types.ts:482](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L482)
 
 Classification from the provider request. Omit it when neither classification can be confirmed.
 
@@ -73,4 +73,4 @@ Classification from the provider request. Omit it when neither classification ca
 
 > `readonly` **tokenIndex**: `number`
 
-Defined in: [src/provider-contract/types.ts:458](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L458)
+Defined in: [src/provider-contract/types.ts:457](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L457)

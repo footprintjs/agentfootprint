@@ -10,9 +10,8 @@
  */
 
 import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../events/types.js';
-import type { ThinkingDeltaKind } from '../events/payloads/thinking.js';
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
-import type { ThinkingBlock } from '../thinking/types.js';
+import type { ThinkingBlock, ThinkingDeltaKind } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
 import type { ToolResultRecord } from './toolResultRecord.js';
 import type { WireRole } from './wireRole.js';

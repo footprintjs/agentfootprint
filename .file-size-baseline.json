@@ -88,7 +88,7 @@
     "src/memory/define.ts": 734,
     "src/memory/define.types.ts": 660,
     "src/memory/stages/summarize.ts": 690,
-    "src/provider-contract/types.ts": 1402,
+    "src/provider-contract/types.ts": 1401,
     "src/recorders/observability/BoundaryRecorder.ts": 909,
     "src/recorders/observability/FlowchartRecorder.ts": 762,
     "src/recorders/observability/recordingEnvelope.ts": 651,

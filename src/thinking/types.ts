@@ -29,6 +29,9 @@
 
 // ─── Block shape ────────────────────────────────────────────────────
 
+/** The adapter's request-based classification, or unclassified when it cannot attest to one. */
+export type ThinkingDeltaKind = 'provider-summary' | 'raw-reasoning' | 'unclassified';
+
 /**
  * One thinking block from an LLM response, normalized into a provider-
  * agnostic shape. A response may contain multiple blocks (e.g. OpenAI's
