@@ -1,11 +1,11 @@
-import { readOwnList } from '../../../lib/boundedJson.js';
-import { isPlaceholder } from '../../../redaction/marker.js';
+import { readOwnList } from '../../../../../lib/boundedJson.js';
+import { isPlaceholder } from '../../../../../redaction/marker.js';
 import {
   coverageWordFragment,
   MAX_SHORT_CHARS,
   shortProblem,
-} from '../../../semantics/coverage/items.js';
-import { isRecord } from './recordValues.js';
+} from '../../../../../semantics/coverage/items.js';
+import { isRecord } from '../../recordValues.js';
 
 /** One declaration is read only as far as the warning can use it. */
 const MAX_WORD_ITEMS = 8;
@@ -19,6 +19,7 @@ export interface DeclaredWords {
   readonly notChecked: DeclaredWordList;
   readonly cannotCover: DeclaredWordList;
   readonly tryInstead?: string;
+  readonly adviceOmitted: boolean;
 }
 
 function ownData(value: object, key: string): unknown {
@@ -67,11 +68,13 @@ export function readDeclaredWords(row: unknown): DeclaredWords | undefined {
     if (!isRecord(row)) return undefined;
     const kind = ownData(row, 'kind');
     if (kind !== 'absence' && kind !== 'ledger') return undefined;
-    const tryInstead = kind === 'absence' ? word(ownData(row, 'tryInstead')) : undefined;
+    const advice = kind === 'absence' ? ownData(row, 'tryInstead') : undefined;
+    const tryInstead = word(advice);
     return {
       notChecked: wordList(ownData(row, 'notChecked')),
       cannotCover: wordList(ownData(row, 'cannotCover')),
       ...(tryInstead !== undefined && { tryInstead }),
+      adviceOmitted: isRecord(advice) && ownData(advice, 'omitted') === true,
     };
   } catch {
     // A host-built row can have throwing own-property traps. It carries no words.

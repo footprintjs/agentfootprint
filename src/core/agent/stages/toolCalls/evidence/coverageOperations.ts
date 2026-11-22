@@ -24,15 +24,13 @@ interface ToolCoverageOperationsLinks {
   readonly noticeEmptyLookup: ToolIntegrityOperations['noticeEmptyLookup'];
 }
 
-/** Retain the whole sentence within the record cap so redaction sees the original value. */
-function recordedSuggestion(facts: CoverageFacts): { readonly tryInstead?: string } {
-  if (
-    facts.kind !== 'absence' ||
-    facts.tryInstead === undefined ||
-    facts.tryInstead.length > MAX_RECORDED_ADVICE_CHARS
-  )
-    return {};
-  return { tryInstead: facts.tryInstead };
+/** Keep whole advice within the record cap. A redaction of this field also hides its omission. */
+function recordedSuggestion(facts: CoverageFacts): Pick<DeclaredCoverage, 'tryInstead'> {
+  if (facts.kind !== 'absence' || facts.tryInstead === undefined) return {};
+  return {
+    tryInstead:
+      facts.tryInstead.length > MAX_RECORDED_ADVICE_CHARS ? { omitted: true } : facts.tryInstead,
+  };
 }
 
 /** Compose the existing coverage callbacks once for this handler. */

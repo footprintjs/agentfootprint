@@ -137,8 +137,8 @@ Defined in: [src/semantics/coverage/types.ts:482](https://github.com/footprintjs
 
 ### tryInstead?
 
-> `readonly` `optional` **tryInstead?**: `string`
+> `readonly` `optional` **tryInstead?**: `string` \| \{ `omitted`: `true`; \}
 
 Defined in: [src/semantics/coverage/types.ts:489](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L489)
 
-Bounded advice for the warning line, present only for an absence that declares it.
+Bounded advice for the warning line, or an omission marker at the same redaction path.

@@ -250,9 +250,10 @@ describe('integration: .limitsTravelWithTheAnswer() — the model cannot drop wh
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('edge: folding and emptiness', () => {
-  it('two tools naming the same limit say it once in each presentation', async () => {
+  it('credits both tools in the warning and lists their shared limit once in the coverage block', async () => {
     const a = defineTool({
       name: 'array_health',
+      displayName: 'Array health',
       description: 'x',
       inputSchema: { type: 'object', properties: {} },
       execute: () =>
@@ -262,6 +263,7 @@ describe('edge: folding and emptiness', () => {
     });
     const b = defineTool({
       name: 'fabric_health',
+      displayName: 'Fabric health',
       description: 'x',
       inputSchema: { type: 'object', properties: {} },
       execute: () =>
@@ -278,7 +280,9 @@ describe('edge: folding and emptiness', () => {
     const parts = out.split(`\n\n${COVERAGE_BLOCK_HEADING}`);
     expect(parts).toHaveLength(2);
     const [warning, limits] = parts;
-    expect(warning?.match(/host-side multipathing/g)).toHaveLength(1);
+    expect(warning).toContain('Array health cannot cover “host-side multipathing”');
+    expect(warning).toContain('Fabric health cannot cover “host-side multipathing”');
+    expect(warning?.match(/host-side multipathing/g)).toHaveLength(2);
     expect(limits?.match(/host-side multipathing/g)).toHaveLength(1);
     expect(limits).toContain('- host-side multipathing — no collector on the hosts');
     expect(declaredOf(t.agent)).toHaveLength(2);

@@ -257,12 +257,10 @@ export interface AssessmentReasonDetail {
   /** The one engine category represented by the classified failures for this reason. */
   readonly category?: import('footprintjs').AttemptCategory;
   readonly toolSays?: AssessmentToolWords;
-  /** What was kept, and the original total when the writer measured it. */
-  readonly counts?: {
-    readonly kept: number;
-    readonly total?: number;
-    readonly unit: string;
-  };
+  /** A kept count with its unit, or a missing count out of a known whole. */
+  readonly counts?:
+    | { readonly kept: number; readonly total?: number; readonly unit: string }
+    | { readonly missing: number; readonly of: number };
   /** The requested and held spans when the source retained both. */
   readonly period?: {
     readonly asked: HeldSpan['queried'];

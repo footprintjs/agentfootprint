@@ -727,6 +727,7 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
       const ran: string[] = [];
       const returnsMiss = defineTool({
         name: 'returns_miss',
+        displayName: 'Returning lookup',
         description: 'a lookup that returns its miss',
         inputSchema: { type: 'object', properties: {} },
         execute: (_args, ctx) => {
@@ -736,6 +737,7 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
       });
       const raisesMiss = defineTool({
         name: 'raises_miss',
+        displayName: 'Pausing lookup',
         description: 'a lookup that asks the person about its miss',
         inputSchema: { type: 'object', properties: {} },
         execute: () => requestInput({ ...QUESTION, absence: absent(DECL) }),
@@ -759,7 +761,16 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe(`done\n\n---\n\nNot sure — a call did not run; ${LOOKUP_WARNING_REASONS}`);
+      expect(done).toBe(
+        'done\n\n---\n\nNot sure — a call did not run; ' +
+          'a tool said there is ground it did not check or cannot cover ' +
+          '(Returning lookup did not check “fabric B”; ' +
+          'Returning lookup cannot cover “hosts outside the collected inventory”; ' +
+          'Pausing lookup did not check “fabric B”; 1 more in the run record); ' +
+          'a tool said nothing matched ' +
+          '(Returning lookup suggested “Ask which fabric the host is cabled to, then look there.”; ' +
+          'Pausing lookup suggested “Ask which fabric the host is cabled to, then look there.”).',
+      );
 
       // The settlement is unchanged: c3 never ran, and its result is the sentence.
       expect(ran).toEqual(['c1', 'd1']);

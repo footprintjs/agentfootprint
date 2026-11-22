@@ -62,10 +62,9 @@ const RESULTS = ['rows', 'empty', 'absence', 'coverage', 'partial', 'pending', '
 const CHECKED = ['the selected inventory'];
 const GAP = ['items awaiting import'];
 
-type GapOwners = readonly [writer: (typeof TOOLS)[number], historicalPeer?: (typeof TOOLS)[number]];
+type GapOwners = readonly [first: (typeof TOOLS)[number], second?: (typeof TOOLS)[number]];
 
-// Warnings by seed and leg. The first tool wrote the retained gap text. A
-// second name captures the prior clause's additional author of the same text.
+// Tools whose retained gap text appears in the warning, by seed and leg.
 const GAP_CLAUSES: readonly (readonly (GapOwners | null)[])[] = [
   [],
   [],
@@ -206,12 +205,18 @@ function priorWarning(text: string | null, owners: GapOwners | null | undefined)
   const author = DISPLAY_NAMES[writer];
   const priorAuthors = peer === undefined ? author : `${author} and ${DISPLAY_NAMES[peer]}`;
   const clause = 'declared ground that was not checked or cannot be covered';
-  const current = `${author} ${clause} (did not check “items awaiting import”)`;
+  const entry = 'did not check “items awaiting import”';
+  const current =
+    peer === undefined
+      ? `${author} ${clause} (${entry})`
+      : `a tool said there is ground it did not check or cannot cover (${author} ${entry}; ${DISPLAY_NAMES[peer]} ${entry})`;
   expect(text).toContain(current);
   return text.replace(current, `${priorAuthors} ${clause}`);
 }
 
-function priorAssessment(assessment: ReturnType<typeof assessAnswer>) {
+function priorAssessment(assessment: ReturnType<typeof assessAnswer> | undefined) {
+  if (assessment === undefined)
+    throw new Error('Expected the seeded run to expose its assessment.');
   const reasons = assessment.reasons.map(({ detail, ...reason }) => {
     const { source } = reason;
     if (source.kind !== 'calls') {
@@ -220,9 +225,10 @@ function priorAssessment(assessment: ReturnType<typeof assessAnswer>) {
     }
     const hasFailure = source.calls.some((call) => call.outcome === 'failed');
     if (reason.reason === 'coverage-gap') {
+      const toolNames = [...new Set(source.calls.map(({ toolName }) => toolName))];
       expect(detail).toEqual({
         toolSays: {
-          entries: [{ kind: 'notChecked', text: GAP[0], toolName: source.calls[0]?.toolName }],
+          entries: toolNames.map((toolName) => ({ kind: 'notChecked', text: GAP[0], toolName })),
           omitted: 0,
         },
       });
