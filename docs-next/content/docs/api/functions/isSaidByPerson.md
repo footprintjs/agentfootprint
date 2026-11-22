@@ -6,7 +6,7 @@ title: isSaidByPerson
 
 > **isSaidByPerson**(`msg`): `boolean`
 
-Defined in: [src/lib/saidByPerson.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L212)
+Defined in: [src/lib/saidByPerson.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L216)
 
 THE rule: true when this message is something a PERSON said.
 

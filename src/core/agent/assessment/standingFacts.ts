@@ -1,3 +1,4 @@
+import { libraryLimitClauses } from './results/library-did/stage.js';
 import {
   evictedCallOutcomes,
   settledSiblingWitness,
@@ -19,10 +20,12 @@ import type {
 export interface StandingNames {
   readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
   readonly displayNames: ReadonlyMap<string, string>;
+  readonly libraryLimits?: ReadonlyMap<AssessmentReason, readonly string[]>;
   readonly skippedSteps?: number;
   readonly batchRefused?: true;
   readonly settledSiblings?: number;
   readonly evictedOutcomes?: EvictedCallOutcomes;
+  readonly libraryLimitsGap?: true;
   readonly dispatchProofGap?: true;
   readonly legacyConflictGap?: true;
   readonly answerValidationGap?: true;
@@ -38,6 +41,12 @@ export function sourcesByReason(
 /** Each recorded cause of an unreachable check owns its witness pointers. */
 export function unreachableWitnessGroups(witnesses: readonly AssessmentPointer[]) {
   return {
+    libraryLimits: witnesses.filter(
+      (p) =>
+        p.kind === 'state' &&
+        (p.key === 'libraryResultLimitsIncomplete' ||
+          (p.key === 'libraryResultLimits' && p.path === '/length')),
+    ),
     conflict: witnesses.filter(legacyConflictWitness),
     dispatch: witnesses.filter(dispatchProofWitness),
     validator: witnesses.filter(
@@ -52,6 +61,7 @@ export function standingFactsOf(
   displayNames: ReadonlyMap<string, string>,
   state?: Readonly<Record<string, unknown>>,
 ): StandingNames {
+  const libraryLimits = libraryLimitClauses(assessment, displayNames, state);
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
   const settlements = assessment.reasons.find((r) => r.reason === 'call-not-completed')?.witness;
   const settledSiblings = settlements?.filter(settledSiblingWitness).length;
@@ -65,12 +75,14 @@ export function standingFactsOf(
   const unreachable = assessment.reasons.find((r) => r.reason === 'check-unreachable')?.witness;
   const gaps = unreachable === undefined ? undefined : unreachableWitnessGroups(unreachable);
   return {
+    ...(libraryLimits !== undefined && { libraryLimits }),
     sources: sourcesByReason(assessment),
     displayNames,
     ...(skippedSteps !== undefined && { skippedSteps }),
     ...(batchRefused && { batchRefused: true as const }),
     ...(settledSiblings !== undefined && { settledSiblings }),
     ...(evictedOutcomes !== undefined && { evictedOutcomes }),
+    ...(gaps?.libraryLimits.length && { libraryLimitsGap: true as const }),
     ...(gaps?.dispatch.length && { dispatchProofGap: true as const }),
     ...(gaps?.conflict.length && { legacyConflictGap: true as const }),
     ...(gaps?.validator.length && { answerValidationGap: true as const }),

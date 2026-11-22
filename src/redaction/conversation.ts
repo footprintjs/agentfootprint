@@ -116,7 +116,14 @@ const NAMES = {
     'droppedSummaries',
   ],
   /** The model's thinking. */
-  thinking: ['thinkingBlocks', 'rawThinking', 'blocks'],
+  thinking: [
+    'thinkingBlocks',
+    'rawThinking',
+    'blocks',
+    'priorReplayThinking',
+    'requestReplay',
+    'priorRequestReplay',
+  ],
   /** Tool calls: what they took, what they returned, what a rule saw. */
   tools: [
     'args',
@@ -154,6 +161,9 @@ const NAMES = {
     // serves as the placeholder.
     'findingsLedger',
     'findingsRequest',
+    // This private native projection can also contain prior findings DATA.
+    'requestReplay',
+    'priorRequestReplay',
     // The opt-in verifier's private evidence/selected executed scope. Resume
     // checkpoints remain private; exported records must not disclose this bag.
     'claimVerification',
@@ -188,6 +198,8 @@ const NAMES = {
     'unsupported',
     'unsupportedValues',
     'evidenceRecovery',
+    'requestReplay',
+    'priorRequestReplay',
     'evidence',
     'explanation',
     // The values a guarding evidence gate found unsupported in the draft.

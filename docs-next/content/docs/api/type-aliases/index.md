@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-160 exported from `agentfootprint`.
+161 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -130,6 +130,7 @@ title: Type Aliases
 - [`SwarmOptions`](/docs/api/type-aliases/SwarmOptions)
 - [`TeardownReason`](/docs/api/type-aliases/TeardownReason)
 - [`TeardownScope`](/docs/api/type-aliases/TeardownScope)
+- [`ThinkingDeltaKind`](/docs/api/type-aliases/ThinkingDeltaKind)
 - [`TimeAnswerProblem`](/docs/api/type-aliases/TimeAnswerProblem)
 - [`TimeAskMessageKey`](/docs/api/type-aliases/TimeAskMessageKey)
 - [`TimeAskMessages`](/docs/api/type-aliases/TimeAskMessages)

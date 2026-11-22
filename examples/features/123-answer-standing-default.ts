@@ -1,4 +1,4 @@
-/** Show what a person sees when a tool reports that its work is pending. */
+/** Show the answer warning for pending work and for a result cut by the framework. */
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import type { Payloads } from '../../src/events.js';
@@ -54,6 +54,8 @@ async function readReport(message: string, disableAnswerLayer = false) {
   }
 }
 
+// #endregion answer-standing-default
+
 export async function run(input: string): Promise<string> {
   const byDefault = await readReport(input);
   const off = await readReport(input, true);
@@ -67,9 +69,41 @@ export async function run(input: string): Promise<string> {
   if (off.answer !== modelAnswer) {
     throw new Error('Expected the model’s exact answer with the answer layer off.');
   }
-  return [`Default\n${byDefault.answer}`, `.answerLayer(false)\n${off.answer}`].join('\n\n');
+  const cut = await cutLogAnswer(input);
+  if (typeof cut !== 'string' || !cut.includes('Not sure') || !cut.includes('event log')) {
+    throw new Error('Expected a warning naming the cut log.');
+  }
+  return [`Default\n${byDefault.answer}`, `.answerLayer(false)\n${off.answer}`, cut].join('\n\n');
 }
-// #endregion answer-standing-default
+
+// #region recorded-result-cut
+async function cutLogAnswer(message: string) {
+  const agent = Agent.create({
+    model: 'mock',
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'log-1', name: 'array_events', args: {} }] },
+        'Every event was healthy.',
+      ],
+    }),
+    maxToolResultChars: 2_000,
+  })
+    .tool(
+      defineTool({
+        name: 'array_events',
+        displayName: 'array event log',
+        description: 'Read the array event log.',
+        execute: () => 'OK\n'.repeat(1_000) + 'PORT DOWN',
+      }),
+    )
+    .build();
+  try {
+    return await agent.run({ message });
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion recorded-result-cut
 
 if (isCliEntry(import.meta.url)) {
   run(meta.defaultInput ?? '')
