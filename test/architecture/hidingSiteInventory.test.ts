@@ -32,13 +32,15 @@ function boundaryOf(source: ts.SourceFile, [file, name]: Boundary): ts.Node {
 }
 
 function doorCalls(source: ts.SourceFile, writer: string, exportName: string): ts.CallExpression[] {
-  return source.statements.flatMap((statement) => {
+  const specifiers = new Set<string>();
+  for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
-      return [];
+      continue;
     const specifier = statement.moduleSpecifier.text;
-    if (posix.join(posix.dirname(source.fileName), specifier) !== `${writer}.js`) return [];
-    return importedCalls(source, specifier, exportName);
-  });
+    if (posix.join(posix.dirname(source.fileName), specifier) === `${writer}.js`)
+      specifiers.add(specifier);
+  }
+  return [...specifiers].flatMap((specifier) => importedCalls(source, specifier, exportName));
 }
 
 it.each(Object.entries(auditedBoundaries))('keeps the %s audit tied to production', (_, sites) => {
@@ -98,6 +100,11 @@ it('the armed answer fold reads the committed result and response facts', () => 
 
 it.each([
   ['one owned write', "import { save } from './facts.js'; function cut() { save(); }", 1],
+  [
+    'one owned write with split imports',
+    "import { describeFact } from './facts.js'; import { save } from './facts.js'; function cut() { describeFact(); save(); }",
+    1,
+  ],
   ['missing write', "import { save } from './facts.js'; function cut() { }", 0],
   ['duplicate write', "import { save } from './facts.js'; function cut() { save(); save(); }", 2],
   ['unrelated import', "import { save } from './other.js'; function cut() { save(); }", 0],
