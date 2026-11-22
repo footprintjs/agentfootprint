@@ -58,6 +58,13 @@ export interface InjectionRecord {
   readonly expiresAfter?: ContextLifetime;
 }
 
+/** Native Messages write. The reader consumes the stable marker before publishing the event. */
+export interface MessageInjectionRecord extends InjectionRecord {
+  readonly slot: 'messages';
+  readonly position: number;
+  readonly recencyFromOrder: true;
+}
+
 /**
  * Slot composition summary — written by a slot subflow at the END of its
  * composition pass. ContextRecorder emits one `context.slot_composed`

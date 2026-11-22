@@ -126,6 +126,83 @@ describe('ContextRecorder — injection emit', () => {
     expect(fn.mock.calls[1][0].payload.contentHash).toBe('b');
   });
 
+  it('derives message recency before dropping previously emitted hashes', () => {
+    const dispatcher = new EventDispatcher();
+    const listener = vi.fn();
+    dispatcher.on('agentfootprint.context.injected', listener);
+    const recorder = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+    const early = injection({ slot: 'messages', contentHash: 'early', position: 0 });
+    const last = injection({
+      slot: 'messages',
+      contentHash: 'last',
+      position: 1,
+      asRole: 'assistant',
+      rawContent: '',
+    });
+    const earlyWrite = { ...early, recencyFromOrder: true };
+    const lastWrite = { ...last, recencyFromOrder: true };
+
+    recorder.onSubflowEntry(subflowEntry(SUBFLOW_IDS.MESSAGES));
+    recorder.onWrite(writeEvent(INJECTION_KEYS.MESSAGES, [lastWrite], SUBFLOW_IDS.MESSAGES));
+    recorder.onWrite(
+      writeEvent(INJECTION_KEYS.MESSAGES, [earlyWrite, lastWrite], SUBFLOW_IDS.MESSAGES),
+    );
+
+    const events = listener.mock.calls.map(([event]) => event.payload);
+    expect(events).toEqual([
+      { ...last, asRecency: 'latest' },
+      { ...early, asRecency: 'earlier' },
+    ]);
+    expect(lastWrite).not.toHaveProperty('asRecency');
+    expect(earlyWrite).not.toHaveProperty('asRecency');
+  });
+
+  it.each(['custom', 'user'] as const)(
+    'preserves omitted recency on a positioned public Messages row from %s',
+    (source) => {
+      const dispatcher = new EventDispatcher();
+      const listener = vi.fn();
+      dispatcher.on('agentfootprint.context.injected', listener);
+      const recorder = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+      const positioned = injection({
+        slot: 'messages',
+        source,
+        reason: 'conversation history [7]',
+        position: 7,
+        asRole: 'assistant',
+      });
+      recorder.onWrite({
+        ...writeEvent(INJECTION_KEYS.MESSAGES, [positioned], SUBFLOW_IDS.MESSAGES),
+        stageId: 'compose',
+        stageName: 'Compose',
+        runtimeStageId: `${SUBFLOW_IDS.MESSAGES}/compose#0`,
+      });
+
+      expect(listener.mock.calls.map(([event]) => event.payload)).toEqual([positioned]);
+      expect(listener.mock.calls[0]![0].payload).not.toHaveProperty('asRecency');
+    },
+  );
+
+  it('preserves custom recency and leaves rows without a position alone', () => {
+    const dispatcher = new EventDispatcher();
+    const listener = vi.fn();
+    dispatcher.on('agentfootprint.context.injected', listener);
+    const recorder = new ContextRecorder({ dispatcher, getRunContext: makeRun });
+    const unpositioned = injection({ slot: 'messages', contentHash: 'unpositioned' });
+    const explicit = injection({
+      slot: 'messages',
+      contentHash: 'explicit',
+      position: 1,
+      asRecency: 'earlier',
+    });
+
+    recorder.onWrite(
+      writeEvent(INJECTION_KEYS.MESSAGES, [unpositioned, explicit], SUBFLOW_IDS.MESSAGES),
+    );
+
+    expect(listener.mock.calls.map(([event]) => event.payload)).toEqual([unpositioned, explicit]);
+  });
+
   it('ignores writes when no slot subflow is active', () => {
     const dispatcher = new EventDispatcher();
     const fn = vi.fn();
