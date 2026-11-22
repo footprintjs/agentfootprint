@@ -38,6 +38,7 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import { assumedClauses, type StandingAssumedValue } from './assumedValues.js';
 import { declaredStandingClause } from './declaredStandingWords.js';
 import {
   callNotCompletedClause,
@@ -49,7 +50,7 @@ import type { StandingNames } from './standingFacts.js';
 import { LIBRARY_LIMIT_WORDS, INCOMPLETE_LIMIT_WORDS } from './results/library-did/stage.js';
 import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
 
-export { assumedValuesSourceOf } from './assumedValues.js';
+export { assumedValuesSourceOf, type StandingAssumedValue } from './assumedValues.js';
 export { settledSiblingWitness } from './callStandingWords.js';
 export { reasonUsesToolWords } from './reasonDetails.js';
 export {
@@ -145,14 +146,6 @@ export interface AnswerAssessmentData {
     readonly ran: number;
     readonly of: number;
   }[];
-}
-
-/** One value a tool's rule assumed this turn — the "Assumed" block's line, as data. */
-export interface StandingAssumedValue {
-  readonly toolName: string;
-  readonly argument: string;
-  readonly value: string;
-  readonly hidden: boolean;
 }
 
 /**
@@ -395,30 +388,6 @@ export function standingDisplayNames(
   return names;
 }
 
-/** The clause for one assumed value — its value only in the tool's own view; the tool in the app's words when it declares them. */
-function assumedClause(line: StandingAssumedValue, displayName: string | undefined): string {
-  const by = displayName === undefined ? `${line.toolName}'s rule` : `the rule of ${displayName}`;
-  return line.hidden
-    ? `${line.argument} was assumed by ${by} (its value is hidden by the tool's view), not given by you`
-    : `${line.argument} = ${JSON.stringify(line.value)} was assumed by ${by}, not given by you`;
-}
-
-/** One clause per distinct (tool, argument, shown value), in the order the rows were filed. */
-function assumedClauses(
-  lines: readonly StandingAssumedValue[],
-  names: StandingNames | undefined,
-): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const line of lines) {
-    const key = JSON.stringify([line.toolName, line.argument, line.hidden ? '' : line.value]);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(assumedClause(line, names?.displayNames.get(line.toolName)));
-  }
-  return out;
-}
-
 const DISPATCH_PROOF_WORDS = 'the record could not establish tool entry for every checked call';
 
 /** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
@@ -493,7 +462,7 @@ function reasonClauses(
   for (const reason of data.reasons) {
     if (reason === 'argument-assumed') {
       // Never cut (see MAX_CLAUSES): the line owns the assumed sentence.
-      clauses.push(...assumedClauses(assumed, names));
+      clauses.push(...assumedClauses(assumed, names?.displayNames));
       // A before-tool rewrite with no declared origin fires the same reason and
       // names no row the block would print: said once, without a value.
       if (rewritten || assumed.length === 0) {

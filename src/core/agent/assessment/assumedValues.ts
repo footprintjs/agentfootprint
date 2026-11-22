@@ -1,6 +1,14 @@
 import { isRecord } from './recordValues.js';
 import type { AnswerAssessment } from './types.js';
 
+/** One value a tool's rule assumed this turn — the "Assumed" block's line, as data. */
+export interface StandingAssumedValue {
+  readonly toolName: string;
+  readonly argument: string;
+  readonly value: string;
+  readonly hidden: boolean;
+}
+
 /**
  * Where this turn's assumed values are read from: the ledger, the turn, and
  * the before-tool rewrites a row may have been superseded by — handed to the
@@ -52,4 +60,28 @@ export function assumedValuesSourceOf(
     turn,
     readDecisions: Array.isArray(decisions) ? () => decisions as readonly unknown[] : undefined,
   };
+}
+
+/** The clause for one assumed value — its value only in the tool's own view; the tool in the app's words when it declares them. */
+function assumedClause(line: StandingAssumedValue, displayName: string | undefined): string {
+  const by = displayName === undefined ? `${line.toolName}'s rule` : `the rule of ${displayName}`;
+  return line.hidden
+    ? `${line.argument} was assumed by ${by} (its value is hidden by the tool's view), not given by you`
+    : `${line.argument} = ${JSON.stringify(line.value)} was assumed by ${by}, not given by you`;
+}
+
+/** One clause per distinct (tool, argument, shown value), in the order the rows were filed. */
+export function assumedClauses(
+  lines: readonly StandingAssumedValue[],
+  displayNames: ReadonlyMap<string, string> | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const key = JSON.stringify([line.toolName, line.argument, line.hidden ? '' : line.value]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(assumedClause(line, displayNames?.get(line.toolName)));
+  }
+  return out;
 }
