@@ -10,8 +10,13 @@ import { isRecord } from '../../recordValues.js';
 /** One declaration is read only as far as the warning can use it. */
 const MAX_WORD_ITEMS = 8;
 
+export interface DeclaredWord {
+  readonly text: string;
+  readonly why?: string;
+}
+
 interface DeclaredWordList {
-  readonly words: readonly string[];
+  readonly words: readonly DeclaredWord[];
   readonly omitted: number;
 }
 
@@ -33,8 +38,7 @@ function word(value: unknown): string | undefined {
   return isPlaceholder(words) ? undefined : words;
 }
 
-function itemWord(item: unknown): string | undefined {
-  if (!isRecord(item)) return undefined;
+function itemText(item: object): string | undefined {
   const what = ownData(item, 'what');
   const long = word(what);
   if (long === undefined || typeof what !== 'string') return undefined;
@@ -54,10 +58,13 @@ function itemWord(item: unknown): string | undefined {
 function wordList(value: unknown): DeclaredWordList {
   const list = readOwnList(value, MAX_WORD_ITEMS);
   if (list === undefined) return { words: [], omitted: 0 };
-  const words: string[] = [];
+  const words: DeclaredWord[] = [];
   for (const item of list.entries) {
-    const text = itemWord(item);
-    if (text !== undefined) words.push(text);
+    if (!isRecord(item)) continue;
+    const text = itemText(item);
+    if (text === undefined) continue;
+    const why = word(ownData(item, 'why'));
+    words.push({ text, ...(why === undefined ? {} : { why }) });
   }
   return { words, omitted: list.unread };
 }

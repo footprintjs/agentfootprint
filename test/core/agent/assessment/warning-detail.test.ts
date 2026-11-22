@@ -204,9 +204,9 @@ describe('the default warning carries recorded reason detail', () => {
     const words = detail?.toolSays;
     expect(run.answer).toContain('cannot cover');
     expect(words?.entries.map(({ kind }) => kind)).toEqual(['cannotCover', 'cannotCover']);
-    expect(words?.entries.reduce((size, { text }) => size + text.length, 0)).toBeLessThanOrEqual(
-      160,
-    );
+    expect(
+      words?.entries.reduce((size, { text, why }) => size + text.length + (why?.length ?? 0), 0),
+    ).toBeLessThanOrEqual(160);
     expect(words?.omitted).toBe(1);
     expect(run.answer).toContain('1 more in the run record');
     expect(run.saved).toEqual(run.assessment);
@@ -259,5 +259,38 @@ it('retains older saved warning text with neither newer wording rule', () => {
   };
   expect(recordedStandingLinesOf(data, [], false, expanded)).toContain(
     standingLineOf(data, [], false, old),
+  );
+});
+
+it('recognizes the exact saved subject-only line even when the record contains why', () => {
+  const data = {
+    assessment: 'unknown',
+    standing: 'not-sure',
+    reasons: ['check-unreachable', 'coverage-gap'],
+    checked: [],
+  } as const;
+  const subject = { kind: 'notChecked', text: 'The archive' } as const;
+  const earlier: StandingNames = {
+    sources: new Map([['coverage-gap', { kind: 'calls', calls: [] }]]),
+    displayNames: new Map(),
+    dispatchProofGap: true,
+    details: new Map([['coverage-gap', { toolSays: { entries: [subject], omitted: 1 } }]]),
+  };
+  const current: StandingNames = {
+    ...earlier,
+    legacyConflictGap: true,
+    details: new Map([
+      [
+        'coverage-gap',
+        { toolSays: { entries: [{ ...subject, why: 'collection paused' }], omitted: 1 } },
+      ],
+    ]),
+  };
+  const earlierLine = standingLineOf(data, [], false, earlier);
+  const currentLine = standingLineOf(data, [], false, current);
+  expect(earlierLine).toContain('did not check “The archive”; 1 more in the run record');
+  expect(currentLine).toContain('did not check “The archive” because “collection paused”');
+  expect(recordedStandingLinesOf(data, [], false, current)).toEqual(
+    expect.arrayContaining([earlierLine, currentLine]),
   );
 });

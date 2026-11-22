@@ -246,6 +246,8 @@ export interface AssessmentToolWords {
   readonly entries: readonly {
     readonly kind: 'notChecked' | 'cannotCover' | 'tryInstead';
     readonly text: string;
+    /** The admitted explanation for an unchecked or uncovered item. */
+    readonly why?: string;
     /** Registered identity of the declaring tool, when retained. */
     readonly toolName?: string;
   }[];
