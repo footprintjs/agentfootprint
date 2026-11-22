@@ -39,7 +39,11 @@
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
 import { declaredStandingClause } from './declaredStandingWords.js';
-import { callNotCompletedClause, unfinishedWorkClause } from './callStandingWords.js';
+import {
+  callNotCompletedClause,
+  unfinishedWorkClause,
+  withPrintedOutputCounts,
+} from './callStandingWords.js';
 import type { StandingNames } from './standingFacts.js';
 import { LIBRARY_LIMIT_WORDS, INCOMPLETE_LIMIT_WORDS } from './results/library-did/stage.js';
 import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
@@ -436,17 +440,24 @@ function reasonClause(
     return 'a value in the answer came from a result the model had set aside';
   }
   if (names !== undefined && source !== undefined) {
+    const counts = names.details?.get(reason)?.counts;
     if (reason === 'call-not-completed') {
-      return callNotCompletedClause(
-        source,
-        names.displayNames,
-        names.batchRefused ? 'a call was refused' : REASON_WORDS[reason],
-        names.settledSiblings,
-        names.evictedOutcomes,
+      return withPrintedOutputCounts(
+        callNotCompletedClause(
+          source,
+          names.displayNames,
+          names.batchRefused ? 'a call was refused' : REASON_WORDS[reason],
+          names.settledSiblings,
+          names.evictedOutcomes,
+        ),
+        counts,
       );
     }
     if (reason === 'work-not-finished') {
-      return unfinishedWorkClause(source, names.displayNames, REASON_WORDS[reason]);
+      return withPrintedOutputCounts(
+        unfinishedWorkClause(source, names.displayNames, REASON_WORDS[reason]),
+        counts,
+      );
     }
   }
   if (reason === 'step-skipped' && names?.skippedSteps !== undefined && names.skippedSteps > 1) {

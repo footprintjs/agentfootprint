@@ -18,8 +18,10 @@ import {
   checkInApproved,
   codeRunnerTool,
   codeRunsOf,
+  defineTool,
   deny,
   isCheckInPause,
+  slidingWindow,
 } from '../../src/index.js';
 import { agentCoreCodeRunner } from '../../src/adapters/code/agentcore.js';
 import { localCodeRunner } from '../../src/adapters/code/local.js';
@@ -111,6 +113,7 @@ describe('code runner settlement from runner facts', () => {
     reason?: 'call-not-completed' | 'work-not-finished';
     cut?: true;
     counts?: ToolOutputCounts;
+    evict?: true;
     redactHistoryContent?: true;
     resume?: true;
     replace?: true;
@@ -182,6 +185,15 @@ describe('code runner settlement from runner facts', () => {
       resume: true,
     },
     {
+      label: 'a local cut after the tool message leaves the window',
+      result: { stdout: 'abcdefghijkl', stderr: '', ok: true },
+      read: `abcdefgh\n[truncated: showing 8 of 12${CLIP_ADVICE}`,
+      reason: 'work-not-finished',
+      cut: true,
+      counts: { kept: 8, total: 12, unit: 'characters' },
+      evict: true,
+    },
+    {
       label: 'clipping with history content selected for redaction',
       result: { stdout: 'abcdefghijkl', stderr: '', ok: true },
       read: `abcdefgh\n[truncated: showing 8 of 12${CLIP_ADVICE}`,
@@ -231,10 +243,15 @@ describe('code runner settlement from runner facts', () => {
             },
           }
         : native;
-    const agent = Agent.create({
+    const builder = Agent.create({
       provider: mock({
         respond: (request) => {
-          const toolResult = request.messages.find((message) => message.role === 'tool');
+          const toolResults = request.messages.filter((message) => message.role === 'tool');
+          if (entry.evict === true && toolResults.some(({ toolCallId }) => toolCallId === 'c2')) {
+            expect(toolResults.map(({ toolCallId }) => toolCallId)).toEqual(['c2']);
+            return { content: MODEL_ANSWER };
+          }
+          const toolResult = toolResults.find(({ toolCallId }) => toolCallId === 'c1');
           if (toolResult === undefined) {
             return { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: 'fixture' } }] };
           }
@@ -245,14 +262,27 @@ describe('code runner settlement from runner facts', () => {
             'toolName',
           ]);
           reads.push(String(toolResult.content));
+          if (entry.evict === true) {
+            return { toolCalls: [{ id: 'c2', name: 'filler', args: {} }] };
+          }
           return { content: MODEL_ANSWER };
         },
       }),
       model: 'mock',
+      ...(entry.evict === true && { keepLastToolResults: false }),
       ...(entry.redactHistoryContent && { redact: { fields: { history: ['2.content'] } } }),
-    })
-      .tool(tool)
-      .build();
+    }).tool(tool);
+    if (entry.evict === true) {
+      builder.window(slidingWindow({ keepRecentTurns: 1 })).tool(
+        defineTool({
+          name: 'filler',
+          description: 'Return one fixed value.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => 'ok',
+        }),
+      );
+    }
+    const agent = builder.build();
     const recorder = recordRun(agent);
     agent.on('agentfootprint.tools.code_run', ({ payload }) => codeRuns.push(payload));
 
@@ -270,16 +300,34 @@ describe('code runner settlement from runner facts', () => {
     expect(reads).toEqual([entry.read]);
     expect.soft(codeRuns.map(({ truncated }) => truncated)).toEqual([entry.cut === true]);
     const state = agent.getLastSnapshot()?.sharedState;
-    const toolMessage = state?.history.find((message) => message.role === 'tool');
-    expect.soft(toolMessage?.toolOutputCounts).toEqual(entry.counts);
+    const toolMessage = state?.history.find(
+      (message) => message.role === 'tool' && message.toolCallId === 'c1',
+    );
+    expect.soft(toolMessage?.toolOutputCounts).toEqual(entry.evict ? undefined : entry.counts);
     expect
       .soft(state?.settledToolCalls?.map(({ outputCounts }) => outputCounts))
-      .toEqual([entry.counts]);
+      .toEqual(entry.evict ? [entry.counts, undefined] : [entry.counts]);
     const reasons = entry.reason === undefined ? [] : [entry.reason];
     expect.soft(live?.reasons.map(({ reason }) => reason)).toEqual(reasons);
     expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
+    const reason = saved.reasons.find(({ reason }) => reason === entry.reason);
+    expect
+      .soft(reason?.detail)
+      .toEqual(entry.counts === undefined ? undefined : { counts: entry.counts });
+    if (entry.evict === true) {
+      expect
+        .soft(reason?.witness)
+        .toEqual([{ kind: 'state', key: 'settledToolCalls', path: '/0/reportedStatus' }]);
+    }
     expect.soft(live).toEqual(saved);
     if (entry.reason === undefined) expect(answer).toBe(MODEL_ANSWER);
+    if (entry.counts !== undefined) {
+      const { kept, total } = entry.counts;
+      const amount = total === undefined ? kept : `${kept} of ${total}`;
+      expect(answer).toContain(`kept ${amount} printed characters`);
+    } else {
+      expect(answer).not.toContain('printed characters');
+    }
   });
 });
 
