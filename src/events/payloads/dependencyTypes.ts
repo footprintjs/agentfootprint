@@ -15,7 +15,7 @@ export type { MemoryFlavor, MemoryStrategyKind, MemoryType } from '../../memory/
 export type { ArtifactOp, ArtifactRefusalReason } from '../../artifacts/capability.js';
 export type { ArtifactOrigin, ArtifactSweepReason } from '../../artifacts/types.js';
 export type { DatasetTimeAxis } from '../../time/axis.js';
-export type { ThinkingBlock } from '../../thinking/types.js';
+export type { ThinkingBlock, ThinkingDeltaKind } from '../../thinking/types.js';
 export type { LoopMoment } from '../../lib/moments.js';
 export type { ScriptsVerdict, TurnEndScripts } from '../../lib/scriptRecord.js';
 export type { InstructionDeliveryLease, ToolResultStatus } from '../../semantics/toolEffects.js';

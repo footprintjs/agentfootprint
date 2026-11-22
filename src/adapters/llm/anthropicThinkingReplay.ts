@@ -10,7 +10,8 @@
  * https://platform.claude.com/docs/en/build-with-claude/thinking#preserving-thinking-blocks
  * https://platform.claude.com/docs/en/build-with-claude/preserved-thinking
  */
-import type { LLMMessage, LLMRequest } from '../../provider-contract/types.js';
+import type { LLMRequest } from '../../provider-contract/types.js';
+import { completedAnthropicThrough } from '../../thinking/anthropicTurn.js';
 import type {
   MessageReplay,
   ReplayPreparation,
@@ -124,29 +125,6 @@ export function thinkingReplayBinding(
   });
 }
 
-/** A supplied tool result is not completion. Only a witnessed end_turn is. */
-function completedThrough(messages: readonly LLMMessage[]): number {
-  const pending = new Set<string>();
-  let completed = -1;
-  for (let i = 0; i < messages.length; i++) {
-    const m = messages[i];
-    if (m.role === 'assistant') {
-      for (const tool of m.toolCalls ?? []) pending.add(tool.id);
-      if (
-        m.replay?.version === 1 &&
-        m.replay.protocol === 'anthropic-messages' &&
-        typeof m.replay.id === 'string' &&
-        m.replay.id.length > 0 &&
-        m.replay.stopReason === 'end_turn' &&
-        pending.size === 0 &&
-        !m.toolCalls?.length
-      )
-        completed = i;
-    } else if (m.role === 'tool' && m.toolCallId !== undefined) pending.delete(m.toolCallId);
-  }
-  return completed;
-}
-
 function suffixOf(current: readonly string[], original: readonly string[]): boolean {
   return (
     current.length <= original.length &&
@@ -196,7 +174,7 @@ export function prepareAnthropicReplay(
   model: string,
   provider: string,
 ): ReplayPreparation {
-  const completed = completedThrough(request.messages);
+  const completed = completedAnthropicThrough(request.messages);
   let prepared = request;
   const omissions: ReplayPreparation['omissions'][number][] = [];
   let retiredThrough = -1;

@@ -108,7 +108,7 @@ try {
 
 ## Reasoning models
 
-Reasoning models (deepseek-r1, qwen3, gpt-oss) think out loud. **Where that thinking lands depends on whether you ask for it.**
+Reasoning models such as deepseek-r1, qwen3 and gpt-oss can send their reasoning in a structured field or inline in the answer.
 
 Ask, and Ollama lifts the reasoning out of the answer into its own field, which arrives as normalized thinking blocks:
 
@@ -116,7 +116,9 @@ Ask, and Ollama lifts the reasoning out of the answer into its own field, which 
 const provider = ollama('deepseek-r1', { think: true }); // or 'low' | 'medium' | 'high' | 'max'
 ```
 
-Don't ask, and the same model writes `<think>…</think>` into the answer text. agentfootprint **recognizes that shape and surfaces the reasoning as thinking blocks — but it does not edit the answer.** The tags stay exactly where the model put them. Silently rewriting a model's output is a change of meaning, and that is your application's call to make, not a library's. If you want the reasoning out of the answer, ask for it with `think`.
+Structured thinking also arrives in [live thinking events](doc:streaming#show-live-thinking-summaries) as `kind: 'raw-reasoning'` when thinking is requested or the model supplies it by default. Set `think: false` to keep structured thinking fragments out of that live stream.
+
+When a model writes `<think>…</think>` into its answer, AgentFootprint surfaces the reasoning in the completed thinking blocks and keeps the answer text intact, including the tags. Request structured thinking with `think` to get separate fields from a supported model.
 
 `ollamaThinkingHandler` does the normalizing; `ollama()` declares it (`thinkingHandler`, which `thinkingHandlerFor` reads), so there is nothing to register. The value it reads is `LLMResponse.rawThinking`, typed as `OllamaRawThinking` — a tagged union that records **which** of the two situations produced the reasoning: `{ kind: 'field' }` when Ollama lifted it out, `{ kind: 'inline' }` when it was found in the answer. Reading that tag is how you tell whether the reasoning is also still sitting in the text your user sees.
 

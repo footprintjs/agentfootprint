@@ -5,7 +5,7 @@ import type { EpochLocation } from '../epochs.js';
 
 type GapRead =
   | {
-      readonly receipt: Pick<StoredReceipt, 'cache' | 'replayPreparations'>;
+      readonly receipt: Pick<StoredReceipt, 'cache' | 'messages' | 'replayPreparations'>;
       readonly cause?: undefined;
     }
   | { readonly receipt?: undefined; readonly cause: ServedGapCause };
@@ -516,7 +516,37 @@ export function gapsOf(
     gaps.push(gapOf('cache-transform'));
   }
   if (receipt !== undefined) gaps.push(gapOf('provider-defaults'));
-  if (receipt?.replayPreparations !== undefined) gaps.push(gapOf('thinking-replay'));
+  const nativeReplay = nativeReplayGapDetails(receipt);
+  if (nativeReplay !== undefined || receipt?.replayPreparations !== undefined) {
+    gaps.push({ ...gapOf('thinking-replay'), ...nativeReplay });
+  }
   if (forced !== undefined) gaps.push(gapOf('forced-tool-schema'));
   return gaps;
+}
+
+function nativeReplayGapDetails(receipt: GapRead['receipt']): Omit<ServedGap, 'gap'> | undefined {
+  const requestOnly = receipt?.messages?.requestOnly;
+  const nativeReasons = Array.isArray(requestOnly)
+    ? requestOnly.flatMap((line) =>
+        typeof line?.reason === 'string' && line.reason.startsWith('native-turn-')
+          ? [line.reason]
+          : [],
+      )
+    : [];
+  const omission = receipt?.replayPreparations !== undefined;
+  if (nativeReasons.length === 0) return undefined;
+  const why =
+    'The request included native tool-turn context whose placement cannot be reconstructed from the public conversation history.';
+  const fields = [
+    ...(nativeReasons.includes('native-turn-recovery')
+      ? ['system.hash', 'system.pieces', 'system.chars']
+      : []),
+    'messages.count',
+    'messages.entries',
+    'messages.requestOnly',
+  ];
+  return {
+    fields: omission ? [...fields, 'requestMeasurement'] : fields,
+    why: omission ? `${why} ${SERVED_GAPS['thinking-replay'].why}` : why,
+  };
 }

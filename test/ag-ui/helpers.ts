@@ -9,7 +9,7 @@ import { AbstractAgent, type RunAgentResult } from '@ag-ui/client';
 import type { BaseEvent, Message, ResumeEntry, RunAgentInput } from '@ag-ui/core';
 import { from, type Observable } from 'rxjs';
 
-import type { AgentfootprintEvent } from '../../src/index.js';
+import type { AgentfootprintEvent } from '../../src/events.js';
 import {
   agUiSerializer,
   type AgUiSerializerOptions,
