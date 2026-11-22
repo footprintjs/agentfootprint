@@ -10,7 +10,7 @@ import type { AgentState } from '../../../types.js';
 import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { boundArgsOf } from '../access/bindings.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
-import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
+import type { ExecutedToolResultEnvelope } from '../contracts/callCells.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import { recordDecisions } from '../../../middleware/ledger.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
@@ -24,6 +24,7 @@ import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js
 import {
   outcomeField,
   reportedStatusField,
+  toolFailureCategoryField,
   toolResultExecutionField,
 } from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
@@ -115,7 +116,7 @@ export function buildResumeAsk(
      *  path knows about itself (a decline or a chain-deny never ran). */
     let stepToolRan = false;
     /** The effects envelope the resumed call returned (9.19.0). */
-    let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeEnvelope: ExecutedToolResultEnvelope | undefined;
     let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
@@ -318,6 +319,10 @@ export function buildResumeAsk(
       }
       // The batch settlement (9.113.0): the answered call's result, then the
       // siblings the pause left un-dispatched, each settled — never run.
+      const resultReplaced =
+        resumedHalt !== undefined ||
+        sourceHalt !== undefined ||
+        !Object.is(modelResult, askPlaced.modelResult);
       const askSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
@@ -332,12 +337,15 @@ export function buildResumeAsk(
             ...toolResultExecutionField(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
-              !stepToolRan ||
-                resumedHalt !== undefined ||
-                sourceHalt !== undefined ||
-                !Object.is(modelResult, askPlaced.modelResult),
+              !stepToolRan || resultReplaced,
+              { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+            ...toolFailureCategoryField(
+              scriptSeen,
+              askSettled,
+              resultReplaced || toolResultDisposition !== undefined,
+            ),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A declined ask ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(askSettled),

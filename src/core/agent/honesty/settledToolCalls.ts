@@ -2,12 +2,14 @@ import type { TypedScope } from 'footprintjs';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
+import { readToolOutputCounts } from '../recordedCalls/outputCounts.js';
 import { readNotDispatched } from '../../../semantics/toolRan.js';
 import type { AgentState } from '../types.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 import { declaredByValue, readEmptiness } from '../emptiness.js';
 import {
   assessmentCallOutcome,
+  recordedToolFailureCategory,
   recordedToolExecution,
   readResultDispositionMark,
   readRewrittenToolResult,
@@ -49,14 +51,20 @@ export function toolSettlementOf(
       : readNotDispatched(message.notDispatched) === 'settled'
       ? 'settled'
       : assessmentCallOutcome({ ...message });
+  const failureCategory = recordedToolFailureCategory(message);
   const settlement: RecordedToolSettlement = {
     callOccurrenceKey,
     execution,
     ...(outcome !== undefined && { outcome }),
+    ...(failureCategory !== undefined && { failureCategory }),
   };
   if (execution !== 'returned') return settlement;
 
   const reportedStatus = rewrite !== undefined ? rewrite.reportedStatus : message.reportedStatus;
+  const outputCounts =
+    rewrite === undefined && (outcome === 'failed' || reportedStatus === 'partial')
+      ? readToolOutputCounts(message.toolOutputCounts)
+      : undefined;
   const content = rewrite === undefined ? unwrapped : rewrite.content;
   const rows =
     rewrite === undefined ? coverage.filter((row) => readCallOccurrenceKey(row) === key) : [];
@@ -82,6 +90,7 @@ export function toolSettlementOf(
     ...settlement,
     delivery: rewrite === undefined ? 'native' : 'rewritten',
     ...((reportedStatus === 'partial' || reportedStatus === 'pending') && { reportedStatus }),
+    ...(outputCounts !== undefined && { outputCounts }),
     ...(empty !== undefined && { empty }),
     ...(gap && { gap: true as const }),
     ...(rewrite?.period !== undefined && { rewrittenPeriod: rewrite.period }),

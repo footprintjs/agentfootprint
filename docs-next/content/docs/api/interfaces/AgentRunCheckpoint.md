@@ -97,7 +97,7 @@ Where the failure happened. Diagnostic — surfaces in oncall
 
 #### phase
 
-> `readonly` **phase**: `"tool"` \| `"iteration"` \| `"unknown"` \| `"llm"`
+> `readonly` **phase**: `"tool"` \| `"unknown"` \| `"iteration"` \| `"llm"`
 
 #### stage?
 

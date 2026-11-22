@@ -949,8 +949,12 @@ describe('a policy that names a slot key keeps its derived events’ content out
       (e) => e.type === 'agentfootprint.context.injected',
     );
     expect(injected.length).toBeGreaterThan(0);
+    expect(
+      injected.map(({ payload }) => payload).filter(({ slot }) => slot === 'messages'),
+    ).toEqual([expect.objectContaining({ asRecency: 'latest', position: 0 })]);
     for (const event of injected) {
       const payload = event.payload as unknown as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('recencyFromOrder');
       expect(payload.slot).toBeDefined();
       expect(payload.contentHash).toBeDefined();
       expect(payload.contentSummary).toBe('[REDACTED]');

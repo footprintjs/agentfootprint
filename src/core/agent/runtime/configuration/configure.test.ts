@@ -56,6 +56,14 @@ describe('resolved Agent construction', () => {
     await expect(agent.run('hello')).resolves.toBe('ok');
   });
 
+  it('rejects unknown or broader live thinking policies while drafts are held', () => {
+    for (const input of [true, 'raw-reasoning', 'provider-summaries']) {
+      expect(() =>
+        Agent.create({ ...options(), liveThinkingWithHeldDrafts: input as never }).build(),
+      ).toThrow(/liveThinkingWithHeldDrafts must be 'provider-summary'/);
+    }
+  });
+
   it('uses the original runner identity in native run metadata', async () => {
     const agent = new Agent({ ...options(), id: 'declared-id' }, 'system', [], voice);
     let configured: unknown;

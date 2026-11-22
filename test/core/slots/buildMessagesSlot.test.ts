@@ -24,7 +24,10 @@ import { flowChart, FlowChartExecutor } from 'footprintjs';
 import type { TypedScope } from 'footprintjs';
 
 import { buildMessagesSlot } from '../../../src/core/slots/buildMessagesSlot.js';
+import { EventDispatcher } from '../../../src/events/dispatcher.js';
+import type { ContextInjectedPayload } from '../../../src/events/payloads.js';
 import { SUBFLOW_IDS } from '../../../src/lib/conventions.js';
+import { ContextRecorder } from '../../../src/recorders/core/ContextRecorder.js';
 import type { LLMMessage } from '../../../src/provider-contract/types.js';
 import type { InjectionRecord } from '../../../src/recorders/core/types.js';
 
@@ -63,6 +66,48 @@ async function project(history: readonly LLMMessage[]): Promise<readonly Injecti
 }
 
 describe('buildMessagesSlot — one record per message, credited to whoever put it there', () => {
+  it.each(['inline', 'deferred'] as const)(
+    'keeps native event labels through %s delivery in an app-owned executor',
+    async (delivery) => {
+      const executor = new FlowChartExecutor(
+        harness([
+          { role: 'user', content: 'hi' },
+          {
+            role: 'assistant',
+            content: 'a delivered message',
+            injectedBy: { injectionId: 'note', flavor: 'custom', iteration: 1 },
+          },
+        ]),
+      );
+      const dispatcher = new EventDispatcher();
+      const payloads: ContextInjectedPayload[] = [];
+      dispatcher.on('agentfootprint.context.injected', ({ payload }) => {
+        payloads.push(payload);
+      });
+      executor.attachCombinedRecorder(
+        new ContextRecorder({
+          dispatcher,
+          getRunContext: () => ({ runId: 'messages', runStartMs: 0, compositionPath: [] }),
+        }),
+        { delivery },
+      );
+
+      await executor.run({});
+      expect((await executor.drainObservers()).pending).toBe(0);
+      expect(
+        payloads.map(({ source, asRecency, position }) => [source, asRecency, position]),
+      ).toEqual([
+        ['user', 'earlier', 0],
+        ['custom', 'latest', 1],
+      ]);
+      for (const row of payloads) {
+        expect(row).not.toHaveProperty('recencyFromOrder');
+        const fields = Object.keys(row);
+        expect(fields[fields.indexOf('position') - 1]).toBe('asRecency');
+      }
+    },
+  );
+
   it('attributes a delivered message to its injection, not to its role', async () => {
     const records = await project([
       { role: 'user', content: 'hi' },

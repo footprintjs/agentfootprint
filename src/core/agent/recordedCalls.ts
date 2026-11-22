@@ -27,6 +27,8 @@ export {
   assessmentCallOutcome,
   callEntered,
   isRecordedBatchRefusal,
+  readToolFailureCategory,
+  recordedToolFailureCategory,
   recordedToolExecution,
   type RecordedToolExecution,
 } from './recordedCalls/execution.js';

@@ -370,6 +370,20 @@ exactly what it always did.
 
 ***
 
+### toolFailureCategory?
+
+> `readonly` `optional` **toolFailureCategory?**: `ToolFailureCategory`
+
+Defined in: [src/provider-contract/toolResultRecord.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L43)
+
+The engine category of a thrown tool failure, without the error text.
+
+#### Inherited from
+
+`ToolResultRecord.toolFailureCategory`
+
+***
+
 ### toolName?
 
 > `readonly` `optional` **toolName?**: `string`
@@ -380,11 +394,25 @@ For `role: 'tool'` — the tool name this result corresponds to.
 
 ***
 
+### toolOutputCounts?
+
+> `readonly` `optional` **toolOutputCounts?**: `ToolOutputCounts`
+
+Defined in: [src/provider-contract/toolResultRecord.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L41)
+
+Printed output counts from an admitted native return. Kept off the provider wire.
+
+#### Inherited from
+
+`ToolResultRecord.toolOutputCounts`
+
+***
+
 ### toolResultDisposition?
 
 > `readonly` `optional` **toolResultDisposition?**: `"withheld"` \| `"rewritten"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L16)
+Defined in: [src/provider-contract/toolResultRecord.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L33)
 
 A host's after-tool rule withheld or replaced this result. Kept off the provider wire.
 
@@ -398,7 +426,7 @@ A host's after-tool rule withheld or replaced this result. Kept off the provider
 
 > `readonly` `optional` **toolResultExecution?**: `"not-entered"` \| `"threw"` \| `"returned"` \| `"returned-unserved"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L22)
+Defined in: [src/provider-contract/toolResultRecord.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L39)
 
 Whether the tool was entered and returned. `returned-unserved` means a
 framework refusal or cap replaced its return. Host rules are recorded
@@ -414,7 +442,7 @@ separately by `toolResultDisposition`. Artifact tickets carry the result.
 
 > `readonly` `optional` **toolResultOrigin?**: `"not-entered"` \| `"input-cancelled"` \| `"outcome-unknown"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L14)
+Defined in: [src/provider-contract/toolResultRecord.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L31)
 
 Producer-owned notice origin, recorded only under findings admission.
 `not-entered` means the producer refused before tool.execute; an error

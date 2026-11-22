@@ -12,10 +12,15 @@ import type { InnerCallHalt } from '../../../innerCallOuter.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
 
+/** A tool return admitted by the invocation and kept off the provider wire. */
+export type ExecutedToolResultEnvelope = ReadToolResultEnvelope & {
+  readonly outputCounts?: LLMMessage['toolOutputCounts'];
+};
+
 export interface CallResultCell {
   result: unknown;
   error: boolean | undefined;
-  toolEnvelope: ReadToolResultEnvelope | undefined;
+  toolEnvelope: ExecutedToolResultEnvelope | undefined;
   toolStatus: ToolResultStatus | undefined;
   /** The status word of a result that is an envelope but for an unknown
    *  status (`semantics/toolEffects.ts` · `unknownStatusOf`), cleaned —
@@ -33,6 +38,7 @@ export interface CallExecution extends PendingDatasetLimits {
   denied: boolean;
   executed: boolean;
   toolResultExecution?: LLMMessage['toolResultExecution'];
+  toolFailureCategory?: LLMMessage['toolFailureCategory'];
   submittedProgram: unknown;
   executeThrew: boolean;
   ranCode: CodeRunFacts | undefined;

@@ -84,7 +84,7 @@ says so, and the one every reader is handed.
 
 #### transform
 
-> `readonly` **transform**: `"rewritten"` \| `"unchanged"` \| `"unknown"`
+> `readonly` **transform**: `"rewritten"` \| `"unknown"` \| `"unchanged"`
 
 What the comparison between the request handed TO the cache strategy and
 the one it handed back could establish. BRANCH ON THIS, never on

@@ -1,3 +1,5 @@
+import type { AttemptCategory } from 'footprintjs';
+import type { ToolFailureCategory } from '../../../provider-contract/toolResultRecord.js';
 import { TOOL_BATCH_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { isRecord } from './record.js';
 import { toolRanOf } from '../../../semantics/toolRan.js';
@@ -66,6 +68,45 @@ export function assessmentCallOutcome(message: Readonly<Record<string, unknown>>
       ? 'refused'
       : undefined)
   );
+}
+
+/** The import-free provider port must mirror the engine vocabulary exactly. */
+type FailureCategoryTable = [AttemptCategory, ToolFailureCategory] extends [
+  ToolFailureCategory,
+  AttemptCategory,
+]
+  ? Record<AttemptCategory, true>
+  : never;
+
+const failureCategories = {
+  timeout: true,
+  'rate-limited': true,
+  server: true,
+  network: true,
+  auth: true,
+  permanent: true,
+  unknown: true,
+} satisfies FailureCategoryTable;
+
+/** Read only the engine's closed category vocabulary from a retained record. */
+export function readToolFailureCategory(value: unknown): AttemptCategory | undefined {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(failureCategories, value)
+    ? (value as AttemptCategory)
+    : undefined;
+}
+
+/** A category belongs only to a failed tool throw whose delivery was retained. */
+export function recordedToolFailureCategory(message: object): AttemptCategory | undefined {
+  const category = readToolFailureCategory(
+    Object.getOwnPropertyDescriptor(message, 'toolFailureCategory')?.value,
+  );
+  if (category === undefined) return undefined;
+  const disposition = Object.getOwnPropertyDescriptor(message, 'toolResultDisposition');
+  return Object.getOwnPropertyDescriptor(message, 'toolResultExecution')?.value === 'threw' &&
+    Object.getOwnPropertyDescriptor(message, 'outcome')?.value === 'failed' &&
+    (disposition === undefined || ('value' in disposition && disposition.value === undefined))
+    ? category
+    : undefined;
 }
 
 /** A protocol refusal has no valid tool-result correlation. Its frame is the witness. */
