@@ -338,6 +338,7 @@ export function applyContinuation(
     ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
     ...(!appendsUserTurn &&
       cp.toolTurnEvidence !== undefined && { toolTurnEvidence: cp.toolTurnEvidence }),
+    ...(!appendsUserTurn && cp.requestReplay !== undefined && { requestReplay: cp.requestReplay }),
     // The tickets the library placed in earlier turns (`placedTickets.ts`):
     // still the library's, so the staged-refs nudge still names them.
     ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),
