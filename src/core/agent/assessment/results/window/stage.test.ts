@@ -3,21 +3,36 @@ import { describe, expect, it } from 'vitest';
 import { assessAnswer } from '../../assess.js';
 import { assessmentDataOf, standingFactsOf, standingLineOf } from '../../compose.js';
 
+const turnNumber = 7;
+
 const call = (index: number) => ({
   callOccurrenceKey: [12, 34, 56, 78, index],
   execution: 'returned',
   delivery: 'native',
 });
 
-const drop = (index: number, strategy = 'sliding-window') => ({
+const receipt = (index: number, turn = turnNumber) => ({
+  turn,
+  toolName: 'lookup',
+  toolCallId: `call-${index}`,
   callOccurrenceKey: call(index).callOccurrenceKey,
+});
+
+const drop = (index: number, strategy = 'sliding-window') => ({
+  ...receipt(index),
+  kind: 'result-dropped-from-window',
   strategy,
 });
 
-const assess = (settledToolCalls: readonly unknown[], windowResultDrops?: readonly unknown[]) =>
+const assess = (settledToolCalls: readonly unknown[], libraryResultLimits?: readonly unknown[]) =>
   assessAnswer({
     snapshot: {
-      sharedState: { settledToolCalls, settledToolCallsComplete: true, windowResultDrops },
+      sharedState: {
+        turnNumber,
+        settledToolCalls,
+        settledToolCallsComplete: true,
+        libraryResultLimits,
+      },
     },
   });
 
@@ -38,7 +53,7 @@ describe('window removals in the current turn', () => {
           source: { kind: 'run' },
           witness: removed.map((_, index) => ({
             kind: 'state',
-            key: 'windowResultDrops',
+            key: 'libraryResultLimits',
             path: `/${index}/strategy`,
           })),
         },
@@ -67,8 +82,26 @@ describe('window removals in the current turn', () => {
     );
     expect(
       assessment.reasons.find(({ reason }) => reason === 'result-dropped-from-window')?.witness,
-    ).toEqual([{ kind: 'state', key: 'windowResultDrops', path: '/0/strategy' }]);
+    ).toEqual([{ kind: 'state', key: 'libraryResultLimits', path: '/0/strategy' }]);
     expect(assess([call(0)]).reasons).toEqual([]);
+  });
+
+  it('keeps the current window receipt separate from an older drop and a current cut', () => {
+    const assessment = assess(
+      [call(0), call(1)],
+      [
+        { ...drop(0), turn: turnNumber - 1 },
+        { ...receipt(0), kind: 'result-cut', keptChars: 2, maxChars: 2, totalChars: 4 },
+        drop(1),
+      ],
+    );
+    expect(assessment.reasons.map(({ reason, witness }) => [reason, witness])).toEqual([
+      ['result-cut', [{ kind: 'state', key: 'libraryResultLimits', path: '/1/keptChars' }]],
+      [
+        'result-dropped-from-window',
+        [{ kind: 'state', key: 'libraryResultLimits', path: '/2/strategy' }],
+      ],
+    ]);
   });
 
   it('reports the same standing after the strategy name is kept out of a saved recording', () => {
@@ -77,9 +110,10 @@ describe('window removals in the current turn', () => {
       snapshot: {
         recorders: [{ id: 'agentfootprint.redaction' }],
         sharedState: {
+          turnNumber,
           settledToolCalls: [call(0)],
           settledToolCallsComplete: true,
-          windowResultDrops: [drop(0, 'REDACTED')],
+          libraryResultLimits: [drop(0, 'REDACTED')],
         },
       },
     });

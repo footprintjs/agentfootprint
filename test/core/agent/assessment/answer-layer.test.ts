@@ -234,6 +234,7 @@ describe('UNIT — the read list and the run constant', () => {
     expect(
       answerFoldReads({
         tools: true,
+        resultLimits: true,
         evidenceGate: true,
         answerValidation: true,
         inputs: true,
@@ -250,7 +251,8 @@ describe('UNIT — the read list and the run constant', () => {
       'enteredToolCallsComplete',
       'settledToolCalls',
       'settledToolCallsComplete',
-      'windowResultDrops',
+      'libraryResultLimits',
+      'libraryResultLimitsIncomplete',
       'unsupportedValues',
       'answerValidation',
       'argumentAsk',
@@ -259,8 +261,12 @@ describe('UNIT — the read list and the run constant', () => {
     // A tool result has an after-tool decision even when inputs are unarmed.
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('middlewareDecisions');
     expect(answerFoldReads({ ...none, toolMiddleware: true })).not.toContain('settledToolCalls');
-    expect(answerFoldReads({ ...none, tools: true, toolMiddleware: true })).toEqual(
-      expect.arrayContaining(['middlewareDecisions', 'settledToolCalls']),
+    const withTools = answerFoldReads({ ...none, tools: true, toolMiddleware: true });
+    expect(withTools).toEqual(expect.arrayContaining(['middlewareDecisions', 'settledToolCalls']));
+    expect(withTools).not.toContain('libraryResultLimits');
+    expect(withTools).not.toContain('libraryResultLimitsIncomplete');
+    expect(answerFoldReads({ ...none, resultLimits: true, toolMiddleware: false })).not.toContain(
+      'libraryResultLimits',
     );
   });
 

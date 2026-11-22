@@ -8,7 +8,8 @@ import { statePointer } from '../../pointer.js';
 import type { AnswerAssessment, AssessmentPointer, AssessmentReason } from '../../types.js';
 
 type State = Readonly<Record<string, unknown>>;
-type LimitKind = LibraryResultLimit['kind'];
+type ResultLimit = Exclude<LibraryResultLimit, { kind: 'result-dropped-from-window' }>;
+type LimitKind = ResultLimit['kind'];
 
 export const LIBRARY_LIMIT_WORDS: Readonly<Record<LimitKind, string>> = {
   'result-cut': 'a tool result was cut',
@@ -43,7 +44,7 @@ export function libraryResultReasons(state: State): readonly LimitReason[] {
   if (!rows) return reasons;
   for (const [index, entry] of rows.entries.entries()) {
     const row = copyLibraryResultLimit(entry);
-    if (row === undefined || row.turn !== state.turnNumber) continue;
+    if (row === undefined || row.turn !== state.turnNumber || !isLibraryLimit(row.kind)) continue;
     const field =
       row.kind === 'times-without-zone'
         ? 'naiveCount'
@@ -55,7 +56,7 @@ export function libraryResultReasons(state: State): readonly LimitReason[] {
   return reasons;
 }
 
-function limitClause(row: LibraryResultLimit, displayName: string | undefined): string {
+function limitClause(row: ResultLimit, displayName: string | undefined): string {
   switch (row.kind) {
     case 'result-cut':
       return `${displayName ?? 'a tool result'} was cut to ${row.keptChars.toLocaleString(

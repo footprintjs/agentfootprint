@@ -14,6 +14,7 @@ import {
 import { mock } from '../../../../src/llm-providers.js';
 import { assessAnswer, recordRun, type Recording } from '../../../../src/observe.js';
 import { assessmentDataOf } from '../../../../src/core/agent/assessment/compose.js';
+import type { AgentState } from '../../../../src/core/agent/types.js';
 import type { AnswerAssessedPayload } from '../../../../src/events/payloads/answer.js';
 import { readCallOccurrenceKey } from '../../../../src/lib/callOccurrence.js';
 
@@ -33,6 +34,10 @@ const PROMPT = 'Read the fixture archive and the live index.';
 const FAILED = `${BODY}\n\n---\n\nNot sure — a call failed.`;
 
 const lookup = (host: string) => ({ toolCalls: [{ id: ID, name: TOOL, args: { host } }] });
+const windowDropKeys = ({ libraryResultLimits, turnNumber }: AgentState) =>
+  (libraryResultLimits ?? [])
+    .filter(({ kind, turn }) => kind === 'result-dropped-from-window' && turn === turnNumber)
+    .map(readCallOccurrenceKey);
 
 type ResultRule = NonNullable<ToolMiddleware['onToolResult']>;
 
@@ -194,9 +199,7 @@ describe('standing when a previously withheld result leaves history', () => {
         ];
         const drop = saved.reasons.find(({ reason }) => reason === 'result-dropped-from-window');
         expect(drop?.witness ?? []).toHaveLength(dropped ? 1 : 0);
-        expect(snapshot.windowResultDrops?.map(readCallOccurrenceKey) ?? []).toEqual(
-          dropped ? [blocks ? entries[1] : firstKey] : [],
-        );
+        expect(windowDropKeys(snapshot)).toEqual(dropped ? [blocks ? entries[1] : firstKey] : []);
         expect.soft(liveData.reasons, 'live answer assessment').toEqual(reasons);
         expect
           .soft(
@@ -267,9 +270,9 @@ describe('standing when a previously withheld result leaves history', () => {
       expect.soft(saved.reasons[0]?.witness).toEqual([]);
       expect
         .soft(saved.reasons[1]?.witness)
-        .toEqual([{ kind: 'state', key: 'windowResultDrops', path: '/0/strategy' }]);
+        .toEqual([{ kind: 'state', key: 'libraryResultLimits', path: '/0/strategy' }]);
       expect
-        .soft(snapshot.windowResultDrops?.map(readCallOccurrenceKey))
+        .soft(windowDropKeys(snapshot))
         .toEqual([readCallOccurrenceKey(snapshot.enteredToolCalls![0])]);
       expect.soft(answer).toBe(WITHHELD_AND_DROPPED);
     } finally {
@@ -419,9 +422,9 @@ describe('standing when a previously withheld result leaves history', () => {
       });
       expect
         .soft(sameTurn.saved.reasons[1]?.witness)
-        .toEqual([{ kind: 'state', key: 'windowResultDrops', path: '/0/strategy' }]);
+        .toEqual([{ kind: 'state', key: 'libraryResultLimits', path: '/0/strategy' }]);
       expect
-        .soft(sameTurn.snapshot.windowResultDrops?.map(readCallOccurrenceKey))
+        .soft(windowDropKeys(sameTurn.snapshot))
         .toEqual([readCallOccurrenceKey(sameTurn.snapshot.enteredToolCalls![1])]);
       expect.soft(assessmentDataOf(sameTurn.saved)).toEqual(sameTurn.liveData);
       expect.soft(answer).toBe(WITHHELD_AND_DROPPED);

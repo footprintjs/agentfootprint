@@ -321,7 +321,7 @@ it('keeps unarmed answer bytes even when the configured window drops a result', 
     expect(await retained.agent.run(QUESTION)).toBe(DONE);
     expect(await evicted.agent.run(QUESTION)).toBe(DONE);
     expect(evicted.historyAtRequest.at(-1)).toEqual(['c2']);
-    expect(evicted.agent.getLastSnapshot()?.sharedState).not.toHaveProperty('windowResultDrops');
+    expect(evicted.agent.getLastSnapshot()?.sharedState).not.toHaveProperty('libraryResultLimits');
   } finally {
     await retained.agent.shutdown();
     await evicted.agent.shutdown();
@@ -354,7 +354,7 @@ it('does not count a strategy report for a result kept in the applied window', a
     expect(kept.historyAtRequest.at(-1)).toEqual(['c1', 'c2']);
     expect(after.returned).toBe(before.returned);
     expect(after.event).toEqual(before.event);
-    expect(kept.agent.getLastSnapshot()?.sharedState).not.toHaveProperty('windowResultDrops');
+    expect(kept.agent.getLastSnapshot()?.sharedState).not.toHaveProperty('libraryResultLimits');
   } finally {
     await control.agent.shutdown();
     await kept.agent.shutdown();
@@ -678,11 +678,13 @@ describe('recorded settlement across the coordinator window axes', () => {
       expect(proof.event.reasons).toEqual(['result-withheld', 'result-dropped-from-window']);
       const { commitLog, sharedState } = agent.getLastSnapshot()!;
       const writes = commitLog.flatMap(({ trace }) => trace);
-      const drops = sharedState.windowResultDrops ?? [];
+      const drops = (sharedState.libraryResultLimits ?? []).filter(
+        ({ kind, turn }) => kind === DROP_REASON && turn === sharedState.turnNumber,
+      );
       expect(drops).toHaveLength(20);
       expect(new Set(drops.map(readCallOccurrenceKey)).size).toBe(20);
       expect(
-        writes.filter(({ path }) => path === 'windowResultDrops').map(({ verb }) => verb),
+        writes.filter(({ path }) => path === 'libraryResultLimits').map(({ verb }) => verb),
       ).toEqual(['set', ...Array<string>(19).fill('append')]);
       for (const [list, complete] of [
         ['enteredToolCalls', 'enteredToolCallsComplete'],

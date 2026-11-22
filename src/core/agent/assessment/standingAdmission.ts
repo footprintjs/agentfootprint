@@ -16,6 +16,7 @@ import {
 } from './entryEvidence.js';
 import { reasonClassOf, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
+import { windowDropWitnesses } from './results/window/stage.js';
 import { callAddressOf, rowList } from './sources.js';
 import type { AssessmentPointer, AssessmentReason } from './types.js';
 
@@ -236,7 +237,14 @@ export function standingAdmission(
     settlements:
       settlements === undefined
         ? undefined
-        : { ...settlements, windowResultDrops: state.windowResultDrops },
+        : {
+            ...settlements,
+            windowDrops: windowDropWitnesses(
+              state.libraryResultLimits,
+              state.turnNumber,
+              settlements,
+            ),
+          },
     keyed,
     entered,
     returned,

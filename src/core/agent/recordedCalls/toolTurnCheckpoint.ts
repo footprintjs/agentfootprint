@@ -8,11 +8,9 @@ import {
 import { copyLibraryResultLimit, type LibraryResultLimit } from '../honesty/libraryResultLimits.js';
 import { isRecord } from './record.js';
 import { readToolSettlements, type RecordedToolSettlement } from './settlement.js';
-import { readWindowResultDrops, type WindowResultDrop } from './windowResultDrops.js';
 
 /** Content-free proof kept only for a retry of the failed human request. */
 export interface ToolTurnEvidence {
-  readonly windowResultDrops?: readonly WindowResultDrop[];
   readonly libraryResultLimits?: readonly LibraryResultLimit[];
   readonly libraryResultLimitsIncomplete?: true;
   readonly entries?: ToolEntryProof;
@@ -64,11 +62,6 @@ function copyResultLimits(value: unknown): readonly LibraryResultLimit[] | undef
   return rows;
 }
 
-function windowDropsOf(value: unknown): ToolTurnEvidence['windowResultDrops'] {
-  const drops = readWindowResultDrops(value);
-  return drops?.complete ? [...drops.byKey.values()].map(({ fact }) => fact) : undefined;
-}
-
 /** Take a detached, bounded copy from the failing executor's committed state. */
 export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefined {
   if (!isRecord(state)) return undefined;
@@ -80,7 +73,6 @@ export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefin
     own(state, 'settledToolCalls'),
     own(state, 'settledToolCallsComplete'),
   );
-  const windowResultDrops = windowDropsOf(own(state, 'windowResultDrops'));
   const libraryResultLimits = copyResultLimits(own(state, 'libraryResultLimits'));
   const incomplete =
     own(state, 'libraryResultLimitsIncomplete') === true ||
@@ -89,14 +81,12 @@ export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefin
     !incomplete &&
     entries === undefined &&
     settlements === undefined &&
-    libraryResultLimits === undefined &&
-    windowResultDrops === undefined
+    libraryResultLimits === undefined
   )
     return undefined;
   return {
     ...(entries && { entries }),
     ...(settlements && { settlements }),
-    ...(windowResultDrops && { windowResultDrops }),
     ...(libraryResultLimits && { libraryResultLimits }),
     ...(incomplete && { libraryResultLimitsIncomplete: true }),
   };
@@ -122,16 +112,13 @@ export function admitToolTurnEvidence(checkpoint: object): ToolTurnEvidence | un
   const settlements = isRecord(settlement)
     ? settlementsOf(own(settlement, 'rows'), own(settlement, 'complete'))
     : undefined;
-  const windowResultDrops = windowDropsOf(own(evidence, 'windowResultDrops'));
   const libraryResultLimits = copyResultLimits(own(evidence, 'libraryResultLimits'));
   const incomplete = own(evidence, 'libraryResultLimitsIncomplete') === true;
   if (
     (!incomplete &&
       entries === undefined &&
       settlements === undefined &&
-      libraryResultLimits === undefined &&
-      windowResultDrops === undefined) ||
-    ('windowResultDrops' in evidence && windowResultDrops === undefined) ||
+      libraryResultLimits === undefined) ||
     ('libraryResultLimitsIncomplete' in evidence && !incomplete) ||
     ('libraryResultLimits' in evidence && libraryResultLimits === undefined) ||
     ('entries' in evidence && entries === undefined) ||
@@ -141,7 +128,6 @@ export function admitToolTurnEvidence(checkpoint: object): ToolTurnEvidence | un
   return {
     ...(entries && { entries }),
     ...(settlements && { settlements }),
-    ...(windowResultDrops && { windowResultDrops }),
     ...(libraryResultLimits && { libraryResultLimits }),
     ...(incomplete && { libraryResultLimitsIncomplete: true }),
   };

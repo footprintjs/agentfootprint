@@ -23,7 +23,6 @@ export {
 } from './recordedCalls/resultDispositions.js';
 export { readRewrittenToolResult } from './recordedCalls/rewrittenResult.js';
 export { readToolSettlements, type RecordedToolSettlement } from './recordedCalls/settlement.js';
-export { readWindowResultDrops, type WindowResultDrop } from './recordedCalls/windowResultDrops.js';
 export {
   assessmentCallOutcome,
   callEntered,

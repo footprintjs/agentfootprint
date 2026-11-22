@@ -3,7 +3,6 @@ import type { CoverageRow } from './coverageRows.js';
 import { fire, type Gathered } from './gathered.js';
 import { historyPointer, statePointer } from './pointer.js';
 import { readCallOutcomes } from './resultEvidence.js';
-import { windowDropWitnesses } from './results/window/stage.js';
 import type { standingAdmission } from './standingAdmission.js';
 import type { TurnResult } from './turnResults.js';
 import type { AssessmentReason } from './types.js';
@@ -54,8 +53,7 @@ export function readSettledResults(
   periodReasons: Readonly<Record<string, AssessmentReason>>,
   g: Gathered,
 ): void {
-  for (const at of windowDropWitnesses(settlements.windowResultDrops, settlements))
-    fire(g, 'result-dropped-from-window', at);
+  for (const at of settlements.windowDrops) fire(g, 'result-dropped-from-window', at);
   const absenceCalls = new Set(
     coverage.filter((row) => row.kind === 'absence').map((row) => row.occurrenceKey),
   );

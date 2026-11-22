@@ -715,6 +715,7 @@ describe('UNIT — the reason table', () => {
       'placed-unread',
       'times-without-zone',
       'result-withheld',
+      'result-dropped-from-window',
       'work-not-finished',
       // Honesty layer 3 (the results layer's period verdicts, step 7b).
       'period-not-held',

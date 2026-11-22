@@ -8,6 +8,7 @@ import {
 import { REASONS } from '../../../../src/core/agent/assessment/reasons.js';
 import { REASON_WITNESS_CLASSES } from '../../../../src/core/agent/assessment/reasonClasses.js';
 import type { AssessmentReason } from '../../../../src/core/agent/assessment/types.js';
+import { MAX_ENTERED_TOOL_CALLS } from '../../../../src/core/agent/honesty/enteredToolCalls.js';
 
 type Row = Readonly<Record<string, unknown>>;
 type Seed = {
@@ -17,6 +18,12 @@ type Seed = {
 };
 
 const CALL = { toolCallId: 'current', toolName: 'lookup', iteration: 1, turn: 2 };
+const WINDOW_DROP = {
+  ...CALL,
+  kind: 'result-dropped-from-window',
+  callOccurrenceKey: [1, 0, 0, 0, 0],
+  strategy: 'sliding-window',
+};
 const PERSON = { role: 'user', content: 'Read the current index.' };
 const PROPOSAL = {
   role: 'assistant',
@@ -115,7 +122,7 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
         },
       ],
       settledToolCallsComplete: true,
-      windowResultDrops: [{ callOccurrenceKey: [1, 0, 0, 0, 0], strategy: 'sliding-window' }],
+      libraryResultLimits: [WINDOW_DROP],
     },
   },
   'work-not-finished': { message: { reportedStatus: 'pending' } },
@@ -289,6 +296,40 @@ describe('standing reason admission by witness', () => {
         ),
       ).toContain("the record could not keep every limit on this turn's tool results");
     }
+  });
+
+  it('window evidence shares the saved receipt limit with other fact kinds', () => {
+    const seed = SEEDS['result-dropped-from-window'];
+    const otherLimits = Array.from({ length: MAX_ENTERED_TOOL_CALLS }, (_, index) => ({
+      ...CALL,
+      toolCallId: `earlier-${index}`,
+      turn: CALL.turn - 1,
+      kind: 'result-cut',
+      keptChars: 10,
+      maxChars: 100,
+      totalChars: 300,
+    }));
+    const assessWith = (prefix: readonly Row[]) =>
+      assessmentOf(
+        { ...seed, state: { ...seed.state, libraryResultLimits: [...prefix, WINDOW_DROP] } },
+        NOT_ENTERED,
+      );
+
+    const atLimit = assessWith(otherLimits.slice(1));
+    expect(
+      atLimit.reasons.find(({ reason }) => reason === 'result-dropped-from-window')?.witness,
+    ).toEqual([
+      {
+        kind: 'state',
+        key: 'libraryResultLimits',
+        path: `/${MAX_ENTERED_TOOL_CALLS - 1}/strategy`,
+      },
+    ]);
+
+    const beyondLimit = assessWith(otherLimits);
+    const beyondReasons = beyondLimit.reasons.map(({ reason }) => reason);
+    expect(beyondReasons).toContain('check-unreachable');
+    expect(beyondReasons).not.toContain('result-dropped-from-window');
   });
 
   it('an incomplete entry record says which check could not reach a verdict', () => {

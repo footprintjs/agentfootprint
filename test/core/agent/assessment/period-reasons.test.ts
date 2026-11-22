@@ -325,7 +325,12 @@ describe('UNIT — which rows the fold reads', () => {
           );
         const dropped = saved.reasons.find(({ reason }) => reason === 'result-dropped-from-window');
         expect.soft(dropped?.witness ?? []).toHaveLength(evicts ? (pauses ? 2 : 1) : 0);
-        const droppedKeys = sharedState.windowResultDrops?.map(readCallOccurrenceKey) ?? [];
+        const droppedKeys = (sharedState.libraryResultLimits ?? [])
+          .filter(
+            ({ kind, turn }) =>
+              kind === 'result-dropped-from-window' && turn === sharedState.turnNumber,
+          )
+          .map(readCallOccurrenceKey);
         expect.soft(droppedKeys.includes(keys[0])).toBe(evicts);
         expect.soft(droppedKeys).not.toContain(keys[1]);
         expect.soft(periodChecks(saved)).toMatchObject([{ ran: 2, of: 2 }]);

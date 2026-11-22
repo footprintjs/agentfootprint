@@ -1,7 +1,7 @@
 export interface HonestyState {
   /** Some result-limit facts could not be retained in this turn's bounded list. */
   libraryResultLimitsIncomplete?: true;
-  /** Framework-imposed result limits for this turn, recorded where the result is served. */
+  /** Framework-imposed limits on this turn’s tool results, recorded where each limit takes effect. */
   libraryResultLimits?: readonly import('../../honesty/libraryResultLimits.js').LibraryResultLimit[];
   /** One native protocol correction per human request; never a conversation-derived allowance. */
   sourceDeclarationCorrectionSpent?: true;
@@ -22,8 +22,6 @@ export interface HonestyState {
   settledToolCalls?: readonly import('../../recordedCalls.js').RecordedToolSettlement[];
   /** Whether every settled call of this turn has a readable fact. */
   settledToolCallsComplete?: boolean;
-  /** Bounded, content-free proofs of the current turn’s tool results removed by the window. */
-  windowResultDrops?: readonly import('../../recordedCalls.js').WindowResultDrop[];
   /**
    * The answer's standing, as data — written by the answer layer's stage at
    * the head of the Final branch (honesty layer 4, `assessment/stage.ts` ·

@@ -11,7 +11,6 @@ export type AnswerFoldKey =
   | 'libraryResultLimitsIncomplete'
   | 'libraryResultLimits'
   | 'settledToolCallsComplete'
-  | 'windowResultDrops'
   | 'stoppedEarly'
   | 'unsupportedValues'
   | 'answerValidation'
@@ -34,7 +33,9 @@ export type AnswerFoldKey =
  *   whenever the model asked for calls, whether or not this agent registered
  *   a tool that could answer them;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
- *   coverage), bounded per-turn entry, settlement and window-drop facts, including recovered proof;
+ *   coverage), bounded per-turn entry and settlement facts, and their completeness;
+ * - a tool result cap, artifact store or window: bounded result-limit receipts
+ *   and their completeness, including any receipts recovered for the same request;
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`;
@@ -73,7 +74,6 @@ export function answerFoldReads(arms: {
           'enteredToolCallsComplete',
           'settledToolCalls',
           'settledToolCallsComplete',
-          'windowResultDrops',
         ] as const)
       : []),
     ...(arms.tools && arms.resultLimits
