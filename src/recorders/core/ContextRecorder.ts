@@ -221,8 +221,8 @@ export class ContextRecorder implements CombinedRecorder {
     // designed to carry exactly what ContextInjectedPayload needs, so we
     // copy through directly.
     //
-    // The slot write supplies the payload, with message recency projected
-    // from its original order. The configured key policy is relayed by `written`. The
+    // The slot write supplies the payload. Native message rows opt in to
+    // projecting recency from the original order. The key policy is relayed by `written`. The
     // dispatcher serves the event like every other: a field the policy names
     // (`rawContent`, `contentSummary`, …) at any depth of the payload is the
     // placeholder (`src/redaction/served.ts`). One rule, footprintjs's — and
@@ -298,16 +298,16 @@ export class ContextRecorder implements CombinedRecorder {
 }
 
 function withMessageRecency(record: InjectionRecord, latest: boolean): InjectionRecord {
-  // The public recorder also accepts custom rows with explicit recency or
-  // without a position. Native message rows always carry their position.
-  if (record.asRecency !== undefined || record.position === undefined) return record;
+  // A position alone makes no recency claim. The native writer's opt-in
+  // travels with the row, including when deferred observers clone the write.
+  if (Object.getOwnPropertyDescriptor(record, 'recencyFromOrder')?.value !== true) return record;
 
-  // Preserve the public event's field order while keeping the stored row
-  // stable as the conversation grows. Use the original array before deduplication.
-  const fields = Object.entries(record);
+  // Keep the marker out of the event and preserve the historical field order.
+  const fields = Object.entries(record).filter(([key]) => key !== 'recencyFromOrder');
   const positionIndex = fields.findIndex(([key]) => key === 'position');
-  if (positionIndex === -1) return record;
-  fields.splice(positionIndex, 0, ['asRecency', latest ? 'latest' : 'earlier']);
+  if (record.asRecency === undefined && positionIndex !== -1) {
+    fields.splice(positionIndex, 0, ['asRecency', latest ? 'latest' : 'earlier']);
+  }
   return Object.fromEntries(fields) as InjectionRecord;
 }
 

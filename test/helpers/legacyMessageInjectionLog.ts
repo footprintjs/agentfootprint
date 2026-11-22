@@ -7,7 +7,8 @@ type Row = Readonly<Record<string, unknown>>;
 function withRecency(row: Row, position: number, last: boolean): Row {
   expect(row).not.toHaveProperty('asRecency');
   expect(row.position).toBe(position);
-  const fields = Object.entries(row);
+  expect(row.recencyFromOrder).toBe(true);
+  const fields = Object.entries(row).filter(([name]) => name !== 'recencyFromOrder');
   // The historical writer placed recency immediately before position.
   fields.splice(
     fields.findIndex(([name]) => name === 'position'),

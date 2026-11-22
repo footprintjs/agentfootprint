@@ -38,7 +38,7 @@ import type { FlowChart, TypedScope } from 'footprintjs';
 import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
 import type { ContextRole, ContextSource } from '../../events/types.js';
-import type { InjectionRecord } from '../../recorders/core/types.js';
+import type { MessageInjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
@@ -110,7 +110,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       // so an injected message and the eviction that later removes it name
       // one piece of context by one name — which they would not if a
       // delivered message got its own hash scheme.
-      const injections: InjectionRecord[] = messages.map((m, i) => {
+      const injections: MessageInjectionRecord[] = messages.map((m, i) => {
         assertComposable(m, i, messages.length);
         const by = m.injectedBy;
         return {
@@ -124,6 +124,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
           rawContent: m.content,
           asRole: m.role,
           position: i,
+          recencyFromOrder: true,
           ...(by !== undefined && { sourceId: by.injectionId }),
           ...(by === undefined && m.toolCallId !== undefined && { sourceId: m.toolCallId }),
           ...(by === undefined && m.role === 'tool' && callOccurrenceField(m.callOccurrenceKey)),
