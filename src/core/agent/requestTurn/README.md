@@ -1,4 +1,5 @@
-# Native tool-turn requests
+# Native tool-turn requests (Mixed)
+The Lens assembles the provider request. The Walker retains accepted context for later calls and crash recovery.
 
 `replayPrefix.ts` stores only the library's contributions to an accepted request. The provider response anchors their placement. On replay, existing supplement messages return before their original assistant and tool projections keep the form already served. Fresh context follows them. The projection maps wire positions back to committed history for cache breakpoints and evidence reads.
 
