@@ -295,7 +295,7 @@ export function buildCallLLMStage(
       withheld !== null
         ? EMPTY_TOOL_SCHEMAS
         : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
-    const { replayState, closure, continuing, messages } = projectCallHistory(
+    const { replayFrames, closure, continuing, messages } = projectCallHistory(
       scope,
       history,
       rendered,
@@ -912,13 +912,13 @@ export function buildCallLLMStage(
       !localFallback && acceptedProjection
         ? afterReplayResponse(
             response,
-            continuing === undefined ? [] : replayState?.frames ?? [],
+            continuing === undefined ? [] : replayFrames ?? [],
             (replay) =>
               captureReplayPrefix(replay, history, messages, tail, continuing?.frozenBefore ?? 0),
             deps.toolsOffAfterRevision === true,
           )
         : undefined;
-    if (nextReplay !== undefined || replayState !== undefined)
+    if (nextReplay !== undefined || replayFrames !== undefined)
       writeRequestReplay(scope, nextReplay);
     // v2.14 — hand provider-specific raw thinking data to the
     // NormalizeThinking sub-subflow (the next stage in sf-call-llm

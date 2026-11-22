@@ -33,5 +33,10 @@ export function projectCallHistory(
         )
       : undefined;
   const continuing = closure === undefined ? prefix : undefined;
-  return { replayState, closure, continuing, messages: continuing?.history ?? rendered };
+  return {
+    replayFrames: replayState?.frames,
+    closure,
+    continuing,
+    messages: continuing?.history ?? rendered,
+  };
 }
