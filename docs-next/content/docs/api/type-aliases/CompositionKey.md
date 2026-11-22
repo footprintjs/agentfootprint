@@ -6,4 +6,4 @@ title: CompositionKey
 
 > **CompositionKey** = *typeof* [`COMPOSITION_KEYS`](/docs/api/variables/COMPOSITION_KEYS)\[keyof *typeof* [`COMPOSITION_KEYS`](/docs/api/variables/COMPOSITION_KEYS)\]
 
-Defined in: [src/recorders/core/types.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L135)
+Defined in: [src/recorders/core/types.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L142)

@@ -157,10 +157,15 @@ export class ContextRecorder implements CombinedRecorder {
     const records = this.asInjectionArray(written.value);
     if (!records) return;
     const seen = this.seenInjections.get(slot) ?? new Set<string>();
-    for (const rec of records) {
+    for (const [index, rec] of records.entries()) {
       if (seen.has(rec.contentHash)) continue;
       seen.add(rec.contentHash);
-      this.emitInjected(written.keptOut ? structureOf(rec, INJECTION_STRUCTURE) : rec, event);
+      const payload =
+        slot === 'messages' ? withMessageRecency(rec, index === records.length - 1) : rec;
+      this.emitInjected(
+        written.keptOut ? structureOf(payload, INJECTION_STRUCTURE) : payload,
+        event,
+      );
     }
     this.seenInjections.set(slot, seen);
   }
@@ -216,8 +221,8 @@ export class ContextRecorder implements CombinedRecorder {
     // designed to carry exactly what ContextInjectedPayload needs, so we
     // copy through directly.
     //
-    // Redaction is never decided here. The record is the one the slot wrote
-    // (relayed when the policy selects its key — `written`), and the
+    // The slot write supplies the payload. Native message rows opt in to
+    // projecting recency from the original order. The key policy is relayed by `written`. The
     // dispatcher serves the event like every other: a field the policy names
     // (`rawContent`, `contentSummary`, …) at any depth of the payload is the
     // placeholder (`src/redaction/served.ts`). One rule, footprintjs's — and
@@ -290,6 +295,20 @@ export class ContextRecorder implements CombinedRecorder {
     }
     return value as readonly BudgetPressureRecord[];
   }
+}
+
+function withMessageRecency(record: InjectionRecord, latest: boolean): InjectionRecord {
+  // A position alone makes no recency claim. The native writer's opt-in
+  // travels with the row, including when deferred observers clone the write.
+  if (Object.getOwnPropertyDescriptor(record, 'recencyFromOrder')?.value !== true) return record;
+
+  // Keep the marker out of the event and preserve the historical field order.
+  const fields = Object.entries(record).filter(([key]) => key !== 'recencyFromOrder');
+  const positionIndex = fields.findIndex(([key]) => key === 'position');
+  if (record.asRecency === undefined && positionIndex !== -1) {
+    fields.splice(positionIndex, 0, ['asRecency', latest ? 'latest' : 'earlier']);
+  }
+  return Object.fromEntries(fields) as InjectionRecord;
 }
 
 /** A slot's write as the recorder derives events from it (`ContextRecorder · written`). */

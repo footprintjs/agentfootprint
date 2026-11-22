@@ -11,7 +11,7 @@
  * ── What this slot is, and is not ───────────────────────────────────
  * It is the OBSERVABILITY PROJECTION of the conversation: one
  * InjectionRecord per message, with the source, reason, role and
- * recency a consumer needs to see what the turn was made of. It is not
+ * position a consumer needs to see what the turn was made of. It is not
  * the wire. The request's message list comes from `scope.history`
  * directly (`stages/callLLM.ts`), because the projection flattens away
  * the LLM-protocol shape a provider needs — an assistant turn's
@@ -37,8 +37,8 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
-import type { ContextRecency, ContextRole, ContextSource } from '../../events/types.js';
-import type { InjectionRecord } from '../../recorders/core/types.js';
+import type { ContextRole, ContextSource } from '../../events/types.js';
+import type { MessageInjectionRecord } from '../../recorders/core/types.js';
 import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
@@ -110,7 +110,7 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       // so an injected message and the eviction that later removes it name
       // one piece of context by one name — which they would not if a
       // delivered message got its own hash scheme.
-      const injections: InjectionRecord[] = messages.map((m, i) => {
+      const injections: MessageInjectionRecord[] = messages.map((m, i) => {
         assertComposable(m, i, messages.length);
         const by = m.injectedBy;
         return {
@@ -123,8 +123,8 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
             : `conversation history [${i}]`,
           rawContent: m.content,
           asRole: m.role,
-          asRecency: (i === messages.length - 1 ? 'latest' : 'earlier') as ContextRecency,
           position: i,
+          recencyFromOrder: true,
           ...(by !== undefined && { sourceId: by.injectionId }),
           ...(by === undefined && m.toolCallId !== undefined && { sourceId: m.toolCallId }),
           ...(by === undefined && m.role === 'tool' && callOccurrenceField(m.callOccurrenceKey)),
@@ -218,7 +218,7 @@ function assertComposable(m: InputMessage, index: number, total: number): void {
  * / etc.) at the injection site — NOT rely on role inference here.
  * Role-based inference is the baseline fallback.
  */
-function inferSource(role: ContextRole): InjectionRecord['source'] {
+function inferSource(role: ContextRole): ContextSource {
   switch (role) {
     case 'user':
       return 'user';

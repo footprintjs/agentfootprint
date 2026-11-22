@@ -87,7 +87,7 @@ interface InjectionRecord {
   slot: ContextSlot;          // WHERE — one of 3 slots
   source: ContextSource;      // FROM — rag / skill / memory / instructions / user / tool-result / custom
   asRole?: ContextRole;       // messages: system | user | assistant | tool
-  asRecency?: ContextRecency; // messages: latest | earlier
+  position?: number;          // messages: index in this composition
   sectionTag?: string;        // system-prompt: XML-ish section tag
   reason: string;             // WHY — human-readable justification
   retrievalScore?: number;    // WHY — numeric evidence
@@ -97,6 +97,12 @@ interface InjectionRecord {
   expiresAfter?: ContextLifetime;  // iteration | turn | run | persistent
 }
 ```
+
+Native message rows keep their position and a stable `recencyFromOrder: true`
+marker. The recorder removes the marker from the event and labels the last row
+`latest` and every earlier row `earlier` before filtering duplicates. Custom
+rows retain whatever label their writer supplied, including an omitted label.
+Keeping the label out of native stored rows lets the recorder append as messages grow.
 
 The `reason` + `source` + `score` fields turn "the LLM saw X" into "the LLM saw X because RAG retrieved it with score 0.92 from the customer-support index." That's the debugging gold context engineering requires.
 
