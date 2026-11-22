@@ -15,6 +15,7 @@ Keep the fact narrow: a kind, a source the host may disclose, and bounded counts
 | Provider cuts the accepted prose response | `recordResponseStop` owns `llmLatestStopReason`. The grouped call maps through `responseStopFields`. | `src/core/agent/assessment/answer/completion/completion.test.ts` covers classic, dynamic and grouped calls, saved output and clearing stale cutoff. |
 | Middleware withholds a result | The fold reads committed `middlewareDecisions` and produces anonymous `result-withheld`. No payload, rule words or tool attribution. | `test/core/agent/assessment/result-visibility-matrix.test.ts` checks which facts reach the answer. |
 | Per-tool result ceiling | A refusal reaches `call-not-completed`. Measure and expose a safe counts fact separately before claiming the answer knows why the ceiling refused. | The architecture inventory pins the ceiling operation and owner. |
+| Code runner clipping and unsuccessful execution | `clipOutput` measures the cut and `codeRunStatus` classifies the result. Initial and resumed dispatch admit the status through `readExecutedResult`. Committed `settledToolCalls` facts supply failure or partial status and permitted counts to `call-not-completed` or `work-not-finished`. | `test/core/codeRunnerTool-unknown-outcome.test.ts` covers initial and resumed calls, retained counts, saved assessments, and redaction. |
 
 ## Open gaps and follow-ups
 
@@ -26,7 +27,6 @@ the task board. Run a real mock turn and a saved assessment when recording is ad
 | After-tool replacement | Native not-checked, absence and period facts survive when disclosure allows. Keep deny anonymous. | 3b |
 | History drop and summary | The answer sees a current-turn removal, including a silent middle drop. Distinguish compaction of prior turns. | 3d |
 | Object-shaped result and empty rowset ticket | Admitted empty row count reaches the answer without making an unread value known empty. | 3e |
-| Code runner clipping and unsuccessful execution | Structured clip or failure survives without parsing result prose. | 3c |
 | Retrieval threshold and budget | Record the library's decision to omit otherwise eligible retrieved context. Separate threshold and budget. | 3f retrieval |
 | Tool choice, gate, ledger, active skill, refused skill and name collision | Identify what was eligible and omitted, with disclosure determined by the existing access policy. | 3f serving |
 | Local answer inspection ceiling | The answer records the words left unread under the bare evidence gate. Provider cutoff remains a separate fact. | 3a follow-up |
@@ -42,6 +42,6 @@ the task board. Run a real mock turn and a saved assessment when recording is ad
 symbol, verifies the imported calls at the registered boundaries, and rejects additional callers
 of those operations. It treats the cap's native and model projections as two calls to one
 operation and expects one call to the recording door per delivery path. It also checks that the answer
-fold reads the two audited record keys. The scenario tests above cover counts, recording scope,
+fold reads the audited result limits, settlements, and response stop. The scenario tests above cover counts, recording scope,
 and what saved assessments can use. Adding a boundary outside the inventoried operations still
 requires a source read and a new inventory entry.

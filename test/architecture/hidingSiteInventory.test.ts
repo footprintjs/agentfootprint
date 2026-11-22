@@ -86,7 +86,7 @@ it('every discovered call of an inventoried operation belongs to its boundary', 
   expect(unexpected).toEqual([]);
 });
 
-it('the armed answer fold reads the committed result and response facts', () => {
+it('the armed answer fold reads the committed result, settlement, and response facts', () => {
   const keys = answerFoldReads({
     tools: true,
     resultLimits: true,
@@ -95,7 +95,9 @@ it('the armed answer fold reads the committed result and response facts', () => 
     inputs: false,
     toolMiddleware: false,
   });
-  expect(keys).toEqual(expect.arrayContaining(['libraryResultLimits', 'llmLatestStopReason']));
+  expect(keys).toEqual(
+    expect.arrayContaining(['libraryResultLimits', 'settledToolCalls', 'llmLatestStopReason']),
+  );
 });
 
 it.each([

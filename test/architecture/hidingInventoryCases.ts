@@ -6,6 +6,29 @@ const toolCalls = `${agent}/stages/toolCalls`;
 
 export const inventoriedCalls = [
   {
+    writer: 'src/core/codeRunnerTool/output',
+    exportName: 'clipOutput',
+    sites: [['src/core/codeRunnerTool.ts', 'render']],
+  },
+  {
+    writer: 'src/core/codeRunnerTool/output',
+    exportName: 'codeRunStatus',
+    sites: [['src/core/codeRunnerTool.ts', 'codeRunnerTool']],
+  },
+  {
+    writer: `${toolCalls}/execution/readExecutedResult`,
+    exportName: 'readExecutedResult',
+    sites: [
+      [`${toolCalls}/execution/initialInvocation.ts`, 'invokeInitialTool'],
+      [`${toolCalls}/execution/resumedInvocation.ts`, 'executeResumed'],
+    ],
+  },
+  {
+    writer: `${agent}/assessment/results/outcomes/stage`,
+    exportName: 'outcomeDetailReader',
+    sites: [[`${agent}/assessment/reasonDetails.ts`, 'readReasonDetails']],
+  },
+  {
     writer: `${agent}/toolResultCap`,
     exportName: 'capToolResult',
     sites: [[`${toolCalls}/decorators/limitsOperations.ts`, 'capResults', 2]],
@@ -64,10 +87,9 @@ export const auditedBoundaries = {
     [`${agent}/stages/window.ts`, 'buildWindowStage'],
   ],
   'object and rowset emptiness': [[`${agent}/assessment/assess.ts`, 'foldState']],
-  'code runner': [
-    ['src/core/codeRunnerTool.ts', 'render'],
-    ['src/core/codeRunnerTool.ts', 'outcomeLine'],
-    ['src/core/codeRunnerTool.ts', 'clip'],
+  'code runner settlement': [
+    [`${agent}/honesty/settledToolCalls.ts`, 'toolSettlementOf'],
+    [`${agent}/honesty/settledToolCalls.ts`, 'commitSettledToolHistory'],
   ],
   'retrieval threshold and budget': [
     ['src/memory/retrieval/topK.ts', 'topK'],
