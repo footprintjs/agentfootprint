@@ -230,6 +230,7 @@ describe('UNIT — the read list and the run constant', () => {
       'pausedToolCallId',
       'findingsLedger',
       'stoppedEarly',
+      'llmLatestStopReason',
     ]);
     expect(
       answerFoldReads({
@@ -246,6 +247,7 @@ describe('UNIT — the read list and the run constant', () => {
       'pausedToolCallId',
       'findingsLedger',
       'stoppedEarly',
+      'llmLatestStopReason',
       'coverageDeclared',
       'enteredToolCalls',
       'enteredToolCallsComplete',

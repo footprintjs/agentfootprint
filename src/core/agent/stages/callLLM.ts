@@ -54,6 +54,7 @@ import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
+import { recordResponseStop } from '../honesty/responseStop.js';
 import { liveChunkEmitter } from './callLLM/liveChunks.js';
 import { recoveryFeedback, requestOnlyMessages } from './callLLM/requestOnly.js';
 import {
@@ -791,20 +792,16 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
-          ...((deps.findings === true ||
-            deps.outputFormat !== undefined ||
-            serving !== undefined) && {
-            prepareFallback: (request: LLMRequest) => {
-              serving?.discard();
-              const witness = deps.findings === true ? capture(request) : undefined;
-              return () => {
-                // A callback may return arbitrary text; it did not inherit
-                // native generation from the provider response it replaces.
-                localFallback = true;
-                acceptedFindingsRequest = witness;
-              };
-            },
-          }),
+          prepareFallback: (request: LLMRequest) => {
+            serving?.discard();
+            const witness = deps.findings === true ? capture(request) : undefined;
+            return () => {
+              // A local answer does not inherit the replaced provider's stop reason
+              // or native generation. The callback may return arbitrary text.
+              localFallback = true;
+              acceptedFindingsRequest = witness;
+            };
+          },
           ...(deps.outputFormat !== undefined && {
             isTerminalRefusal: (response: LLMResponse) =>
               answeredBy.native && response.stopReason === 'refusal',
@@ -858,14 +855,12 @@ export function buildCallLLMStage(
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
-    // Native candidates only, every call (so it is never stale): the stop reason the
-    // Route decider judges a constrained answer by — a 'refusal' or
-    // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
-    // nativeStopFailure). Absent on every other agent, so their bytes are unchanged.
-    if (deps.outputFormat !== undefined) {
-      scope.llmLatestStopReason = nativeOutput ? response.stopReason : undefined;
-      scope.llmLatestNativeOutput = nativeOutput;
-    }
+    recordResponseStop(
+      scope,
+      localFallback ? undefined : response.stopReason,
+      nativeOutput,
+      deps.outputFormat !== undefined,
+    );
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

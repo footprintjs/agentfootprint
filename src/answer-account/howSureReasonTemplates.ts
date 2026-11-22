@@ -95,6 +95,7 @@ export const HOW_SURE_REASON_TEMPLATES = {
     'A script shown in the answer matches no submission of this turn on the record.',
   ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
+  'howSure.reason.answerOutputLimit': t("The answer was cut off at the model's output limit."),
   // The answer layer's witness (honesty layer 4) — set 5.
   'howSure.reason.stepsUnfinished': t(
     "The answer came before the active skill's declared steps finished.",

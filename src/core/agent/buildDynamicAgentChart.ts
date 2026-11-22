@@ -86,6 +86,7 @@ import {
   RESULTS_LOOP_TARGET,
   startFinalBranch,
 } from './honesty/mounts.js';
+import { responseStopFields } from './honesty/responseStop.js';
 import type { AgentState } from './types.js';
 import { dynamicTurnSeed } from './dynamicTurnSeed.js';
 import { memberRunArg } from '../memberRun.js';
@@ -679,6 +680,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(p.toolChoices !== undefined && { priorToolChoices: p.toolChoices }),
           ...(p.llmLatestReplay !== undefined && { priorLatestReplay: p.llmLatestReplay }),
           ...(p.requestReplay !== undefined && { priorRequestReplay: p.requestReplay }),
+          ...(p.llmLatestStopReason !== undefined && {
+            priorLatestStopReason: p.llmLatestStopReason,
+          }),
           // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
           // on the OUTER scope, read by the engine mapper INSIDE this
           // boundary. Same gate as the engagement state above.
@@ -751,14 +755,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // binding into a new provider proof. Present undefined clears it.
           ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
           ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
-          // Native output candidates only — absent otherwise, so the mapper
-          // is byte-identical for every other agent (see AgentState).
-          ...(Object.hasOwn(s, 'llmLatestStopReason') && {
-            llmLatestStopReason: s.llmLatestStopReason,
-          }),
-          ...(Object.hasOwn(s, 'llmLatestNativeOutput') && {
-            llmLatestNativeOutput: s.llmLatestNativeOutput,
-          }),
+          // Native candidates and prose cutoffs carry stop evidence. Ordinary
+          // replies without earlier stop evidence leave the mapper byte-identical.
+          ...responseStopFields(s),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.

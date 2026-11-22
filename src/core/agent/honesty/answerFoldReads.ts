@@ -12,6 +12,7 @@ export type AnswerFoldKey =
   | 'libraryResultLimits'
   | 'settledToolCallsComplete'
   | 'stoppedEarly'
+  | 'llmLatestStopReason'
   | 'unsupportedValues'
   | 'answerValidation'
   | 'argumentAsk'
@@ -31,7 +32,9 @@ export type AnswerFoldKey =
  *   `stoppedEarly` — the Route decider writes it on EVERY agent
  *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
  *   whenever the model asked for calls, whether or not this agent registered
- *   a tool that could answer them;
+ *   a tool that could answer them. The call stage can commit `llmLatestStopReason`
+ *   when the provider reports a cutoff or served a native format. The stage
+ *   skips that read when the key is absent;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
  *   coverage), bounded per-turn entry and settlement facts, and their completeness;
  * - a tool result cap, artifact store or window: bounded result-limit receipts
@@ -67,6 +70,7 @@ export function answerFoldReads(arms: {
     'pausedToolCallId',
     'findingsLedger',
     'stoppedEarly',
+    'llmLatestStopReason',
     ...(arms.tools
       ? ([
           'coverageDeclared',

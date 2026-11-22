@@ -123,6 +123,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'derived-from-reading': 'howSure.reason.derivedFromReading',
   'script-unmatched': 'howSure.reason.scriptUnmatched',
   'stopped-early': 'howSure.reason.stoppedEarly',
+  'answer-output-limit': 'howSure.reason.answerOutputLimit',
   'steps-unfinished': 'howSure.reason.stepsUnfinished',
   'step-skipped': 'howSure.reason.stepSkipped',
   'negative-prose-unverified': 'howSure.reason.negativeProseUnverified',

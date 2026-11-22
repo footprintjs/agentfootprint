@@ -299,6 +299,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
   },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', source: 'run', reads: 'stoppedEarly' },
   {
+    reason: 'answer-output-limit',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads: 'llmLatestStopReason (max_tokens)',
+  },
+  {
     reason: 'steps-unfinished',
     layer: 4,
     class: 'not-sure',

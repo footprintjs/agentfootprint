@@ -281,6 +281,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'script-unmatched':
     'a script shown in the answer matches no submission of this turn on the record',
   'stopped-early': 'the run stopped before the model finished',
+  'answer-output-limit': "the answer was cut off at the model's output limit",
   'steps-unfinished': "the answer came before the skill's declared steps finished",
   'step-skipped': 'a declared step was skipped',
   'negative-prose-unverified': 'model prose was not verified for negative claims',
