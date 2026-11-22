@@ -535,11 +535,7 @@ export function buildResumedInvocation(
           negativeResultId: negativeDispatch?.resultId,
         };
       }
-      if (
-        toolInvoked &&
-        seen?.toolResultExecution === 'threw' &&
-        binding.halt === undefined
-      ) {
+      if (toolInvoked && seen?.toolResultExecution === 'threw' && binding.halt === undefined) {
         const category = classifyToolFailure(err, deps.answerLayer);
         if (category !== undefined) seen.toolFailureCategory = category;
       }
