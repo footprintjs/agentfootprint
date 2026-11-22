@@ -11,6 +11,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
+import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../../src/answer-account/templates.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 
 /** Complete account, returned answer and assessments from f44f95bcb7c5, in seed order. */
@@ -185,9 +186,12 @@ it.each(SEEDS)(
           if (!runs.has(meta.runId)) runs.set(meta.runId, `recorded-run-${runs.size + 1}`);
         }
         const account = accountForAnswer(recording);
-        // New templates advance the vocabulary for unmatched evidence and withheld results.
-        // Compare every old sentence and pointer against the pinned version-18 account.
-        expect(account.templates).toEqual({ set: 'answer-account', version: 22 });
+        // Check the current vocabulary stamp and compare every old sentence
+        // and pointer against the pinned version-18 account.
+        expect(account.templates).toEqual({
+          set: 'answer-account',
+          version: ANSWER_ACCOUNT_TEMPLATE_SET_VERSION,
+        });
         captures.push({
           account: { ...account, templates: { ...account.templates, version: 18 } },
           answer: typeof result === 'string' ? result : 'paused',
