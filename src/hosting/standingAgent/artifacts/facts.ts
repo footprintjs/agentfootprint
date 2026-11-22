@@ -151,6 +151,7 @@ export function emitArtifactFact(
           ...(meta.origin !== undefined && { origin: meta.origin }),
           ...(meta.parentRefs !== undefined && { parentRefs: meta.parentRefs }),
           ...(meta.timeAxis !== undefined && { timeAxis: meta.timeAxis }),
+          ...(meta.naiveCount !== undefined && { naiveCount: meta.naiveCount }),
         },
         attribution,
       );

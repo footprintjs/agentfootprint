@@ -230,6 +230,9 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'sources-conflict',
         'unsupported-argument',
         'value-contingent',
+        'result-cut',
+        'placed-unread',
+        'times-without-zone',
         'work-not-finished',
       ].sort(),
     );

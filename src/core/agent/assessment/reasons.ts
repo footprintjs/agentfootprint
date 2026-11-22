@@ -136,6 +136,27 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
   },
   {
+    reason: 'result-cut',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was cut',
+  },
+  {
+    reason: 'placed-unread',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was stored by reference and not read',
+  },
+  {
+    reason: 'times-without-zone',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: some times in a dataset have no zone',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',

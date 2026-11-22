@@ -114,13 +114,7 @@ import {
   readMetadataEntry,
   type NotFoundMeaning,
 } from './objectStore.js';
-import {
-  canonicalPayloadBytes,
-  computeArtifactDigest,
-  decodeCanonicalPayload,
-  payloadShapeOf,
-  type PayloadShape,
-} from './payload.js';
+import { computeArtifactDigest, decodeCanonicalPayload, type PayloadShape } from './payload.js';
 import {
   assertRetention,
   planRetention,
@@ -436,22 +430,25 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
   return {
     async put(scope, input): Promise<ArtifactPutResult> {
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         async (parent) => (await liveHead(scope, parent)) !== undefined,
         retention,
         at,
       );
-      const bytes = canonicalPayloadBytes(input.data);
-      const shape = payloadShapeOf(input.data);
-      const metaValue = encodeArtifactMetaValue(meta, shape, S3_METADATA_BUDGET, 's3Artifacts');
+      const metaValue = encodeArtifactMetaValue(
+        meta,
+        payload.shape,
+        S3_METADATA_BUDGET,
+        's3Artifacts',
+      );
       const swept = await applyRetention(scope, meta.bytes, at);
       await send(
         'PutObject',
         new commands.Put({
           Bucket: bucket,
           Key: keyFor(scope, meta.ref),
-          Body: bytes,
+          Body: payload.bytes,
           ContentType: meta.mediaType,
           Metadata: { [ARTIFACT_META_KEY]: metaValue },
         }),

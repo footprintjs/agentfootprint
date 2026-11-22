@@ -45,7 +45,7 @@ import {
   canonicalPayloadBytes,
   computeArtifactDigest,
   decodeArtifactData,
-  encodeArtifactData,
+  envelopeOfSnapshot,
   type EncodedPayload,
 } from './payload.js';
 import {
@@ -238,7 +238,7 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
   return {
     async put(scope, input): Promise<ArtifactPutResult> {
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         (parent) => liveEnvelope(scope, parent) !== undefined,
         retention,
@@ -258,7 +258,7 @@ export function fileArtifacts(options: FileArtifactsOptions): ArtifactStore {
       const envelope: ArtifactEnvelope = {
         format: FILE_FORMAT,
         meta,
-        payload: encodeArtifactData(input.data),
+        payload: envelopeOfSnapshot(payload),
       };
       fs.mkdirSync(scopeDir(scope), { recursive: true });
       fs.writeFileSync(fileFor(scope, meta.ref), JSON.stringify(envelope));

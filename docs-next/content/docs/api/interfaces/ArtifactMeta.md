@@ -26,7 +26,7 @@ Payload size in bytes (UTF-8 for text/JSON, byteLength for binary).
 
 > `readonly` **createdAt**: `number`
 
-Defined in: [src/artifacts/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L115)
+Defined in: [src/artifacts/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L117)
 
 Unix ms when the artifact was stored.
 
@@ -85,6 +85,16 @@ The human name: `"Q3 sales by region"`.
 Defined in: [src/artifacts/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L86)
 
 MIME type of the payload: `'application/json'`, `'text/csv'`, …
+
+***
+
+### naiveCount?
+
+> `readonly` `optional` **naiveCount?**: `number`
+
+Defined in: [src/artifacts/types.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L115)
+
+Number of values in the declared time column with no offset or source zone, when positive.
 
 ***
 
