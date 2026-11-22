@@ -131,6 +131,7 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'derived-from-reading': ledger({ kind: 'time-derived', values: ['2026-03-03'] }),
   'script-unmatched': ledger({ kind: 'script-shown', label: 'unmatched' }),
   'stopped-early': { state: { stoppedEarly: { reason: 'max-iterations', iteration: 2 } } },
+  'answer-output-limit': { state: { llmLatestStopReason: 'max_tokens' } },
   'steps-unfinished': ledger({ kind: 'steps-unfinished' }),
   'step-skipped': ledger({ kind: 'step-skipped', policy: 'advance' }),
   'negative-prose-unverified': ledger({ kind: 'negative-claim-note' }),

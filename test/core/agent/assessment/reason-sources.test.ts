@@ -198,6 +198,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
     expect(byKind('answer')).toEqual(
       [
         'answer-check-failed',
+        'answer-output-limit',
         'claim-exceeds-search',
         'claim-unsettled',
         'derived-from-reading',

@@ -249,8 +249,8 @@ export interface CallLLMStageDeps {
    * The format that `'native'` requires and `'auto'` selects when supported
    * (`nativeOutputFormat.ts`). When selected, the request
    * carries it as `outputFormat`, this stage refuses a provider manifest that
-   * says it did not cross, and it records `llmLatestStopReason` for the Route
-   * decider. Absent, not one line of that runs.
+   * says it did not cross, and the Route decider judges the committed stop
+   * reason before parsing. Without a format Route leaves that reason to the answer layer.
    */
   readonly outputFormat?: NonNullable<LLMRequest['outputFormat']>;
   /** Select native per effective request, otherwise retain instruction + parsing. */

@@ -31,6 +31,7 @@ export function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
     priorEvidenceRecoveryUsed?: boolean;
     priorToolChoices?: readonly ToolChoiceEntry[];
     priorLatestReplay?: AgentState['llmLatestReplay'];
+    priorLatestStopReason?: AgentState['llmLatestStopReason'];
     priorRequestReplay?: RequestReplayValue;
   }>();
 
@@ -72,6 +73,9 @@ export function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   // evidence can explicitly clear the outer turn's former evidence.
   if (args.priorLatestReplay !== undefined) scope.llmLatestReplay = args.priorLatestReplay;
   if (args.priorRequestReplay !== undefined) writeRequestReplay(scope, args.priorRequestReplay);
+  // A normal reply can explicitly clear the outer scope’s preceding cutoff.
+  if (args.priorLatestStopReason !== undefined)
+    scope.llmLatestStopReason = args.priorLatestStopReason;
 
   // Per-iteration working keys — fresh each turn (slots + cache + callLLM
   // populate these inside the subflow; nothing outside reads the
