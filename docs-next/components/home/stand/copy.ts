@@ -21,7 +21,7 @@ export const REAL = {
   finding: `The answer's 'status' claims "completed" but the run's settled fact is status(A-1042) = "pending"`,
   withheld: "The answer was withheld: answer validation 'refund' did not pass (failed).",
   notSure:
-    'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+    'Not sure — a tool said there is ground it did not check or cannot cover (did not check “card network reports”); a tool said nothing matched.',
   consistent:
     "Consistent with the run's record — 2 checks ran and none fired: what came back · names and numbers. This is not a verification.",
   consistentOneCheck:

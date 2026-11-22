@@ -11,9 +11,10 @@ export interface Gathered {
   support?: AnswerAssessment['support'];
 }
 
-export function fire(g: Gathered, reason: AssessmentReason, witness: AssessmentPointer): void {
-  if (!g.admit(reason, witness)) return;
+export function fire(g: Gathered, reason: AssessmentReason, witness: AssessmentPointer): boolean {
+  if (!g.admit(reason, witness)) return false;
   const list = g.fired.get(reason) ?? [];
   list.push(witness);
   g.fired.set(reason, list);
+  return true;
 }

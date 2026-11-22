@@ -16,7 +16,7 @@ export interface AssumedValuesSource {
 
 // FOLD · the one choice of what the line's assumed values are read from
 // consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage (to compose
-// the line), answer-account/account.ts · appendedStandingLine (to find it again in the answer)
+// the line), answer-account/facts/standing.ts · appendedStandingLine (to find it again in the answer)
 /**
  * The source of the line's assumed values in `record` (committed state) —
  * `undefined` when the line names none: no `argument-assumed` reason, no

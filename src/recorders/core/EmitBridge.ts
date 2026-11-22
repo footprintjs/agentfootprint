@@ -15,6 +15,7 @@ import type { EventDispatcher } from '../../events/dispatcher.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../../events/registry.js';
 import { buildEventMeta, type RunContext, type TurnEventMeta } from '../../bridge/eventMeta.js';
 import { projectEventSourcePosition } from '../../bridge/eventSourcePosition.js';
+import { isDeferredPayloadSummary, type DeferredPayloadSummary } from './deferredPayload.js';
 
 export interface EmitBridgeOptions {
   readonly dispatcher: EventDispatcher;
@@ -29,6 +30,8 @@ export interface EmitBridgeOptions {
    */
   readonly prefix: string | readonly string[];
   readonly getRunContext: () => RunContext;
+  /** Set on one native bridge per run, since each bridge sees the same emit capture. */
+  readonly onSummary?: () => void;
   readonly rootTurnAt?: (type: AgentfootprintEventType, runtimeStageId: string) => true | undefined;
   readonly turnMetaAt?: (
     type: AgentfootprintEventType,
@@ -41,6 +44,7 @@ export class EmitBridge implements CombinedRecorder {
   private readonly dispatcher: EventDispatcher;
   private readonly prefixes: readonly string[];
   private readonly getRunContext: () => RunContext;
+  private readonly onSummary: EmitBridgeOptions['onSummary'];
   private readonly rootTurnAt: EmitBridgeOptions['rootTurnAt'];
   private readonly turnMetaAt: EmitBridgeOptions['turnMetaAt'];
 
@@ -49,12 +53,16 @@ export class EmitBridge implements CombinedRecorder {
     this.id = options.id;
     this.prefixes = typeof options.prefix === 'string' ? [options.prefix] : options.prefix;
     this.getRunContext = options.getRunContext;
+    this.onSummary = options.onSummary;
     this.rootTurnAt = options.rootTurnAt;
     this.turnMetaAt = options.turnMetaAt;
   }
 
-  onEmit(event: EmitEvent): void {
-    if (typeof event.name !== 'string') return;
+  onEmit(event: EmitEvent | DeferredPayloadSummary): void {
+    if (!('name' in event) || typeof event.name !== 'string') {
+      if (this.onSummary !== undefined && isDeferredPayloadSummary(event)) this.onSummary();
+      return;
+    }
     const name = event.name;
     if (!this.prefixes.some((p) => name.startsWith(p))) return;
     const type = event.name as AgentfootprintEventType;

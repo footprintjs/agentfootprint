@@ -86,88 +86,10 @@ import {
   RESULTS_LOOP_TARGET,
   startFinalBranch,
 } from './honesty/mounts.js';
+import { responseStopFields } from './honesty/responseStop.js';
 import type { AgentState } from './types.js';
-import type { ToolChoiceEntry } from './toolChoice/types.js';
+import { dynamicTurnSeed } from './dynamicTurnSeed.js';
 import { memberRunArg } from '../memberRun.js';
-
-/**
- * Inner seed for the `sf-llm-call` subflow. Initialises the per-turn
- * working keys (the ones the OUTER seed set on the flat chart) and
- * copies the cross-iteration accumulators from their read-only `prior*`
- * inputs into the writable working keys.
- *
- * Why the `prior*` indirection: `inputMapper` values are frozen inside
- * the subflow (any `scope.set` on them throws). callLLM does
- * `scope.totalInputTokens += usage` — so `totalInputTokens` must be a
- * writable working key, seeded here from the frozen `priorTotalInputTokens`.
- */
-function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
-  const args = scope.$getArgs<{
-    priorTotalInputTokens?: number;
-    priorTotalOutputTokens?: number;
-    priorTotalCacheReadTokens?: number;
-    priorCumTokensInput?: number;
-    priorCumTokensOutput?: number;
-    priorCumEstimatedUsd?: number;
-    priorCostBudgetHit?: boolean;
-    priorSkillHistory?: readonly (string | undefined)[];
-    priorHistory?: readonly LLMMessage[];
-    priorDeliveredMessageKeys?: readonly string[];
-    priorEvidenceRecoveryUsed?: boolean;
-    priorToolChoices?: readonly ToolChoiceEntry[];
-    priorLatestReplay?: AgentState['llmLatestReplay'];
-  }>();
-
-  // Cross-iteration accumulators — seed working keys from prior totals
-  // so they continue to accumulate across loop re-entries.
-  scope.totalInputTokens = args.priorTotalInputTokens ?? 0;
-  scope.totalOutputTokens = args.priorTotalOutputTokens ?? 0;
-  // Cache reads (9.110.0) — value-conditional both ways: seeded only when a
-  // provider has reported one, so a run on a provider that reports none
-  // crosses no new key.
-  if (args.priorTotalCacheReadTokens !== undefined) {
-    scope.totalCacheReadTokens = args.priorTotalCacheReadTokens;
-  }
-  scope.cumTokensInput = args.priorCumTokensInput ?? 0;
-  scope.cumTokensOutput = args.priorCumTokensOutput ?? 0;
-  scope.cumEstimatedUsd = args.priorCumEstimatedUsd ?? 0;
-  scope.costBudgetHit = args.priorCostBudgetHit ?? false;
-  scope.skillHistory = args.priorSkillHistory ?? [];
-
-  // The WINDOW, as a writable working key (7.21). It used to arrive as the
-  // read-only `history` input, which was fine while nothing inside the
-  // subflow changed it — the Deliver stage does. Seeding it here from
-  // `priorHistory` (and bubbling it out at the boundary) is what makes the
-  // one-past law hold in the grouped shape too: what this iteration sends is
-  // what the next iteration's window stage sees. The delivery ledger takes
-  // the same trip so a delivered message is not re-delivered next turn.
-  scope.history = args.priorHistory ?? [];
-  scope.deliveredMessageKeys = args.priorDeliveredMessageKeys ?? [];
-  if (args.priorEvidenceRecoveryUsed !== undefined) {
-    scope.evidenceRecoveryUsed = args.priorEvidenceRecoveryUsed;
-  }
-  // The classifier's rows (9.105.0), the `history` trip: the Tools branch
-  // inside this boundary reads them, the call-llm stage appends to them, and
-  // the boundary bubbles them out — so they arrive under an alias and become
-  // the writable working key here. Value-conditional: an unarmed agent, and
-  // an armed one on its first call, seeds no key.
-  if (args.priorToolChoices !== undefined) scope.toolChoices = args.priorToolChoices;
-  // Carry presence across the fresh inner scope so a reply with no replay
-  // evidence can explicitly clear the outer turn's former evidence.
-  if (args.priorLatestReplay !== undefined) scope.llmLatestReplay = args.priorLatestReplay;
-
-  // Per-iteration working keys — fresh each turn (slots + cache + callLLM
-  // populate these inside the subflow; nothing outside reads the
-  // injection arrays, so they stay subflow-internal).
-  scope.activeInjections = [];
-  scope.systemPromptInjections = [];
-  scope.messagesInjections = [];
-  scope.toolsInjections = [];
-  scope.cacheMarkers = [];
-  scope.llmLatestContent = '';
-  scope.llmLatestToolCalls = [];
-  scope.thinkingBlocks = [];
-}
 
 /**
  * Build the Dynamic-ReAct agent chart from the shared `AgentChartDeps`.
@@ -757,6 +679,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // shape, not the read-only `findingsLedger` one). Value-conditional.
           ...(p.toolChoices !== undefined && { priorToolChoices: p.toolChoices }),
           ...(p.llmLatestReplay !== undefined && { priorLatestReplay: p.llmLatestReplay }),
+          ...(p.requestReplay !== undefined && { priorRequestReplay: p.requestReplay }),
+          ...(p.llmLatestStopReason !== undefined && {
+            priorLatestStopReason: p.llmLatestStopReason,
+          }),
           // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
           // on the OUTER scope, read by the engine mapper INSIDE this
           // boundary. Same gate as the engagement state above.
@@ -828,14 +754,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Atomic tuple + Replace below: never merge a former layout or
           // binding into a new provider proof. Present undefined clears it.
           ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
-          // Native output candidates only — absent otherwise, so the mapper
-          // is byte-identical for every other agent (see AgentState).
-          ...(Object.hasOwn(s, 'llmLatestStopReason') && {
-            llmLatestStopReason: s.llmLatestStopReason,
-          }),
-          ...(Object.hasOwn(s, 'llmLatestNativeOutput') && {
-            llmLatestNativeOutput: s.llmLatestNativeOutput,
-          }),
+          ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
+          // Native candidates and prose cutoffs carry stop evidence. Ordinary
+          // replies without earlier stop evidence leave the mapper byte-identical.
+          ...responseStopFields(s),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.

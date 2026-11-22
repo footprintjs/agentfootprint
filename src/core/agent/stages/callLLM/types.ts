@@ -16,6 +16,8 @@ import type { OutputSchemaParser } from '../../../../answer-validation/outputSch
 import type { FindingsAnswerAsk, FindingsServeMode } from '../../findings/serve.js';
 
 export interface CallLLMStageDeps {
+  /** Mark the accepted model response on this native leg before checks run. */
+  readonly onResponseCommitted?: () => void;
   /** Preserve approved replay retirement for recovery before transport. */
   readonly onReplayPrepared?: LLMCallHooks['onReplayPrepared'];
   /** The LLM provider to invoke. */
@@ -28,6 +30,8 @@ export interface CallLLMStageDeps {
   readonly maxTokens?: number;
   /** A terminal policy owns delivery; keep provider drafts off the token channel. */
   readonly suppressDraftTokens?: boolean;
+  /** The app admits provider summaries while a terminal policy holds drafts. */
+  readonly allowHeldProviderSummary?: true;
   /** Output middleware has not judged this draft; keep lifecycle/usage, not its text. */
   readonly withholdDraftContent?: true;
   /** Read recovery state only on an agent whose evidence gate can revise. */
@@ -245,8 +249,8 @@ export interface CallLLMStageDeps {
    * The format that `'native'` requires and `'auto'` selects when supported
    * (`nativeOutputFormat.ts`). When selected, the request
    * carries it as `outputFormat`, this stage refuses a provider manifest that
-   * says it did not cross, and it records `llmLatestStopReason` for the Route
-   * decider. Absent, not one line of that runs.
+   * says it did not cross, and the Route decider judges the committed stop
+   * reason before parsing. Without a format Route leaves that reason to the answer layer.
    */
   readonly outputFormat?: NonNullable<LLMRequest['outputFormat']>;
   /** Select native per effective request, otherwise retain instruction + parsing. */

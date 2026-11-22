@@ -68,6 +68,9 @@ export interface AgentRunCheckpoint {
   readonly sourceDeclarationCorrection?: { readonly spent: true };
   /** Bounded, private tool proof from the failed request, used only by `resumeOnError`. */
   readonly toolTurnEvidence?: import('./agent/recordedCalls/toolTurnCheckpoint.js').ToolTurnEvidence;
+  /** Private request context for a signed, unfinished tool turn. It belongs in
+   * trusted checkpoint storage and is used only to retry the same request. */
+  readonly requestReplay?: import('./agent/requestTurn/state.js').RequestReplayValue;
   /**
    * Every span this conversation folded into a summary, oldest first — what
    * makes a compacted conversation still a provable one after the process

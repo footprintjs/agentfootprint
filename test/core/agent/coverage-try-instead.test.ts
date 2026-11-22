@@ -26,19 +26,16 @@
  *   • the `agentfootprint.tools.absent` EVENT — carries `tryInstead` and
  *     `tryInsteadTool`, each as declared; before 9.113.0 it carried neither
  *     (integration);
- *   • the tool turn across a JSON CHECKPOINT — an envelope-in-history pin,
- *     NOT a reader: no typed field is checkpointed (events are not, and
- *     `coverageDeclared` never carries a suggestion), so what it proves is
- *     that the envelope's JSON in history reaches a fresh executor's request
- *     intact (integration);
+ *   • the tool turn across a JSON CHECKPOINT — the typed tool stays in the
+ *     history envelope and reaches a fresh executor's request intact. The
+ *     row keeps the bounded sentence for the warning (integration);
  *   • the EVIDENCE corpus — the typed `tool` and `why` ground exactly as the
  *     sentence does; `looked_for` stays the one field withheld (security);
  *   • the dataset projection GUARD — keeps `try_instead_tool` among the
  *     declarations an adapter may not change (edge).
  *
- * And the two pinned as NOT reading it: the appended coverage block and the
- * `coverageDeclared` rows describe GROUND, and a suggestion is not ground
- * (regression).
+ * The appended coverage block still describes the ground the tool covered.
+ * The warning uses the bounded advice from the tracked row (regression).
  *
  * The sentence form's bytes are pinned against a reference generated on the
  * 9.112.2 tree BEFORE any source edit of this release, by this file in update
@@ -61,6 +58,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ABSENCE_NOTE,
+  COVERAGE_BLOCK_HEADING,
   Agent,
   absent,
   askHuman,
@@ -634,10 +632,8 @@ describe('integration: tools.absent and the tool turn carry the suggestion, as d
 });
 
 describe('integration: the tool turn in a JSON checkpoint still carries the typed tool', () => {
-  // What rides the checkpoint is the tool turn (history): no typed field is
-  // tracked (`coverageDeclared` never carries a suggestion) and events are not
-  // checkpointed. So this pins the one path there is — the envelope's JSON in
-  // the tool turn reaches a fresh executor's request intact.
+  // The typed suggestion rides the tool turn in history. The row also carries
+  // the bounded sentence that the fresh executor uses in the warning.
   it('pauses after the absence, survives JSON, and the resumed model call reads the same object', async () => {
     const askFirst = defineTool({
       name: 'ask_first',
@@ -667,7 +663,8 @@ describe('integration: the tool turn in a JSON checkpoint still carries the type
     const out = await build(second.provider).resume(stored as never, 'the one in the east lab');
     expect(out).toBe(
       'Nothing was collected for it.\n\n---\n\n' +
-        'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+        'Not sure — a tool said there is ground it did not check or cannot cover ' +
+        `(did not check “${EXISTENCE.what}”); a tool said nothing matched (suggested “${FLAGSHIP_TEXT}”).`,
     );
 
     const resumedTurn = second.sent[0]?.find((m) => m.role === 'tool' && m.toolCallId === 't1');
@@ -755,7 +752,7 @@ describe('edge: the one recognizer is the one reader, whoever minted the envelop
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Regression — the sentence form, and the two readers that never read it
+// Regression — the sentence form and the unchanged coverage block
 // ─────────────────────────────────────────────────────────────────────────
 
 const REFERENCE_PATH = resolve(__dirname, 'fixtures/absent-try-instead-sentence.reference.json');
@@ -763,6 +760,11 @@ const UPDATE_REFERENCE = process.env.AF_TRY_INSTEAD_REFERENCE === 'update';
 
 function withoutOccurrence({ callOccurrenceKey: _key, ...record }: Ev): Ev {
   return record;
+}
+
+/** The historical coverage record predates the warning's one additive field. */
+function withoutWarningSuggestion({ tryInstead: _suggestion, ...row }: Ev): Ev {
+  return withoutOccurrence(row);
 }
 
 function expectOccurrence(run: Awaited<ReturnType<typeof runOnce>>): void {
@@ -796,13 +798,15 @@ describe('regression: the sentence form is byte-identical', () => {
     // This witness pins the complete pre-default answer, including the legacy limits block.
     const t = await runOnce(() => absent(SENTENCE_DECL), { limits: true, answerLayer: false });
     expectOccurrence(t);
+    expect(t.coverageDeclared).toHaveLength(1);
+    expect(t.coverageDeclared?.[0]?.tryInstead).toBe(SENTENCE_DECL.tryInstead);
     const observed: SentenceFormReference = {
       envelope: JSON.stringify(absent(SENTENCE_DECL)),
       flagshipEnvelope: JSON.stringify(absent(FLAGSHIP_SENTENCE)),
       sent: t.sent,
       toolTurn: t.toolTurn,
       answer: t.answer,
-      coverageDeclared: t.coverageDeclared?.map(withoutOccurrence),
+      coverageDeclared: t.coverageDeclared?.map(withoutWarningSuggestion),
       absentEvent: withoutOccurrence(t.absences[0] ?? {}),
       toolEndStatus: t.toolEnds[0]?.status,
     };
@@ -876,7 +880,7 @@ describe('regression: a `tryInstead` that is not a sentence still delivers the a
   });
 });
 
-describe('regression: the appended block and the tracked rows never read a suggestion', () => {
+describe('regression: the warning carries the sentence and the limits block stays byte-identical', () => {
   const base: AbsenceDeclaration = {
     what: LOOKED_FOR,
     checked: [CHECKED],
@@ -884,22 +888,40 @@ describe('regression: the appended block and the tracked rows never read a sugge
     cannotCover: [{ what: 'host-side multipathing', why: 'no collector runs on the hosts' }],
   };
 
-  it('none, a sentence, a typed tool or both — the same answer block and the same rows', async () => {
+  it('tracks only bounded advice while preserving all other row fields and the long block', async () => {
     const none = await runOnce(() => absent(base), { limits: true });
+    const longSuggestion = `Check the archived inventory ${'for every cluster '.repeat(
+      5,
+    )}before retrying.`;
     const variants = [
-      { tryInstead: FLAGSHIP_TEXT },
-      { tryInsteadTool: TYPED },
-      { tryInstead: FLAGSHIP_TEXT, tryInsteadTool: TYPED },
+      { suggestion: { tryInstead: FLAGSHIP_TEXT }, short: FLAGSHIP_TEXT },
+      { suggestion: { tryInsteadTool: TYPED }, short: undefined },
+      { suggestion: { tryInstead: FLAGSHIP_TEXT, tryInsteadTool: TYPED }, short: FLAGSHIP_TEXT },
+      { suggestion: { tryInstead: longSuggestion }, short: `${longSuggestion.slice(0, 79)}…` },
     ];
-    // The block states GROUND; a suggestion is advice about a call not yet
-    // made, and it would change the bytes of every answer that declared one.
-    expect(none.answer).toContain('Coverage of this answer');
+    const separator = `\n\n${COVERAGE_BLOCK_HEADING}`;
+    const noneParts = none.answer.split(separator);
+    expect(noneParts).toHaveLength(2);
+    const [noAdvice, originalBlock] = noneParts;
+    expect(noAdvice).toMatch(/a tool said nothing matched\.$/);
+    expect(none.coverageDeclared).toHaveLength(1);
+    expect(none.coverageDeclared?.[0]).not.toHaveProperty('tryInstead');
     expectOccurrence(none);
-    for (const suggestion of variants) {
+    for (const { suggestion, short } of variants) {
       const t = await runOnce(() => absent({ ...base, ...suggestion }), { limits: true });
-      expect(t.answer).toBe(none.answer);
+      const parts = t.answer.split(separator);
+      expect(parts).toHaveLength(2);
+      const [warning, block] = parts;
+      expect(block).toBe(originalBlock);
+      expect(warning).toBe(
+        short === undefined ? noAdvice : `${noAdvice?.slice(0, -1)} (suggested “${short}”).`,
+      );
       expectOccurrence(t);
-      expect(JSON.stringify(t.coverageDeclared?.map(withoutOccurrence))).toBe(
+      expect(t.coverageDeclared).toHaveLength(1);
+      expect(t.coverageDeclared?.[0]).not.toHaveProperty('tryInsteadTool');
+      if (short === undefined) expect(t.coverageDeclared?.[0]).not.toHaveProperty('tryInstead');
+      else expect(t.coverageDeclared?.[0]?.tryInstead).toBe(suggestion.tryInstead);
+      expect(JSON.stringify(t.coverageDeclared?.map(withoutWarningSuggestion))).toBe(
         JSON.stringify(none.coverageDeclared?.map(withoutOccurrence)),
       );
     }

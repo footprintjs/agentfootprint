@@ -80,6 +80,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare reliabilityConfig?: AgentConfiguration['reliabilityConfig'];
   declare thinkingHandler?: AgentConfiguration['thinkingHandler'];
   declare thinkingBudget?: AgentConfiguration['thinkingBudget'];
+  declare liveThinkingWithHeldDrafts?: AgentConfiguration['liveThinkingWithHeldDrafts'];
   declare structureRecorders?: AgentConfiguration['structureRecorders'];
   declare agentGroupTranslator?: AgentConfiguration['agentGroupTranslator'];
   declare reactMode: AgentConfiguration['reactMode'];

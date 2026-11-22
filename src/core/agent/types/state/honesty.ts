@@ -1,4 +1,8 @@
 export interface HonestyState {
+  /** Some result-limit facts could not be retained in this turn's bounded list. */
+  libraryResultLimitsIncomplete?: true;
+  /** Framework-imposed result limits for this turn, recorded where the result is served. */
+  libraryResultLimits?: readonly import('../../honesty/libraryResultLimits.js').LibraryResultLimit[];
   /** One native protocol correction per human request; never a conversation-derived allowance. */
   sourceDeclarationCorrectionSpent?: true;
   /** Already masked omission observations, pending their actual batch-barrier settlement. */

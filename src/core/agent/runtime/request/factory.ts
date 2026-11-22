@@ -35,6 +35,9 @@ export interface RequestEnvironment {
 export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      onResponseCommitted: () => {
+        run.value.modelResponseCommitted = true;
+      },
       onReplayPrepared: (preparation) => {
         if (
           run.value.checkpointTracker !== undefined &&
@@ -76,6 +79,9 @@ export function requestFactory(environment: RequestEnvironment) {
         environment.governsOutput) && {
         suppressDraftTokens: true,
         withholdDraftContent: true,
+        ...(environment.configuration.liveThinkingWithHeldDrafts === 'provider-summary' && {
+          allowHeldProviderSummary: true as const,
+        }),
       }),
       // Tool choice by classifier (9.105.0): the outcome row after the reply.
       ...(environment.configuration.toolChoiceOptions !== undefined && {

@@ -31,6 +31,12 @@ row. Observing a retry of the same request leaves one row. The original
 provider hooks still carry request observations and close when the invocation
 settles.
 
+`liveChunks.ts` emits an attempt's thinking and visible text in provider order.
+It applies the served-event redaction policy. Calls that protect draft output
+may opt in to classified provider summaries through `AgentOptions`. The answer
+policy still owns draft text delivery. The call stage owns the terminal response
+and cancellation.
+
 ## Dispatch lifetime
 
 Every attempt carries the run’s signal on its

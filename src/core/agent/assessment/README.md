@@ -208,7 +208,7 @@ stays the verdict when both exist. A `steps-unfinished` row fires the reason of 
 name and files no check: the record holds only the unfinished verdict.
 
 **A conflict whose readings the record cannot place — the incomplete-record
-policy** (`assess.ts` · `conflictOfThisTurn`). Each reading of a conflict row
+policy** (`assessment/conflicts.ts` · `conflictOfThisTurn`). Each reading of a conflict row
 (`witnesses`) is placed by the call it names, as the record shows it:
 
 - **current** — a call of this turn;
@@ -223,8 +223,8 @@ Which turn the row belongs to is decided in this order:
 2. a current reading places the row here, stamped or not (the call-id rule);
 3. a row stamped with THIS turn stays this turn's unless EVERY reading is
    earlier. An unresolved reading, no readings at all, or a list the fold cannot
-   read whole (`rowList`, above) establishes no placement elsewhere, and its
-   source counts those readings in `unnamed`;
+   read whole (`rowList`, above) establishes no placement elsewhere. When
+   admitted, the source counts readings it cannot name in `unnamed`;
 4. an UNSTAMPED row is placed only by a current reading, and so is any row of a
    record with no `turnNumber`.
 
@@ -238,13 +238,31 @@ it cannot name — and lifts the stamp only on a placement the record establishe
 The reverse stays refused: an unstamped conflict is never attached to today's
 answer by a reading the record does not show to be today's.
 
+**Older recordings.** A keyless record can predate occurrence and settlement
+evidence. In the absence of settlement, tool-entry or middleware evidence and
+of withheld calls, a conflict placed in this turn yields the run-level reason
+`check-unreachable` if the list cannot be read whole or if it has at least two
+readings and one or more are unplaced. The line says the record holds a conflict
+whose readings it cannot place. A served placeholder entry is an unplaced
+reading, and a placeholder replacing the entire list leaves it unreadable.
+A fully read list of fewer than two entries is outside the rule because the
+writer files conflicts only with at least two readings. Keyed and delivery-governed records
+still need the existing admission proof, as does any `sources-conflict` reason
+that attributes the conflict to results.
+
+If the same record also shows an unverified answer check, the standing line
+and the answer account state both causes. During replay, a saved line that
+states only the older answer-check wording is still credited to the library
+when the record independently supports that check and the text exactly matches
+the appended section.
+
 ```ts
 // turnNumber: 2; history: [person 't1', result of old1, person 't2', result of c2]
 const reading = (toolCallId?: string) => ({ toolCallId, subject: { kind: 'host', id: 'h1' }, predicate: 'state' });
 const filedNow = (witnesses: unknown[]) => ({ kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 });
 const fold = (witnesses: unknown[]) =>
   assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [filedNow(witnesses)] } } });
-fold([reading('missingA'), reading('missingB')]).reasons[0].source; // { kind: 'calls', calls: [], unnamed: 2 }
+fold([reading('missingA'), reading('missingB')]).reasons[0].source; // { kind: 'run' } for check-unreachable
 fold([reading('old1'), reading('missingB')]).standing;               // 'not-sure' — one earlier, one unresolved
 fold([reading(), reading()]).standing;                               // 'not-sure' — no ids at all
 fold([reading('old1')]).standing;                                    // 'consistent' — every reading earlier
@@ -288,7 +306,7 @@ history occurrence. The provider can use the same ID again.
 
 | Rests on | Reasons |
 |---|---|
-| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
+| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `result-cut`, `placed-unread`, `times-without-zone`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
 | `answer` | `value-contingent` (answer witness), `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
 | `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `step-skipped`, `result-withheld`, `check-unreachable` |
 
@@ -326,8 +344,8 @@ outside this: see [Not covered](./LIMITS.md#not-covered)):
   record's own claim);
 - a value that is not a plain array is not trusted as a list: one call the
   record cannot name, and — for a conflict — no placement shown elsewhere, so
-  a row stamped with this turn keeps its doubt (`assess.ts` ·
-  `conflictOfThisTurn`, below).
+  a row stamped with this turn keeps its doubt (`assessment/conflicts.ts` ·
+  `conflictOfThisTurn`).
 
 **Why.** `Array.from` and `for…of` run a list's own iterator: an empty one hid a
 named reading (the source read `{ calls: [], unnamed: 1 }`), and a getter would
@@ -342,7 +360,7 @@ witnesses.length = 3; // index 2 is a hole
 Object.defineProperty(witnesses, Symbol.iterator, { value: function* () {} }); // never called
 const conflict = { kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 };
 assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [conflict] } } })
-  .reasons[0].source; // { kind: 'calls', calls: [{ toolCallId: 'c2', toolName: 'lookup' }], unnamed: 2 }
+  .reasons[0].source; // { kind: 'run' } on a legacy record with no delivery evidence
 ```
 
 **The app's words for a reason's calls.** A tool may declare `displayName`

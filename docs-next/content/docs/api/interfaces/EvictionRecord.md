@@ -4,7 +4,7 @@ title: EvictionRecord
 
 # Interface: EvictionRecord
 
-Defined in: [src/recorders/core/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L85)
+Defined in: [src/recorders/core/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L92)
 
 Eviction record — a piece that was removed from a slot under pressure.
 
@@ -14,7 +14,7 @@ Eviction record — a piece that was removed from a slot under pressure.
 
 > `readonly` **contentHash**: `string`
 
-Defined in: [src/recorders/core/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L87)
+Defined in: [src/recorders/core/types.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L94)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/recorders/core/types.ts:87](https://github.com/footprintjs/agen
 
 > `readonly` **reason**: `"budget"` \| `"stale"` \| `"low_score"` \| `"policy"` \| `"user_revoked"`
 
-Defined in: [src/recorders/core/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L88)
+Defined in: [src/recorders/core/types.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L95)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/recorders/core/types.ts:88](https://github.com/footprintjs/agen
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/recorders/core/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L86)
+Defined in: [src/recorders/core/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L93)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/recorders/core/types.ts:86](https://github.com/footprintjs/agen
 
 > `readonly` **survivalMs**: `number`
 
-Defined in: [src/recorders/core/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L89)
+Defined in: [src/recorders/core/types.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/types.ts#L96)

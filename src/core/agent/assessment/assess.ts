@@ -35,10 +35,8 @@
  * this turn — one that names one of those calls, or one stamped with this turn
  * whose readings the record does not all place in earlier turns
  * (`conflictOfThisTurn`; the ledger IS carried, so rows about earlier turns'
- * calls are left out), and the
- * answer's own rows (`unsupportedValues`,
- * `stoppedEarly`, `answerValidation`). "Rests on" is every call of the turn: it
- * may over-report, it never hides.
+ * calls are left out), and the answer's own rows (`unsupportedValues`, `stoppedEarly`,
+ * `answerValidation`). "Rests on" includes every call of the turn.
  *
  * ## How the turn ended
  *
@@ -52,6 +50,7 @@ import { callIndexOf, isRecord, str } from './recordValues.js';
 import { recoveredCallOutcomes, turnResults } from './turnResults.js';
 import { argumentRows, waitingArgumentIteration, type ArgumentRowRead } from './argumentRows.js';
 import { rowsAtProblem } from '../emptiness.js';
+import { libraryResultReasons } from './results/library-did/stage.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import { historyCallResolver, readHistoryCalls, uniqueHistoryProposal } from '../recordedCalls.js';
 import { readIntegrityRows } from './integrityReasons.js';
@@ -60,8 +59,11 @@ import { periodRows, PERIOD_REASONS, readPeriodVerdicts } from './periodRows.js'
 import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
 import { deliveredResults } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
-import { REASONS, reasonEntry } from './reasons.js';
-import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
+import { answerCompletionReasons } from './answer/completion/completion.js';
+import { reasonEntry } from './reasons.js';
+import { rowList } from './sources.js';
+import { assessmentValueOf, readReasonDetails, type RetainedReasonState } from './reasonDetails.js';
+import { readConflicts } from './conflicts.js';
 import { rewritesByOccurrence } from './rewrittenArguments.js';
 import { coverageRows } from './coverageRows.js';
 import { fire, type Gathered } from './gathered.js';
@@ -346,64 +348,6 @@ function readArgumentAsk(
 }
 
 /**
- * Layer 3, the model's readings: a conflict row of THIS turn
- * (`conflictOfThisTurn`). A row the one writer stamped with its `turn` (the
- * honesty layers' turn stamp, filed while a layer is armed) is this turn's
- * only when the stamp says so — a provider that reuses call ids across turns
- * no longer makes an earlier turn's conflict read as this one's.
- */
-function readConflicts(
-  state: Readonly<Record<string, unknown>>,
-  places: CallPlaces,
-  g: Gathered,
-): void {
-  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
-  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
-  ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'conflict') return;
-    if (conflictOfThisTurn(row, turn, places)) {
-      fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
-    }
-  });
-}
-
-/**
- * Whether a conflict row is this turn's — THE INCOMPLETE-RECORD POLICY. Each
- * reading (`witnesses`) is placed by the call it names, as the record shows
- * it: CURRENT (a call of this turn), EARLIER (a call `history` places before
- * this turn began — its result, or the request that asked for it) or
- * UNRESOLVED (no identifiable call: a hole, a getter's entry, a missing
- * result, or multiple results that could be the witness).
- *
- * - a row stamped with ANOTHER turn is never this turn's;
- * - a CURRENT reading places the row here, stamped or not;
- * - a row stamped with THIS turn stays this turn's unless EVERY reading is
- *   EARLIER — a contrary placement the record establishes. An unresolved
- *   reading establishes none: the stamp keeps its doubt, and the source
- *   counts the reading in `unnamed` (`sources.ts`). No readings at all, or a
- *   list the fold cannot read whole (not a plain array, or longer than it
- *   reads — `sources.ts` · `rowList`), establish none either;
- * - an UNSTAMPED row is never placed by a reading that is not current: an
- *   earlier turn's conflict whose ids are gone, or unresolved, stays out of
- *   this turn. Nor is any row of a record with no `turnNumber`, where no stamp
- *   can be read against the turn.
- */
-function conflictOfThisTurn(
-  row: Readonly<Record<string, unknown>>,
-  turn: number | undefined,
-  places: CallPlaces,
-): boolean {
-  const stamped = typeof row.turn === 'number' && turn !== undefined;
-  if (stamped && row.turn !== turn) return false;
-  const witnesses = rowList(row.witnesses);
-  const placement = (witnesses?.entries ?? []).map((w) => callPlacement(w, places));
-  if (placement.includes('current')) return true;
-  if (!stamped) return false;
-  const readWhole = witnesses !== undefined && witnesses.unread === 0;
-  return !(readWhole && placement.length > 0 && placement.every((at) => at === 'earlier'));
-}
-
-/**
  * Layer 4, the answer's own rows: the evidence gate's verdict (a flag —
  * `unsupportedValues` — or, while the answer layer is armed, its clean pass,
  * the `grounded` witness row), a cut-short turn, an answer given before its
@@ -439,9 +383,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
       });
     }
   }
-  if (isRecord(state.stoppedEarly)) {
-    fire(g, 'stopped-early', statePointer('stoppedEarly', 'iteration'));
-  }
+  for (const { reason, witness } of answerCompletionReasons(state)) fire(g, reason, witness);
   for (const w of witnesses) {
     if (w.kind !== 'grounded') fire(g, w.kind, statePointer('findingsLedger', w.index, 'kind'));
   }
@@ -540,41 +482,6 @@ function readScriptsShown(state: Readonly<Record<string, unknown>>, g: Gathered)
 }
 
 /**
- * The reasons in `REASONS` order, each with what it rests on (its DECLARED
- * kind, and for `calls` the calls its rows name — `sources.ts`), and the value
- * by precedence: a reason > support > a check ran > nothing. The source never
- * moves the value: it is read after the reason fired, from the same rows.
- */
-function valueOf(g: Gathered, read: SourceRead): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
-  const reasons = REASONS.flatMap((entry) => {
-    const witness = g.fired.get(entry.reason);
-    if (witness === undefined) return [];
-    const source =
-      entry.reason === 'value-contingent' &&
-      witness.some((w) => w.kind === 'state' && w.path.endsWith('/declaredOn'))
-        ? 'answer'
-        : entry.source;
-    return [
-      {
-        reason: entry.reason,
-        ...(entry.layer !== undefined && { layer: entry.layer }),
-        witness,
-        source: reasonSourceOf(entry.reason, source, witness, read),
-      },
-    ];
-  });
-  const assessment: AnswerAssessment['assessment'] =
-    reasons.length > 0
-      ? 'unknown'
-      : g.support !== undefined
-      ? 'known'
-      : g.checked.some((c) => c.ran > 0)
-      ? 'unrefuted'
-      : 'not-applicable';
-  return { assessment, reasons };
-}
-
-/**
  * Fold one answer's standing from its committed record.
  *
  * The record of a turn that ended in an ANSWER or in a PAUSE (a pause reads
@@ -639,9 +546,18 @@ export function assessLive(
   snapshot: unknown,
   declarations?: AssessmentDeclarations,
   retainedHistory?: (history: readonly unknown[]) => unknown,
+  retainedReasonState?: RetainedReasonState,
 ): AnswerAssessment {
   checkInputs({ snapshot }, declarations);
-  return foldState(stateOf({ snapshot }), declarations, false, retainedHistory);
+  return foldState(
+    stateOf({ snapshot }),
+    declarations,
+    false,
+    retainedHistory,
+    undefined,
+    undefined,
+    retainedReasonState ?? (() => undefined),
+  );
 }
 
 /**
@@ -659,6 +575,7 @@ export function foldState(
   retainedHistory?: (history: readonly unknown[]) => unknown,
   declarationAddresses?: ReadonlyMap<number, number>,
   legacyEvents?: unknown,
+  retain: RetainedReasonState = (_key, value) => value,
 ): AnswerAssessment {
   const { state, asked } = served
     ? keptOutGuard(recorded)
@@ -738,6 +655,7 @@ export function foldState(
       fire(g, 'check-unreachable', statePointer('findingsLedger', row.index, 'argument'));
     }
   }
+  for (const { reason, witness } of libraryResultReasons(state)) fire(g, reason, witness);
   readCoverageRows(coverage, g);
   readTurnCalls(reads, coverage, resultOpportunities, g);
   readContingentRows(state, places, g);
@@ -773,7 +691,7 @@ export function foldState(
       fire(g, 'period-beyond-retention', statePointer('findingsLedger', index, 'refused'));
     }
   }
-  readConflicts(state, places, g);
+  readConflicts(state, (ref) => callPlacement(ref, places), g, admission.legacyConflictCheck);
   readAnswerRows(state, g);
   const integrity = readIntegrityRows(state);
   for (const { reason, at } of integrity.fired) fire(g, reason, at);
@@ -788,13 +706,26 @@ export function foldState(
       keptOut: [...asked].sort(),
     };
   }
-  const { assessment, reasons } = valueOf(g, {
+  const detail = readReasonDetails(
+    g,
+    current,
+    coverage,
     state,
-    turnResults: results,
-    historyCalls,
-    turnBegins: begins,
-    declarationAddresses,
-  });
+    admission.settlements?.byKey,
+    retain,
+  );
+  const { assessment, reasons } = assessmentValueOf(
+    g,
+    {
+      state,
+      turnResults: results,
+      historyCalls,
+      turnBegins: begins,
+      declarationAddresses,
+      failureCategories: detail.failureByHistory,
+    },
+    detail,
+  );
   return {
     assessment,
     standing: standingOf(assessment, reasons),

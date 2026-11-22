@@ -15,6 +15,7 @@ import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
 import type { SourceLinkConsumer } from '../../types/state/records.js';
 import { identifyAcceptedToolCalls } from './acceptedCalls.js';
+import type { CallLLMStageDeps } from './types.js';
 
 const historyPositionLimit = 256;
 
@@ -111,12 +112,14 @@ export function commitAcceptedResponse(
   scope: TypedScope<AgentState>,
   response: Pick<LLMResponse, 'content' | 'toolCalls'>,
   serving: ReturnType<typeof servedRequestRecorder>,
-  runId: string | undefined,
+  deps: Pick<CallLLMStageDeps, 'getRunId' | 'onResponseCommitted'>,
 ) {
+  const runId = deps.getRunId?.();
   const consumer = serving?.consumerFor(runId);
   if (consumer !== undefined) scope.sourceLinkConsumer = consumer;
   else if ('sourceLinkConsumer' in scope) scope.$delete('sourceLinkConsumer');
   scope.llmLatestContent = response.content;
+  deps.onResponseCommitted?.();
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
   return acceptedToolCalls;

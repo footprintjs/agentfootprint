@@ -46,7 +46,9 @@ type Verdict = z.infer<typeof Verdict>;
 const VERDICT: Verdict = { healthy: true, summary: 'Replication is healthy.' };
 const JSON_ANSWER = JSON.stringify(VERDICT);
 const COVERAGE_STANDING =
-  'Not sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.';
+  'Not sure — a tool said there is ground it did not check or cannot cover ' +
+  '(a tool did not check “NDM migration sessions”; a tool cannot cover “multipathing”; ' +
+  'a tool cannot cover “host-side multipathing”); a tool said nothing matched.';
 
 const LEDGER = {
   checked: ['SRDF pair state on all 4 arrays (live query)'],

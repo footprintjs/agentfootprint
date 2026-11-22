@@ -14,11 +14,94 @@ import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import { REDACTION_MARKER_ID } from '../../src/redaction/marker.js';
-import { assertP1 } from './helpers.js';
+import { assertP1, fixtureA } from './helpers.js';
 
 const REPLY = 'The request was received.';
 const call = (id: string, name: string, args: Record<string, unknown> = {}) => ({
   toolCalls: [{ id, name, args }],
+});
+
+const CONFLICT_WARNING = 'the record holds a conflict whose readings it cannot place';
+const VALIDATOR_WARNING = "the app's answer checks could not reach a verdict on this answer";
+const MODEL_ANSWER = 'Here is the answer.';
+const legacyConflictRecording = (finalContent: string, withValidator = false): Recording => ({
+  events: fixtureA()
+    .events.filter(({ type }) => type === 'agentfootprint.agent.turn_end')
+    .map((end) => ({
+      ...end,
+      payload: {
+        ...end.payload,
+        finalContent,
+        answerAssessment: {
+          assessment: 'unknown',
+          standing: 'not-sure',
+          reasons: ['check-unreachable'],
+          checked: [],
+        },
+      },
+    })),
+  structure: undefined,
+  snapshot: {
+    recorders: [{ id: REDACTION_MARKER_ID }],
+    sharedState: {
+      turnNumber: 2,
+      history: [
+        { role: 'user', content: 'What changed?' },
+        { role: 'tool', toolName: 'lookup', toolCallId: 'c2', content: '[1]' },
+      ],
+      findingsLedger: [
+        {
+          kind: 'conflict',
+          witnesses: [{ toolCallId: 'c2' }, '[REDACTED]'],
+        },
+      ],
+      ...(withValidator && { answerValidation: { status: 'unverified' } }),
+    },
+  },
+});
+
+it('the explanation names a legacy conflict gap in a served recording', () => {
+  const account = accountForAnswer(legacyConflictRecording(MODEL_ANSWER));
+  const lines = account.rows.find(({ id }) => id === 'how-sure')?.lines ?? [];
+  expect(account.facts.standing.value).toBe('not-sure');
+  expect(
+    lines.find(({ template }) => template.id === 'howSure.reason.conflictReadingsUnplaced'),
+  ).toMatchObject({ text: 'The record holds a conflict whose readings it cannot place.' });
+  expect(
+    lines.some(({ template }) => template.id === 'howSure.reason.dispatchProofUnavailable'),
+  ).toBe(false);
+});
+
+it.each([
+  { name: 'retained validator line', line: `Not sure — ${VALIDATOR_WARNING}.` },
+  { name: 'current combined line', line: `Not sure — ${CONFLICT_WARNING}; ${VALIDATOR_WARNING}.` },
+])('preserves attribution for the $name and explains both causes', ({ line }) => {
+  const recording = legacyConflictRecording(`${MODEL_ANSWER}\n\n---\n\n${line}`, true);
+  const account = accountForAnswer(recording);
+  expect(account.answer).toMatchObject({ value: MODEL_ANSWER, source: 'model' });
+  expect(account.facts.limitsBlock).toMatchObject({
+    value: line,
+    source: 'library',
+    status: 'recorded',
+  });
+  const lines = account.rows.find(({ id }) => id === 'how-sure')?.lines ?? [];
+  expect(lines.find(({ template }) => template.id === 'howSure.standing.notSure')?.text).toContain(
+    '2 reasons',
+  );
+  expect(
+    lines.find(({ template }) => template.id === 'howSure.reason.conflictReadingsUnplaced'),
+  ).toMatchObject({ pointers: [{ kind: 'state', key: 'findingsLedger', path: '/0/kind' }] });
+  expect(
+    lines.find(({ template }) => template.id === 'howSure.reason.checkUnreachable'),
+  ).toMatchObject({ pointers: [{ kind: 'state', key: 'answerValidation', path: '/status' }] });
+  assertP1(account, recording);
+});
+
+it('does not attribute a validator line to the library without its independent witness', () => {
+  const text = `${MODEL_ANSWER}\n\n---\n\nNot sure — ${VALIDATOR_WARNING}.`;
+  const account = accountForAnswer(legacyConflictRecording(text));
+  expect(account.answer).toMatchObject({ value: text, source: 'model' });
+  expect(account.facts.limitsBlock.status).toBe('not-applicable');
 });
 
 async function recorded(agent: Agent) {

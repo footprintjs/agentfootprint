@@ -15,6 +15,7 @@ import {
 } from '../../../../../tools/askComponent.js';
 import { presentArtifact, PRESENT_TOOL_NAME } from '../../../../../artifacts/present.js';
 import { safeStringify } from '../../../validators.js';
+import { recordLibraryResultLimit } from '../../../honesty/libraryResultLimits.js';
 import { placedResultKind, placedToolResult } from '../../../../../artifacts/placement.js';
 import { strippedOnly } from '../../../../../semantics/coverage/read.js';
 import type { ToolArtifactsOperations } from '../contracts/operations/artifacts.js';
@@ -329,6 +330,7 @@ export function buildToolArtifactsOperations(
         ...callOccurrenceField(call.callOccurrenceKey),
       },
     ];
+    recordLibraryResultLimit(scope, call, { kind: 'placed-unread', ref: meta.ref });
     return {
       // One ticket when the two channels carry one value — the capResults
       // law. A value that differs from what the model reads ONLY by the

@@ -136,6 +136,27 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
   },
   {
+    reason: 'result-cut',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was cut',
+  },
+  {
+    reason: 'placed-unread',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was stored by reference and not read',
+  },
+  {
+    reason: 'times-without-zone',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: some times in a dataset have no zone',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',
@@ -220,7 +241,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assess.ts · conflictOfThisTurn)',
+      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assessment/conflicts.ts · conflictOfThisTurn)',
   },
   {
     reason: 'column-type-mismatch',
@@ -269,6 +290,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "findingsLedger: a script-shown witness row of this turn with label 'unmatched' — a fenced block the answer showed equals no program this turn's calls submitted to a declared code-running tool (filed under code: 'match' while the answer layer is armed)",
   },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', source: 'run', reads: 'stoppedEarly' },
+  {
+    reason: 'answer-output-limit',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads: 'llmLatestStopReason (max_tokens)',
+  },
   {
     reason: 'steps-unfinished',
     layer: 4,
@@ -336,7 +364,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'run',
     reads:
-      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish)",
+      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish). findingsLedger: a legacy conflict row of this turn whose readings cannot all be placed",
   },
 ]);
 

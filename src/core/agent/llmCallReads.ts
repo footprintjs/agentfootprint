@@ -1,3 +1,5 @@
+import { readRequestReplay, type RequestReplayValue } from './requestTurn/state.js';
+
 /**
  * core/agent/llmCallReads — the run records CallLLM reads, READ-ONLY, inside
  * the grouped chart's `sf-llm-call` boundary (`buildDynamicAgentChart.ts`).
@@ -6,7 +8,7 @@
  * keys is written OUTSIDE it (by tool-calls, the Route decider or the window).
  * A key that does not cross is silently empty inside: the same agent, with the
  * same declarations, served less because of a chart shape it did not choose.
- * All three are value-conditional (an agent that never wrote one crosses no
+ * The reads are value-conditional (an agent that never wrote one crosses no
  * new key) and read-only inside (the writes are outside), so no outputMapper
  * line is needed.
  *
@@ -19,6 +21,8 @@
  *   collapses.
  * - `placedTickets`: the receipt of the tickets the library placed
  *   (`placedTickets.ts`); without it the staged-refs nudge names no ticket.
+ * - `priorReplayThinking`: the normalized blocks of a real prior terminal
+ *   response, used when an enforcing native retry has to withdraw its tools.
  *
  * @example
  * ```ts
@@ -26,11 +30,16 @@
  * ```
  */
 
-/** The three keys, in this order, each only when the parent holds it. */
+/** Copy each record only when the parent holds it. */
 export function llmCallReadsInto(p: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const replay = p.requestReplay as RequestReplayValue | undefined;
   return {
     ...(p.compactions !== undefined && { compactions: p.compactions }),
     ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
     ...(p.placedTickets !== undefined && { placedTickets: p.placedTickets }),
+    ...(replay !== undefined &&
+      readRequestReplay(replay).closing !== undefined && {
+        priorReplayThinking: p.thinkingBlocks,
+      }),
   };
 }

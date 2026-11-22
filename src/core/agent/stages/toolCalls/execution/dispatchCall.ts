@@ -1,3 +1,4 @@
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
@@ -477,6 +478,20 @@ export function buildCallDispatch(
         modelResultCapped,
         toolResultDisposition,
       };
+      recordServedLimits(
+        scope,
+        { toolName: tc.name, toolCallId: tc.id, ...callOccurrenceField(tc.callOccurrenceKey) },
+        execution.toolResultExecution === 'returned' &&
+          !outcome.error &&
+          !execution.denied &&
+          !execution.ceilingRefused &&
+          !execution.haltContext &&
+          !skillRoute.skillRejected,
+        toolResultDisposition,
+        capped.cut,
+        execution,
+        delivery.resultStr,
+      );
       landCallResult(scope, deps, {
         delivery,
         execution,

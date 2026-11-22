@@ -198,6 +198,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
     expect(byKind('answer')).toEqual(
       [
         'answer-check-failed',
+        'answer-output-limit',
         'claim-exceeds-search',
         'claim-unsettled',
         'derived-from-reading',
@@ -229,6 +230,9 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'sources-conflict',
         'unsupported-argument',
         'value-contingent',
+        'result-cut',
+        'placed-unread',
+        'times-without-zone',
         'work-not-finished',
       ].sort(),
     );
@@ -824,6 +828,7 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
                 toolCallId: 'c2',
                 toolName: 'read_incidents',
                 outcome: kind === 'throw' ? 'failed' : 'refused',
+                ...(kind === 'throw' ? { category: 'unknown' } : {}),
               },
             ],
           });
