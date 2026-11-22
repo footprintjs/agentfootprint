@@ -172,19 +172,15 @@ export interface ThinkingHandler {
   normalize(raw: unknown): readonly ThinkingBlock[];
 
   /**
-   * Optional streaming hot-path. When provided AND the provider streams,
-   * the framework calls `parseChunk(chunk)` per provider chunk and
-   * emits `agentfootprint.stream.thinking_delta` events for any
-   * `thinkingDelta` returned. Handlers without streaming support omit
-   * this field; the framework still calls `normalize()` on the
-   * response's terminal `LLMResponse.providerRef`.
+   * Optional parser a provider adapter can use for its own stream frames.
+   * The adapter supplies `LLMChunk.thinkingDelta` and its request-based
+   * classification after admitting the frame. Terminal thinking uses
+   * `normalize()` separately.
    *
    * @param chunk Provider-specific chunk shape (Anthropic emits
    *              `content_block_delta` events; OpenAI doesn't yet
    *              stream reasoning content).
-   * @returns Object with optional `thinkingDelta` text — when set,
-   *          framework fires `stream.thinking_delta` event with the
-   *          content. Return `{}` (or omit) for chunks that contain
+   * @returns A candidate `thinkingDelta`, or `{}` when the frame contains
    *          no thinking content.
    */
   parseChunk?(chunk: unknown): { thinkingDelta?: string };

@@ -43,12 +43,12 @@ function completedArguments(
 /** Per-response raw argument evidence, shared by SDK and fetch adapters. */
 export class AnthropicToolArguments {
   private readonly blocks = new Map<number, ArgumentsBlock>();
-  private readonly starts = new Set<number>();
+  private readonly starts = new Map<number, 'thinking' | 'other'>();
   private observedTool = false;
   private ended = false;
   private invalid = false;
 
-  /** Record only the protocol facts needed to judge a tool's completed JSON. */
+  /** Record the block lifetime for completed tool arguments and live thinking admission. */
   observe(event: unknown): void {
     if (!object(event)) return;
     if (event.type === 'message_stop') {
@@ -77,10 +77,11 @@ export class AnthropicToolArguments {
     if (event.type === 'content_block_start') {
       if (this.starts.has(index)) {
         this.invalid = true;
+        this.starts.set(index, 'other');
         return;
       }
-      this.starts.add(index);
       const block = event.content_block;
+      this.starts.set(index, object(block) && block.type === 'thinking' ? 'thinking' : 'other');
       if (
         object(block) &&
         block.type === 'tool_use' &&
@@ -101,6 +102,7 @@ export class AnthropicToolArguments {
     const block = this.blocks.get(index);
     if (event.type === 'content_block_stop') {
       if (!this.starts.has(index)) this.invalid = true;
+      this.starts.set(index, 'other');
       if (block) {
         if (block.closed) block.invalid = true;
         block.closed = true;
@@ -123,6 +125,11 @@ export class AnthropicToolArguments {
       )
     )
       block.invalid = true;
+  }
+
+  /** Only an open, public thinking block can contribute live display text. */
+  hasOpenThinkingBlock(index: number | undefined): boolean {
+    return !this.ended && index !== undefined && this.starts.get(index) === 'thinking';
   }
 
   /** EOF/abort is not a completed response, even if an SDK exposes a partial object. */

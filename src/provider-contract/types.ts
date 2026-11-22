@@ -10,6 +10,7 @@
  */
 
 import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../events/types.js';
+import type { ThinkingDeltaKind } from '../events/payloads/thinking.js';
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
@@ -17,6 +18,7 @@ import type { ToolResultRecord } from './toolResultRecord.js';
 import type { WireRole } from './wireRole.js';
 export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
+export type { ThinkingDeltaKind };
 export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
@@ -472,22 +474,13 @@ export interface LLMChunk {
    */
   readonly response?: LLMResponse;
   /**
-   * v2.14 — streaming thinking-content tokens. Parallel to `content`
-   * but for the model's reasoning chain rather than visible output.
-   * Set on chunks that carry thinking deltas (Anthropic emits these
-   * via `content_block_delta` events with `delta.type === 'thinking_delta'`);
-   * undefined or empty on chunks that carry only visible-content tokens.
-   *
-   * Frameworks: this field drives `agentfootprint.stream.thinking_delta`
-   * events when a `ThinkingHandler.parseChunk()` returns one. Consumers
-   * who want to render thinking-as-it-streams subscribe to that event.
-   *
-   * Default consumer behavior: thinking tokens are not surfaced to end
-   * users unless a consumer explicitly subscribes to the
-   * `agentfootprint.stream.thinking_delta` event (or renders it through a
-   * live-status strategy).
+   * Live thinking text. Nonempty fragments on nonterminal chunks drive
+   * `agentfootprint.stream.thinking_delta` events under the run's redaction policy.
+   * Adapters keep signatures, redacted blocks and private data out of this field.
    */
   readonly thinkingDelta?: string;
+  /** Classification from the provider request. Omit it when neither classification can be confirmed. */
+  readonly thinkingKind?: ThinkingDeltaKind;
 }
 
 /**

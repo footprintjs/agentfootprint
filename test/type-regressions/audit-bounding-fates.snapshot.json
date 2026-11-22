@@ -1078,6 +1078,7 @@
   "agentfootprint.stream.thinking_delta": {
     "content": "chars",
     "iteration": "kept",
+    "kind": "kept",
     "tokenIndex": "kept"
   },
   "agentfootprint.stream.thinking_end": {

@@ -55,6 +55,7 @@ import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recov
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
+import { liveChunkEmitter } from './callLLM/liveChunks.js';
 import {
   assertForcedRequestSupported,
   describeProviderDispatch,
@@ -599,8 +600,8 @@ export function buildCallLLMStage(
 
     // Streaming-first: when the provider implements `stream()` we
     // consume chunk-by-chunk so consumers see tokens as they arrive
-    // instead of waiting for the full LLM call to finish. Each
-    // non-terminal chunk fires `agentfootprint.stream.token`. The
+    // instead of waiting for the full LLM call to finish. Non-terminal
+    // chunks can carry thinking, visible text, or both. The
     // terminal chunk SHOULD carry the authoritative `LLMResponse`;
     // when it doesn't (older providers, partial implementations) we
     // fall back to `complete()` for the authoritative payload —
@@ -655,7 +656,6 @@ export function buildCallLLMStage(
         serving?.discard,
       );
       let resp: LLMResponse | undefined;
-      let firstChunkFired = false;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
       // goes through the scanner the answer's peel uses, so a token never
       // carries the model's `_findings` notes — not even when a chunk ends
@@ -666,7 +666,13 @@ export function buildCallLLMStage(
         peel !== undefined && deps.suppressDraftTokens !== true
           ? peel.reservedMemberFilter()
           : undefined;
-      let lastTokenIndex = -1;
+      const liveChunks = liveChunkEmitter(scope, {
+        providerName: selectedProvider.name,
+        iteration,
+        suppressDraftTokens: deps.suppressDraftTokens === true,
+        textFilter: shown,
+        onFirstChunk: hooks.onFirstChunk,
+      });
       if (selectedProvider.stream) {
         for await (const chunk of streamObserved(
           selectedProvider,
@@ -678,53 +684,10 @@ export function buildCallLLMStage(
             if (chunk.response) resp = chunk.response;
             break;
           }
-          // A provider is a port anyone can implement, and a non-terminal
-          // chunk that carries no `content` used to die on the next line as
-          // `Cannot read properties of undefined (reading 'length')` —
-          // naming neither the provider nor the contract it missed. The
-          // commonest shape of the mistake is a chunk that ends the stream
-          // with its own marker instead of `done: true`, which is why the
-          // refusal says what the terminal chunk looks like.
-          if (typeof (chunk.content as unknown) !== 'string') {
-            throw new TypeError(
-              `provider '${selectedProvider.name}' yielded a stream chunk whose \`content\` is ` +
-                `${chunk.content === undefined ? 'missing' : `a ${typeof chunk.content}`}. ` +
-                `Every chunk from LLMProvider.stream() is ` +
-                `{ tokenIndex: number, content: string, done: boolean }, and the LAST one is ` +
-                `{ content: '', done: true, response } — the response payload rides the ` +
-                `terminal chunk. A chunk that ends the stream any other way is not seen as ` +
-                `terminal, and its missing content stops the run here.`,
-            );
-          }
-          if (chunk.content.length > 0) {
-            if (!firstChunkFired) {
-              firstChunkFired = true;
-              hooks.onFirstChunk?.();
-            }
-            if (deps.suppressDraftTokens !== true) {
-              const content = shown === undefined ? chunk.content : shown.push(chunk.content);
-              lastTokenIndex = chunk.tokenIndex;
-              if (content.length > 0) {
-                typedEmit(scope, 'agentfootprint.stream.token', {
-                  iteration,
-                  tokenIndex: chunk.tokenIndex,
-                  content,
-                });
-              }
-            }
-          }
+          liveChunks.push(chunk);
         }
       }
-      // What the scanner still held when the stream ended goes out as one
-      // last token (whitespace, a key it was reading, a `{`…).
-      const held = shown?.end() ?? '';
-      if (held.length > 0) {
-        typedEmit(scope, 'agentfootprint.stream.token', {
-          iteration,
-          tokenIndex: lastTokenIndex + 1,
-          content: held,
-        });
-      }
+      liveChunks.finish();
       if (!resp) {
         // No `stream()` OR stream finished without a response payload.
         // Raw errors propagate so the reliability loop can classify them;

@@ -566,6 +566,60 @@ describe('OllamaProvider — scenario: streaming', () => {
     expect(last.response!.stopReason).toBe('stop');
   });
 
+  it.each([
+    ['model default', {}, {}, undefined],
+    ['request budget', {}, { thinking: { budget: 1500 } }, true],
+    ['configured level', { think: 'high' }, {}, 'high'],
+    ['explicitly disabled', { think: false }, { thinking: { budget: 1500 } }, false],
+  ] as const)(
+    'streams only admitted structured thinking with %s',
+    async (_name, options, request, think) => {
+      const calls: WireCall[] = [];
+      const p = ollama('llama3.2', {
+        ...options,
+        _fetch: fakeFetch(
+          () =>
+            ndjsonResponse([
+              { message: { role: 'assistant', thinking: 'Consider ', content: '' } },
+              { message: { role: 'assistant', content: 'Hello' } },
+              { message: { role: 'assistant', thinking: 'the reply.', content: '' } },
+              streamFrames[2],
+            ]),
+          { calls },
+        ),
+      });
+      const chunks = [];
+      for await (const chunk of p.stream!({ ...baseRequest, ...request })) chunks.push(chunk);
+
+      expect(calls[0]?.body.think).toBe(think);
+      expect(chunks.filter((chunk) => !chunk.done)).toEqual(
+        think === false
+          ? [{ tokenIndex: 0, content: 'Hello', done: false }]
+          : [
+              {
+                tokenIndex: 0,
+                content: '',
+                done: false,
+                thinkingDelta: 'Consider ',
+                thinkingKind: 'raw-reasoning',
+              },
+              { tokenIndex: 1, content: 'Hello', done: false },
+              {
+                tokenIndex: 2,
+                content: '',
+                done: false,
+                thinkingDelta: 'the reply.',
+                thinkingKind: 'raw-reasoning',
+              },
+            ],
+      );
+      expect(chunks.at(-1)?.response?.rawThinking).toEqual({
+        kind: 'field',
+        thinking: 'Consider the reply.',
+      });
+    },
+  );
+
   it('REPORTS TOKEN COUNTS while streaming — the whole reason for the native wire', async () => {
     const p = ollama('llama3.2', { _fetch: fakeFetch(() => ndjsonResponse(streamFrames)) });
     const chunks = [];

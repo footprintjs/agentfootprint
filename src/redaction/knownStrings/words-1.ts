@@ -194,6 +194,7 @@ export const words1 = {
   proposition: true,
   prose: true,
   provider: true,
+  'provider-summary': true,
   'publication-changed': true,
   'publication-unavailable': true,
   'published-dataset': true,
@@ -210,6 +211,7 @@ export const words1 = {
   ranking: true,
   'rate-limited': true,
   raw: true,
+  'raw-reasoning': true,
   read_skill_result: true,
   'record-composed': true,
   recorded: true,
@@ -298,6 +300,4 @@ export const words1 = {
   summarize: true,
   summarizing: true,
   superseded: true,
-  system: true,
-  'system-prompt': true,
 } as const;
