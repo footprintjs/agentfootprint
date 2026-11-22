@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.2.2] - 2026-11-22
+
+### Fixed
+
+- **The answer explains when the framework limited a tool result.** Its standing and replay now report a result cut short, a result stored by reference that no tool read, and dataset timestamps without a zone. The warning uses the tool’s display name and recorded counts when available.
+
 ## [16.2.1] - 2026-11-21
 
 ### Fixed
