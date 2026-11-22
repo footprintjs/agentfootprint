@@ -86,7 +86,7 @@ export const auditedBoundaries = {
     [`${agent}/window/strategies/summarizeOldest.ts`, 'summarizeOldest'],
     [`${agent}/stages/window.ts`, 'buildWindowStage'],
   ],
-  'object and rowset emptiness': [[`${agent}/assessment/results/stage.ts`, 'readResultEvidence']],
+  'object and rowset emptiness': [[`${agent}/assessment/assess.ts`, 'foldState']],
   'code runner settlement': [
     [`${agent}/honesty/settledToolCalls.ts`, 'toolSettlementOf'],
     [`${agent}/honesty/settledToolCalls.ts`, 'commitSettledToolHistory'],

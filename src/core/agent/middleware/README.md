@@ -146,7 +146,7 @@ secrets").
   rewrite of a ruled tool's arguments is filed with `changedKeys` (and, when
   declared, `allow(args, why, { from })`'s origin per key); this is the ONE
   reading of those rows, taken by the answer's standing
-  (`assessment/inputs/stage.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
+  (`assessment/assess.ts` · `readArgumentVerdicts`) and the answer's "Assumed"
   block (`arguments/serve/assumed.ts` · `assumedBlockOf`), so the two cannot disagree
   about which value a call ran with. Both readers load through `import()`, so
   a plain agent never carries this module. The call's recorded occurrence
