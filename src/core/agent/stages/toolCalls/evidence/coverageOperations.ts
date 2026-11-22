@@ -6,7 +6,11 @@ import {
 } from '../../../../../semantics/coverage/index.js';
 import { copyPeriod } from '../../../../../semantics/coverage/period.js';
 import { warnPeriodUnjudged } from '../helpers/periodWarnings.js';
-import { type CoverageSection, readItemExtras } from '../../../../../semantics/coverage/items.js';
+import {
+  type CoverageSection,
+  MAX_RECORDED_ADVICE_CHARS,
+  readItemExtras,
+} from '../../../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../../../semantics/coverage/inProgress.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { composedEventFields } from '../../../../../semantics/coverage/search/events.js';
@@ -18,6 +22,17 @@ import type { ToolIntegrityOperations } from '../contracts/operations/integrity.
 
 interface ToolCoverageOperationsLinks {
   readonly noticeEmptyLookup: ToolIntegrityOperations['noticeEmptyLookup'];
+}
+
+/** Retain the whole sentence within the record cap so redaction sees the original value. */
+function recordedSuggestion(facts: CoverageFacts): { readonly tryInstead?: string } {
+  if (
+    facts.kind !== 'absence' ||
+    facts.tryInstead === undefined ||
+    facts.tryInstead.length > MAX_RECORDED_ADVICE_CHARS
+  )
+    return {};
+  return { tryInstead: facts.tryInstead };
 }
 
 /** Compose the existing coverage callbacks once for this handler. */
@@ -105,11 +120,8 @@ export function buildToolCoverageOperations(
           checked,
           ...(notChecked.length > 0 && { notChecked }),
           ...(cannotCover.length > 0 && { cannotCover }),
-          // The suggestion, as declared (9.113.0): the sentence, and the
-          // typed tool as a copy (`tryInsteadToolOfAbsence`). The EVENT only:
-          // it is advice about a call not yet made, not ground the answer
-          // stands on, so the tracked row below and the block composed from
-          // it never carry it.
+          // Full advice, as declared. The row also keeps the sentence when
+          // within its cap. The typed tool remains event-only.
           ...(facts.tryInstead !== undefined && { tryInstead: facts.tryInstead }),
           ...(facts.tryInsteadTool !== undefined && { tryInsteadTool: facts.tryInsteadTool }),
           // Honesty step 7b — where the search looked and when (the event only:
@@ -131,6 +143,7 @@ export function buildToolCoverageOperations(
         kind: facts.kind,
         ...base,
         ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
+        ...recordedSuggestion(facts),
         checked,
         notChecked,
         cannotCover,
@@ -196,6 +209,7 @@ export function buildToolCoverageOperations(
       resultId: composed.resultId,
       handle: composed.handle,
       ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
+      ...recordedSuggestion(facts),
       checked: facts.coverage.checked as ComposedCoverage['checked'],
       notChecked: facts.coverage.notChecked,
       cannotCover: facts.coverage.cannotCover,

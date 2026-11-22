@@ -1,3 +1,5 @@
+import type { AttemptCategory } from 'footprintjs';
+
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
   /**
@@ -20,4 +22,6 @@ export interface ToolResultRecord {
    * separately by `toolResultDisposition`. Artifact tickets carry the result.
    */
   readonly toolResultExecution?: 'not-entered' | 'threw' | 'returned' | 'returned-unserved';
+  /** The engine category of a thrown tool failure, without the error text. */
+  readonly toolFailureCategory?: AttemptCategory;
 }

@@ -45,6 +45,9 @@ const final = (content: string) => ({ content, toolCalls: [], stopReason: 'stop'
 /** The answer the field cares about: confident, clean, and silent about its
  *  own boundary. The model never mentions a limit anywhere below. */
 const CONFIDENT = 'Replication is healthy. Everything looks fine.';
+const COVERAGE_WARNING =
+  'Not sure — a tool said there is ground it did not check or cannot cover ' +
+  '(did not check “NDM migration sessions”; cannot cover “host-side multipathing”).';
 
 type Ev = Record<string, unknown>;
 const capture = () => {
@@ -162,9 +165,7 @@ describe('integration: recording is unconditional', () => {
   it('files tools.coverage_declared and tracks the ledger even with the option OFF', async () => {
     const t = buildAgent({ replies: [call('replication_health'), final(CONFIDENT)] });
     const out = await t.agent.run('is replication healthy?');
-    expect(out).toBe(
-      `${CONFIDENT}\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover.`,
-    );
+    expect(out).toBe(`${CONFIDENT}\n\n---\n\n${COVERAGE_WARNING}`);
     expect(t.declared).toHaveLength(1);
     expect(t.declared[0]).toMatchObject({
       toolName: 'replication_health',
@@ -249,7 +250,7 @@ describe('integration: .limitsTravelWithTheAnswer() — the model cannot drop wh
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('edge: folding and emptiness', () => {
-  it('two tools naming the same limit say it once', async () => {
+  it('two tools naming the same limit say it once in each presentation', async () => {
     const a = defineTool({
       name: 'array_health',
       description: 'x',
@@ -274,7 +275,12 @@ describe('edge: folding and emptiness', () => {
       travel: true,
     });
     const out = await t.agent.run('status?');
-    expect(out.match(/host-side multipathing/g)).toHaveLength(1);
+    const parts = out.split(`\n\n${COVERAGE_BLOCK_HEADING}`);
+    expect(parts).toHaveLength(2);
+    const [warning, limits] = parts;
+    expect(warning?.match(/host-side multipathing/g)).toHaveLength(1);
+    expect(limits?.match(/host-side multipathing/g)).toHaveLength(1);
+    expect(limits).toContain('- host-side multipathing — no collector on the hosts');
     expect(declaredOf(t.agent)).toHaveLength(2);
   });
 
@@ -317,8 +323,6 @@ describe('regression: the survival guarantee does not depend on the model', () =
   it('without coverage delivery, the answer carries the default standing line alone', async () => {
     const t = buildAgent({ replies: [call('replication_health'), final(CONFIDENT)] });
     const out = await t.agent.run('is replication healthy?');
-    expect(out).toBe(
-      `${CONFIDENT}\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover.`,
-    );
+    expect(out).toBe(`${CONFIDENT}\n\n---\n\n${COVERAGE_WARNING}`);
   });
 });

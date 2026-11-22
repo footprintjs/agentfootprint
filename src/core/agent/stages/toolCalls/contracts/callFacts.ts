@@ -15,6 +15,7 @@ export interface ResumedCallFacts {
   entered?: true;
   /** Settlement at the tool boundary, before the framework reads or delivers the result. */
   toolResultExecution?: LLMMessage['toolResultExecution'];
+  toolFailureCategory?: LLMMessage['toolFailureCategory'];
   /** The declared argument's value as the model proposed it — read before `execute`. */
   proposed?: unknown;
   /** The declared argument's value handed to `execute` — read just before it ran. */

@@ -25,6 +25,7 @@ export const fields2 = {
   toolCalls: true,
   toolChars: true,
   toolCount: true,
+  toolFailureCategory: true,
   toolId: true,
   toolName: true,
   toolResultDisposition: true,

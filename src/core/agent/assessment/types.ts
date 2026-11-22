@@ -233,6 +233,24 @@ export type AssessmentCheck =
 /** The honesty layer a reason or a check belongs to: 1 choose · 2 inputs · 3 results · 4 answer. */
 export type HonestyLayer = 1 | 2 | 3 | 4;
 
+/** Bounded words from a tool declaration that the run may serve. */
+export interface AssessmentToolWords {
+  readonly entries: readonly {
+    readonly kind: 'notChecked' | 'cannotCover' | 'tryInstead';
+    readonly text: string;
+    /** Registered identity of the declaring tool, when retained. */
+    readonly toolName?: string;
+  }[];
+  readonly omitted: number;
+}
+
+/** Additional facts behind a reason, when the record holds them. */
+export interface AssessmentReasonDetail {
+  /** The one engine category represented by the classified failures for this reason. */
+  readonly category?: import('footprintjs').AttemptCategory;
+  readonly toolSays?: AssessmentToolWords;
+}
+
 /**
  * What a reason rests on — names and ids only, never a value or an argument.
  * The KIND is declared once per reason (`reasons.ts` · `REASONS`), never
@@ -265,6 +283,8 @@ export type AssessmentReasonSource =
         readonly toolName: string;
         /** The recorded outcome for a call behind `call-not-completed`. */
         readonly outcome?: 'refused' | 'failed';
+        /** The engine's classification of a tool exception. Never its message. */
+        readonly category?: import('footprintjs').AttemptCategory;
         /** The committed unfinished status behind work-not-finished. */
         readonly reportedStatus?: 'partial' | 'pending';
       }[];
@@ -301,6 +321,8 @@ export interface AnswerAssessment {
     readonly witness: readonly AssessmentPointer[];
     /** What it rests on — specific calls, the answer, or the run (see {@link AssessmentReasonSource}). */
     readonly source: AssessmentReasonSource;
+    /** Closed failure categories and bounded, admitted tool declarations. */
+    readonly detail?: AssessmentReasonDetail;
   }[];
   /** The row `known` stands on — present only when one does. */
   readonly support?: {

@@ -824,6 +824,7 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
                 toolCallId: 'c2',
                 toolName: 'read_incidents',
                 outcome: kind === 'throw' ? 'failed' : 'refused',
+                ...(kind === 'throw' ? { category: 'unknown' } : {}),
               },
             ],
           });

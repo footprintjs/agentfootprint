@@ -17,6 +17,7 @@ import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js
 import {
   outcomeField,
   reportedStatusField,
+  toolFailureCategoryField,
   toolResultExecutionField,
 } from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
@@ -214,6 +215,10 @@ export function buildResumeCredential(
         links.emitTransitionConflict(scope, iteration, consentTransition);
       }
       // The batch settlement (9.113.0) — the ask path's twin.
+      const resultReplaced =
+        dispatched.halt !== undefined ||
+        sourceHalt !== undefined ||
+        !Object.is(modelResult, consentPlaced.modelResult);
       const consentSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
@@ -229,12 +234,14 @@ export function buildResumeCredential(
             ...toolResultExecutionField(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
-              !consentSettled.clean ||
-                dispatched.halt !== undefined ||
-                sourceHalt !== undefined ||
-                !Object.is(modelResult, consentPlaced.modelResult),
+              !consentSettled.clean || resultReplaced,
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+            ...toolFailureCategoryField(
+              scriptSeen,
+              consentSettled,
+              resultReplaced || toolResultDisposition !== undefined,
+            ),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A blocked credential ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(consentSettled),

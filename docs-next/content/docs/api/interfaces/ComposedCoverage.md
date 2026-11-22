@@ -100,7 +100,7 @@ R5). Library-minted, like `resultId`; never the provider's call id.
 
 > `readonly` `optional` **inProgress?**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:501](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L501)
+Defined in: [src/semantics/coverage/types.ts:503](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L503)
 
 What the call found still running — its outcome not known yet — as the
 `coverage()` declared it (copied item by item; `short` and `count` when
@@ -223,3 +223,17 @@ Defined in: [src/semantics/coverage/types.ts:482](https://github.com/footprintjs
 #### Inherited from
 
 [`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage).[`toolName`](/docs/api/interfaces/DeclaredCoverage#toolname)
+
+***
+
+### tryInstead?
+
+> `readonly` `optional` **tryInstead?**: `string`
+
+Defined in: [src/semantics/coverage/types.ts:489](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L489)
+
+Bounded advice for the warning line, present only for an absence that declares it.
+
+#### Inherited from
+
+[`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage).[`tryInstead`](/docs/api/interfaces/DeclaredCoverage#tryinstead)

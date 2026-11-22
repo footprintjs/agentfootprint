@@ -485,6 +485,8 @@ export interface DeclaredCoverage extends Coverage {
   readonly iteration: number;
   /** Present for `'absence'` only — what the search was for. */
   readonly lookedFor?: string;
+  /** Bounded advice for the warning line, present only for an absence that declares it. */
+  readonly tryInstead?: string;
   /**
    * The period the declaration said its read covered, in the record's
    * camelCase form (honesty step 7b) — present only when the envelope declared

@@ -9,6 +9,7 @@ import type {
   AnswerAssessment,
   AssessmentPointer,
   AssessmentReason,
+  AssessmentReasonDetail,
   AssessmentReasonSource,
 } from './types.js';
 
@@ -19,6 +20,7 @@ import type {
 export interface StandingNames {
   readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
   readonly displayNames: ReadonlyMap<string, string>;
+  readonly details?: ReadonlyMap<AssessmentReason, AssessmentReasonDetail>;
   readonly skippedSteps?: number;
   readonly batchRefused?: true;
   readonly settledSiblings?: number;
@@ -51,11 +53,12 @@ export function standingFactsOf(
   assessment: AnswerAssessment,
   displayNames: ReadonlyMap<string, string>,
   state?: Readonly<Record<string, unknown>>,
+  retainedSettlements?: () => unknown,
 ): StandingNames {
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
   const settlements = assessment.reasons.find((r) => r.reason === 'call-not-completed')?.witness;
   const settledSiblings = settlements?.filter(settledSiblingWitness).length;
-  const evictedOutcomes = evictedCallOutcomes(settlements, state);
+  const evictedOutcomes = evictedCallOutcomes(settlements, state, retainedSettlements);
   const batchRefused = settlements?.some(
     (pointer) =>
       pointer.kind === 'history' &&
@@ -67,6 +70,11 @@ export function standingFactsOf(
   return {
     sources: sourcesByReason(assessment),
     displayNames,
+    details: new Map(
+      assessment.reasons.flatMap(({ reason, detail }) =>
+        detail === undefined ? [] : [[reason, detail] as const],
+      ),
+    ),
     ...(skippedSteps !== undefined && { skippedSteps }),
     ...(batchRefused && { batchRefused: true as const }),
     ...(settledSiblings !== undefined && { settledSiblings }),

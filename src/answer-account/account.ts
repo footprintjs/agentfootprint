@@ -9,14 +9,6 @@
  * and counted (`unread`); a line whose fill fails becomes `unreadable.line@1`.
  */
 
-import { assumedLinesFor } from '../core/agent/arguments/serve.js';
-import {
-  assessmentDataFrom,
-  assumedValuesSourceOf,
-  recordedStandingLinesOf,
-  rewrittenBehind,
-  standingFactsOf,
-} from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
 import { scriptRowsOfTurn, scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
 import {
@@ -73,11 +65,7 @@ import { readCheckedRows } from './facts/checked.js';
 import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
 import { beforePausePointers, readFoundRow } from './facts/found.js';
 import { readHowSure } from './facts/howSure.js';
-import {
-  recordedStandingNames,
-  recordedStandingWitnesses,
-  WITNESSED_REASONS,
-} from './facts/standing.js';
+import { appendedStandingLine } from './facts/standing.js';
 import { runChecks, summaryOf, wrongLines } from './signals.js';
 
 export interface AccountOptions {
@@ -143,40 +131,6 @@ const BLOCK_HEADINGS: readonly string[] = [
   `${COVERAGE_BLOCK_HEADING} — declared by the tools that produced it, not by the model:`,
   ASSUMED_BLOCK_HEADING,
 ];
-
-/**
- * Standing-line candidates rebuilt from the record. The exact match below
- * selects the wording held by this recorded answer.
- *
- * The line opens with the owner's plain words ("Not sure — ", "Known — "),
- * which a model can write too, so an opening proves nothing. The record does:
- * `turn_end.answerAssessment` exists only on a run whose answer layer folded
- * the standing, and the line is ONE function of that projection
- * (`assessment/compose.ts` · `standingLineOf`) — plus, when a value was
- * assumed, of the rows `assumedValuesSourceOf` reads and the fold's rewrite
- * witness. The account claims only the exact line in its appended position.
- *
- * The fold supplies the witnesses and `turn_end.standingLineNames` supplies names.
- * The account leaves the line unclaimed when required committed state or the
- * complete recorded display names are unavailable.
- */
-function appendedStandingLine(end: ViewEvent, view: RecordingView): readonly string[] {
-  const data = assessmentDataFrom(end.payload.answerAssessment);
-  if (data === undefined) return [];
-  const displayNames = recordedStandingNames(end, view);
-  if (displayNames === null) return [];
-  if (displayNames === undefined && !data.reasons.some((reason) => WITNESSED_REASONS.has(reason))) {
-    return recordedStandingLinesOf(data, [], false);
-  }
-  const assessed = recordedStandingWitnesses(view, data.reasons);
-  const { state } = view;
-  if (assessed === undefined || state === undefined) return [];
-  const source = assumedValuesSourceOf(assessed, state);
-  const assumed =
-    source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
-  const facts = standingFactsOf(assessed, displayNames ?? new Map(), view.stateAsRecorded);
-  return recordedStandingLinesOf(data, assumed, rewrittenBehind(assessed), facts);
-}
 
 /**
  * The opening of the scripts block THIS run attached
