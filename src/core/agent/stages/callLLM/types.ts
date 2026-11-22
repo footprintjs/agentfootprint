@@ -30,6 +30,8 @@ export interface CallLLMStageDeps {
   readonly maxTokens?: number;
   /** A terminal policy owns delivery; keep provider drafts off the token channel. */
   readonly suppressDraftTokens?: boolean;
+  /** The app admits provider summaries while a terminal policy holds drafts. */
+  readonly allowHeldProviderSummary?: true;
   /** Output middleware has not judged this draft; keep lifecycle/usage, not its text. */
   readonly withholdDraftContent?: true;
   /** Read recovery state only on an agent whose evidence gate can revise. */

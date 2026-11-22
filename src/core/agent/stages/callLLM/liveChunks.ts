@@ -7,6 +7,7 @@ interface LiveChunkOptions {
   readonly providerName: string;
   readonly iteration: number;
   readonly suppressDraftTokens: boolean;
+  readonly allowHeldProviderSummary: boolean;
   readonly textFilter: ReservedMemberFilter | undefined;
   readonly onFirstChunk: (() => void) | undefined;
 }
@@ -17,7 +18,14 @@ export function liveChunkEmitter(
   signal: AbortSignal | undefined,
   options: LiveChunkOptions,
 ) {
-  const { providerName, iteration, suppressDraftTokens, textFilter, onFirstChunk } = options;
+  const {
+    providerName,
+    iteration,
+    suppressDraftTokens,
+    allowHeldProviderSummary,
+    textFilter,
+    onFirstChunk,
+  } = options;
   let firstChunkFired = false;
   let lastTokenIndex = -1;
   return {
@@ -40,10 +48,12 @@ export function liveChunkEmitter(
         );
       }
       const tokenIndex = chunk.tokenIndex;
-      const thinking = suppressDraftTokens ? undefined : chunk.thinkingDelta;
-      const hasThinking = typeof thinking === 'string' && thinking.length > 0;
+      const thinking =
+        suppressDraftTokens && !allowHeldProviderSummary ? undefined : chunk.thinkingDelta;
+      const hasThinkingDelta = typeof thinking === 'string' && thinking.length > 0;
+      const kind = hasThinkingDelta ? chunk.thinkingKind : undefined;
+      const hasThinking = hasThinkingDelta && (!suppressDraftTokens || kind === 'provider-summary');
       const hasText = visible.length > 0;
-      const kind = hasThinking ? chunk.thinkingKind : undefined;
       throwIfAborted(signal);
       if (!firstChunkFired && (hasThinking || hasText)) {
         firstChunkFired = true;

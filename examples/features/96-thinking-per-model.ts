@@ -15,7 +15,7 @@
  * Run:  npm run example examples/features/96-thinking-per-model.ts
  */
 import assert from 'node:assert/strict';
-import { Agent } from '../../src/index.js';
+import { Agent, allow } from '../../src/index.js';
 import {
   anthropic,
   forcedToolChoiceFor,
@@ -147,8 +147,20 @@ export async function run(input: string): Promise<unknown> {
   assert.equal(bodies.length, 2); // forced-choice refusal sent nothing either
 
   // #region live-summary
-  const summaryAgent = Agent.create({ provider, model: 'claude-opus-5-5' })
+  const summaryAgent = Agent.create({
+    provider,
+    model: 'claude-opus-5-5',
+    liveThinkingWithHeldDrafts: 'provider-summary',
+  })
     .thinking({ budget: 4000 })
+    .act({
+      output: [
+        {
+          name: 'trim-answer',
+          onMessage: ({ content }) => allow(content.trim(), 'Trim surrounding whitespace.'),
+        },
+      ],
+    })
     .build();
   const liveSummary: string[] = [];
   summaryAgent.on('agentfootprint.stream.thinking_delta', ({ payload }) => {
