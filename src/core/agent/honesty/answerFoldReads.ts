@@ -30,8 +30,9 @@ export type AnswerFoldKey =
  *   `stoppedEarly` — the Route decider writes it on EVERY agent
  *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
  *   whenever the model asked for calls, whether or not this agent registered
- *   a tool that could answer them. The call stage commits `llmLatestStopReason`
- *   for every accepted provider response;
+ *   a tool that could answer them. The call stage can commit `llmLatestStopReason`
+ *   when the provider reports a cutoff or served a native format. The stage
+ *   skips that read when the key is absent;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
  *   coverage), bounded per-turn entry and settlement facts, and their completeness;
  * - the evidence gate: `unsupportedValues`;

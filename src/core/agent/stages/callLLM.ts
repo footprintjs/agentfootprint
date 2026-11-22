@@ -55,6 +55,7 @@ import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recov
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
+import { recordResponseStop } from '../honesty/responseStop.js';
 import {
   assertForcedRequestSupported,
   describeProviderDispatch,
@@ -905,12 +906,12 @@ export function buildCallLLMStage(
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
-    // The accepted provider response owns this fact, never an earlier draft.
-    // Route still judges it only for a native response (nativeStopFailure).
-    scope.llmLatestStopReason = localFallback ? undefined : response.stopReason;
-    if (deps.outputFormat !== undefined) {
-      scope.llmLatestNativeOutput = nativeOutput;
-    }
+    recordResponseStop(
+      scope,
+      localFallback ? undefined : response.stopReason,
+      nativeOutput,
+      deps.outputFormat !== undefined,
+    );
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

@@ -96,6 +96,8 @@ function committedRecordOf(
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const key of reads) {
+    // An absent prose cutoff contributes no reason and must leave no read in the record.
+    if (key === 'llmLatestStopReason' && !(key in scope)) continue;
     const value = scope.$getValue(key);
     if (value !== undefined) record[key] = value;
   }

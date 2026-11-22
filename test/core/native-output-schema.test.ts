@@ -309,7 +309,7 @@ describe("a 'refusal' or 'max_tokens' stop", () => {
       .outputSchema(Verdict)
       .build();
     await expect(agent.runTyped({ message: 'q' })).resolves.toEqual({ status: 'ok' });
-    expect(state(agent).llmLatestStopReason).toBe('refusal');
+    expect('llmLatestStopReason' in state(agent)).toBe(false);
   });
 });
 

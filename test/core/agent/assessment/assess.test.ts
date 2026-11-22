@@ -729,6 +729,7 @@ describe('UNIT — the reason table', () => {
       // Code in an answer (`code: 'match'`): a shown block matches no submission of the turn.
       'script-unmatched',
       'stopped-early',
+      'answer-output-limit',
       // Honesty layer 4 (the answer layer's procedure witness rows, step 6).
       'steps-unfinished',
       'step-skipped',

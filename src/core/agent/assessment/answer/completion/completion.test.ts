@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Agent, defineTool } from '../../../../../index.js';
+import { Agent, defineTool, isPaused } from '../../../../../index.js';
 import { mock } from '../../../../../llm-providers.js';
 import { assessAnswer, recordRun } from '../../../../../observe.js';
 import { answerCompletionReasons } from './completion.js';
@@ -29,6 +29,24 @@ it('a paused tool call has no answer to warn about yet', () => {
 });
 
 describe.each(['classic', 'dynamic', 'dynamic-grouped'] as const)('%s', (reactMode) => {
+  it('does not add a stop key to an ordinary prose recording', async () => {
+    const agent = Agent.create({
+      provider: mock({ reply: prose, stopReason: 'stop' }),
+      model: 'mock',
+      reactMode,
+    }).build();
+    const recorder = recordRun(agent);
+    try {
+      expect(await agent.run({ message: 'What should I do?' })).toBe(prose);
+      const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
+      expect(Object.hasOwn(recording.snapshot.sharedState, key)).toBe(false);
+      expect(assessAnswer(recording).reasons.map((entry) => entry.reason)).not.toContain(reason);
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  });
+
   it.each(['full', 'delta'] as const)(
     'explains a truncated answer in a %s recording',
     async (commitValues) => {
@@ -80,8 +98,61 @@ describe.each(['classic', 'dynamic', 'dynamic-grouped'] as const)('%s', (reactMo
       )
       .build();
     expect(await agent.run({ message: 'What should I do?' })).toBe(prose);
-    expect(agent.getLastSnapshot()?.sharedState[key]).toBe('stop');
+    expect(agent.getLastSnapshot()?.sharedState[key]).toBeUndefined();
     expect((await agent.assessment())?.reasons.map((entry) => entry.reason)).not.toContain(reason);
+  });
+
+  it('reports only the pending argument after a cutoff, including after save and resume', async () => {
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: '1', name: 'lookup', args: {} }], stopReason: 'max_tokens' },
+          { content: prose, stopReason: 'stop' },
+        ],
+      }),
+      model: 'mock',
+      reactMode,
+    })
+      .tool(
+        defineTool({
+          name: 'lookup',
+          description: 'Read the logs over a period',
+          inputSchema: {
+            type: 'object',
+            required: ['period'],
+            properties: { period: { type: 'string', enum: ['1h', '24h'] } },
+          },
+          askOrAssume: {
+            period: { ask: 'Which period should I read?', choices: ['1h', '24h'] },
+          },
+          execute: () => [],
+        }),
+      )
+      .answerLayer()
+      .build();
+    const recorder = recordRun(agent);
+    try {
+      const paused = await agent.run({ message: 'What do the logs show?' });
+      if (!isPaused(paused)) throw new Error('Expected an argument pause.');
+      const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
+      const saved = assessAnswer(recording);
+      expect(saved).toMatchObject({ standing: 'ask', reasons: [{ reason: 'argument-asked' }] });
+      expect(await agent.assessment()).toEqual(saved);
+      const request = paused.awaitingInput;
+      if (request?.fields[0] === undefined) throw new Error('Expected a period input.');
+      await expect(
+        agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), {
+          requestId: request.requestId,
+          values: { [request.fields[0].id]: '24h' },
+        }),
+      ).resolves.toBe(prose);
+      expect((await agent.assessment())?.reasons.map((entry) => entry.reason)).not.toContain(
+        reason,
+      );
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
   });
 });
 

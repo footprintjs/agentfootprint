@@ -86,6 +86,7 @@ import {
   RESULTS_LOOP_TARGET,
   startFinalBranch,
 } from './honesty/mounts.js';
+import { responseStopFields } from './honesty/responseStop.js';
 import type { AgentState } from './types.js';
 import type { ToolChoiceEntry } from './toolChoice/types.js';
 import { memberRunArg } from '../memberRun.js';
@@ -116,6 +117,7 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
     priorEvidenceRecoveryUsed?: boolean;
     priorToolChoices?: readonly ToolChoiceEntry[];
     priorLatestReplay?: AgentState['llmLatestReplay'];
+    priorLatestStopReason?: AgentState['llmLatestStopReason'];
   }>();
 
   // Cross-iteration accumulators — seed working keys from prior totals
@@ -155,6 +157,8 @@ function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
   // Carry presence across the fresh inner scope so a reply with no replay
   // evidence can explicitly clear the outer turn's former evidence.
   if (args.priorLatestReplay !== undefined) scope.llmLatestReplay = args.priorLatestReplay;
+  if (args.priorLatestStopReason !== undefined)
+    scope.llmLatestStopReason = args.priorLatestStopReason;
 
   // Per-iteration working keys — fresh each turn (slots + cache + callLLM
   // populate these inside the subflow; nothing outside reads the
@@ -757,6 +761,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // shape, not the read-only `findingsLedger` one). Value-conditional.
           ...(p.toolChoices !== undefined && { priorToolChoices: p.toolChoices }),
           ...(p.llmLatestReplay !== undefined && { priorLatestReplay: p.llmLatestReplay }),
+          ...(p.llmLatestStopReason !== undefined && {
+            priorLatestStopReason: p.llmLatestStopReason,
+          }),
           // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
           // on the OUTER scope, read by the engine mapper INSIDE this
           // boundary. Same gate as the engagement state above.
@@ -828,12 +835,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Atomic tuple + Replace below: never merge a former layout or
           // binding into a new provider proof. Present undefined clears it.
           ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
-          // An absent stop clears the previous response's fact across loop iterations.
-          llmLatestStopReason: s.llmLatestStopReason,
-          // The native-format flag remains private to native output candidates.
-          ...(Object.hasOwn(s, 'llmLatestNativeOutput') && {
-            llmLatestNativeOutput: s.llmLatestNativeOutput,
-          }),
+          ...responseStopFields(s),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.
