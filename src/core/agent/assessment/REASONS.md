@@ -17,6 +17,9 @@ complete witness table in `reasonClasses.ts`.
 | `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `assess.ts` · `firstRowOfTurn`) |
 | `call-not-completed` | 3 | `history`: a recorded refusal, failure or settled call of this turn. A malformed batch carries a refusal frame with no fabricated tool-result correlation. A later completed call of the same tool with equal recorded arguments clears the reason for that call. If the arguments are absent or kept out of the record, the reason fires. |
 | `result-withheld` | 3 | This turn's record proves a host rule denied a returned result. The standing gives no number, call name, witness or result facts. |
+| `result-cut` | 3 | `libraryResultLimits`: a tool result was cut. |
+| `placed-unread` | 3 | `libraryResultLimits`: a tool result was stored by reference and not read. |
+| `times-without-zone` | 3 | `libraryResultLimits`: some times in a dataset have no zone. |
 | `work-not-finished` | 3 | `history`: a tool message of this turn records `partial` or `pending` without an `outcome`. The same completed-retry rule applies. |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |

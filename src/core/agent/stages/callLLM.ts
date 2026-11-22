@@ -2,7 +2,6 @@ import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
 import { groundedTextOf } from './callLLM/groundedText.js';
-import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
@@ -51,11 +50,12 @@ import {
   unsupportedArgumentsOf,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
-import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
+import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
 import { liveChunkEmitter } from './callLLM/liveChunks.js';
+import { recoveryFeedback, requestOnlyMessages } from './callLLM/requestOnly.js';
 import {
   assertForcedRequestSupported,
   describeProviderDispatch,
@@ -66,7 +66,6 @@ import {
 } from './callLLM/providerRequest.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
-import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
@@ -83,6 +82,10 @@ import {
 } from '../findings/reserved.js';
 import { collapseJudged } from '../findings/serve.js';
 import type { FindingsLedger } from '../findings/types.js';
+import { captureReplayPrefix, replayCacheMarkers } from '../requestTurn/replayPrefix.js';
+import { afterReplayResponse, sameReplayProjection } from '../requestTurn/state.js';
+import { writeRequestReplay } from '../requestTurn/native.js';
+import { projectCallHistory } from './callLLM/requestProjection.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import type { ToolChoiceLedger } from '../toolChoice/types.js';
 import type { OntologyPiece } from '../../../ontology/serve.js';
@@ -229,7 +232,7 @@ export function buildCallLLMStage(
       deps.hasFindingsLedger === true
         ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
         : committed;
-    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
+    const rendered = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
@@ -293,14 +296,25 @@ export function buildCallLLMStage(
       withheld !== null
         ? EMPTY_TOOL_SCHEMAS
         : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
+    const { replayFrames, closure, continuing, messages } = projectCallHistory(
+      scope,
+      history,
+      rendered,
+      recoveryPiece !== undefined && withheld !== null,
+    );
     // The forced schema rides on the wire and in `llm_start`. Offered contracts
     // specialize the findings instruction in request-only copies that replay rebuilds.
+    const recoveryNote =
+      recoveryPiece !== undefined && continuing !== undefined && withheld === null
+        ? recoveryFeedback(recoveryPiece.rawContent)
+        : undefined;
+    const systemRecovery = recoveryNote === undefined ? recoveryPiece : undefined;
     const systemPieces = projectSourceInstructions(
-      recoveryPiece === undefined && ontologyPieceRecord === undefined
+      systemRecovery === undefined && ontologyPieceRecord === undefined
         ? systemPromptInjections
         : [
             ...systemPromptInjections,
-            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(systemRecovery === undefined ? [] : [systemRecovery]),
             ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
           ],
       registeredToolSchemas,
@@ -310,72 +324,29 @@ export function buildCallLLMStage(
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;
 
-    // THE STAGED-REFS NUDGE (`nudge: true` on the evidence gate). Judged on
-    // `registeredToolSchemas` — the tools REALLY served this call, so the
-    // wrap-up's withheld surface arms nothing and a synthetic schema tool is
-    // never named a spender. The line is request-only: `scope.history` is
-    // untouched, so it never enters the exempt corpus and never persists —
-    // recomposed each iteration, present exactly while both conditions hold.
-    let wireMessages = messages;
-    // Lines composed for THIS request and written to no history — each with
-    // the mechanism that composed it, so the receipt can say a line existed
-    // without saying what it said.
-    const requestOnly: { readonly message: LLMMessage; readonly reason: string }[] = [];
-    const nudge =
-      deps.toolWants === undefined
-        ? undefined
-        : stagedRefsNudgeFor(scope, messages, deps.toolWants, registeredToolSchemas, iteration);
-    if (nudge !== undefined) {
-      requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
-      wireMessages = [...messages, nudge];
-    }
-    // THE TIME LINE (step T6b, `.time({ reader })` only) — the library's conclusion about the
-    // person's time words, LAST, at the decision point: a settled window with its source and each
-    // tool's values, or a quote not confirmed yet and the one move that asks the person. Composed
-    // by the tools slot from the tools it served (`agent/arguments/serve/windows.ts` · `timeWindowsLine`)
-    // and served only on the iteration that composed it — a slot that did not re-run (classic
-    // mode) leaves an older line, which is never served. Request-only like the nudge above; not
-    // on the wrap-up call, whose tools are withheld. `servedView` rebuilds it from the same key.
-    const timeLine = deps.timeLine === true ? scope.timeLine : undefined;
-    if (
-      timeLine !== undefined &&
-      timeLine.iteration === iteration &&
-      timeLine.text.length > 0 &&
-      // `wrapUpAsked` is read here as it always was (an unarmed agent's reads
-      // are unchanged); `withheld` adds the revision's rule.
-      scope.wrapUpAsked !== true &&
-      withheld === null
-    ) {
-      const line: LLMMessage = { role: 'user', content: timeLine.text };
-      requestOnly.push({ message: line, reason: 'time-window-line' });
-      wireMessages = [...wireMessages, line];
-    }
-    // THE EVIDENCE CONCLUSION (the figures dial) — the library's finding about
-    // the numbers it flagged, LAST, on the one call that serves the revision
-    // instruction (`evidence/figures.ts` · `figuresConclusionLine`). Absent
-    // whenever the dial is off or no flagged value was a number.
-    const conclusion =
-      deps.hasEvidenceRecovery === true
-        ? evidenceConclusionLine(scope.evidenceRecovery, scope.evidenceRecoveryUsed, iteration)
-        : undefined;
-    if (conclusion !== undefined) {
-      const line: LLMMessage = { role: 'user', content: conclusion };
-      requestOnly.push({ message: line, reason: 'evidence-conclusion' });
-      wireMessages = [...wireMessages, line];
-    }
-
-    if (deps.hasFindingsLedger === true) {
-      // A resumed leg can have a different host configuration from its checkpoint.
-      // Record the layout actually used by THIS call; replay reads its commit.
-      scope.findingsLayout = FINDINGS_LAYOUT;
-      scope.findingsContextBytes = findingsContextBytes(deps.findingsContextBytes);
-      const line: LLMMessage = {
-        role: 'user',
-        content: findingsContext(committed, ledger, deps.findingsContextBytes),
-      };
-      requestOnly.push({ message: line, reason: 'findings-data' });
-      wireMessages = [...wireMessages, line];
-    }
+    const freshNotes = requestOnlyMessages(scope, deps, {
+      iteration,
+      committed,
+      messages,
+      ledger,
+      registeredToolSchemas,
+      withheld,
+    });
+    const recoveryContext = closure ?? recoveryNote;
+    const tail = recoveryContext === undefined ? freshNotes : [recoveryContext, ...freshNotes];
+    const prefixWire = continuing?.wire ?? messages;
+    const wireMessages =
+      tail.length === 0 ? prefixWire : [...prefixWire, ...tail.map(({ message }) => message)];
+    const requestOnly =
+      continuing === undefined
+        ? tail
+        : [
+            ...continuing.additions.map(({ message, reason, wireIndex }) => ({
+              message,
+              reason: `native-turn-prefix:${wireIndex}:${reason}`,
+            })),
+            ...tail,
+          ];
 
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
@@ -434,7 +405,10 @@ export function buildCallLLMStage(
     // A custom strategy can create remote cache handles, so refuse a known
     // unsupported effective request before even that preparation does I/O.
     assertForcedRequestSupported(provider, baseRequest);
-    const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
+    const cacheMarkers = replayCacheMarkers(
+      (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [],
+      continuing,
+    );
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
     const serving =
       deps.recordReceipt === false
@@ -527,7 +501,7 @@ export function buildCallLLMStage(
       iteration,
       systemPieces,
       tools: activeToolSchemas,
-      requestOnly,
+      requestOnly: freshNotes,
     }));
 
     // THE CLOSURE CHECK (9.60.0, dangling-reference). At assembly, BEFORE the
@@ -627,6 +601,12 @@ export function buildCallLLMStage(
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
+    const preserveReplay =
+      deps.hasEvidenceRecovery === true ||
+      deps.hasFindingsLedger === true ||
+      tail.length > 0 ||
+      continuing !== undefined;
+    let acceptedProjection = false;
     const issued = deps.findings === true ? issuedTicketsOf(scope.placedTickets) : undefined;
     const capture = (req: LLMRequest) => captureFindingsRequest(req, committed, iteration, issued);
     // The run signal reaches the wire. See callLLM/README.md#dispatch-lifetime.
@@ -644,14 +624,17 @@ export function buildCallLLMStage(
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
+      let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
       const attemptHooks = observeCallRequests(
         attempts.hooks,
-        serving === undefined && deps.findings !== true
+        serving === undefined && deps.findings !== true && !preserveReplay
           ? undefined
           : (request) => {
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
+              if (preserveReplay)
+                stableProjection = sameReplayProjection(wireMessages, request.messages);
             },
         serving?.discard,
       );
@@ -703,6 +686,8 @@ export function buildCallLLMStage(
           : attempts.request;
         dispatch = describeProviderDispatch(selectedProvider, completion);
         if (deps.findings === true) candidate = capture(completion);
+        if (preserveReplay)
+          stableProjection = sameReplayProjection(wireMessages, completion.messages);
         resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
       }
       // An answer that arrived after the abort is not an answer: refused here,
@@ -733,6 +718,7 @@ export function buildCallLLMStage(
           : tagThinkingResponse(resp, String(hooks.providerIndex));
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
+      acceptedProjection = stableProjection;
       return attempts.response(answered);
     };
 
@@ -885,6 +871,18 @@ export function buildCallLLMStage(
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {
       scope.llmLatestReplay = response.replay === undefined ? undefined : [response.replay];
     }
+    const nextReplay =
+      !localFallback && acceptedProjection
+        ? afterReplayResponse(
+            response,
+            continuing === undefined ? [] : replayFrames ?? [],
+            (replay) =>
+              captureReplayPrefix(replay, history, messages, tail, continuing?.frozenBefore ?? 0),
+            deps.toolsOffAfterRevision === true,
+          )
+        : undefined;
+    if (nextReplay !== undefined || replayFrames !== undefined)
+      writeRequestReplay(scope, nextReplay);
     // v2.14 — hand provider-specific raw thinking data to the
     // NormalizeThinking sub-subflow (the next stage in sf-call-llm
     // when a ThinkingHandler is configured). Undefined when the
@@ -1014,7 +1012,7 @@ export function buildCallLLMStage(
               // The recovery piece quotes the model's words; only the trusted
               // system injections count as grounds when that piece is present.
               // Findings DATA is a request-only message after history.
-              ...(recoveryPiece === undefined
+              ...(systemRecovery === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []
                   : [llmRequest.systemPrompt]
@@ -1026,7 +1024,7 @@ export function buildCallLLMStage(
                 : []),
               // Every tool result as the TOOL's own bytes — the inputs layer's note
               // after a filled call's result is the library's words (`groundedTextOf`).
-              ...groundedTextOf(frameMessages, committed),
+              ...groundedTextOf(frameMessages, committed, continuing?.historyPositions),
             ],
             assistant: frameMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
             ...(external.length > 0 && { external }),

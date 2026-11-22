@@ -178,6 +178,7 @@ export const words1 = {
   phrase: true,
   pinecone: true,
   'placed-result': true,
+  'placed-unread': true,
   policy: true,
   'pool-full': true,
   population: true,
@@ -229,6 +230,7 @@ export const words1 = {
   'require-instruction': true,
   result: true,
   'result-capped': true,
+  'result-cut': true,
   'result-period': true,
   'result-shape': true,
   'result-withheld': true,
@@ -298,6 +300,4 @@ export const words1 = {
   success: true,
   sum: true,
   summarize: true,
-  summarizing: true,
-  superseded: true,
 } as const;
