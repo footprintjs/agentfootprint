@@ -85,6 +85,57 @@ describe.each(['classic', 'dynamic', 'dynamic-grouped'] as const)('%s', (reactMo
   });
 });
 
+it('uses the final cutoff after two tool calls in a large thinking-enabled turn', async () => {
+  const stops = ['tool_use', 'tool_use', 'max_tokens'] as const;
+  const budgets: (number | undefined)[] = [];
+  let toolRuns = 0;
+  const provider = mock({
+    chunkDelayMs: 0,
+    respond: (request) => {
+      const stopReason = stops[budgets.length];
+      if (stopReason === undefined) throw new Error('Unexpected provider call');
+      budgets.push(request.thinking?.budget);
+      return {
+        stopReason,
+        usage: { input: 80_000, output: stopReason === 'max_tokens' ? 4_096 : 128, thinking: 96 },
+        ...(stopReason === 'tool_use'
+          ? { toolCalls: [{ id: `lookup-${budgets.length}`, name: 'lookup', args: {} }] }
+          : { content: prose }),
+      };
+    },
+  });
+  const agent = Agent.create({ provider, model: 'mock', reactMode: 'dynamic-grouped' })
+    .thinking({ budget: 1_024 })
+    .tool(
+      defineTool({
+        name: 'lookup',
+        description: 'Read the next log segment',
+        inputSchema: { type: 'object' },
+        execute: () => `Log segment ${++toolRuns}`,
+      }),
+    )
+    .build();
+  const providerStops: string[] = [];
+  agent.on('agentfootprint.stream.llm_end', ({ payload }) =>
+    providerStops.push(payload.stopReason),
+  );
+  const recorder = recordRun(agent);
+  try {
+    expect(await agent.run({ message: 'What do the logs show?' })).toContain(line);
+    expect(budgets).toEqual([1_024, 1_024, 1_024]);
+    expect(toolRuns).toBe(2);
+    expect(providerStops).toEqual(stops);
+    const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
+    expect(recording.snapshot.sharedState[key]).toBe('max_tokens');
+    const saved = assessAnswer(recording);
+    expect(saved).toEqual(await agent.assessment());
+    expect(saved.reasons.filter((entry) => entry.reason === reason)).toHaveLength(1);
+  } finally {
+    recorder.stop();
+    await agent.shutdown();
+  }
+});
+
 it.each([
   undefined,
   'stop',
