@@ -233,6 +233,7 @@ export function buildResumeCredential(
                 dispatched.halt !== undefined ||
                 sourceHalt !== undefined ||
                 !Object.is(modelResult, consentPlaced.modelResult),
+              { scope, counts: consentEnvelope?.outputCounts, disposition: toolResultDisposition },
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...innerCallsFieldOf(scope, toolCallId, iteration),

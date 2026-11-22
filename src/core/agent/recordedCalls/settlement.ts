@@ -3,6 +3,8 @@ import { readCallOccurrenceKey, type CallOccurrenceKey } from '../../../lib/call
 import type { PeriodVerdict } from '../../../semantics/coverage/period.js';
 import { MAX_ENTERED_TOOL_CALLS } from '../honesty/enteredToolCalls.js';
 import { isRecord } from './record.js';
+import { readToolOutputCounts } from './outputCounts.js';
+import type { ToolOutputCounts } from '../../../provider-contract/toolResultRecord.js';
 
 /** The bounded, content-free result of settling one admitted call occurrence. */
 export interface RecordedToolSettlement {
@@ -11,6 +13,7 @@ export interface RecordedToolSettlement {
   readonly delivery?: 'native' | 'rewritten' | 'withheld';
   readonly outcome?: 'refused' | 'failed' | 'settled';
   readonly reportedStatus?: 'partial' | 'pending';
+  readonly outputCounts?: ToolOutputCounts;
   readonly empty?: 'declared-absent' | 'empty-undeclared';
   readonly gap?: true;
   readonly rewrittenPeriod?: PeriodVerdict;
@@ -58,12 +61,19 @@ function settlementRow(value: unknown): RecordedToolSettlement | undefined {
     !optional(periods, rewrittenPeriod)
   )
     return undefined;
+  const outputCounts =
+    execution === 'returned' &&
+    delivery === 'native' &&
+    (outcome === 'failed' || reportedStatus === 'partial')
+      ? readToolOutputCounts(Object.getOwnPropertyDescriptor(value, 'outputCounts')?.value)
+      : undefined;
   return {
     callOccurrenceKey,
     execution,
     ...(delivery !== undefined && { delivery }),
     ...(outcome !== undefined && { outcome }),
     ...(reportedStatus !== undefined && { reportedStatus }),
+    ...(outputCounts !== undefined && { outputCounts }),
     ...(empty !== undefined && { empty }),
     ...(gap === true && { gap }),
     ...(rewrittenPeriod !== undefined && { rewrittenPeriod }),

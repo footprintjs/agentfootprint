@@ -56,17 +56,13 @@ import { fnv1a } from '../lib/fnv1a.js';
 import { isLineBreak } from '../lib/linearText.js';
 import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../provider-contract/types.js';
 import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../provider-contract/types.js';
+import type { ToolOutputCounts } from '../provider-contract/toolResultRecord.js';
 import type { ToolWants } from '../artifacts/wants.js';
 import type { CredentialNeed } from '../identity/types.js';
 import type { CheckInDemand } from './checkin.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools/tools.js';
 import { toolSessionKey, type TeardownScope } from '../tools/toolSessions.js';
-import {
-  clipOutput,
-  codeRunStatus,
-  outcomeLine,
-  type CodeOutputCounts,
-} from './codeRunnerTool/output.js';
+import { clipOutput, codeRunStatus, outcomeLine } from './codeRunnerTool/output.js';
 
 /** The scopes a code session can be held under. `'shutdown'` is not one: it is
  *  when everything goes, not a thing to key a session on. */
@@ -192,6 +188,7 @@ export interface CodeRunSlot {
     readonly runs: ReadonlyMap<string, CodeRunFacts>;
     readonly text: string;
     readonly status: 'failure' | 'partial';
+    readonly outputCounts?: ToolOutputCounts;
   };
 }
 
@@ -481,7 +478,8 @@ export function codeRunnerTool(
       if (slot !== undefined) {
         slot.facts = facts;
         const status = codeRunStatus(result, counts !== undefined);
-        slot.result = status === undefined ? undefined : { runs: codeRuns, text, status };
+        slot.result =
+          status === undefined ? undefined : { runs: codeRuns, text, status, outputCounts: counts };
       }
       codeRuns.set(ctx.toolCallId, facts);
       return text;
@@ -840,7 +838,7 @@ function render(
   minted?: ReadonlyMap<string, FileMintOutcome>,
   staged: readonly string[] = [],
   declared: readonly string[] = [],
-): { readonly text: string; readonly counts?: CodeOutputCounts } {
+): { readonly text: string; readonly counts?: ToolOutputCounts } {
   const parts: string[] = [];
   // What was put IN, stated before what came out. A model whose code failed to
   // find a file needs to know the file was staged and under which name — the

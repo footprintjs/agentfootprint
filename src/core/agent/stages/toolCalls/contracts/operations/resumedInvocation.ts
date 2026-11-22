@@ -1,7 +1,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { Resolution, ResumedCallFacts } from '../callFacts.js';
-import type { ReadToolResultEnvelope } from '../../../../../../semantics/toolEffects.js';
+import type { ExecutedToolResultEnvelope } from '../callCells.js';
 import type { InnerCallHalt } from '../../../../innerCallOuter.js';
 import type { PausedGatePolicy } from '../../../../types/state/pause.js';
 
@@ -18,7 +18,7 @@ export interface ResumedCallResult {
    *  fired this carries the refusal as `content` and status `'invalid'`
    *  (synthesized empty-effects for a non-envelope result), so every resume
    *  path routes the status without knowing about ceilings. */
-  envelope?: ReadToolResultEnvelope;
+  envelope?: ExecutedToolResultEnvelope;
   /** The tool's own `resultCeiling` refused the result (9.20.0): `result`
    *  is the teaching refusal, the true size is on the record. The call ran
    *  — but it must not complete a procedure step (the model was told to

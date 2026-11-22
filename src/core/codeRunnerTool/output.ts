@@ -1,3 +1,4 @@
+import type { ToolOutputCounts } from '../../provider-contract/toolResultRecord.js';
 import type { CodeResult } from '../../provider-contract/types.js';
 
 /**
@@ -85,17 +86,11 @@ export function codeRunStatus(
   return truncated ? 'partial' : undefined;
 }
 
-export interface CodeOutputCounts {
-  readonly kept: number;
-  readonly total?: number;
-  readonly unit: 'characters';
-}
-
 /** Render each stream and describe the cut, excluding presentation text from the counts. */
 export function clipOutput(
   result: Pick<CodeResult, 'stdout' | 'stderr' | 'truncated'>,
   max: number,
-): { readonly stdout: string; readonly stderr: string; readonly counts?: CodeOutputCounts } {
+): { readonly stdout: string; readonly stderr: string; readonly counts?: ToolOutputCounts } {
   const { stdout: rawOut, stderr: rawErr, truncated } = result;
   const upstreamOut = truncated?.stdout === true;
   const upstreamErr = truncated?.stderr === true;

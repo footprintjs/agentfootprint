@@ -285,6 +285,7 @@ export const fields0 = {
   iteration: true,
   iterationCount: true,
   k: true,
+  kept: true,
   key: true,
   keyHash: true,
   keyword: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   layout: true,
   length: true,
   limit: true,
-  lines: true,
 } as const;

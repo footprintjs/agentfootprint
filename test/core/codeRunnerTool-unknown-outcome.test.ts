@@ -13,10 +13,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   Agent,
+  allow,
   CodeSandboxError,
   checkInApproved,
   codeRunnerTool,
   codeRunsOf,
+  deny,
   isCheckInPause,
 } from '../../src/index.js';
 import { agentCoreCodeRunner } from '../../src/adapters/code/agentcore.js';
@@ -25,6 +27,7 @@ import { mock } from '../../src/llm-providers.js';
 import { assessAnswer, recordRun } from '../../src/observe.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 import type { CodeResult, CodeRunner } from '../../src/provider-contract/types.js';
+import type { ToolOutputCounts } from '../../src/provider-contract/toolResultRecord.js';
 import type { ToolExecutionContext } from '../../src/tools/tools.js';
 import { AWS_COMMAND_PINS, fakeSdk } from '../adapters/aws/awsCommandPin.js';
 import { spawnErroringAfterStart } from '../adapters/code/childSeam.js';
@@ -107,6 +110,8 @@ describe('code runner settlement from runner facts', () => {
     read: string;
     reason?: 'call-not-completed' | 'work-not-finished';
     cut?: true;
+    counts?: ToolOutputCounts;
+    redactHistoryContent?: true;
     resume?: true;
     replace?: true;
   }[] = [
@@ -165,6 +170,24 @@ describe('code runner settlement from runner facts', () => {
       read: `abcdefgh\n[truncated: showing 8 of 12${CLIP_ADVICE}`,
       reason: 'work-not-finished',
       cut: true,
+      counts: { kept: 8, total: 12, unit: 'characters' },
+    },
+    {
+      label: 'a local cut after check-in',
+      result: { stdout: 'abcdefghijkl', stderr: '', ok: true },
+      read: `abcdefgh\n[truncated: showing 8 of 12${CLIP_ADVICE}`,
+      reason: 'work-not-finished',
+      cut: true,
+      counts: { kept: 8, total: 12, unit: 'characters' },
+      resume: true,
+    },
+    {
+      label: 'clipping with history content selected for redaction',
+      result: { stdout: 'abcdefghijkl', stderr: '', ok: true },
+      read: `abcdefgh\n[truncated: showing 8 of 12${CLIP_ADVICE}`,
+      reason: 'work-not-finished',
+      cut: true,
+      redactHistoryContent: true,
     },
     {
       label: 'an upstream cut whose original size is unavailable',
@@ -172,6 +195,7 @@ describe('code runner settlement from runner facts', () => {
       read: `abcd\n[truncated: showing 4${CLIP_ADVICE}`,
       reason: 'work-not-finished',
       cut: true,
+      counts: { kept: 4, unit: 'characters' },
     },
     {
       label: 'a failed run with a measured upstream cut',
@@ -185,6 +209,7 @@ describe('code runner settlement from runner facts', () => {
       read: `stderr:\nbad\n[truncated: showing 3${CLIP_ADVICE}\n[exit 7] ${EXIT_ADVICE}`,
       reason: 'call-not-completed',
       cut: true,
+      counts: { kept: 3, total: 12, unit: 'characters' },
     },
   ];
 
@@ -213,11 +238,18 @@ describe('code runner settlement from runner facts', () => {
           if (toolResult === undefined) {
             return { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: 'fixture' } }] };
           }
+          expect(Object.keys(toolResult).sort()).toEqual([
+            'content',
+            'role',
+            'toolCallId',
+            'toolName',
+          ]);
           reads.push(String(toolResult.content));
           return { content: MODEL_ANSWER };
         },
       }),
       model: 'mock',
+      ...(entry.redactHistoryContent && { redact: { fields: { history: ['2.content'] } } }),
     })
       .tool(tool)
       .build();
@@ -237,6 +269,12 @@ describe('code runner settlement from runner facts', () => {
     const saved = assessAnswer(JSON.parse(JSON.stringify(recorder.toRecording())));
     expect(reads).toEqual([entry.read]);
     expect.soft(codeRuns.map(({ truncated }) => truncated)).toEqual([entry.cut === true]);
+    const state = agent.getLastSnapshot()?.sharedState;
+    const toolMessage = state?.history.find((message) => message.role === 'tool');
+    expect.soft(toolMessage?.toolOutputCounts).toEqual(entry.counts);
+    expect
+      .soft(state?.settledToolCalls?.map(({ outputCounts }) => outputCounts))
+      .toEqual([entry.counts]);
     const reasons = entry.reason === undefined ? [] : [entry.reason];
     expect.soft(live?.reasons.map(({ reason }) => reason)).toEqual(reasons);
     expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
@@ -244,6 +282,55 @@ describe('code runner settlement from runner facts', () => {
     if (entry.reason === undefined) expect(answer).toBe(MODEL_ANSWER);
   });
 });
+
+it.each(['withheld', 'rewritten'] as const)(
+  'keeps raw clipping sizes out after a result is %s',
+  async (disposition) => {
+    const through = async (length: number) => {
+      const reads: string[] = [];
+      const agent = Agent.create({
+        provider: mock({
+          respond: (request) => {
+            const reply = request.messages.find((message) => message.role === 'tool');
+            if (reply === undefined) {
+              return { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: 'fixture' } }] };
+            }
+            reads.push(String(reply.content));
+            return { content: MODEL_ANSWER };
+          },
+        }),
+        model: 'mock',
+      })
+        .tool(
+          codeRunnerTool({
+            runner: runnerAnswering({ stdout: 'x'.repeat(length), stderr: '', ok: true }),
+            maxOutputChars: 8,
+          }),
+        )
+        .toolMiddleware({
+          name: 'output-fixture',
+          onToolResult: () =>
+            disposition === 'withheld'
+              ? deny('The result is private.')
+              : allow('Replacement.', 'The result is private.'),
+        })
+        .build();
+      const recorder = recordRun(agent);
+      const answer = await agent.run({ message: 'Run the fixture.' });
+      const state = agent.getLastSnapshot()!.sharedState;
+      expect(state.history.find(({ role }) => role === 'tool')).not.toHaveProperty(
+        'toolOutputCounts',
+      );
+      expect(state.settledToolCalls?.[0]).toMatchObject({ delivery: disposition });
+      expect(state.settledToolCalls?.[0]).not.toHaveProperty('outputCounts');
+      const assessment = await agent.assessment();
+      expect(assessAnswer(JSON.parse(JSON.stringify(recorder.toRecording())))).toEqual(assessment);
+      return { answer, reads, assessment };
+    };
+
+    expect(await through(20)).toEqual(await through(50));
+  },
+);
 
 describe('end to end — AgentCore reports nothing, and nothing is claimed', () => {
   it('the model reads "unknown" and tools.code_run carries no ok', async () => {

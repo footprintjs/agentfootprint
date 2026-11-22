@@ -1,6 +1,4 @@
-# Code runner output
-
-Role: Lens.
+# Code runner output (Lens)
 
 The code-runner facade uses these pure functions to preserve stdout, stderr,
 and exit wording while measuring what the clip retains. A count uses the
