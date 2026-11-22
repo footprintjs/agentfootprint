@@ -115,9 +115,12 @@ before its first write, so it never comes back as a `store-unavailable` receipt.
 The shape is closed: a misspelt key is refused by name, never dropped. Consumers
 use `readTimeAxis(meta)`, which returns absent, declared or malformed, and
 `describeTimeAxis(axis)`, which gives the one title wording ("hourly avg and max").
-The store never scans rows. A declared column the rows lack is the consumer's to
-report, visibly. `sqliteArtifacts` adds the `time_axis` column in place on an older
-file, and the JSON-envelope stores carry it unchanged.
+For row arrays with an ISO axis and no declared zone, the built-in stores count offset-less
+values in the named column at mint. A positive count travels with the ticket as `naiveCount`.
+Malformed or missing times do not add to that count. A custom JSON encoder or accessor in the
+row or time column can change its saved value, so its dataset has no count. Older tickets omit it.
+SQLite adds both metadata columns in place on older files. Custom stores can use the same time-axis classifier
+(`normaliseInstants(rows, axis).counts.naive`) when minting their own metadata.
 
 The declaration and its judge live in the time layer (`src/time/axis.ts`), so
 `interval` and `zone` use the one duration and zone grammar. A consumer that COMPARES

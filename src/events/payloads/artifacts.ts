@@ -34,6 +34,8 @@ export interface ArtifactMintedPayload {
   readonly parentRefs?: readonly string[];
   /** The rows' declared time axis — validated at mint (see `ArtifactMeta.timeAxis`). */
   readonly timeAxis?: DatasetTimeAxis;
+  /** Offset-less values on the minted dataset’s ISO axis when it declares no zone. */
+  readonly naiveCount?: number;
   /** The tool whose execute minted it. ABSENT when no tool did — the run's own
    *  recording (9.26.0, the `recordings` dial) or a host filing for its turn
    *  through `HostReply.turnArtifacts`; the event's `meta.sessionId` then names

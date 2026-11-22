@@ -19,6 +19,7 @@ import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
+import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -188,6 +189,8 @@ export async function invokeInitialTool(
         frame.tc.id,
         frame.execution.resultFinalizer?.needsPublications,
         frame.tc.callOccurrenceKey,
+        binding,
+        frame.execution,
       ),
       ...(frame.wanted.wantedMeta !== undefined && { wanted: frame.wanted.wantedMeta }),
       ...frame.toolProgress(scope, {
@@ -238,6 +241,7 @@ export async function invokeInitialTool(
     );
     let returned = false;
     try {
+      markWantedResultsRead(scope, frame.wanted.wantedMeta);
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
       frame.outcome.result = await frame.tool.execute(
         frame.callArguments.callArgs,

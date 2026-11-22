@@ -13,6 +13,7 @@
 import { isArtifactRef, mintArtifactRef } from './naming.js';
 import { computeArtifactDigest, measureArtifactBytes } from './payload.js';
 import { resolveExpiresAt, type ArtifactRetention } from './retention.js';
+import { classify } from '../time/axis/classify.js';
 import { timeAxisIssues, type DatasetTimeAxis } from '../time/axis.js';
 import {
   InvalidArtifactError,
@@ -92,8 +93,11 @@ export async function prepareArtifact(
   const digest = input.digest === 'sha-256' ? await computeArtifactDigest(input.data) : undefined;
   const expiresAt = resolveExpiresAt(input.expiresAt, retention, now);
 
+  const naiveCount = countStoredNaiveTimes(input.data, input.timeAxis);
+
   const meta: ArtifactMeta = {
     ref: mintArtifactRef(),
+    ...(naiveCount !== undefined && naiveCount > 0 && { naiveCount }),
     kind: input.kind,
     mediaType: input.mediaType,
     bytes,
@@ -107,6 +111,34 @@ export async function prepareArtifact(
     ...(input.timeAxis !== undefined && { timeAxis: copyTimeAxis(input.timeAxis) }),
   };
   return { meta, bytes };
+}
+
+/** Count once over plain JSON rows, using the same value classifier as normaliseInstants.
+ * Accessors and custom JSON encoders can change the stored value; omit the receipt for those. */
+function countStoredNaiveTimes(
+  data: unknown,
+  axis: DatasetTimeAxis | undefined,
+): number | undefined {
+  if (axis?.unit !== 'iso' || axis.zone !== undefined || !Array.isArray(data) || 'toJSON' in data)
+    return undefined;
+  const walls = new Map();
+  let count = 0;
+  for (let i = 0; i < data.length; i++) {
+    const item = Object.getOwnPropertyDescriptor(data, i);
+    if (!item && !(i in data)) continue;
+    if (!item || !('value' in item)) return undefined;
+    const row: unknown = item.value;
+    if (row === null || (typeof row !== 'object' && typeof row !== 'function')) continue;
+    if ('toJSON' in row) return undefined;
+    if (Array.isArray(row) || typeof row === 'function') continue;
+    const column = Object.getOwnPropertyDescriptor(row, axis.column);
+    if (!column?.enumerable) continue;
+    if (!('value' in column) || (typeof column.value === 'object' && column.value !== null)) {
+      return undefined;
+    }
+    if (classify(row, axis, walls).kind === 'naive') count++;
+  }
+  return count;
 }
 
 /** The ticket keeps its OWN copy — a caller mutating its declaration after

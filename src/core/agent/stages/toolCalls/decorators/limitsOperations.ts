@@ -7,7 +7,7 @@ import type { ToolResultStatus } from '../../../../../semantics/toolEffects.js';
 import { applyResultCeiling } from '../../../resultCeiling.js';
 import { servedToModel } from '../../../../../semantics/coverage/read.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
-import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
+import type { CappedResults, ToolLimitsOperations } from '../contracts/operations/limits.js';
 
 /** Compose the existing limits callbacks once for this handler. */
 export function buildToolLimitsOperations(
@@ -30,19 +30,18 @@ export function buildToolLimitsOperations(
   const capResults = (
     toolName: string,
     values: { readonly result: unknown; readonly modelResult: unknown },
-  ): { readonly result: unknown; readonly modelResult: unknown } => {
+  ): CappedResults => {
     const max = deps.maxToolResultChars;
     if (max === undefined) return values;
-    const result = capToolResult(values.result, { toolName, maxChars: max }).value;
+    const result = capToolResult(values.result, { toolName, maxChars: max });
+    const served =
+      values.modelResult === values.result
+        ? result
+        : capToolResult(values.modelResult, { toolName, maxChars: max });
     return {
-      result,
-      // One marker when the two channels carry one value — the common case, and
-      // the one where two distinct objects would be a difference with no fact
-      // behind it.
-      modelResult:
-        values.modelResult === values.result
-          ? result
-          : capToolResult(values.modelResult, { toolName, maxChars: max }).value,
+      result: result.value,
+      modelResult: served.value,
+      ...(served.cut && { cut: served.cut }),
     };
   };
 

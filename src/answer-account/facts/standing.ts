@@ -29,6 +29,9 @@ import { boundedPointer, historyOf, stateAt, type ReadContext } from './common.j
 
 /** Reasons whose standing line needs the committed rows for its details. */
 export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
+  'result-cut',
+  'placed-unread',
+  'times-without-zone',
   'argument-assumed',
   'value-contingent',
   'check-unreachable',
@@ -102,6 +105,9 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
   'call-not-completed': 'howSure.reason.callNotCompleted',
   'result-withheld': 'howSure.reason.resultWithheld',
+  'result-cut': 'howSure.reason.resultCut',
+  'placed-unread': 'howSure.reason.placedUnread',
+  'times-without-zone': 'howSure.reason.timesWithoutZone',
   'work-not-finished': 'howSure.reason.workNotFinished',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
@@ -303,11 +309,13 @@ export function standingLines(
     return noStanding(ctx, 'howSure.standing.noAnswer');
   }
   const reasonPointers = pointersOf(a.reasons.flatMap((r) => r.witness));
-  const { conflict, dispatch, validator } = unreachableWitnessGroups(
+  const { conflict, dispatch, validator, libraryLimits } = unreachableWitnessGroups(
     a.reasons.find(({ reason }) => reason === 'check-unreachable')?.witness ?? [],
   );
   const accompanyingReasons =
-    conflict.length === 0 ? 0 : Number(dispatch.length > 0) + Number(validator.length > 0);
+    conflict.length === 0 && libraryLimits.length === 0
+      ? 0
+      : [conflict, libraryLimits, dispatch, validator].filter((rows) => rows.length > 0).length - 1;
   const ran = a.checked.filter((c) => c.ran > 0);
   const lines: Sentence[] = [];
   let resolve: ReturnType<typeof historyCallResolver> | undefined;
@@ -347,9 +355,10 @@ export function standingLines(
           const count = COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length;
           let template: TemplateId = REASON_LINES[r.reason];
           if (r.reason === 'check-unreachable') {
-            if (conflict.length > 0) {
+            if (conflict.length > 0 || libraryLimits.length > 0) {
               const causes = [
                 ['howSure.reason.conflictReadingsUnplaced', conflict],
+                ['howSure.reason.libraryLimitsIncomplete', libraryLimits],
                 ['howSure.reason.dispatchProofUnavailable', dispatch],
                 ['howSure.reason.checkUnreachable', validator],
               ] as const;
