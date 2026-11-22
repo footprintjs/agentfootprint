@@ -49,7 +49,7 @@ import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/type
 import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
 import {
   anchorTurnNumber,
-  historyForTurn,
+  seedHistoryForTurn,
   seedConversationTurn,
 } from '../runtime/conversation/seedHistory.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
@@ -506,8 +506,7 @@ function seedFrom(
     correction?.spent === true
   )
     scope.sourceDeclarationCorrectionSpent = true;
-  const history = historyForTurn(resume, message);
-  scope.history = history;
+  const history = seedHistoryForTurn(scope, resume, message);
   seedToolEvidence(scope, deps, resume);
   restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);

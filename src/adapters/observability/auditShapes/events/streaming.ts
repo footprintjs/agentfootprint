@@ -97,6 +97,7 @@ export function streamingShapes() {
     'agentfootprint.stream.thinking_delta': eventShape<'agentfootprint.stream.thinking_delta'>({
       iteration: num,
       tokenIndex: num,
+      kind: oneOf('provider-summary', 'raw-reasoning', 'unclassified'),
       content: charsMarker,
     }),
 

@@ -5,6 +5,7 @@ import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
@@ -237,9 +238,7 @@ export function buildResumedInvocation(
       );
       if (!credentials.ok) return { result: credentials.result, error: true };
       const resolvedCredential = credentials.credential;
-      // This dispatch's own slot for the runner's facts (`CODE_RUN_SLOT`):
-      // facts reach the exact dispatch that ran, never another run's call
-      // that happens to reuse the provider's id.
+      // Keep runner facts on this dispatch even when another call reuses its provider ID.
       const codeRunSlot: CodeRunSlot = {};
       const executionContext = {
         [CODE_RUN_SLOT]: codeRunSlot,
@@ -260,6 +259,8 @@ export function buildResumedInvocation(
           toolCallId,
           seen?.resultFinalizer?.needsPublications,
           seen?.callOccurrenceKey,
+          binding,
+          seen,
         ),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...links.toolProgress(scope, { toolName, toolCallId, iteration, ...occurrence }),
@@ -341,6 +342,7 @@ export function buildResumedInvocation(
       let result: unknown;
       let returned = false;
       try {
+        markWantedResultsRead(scope, wantedMeta);
         recordToolEntry(scope, seen?.callOccurrenceKey);
         result = await tool.execute(args, executionContext);
         returned = true;

@@ -48,6 +48,12 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
   'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
   'howSure.reason.resultWithheld': t('A result was kept out by a rule.'),
+  'howSure.reason.libraryLimitsIncomplete': t(
+    "The record could not keep every limit on this turn's tool results.",
+  ),
+  'howSure.reason.resultCut': t('A tool result was cut.'),
+  'howSure.reason.placedUnread': t('A tool result was stored by reference and not read.'),
+  'howSure.reason.timesWithoutZone': t('Some times in a dataset have no zone.'),
   'howSure.reason.resultDroppedFromWindow': t(
     "{{count:n,'result from this turn was','results from this turn were'}} dropped from the conversation before the answer.",
   ),

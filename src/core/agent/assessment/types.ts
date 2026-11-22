@@ -63,6 +63,8 @@ export type AssessmentPointer =
  *   searched: silence recorded as silence;
  * - `call-not-completed` — a tool call of this turn recorded as refused or
  *   failed, with no later completion of the same call by recorded arguments;
+ * - `result-cut`, `placed-unread`, `times-without-zone` — this turn's recorded result
+ *   lost characters, stayed behind an unread reference, or included times with no zone;
  * - `result-dropped-from-window` — a delivered tool result of this turn was
  *   removed from the model's conversation window before the answer;
  * - `work-not-finished` — an admitted tool result of this turn recorded partial or
@@ -164,6 +166,9 @@ export type AssessmentReason =
   | 'empty-undeclared'
   | 'call-not-completed'
   | 'result-withheld'
+  | 'result-cut'
+  | 'placed-unread'
+  | 'times-without-zone'
   | 'result-dropped-from-window'
   | 'work-not-finished'
   | 'period-not-held'

@@ -41,6 +41,7 @@ import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
 import { callNotCompletedClause, unfinishedWorkClause } from './callStandingWords.js';
 import { windowDropClause } from './results/window/stage.js';
 import type { StandingNames } from './standingFacts.js';
+import { LIBRARY_LIMIT_WORDS, INCOMPLETE_LIMIT_WORDS } from './results/library-did/stage.js';
 import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
 
 export { assumedValuesSourceOf } from './assumedValues.js';
@@ -258,6 +259,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
     'a value a call ran with was taken from a result the model itself had set aside',
   'call-not-completed': 'a call did not complete',
   'result-withheld': 'a result was kept out by a rule',
+  ...LIBRARY_LIMIT_WORDS,
   'result-dropped-from-window':
     'a result from this turn was dropped from the conversation before the answer',
   'work-not-finished': 'a tool reported unfinished work',
@@ -420,8 +422,11 @@ function reasonClause(
   const source = names?.sources.get(reason);
   if (reason === 'result-dropped-from-window' && names?.windowDrops !== undefined)
     return windowDropClause(names.windowDrops);
-  if (reason === 'check-unreachable' && names?.legacyConflictGap) {
-    const causes = ['the record holds a conflict whose readings it cannot place'];
+  if (reason === 'check-unreachable' && (names?.legacyConflictGap || names?.libraryLimitsGap)) {
+    const causes: string[] = [];
+    if (names.legacyConflictGap)
+      causes.push('the record holds a conflict whose readings it cannot place');
+    if (names.libraryLimitsGap) causes.push(INCOMPLETE_LIMIT_WORDS);
     if (names.dispatchProofGap) causes.push(DISPATCH_PROOF_WORDS);
     if (names.answerValidationGap) causes.push(REASON_WORDS[reason]);
     return causes.join('; ');
@@ -479,12 +484,11 @@ function reasonClauses(
       }
       continue;
     }
-    if (counted < MAX_CLAUSES) {
-      clauses.push(reasonClause(reason, names));
-      counted += 1;
-    } else {
-      folded += 1;
-    }
+    const details = names?.libraryLimits?.get(reason) ?? [reasonClause(reason, names)];
+    const room = MAX_CLAUSES - counted;
+    clauses.push(...details.slice(0, room));
+    counted += Math.min(details.length, room);
+    folded += Math.max(0, details.length - room);
   }
   if (folded > 0) clauses.push(`… and ${folded} more (in the run record)`);
   return clauses;

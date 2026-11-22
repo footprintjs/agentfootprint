@@ -109,6 +109,10 @@ export function seedToolEvidence(
 ): void {
   const continuing = resume !== undefined && !resume.appendsUserTurn;
   const recovered = continuing ? resume.toolTurnEvidence : undefined;
+  if (recovered?.libraryResultLimits !== undefined) {
+    scope.libraryResultLimits = [...recovered.libraryResultLimits];
+  }
+  if (recovered?.libraryResultLimitsIncomplete === true) scope.libraryResultLimitsIncomplete = true;
   seedEnteredToolCalls(scope, deps, continuing, recovered?.entries);
   const armed = deps.honestyLayers?.answer === true;
   seedToolSettlements(scope, armed, continuing, recovered?.settlements);

@@ -191,6 +191,23 @@ export function standingAdmission(
     const key = readCallOccurrenceKey(
       row.kind === 'contingent' && isRecord(row.declaredOn) ? row.declaredOn : row,
     );
+    if (
+      pointer.key === 'libraryResultLimits' &&
+      (reason === 'result-cut' || reason === 'placed-unread' || reason === 'times-without-zone')
+    ) {
+      // A cut settles the original result as unserved. Its prefix can still carry a
+      // native dataset ticket. Only the post-policy writer can attest that it survived.
+      const zoneCount = reason === 'times-without-zone';
+      if (zoneCount && Object.getOwnPropertyDescriptor(row, 'nativeRefInCut')?.value !== true)
+        return nativeResult(row, occurrence);
+      if (returned(occurrence, zoneCount, key)) return true;
+      const fact = settlementOf(occurrence, key);
+      return (
+        fact?.execution === 'returned-unserved' &&
+        fact.delivery !== 'withheld' &&
+        fact.outcome === undefined
+      );
+    }
     return kind === 'input'
       ? entered(occurrence, key)
       : row.kind === 'contingent' && settlements !== undefined

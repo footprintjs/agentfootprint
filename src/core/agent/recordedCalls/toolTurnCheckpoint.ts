@@ -5,18 +5,21 @@ import {
   type EnteredToolCall,
   type ToolEntryProof,
 } from '../honesty/enteredToolCalls.js';
+import { copyLibraryResultLimit, type LibraryResultLimit } from '../honesty/libraryResultLimits.js';
 import { isRecord } from './record.js';
 import { readToolSettlements, type RecordedToolSettlement } from './settlement.js';
 import { readWindowResultDrops, type WindowResultDrop } from './windowResultDrops.js';
 
 /** Content-free proof kept only for a retry of the failed human request. */
 export interface ToolTurnEvidence {
+  readonly windowResultDrops?: readonly WindowResultDrop[];
+  readonly libraryResultLimits?: readonly LibraryResultLimit[];
+  readonly libraryResultLimitsIncomplete?: true;
   readonly entries?: ToolEntryProof;
   readonly settlements?: {
     readonly rows: readonly RecordedToolSettlement[];
     readonly complete: boolean;
   };
-  readonly windowResultDrops?: readonly WindowResultDrop[];
 }
 
 const own = (object: object, field: string): unknown =>
@@ -49,6 +52,18 @@ function settlementsOf(value: unknown, complete: unknown): ToolTurnEvidence['set
   return { rows: result.rows, complete };
 }
 
+function copyResultLimits(value: unknown): readonly LibraryResultLimit[] | undefined {
+  const list = readOwnList(value, MAX_ENTERED_TOOL_CALLS);
+  if (list === undefined || list.unread !== 0) return undefined;
+  const rows: LibraryResultLimit[] = [];
+  for (const item of list.entries) {
+    const row = copyLibraryResultLimit(item);
+    if (row === undefined) return undefined;
+    rows.push(row);
+  }
+  return rows;
+}
+
 function windowDropsOf(value: unknown): ToolTurnEvidence['windowResultDrops'] {
   const drops = readWindowResultDrops(value);
   return drops?.complete ? [...drops.byKey.values()].map(({ fact }) => fact) : undefined;
@@ -66,12 +81,24 @@ export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefin
     own(state, 'settledToolCallsComplete'),
   );
   const windowResultDrops = windowDropsOf(own(state, 'windowResultDrops'));
-  if (entries === undefined && settlements === undefined && windowResultDrops === undefined)
+  const libraryResultLimits = copyResultLimits(own(state, 'libraryResultLimits'));
+  const incomplete =
+    own(state, 'libraryResultLimitsIncomplete') === true ||
+    ('libraryResultLimits' in state && libraryResultLimits === undefined);
+  if (
+    !incomplete &&
+    entries === undefined &&
+    settlements === undefined &&
+    libraryResultLimits === undefined &&
+    windowResultDrops === undefined
+  )
     return undefined;
   return {
     ...(entries && { entries }),
     ...(settlements && { settlements }),
     ...(windowResultDrops && { windowResultDrops }),
+    ...(libraryResultLimits && { libraryResultLimits }),
+    ...(incomplete && { libraryResultLimitsIncomplete: true }),
   };
 }
 
@@ -96,9 +123,17 @@ export function admitToolTurnEvidence(checkpoint: object): ToolTurnEvidence | un
     ? settlementsOf(own(settlement, 'rows'), own(settlement, 'complete'))
     : undefined;
   const windowResultDrops = windowDropsOf(own(evidence, 'windowResultDrops'));
+  const libraryResultLimits = copyResultLimits(own(evidence, 'libraryResultLimits'));
+  const incomplete = own(evidence, 'libraryResultLimitsIncomplete') === true;
   if (
-    (entries === undefined && settlements === undefined && windowResultDrops === undefined) ||
+    (!incomplete &&
+      entries === undefined &&
+      settlements === undefined &&
+      libraryResultLimits === undefined &&
+      windowResultDrops === undefined) ||
     ('windowResultDrops' in evidence && windowResultDrops === undefined) ||
+    ('libraryResultLimitsIncomplete' in evidence && !incomplete) ||
+    ('libraryResultLimits' in evidence && libraryResultLimits === undefined) ||
     ('entries' in evidence && entries === undefined) ||
     ('settlements' in evidence && settlements === undefined)
   )
@@ -107,5 +142,7 @@ export function admitToolTurnEvidence(checkpoint: object): ToolTurnEvidence | un
     ...(entries && { entries }),
     ...(settlements && { settlements }),
     ...(windowResultDrops && { windowResultDrops }),
+    ...(libraryResultLimits && { libraryResultLimits }),
+    ...(incomplete && { libraryResultLimitsIncomplete: true }),
   };
 }

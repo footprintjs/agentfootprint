@@ -8,6 +8,8 @@ export type AnswerFoldKey =
   | 'enteredToolCalls'
   | 'enteredToolCallsComplete'
   | 'settledToolCalls'
+  | 'libraryResultLimitsIncomplete'
+  | 'libraryResultLimits'
   | 'settledToolCallsComplete'
   | 'windowResultDrops'
   | 'stoppedEarly'
@@ -52,6 +54,7 @@ export type AnswerFoldKey =
  */
 export function answerFoldReads(arms: {
   readonly tools: boolean;
+  readonly resultLimits?: boolean;
   readonly evidenceGate: boolean;
   readonly answerValidation: boolean;
   readonly inputs: boolean;
@@ -72,6 +75,9 @@ export function answerFoldReads(arms: {
           'settledToolCallsComplete',
           'windowResultDrops',
         ] as const)
+      : []),
+    ...(arms.tools && arms.resultLimits
+      ? (['libraryResultLimits', 'libraryResultLimitsIncomplete'] as const)
       : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),

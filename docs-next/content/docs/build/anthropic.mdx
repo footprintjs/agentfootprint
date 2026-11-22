@@ -73,6 +73,8 @@ The same option exists on `browserAnthropic()`, and both adapters put the identi
 
 **Adaptive thinking takes no budget.** The model decides whether and how much to think, so the budget is not sent (dev mode says so once per model) and no effort level is guessed from it. It still keeps `max_tokens` above itself — `budget + 1024` when the request's is lower — because thinking counts toward `max_tokens`. `display: 'summarized'` is what makes the thinking readable; these models otherwise return it empty.
 
+With the SDK-based `anthropic()` adapter, use [live thinking deltas](doc:streaming#show-live-thinking-summaries) to display requested adaptive summaries while the call is still running.
+
 **Refused before anything is sent**, as an `UnsupportedThinkingError` (from `agentfootprint/providers`; `provider`, `model`, `reason`, `retryable: false`):
 
 - `'no-thinking'` — at `build()` for the agent's model and its skill and escalation brains; on the first call for a model `.configure()` picks at run time.

@@ -1,3 +1,4 @@
+import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
@@ -212,6 +213,13 @@ export function buildResumePlain(
       entered: true,
       seen: occurrence,
     });
+    recordServedLimits(
+      scope,
+      { toolName, toolCallId, ...occurrence },
+      true,
+      toolResultDisposition,
+      pauseCapped.cut,
+    );
     links.emitToolEnd(
       scope,
       toolName,
