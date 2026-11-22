@@ -77,6 +77,7 @@ export type AssessmentPointer =
  * - `value-survived-revision` — the same, after the one revision the gate
  *   asked for;
  * - `stopped-early` — a limit cut the turn short (`stoppedEarly`);
+ * - `answer-output-limit` — the delivered response stopped at the model's output limit;
  * - `step-skipped` — a committed witness shows the procedure advanced past a declared step;
  * - `answer-check-failed` — the app's answer checks (`.answerValidation()`)
  *   failed this answer;
@@ -181,6 +182,7 @@ export type AssessmentReason =
   | 'derived-from-reading'
   | 'script-unmatched'
   | 'stopped-early'
+  | 'answer-output-limit'
   | 'steps-unfinished'
   | 'step-skipped'
   | 'negative-prose-unverified'

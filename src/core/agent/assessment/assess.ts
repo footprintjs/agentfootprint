@@ -59,6 +59,7 @@ import { periodRows, PERIOD_REASONS, readPeriodVerdicts } from './periodRows.js'
 import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
 import { deliveredResults } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
+import { answerCompletionReasons } from './answer/completion/completion.js';
 import { reasonEntry } from './reasons.js';
 import { rowList } from './sources.js';
 import { assessmentValueOf, readReasonDetails, type RetainedReasonState } from './reasonDetails.js';
@@ -382,9 +383,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
       });
     }
   }
-  if (isRecord(state.stoppedEarly)) {
-    fire(g, 'stopped-early', statePointer('stoppedEarly', 'iteration'));
-  }
+  for (const { reason, witness } of answerCompletionReasons(state)) fire(g, reason, witness);
   for (const w of witnesses) {
     if (w.kind !== 'grounded') fire(g, w.kind, statePointer('findingsLedger', w.index, 'kind'));
   }

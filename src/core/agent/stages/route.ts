@@ -1563,8 +1563,8 @@ function buildEnforcingDecider(
     const attempt = ((scope.outputAttempts?.length as number | undefined) ?? 0) + 1;
     // `'native'`: a refusal or truncation stop fails the attempt by name
     // before the parser runs — the format did not hold for that text. The
-    // stop key is READ only under `'native'`: a tracked get of an absent key
-    // is still a read on the record, and every other agent keeps its bytes.
+    // Route READS the stop key only when this response used the format:
+    // an instruction fallback is judged by the parser alone.
     const failure =
       (enforcement.outputFormat !== undefined && scope.llmLatestNativeOutput === true
         ? nativeStopFailure(enforcement, scope.llmLatestStopReason)

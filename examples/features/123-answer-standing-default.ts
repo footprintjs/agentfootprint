@@ -114,11 +114,16 @@ export async function run(input: string): Promise<string> {
   if (typeof cut !== 'string' || !cut.includes('Not sure') || !cut.includes('event log')) {
     throw new Error('Expected a warning naming the cut log.');
   }
+  const cutoff = await answerAtOutputLimit(input);
+  if (!cutoff.includes("the answer was cut off at the model's output limit")) {
+    throw new Error('Expected the delivered answer to explain the cutoff.');
+  }
   return [
     `Pending work\n${byDefault.answer}`,
     `.answerLayer(false)\n${off.answer}`,
     `Timeout and coverage gap\n${detailed.answer}`,
     `Result cut\n${cut}`,
+    `Output cutoff\n${cutoff}`,
   ].join('\n\n');
 }
 // #endregion answer-standing-default
@@ -151,6 +156,22 @@ async function cutLogAnswer(message: string) {
   }
 }
 // #endregion recorded-result-cut
+
+// #region answer-output-limit
+async function answerAtOutputLimit(message: string): Promise<string> {
+  const agent = Agent.create({
+    provider: mock({ reply: 'The report contains', stopReason: 'max_tokens' }),
+    model: 'mock',
+  }).build();
+  try {
+    const answer = await agent.run({ message });
+    if (typeof answer !== 'string') throw new Error('Unexpected pause.');
+    return answer;
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion answer-output-limit
 
 if (isCliEntry(import.meta.url)) {
   run(meta.defaultInput ?? '')
