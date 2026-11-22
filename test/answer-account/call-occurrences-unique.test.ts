@@ -56,9 +56,37 @@ afterEach(() => {
 });
 
 const TOOLS = ['inventory', 'review'] as const;
+const DISPLAY_NAMES = { inventory: 'the inventory check', review: 'the review' };
 const RESULTS = ['rows', 'empty', 'absence', 'coverage', 'partial', 'pending', 'failure'] as const;
 const CHECKED = ['the selected inventory'];
 const GAP = ['items awaiting import'];
+
+type GapOwners = readonly [writer: (typeof TOOLS)[number], historicalPeer?: (typeof TOOLS)[number]];
+
+// Warnings by seed and leg. The first tool wrote the retained gap text. A
+// second name captures the prior clause's additional author of the same text.
+const GAP_CLAUSES: readonly (readonly (GapOwners | null)[])[] = [
+  [],
+  [],
+  [['inventory']],
+  [['review'], ['inventory', 'review']],
+  [],
+  [['inventory']],
+  [['inventory']],
+  [['review', 'inventory']],
+  [['inventory', 'review'], ['review']],
+  [null, ['inventory']],
+  [['review']],
+  [['review']],
+  [['review']],
+  [['inventory', 'review'], ['inventory']],
+  [null, ['review']],
+  [['inventory']],
+  [['review', 'inventory']],
+  [],
+  [['review'], ['inventory']],
+  [null, ['inventory', 'review']],
+];
 
 function resultFor(slot: number) {
   switch (RESULTS[slot]) {
@@ -124,7 +152,7 @@ function generatedRun(seed: number) {
       TOOLS.map((name) =>
         defineTool({
           name,
-          displayName: name === 'inventory' ? 'the inventory check' : 'the review',
+          displayName: DISPLAY_NAMES[name],
           description: 'Read one inventory fixture.',
           inputSchema: {
             type: 'object',
@@ -170,6 +198,47 @@ function digest(value: unknown, runs: ReadonlyMap<string, string>): string {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
+function priorWarning(text: string | null, owners: GapOwners | null | undefined): string | null {
+  if (owners == null) return text;
+  if (text === null) throw new Error('Expected a rendered warning.');
+  const [writer, peer] = owners;
+  const author = DISPLAY_NAMES[writer];
+  const priorAuthors = peer === undefined ? author : `${author} and ${DISPLAY_NAMES[peer]}`;
+  const clause = 'declared ground that was not checked or cannot be covered';
+  const current = `${author} ${clause} (did not check “items awaiting import”)`;
+  expect(text).toContain(current);
+  return text.replace(current, `${priorAuthors} ${clause}`);
+}
+
+function priorAssessment(assessment: ReturnType<typeof assessAnswer>) {
+  const reasons = assessment.reasons.map(({ detail, ...reason }) => {
+    const { source } = reason;
+    if (source.kind !== 'calls') {
+      expect(detail).toBeUndefined();
+      return reason;
+    }
+    const hasFailure = source.calls.some((call) => call.outcome === 'failed');
+    if (reason.reason === 'coverage-gap') {
+      expect(detail).toEqual({
+        toolSays: {
+          entries: [{ kind: 'notChecked', text: GAP[0], toolName: source.calls[0]?.toolName }],
+          omitted: 0,
+        },
+      });
+    } else {
+      expect(detail).toEqual(
+        reason.reason === 'call-not-completed' && hasFailure ? { category: 'unknown' } : undefined,
+      );
+    }
+    const calls = source.calls.map(({ category, ...call }) => {
+      expect(category).toBe(call.outcome === 'failed' ? 'unknown' : undefined);
+      return call;
+    });
+    return { ...reason, source: { ...source, calls } };
+  });
+  return { ...assessment, reasons };
+}
+
 it.each(SEEDS)(
   'preserves the complete account and standing for unique call IDs, seed %i',
   async (seed) => {
@@ -188,11 +257,22 @@ it.each(SEEDS)(
         // New templates advance the vocabulary for unmatched evidence and withheld results.
         // Compare every old sentence and pointer against the pinned version-18 account.
         expect(account.templates).toEqual({ set: 'answer-account', version: 22 });
+        const owners = GAP_CLAUSES[seed]?.[captures.length];
+        const { limitsBlock } = account.facts;
+        // The exact warning and reason detail are asserted before projecting the
+        // original account and assessment shape for the historical digest.
         captures.push({
-          account: { ...account, templates: { ...account.templates, version: 18 } },
-          answer: typeof result === 'string' ? result : 'paused',
-          recordedAssessment: assessAnswer(recording),
-          liveAssessment: await agent.assessment(),
+          account: {
+            ...account,
+            facts: {
+              ...account.facts,
+              limitsBlock: { ...limitsBlock, value: priorWarning(limitsBlock.value, owners) },
+            },
+            templates: { ...account.templates, version: 18 },
+          },
+          answer: priorWarning(typeof result === 'string' ? result : 'paused', owners),
+          recordedAssessment: priorAssessment(assessAnswer(recording)),
+          liveAssessment: priorAssessment(await agent.assessment()),
         });
         return result;
       } finally {

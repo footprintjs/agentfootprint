@@ -45,6 +45,7 @@ import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './type
 
 export { assumedValuesSourceOf } from './assumedValues.js';
 export { settledSiblingWitness } from './callStandingWords.js';
+export { reasonUsesToolWords } from './reasonDetails.js';
 export {
   sourcesByReason,
   standingFactsOf,
@@ -115,7 +116,7 @@ export function standingLineSaid(
  * plain words a model can write too, so a reader of the answer text never
  * matches on them alone: the answer account finds the line by rebuilding the
  * WHOLE line from the run's record (`answer-account/facts/standing.ts` ·
- * `readAnswer`, through `standingLineOf`).
+ * `standingLines`, through `standingLineOf`).
  */
 export const STANDING_LINE_OPENINGS: Readonly<Record<AnswerAssessment['standing'], string>> =
   Object.freeze({

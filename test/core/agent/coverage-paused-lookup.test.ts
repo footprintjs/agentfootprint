@@ -76,6 +76,11 @@ const DECL = {
   tryInsteadTool: { tool: 'fabric_inventory', why: 'it lists what each fabric holds' },
 };
 
+const LOOKUP_WARNING_REASONS =
+  'a tool said there is ground it did not check or cannot cover ' +
+  '(did not check “fabric B”; cannot cover “hosts outside the collected inventory”); ' +
+  'a tool said nothing matched (suggested “Ask which fabric the host is cabled to, then look there.”).';
+
 const QUESTION = {
   id: 'fabric',
   question: 'Which fabric is the host cabled to?',
@@ -432,10 +437,7 @@ describe('integration: a raising lookup files what a returning lookup files', ()
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe(
-        answer.content +
-          '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-      );
+      expect(done).toBe(`${answer.content}\n\n---\n\nNot sure — ${LOOKUP_WARNING_REASONS}`);
       expect(payloadsOf(raised, 'agentfootprint.tools.absent')).toHaveLength(1);
       expect(JSON.stringify(stateOf(raised.agent).coverageDeclared)).toBe(rowsAtRaise);
       // The paused call's served result is the person's answer — never the envelope.
@@ -612,10 +614,7 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(
-      answer.content +
-        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-    );
+    expect(done).toBe(`${answer.content}\n\n---\n\nNot sure — ${LOOKUP_WARNING_REASONS}`);
     expect(filedUnder).toEqual(['outer_proc/c1']);
   });
 
@@ -687,10 +686,7 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(
-      answer.content +
-        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-    );
+    expect(done).toBe(`${answer.content}\n\n---\n\nNot sure — ${LOOKUP_WARNING_REASONS}`);
     expect(filedUnder).toEqual(['outer/c1']);
   });
 });
@@ -763,10 +759,7 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe(
-        'done\n\n---\n\nNot sure — a call did not run; ' +
-          'a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-      );
+      expect(done).toBe(`done\n\n---\n\nNot sure — a call did not run; ${LOOKUP_WARNING_REASONS}`);
 
       // The settlement is unchanged: c3 never ran, and its result is the sentence.
       expect(ran).toEqual(['c1', 'd1']);

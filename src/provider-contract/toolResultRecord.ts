@@ -1,4 +1,12 @@
-import type { AttemptCategory } from 'footprintjs';
+/** Engine failure kinds available on the framework-only part of a tool result. */
+export type ToolFailureCategory =
+  | 'timeout'
+  | 'rate-limited'
+  | 'server'
+  | 'network'
+  | 'auth'
+  | 'permanent'
+  | 'unknown';
 
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
@@ -23,5 +31,5 @@ export interface ToolResultRecord {
    */
   readonly toolResultExecution?: 'not-entered' | 'threw' | 'returned' | 'returned-unserved';
   /** The engine category of a thrown tool failure, without the error text. */
-  readonly toolFailureCategory?: AttemptCategory;
+  readonly toolFailureCategory?: ToolFailureCategory;
 }

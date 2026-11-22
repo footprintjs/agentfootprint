@@ -8,11 +8,11 @@ import {
 /** The account's standing and its witnesses, read by the shared assessment fold. */
 
 import { assumedLinesFor } from '../../core/agent/arguments/serve.js';
-import { reasonUsesToolWords } from '../../core/agent/assessment/reasonDetails.js';
 import { foldState } from '../../core/agent/assessment/assess.js';
 import {
   assessmentDataFrom,
   assumedValuesSourceOf,
+  reasonUsesToolWords,
   recordedStandingLinesOf,
   rewrittenBehind,
   settledSiblingWitness,

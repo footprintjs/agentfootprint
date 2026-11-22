@@ -372,9 +372,9 @@ exactly what it always did.
 
 ### toolFailureCategory?
 
-> `readonly` `optional` **toolFailureCategory?**: `AttemptCategory`
+> `readonly` `optional` **toolFailureCategory?**: `ToolFailureCategory`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L26)
+Defined in: [src/provider-contract/toolResultRecord.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L34)
 
 The engine category of a thrown tool failure, without the error text.
 
@@ -398,7 +398,7 @@ For `role: 'tool'` — the tool name this result corresponds to.
 
 > `readonly` `optional` **toolResultDisposition?**: `"withheld"` \| `"rewritten"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L18)
+Defined in: [src/provider-contract/toolResultRecord.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L26)
 
 A host's after-tool rule withheld or replaced this result. Kept off the provider wire.
 
@@ -412,7 +412,7 @@ A host's after-tool rule withheld or replaced this result. Kept off the provider
 
 > `readonly` `optional` **toolResultExecution?**: `"not-entered"` \| `"threw"` \| `"returned"` \| `"returned-unserved"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L24)
+Defined in: [src/provider-contract/toolResultRecord.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L32)
 
 Whether the tool was entered and returned. `returned-unserved` means a
 framework refusal or cap replaced its return. Host rules are recorded
@@ -428,7 +428,7 @@ separately by `toolResultDisposition`. Artifact tickets carry the result.
 
 > `readonly` `optional` **toolResultOrigin?**: `"not-entered"` \| `"input-cancelled"` \| `"outcome-unknown"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L16)
+Defined in: [src/provider-contract/toolResultRecord.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L24)
 
 Producer-owned notice origin, recorded only under findings admission.
 `not-entered` means the producer refused before tool.execute; an error

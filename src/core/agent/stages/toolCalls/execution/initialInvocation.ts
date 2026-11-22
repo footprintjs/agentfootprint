@@ -117,7 +117,7 @@ export async function invokeInitialTool(
   >,
   frame: InvokeInitialToolFrame,
 ) {
-  let failureCategory: ReturnType<typeof classifyToolFailure>;
+  let toolInvoked = false;
   const declarationCall = {
     toolName: frame.tc.name,
     toolCallId: frame.tc.id,
@@ -242,15 +242,11 @@ export async function invokeInitialTool(
     let returned = false;
     try {
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
-      try {
-        frame.outcome.result = await frame.tool.execute(
-          frame.callArguments.callArgs,
-          executionContext,
-        );
-      } catch (error) {
-        failureCategory = classifyToolFailure(error, deps.answerLayer);
-        throw error;
-      }
+      toolInvoked = true;
+      frame.outcome.result = await frame.tool.execute(
+        frame.callArguments.callArgs,
+        executionContext,
+      );
       returned = true;
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
@@ -549,12 +545,13 @@ export async function invokeInitialTool(
     frame.outcome.toolStatus = undefined;
     frame.execution.executeThrew = frame.execution.executed;
     if (
-      failureCategory !== undefined &&
+      toolInvoked &&
       frame.execution.toolResultExecution === 'threw' &&
       !paused &&
       halt === undefined
     ) {
-      frame.execution.toolFailureCategory = failureCategory;
+      const category = classifyToolFailure(err, deps.answerLayer);
+      if (category !== undefined) frame.execution.toolFailureCategory = category;
     }
     frame.outcome.result =
       (innerHalt !== undefined && paused ? innerHalt.tellLLM : undefined) ??

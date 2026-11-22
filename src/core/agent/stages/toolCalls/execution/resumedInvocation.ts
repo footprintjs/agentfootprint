@@ -153,7 +153,7 @@ export function buildResumedInvocation(
       wantedMeta = resolution.wanted;
     }
     let executed = false;
-    let failureCategory: ReturnType<typeof classifyToolFailure>;
+    let toolInvoked = false;
     let negativeDispatch: NegativeDispatch | undefined;
     /** What the run ended with, when it ended before the call could run. */
     let ended: Error | undefined;
@@ -304,12 +304,8 @@ export function buildResumedInvocation(
       let returned = false;
       try {
         recordToolEntry(scope, seen?.callOccurrenceKey);
-        try {
-          result = await tool.execute(args, executionContext);
-        } catch (error) {
-          failureCategory = classifyToolFailure(error, deps.answerLayer);
-          throw error;
-        }
+        toolInvoked = true;
+        result = await tool.execute(args, executionContext);
         returned = true;
       } finally {
         await binding.close(env.signal);
@@ -540,11 +536,12 @@ export function buildResumedInvocation(
         };
       }
       if (
-        failureCategory !== undefined &&
+        toolInvoked &&
         seen?.toolResultExecution === 'threw' &&
         binding.halt === undefined
       ) {
-        seen.toolFailureCategory = failureCategory;
+        const category = classifyToolFailure(err, deps.answerLayer);
+        if (category !== undefined) seen.toolFailureCategory = category;
       }
       // A tool that threw still RAN, and may have done half its work; the
       // after-tool moment exists precisely for the rules that care about that.

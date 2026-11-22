@@ -1,4 +1,5 @@
 import type { AttemptCategory } from 'footprintjs';
+import type { ToolFailureCategory } from '../../../provider-contract/toolResultRecord.js';
 import { TOOL_BATCH_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { isRecord } from './record.js';
 import { toolRanOf } from '../../../semantics/toolRan.js';
@@ -69,6 +70,14 @@ export function assessmentCallOutcome(message: Readonly<Record<string, unknown>>
   );
 }
 
+/** The import-free provider port must mirror the engine vocabulary exactly. */
+type FailureCategoryTable = [AttemptCategory, ToolFailureCategory] extends [
+  ToolFailureCategory,
+  AttemptCategory,
+]
+  ? Record<AttemptCategory, true>
+  : never;
+
 const failureCategories = {
   timeout: true,
   'rate-limited': true,
@@ -77,7 +86,7 @@ const failureCategories = {
   auth: true,
   permanent: true,
   unknown: true,
-} satisfies Record<AttemptCategory, true>;
+} satisfies FailureCategoryTable;
 
 /** Read only the engine's closed category vocabulary from a retained record. */
 export function readToolFailureCategory(value: unknown): AttemptCategory | undefined {
