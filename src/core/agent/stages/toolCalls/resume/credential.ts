@@ -237,6 +237,7 @@ export function buildResumeCredential(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
               !consentSettled.clean || resultReplaced,
+              { scope, counts: consentEnvelope?.outputCounts, disposition: toolResultDisposition },
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...toolFailureCategoryField(

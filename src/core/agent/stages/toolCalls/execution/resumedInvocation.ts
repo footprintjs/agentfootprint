@@ -10,7 +10,6 @@ import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
 import { isPauseRequest } from '../../../../pause.js';
 import {
   type ToolResultStatus,
-  readToolResultEnvelope,
   explainStatusOnlyNearMiss,
   unknownStatusOf,
   unknownStatusWarning,
@@ -43,6 +42,7 @@ import type {
 } from '../contracts/operations/resumedInvocation.js';
 import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js';
+import { readExecutedResult } from './readExecutedResult.js';
 
 /** Compose the existing resumed invocation without changing its catch/cleanup boundary. */
 export function buildResumedInvocation(
@@ -337,7 +337,7 @@ export function buildResumedInvocation(
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
       // judged exactly as an inline one's.
-      const envelope = readToolResultEnvelope(result);
+      const envelope = readExecutedResult(tool, result, codeRunSlot);
       if (envelope !== undefined) {
         // Coverage (this release) before the ceiling, for the same reason the
         // effects are judged even when the payload is refused: the boundary a

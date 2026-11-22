@@ -1,5 +1,5 @@
-**Fold** — categories supported by recorded tool failures.
+**Fold** — failure categories and measured clipping supported by recorded tool outcomes.
 
-`failureCategoryReader` compares admitted settlements with the retained recording. Only a failed settlement with the same occurrence, row position, and validated category contributes evidence. A unique history match may carry that category to the call. The overall reason carries a category when its witnesses contain exactly one distinct recorded category.
+`outcomeDetailReader` compares admitted settlements with the retained recording. The occurrence and settlement position must agree. A unique history match places the detail on the tool message. After eviction the reason can still cite the settlement itself. A failure reason carries an engine category when its witnesses contain exactly one distinct recorded category.
 
-Each projection returns only the closed engine category. Older rows without a category, withheld evidence, and ambiguous history matches supply no category for that witness.
+An incomplete or unfinished call carries clipping counts when its witnesses all point to the same measured settlement and the retained record still shows the same status and counts. If several calls contribute to the reason, a single count would misstate what it covers. Redacted, withheld, and rewritten output supplies no counts.

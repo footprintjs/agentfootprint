@@ -10,7 +10,7 @@ import type { AgentState } from '../../../types.js';
 import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { boundArgsOf } from '../access/bindings.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
-import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
+import type { ExecutedToolResultEnvelope } from '../contracts/callCells.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import { recordDecisions } from '../../../middleware/ledger.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
@@ -116,7 +116,7 @@ export function buildResumeAsk(
      *  path knows about itself (a decline or a chain-deny never ran). */
     let stepToolRan = false;
     /** The effects envelope the resumed call returned (9.19.0). */
-    let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeEnvelope: ExecutedToolResultEnvelope | undefined;
     let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
@@ -338,6 +338,7 @@ export function buildResumeAsk(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
               !stepToolRan || resultReplaced,
+              { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...toolFailureCategoryField(

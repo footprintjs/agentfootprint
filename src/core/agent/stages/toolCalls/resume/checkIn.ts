@@ -12,7 +12,7 @@ import { boundArgsOf } from '../access/bindings.js';
 import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
-import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
+import type { ExecutedToolResultEnvelope } from '../contracts/callCells.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
@@ -134,7 +134,7 @@ export function buildResumeCheckIn(
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
-    let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeEnvelope: ExecutedToolResultEnvelope | undefined;
     let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
@@ -289,6 +289,7 @@ export function buildResumeCheckIn(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
               !stepToolRan || resultReplaced,
+              { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
             ...toolFailureCategoryField(

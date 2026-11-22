@@ -257,6 +257,11 @@ export function landCallResult(
         frame.execution.haltContext !== undefined ||
         frame.skillRoute.skillRejected ||
         frame.delivery.modelResultCapped,
+      {
+        scope,
+        counts: frame.outcome.toolEnvelope?.outputCounts,
+        disposition: frame.delivery.toolResultDisposition,
+      },
     ),
     ...(frame.delivery.toolResultDisposition !== undefined && {
       toolResultDisposition: frame.delivery.toolResultDisposition,
