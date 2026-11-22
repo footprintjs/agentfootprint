@@ -61,7 +61,12 @@ import type { CredentialNeed } from '../identity/types.js';
 import type { CheckInDemand } from './checkin.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools/tools.js';
 import { toolSessionKey, type TeardownScope } from '../tools/toolSessions.js';
-import { clip, codeRunStatus, outcomeLine } from './codeRunnerTool/output.js';
+import {
+  clipOutput,
+  codeRunStatus,
+  outcomeLine,
+  type CodeOutputCounts,
+} from './codeRunnerTool/output.js';
 
 /** The scopes a code session can be held under. `'shutdown'` is not one: it is
  *  when everything goes, not a thing to key a session on. */
@@ -449,14 +454,7 @@ export function codeRunnerTool(
         ...(ctx.signal && { signal: ctx.signal }),
       });
       const minted = await mintProducedFiles(result, ctx);
-      const { text, truncated } = render(
-        result,
-        maxOutputChars,
-        name,
-        minted,
-        stagedNames,
-        wantNames,
-      );
+      const { text, counts } = render(result, maxOutputChars, name, minted, stagedNames, wantNames);
       // Facts only, never `args.code` — generated code quotes the data it was
       // handed, so the code is the one part of this that must not travel.
       const facts: CodeRunFacts = {
@@ -464,7 +462,7 @@ export function codeRunnerTool(
         language,
         stagedInputs: stagedNames.length,
         outputChars: text.length,
-        truncated,
+        truncated: counts !== undefined,
         // The runner's own verdict, or nothing: a runner that reported no
         // outcome leaves no `ok` here, so the record never says "ran clean"
         // on the strength of silence.
@@ -482,7 +480,7 @@ export function codeRunnerTool(
       const slot = (ctx as { readonly [CODE_RUN_SLOT]?: CodeRunSlot })[CODE_RUN_SLOT];
       if (slot !== undefined) {
         slot.facts = facts;
-        const status = codeRunStatus(result, truncated);
+        const status = codeRunStatus(result, counts !== undefined);
         slot.result = status === undefined ? undefined : { runs: codeRuns, text, status };
       }
       codeRuns.set(ctx.toolCallId, facts);
@@ -842,7 +840,7 @@ function render(
   minted?: ReadonlyMap<string, FileMintOutcome>,
   staged: readonly string[] = [],
   declared: readonly string[] = [],
-): { readonly text: string; readonly truncated: boolean } {
+): { readonly text: string; readonly counts?: CodeOutputCounts } {
   const parts: string[] = [];
   // What was put IN, stated before what came out. A model whose code failed to
   // find a file needs to know the file was staged and under which name — the
@@ -882,10 +880,9 @@ function render(
         `${declared.map((n) => `'${n}'`).join(' / ')}.]`,
     );
   }
-  const stdout = clip(result.stdout, maxOutputChars, result.truncated?.stdout === true);
-  const stderr = clip(result.stderr, maxOutputChars, result.truncated?.stderr === true);
-  if (stdout.text.length > 0) parts.push(stdout.text);
-  if (stderr.text.length > 0) parts.push(`stderr:\n${stderr.text}`);
+  const { stdout, stderr, counts } = clipOutput(result, maxOutputChars);
+  if (stdout.length > 0) parts.push(stdout);
+  if (stderr.length > 0) parts.push(`stderr:\n${stderr}`);
   const outcome = outcomeLine(result, toolName);
   if (outcome !== undefined) parts.push(outcome);
   for (const artifact of result.artifacts ?? []) {
@@ -913,5 +910,5 @@ function render(
     // only one of them tells the model what to do next.
     parts.push('(the code ran and printed nothing — print the value you want returned)');
   }
-  return { text: parts.join('\n'), truncated: stdout.truncated || stderr.truncated };
+  return { text: parts.join('\n'), ...(counts !== undefined && { counts }) };
 }

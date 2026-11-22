@@ -46,22 +46,25 @@ export function outcomeLine(result: CodeResult, toolName: string): string | unde
 }
 
 /** Clip to the tool's ceiling, and SAY SO — including a cut the runner made. */
-export function clip(
+function clip(
   text: string,
   max: number,
   alreadyCutUpstream: boolean,
 ): {
   readonly text: string;
+  readonly kept: number;
   readonly truncated: boolean;
 } {
   const cutHere = text.length > max;
   const shown = cutHere ? text.slice(0, max) : text;
-  if (!cutHere && !alreadyCutUpstream) return { text: shown, truncated: false };
+  const kept = shown.length;
+  if (!cutHere && !alreadyCutUpstream) return { text: shown, kept, truncated: false };
   const of = cutHere ? text.length : undefined;
   return {
+    kept,
     truncated: true,
     text:
-      `${shown}\n[truncated: showing ${shown.length}${of !== undefined ? ` of ${of}` : ''} ` +
+      `${shown}\n[truncated: showing ${kept}${of !== undefined ? ` of ${of}` : ''} ` +
       'characters. Re-run printing a summary, a slice, or an aggregate instead of the whole ' +
       'value.]',
   };
@@ -80,4 +83,48 @@ export function codeRunStatus(
   )
     return 'failure';
   return truncated ? 'partial' : undefined;
+}
+
+export interface CodeOutputCounts {
+  readonly kept: number;
+  readonly total?: number;
+  readonly unit: 'characters';
+}
+
+/** Render each stream and describe the cut, excluding presentation text from the counts. */
+export function clipOutput(
+  result: Pick<CodeResult, 'stdout' | 'stderr' | 'truncated'>,
+  max: number,
+): { readonly stdout: string; readonly stderr: string; readonly counts?: CodeOutputCounts } {
+  const { stdout: rawOut, stderr: rawErr, truncated } = result;
+  const upstreamOut = truncated?.stdout === true;
+  const upstreamErr = truncated?.stderr === true;
+  const stdout = clip(rawOut, max, upstreamOut);
+  const stderr = clip(rawErr, max, upstreamErr);
+  const rendered = { stdout: stdout.text, stderr: stderr.text };
+  if (!stdout.truncated && !stderr.truncated) return rendered;
+
+  let total: number | undefined = rawOut.length + rawErr.length;
+  if (upstreamOut || upstreamErr) {
+    // One adapter field can name the only upstream-clipped stream. When both
+    // streams were cut, that field reports a maximum rather than a sum.
+    const reported = Object.getOwnPropertyDescriptor(truncated ?? {}, 'ofChars')?.value;
+    const clipped = upstreamOut ? rawOut : rawErr;
+    const other = upstreamOut ? rawErr : rawOut;
+    total =
+      upstreamOut !== upstreamErr &&
+      typeof reported === 'number' &&
+      Number.isSafeInteger(reported) &&
+      reported > clipped.length
+        ? reported + other.length
+        : undefined;
+  }
+  return {
+    ...rendered,
+    counts: {
+      kept: stdout.kept + stderr.kept,
+      ...(total !== undefined && Number.isSafeInteger(total) && { total }),
+      unit: 'characters',
+    },
+  };
 }
