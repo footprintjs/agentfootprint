@@ -1,7 +1,7 @@
 import type { AttemptCategory } from 'footprintjs';
 import { namedCalls } from '../../../lib/displayName.js';
 import { readToolSettlements } from '../recordedCalls.js';
-import type { AssessmentPointer, AssessmentReasonSource } from './types.js';
+import type { AssessmentPointer, AssessmentReasonDetail, AssessmentReasonSource } from './types.js';
 
 export type EvictedCallOutcomes = Readonly<Record<'refused' | 'failed' | 'settled', number>> & {
   readonly categories: ReadonlyMap<AttemptCategory, number>;
@@ -147,4 +147,14 @@ export function unfinishedWorkClause(
   if (clauses.length === 0) return fallback;
   if (unnamed > 0) clauses.push(fallback);
   return clauses.join(' and ');
+}
+
+/** Add the recorded printed-output measurement to its call's warning. */
+export function withPrintedOutputCounts(
+  clause: string,
+  counts: AssessmentReasonDetail['counts'],
+): string {
+  if (counts === undefined || !('kept' in counts) || counts.unit !== 'characters') return clause;
+  const amount = counts.total === undefined ? counts.kept : `${counts.kept} of ${counts.total}`;
+  return `${clause} (kept ${amount} printed characters)`;
 }

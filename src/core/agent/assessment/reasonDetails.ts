@@ -4,7 +4,7 @@ import { REASONS } from './reasons.js';
 import type { Gathered } from './gathered.js';
 import { reasonSourceOf, type SourceRead } from './sources.js';
 import { coverageUsesToolWords, declaredWordsReader } from './results/coverage/stage.js';
-import { failureCategoryReader, type FailureSettlement } from './results/outcomes/stage.js';
+import { outcomeDetailReader, type OutcomeSettlement } from './results/outcomes/stage.js';
 import { periodUsesToolWords, periodWordsOccurrenceReader } from './results/periods/stage.js';
 import type {
   AnswerAssessment,
@@ -24,7 +24,7 @@ export function reasonUsesToolWords(reason: AssessmentReason): boolean {
   return coverageUsesToolWords(reason) || periodUsesToolWords(reason);
 }
 
-interface DetailRead extends ReturnType<typeof failureCategoryReader> {
+interface DetailRead extends ReturnType<typeof outcomeDetailReader> {
   readonly wordsFor: (
     reason: AssessmentReason,
     witness: readonly AssessmentPointer[],
@@ -37,11 +37,11 @@ export function readReasonDetails(
   calls: readonly HistoryCall[],
   coverage: readonly CoverageRow[],
   state: Readonly<Record<string, unknown>>,
-  settlements: ReadonlyMap<string, FailureSettlement> | undefined,
+  settlements: ReadonlyMap<string, OutcomeSettlement> | undefined,
   retain: RetainedReasonState,
 ): DetailRead {
-  const failures = g.fired.has('call-not-completed') ? settlements : undefined;
-  const outcomes = failureCategoryReader(calls, failures, () =>
+  const measured = g.fired.has('call-not-completed') || g.fired.has('work-not-finished');
+  const outcomes = outcomeDetailReader(calls, measured ? settlements : undefined, () =>
     retain('settledToolCalls', state.settledToolCalls),
   );
   const readWords = [...g.fired.keys()].some(reasonUsesToolWords)
@@ -66,9 +66,14 @@ function detailOf(
     const toolSays = read.wordsFor(reason, witness);
     return toolSays === undefined ? undefined : { toolSays };
   }
-  if (reason !== 'call-not-completed') return undefined;
-  const category = read.failureFor(witness);
-  return category === undefined ? undefined : { category };
+  if (reason !== 'call-not-completed' && reason !== 'work-not-finished') return undefined;
+  const category = reason === 'call-not-completed' ? read.failureFor(witness) : undefined;
+  const counts = read.countsFor(witness);
+  if (category === undefined && counts === undefined) return undefined;
+  return {
+    ...(category !== undefined && { category }),
+    ...(counts !== undefined && { counts }),
+  };
 }
 
 /** Assemble the standing value and project only facts from the witnesses that fired. */

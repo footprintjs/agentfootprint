@@ -1,10 +1,12 @@
 import type { AttemptCategory } from 'footprintjs';
 import { readOwnList } from '../../../lib/boundedJson.js';
 import { readCallOccurrenceKey, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
+import type { ToolOutputCounts } from '../../../provider-contract/toolResultRecord.js';
 import type { PeriodVerdict } from '../../../semantics/coverage/period.js';
 import { MAX_ENTERED_TOOL_CALLS } from '../honesty/enteredToolCalls.js';
-import { isRecord } from './record.js';
 import { readToolFailureCategory } from './execution.js';
+import { isRecord } from './record.js';
+import { readToolOutputCounts } from './outputCounts.js';
 
 /** The bounded, content-free result of settling one admitted call occurrence. */
 export interface RecordedToolSettlement {
@@ -14,6 +16,7 @@ export interface RecordedToolSettlement {
   readonly outcome?: 'refused' | 'failed' | 'settled';
   readonly failureCategory?: AttemptCategory;
   readonly reportedStatus?: 'partial' | 'pending';
+  readonly outputCounts?: ToolOutputCounts;
   readonly empty?: 'declared-absent' | 'empty-undeclared';
   readonly gap?: true;
   readonly rewrittenPeriod?: PeriodVerdict;
@@ -61,6 +64,12 @@ function settlementRow(value: unknown): RecordedToolSettlement | undefined {
     !optional(periods, rewrittenPeriod)
   )
     return undefined;
+  const outputCounts =
+    execution === 'returned' &&
+    delivery === 'native' &&
+    (outcome === 'failed' || reportedStatus === 'partial')
+      ? readToolOutputCounts(Object.getOwnPropertyDescriptor(value, 'outputCounts')?.value)
+      : undefined;
   // A failed read of this optional field must not erase the legacy settlement.
   const failureCategory =
     execution === 'threw' && outcome === 'failed'
@@ -73,6 +82,7 @@ function settlementRow(value: unknown): RecordedToolSettlement | undefined {
     ...(outcome !== undefined && { outcome }),
     ...(failureCategory !== undefined && { failureCategory }),
     ...(reportedStatus !== undefined && { reportedStatus }),
+    ...(outputCounts !== undefined && { outputCounts }),
     ...(empty !== undefined && { empty }),
     ...(gap === true && { gap }),
     ...(rewrittenPeriod !== undefined && { rewrittenPeriod }),
