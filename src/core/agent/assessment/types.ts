@@ -19,6 +19,7 @@
  */
 
 import type { ContextErrorKind } from '../../../integrity/finding/types.js';
+import type { HeldSpan } from '../../../semantics/coverage/periodRow.js';
 
 /**
  * A leaf of the committed record a reason or a check rests on — an RFC 6901
@@ -249,6 +250,17 @@ export interface AssessmentReasonDetail {
   /** The one engine category represented by the classified failures for this reason. */
   readonly category?: import('footprintjs').AttemptCategory;
   readonly toolSays?: AssessmentToolWords;
+  /** What was kept, and the original total when the writer measured it. */
+  readonly counts?: {
+    readonly kept: number;
+    readonly total?: number;
+    readonly unit: string;
+  };
+  /** The requested and held spans when the source retained both. */
+  readonly period?: {
+    readonly asked: HeldSpan['queried'];
+    readonly held: HeldSpan['held'];
+  };
 }
 
 /**
