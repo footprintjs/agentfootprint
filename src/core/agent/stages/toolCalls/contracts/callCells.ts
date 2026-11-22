@@ -1,3 +1,4 @@
+import type { PendingDatasetLimits } from '../../../honesty/libraryResultLimits.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type {
   ReadToolResultEnvelope,
@@ -32,11 +33,12 @@ export interface CallArguments {
   chainedArgs: ToolArgs;
 }
 
-export interface CallExecution {
+export interface CallExecution extends PendingDatasetLimits {
   resultFinalizer?: NativeResultFinalizer;
   denied: boolean;
   executed: boolean;
   toolResultExecution?: LLMMessage['toolResultExecution'];
+  toolFailureCategory?: LLMMessage['toolFailureCategory'];
   submittedProgram: unknown;
   executeThrew: boolean;
   ranCode: CodeRunFacts | undefined;

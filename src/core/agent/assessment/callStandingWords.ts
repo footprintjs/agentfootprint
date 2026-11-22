@@ -1,13 +1,17 @@
+import type { AttemptCategory } from 'footprintjs';
 import { namedCalls } from '../../../lib/displayName.js';
 import { readToolSettlements } from '../recordedCalls.js';
 import type { AssessmentPointer, AssessmentReasonSource } from './types.js';
 
-export type EvictedCallOutcomes = Readonly<Record<'refused' | 'failed' | 'settled', number>>;
+export type EvictedCallOutcomes = Readonly<Record<'refused' | 'failed' | 'settled', number>> & {
+  readonly categories: ReadonlyMap<AttemptCategory, number>;
+};
 
 /** Read outcomes only for settlement rows that the assessment used as witnesses. */
 export function evictedCallOutcomes(
   witnesses: readonly AssessmentPointer[] | undefined,
   state: Readonly<Record<string, unknown>> | undefined,
+  retainedSettlements?: () => unknown,
 ): EvictedCallOutcomes | undefined {
   if (witnesses === undefined || state === undefined) return undefined;
   const indices = new Set<number>();
@@ -19,9 +23,23 @@ export function evictedCallOutcomes(
   if (indices.size === 0) return undefined;
   const read = (key: string): unknown => Object.getOwnPropertyDescriptor(state, key)?.value;
   const ledger = readToolSettlements(read('settledToolCalls'), read('settledToolCallsComplete'));
-  const counts = { refused: 0, failed: 0, settled: 0 };
-  for (const { index, fact } of ledger?.byKey.values() ?? []) {
-    if (indices.has(index) && fact.outcome !== undefined) counts[fact.outcome]++;
+  const visible =
+    retainedSettlements === undefined ? ledger : readToolSettlements(retainedSettlements(), true);
+  const categories = new Map<AttemptCategory, number>();
+  const counts = { refused: 0, failed: 0, settled: 0, categories };
+  for (const [key, { index, fact }] of ledger?.byKey ?? []) {
+    if (!indices.has(index) || fact.outcome === undefined) continue;
+    counts[fact.outcome]++;
+    const category = fact.failureCategory;
+    const served = visible?.byKey.get(key);
+    if (
+      fact.outcome === 'failed' &&
+      category !== undefined &&
+      served?.index === index &&
+      served.fact.failureCategory === category
+    ) {
+      categories.set(category, (categories.get(category) ?? 0) + 1);
+    }
   }
   return counts;
 }
@@ -29,6 +47,55 @@ export function evictedCallOutcomes(
 /** The committed settlement marker identifies an undispatched sibling. */
 export function settledSiblingWitness(witness: AssessmentPointer): boolean {
   return witness.kind === 'history' && witness.path === '/notDispatched/pausedCall/toolCallId';
+}
+
+const FAILURE_WORDS = {
+  timeout: 'timed out',
+  'rate-limited': 'hit a rate limit',
+  server: 'failed with a server error',
+  network: 'failed with a network error',
+  auth: 'failed an access check',
+  permanent: 'failed with a non-retryable error',
+  unknown: undefined,
+} satisfies Readonly<Record<AttemptCategory, string | undefined>>;
+
+type Calls = Extract<AssessmentReasonSource, { kind: 'calls' }>['calls'];
+
+function failedCallClauses(
+  calls: Calls,
+  displayNames: ReadonlyMap<string, string>,
+  evicted: EvictedCallOutcomes | undefined,
+): string[] {
+  const clauses: string[] = [];
+  let recorded = evicted?.failed ?? 0;
+  const words = (tool: string) => displayNames.get(tool);
+  for (const category of Object.keys(FAILURE_WORDS) as AttemptCategory[]) {
+    const phrase = FAILURE_WORDS[category];
+    if (phrase === undefined) continue;
+    const classified = calls.filter((call) => call.category === category);
+    const count = evicted?.categories.get(category) ?? 0;
+    if (classified.length + count === 0) continue;
+    recorded -= count;
+    const who =
+      namedCalls(classified, count, words) ??
+      (classified.length + count === 1 ? 'a call' : 'calls');
+    clauses.push(`${who} ${phrase}`);
+  }
+  const unknown = calls.filter(
+    (call) => call.category === undefined || call.category === 'unknown',
+  );
+  const count = unknown.length + recorded;
+  if (count > 0) {
+    const who = namedCalls(unknown, recorded, words);
+    clauses.push(
+      who === undefined
+        ? count === 1
+          ? 'a call failed'
+          : 'calls failed'
+        : `${who} did not complete (failed)`,
+    );
+  }
+  return clauses;
 }
 
 /** Group calls by the outcome the fold recorded. Registered names stay private. */
@@ -47,9 +114,9 @@ export function callNotCompletedClause(
     const count = calls.length + recorded;
     if (count === 0) return [];
     unnamed -= recorded;
+    if (outcome === 'failed') return failedCallClauses(calls, displayNames, evicted);
     const who = namedCalls(calls, recorded, (tool) => displayNames.get(tool));
     if (who !== undefined) return [`${who} did not complete (${outcome})`];
-    if (outcome === 'failed') return [count === 1 ? 'a call failed' : 'calls failed'];
     return [count === 1 ? 'a call was refused' : 'calls were refused'];
   });
   const evictedSiblings = evicted?.settled ?? 0;

@@ -43,6 +43,7 @@ export const fields1 = {
   modelOverrides: true,
   modelResult: true,
   moment: true,
+  naiveCount: true,
   name: true,
   namespace: true,
   narrowBy: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   terminatedBy: true,
   text: true,
   thinking: true,
-  thinkingBlocks: true,
 } as const;

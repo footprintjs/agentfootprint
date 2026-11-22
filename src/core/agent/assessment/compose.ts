@@ -38,12 +38,15 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import { declaredStandingClause } from './declaredStandingWords.js';
 import { callNotCompletedClause, unfinishedWorkClause } from './callStandingWords.js';
 import type { StandingNames } from './standingFacts.js';
+import { LIBRARY_LIMIT_WORDS, INCOMPLETE_LIMIT_WORDS } from './results/library-did/stage.js';
 import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
 
 export { assumedValuesSourceOf } from './assumedValues.js';
 export { settledSiblingWitness } from './callStandingWords.js';
+export { reasonUsesToolWords } from './reasonDetails.js';
 export {
   sourcesByReason,
   standingFactsOf,
@@ -113,8 +116,8 @@ export function standingLineSaid(
  * The line's first words, one per standing — the owner's words. They are
  * plain words a model can write too, so a reader of the answer text never
  * matches on them alone: the answer account finds the line by rebuilding the
- * WHOLE line from the run's record (`answer-account/account.ts` ·
- * `readAnswer`, through `standingLineOf`).
+ * WHOLE line from the run's record (`answer-account/facts/standing.ts` ·
+ * `standingLines`, through `standingLineOf`).
  */
 export const STANDING_LINE_OPENINGS: Readonly<Record<AnswerAssessment['standing'], string>> =
   Object.freeze({
@@ -174,7 +177,7 @@ const ASSESSMENTS: readonly AnswerAssessment['assessment'][] = [
 ];
 
 // FOLD · the one reader of the standing as data off a RECORD (`turn_end.answerAssessment`)
-// consumers read this and never re-derive it: answer-account/account.ts · appendedStandingLine
+// consumers read this and never re-derive it: answer-account/facts/standing.ts · appendedStandingLine
 /**
  * The standing as data read back off a record — `turn_end.answerAssessment`
  * as a recording holds it — or `undefined` unless every field is in this
@@ -256,6 +259,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
     'a value a call ran with was taken from a result the model itself had set aside',
   'call-not-completed': 'a call did not complete',
   'result-withheld': 'a result was kept out by a rule',
+  ...LIBRARY_LIMIT_WORDS,
   'work-not-finished': 'a tool reported unfinished work',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
@@ -275,6 +279,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'script-unmatched':
     'a script shown in the answer matches no submission of this turn on the record',
   'stopped-early': 'the run stopped before the model finished',
+  'answer-output-limit': "the answer was cut off at the model's output limit",
   'steps-unfinished': "the answer came before the skill's declared steps finished",
   'step-skipped': 'a declared step was skipped',
   'negative-prose-unverified': 'model prose was not verified for negative claims',
@@ -331,7 +336,7 @@ const NAMED_REASON_WORDS: Readonly<
 };
 
 // FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
-// consumers read this and never re-derive it: answer-account/account.ts · appendedStandingLine
+// consumers read this and never re-derive it: answer-account/facts/standing.ts · appendedStandingLine
 /**
  * The words a record kept for the line — registered tool name → display name,
  * as `turn_end.standingLineNames` holds them — or `undefined` unless every
@@ -352,7 +357,7 @@ export function standingNamesFrom(value: unknown): ReadonlyMap<string, string> |
 
 // FOLD · the one choice of which display names the standing line may use
 // consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage (to name
-// the calls and file the names on turn_end), answer-account/account.ts · appendedStandingLine
+// the calls and file the names on turn_end), answer-account/facts/standing.ts · appendedStandingLine
 // (the line rebuilt from the names the record kept)
 /**
  * The display names the line may use for `a`: for every tool a `not-sure`
@@ -372,9 +377,10 @@ export function standingDisplayNames(
   const tools = [
     ...a.reasons.flatMap((r) => (r.source.kind === 'calls' ? r.source.calls : [])),
     ...assumed,
+    ...a.reasons.flatMap((r) => r.detail?.toolSays?.entries ?? []),
   ].map((c) => c.toolName);
   for (const tool of tools) {
-    if (names.has(tool)) continue;
+    if (tool === undefined || names.has(tool)) continue;
     const words = displayNameOf(tool);
     if (words !== undefined) names.set(tool, words);
   }
@@ -414,8 +420,11 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
-  if (reason === 'check-unreachable' && names?.legacyConflictGap) {
-    const causes = ['the record holds a conflict whose readings it cannot place'];
+  if (reason === 'check-unreachable' && (names?.legacyConflictGap || names?.libraryLimitsGap)) {
+    const causes: string[] = [];
+    if (names.legacyConflictGap)
+      causes.push('the record holds a conflict whose readings it cannot place');
+    if (names.libraryLimitsGap) causes.push(INCOMPLETE_LIMIT_WORDS);
     if (names.dispatchProofGap) causes.push(DISPATCH_PROOF_WORDS);
     if (names.answerValidationGap) causes.push(REASON_WORDS[reason]);
     return causes.join('; ');
@@ -446,6 +455,10 @@ function reasonClause(
   if (named === undefined || names === undefined || source?.kind !== 'calls') {
     return REASON_WORDS[reason];
   }
+  const words = names.details?.get(reason)?.toolSays;
+  if (words !== undefined) {
+    return declaredStandingClause(REASON_WORDS[reason], named, words, names.displayNames);
+  }
   const who = namedCalls(source.calls, source.unnamed ?? 0, (tool) => names.displayNames.get(tool));
   return who === undefined ? REASON_WORDS[reason] : named(who);
 }
@@ -473,12 +486,11 @@ function reasonClauses(
       }
       continue;
     }
-    if (counted < MAX_CLAUSES) {
-      clauses.push(reasonClause(reason, names));
-      counted += 1;
-    } else {
-      folded += 1;
-    }
+    const details = names?.libraryLimits?.get(reason) ?? [reasonClause(reason, names)];
+    const room = MAX_CLAUSES - counted;
+    clauses.push(...details.slice(0, room));
+    counted += Math.min(details.length, room);
+    folded += Math.max(0, details.length - room);
   }
   if (folded > 0) clauses.push(`… and ${folded} more (in the run record)`);
   return clauses;
@@ -556,14 +568,18 @@ export function recordedStandingLinesOf(
   rewritten: boolean,
   names?: StandingNames,
 ): readonly string[] {
-  const current = standingLineOf(data, assumed, rewritten, names);
-  if (names === undefined) return [current];
+  if (names === undefined) return [standingLineOf(data, assumed, rewritten)];
   const { legacyConflictGap, ...earlierFacts } = names;
+  const versions = [names];
   if (
-    !legacyConflictGap ||
-    !data.reasons.includes('check-unreachable') ||
-    (!names.dispatchProofGap && !names.answerValidationGap)
-  )
-    return [current];
-  return [current, standingLineOf(data, assumed, rewritten, earlierFacts)];
+    legacyConflictGap &&
+    data.reasons.includes('check-unreachable') &&
+    (names.dispatchProofGap || names.answerValidationGap)
+  ) {
+    versions.push(earlierFacts);
+  }
+  if (names.details?.size) {
+    versions.push(...versions.map((facts) => ({ ...facts, details: new Map() })));
+  }
+  return [...new Set(versions.map((facts) => standingLineOf(data, assumed, rewritten, facts)))];
 }

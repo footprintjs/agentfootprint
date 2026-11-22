@@ -157,6 +157,7 @@ export const words0 = {
   answer: true,
   'answer-check-failed': true,
   'answer-checks': true,
+  'answer-output-limit': true,
   answered: true,
   anthropic: true,
   'anthropic-messages': true,
@@ -301,5 +302,4 @@ export const words0 = {
   final: true,
   findings: true,
   flagged: true,
-  fn: true,
 } as const;

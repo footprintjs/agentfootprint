@@ -11,6 +11,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../src/observe.js';
+import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION } from '../../src/answer-account/templates.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 
 /** Complete account, returned answer and assessments from f44f95bcb7c5, in seed order. */
@@ -56,9 +57,36 @@ afterEach(() => {
 });
 
 const TOOLS = ['inventory', 'review'] as const;
+const DISPLAY_NAMES = { inventory: 'the inventory check', review: 'the review' };
 const RESULTS = ['rows', 'empty', 'absence', 'coverage', 'partial', 'pending', 'failure'] as const;
 const CHECKED = ['the selected inventory'];
 const GAP = ['items awaiting import'];
+
+type GapOwners = readonly [first: (typeof TOOLS)[number], second?: (typeof TOOLS)[number]];
+
+// Tools whose retained gap text appears in the warning, by seed and leg.
+const GAP_CLAUSES: readonly (readonly (GapOwners | null)[])[] = [
+  [],
+  [],
+  [['inventory']],
+  [['review'], ['inventory', 'review']],
+  [],
+  [['inventory']],
+  [['inventory']],
+  [['review', 'inventory']],
+  [['inventory', 'review'], ['review']],
+  [null, ['inventory']],
+  [['review']],
+  [['review']],
+  [['review']],
+  [['inventory', 'review'], ['inventory']],
+  [null, ['review']],
+  [['inventory']],
+  [['review', 'inventory']],
+  [],
+  [['review'], ['inventory']],
+  [null, ['inventory', 'review']],
+];
 
 function resultFor(slot: number) {
   switch (RESULTS[slot]) {
@@ -124,7 +152,7 @@ function generatedRun(seed: number) {
       TOOLS.map((name) =>
         defineTool({
           name,
-          displayName: name === 'inventory' ? 'the inventory check' : 'the review',
+          displayName: DISPLAY_NAMES[name],
           description: 'Read one inventory fixture.',
           inputSchema: {
             type: 'object',
@@ -170,6 +198,54 @@ function digest(value: unknown, runs: ReadonlyMap<string, string>): string {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
+function priorWarning(text: string | null, owners: GapOwners | null | undefined): string | null {
+  if (owners == null) return text;
+  if (text === null) throw new Error('Expected a rendered warning.');
+  const [writer, peer] = owners;
+  const author = DISPLAY_NAMES[writer];
+  const priorAuthors = peer === undefined ? author : `${author} and ${DISPLAY_NAMES[peer]}`;
+  const clause = 'declared ground that was not checked or cannot be covered';
+  const entry = 'did not check “items awaiting import”';
+  const current =
+    peer === undefined
+      ? `${author} ${clause} (${entry})`
+      : `a tool said there is ground it did not check or cannot cover (${author} ${entry}; ${DISPLAY_NAMES[peer]} ${entry})`;
+  expect(text).toContain(current);
+  return text.replace(current, `${priorAuthors} ${clause}`);
+}
+
+function priorAssessment(assessment: ReturnType<typeof assessAnswer> | undefined) {
+  if (assessment === undefined)
+    throw new Error('Expected the seeded run to expose its assessment.');
+  const reasons = assessment.reasons.map(({ detail, ...reason }) => {
+    const { source } = reason;
+    if (source.kind !== 'calls') {
+      expect(detail).toBeUndefined();
+      return reason;
+    }
+    const hasFailure = source.calls.some((call) => call.outcome === 'failed');
+    if (reason.reason === 'coverage-gap') {
+      const toolNames = [...new Set(source.calls.map(({ toolName }) => toolName))];
+      expect(detail).toEqual({
+        toolSays: {
+          entries: toolNames.map((toolName) => ({ kind: 'notChecked', text: GAP[0], toolName })),
+          omitted: 0,
+        },
+      });
+    } else {
+      expect(detail).toEqual(
+        reason.reason === 'call-not-completed' && hasFailure ? { category: 'unknown' } : undefined,
+      );
+    }
+    const calls = source.calls.map(({ category, ...call }) => {
+      expect(category).toBe(call.outcome === 'failed' ? 'unknown' : undefined);
+      return call;
+    });
+    return { ...reason, source: { ...source, calls } };
+  });
+  return { ...assessment, reasons };
+}
+
 it.each(SEEDS)(
   'preserves the complete account and standing for unique call IDs, seed %i',
   async (seed) => {
@@ -185,14 +261,28 @@ it.each(SEEDS)(
           if (!runs.has(meta.runId)) runs.set(meta.runId, `recorded-run-${runs.size + 1}`);
         }
         const account = accountForAnswer(recording);
-        // New templates advance the vocabulary for unmatched evidence and withheld results.
-        // Compare every old sentence and pointer against the pinned version-18 account.
-        expect(account.templates).toEqual({ set: 'answer-account', version: 22 });
+        // Check the current vocabulary stamp and compare every old sentence
+        // and pointer against the pinned version-18 account.
+        expect(account.templates).toEqual({
+          set: 'answer-account',
+          version: ANSWER_ACCOUNT_TEMPLATE_SET_VERSION,
+        });
+        const owners = GAP_CLAUSES[seed]?.[captures.length];
+        const { limitsBlock } = account.facts;
+        // The exact warning and reason detail are asserted before projecting the
+        // original account and assessment shape for the historical digest.
         captures.push({
-          account: { ...account, templates: { ...account.templates, version: 18 } },
-          answer: typeof result === 'string' ? result : 'paused',
-          recordedAssessment: assessAnswer(recording),
-          liveAssessment: await agent.assessment(),
+          account: {
+            ...account,
+            facts: {
+              ...account.facts,
+              limitsBlock: { ...limitsBlock, value: priorWarning(limitsBlock.value, owners) },
+            },
+            templates: { ...account.templates, version: 18 },
+          },
+          answer: priorWarning(typeof result === 'string' ? result : 'paused', owners),
+          recordedAssessment: priorAssessment(assessAnswer(recording)),
+          liveAssessment: priorAssessment(await agent.assessment()),
         });
         return result;
       } finally {

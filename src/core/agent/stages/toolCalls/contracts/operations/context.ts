@@ -1,3 +1,4 @@
+import type { PendingDatasetLimits } from '../../../../honesty/libraryResultLimits.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { LLMMessage } from '../../../../../../provider-contract/types.js';
@@ -14,6 +15,8 @@ export interface ToolContextOperations {
     toolCallId: string,
     capturePublications?: boolean,
     callOccurrenceKey?: CallOccurrenceKey,
+    binding?: OuterCallBinding,
+    pending?: PendingDatasetLimits,
   ) => Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'>;
   readonly toolDispatchCtx: (
     scope: TypedScope<AgentState>,

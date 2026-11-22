@@ -711,6 +711,9 @@ describe('UNIT — the reason table', () => {
       'coverage-gap',
       'empty-undeclared',
       'call-not-completed',
+      'result-cut',
+      'placed-unread',
+      'times-without-zone',
       'result-withheld',
       'work-not-finished',
       // Honesty layer 3 (the results layer's period verdicts, step 7b).
@@ -729,6 +732,7 @@ describe('UNIT — the reason table', () => {
       // Code in an answer (`code: 'match'`): a shown block matches no submission of the turn.
       'script-unmatched',
       'stopped-early',
+      'answer-output-limit',
       // Honesty layer 4 (the answer layer's procedure witness rows, step 6).
       'steps-unfinished',
       'step-skipped',

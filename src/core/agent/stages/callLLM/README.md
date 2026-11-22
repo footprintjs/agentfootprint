@@ -31,6 +31,10 @@ row. Observing a retry of the same request leaves one row. The original
 provider hooks still carry request observations and close when the invocation
 settles.
 
+`liveChunks.ts` emits an attempt's thinking and visible text in provider order.
+It uses the served-event policy and withholds live chunks when the call protects
+draft output. The call stage still owns the terminal response and cancellation.
+
 ## Dispatch lifetime
 
 Every attempt carries the run’s signal on its

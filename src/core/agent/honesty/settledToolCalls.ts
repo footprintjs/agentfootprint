@@ -9,6 +9,7 @@ import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.j
 import { declaredByValue, readEmptiness } from '../emptiness.js';
 import {
   assessmentCallOutcome,
+  recordedToolFailureCategory,
   recordedToolExecution,
   readRewrittenToolResult,
   type RecordedToolSettlement,
@@ -47,10 +48,12 @@ export function toolSettlementOf(
       : readNotDispatched(message.notDispatched) === 'settled'
       ? 'settled'
       : assessmentCallOutcome({ ...message });
+  const failureCategory = recordedToolFailureCategory(message);
   const settlement: RecordedToolSettlement = {
     callOccurrenceKey,
     execution,
     ...(outcome !== undefined && { outcome }),
+    ...(failureCategory !== undefined && { failureCategory }),
   };
   if (execution !== 'returned') return settlement;
 
@@ -110,6 +113,10 @@ export function seedToolEvidence(
 ): void {
   const continuing = resume !== undefined && !resume.appendsUserTurn;
   const recovered = continuing ? resume.toolTurnEvidence : undefined;
+  if (recovered?.libraryResultLimits !== undefined) {
+    scope.libraryResultLimits = [...recovered.libraryResultLimits];
+  }
+  if (recovered?.libraryResultLimitsIncomplete === true) scope.libraryResultLimitsIncomplete = true;
   seedEnteredToolCalls(scope, deps, continuing, recovered?.entries);
   seedToolSettlements(
     scope,

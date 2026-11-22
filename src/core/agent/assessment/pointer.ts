@@ -17,3 +17,10 @@ export const historyPointer = (result: TurnResult): AssessmentPointer => ({
   path: result.toolCallId !== undefined ? '/toolCallId' : '/role',
   ...(result.toolCallId !== undefined && { toolCallId: result.toolCallId }),
 });
+
+/** The first array slot a state witness names, when it has a canonical index. */
+export function witnessRowIndex(path: string): number | undefined {
+  const first = /^\/(0|[1-9]\d*)(?:\/|$)/.exec(path)?.[1];
+  const index = Number(first);
+  return Number.isSafeInteger(index) ? index : undefined;
+}

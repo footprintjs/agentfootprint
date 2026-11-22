@@ -380,9 +380,12 @@ request's `threadId` and `runId`, and three decisions that are yours:
   The record's result for a failed call is the thrown text, which may hold a
   connection string, a path or a provider's response. `'served'` sends the
   record's own result.
-- **`reasoning`** — the model's chain of thought (`REASONING_*`), from the served
-  thinking events. Off unless you set `reasoning: true`; whether a person may read
-  it is a product decision.
+- **`reasoning`** — emits `REASONING_*` frames from the served thinking events
+  when you set `reasoning: true`. Live deltas supply text as it arrives, and
+  completed thinking blocks can supply text when a call had no live deltas.
+  The option admits provider summaries, raw reasoning and unclassified thinking.
+  For a summary-only UI, select explicitly labeled deltas at the
+  [native event boundary](doc:streaming#show-live-thinking-summaries).
 
 A failure is described in FIXED words: `RUN_ERROR` repeats the served
 `error.fatal` only when it is one of the library's fixed sentences (a provider

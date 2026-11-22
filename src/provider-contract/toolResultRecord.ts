@@ -5,6 +5,16 @@ export interface ToolOutputCounts {
   readonly unit: 'characters';
 }
 
+/** Engine failure kinds available on the framework-only part of a tool result. */
+export type ToolFailureCategory =
+  | 'timeout'
+  | 'rate-limited'
+  | 'server'
+  | 'network'
+  | 'auth'
+  | 'permanent'
+  | 'unknown';
+
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
   /**
@@ -29,4 +39,6 @@ export interface ToolResultRecord {
   readonly toolResultExecution?: 'not-entered' | 'threw' | 'returned' | 'returned-unserved';
   /** Printed output counts from an admitted native return. Kept off the provider wire. */
   readonly toolOutputCounts?: ToolOutputCounts;
+  /** The engine category of a thrown tool failure, without the error text. */
+  readonly toolFailureCategory?: ToolFailureCategory;
 }

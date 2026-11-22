@@ -1,4 +1,4 @@
-import type { ThinkingBlock } from './dependencyTypes.js';
+import type { ThinkingBlock, ThinkingDeltaKind } from './dependencyTypes.js';
 
 // embedding.* (1)
 export interface EmbeddingGeneratedPayload {
@@ -14,30 +14,17 @@ export interface EmbeddingGeneratedPayload {
 // stream.thinking.* (2) + agent.thinking.* (1) — v2.14 extended thinking
 
 /**
- * Emitted (v2.14) per provider chunk that carries thinking-content
- * tokens. Lives in `stream.*` domain — parallel to `stream.token` for
- * visible-content tokens.
- *
- * **Provider behavior:**
- * - Anthropic: fires for every `content_block_delta` with
- *   `delta.type === 'thinking_delta'`. May fire 100s of times per turn.
- * - OpenAI o1/o3: NEVER fires (OpenAI doesn't stream reasoning content
- *   as of early 2026). Only `thinking_end` fires at response completion.
- * - Custom providers: fire when `ThinkingHandler.parseChunk()` returns
- *   a non-empty `thinkingDelta`.
- *
- * **Default consumer behavior:** thinking_delta events are emitted but
- * not surfaced to end users unless a consumer explicitly subscribes to
- * this event (e.g. for reasoning-as-it-streams UIs).
- *
- * **Sensitive data:** `content` is raw model thinking text. Use
- * `RedactionPolicy.thinkingPatterns` (Phase 3) to scrub before audit-log
- * adapters fire. Same risk profile as `stream.token`.
+ * One live fragment from a provider's `LLMChunk.thinkingDelta`, served through
+ * the run's redaction policy. Providers that deliver thinking only at completion
+ * can still produce `thinking_end`. Hosts explicitly choose whether to display
+ * these fragments.
  */
 export interface StreamThinkingDeltaPayload {
   readonly iteration: number;
   readonly tokenIndex: number;
-  /** Per-chunk delta text, NOT accumulated. ~10–50 chars typical. */
+  /** The adapter's request-based classification. Older records may omit it. */
+  readonly kind?: ThinkingDeltaKind;
+  /** Only this chunk's text. Signatures and redacted blocks have no live delta. */
   readonly content: string;
 }
 

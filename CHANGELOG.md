@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.3.0] - 2026-11-22
+
+### Added
+
+- **Watch provider thinking as it streams.** Agent stream subscribers receive Anthropic's requested summaries and structured reasoning from Ollama as they arrive. Live deltas carry `provider-summary`, `raw-reasoning`, or `unclassified`, so apps can choose what to display. The run's redaction policy applies to the served event.
+
+### Fixed
+
+- **The answer explains when the framework limited a tool result.** Its standing and replay now report a result cut short, a result stored by reference that no tool read, and dataset timestamps without a zone. The warning uses the tool’s display name and recorded counts when available.
+
+- **Findings and evidence recovery can continue after a signed tool call.** AgentFootprint preserves the findings context that preceded each signed response, including when resuming the same request after a transport error. Revisions append feedback while keeping the signed prefix stable. A revision governed by an enforcing answer check uses witnessed completion to withdraw the tools.
+
 ## [16.2.1] - 2026-11-21
 
 ### Fixed

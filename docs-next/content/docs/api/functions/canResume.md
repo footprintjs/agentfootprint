@@ -6,7 +6,7 @@ title: canResume
 
 > **canResume**(`error`): `boolean`
 
-Defined in: [src/core/runCheckpoint.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L259)
+Defined in: [src/core/runCheckpoint.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L264)
 
 Can `agent.resumeOnError(checkpoint)` plausibly succeed for this failure?
 
