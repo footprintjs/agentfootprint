@@ -29,7 +29,7 @@ answer one question — a bare `[]` reads "not sure" (`empty-undeclared`), an
 
 ## Warning flow
 
-The live stage and replay run these steps in the same order over one committed record. Repeated folders reflect the established check and witness order.
+The live stage and replay run the same flow over one committed record. This table lists the direct calls in chart.ts. Repeated folders reflect the established check and witness order.
 
 <!-- answer-warning-stages:start -->
 
