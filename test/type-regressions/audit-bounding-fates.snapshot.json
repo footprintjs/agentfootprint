@@ -265,6 +265,7 @@
     "kind": "kept",
     "label": "chars",
     "mediaType": "kept",
+    "naiveCount": "kept",
     "origin.runId": "kept",
     "origin.toolCallId": "kept",
     "parentRefs[]": "kept",

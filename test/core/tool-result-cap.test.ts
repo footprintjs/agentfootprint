@@ -116,6 +116,27 @@ describe('capToolResult — the marker', () => {
 // ─── P2 Boundary ─────────────────────────────────────────────────────
 
 describe('capToolResult — boundaries', () => {
+  it('measures the retained head, cap and original text without treating a tool-shaped marker as a cut', () => {
+    const text = '"'.repeat(2_000);
+    const { value, cut } = capToolResult(text, { toolName: 'log', maxChars: 300 });
+    expect(cut).toEqual({
+      maxChars: 300,
+      keptChars: (value as { head: string }).head.length,
+      totalChars: text.length,
+    });
+    expect(capToolResult('x'.repeat(200), { toolName: 'log', maxChars: 5 }).cut).toEqual({
+      maxChars: 5,
+      keptChars: 0,
+      totalChars: 200,
+    });
+    expect(
+      capToolResult(
+        { truncated: true, head: '', reason: 'claimed by tool' },
+        { toolName: 'log', maxChars: 300 },
+      ).cut,
+    ).toBeUndefined();
+  });
+
   it('passes a result of exactly the cap, and replaces one char more', () => {
     expect(capToolResult('a'.repeat(100), { toolName: 't', maxChars: 100 }).truncated).toBe(false);
     expect(capToolResult('a'.repeat(101), { toolName: 't', maxChars: 100 }).truncated).toBe(true);

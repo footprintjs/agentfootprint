@@ -80,6 +80,25 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'value-contingent': argument({ source: 'result', setAside: 'open' }),
   'unsupported-argument': integrity('unsupported-argument'),
   'call-not-completed': { message: NOT_ENTERED },
+  'result-cut': {
+    state: {
+      libraryResultLimits: [
+        { ...CALL, kind: 'result-cut', keptChars: 10, maxChars: 100, totalChars: 300 },
+      ],
+    },
+  },
+  'placed-unread': {
+    state: {
+      libraryResultLimits: [{ ...CALL, kind: 'placed-unread', ref: 'art_0123456789012345678901' }],
+    },
+  },
+  'times-without-zone': {
+    state: {
+      libraryResultLimits: [
+        { ...CALL, kind: 'times-without-zone', naiveCount: 1, ref: 'art_0123456789012345678901' },
+      ],
+    },
+  },
   'result-withheld': { message: DENIED },
   'work-not-finished': { message: { reportedStatus: 'pending' } },
   'coverage-gap': coverage('ledger', { notChecked: ['late arrivals'] }),
@@ -205,7 +224,9 @@ describe('standing reason admission by witness', () => {
         // witnesses describe native data that this replacement no longer carries.
         expect
           .soft(reasonsOf(seed, REWRITTEN), 'served rewrite')
-          .toEqual(reason === 'sources-conflict' ? [reason] : []);
+          .toEqual(
+            ['sources-conflict', 'result-cut', 'placed-unread'].includes(reason) ? [reason] : [],
+          );
       }
     },
   );
@@ -232,6 +253,25 @@ describe('standing reason admission by witness', () => {
       }
     },
   );
+
+  it('a bounded result-limit record cannot silently clear the standing', () => {
+    for (const state of [
+      { libraryResultLimitsIncomplete: true },
+      { libraryResultLimits: new Array(2_000) },
+    ]) {
+      const assessment = assessmentOf({ state }, RETURNED);
+      expect(assessment.standing).toBe('not-sure');
+      expect(assessment.reasons.map(({ reason }) => reason)).toEqual(['check-unreachable']);
+      expect(
+        standingLineOf(
+          assessmentDataOf(assessment),
+          [],
+          false,
+          standingFactsOf(assessment, new Map()),
+        ),
+      ).toContain("the record could not keep every limit on this turn's tool results");
+    }
+  });
 
   it('an incomplete entry record says which check could not reach a verdict', () => {
     const assessment = assessmentOf(

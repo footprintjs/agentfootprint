@@ -232,6 +232,38 @@ describe('the axis on the time layer (T2) — integration', () => {
     );
   });
 
+  it('counts the time cells in stored JSON, including serialized accessor values', async () => {
+    const store = inMemoryArtifacts();
+    const put = async (data: unknown[]) =>
+      (
+        await store.put(SCOPE, {
+          kind: 'rows',
+          mediaType: 'application/json',
+          data,
+          timeAxis: HOURLY,
+        })
+      ).meta;
+    const wall = '2026-09-14T10:00:00';
+    const inherited = Object.create({ hour: wall });
+    const hidden = Object.defineProperty({}, 'hour', { value: wall });
+    expect((await put([inherited, hidden, { hour: wall }])).naiveCount).toBe(1);
+    expect(
+      (await put([{ hour: wall, toJSON: () => ({ hour: '2026-09-14T10:00:00Z' }) }])).naiveCount,
+    ).toBeUndefined();
+    expect(
+      (
+        await put([
+          { hour: wall },
+          {
+            get hour() {
+              return wall;
+            },
+          },
+        ])
+      ).naiveCount,
+    ).toBe(2);
+  });
+
   it('a stored dataset read back and viewed: UTC points, the stored bytes unchanged', async () => {
     const store = inMemoryArtifacts();
     const rows = [
@@ -293,17 +325,25 @@ describe.skipIf(!sqliteAvailable)('sqliteArtifacts — the column is added in pl
       };
       const raw = new DatabaseSync(file);
       raw.exec('ALTER TABLE af_artifacts DROP COLUMN time_axis');
+      raw.exec('ALTER TABLE af_artifacts DROP COLUMN naive_count');
       raw.close();
 
       const reopened = sqliteArtifacts({ file });
       expect((await reopened.head(SCOPE, old.ref))?.timeAxis).toBeUndefined();
+      expect((await reopened.head(SCOPE, old.ref))?.naiveCount).toBeUndefined();
       const { meta } = await reopened.put(SCOPE, {
         kind: 'dataset/rows',
         mediaType: 'application/json',
-        data: [],
+        data: [
+          { hour: '2026-01-01T10:00' },
+          { hour: '2026-01-01T10:00Z' },
+          { hour: 'invalid' },
+          {},
+        ],
         timeAxis: HOURLY,
       });
       expect((await reopened.head(SCOPE, meta.ref))?.timeAxis).toEqual(HOURLY);
+      expect((await reopened.head(SCOPE, meta.ref))?.naiveCount).toBe(1);
       reopened.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

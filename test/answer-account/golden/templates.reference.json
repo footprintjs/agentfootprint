@@ -1855,6 +1855,42 @@
   ],
   "source": "library"
  },
+ "howSure.reason.libraryLimitsIncomplete@1": {
+  "text": "The record could not keep every limit on this turn's tool results.",
+  "parts": [
+   {
+    "text": "The record could not keep every limit on this turn's tool results."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.resultCut@1": {
+  "text": "A tool result was cut.",
+  "parts": [
+   {
+    "text": "A tool result was cut."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.placedUnread@1": {
+  "text": "A tool result was stored by reference and not read.",
+  "parts": [
+   {
+    "text": "A tool result was stored by reference and not read."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.timesWithoutZone@1": {
+  "text": "Some times in a dataset have no zone.",
+  "parts": [
+   {
+    "text": "Some times in a dataset have no zone."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.workNotFinished@1": {
   "text": "2 calls reported unfinished work.",
   "parts": [
