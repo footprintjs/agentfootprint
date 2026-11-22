@@ -26,7 +26,16 @@ const RANDOM_LENGTH = 22;
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 /** The full shape, anchored: `art_` + exactly 22 base62 chars. */
-const REF_PATTERN = /^art_[A-Za-z0-9]{22}$/;
+const REF_GRAMMAR = `${ARTIFACT_REF_PREFIX}[A-Za-z0-9]{${RANDOM_LENGTH}}`;
+const REF_PATTERN = new RegExp(`^${REF_GRAMMAR}$`);
+// ECMAScript identifiers can continue with combining marks and join controls as well as letters.
+const IDENTIFIER_CHAR = String.raw`[$\p{ID_Continue}\u200C\u200D]`;
+const TEXT_REFS = new RegExp(`(?<!${IDENTIFIER_CHAR})${REF_GRAMMAR}(?!${IDENTIFIER_CHAR})`, 'gu');
+
+/** Exact, whole reference tokens, as they appeared in delivered text. */
+export function* artifactRefsInText(text: string): Iterable<string> {
+  for (const match of text.matchAll(TEXT_REFS)) yield match[0];
+}
 
 /**
  * Mint a fresh, opaque, never-content-derived ref.

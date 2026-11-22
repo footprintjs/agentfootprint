@@ -27,7 +27,7 @@ import { isArtifactRef } from './naming.js';
 import {
   computeArtifactDigest,
   decodeArtifactData,
-  encodeArtifactData,
+  envelopeOfSnapshot,
   type EncodedPayload,
 } from './payload.js';
 import {
@@ -142,7 +142,7 @@ export function inMemoryArtifacts(options: InMemoryArtifactsOptions = {}): InMem
     async put(scope, input): Promise<ArtifactPutResult> {
       const held = shelf(scope);
       const at = now();
-      const { meta } = await prepareArtifact(
+      const { meta, payload } = await prepareArtifact(
         input,
         (parent) => liveRow(scope, parent) !== undefined,
         retention,
@@ -161,7 +161,7 @@ export function inMemoryArtifacts(options: InMemoryArtifactsOptions = {}): InMem
         held.delete(swept.ref);
         if (swept.reason !== 'ttl') dropped++;
       }
-      held.set(meta.ref, { meta, payload: encodeArtifactData(input.data), lastAccessedAt: at });
+      held.set(meta.ref, { meta, payload: envelopeOfSnapshot(payload), lastAccessedAt: at });
       return { meta, swept: plan.swept };
     },
 

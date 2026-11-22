@@ -369,6 +369,7 @@ const CANARY_PAYLOAD: {
     kind: 'dataset/rows',
     mediaType: 'application/json',
     bytes: 512,
+    naiveCount: 0,
     label: leaf(c, 'label'),
     digest: 'sha-256:00ff',
     expiresAt: 1_700_000_000_000,

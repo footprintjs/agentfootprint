@@ -187,7 +187,7 @@ it.each(SEEDS)(
         const account = accountForAnswer(recording);
         // New templates advance the vocabulary for unmatched evidence and withheld results.
         // Compare every old sentence and pointer against the pinned version-18 account.
-        expect(account.templates).toEqual({ set: 'answer-account', version: 22 });
+        expect(account.templates).toEqual({ set: 'answer-account', version: 23 });
         captures.push({
           account: { ...account, templates: { ...account.templates, version: 18 } },
           answer: typeof result === 'string' ? result : 'paused',

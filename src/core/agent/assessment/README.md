@@ -306,7 +306,7 @@ history occurrence. The provider can use the same ID again.
 
 | Rests on | Reasons |
 |---|---|
-| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
+| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `result-cut`, `placed-unread`, `times-without-zone`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
 | `answer` | `value-contingent` (answer witness), `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
 | `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `step-skipped`, `result-withheld`, `check-unreachable` |
 
