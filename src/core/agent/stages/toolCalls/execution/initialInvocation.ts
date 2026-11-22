@@ -34,7 +34,6 @@ import {
   pauseNegativeCall,
 } from '../../../negativeClaims/capture.js';
 import {
-  readToolResultEnvelope,
   explainStatusOnlyNearMiss,
   unknownStatusOf,
   unknownStatusWarning,
@@ -49,6 +48,7 @@ import {
   repeatOf,
 } from '../../../../../tools/inputRequest.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { readExecutedResult } from './readExecutedResult.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -279,7 +279,7 @@ export async function invokeInitialTool(
     // `tool_end`) sees the CONTENT, exactly what a bare return
     // would have shown. The effects are judged below, after the
     // gates, in call order.
-    const envelope = readToolResultEnvelope(frame.outcome.result);
+    const envelope = readExecutedResult(frame.tool, frame.outcome.result, codeRunSlot);
     if (envelope !== undefined) {
       frame.outcome.toolEnvelope = envelope;
       frame.outcome.result = envelope.content;

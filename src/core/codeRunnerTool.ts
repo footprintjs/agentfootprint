@@ -61,6 +61,7 @@ import type { CredentialNeed } from '../identity/types.js';
 import type { CheckInDemand } from './checkin.js';
 import { defineTool, type Tool, type ToolExecutionContext } from '../tools/tools.js';
 import { toolSessionKey, type TeardownScope } from '../tools/toolSessions.js';
+import { clip, codeRunStatus, outcomeLine } from './codeRunnerTool/output.js';
 
 /** The scopes a code session can be held under. `'shutdown'` is not one: it is
  *  when everything goes, not a thing to key a session on. */
@@ -182,6 +183,11 @@ export const CODE_RUN_SLOT: unique symbol = Symbol.for('agentfootprint.tools.cod
 /** One dispatch's slot for the facts of the code it ran. @internal */
 export interface CodeRunSlot {
   facts?: CodeRunFacts;
+  result?: {
+    readonly runs: ReadonlyMap<string, CodeRunFacts>;
+    readonly text: string;
+    readonly status: 'failure' | 'partial';
+  };
 }
 
 /** What one finished code run is worth reporting, minus the code itself. */
@@ -443,15 +449,22 @@ export function codeRunnerTool(
         ...(ctx.signal && { signal: ctx.signal }),
       });
       const minted = await mintProducedFiles(result, ctx);
-      const rendered = render(result, maxOutputChars, name, minted, stagedNames, wantNames);
+      const { text, truncated } = render(
+        result,
+        maxOutputChars,
+        name,
+        minted,
+        stagedNames,
+        wantNames,
+      );
       // Facts only, never `args.code` — generated code quotes the data it was
       // handed, so the code is the one part of this that must not travel.
       const facts: CodeRunFacts = {
         tool: name,
         language,
         stagedInputs: stagedNames.length,
-        outputChars: rendered.length,
-        truncated: rendered.length >= maxOutputChars,
+        outputChars: text.length,
+        truncated,
         // The runner's own verdict, or nothing: a runner that reported no
         // outcome leaves no `ok` here, so the record never says "ran clean"
         // on the strength of silence.
@@ -467,9 +480,13 @@ export function codeRunnerTool(
       // The published map, by the call's id, exactly as always — and, for a
       // call an agent dispatched, that dispatch's own slot as well.
       const slot = (ctx as { readonly [CODE_RUN_SLOT]?: CodeRunSlot })[CODE_RUN_SLOT];
-      if (slot !== undefined) slot.facts = facts;
+      if (slot !== undefined) {
+        slot.facts = facts;
+        const status = codeRunStatus(result, truncated);
+        slot.result = status === undefined ? undefined : { runs: codeRuns, text, status };
+      }
       codeRuns.set(ctx.toolCallId, facts);
-      return rendered;
+      return text;
     },
   });
 
@@ -825,7 +842,7 @@ function render(
   minted?: ReadonlyMap<string, FileMintOutcome>,
   staged: readonly string[] = [],
   declared: readonly string[] = [],
-): string {
+): { readonly text: string; readonly truncated: boolean } {
   const parts: string[] = [];
   // What was put IN, stated before what came out. A model whose code failed to
   // find a file needs to know the file was staged and under which name — the
@@ -896,64 +913,5 @@ function render(
     // only one of them tells the model what to do next.
     parts.push('(the code ran and printed nothing — print the value you want returned)');
   }
-  return parts.join('\n');
-}
-
-/**
- * The one line that states how the run ended — built only from the fields the
- * runner supplied, and never contradicting one of them.
- *
- * - `[exit N]` appears only when N was supplied. An absent exit status is
- *   never written as one ("non-zero" was a guess the runner never made).
- * - A service error with no exit status is NOT a failed program: whether the
- *   code ran is not confirmed.
- * - A process ended before it exited says so, with the signal when known.
- * - An exit status that was supplied is never called missing: with
- *   `exitCode: 0` and no verdict, the run reported its exit, so there is
- *   nothing to add.
- * - Only when the runner supplied none of these is the outcome stated as
- *   unknown — UNKNOWN IS STATED, like a cut, because output alone cannot say
- *   a script finished: it can print its answer and then fail.
- */
-function outcomeLine(result: CodeResult, toolName: string): string | undefined {
-  if (result.ok === true) return undefined;
-  if (result.serviceError === true && result.exitCode === undefined) {
-    return (
-      `[not confirmed: the code runner flagged an error for the ${toolName} call this result ` +
-      'answers and reported no exit status, so whether that code ran is not known]'
-    );
-  }
-  if (result.exitCode !== undefined) {
-    if (result.exitCode === 0 && result.ok === undefined) return undefined;
-    return (
-      `[exit ${result.exitCode}] the code did not complete successfully — read stderr above ` +
-      'and fix it.'
-    );
-  }
-  if (result.ok === false) {
-    const ended =
-      result.terminatedBy === undefined ? '' : ` (terminated by ${result.terminatedBy})`;
-    return (
-      `[no exit status reported${ended}: the code of the ${toolName} call this result answers ` +
-      'did not run to completion — read stderr above]'
-    );
-  }
-  return (
-    `[exit status unknown: the code runner reported neither an exit status nor an error for ` +
-    `the ${toolName} call this result answers, so whether that code finished is not known]`
-  );
-}
-
-/** Clip to the tool's ceiling, and SAY SO — including a cut the runner made. */
-function clip(text: string, max: number, alreadyCutUpstream: boolean): { text: string } {
-  const cutHere = text.length > max;
-  const shown = cutHere ? text.slice(0, max) : text;
-  if (!cutHere && !alreadyCutUpstream) return { text: shown };
-  const of = cutHere ? text.length : undefined;
-  return {
-    text:
-      `${shown}\n[truncated: showing ${shown.length}${of !== undefined ? ` of ${of}` : ''} ` +
-      'characters. Re-run printing a summary, a slice, or an aggregate instead of the whole ' +
-      'value.]',
-  };
+  return { text: parts.join('\n'), truncated: stdout.truncated || stderr.truncated };
 }

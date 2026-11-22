@@ -11,10 +11,18 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, CodeSandboxError, codeRunnerTool, codeRunsOf } from '../../src/index.js';
+import {
+  Agent,
+  CodeSandboxError,
+  checkInApproved,
+  codeRunnerTool,
+  codeRunsOf,
+  isCheckInPause,
+} from '../../src/index.js';
 import { agentCoreCodeRunner } from '../../src/adapters/code/agentcore.js';
 import { localCodeRunner } from '../../src/adapters/code/local.js';
 import { mock } from '../../src/llm-providers.js';
+import { assessAnswer, recordRun } from '../../src/observe.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 import type { CodeResult, CodeRunner } from '../../src/provider-contract/types.js';
 import type { ToolExecutionContext } from '../../src/tools/tools.js';
@@ -81,6 +89,159 @@ describe('codeRunnerTool — what the model reads about an outcome', () => {
     });
     await known.execute({ code: 'x' }, ctx);
     expect(codeRunsOf(known)?.get('c1')?.ok).toBe(false);
+  });
+});
+
+const CLIP_ADVICE =
+  ' characters. Re-run printing a summary, a slice, or an aggregate instead of the whole value.]';
+const EXIT_ADVICE = 'the code did not complete successfully — read stderr above and fix it.';
+const UNKNOWN =
+  '[exit status unknown: the code runner reported neither an exit status nor an error for ' +
+  'the run_code call this result answers, so whether that code finished is not known]';
+const MODEL_ANSWER = 'Here is the result.';
+
+describe('code runner settlement from runner facts', () => {
+  const cases: {
+    label: string;
+    result: CodeResult;
+    read: string;
+    reason?: 'call-not-completed' | 'work-not-finished';
+    cut?: true;
+    resume?: true;
+    replace?: true;
+  }[] = [
+    {
+      label: 'an exact-limit success',
+      result: { stdout: '12345678', stderr: '', ok: true },
+      read: '12345678',
+    },
+    {
+      label: 'exit zero without an explicit verdict',
+      result: { stdout: 'fine', stderr: '', exitCode: 0 },
+      read: 'fine',
+    },
+    {
+      label: 'no outcome declaration',
+      result: { stdout: 'fine', stderr: '' },
+      read: `fine\n${UNKNOWN}`,
+    },
+    {
+      label: 'an exit-looking line from successful code',
+      result: { stdout: '[exit 7]', stderr: '', ok: true },
+      read: '[exit 7]',
+    },
+    {
+      label: 'a decorator that substitutes its own output for a failed result',
+      result: { stdout: '', stderr: 'bad', exitCode: 7 },
+      read: 'replacement',
+      replace: true,
+    },
+    {
+      label: 'a reported nonzero exit without an explicit verdict',
+      result: { stdout: 'rows', stderr: 'bad', exitCode: 7 },
+      read: `rows\nstderr:\nbad\n[exit 7] ${EXIT_ADVICE}`,
+      reason: 'call-not-completed',
+    },
+    {
+      label: 'a service error with program execution unconfirmed',
+      result: { stdout: 'down', stderr: '', ok: false, serviceError: true },
+      read:
+        'down\n[not confirmed: the code runner flagged an error for the run_code call this result ' +
+        'answers and reported no exit status, so whether that code ran is not known]',
+      reason: 'call-not-completed',
+    },
+    {
+      label: 'termination after check-in',
+      result: { stdout: 'rows', stderr: '', ok: false, terminatedBy: 'SIGTERM' },
+      read:
+        'rows\n[no exit status reported (terminated by SIGTERM): the code of the run_code call ' +
+        'this result answers did not run to completion — read stderr above]',
+      reason: 'call-not-completed',
+      resume: true,
+    },
+    {
+      label: 'clipping in the tool',
+      result: { stdout: 'abcdefghijkl', stderr: '', ok: true },
+      read: `abcdefgh\n[truncated: showing 8 of 12${CLIP_ADVICE}`,
+      reason: 'work-not-finished',
+      cut: true,
+    },
+    {
+      label: 'an upstream cut whose original size is unavailable',
+      result: { stdout: 'abcd', stderr: '', ok: true, truncated: { stdout: true } },
+      read: `abcd\n[truncated: showing 4${CLIP_ADVICE}`,
+      reason: 'work-not-finished',
+      cut: true,
+    },
+    {
+      label: 'a failed run with a measured upstream cut',
+      result: {
+        stdout: '',
+        stderr: 'bad',
+        ok: false,
+        exitCode: 7,
+        truncated: { stderr: true, ofChars: 12 },
+      },
+      read: `stderr:\nbad\n[truncated: showing 3${CLIP_ADVICE}\n[exit 7] ${EXIT_ADVICE}`,
+      reason: 'call-not-completed',
+      cut: true,
+    },
+  ];
+
+  it.each(cases)('records $label while preserving the model message', async (entry) => {
+    const reads: string[] = [];
+    const codeRuns: { readonly truncated: boolean }[] = [];
+    const native = codeRunnerTool({
+      runner: runnerAnswering(entry.result),
+      maxOutputChars: 8,
+      ...(entry.resume === true && { checkIn: 'always' }),
+    });
+    const tool =
+      entry.replace === true
+        ? {
+            ...native,
+            async execute(args: { code: string }, context: ToolExecutionContext) {
+              await native.execute(args, context);
+              return 'replacement';
+            },
+          }
+        : native;
+    const agent = Agent.create({
+      provider: mock({
+        respond: (request) => {
+          const toolResult = request.messages.find((message) => message.role === 'tool');
+          if (toolResult === undefined) {
+            return { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: 'fixture' } }] };
+          }
+          reads.push(String(toolResult.content));
+          return { content: MODEL_ANSWER };
+        },
+      }),
+      model: 'mock',
+    })
+      .tool(tool)
+      .build();
+    const recorder = recordRun(agent);
+    agent.on('agentfootprint.tools.code_run', ({ payload }) => codeRuns.push(payload));
+
+    let answer = await agent.run({ message: 'Run the fixture.' });
+    if (entry.resume === true) {
+      if (!isCheckInPause(answer)) throw new Error('Expected a code-run check-in.');
+      answer = await agent.resume(
+        answer.checkpoint,
+        checkInApproved({ request: answer.checkIn, by: 'fixture' }),
+      );
+    }
+
+    const live = await agent.assessment();
+    const saved = assessAnswer(JSON.parse(JSON.stringify(recorder.toRecording())));
+    expect(reads).toEqual([entry.read]);
+    expect.soft(codeRuns.map(({ truncated }) => truncated)).toEqual([entry.cut === true]);
+    const reasons = entry.reason === undefined ? [] : [entry.reason];
+    expect.soft(live?.reasons.map(({ reason }) => reason)).toEqual(reasons);
+    expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
+    expect.soft(live).toEqual(saved);
+    if (entry.reason === undefined) expect(answer).toBe(MODEL_ANSWER);
   });
 });
 
