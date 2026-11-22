@@ -216,7 +216,10 @@ export function standingAdmission(
   return {
     admit,
     dispositions,
-    settlements,
+    settlements:
+      settlements === undefined
+        ? undefined
+        : { ...settlements, windowResultDrops: state.windowResultDrops },
     keyed,
     entered,
     returned,

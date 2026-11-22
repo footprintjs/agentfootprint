@@ -9,9 +9,14 @@ import { declaredByValue, readEmptiness } from '../emptiness.js';
 import {
   assessmentCallOutcome,
   recordedToolExecution,
+  readResultDispositionMark,
   readRewrittenToolResult,
+  readToolSettlements,
+  readWindowResultDrops,
+  type WindowResultDrop,
   type RecordedToolSettlement,
 } from '../recordedCalls.js';
+import type { WindowEviction } from '../window/strategy.js';
 import { MAX_ENTERED_TOOL_CALLS, seedEnteredToolCalls } from './enteredToolCalls.js';
 import type { HonestyLayers } from './armed.js';
 
@@ -105,12 +110,10 @@ export function seedToolEvidence(
   const continuing = resume !== undefined && !resume.appendsUserTurn;
   const recovered = continuing ? resume.toolTurnEvidence : undefined;
   seedEnteredToolCalls(scope, deps, continuing, recovered?.entries);
-  seedToolSettlements(
-    scope,
-    deps.honestyLayers?.answer === true,
-    continuing,
-    recovered?.settlements,
-  );
+  const armed = deps.honestyLayers?.answer === true;
+  seedToolSettlements(scope, armed, continuing, recovered?.settlements);
+  if (armed && recovered?.windowResultDrops !== undefined)
+    scope.windowResultDrops = recovered.windowResultDrops;
 }
 
 /** Commit the facts at the same boundary as the newly settled messages. */
@@ -135,4 +138,48 @@ export function commitSettledToolHistory(
     if (added.length > 0) scope.settledToolCalls = [...prior, ...added];
   }
   scope.history = history;
+}
+
+/** Append evidence of this turn's visible results removed by the applied window. */
+export function commitWindowResultDrops(
+  scope: TypedScope<AgentState>,
+  evictions: readonly WindowEviction[],
+  nextHistory: readonly LLMMessage[],
+  strategy: string,
+): void {
+  if (evictions.length === 0 || !Object.hasOwn(scope, 'settledToolCalls')) return;
+  const prior = scope.$getValue('settledToolCalls') as AgentState['settledToolCalls'];
+  if (prior === undefined || prior.length === 0) return;
+  const previous = scope.$getValue('history') as readonly LLMMessage[];
+  const dropped = new Set<string>();
+  for (const { index } of evictions) {
+    const message = previous[index];
+    if (message?.role !== 'tool' || recordedToolExecution({ ...message }) !== 'returned') continue;
+    const mark = readResultDispositionMark(message);
+    if (mark === 'withheld' || mark === 'unknown') continue;
+    const key = readCallOccurrenceKey(message);
+    if (typeof key === 'string') dropped.add(key);
+  }
+  if (dropped.size === 0) return;
+  // A custom plan may report a row that is still present in the applied window.
+  for (const message of nextHistory) {
+    if (message.role !== 'tool') continue;
+    const key = readCallOccurrenceKey(message);
+    if (typeof key === 'string') dropped.delete(key);
+  }
+  if (dropped.size === 0) return;
+  const existing = (scope.$getValue('windowResultDrops') as AgentState['windowResultDrops']) ?? [];
+  const seen = readWindowResultDrops(existing)?.byKey;
+  const room = MAX_ENTERED_TOOL_CALLS - existing.length;
+  if (room <= 0) return;
+  const settlements = readToolSettlements(prior, true);
+  if (settlements === undefined) return;
+  const added: WindowResultDrop[] = [];
+  for (const key of dropped) {
+    const fact = settlements.byKey.get(key)?.fact;
+    if (seen?.has(key) || (fact?.delivery !== 'native' && fact?.delivery !== 'rewritten')) continue;
+    added.push({ callOccurrenceKey: fact.callOccurrenceKey, strategy });
+    if (added.length === room) break;
+  }
+  if (added.length > 0) scope.windowResultDrops = [...existing, ...added];
 }

@@ -56,12 +56,12 @@ import { emitCostTick, type ResolvedCostBudget } from '../../cost.js';
 import { foldLedger, type LedgerFold } from '../findings/ledger.js';
 import { isResultMessage } from '../findings/offer.js';
 import type { FindingsLedger, Standing } from '../findings/types.js';
+import { commitWindowResultDrops } from '../honesty/settledToolCalls.js';
 import { currentRequestIndexOf } from '../window/currentRequest.js';
 import { toolResultPinsOf } from '../window/lastToolResult.js';
 import { ledgerFactPinsOf, turnStandingOf } from '../window/ledgerFactPins.js';
 import { DEFAULT_KEEP_LAST_TOOL_RESULTS } from '../window/options.js';
 import { removalFacts } from '../window/removal.js';
-import type { WindowStrategy } from '../window/strategy.js';
 import {
   answeredCallIds,
   planRemoval,
@@ -76,7 +76,8 @@ import type {
   WindowObservations,
   WindowRecord,
   WindowRefusalReason,
-} from '../window/types.js';
+  WindowStrategy,
+} from '../window/index.js';
 import type { AgentState } from '../types.js';
 
 export interface WindowStageDeps {
@@ -385,6 +386,7 @@ export function buildWindowStage(
         result.rebase.keptTailCount,
         result.rebase.insertedAtMs,
       );
+      commitWindowResultDrops(scope, result.evictions, result.window, strategy.name);
       scope.history = result.window;
     }
 

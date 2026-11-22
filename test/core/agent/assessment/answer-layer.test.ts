@@ -250,6 +250,7 @@ describe('UNIT — the read list and the run constant', () => {
       'enteredToolCallsComplete',
       'settledToolCalls',
       'settledToolCallsComplete',
+      'windowResultDrops',
       'unsupportedValues',
       'answerValidation',
       'argumentAsk',

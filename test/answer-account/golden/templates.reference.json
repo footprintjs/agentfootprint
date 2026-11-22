@@ -1855,6 +1855,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.resultDroppedFromWindow@1": {
+  "text": "2 results from this turn were dropped from the conversation before the answer.",
+  "parts": [
+   {
+    "text": "2 results from this turn were dropped from the conversation before the answer."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.workNotFinished@1": {
   "text": "2 calls reported unfinished work.",
   "parts": [

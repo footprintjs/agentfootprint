@@ -34,6 +34,7 @@ export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'check-unreachable',
   'call-not-completed',
   'work-not-finished',
+  'result-dropped-from-window',
   'step-skipped',
 ]);
 
@@ -102,6 +103,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'empty-undeclared': 'howSure.reason.emptyUndeclared',
   'call-not-completed': 'howSure.reason.callNotCompleted',
   'result-withheld': 'howSure.reason.resultWithheld',
+  'result-dropped-from-window': 'howSure.reason.resultDroppedFromWindow',
   'work-not-finished': 'howSure.reason.workNotFinished',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
@@ -140,6 +142,7 @@ const COUNTED: ReadonlySet<AssessmentReason> = new Set([
   'declared-absent',
   'empty-undeclared',
   'work-not-finished',
+  'result-dropped-from-window',
   'step-skipped',
   'period-not-held',
   'period-partly-held',

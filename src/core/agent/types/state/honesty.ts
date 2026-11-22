@@ -18,6 +18,8 @@ export interface HonestyState {
   settledToolCalls?: readonly import('../../recordedCalls.js').RecordedToolSettlement[];
   /** Whether every settled call of this turn has a readable fact. */
   settledToolCallsComplete?: boolean;
+  /** Bounded, content-free proofs of the current turn’s tool results removed by the window. */
+  windowResultDrops?: readonly import('../../recordedCalls.js').WindowResultDrop[];
   /**
    * The answer's standing, as data — written by the answer layer's stage at
    * the head of the Final branch (honesty layer 4, `assessment/stage.ts` ·

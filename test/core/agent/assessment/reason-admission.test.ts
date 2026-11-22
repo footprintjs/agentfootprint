@@ -81,6 +81,24 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'unsupported-argument': integrity('unsupported-argument'),
   'call-not-completed': { message: NOT_ENTERED },
   'result-withheld': { message: DENIED },
+  'result-dropped-from-window': {
+    state: {
+      settledToolCalls: [
+        {
+          callOccurrenceKey: [1, 0, 0, 0, 0],
+          execution: 'returned',
+          delivery: 'native',
+        },
+        {
+          callOccurrenceKey: [2, 0, 0, 0, 0],
+          execution: 'not-entered',
+          outcome: 'refused',
+        },
+      ],
+      settledToolCallsComplete: true,
+      windowResultDrops: [{ callOccurrenceKey: [1, 0, 0, 0, 0], strategy: 'sliding-window' }],
+    },
+  },
   'work-not-finished': { message: { reportedStatus: 'pending' } },
   'coverage-gap': coverage('ledger', { notChecked: ['late arrivals'] }),
   'declared-absent': coverage('absence'),

@@ -7,6 +7,7 @@ import {
 } from '../honesty/enteredToolCalls.js';
 import { isRecord } from './record.js';
 import { readToolSettlements, type RecordedToolSettlement } from './settlement.js';
+import { readWindowResultDrops, type WindowResultDrop } from './windowResultDrops.js';
 
 /** Content-free proof kept only for a retry of the failed human request. */
 export interface ToolTurnEvidence {
@@ -15,6 +16,7 @@ export interface ToolTurnEvidence {
     readonly rows: readonly RecordedToolSettlement[];
     readonly complete: boolean;
   };
+  readonly windowResultDrops?: readonly WindowResultDrop[];
 }
 
 const own = (object: object, field: string): unknown =>
@@ -47,6 +49,11 @@ function settlementsOf(value: unknown, complete: unknown): ToolTurnEvidence['set
   return { rows: result.rows, complete };
 }
 
+function windowDropsOf(value: unknown): ToolTurnEvidence['windowResultDrops'] {
+  const drops = readWindowResultDrops(value);
+  return drops?.complete ? [...drops.byKey.values()].map(({ fact }) => fact) : undefined;
+}
+
 /** Take a detached, bounded copy from the failing executor's committed state. */
 export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefined {
   if (!isRecord(state)) return undefined;
@@ -58,8 +65,14 @@ export function toolTurnEvidenceFrom(state: unknown): ToolTurnEvidence | undefin
     own(state, 'settledToolCalls'),
     own(state, 'settledToolCallsComplete'),
   );
-  if (entries === undefined && settlements === undefined) return undefined;
-  return { ...(entries && { entries }), ...(settlements && { settlements }) };
+  const windowResultDrops = windowDropsOf(own(state, 'windowResultDrops'));
+  if (entries === undefined && settlements === undefined && windowResultDrops === undefined)
+    return undefined;
+  return {
+    ...(entries && { entries }),
+    ...(settlements && { settlements }),
+    ...(windowResultDrops && { windowResultDrops }),
+  };
 }
 
 /** Admit and detach present request proof before a fresh runtime can use it. */
@@ -82,11 +95,17 @@ export function admitToolTurnEvidence(checkpoint: object): ToolTurnEvidence | un
   const settlements = isRecord(settlement)
     ? settlementsOf(own(settlement, 'rows'), own(settlement, 'complete'))
     : undefined;
+  const windowResultDrops = windowDropsOf(own(evidence, 'windowResultDrops'));
   if (
-    (entries === undefined && settlements === undefined) ||
+    (entries === undefined && settlements === undefined && windowResultDrops === undefined) ||
+    ('windowResultDrops' in evidence && windowResultDrops === undefined) ||
     ('entries' in evidence && entries === undefined) ||
     ('settlements' in evidence && settlements === undefined)
   )
     return invalid();
-  return { ...(entries && { entries }), ...(settlements && { settlements }) };
+  return {
+    ...(entries && { entries }),
+    ...(settlements && { settlements }),
+    ...(windowResultDrops && { windowResultDrops }),
+  };
 }

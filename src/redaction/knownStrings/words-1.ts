@@ -227,6 +227,7 @@ export const words1 = {
   'require-instruction': true,
   result: true,
   'result-capped': true,
+  'result-dropped-from-window': true,
   'result-period': true,
   'result-shape': true,
   'result-withheld': true,
@@ -299,5 +300,4 @@ export const words1 = {
   summarizing: true,
   superseded: true,
   system: true,
-  'system-prompt': true,
 } as const;

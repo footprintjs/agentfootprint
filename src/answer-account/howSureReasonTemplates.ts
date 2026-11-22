@@ -48,6 +48,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
   'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
   'howSure.reason.resultWithheld': t('A result was kept out by a rule.'),
+  'howSure.reason.resultDroppedFromWindow': t(
+    "{{count:n,'result from this turn was','results from this turn were'}} dropped from the conversation before the answer.",
+  ),
   'howSure.reason.workNotFinished': t(
     "{{count:n,'call reported','calls reported'}} unfinished work.",
   ),

@@ -13,6 +13,7 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'unsupported-argument': 'input',
   'call-not-completed': 'settlement',
   'result-withheld': 'settlement',
+  'result-dropped-from-window': 'turn',
   'work-not-finished': 'result',
   'coverage-gap': 'result',
   'declared-absent': 'result',

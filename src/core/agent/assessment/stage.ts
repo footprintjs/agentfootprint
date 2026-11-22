@@ -170,6 +170,7 @@ export async function assessAnswerStage(
           reason === 'check-unreachable' ||
           reason === 'call-not-completed' ||
           reason === 'work-not-finished' ||
+          reason === 'result-dropped-from-window' ||
           reason === 'value-contingent' ||
           reason === 'step-skipped',
       )

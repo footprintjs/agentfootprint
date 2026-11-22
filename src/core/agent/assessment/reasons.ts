@@ -136,6 +136,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
   },
   {
+    reason: 'result-dropped-from-window',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'windowResultDrops and settledToolCalls: this turn’s delivered results removed by an applied window strategy',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',

@@ -21,7 +21,11 @@ const TOOL = 'fixture_lookup';
 const ID = 'reused';
 const PAUSING_TOOL = 'confirm_fixture';
 const BODY = 'The lookup is complete.';
-const WITHHELD = `${BODY}\n\n---\n\nNot sure — a result was kept out by a rule.`;
+const WITHHELD_CLAUSE = 'a result was kept out by a rule';
+const WITHHELD = `${BODY}\n\n---\n\nNot sure — ${WITHHELD_CLAUSE}.`;
+const DROP = '1 result from this turn was dropped from the conversation before the answer.';
+const DROPPED = `${BODY}\n\n---\n\nNot sure — ${DROP}`;
+const WITHHELD_AND_DROPPED = `${BODY}\n\n---\n\nNot sure — ${WITHHELD_CLAUSE}; ${DROP}`;
 const CONSISTENT = `${BODY}\n\n---\n\nConsistent with the run's record — 1 check ran and did not fire: what came back. This is not a verification.`;
 const NOTICE = 'The archive is unavailable.';
 const OVERSIZED_RESULT = 'x'.repeat(150);
@@ -139,7 +143,7 @@ describe('standing when a previously withheld result leaves history', () => {
     { evicts: false, pauses: false, blocks: false },
     { evicts: true, pauses: false, blocks: false },
   ])(
-    'a reused ID preserves anonymous withholding only in its own turn (evicts=$evicts, pauses=$pauses, blocks=$blocks)',
+    'a reused ID preserves distinct visible drops and anonymous withholding within the turn (evicts=$evicts, pauses=$pauses, blocks=$blocks)',
     async (options) => {
       const { evicts, pauses, blocks } = options;
       const { agent, execute, onToolResult } = fixture(options);
@@ -181,7 +185,18 @@ describe('standing when a previously withheld result leaves history', () => {
           !evicts && blocks ? ['withheld', undefined] : results.map(() => undefined),
         );
 
-        const reasons = blocks ? ['result-withheld'] : [];
+        // A visible archive result or an answered pause can leave the window.
+        // The withheld archive itself must never contribute to the count.
+        const dropped = evicts && (!blocks || pauses);
+        const reasons = [
+          ...(blocks ? ['result-withheld'] : []),
+          ...(dropped ? ['result-dropped-from-window'] : []),
+        ];
+        const drop = saved.reasons.find(({ reason }) => reason === 'result-dropped-from-window');
+        expect(drop?.witness ?? []).toHaveLength(dropped ? 1 : 0);
+        expect(snapshot.windowResultDrops?.map(readCallOccurrenceKey) ?? []).toEqual(
+          dropped ? [blocks ? entries[1] : firstKey] : [],
+        );
         expect.soft(liveData.reasons, 'live answer assessment').toEqual(reasons);
         expect
           .soft(
@@ -190,7 +205,14 @@ describe('standing when a previously withheld result leaves history', () => {
           )
           .toEqual(reasons);
         expect.soft(assessmentDataOf(saved), 'saved/live parity').toEqual(liveData);
-        expect.soft(first, 'delivered standing').toBe(blocks ? WITHHELD : CONSISTENT);
+        const firstAnswer = blocks
+          ? dropped
+            ? WITHHELD_AND_DROPPED
+            : WITHHELD
+          : dropped
+          ? DROPPED
+          : CONSISTENT;
+        expect.soft(first, 'delivered standing').toBe(firstAnswer);
         if (blocks) {
           expect
             .soft(saved.reasons[0])
@@ -240,9 +262,16 @@ describe('standing when a previously withheld result leaves history', () => {
           ({ role, toolName }) => role === 'tool' && toolName === PAUSING_TOOL,
         ),
       ).toEqual([]);
-      expect.soft(liveData.reasons).toEqual(['result-withheld']);
+      expect.soft(liveData.reasons).toEqual(['result-withheld', 'result-dropped-from-window']);
       expect.soft(assessmentDataOf(saved)).toEqual(liveData);
-      expect.soft(answer).toBe(WITHHELD);
+      expect.soft(saved.reasons[0]?.witness).toEqual([]);
+      expect
+        .soft(saved.reasons[1]?.witness)
+        .toEqual([{ kind: 'state', key: 'windowResultDrops', path: '/0/strategy' }]);
+      expect
+        .soft(snapshot.windowResultDrops?.map(readCallOccurrenceKey))
+        .toEqual([readCallOccurrenceKey(snapshot.enteredToolCalls![0])]);
+      expect.soft(answer).toBe(WITHHELD_AND_DROPPED);
     } finally {
       observation.stop();
       await agent.shutdown();
@@ -322,12 +351,12 @@ describe('standing when a previously withheld result leaves history', () => {
     },
   );
 
-  it('recovers a withheld-return warning from a serialized error checkpoint for the same request', async () => {
+  it('recovers anonymous withholding and the one visible drop from a serialized error checkpoint', async () => {
     const respond = vi
       .fn()
       .mockReturnValueOnce(lookup('archive'))
       .mockReturnValueOnce(lookup('live'))
-      // Complete an iteration after the window has dropped the archive result.
+      // The window drops the withheld archive and then the visible live result.
       .mockReturnValueOnce(lookup('verify'))
       .mockImplementationOnce(() => {
         throw Object.assign(new Error('Fixture model unavailable'), { status: 503 });
@@ -380,7 +409,7 @@ describe('standing when a previously withheld result leaves history', () => {
       const sameTurn = resumed.read();
       expect(sameTurn.turn).toBe(1);
       expect(retry.execute).not.toHaveBeenCalled();
-      const reasons = ['result-withheld'];
+      const reasons = ['result-withheld', 'result-dropped-from-window'];
       expect.soft(sameTurn.liveData.reasons).toEqual(reasons);
       expect.soft(sameTurn.saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
       expect.soft(sameTurn.saved.reasons[0]).toMatchObject({
@@ -388,8 +417,14 @@ describe('standing when a previously withheld result leaves history', () => {
         source: { kind: 'run' },
         witness: [],
       });
+      expect
+        .soft(sameTurn.saved.reasons[1]?.witness)
+        .toEqual([{ kind: 'state', key: 'windowResultDrops', path: '/0/strategy' }]);
+      expect
+        .soft(sameTurn.snapshot.windowResultDrops?.map(readCallOccurrenceKey))
+        .toEqual([readCallOccurrenceKey(sameTurn.snapshot.enteredToolCalls![1])]);
       expect.soft(assessmentDataOf(sameTurn.saved)).toEqual(sameTurn.liveData);
-      expect.soft(answer).toBe(WITHHELD);
+      expect.soft(answer).toBe(WITHHELD_AND_DROPPED);
 
       expect(
         await next.agent.run({ message: 'Read the follow-up index.', continueFrom: checkpoint }),
