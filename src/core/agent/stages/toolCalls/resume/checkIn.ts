@@ -12,7 +12,7 @@ import { boundArgsOf } from '../access/bindings.js';
 import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
-import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
+import type { ExecutedToolResultEnvelope } from '../contracts/callCells.js';
 import type { ResumedCallFacts, TransitionBatchState } from '../contracts/callFacts.js';
 import type { ToolParty } from '../../../../slots/buildToolsSlot.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
@@ -24,6 +24,7 @@ import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js
 import {
   outcomeField,
   reportedStatusField,
+  toolFailureCategoryField,
   toolResultExecutionField,
 } from '../execution/outcomeField.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
@@ -133,7 +134,7 @@ export function buildResumeCheckIn(
     /** Step-advance eligibility, judged by this path (a decline ran nothing). */
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
-    let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    let resumeEnvelope: ExecutedToolResultEnvelope | undefined;
     let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
@@ -269,6 +270,10 @@ export function buildResumeCheckIn(
         links.emitTransitionConflict(scope, iteration, decisionTransition);
       }
       // The batch settlement (9.113.0) — the ask path's twin.
+      const resultReplaced =
+        resumedHalt !== undefined ||
+        sourceHalt !== undefined ||
+        !Object.is(modelResult, decisionPlaced.modelResult);
       const decisionSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
@@ -283,12 +288,15 @@ export function buildResumeCheckIn(
             ...toolResultExecutionField(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
-              !stepToolRan ||
-                resumedHalt !== undefined ||
-                sourceHalt !== undefined ||
-                !Object.is(modelResult, decisionPlaced.modelResult),
+              !stepToolRan || resultReplaced,
+              { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+            ...toolFailureCategoryField(
+              scriptSeen,
+              decisionSettled,
+              resultReplaced || toolResultDisposition !== undefined,
+            ),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A decline ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(decisionSettled),

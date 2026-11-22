@@ -35,7 +35,6 @@ import {
   pauseNegativeCall,
 } from '../../../negativeClaims/capture.js';
 import {
-  readToolResultEnvelope,
   explainStatusOnlyNearMiss,
   unknownStatusOf,
   unknownStatusWarning,
@@ -44,12 +43,14 @@ import { isPauseRequest } from '../../../../pause.js';
 import { throwIfAborted } from '../../../../../lib/abort.js';
 import { bindOuterCall } from '../../../innerCallOuter.js';
 import { toolPauseData } from './toolPauseData.js';
+import { classifyToolFailure } from './outcomeField.js';
 import {
   validateInputDeclaration,
   stampInputRequest,
   repeatOf,
 } from '../../../../../tools/inputRequest.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { readExecutedResult } from './readExecutedResult.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -113,9 +114,11 @@ export async function invokeInitialTool(
     | 'sourceEvidenceConfig'
     | 'currentRun'
     | 'isRunRetired'
+    | 'answerLayer'
   >,
   frame: InvokeInitialToolFrame,
 ) {
+  let toolInvoked = false;
   const declarationCall = {
     toolName: frame.tc.name,
     toolCallId: frame.tc.id,
@@ -243,6 +246,7 @@ export async function invokeInitialTool(
     try {
       markWantedResultsRead(scope, frame.wanted.wantedMeta);
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
+      toolInvoked = true;
       frame.outcome.result = await frame.tool.execute(
         frame.callArguments.callArgs,
         executionContext,
@@ -283,7 +287,7 @@ export async function invokeInitialTool(
     // `tool_end`) sees the CONTENT, exactly what a bare return
     // would have shown. The effects are judged below, after the
     // gates, in call order.
-    const envelope = readToolResultEnvelope(frame.outcome.result);
+    const envelope = readExecutedResult(frame.tool, frame.outcome.result, codeRunSlot);
     if (envelope !== undefined) {
       frame.outcome.toolEnvelope = envelope;
       frame.outcome.result = envelope.content;
@@ -390,10 +394,11 @@ export async function invokeInitialTool(
     let raisedMissError: string | undefined;
     const halt = frame.execution.haltContext;
     const innerHalt = halt?.call === undefined ? undefined : halt;
+    const paused = isPauseRequest(err);
     // In a batch whose one human question was the inputs layer's ask
     // (`oneQuestionAsked`), the tool's own pause cannot be given: the
     // call settles as an error below, with the refusal sentence.
-    if (innerHalt === undefined && isPauseRequest(err) && !frame.oneQuestionAsked) {
+    if (innerHalt === undefined && paused && !frame.oneQuestionAsked) {
       // The typed half of the question (9.24.0): a tool that raised
       // `askHuman({ question, component })` nominated a screen
       // component, and the nomination is judged HERE — the raise
@@ -543,10 +548,19 @@ export async function invokeInitialTool(
     frame.outcome.toolEnvelope = undefined;
     frame.outcome.toolStatus = undefined;
     frame.execution.executeThrew = frame.execution.executed;
+    if (
+      toolInvoked &&
+      frame.execution.toolResultExecution === 'threw' &&
+      !paused &&
+      halt === undefined
+    ) {
+      const category = classifyToolFailure(err, deps.answerLayer);
+      if (category !== undefined) frame.execution.toolFailureCategory = category;
+    }
     frame.outcome.result =
-      (innerHalt !== undefined && isPauseRequest(err) ? innerHalt.tellLLM : undefined) ??
+      (innerHalt !== undefined && paused ? innerHalt.tellLLM : undefined) ??
       raisedMissError ??
-      (frame.askedLayer !== undefined && isPauseRequest(err)
+      (frame.askedLayer !== undefined && paused
         ? // Reached only in the batch that asked (a pause anywhere
           // else returned above, or set `raisedMissError`): the
           // answers the call carried are kept for its next proposal.

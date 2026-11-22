@@ -59,8 +59,10 @@ import { periodRows, PERIOD_REASONS, readPeriodVerdicts } from './periodRows.js'
 import { retentionRefusalsOf } from '../../../time/retentionRefusals.js';
 import { deliveredResults } from './resultDispositions.js';
 import { witnessRows } from './answerWitnesses.js';
-import { REASONS, reasonEntry } from './reasons.js';
-import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
+import { answerCompletionReasons } from './answer/completion/completion.js';
+import { reasonEntry } from './reasons.js';
+import { rowList } from './sources.js';
+import { assessmentValueOf, readReasonDetails, type RetainedReasonState } from './reasonDetails.js';
 import { readConflicts } from './conflicts.js';
 import { rewritesByOccurrence } from './rewrittenArguments.js';
 import { coverageRows } from './coverageRows.js';
@@ -381,9 +383,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
       });
     }
   }
-  if (isRecord(state.stoppedEarly)) {
-    fire(g, 'stopped-early', statePointer('stoppedEarly', 'iteration'));
-  }
+  for (const { reason, witness } of answerCompletionReasons(state)) fire(g, reason, witness);
   for (const w of witnesses) {
     if (w.kind !== 'grounded') fire(g, w.kind, statePointer('findingsLedger', w.index, 'kind'));
   }
@@ -482,41 +482,6 @@ function readScriptsShown(state: Readonly<Record<string, unknown>>, g: Gathered)
 }
 
 /**
- * The reasons in `REASONS` order, each with what it rests on (its DECLARED
- * kind, and for `calls` the calls its rows name — `sources.ts`), and the value
- * by precedence: a reason > support > a check ran > nothing. The source never
- * moves the value: it is read after the reason fired, from the same rows.
- */
-function valueOf(g: Gathered, read: SourceRead): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
-  const reasons = REASONS.flatMap((entry) => {
-    const witness = g.fired.get(entry.reason);
-    if (witness === undefined) return [];
-    const source =
-      entry.reason === 'value-contingent' &&
-      witness.some((w) => w.kind === 'state' && w.path.endsWith('/declaredOn'))
-        ? 'answer'
-        : entry.source;
-    return [
-      {
-        reason: entry.reason,
-        ...(entry.layer !== undefined && { layer: entry.layer }),
-        witness,
-        source: reasonSourceOf(entry.reason, source, witness, read),
-      },
-    ];
-  });
-  const assessment: AnswerAssessment['assessment'] =
-    reasons.length > 0
-      ? 'unknown'
-      : g.support !== undefined
-      ? 'known'
-      : g.checked.some((c) => c.ran > 0)
-      ? 'unrefuted'
-      : 'not-applicable';
-  return { assessment, reasons };
-}
-
-/**
  * Fold one answer's standing from its committed record.
  *
  * The record of a turn that ended in an ANSWER or in a PAUSE (a pause reads
@@ -581,9 +546,18 @@ export function assessLive(
   snapshot: unknown,
   declarations?: AssessmentDeclarations,
   retainedHistory?: (history: readonly unknown[]) => unknown,
+  retainedReasonState?: RetainedReasonState,
 ): AnswerAssessment {
   checkInputs({ snapshot }, declarations);
-  return foldState(stateOf({ snapshot }), declarations, false, retainedHistory);
+  return foldState(
+    stateOf({ snapshot }),
+    declarations,
+    false,
+    retainedHistory,
+    undefined,
+    undefined,
+    retainedReasonState ?? (() => undefined),
+  );
 }
 
 /**
@@ -601,6 +575,7 @@ export function foldState(
   retainedHistory?: (history: readonly unknown[]) => unknown,
   declarationAddresses?: ReadonlyMap<number, number>,
   legacyEvents?: unknown,
+  retain: RetainedReasonState = (_key, value) => value,
 ): AnswerAssessment {
   const { state, asked } = served
     ? keptOutGuard(recorded)
@@ -731,13 +706,26 @@ export function foldState(
       keptOut: [...asked].sort(),
     };
   }
-  const { assessment, reasons } = valueOf(g, {
+  const detail = readReasonDetails(
+    g,
+    current,
+    coverage,
     state,
-    turnResults: results,
-    historyCalls,
-    turnBegins: begins,
-    declarationAddresses,
-  });
+    admission.settlements?.byKey,
+    retain,
+  );
+  const { assessment, reasons } = assessmentValueOf(
+    g,
+    {
+      state,
+      turnResults: results,
+      historyCalls,
+      turnBegins: begins,
+      declarationAddresses,
+      failureCategories: detail.failureByHistory,
+    },
+    detail,
+  );
   return {
     assessment,
     standing: standingOf(assessment, reasons),

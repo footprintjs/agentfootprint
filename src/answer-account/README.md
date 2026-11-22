@@ -67,7 +67,7 @@ standing line names and the limits block marks — never a second derivation
 here. A line the answer layer appended that named calls in the app's words (a
 tool's `displayName`) is found again from the record: the words ride
 `turn_end.standingLineNames`, the calls are the fold's, and the line is rebuilt
-whole (`account.ts` · `appendedStandingLine`; words the record does not hold in
+whole (`facts/standing.ts` · `appendedStandingLine`; words the record does not hold in
 full and the line is not claimed).
 
 ```ts

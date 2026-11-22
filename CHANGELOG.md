@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.4.0] - 2026-11-22
+
+### Added
+
+- **Answer warnings explain tool failures and limits.** The default prose warning uses the engine’s failure category, such as a timeout, and bounded words from admitted tool declarations under the run’s redaction policy. The full assessment exposes those details. Typed answers keep their format, and the opt-in limits block still carries the longer declaration.
+
+- **Show provider summaries while answer drafts are held.** Set `liveThinkingWithHeldDrafts: 'provider-summary'` on `Agent.create` to receive classified provider summaries before the answer is approved. The summaries use the existing stream event, run redaction, and first-chunk retry rule. Draft answer text and other live thinking stay held under the output policy.
+
+### Fixed
+
+- **Say when an answer hits the model's output limit.** An accepted provider response that stops at the limit records why it ended. Its answer standing reports the cutoff, and eligible prose includes that warning. An earlier draft's stop does not warn about a later answer.
+
 ## [16.3.0] - 2026-11-22
 
 ### Added

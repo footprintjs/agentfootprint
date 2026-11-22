@@ -1,4 +1,6 @@
+import { errorCategory } from 'footprintjs';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { codeOutputCountsAllowed } from '../../../honesty/codeOutputCounts.js';
 import {
   callOutcomeOf,
   reportedStatusOf,
@@ -22,10 +24,44 @@ export function toolResultExecutionField(
   answerLayer: true | undefined,
   execution: LLMMessage['toolResultExecution'],
   unserved: boolean,
-): Pick<LLMMessage, 'toolResultExecution'> {
+  codeResult?: {
+    readonly scope: object;
+    readonly counts?: LLMMessage['toolOutputCounts'];
+    readonly disposition?: LLMMessage['toolResultDisposition'];
+  },
+): Pick<LLMMessage, 'toolResultExecution' | 'toolOutputCounts'> {
   if (answerLayer !== true) return {};
   return {
     toolResultExecution:
       execution === 'returned' && unserved ? 'returned-unserved' : execution ?? 'not-entered',
+    ...(execution === 'returned' &&
+      !unserved &&
+      codeResult?.disposition === undefined &&
+      codeResult?.counts !== undefined &&
+      codeOutputCountsAllowed(codeResult.scope) && { toolOutputCounts: codeResult.counts }),
   };
+}
+
+/** Classify at the throw site, before the result becomes prose. */
+export function classifyToolFailure(
+  error: unknown,
+  answerLayer: true | undefined,
+): LLMMessage['toolFailureCategory'] {
+  return answerLayer === true ? errorCategory(error) : undefined;
+}
+
+/** File only the category of a failed throw that the delivery path retained. */
+export function toolFailureCategoryField(
+  boundary: Pick<LLMMessage, 'toolResultExecution' | 'toolFailureCategory'>,
+  call: DispatchSettlement,
+  replaced: boolean,
+): Pick<LLMMessage, 'toolFailureCategory'> {
+  if (
+    replaced ||
+    boundary.toolResultExecution !== 'threw' ||
+    boundary.toolFailureCategory === undefined ||
+    callOutcomeOf(call) !== 'failed'
+  )
+    return {};
+  return { toolFailureCategory: boundary.toolFailureCategory };
 }

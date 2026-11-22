@@ -387,6 +387,13 @@ when it has a `displayName` and reports whether the call was refused or failed.
 
 An admitted tool result that reports `partial` or `pending` adds `work-not-finished` when the call has no recorded failure or refusal. The same retry rule clears this warning when a later call completes with the same recorded tool and arguments. A tool's plain result text supplies no status for this check.
 
+When the final provider response stops at the model's output limit,
+`answer-output-limit` makes the standing `not-sure`. An earlier draft's stop has
+no effect on a later answer. A saved recording with no committed stop reason
+does not supply this warning.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-output-limit" title="A model stops at its output limit" />
+
 With the answer layer armed, `step-skipped` counts declared steps the procedure advanced past after a skip. Under the hold policy the request stays on the record and the step stays required.
 
 Other reasons include a tool declaring ground it did not check (`coverage-gap`)
@@ -455,8 +462,7 @@ person. The standing line names a reason's calls only in those words: "Not sure 
 loading the attached data reported no matching results." With several calls behind one reason it
 names the declared ones and counts the rest ("loading the attached data and 1 other
 call reported no matching results"). The limits block marks the items each call declared the same
-way. Without a `displayName` nothing changes, word for word, and a reason's calls are
-never named by the registered tool name, which your app may not want a person to see.
+way. A call without a `displayName` gets generic wording in the warning.
 Not every surface uses `displayName` yet: the time layer's limits lines, the answer
 account's rows, and — for a tool that declares none — the assumed clause and the
 `Period:` / "In progress" lines still print the registered name (a known follow-up).
@@ -484,7 +490,15 @@ runs at the start of the final branch, after the checks have filed their verdict
 When the answer's standing is `not-sure` or `ask`, a prose answer includes a line
 explaining why. The standing travels as data for every delivered answer.
 
-<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-standing-default" title="A tool reports pending work" />
+A tool exception that the engine classifies gets wording for that category, such as
+“Collector check timed out.” An unclassified exception gets a generic failure warning.
+The full `AnswerAssessment.reasons[].detail` can carry the category without the exception
+message. It can also carry short words from an admitted tool declaration for a coverage
+gap, an absence or a period reason. The warning bounds those words, counts extra entries
+and applies the run's redaction policy before displaying them. Use
+`.limitsTravelWithTheAnswer()` to attach the longer coverage block.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-standing-default" title="Default warnings for pending work, timeouts and coverage gaps" />
 
 The warning also covers limits the framework introduced while serving tool results.
 A cut result names the tool and reports how many characters of the original reached the model.
