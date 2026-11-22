@@ -218,7 +218,7 @@ function assertComposable(m: InputMessage, index: number, total: number): void {
  * / etc.) at the injection site — NOT rely on role inference here.
  * Role-based inference is the baseline fallback.
  */
-function inferSource(role: ContextRole): InjectionRecord['source'] {
+function inferSource(role: ContextRole): ContextSource {
   switch (role) {
     case 'user':
       return 'user';
