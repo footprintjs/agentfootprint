@@ -24,6 +24,7 @@ import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js
 import {
   outcomeField,
   reportedStatusField,
+  toolFailureCategoryField,
   toolResultExecutionField,
 } from '../execution/outcomeField.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
@@ -318,6 +319,10 @@ export function buildResumeAsk(
       }
       // The batch settlement (9.113.0): the answered call's result, then the
       // siblings the pause left un-dispatched, each settled — never run.
+      const resultReplaced =
+        resumedHalt !== undefined ||
+        sourceHalt !== undefined ||
+        !Object.is(modelResult, askPlaced.modelResult);
       const askSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
@@ -332,12 +337,14 @@ export function buildResumeAsk(
             ...toolResultExecutionField(
               deps.answerLayer,
               scriptSeen.toolResultExecution,
-              !stepToolRan ||
-                resumedHalt !== undefined ||
-                sourceHalt !== undefined ||
-                !Object.is(modelResult, askPlaced.modelResult),
+              !stepToolRan || resultReplaced,
             ),
             ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+            ...toolFailureCategoryField(
+              scriptSeen,
+              askSettled,
+              resultReplaced || toolResultDisposition !== undefined,
+            ),
             ...innerCallsFieldOf(scope, toolCallId, iteration),
             // A declined ask ran nothing → 'refused'; read by the check-in trail.
             ...outcomeField(askSettled),

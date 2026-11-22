@@ -1,7 +1,5 @@
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { batchAddress } from '../../../arguments/batchAddress.js';
-import { buildArgumentRefusal } from '../access/argumentValidation.js';
-import { buildSearchCoverage } from '../../searchCoverage.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -35,54 +33,16 @@ import { rewrittenAfterApproval } from '../access/bindings.js';
 import { recheckResumedCall, recordResumedRefusal } from '../access/resumedAdmission.js';
 import { resumedCredential } from './resumedCredential.js';
 import { resumedPauseRefusal } from './resumedPauseRefusal.js';
+import { classifyToolFailure } from './outcomeField.js';
 import { awaitUnder } from '../../../../../lib/abort.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
-import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
-import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
-import type { ToolArtifactsOperations } from '../contracts/operations/artifacts.js';
-import type { ToolCredentialsOperations } from '../contracts/operations/credentials.js';
-import type { ToolContextOperations } from '../contracts/operations/context.js';
-import type { ToolProgressOperations } from '../contracts/operations/progress.js';
-import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
-import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
-import type { ToolCoverageOperations } from '../contracts/operations/coverage.js';
-import type { ToolSemanticsOperations } from '../contracts/operations/semantics.js';
-import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
-import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
-import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type {
   ResumedCallResult,
   ResumedInvocation,
+  ResumedInvocationLinks,
 } from '../contracts/operations/resumedInvocation.js';
 import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js';
-
-interface ResumedInvocationLinks {
-  readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
-  readonly unmountedRules: ToolCatalogOperations['unmountedRules'];
-  readonly parkedNow: ToolCatalogOperations['parkedNow'];
-  readonly historyForCheckIn: ToolSettlementOperations['historyForCheckIn'];
-  readonly argumentRefusal: ReturnType<typeof buildArgumentRefusal>;
-  readonly noteOffWire: ToolCatalogOperations['noteOffWire'];
-  readonly resolveWantsAtDispatch: ToolArtifactsOperations['resolveWantsAtDispatch'];
-  readonly credentialsIn: ToolCredentialsOperations['credentialsIn'];
-  readonly hasCredentials: boolean;
-  readonly toolArtifacts: ToolContextOperations['toolArtifacts'];
-  readonly toolProgress: ToolProgressOperations['toolProgress'];
-  readonly sessionContext: ToolResourcesOperations['sessionContext'];
-  readonly toolDispatchCtx: ToolContextOperations['toolDispatchCtx'];
-  readonly endCall: ToolResourcesOperations['endCall'];
-  readonly searchFunnel: ReturnType<typeof buildSearchCoverage>;
-  readonly runFactsOf: ToolResourcesOperations['runFactsOf'];
-  readonly programOfCall: ToolScriptsOperations['programOfCall'];
-  readonly proposedArgsOf: ToolScriptsOperations['proposedArgsOf'];
-  readonly takeCodeRun: ToolScriptsOperations['takeCodeRun'];
-  readonly declareCoverage: ToolCoverageOperations['declareCoverage'];
-  readonly declareSemantics: ToolSemanticsOperations['declareSemantics'];
-  readonly refuseOverCeiling: ToolLimitsOperations['refuseOverCeiling'];
-  readonly judgeColumns: ToolIntegrityOperations['judgeColumns'];
-  readonly warnEffect: ToolEffectsOperations['warnEffect'];
-}
 
 /** Compose the existing resumed invocation without changing its catch/cleanup boundary. */
 export function buildResumedInvocation(
@@ -99,6 +59,7 @@ export function buildResumedInvocation(
     | 'columnCheckMode'
     | 'resultRowsetsFor'
     | 'integrityLedger'
+    | 'answerLayer'
     | 'currentRun'
     | 'isRunRetired'
   >,
@@ -193,6 +154,7 @@ export function buildResumedInvocation(
       wantedMeta = resolution.wanted;
     }
     let executed = false;
+    let toolInvoked = false;
     let negativeDispatch: NegativeDispatch | undefined;
     /** What the run ended with, when it ended before the call could run. */
     let ended: Error | undefined;
@@ -344,6 +306,7 @@ export function buildResumedInvocation(
       try {
         markWantedResultsRead(scope, wantedMeta);
         recordToolEntry(scope, seen?.callOccurrenceKey);
+        toolInvoked = true;
         result = await tool.execute(args, executionContext);
         returned = true;
       } finally {
@@ -573,6 +536,10 @@ export function buildResumedInvocation(
           executed,
           negativeResultId: negativeDispatch?.resultId,
         };
+      }
+      if (toolInvoked && seen?.toolResultExecution === 'threw' && binding.halt === undefined) {
+        const category = classifyToolFailure(err, deps.answerLayer);
+        if (category !== undefined) seen.toolFailureCategory = category;
       }
       // A tool that threw still RAN, and may have done half its work; the
       // after-tool moment exists precisely for the rules that care about that.
