@@ -73,7 +73,13 @@ export async function run(input: string): Promise<string> {
   if (typeof cut !== 'string' || !cut.includes('Not sure') || !cut.includes('event log')) {
     throw new Error('Expected a warning naming the cut log.');
   }
-  return [`Default\n${byDefault.answer}`, `.answerLayer(false)\n${off.answer}`, cut].join('\n\n');
+  const cutoff = await answerAtOutputLimit(input);
+  if (!cutoff.includes("the answer was cut off at the model's output limit")) {
+    throw new Error('Expected the delivered answer to explain the cutoff.');
+  }
+  return [`Default\n${byDefault.answer}`, `.answerLayer(false)\n${off.answer}`, cut, cutoff].join(
+    '\n\n',
+  );
 }
 
 // #region recorded-result-cut
@@ -104,6 +110,22 @@ async function cutLogAnswer(message: string) {
   }
 }
 // #endregion recorded-result-cut
+
+// #region answer-output-limit
+async function answerAtOutputLimit(message: string): Promise<string> {
+  const agent = Agent.create({
+    provider: mock({ reply: 'The report contains', stopReason: 'max_tokens' }),
+    model: 'mock',
+  }).build();
+  try {
+    const answer = await agent.run({ message });
+    if (typeof answer !== 'string') throw new Error('Unexpected pause.');
+    return answer;
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion answer-output-limit
 
 if (isCliEntry(import.meta.url)) {
   run(meta.defaultInput ?? '')
