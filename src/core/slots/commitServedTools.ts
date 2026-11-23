@@ -1,3 +1,4 @@
+import type { WireCollision } from './wireCollisions.js';
 import type { Tool } from '../../tools/tools.js';
 import type { ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
@@ -40,14 +41,25 @@ interface TopNOmission {
   readonly party: ToolParty;
 }
 
+interface CollisionOmission {
+  readonly kind: 'collision';
+  readonly name: string;
+  readonly tool: Tool;
+  readonly party: ToolParty;
+  readonly winner: { readonly tool: Tool; readonly party: ToolParty };
+}
+
+type SelectionRow = DiscoveryOmissions['rows'][number] | TopNOmission | CollisionOmission;
+
 interface SlotSelection {
   readonly iteration: number;
-  readonly rows: readonly (DiscoveryOmissions['rows'][number] | TopNOmission)[];
+  readonly rows: readonly SelectionRow[];
   readonly complete: boolean;
 }
 
 interface SlotCommit {
   readonly iteration: number;
+  readonly collisions?: readonly WireCollision[];
   readonly narrowedTo?: ReadonlySet<string>;
   readonly omitted?: readonly string[];
   readonly winners: ReadonlyMap<string, ToolParty>;
@@ -60,11 +72,25 @@ interface SlotCommit {
 /** Join the actual pick to the original merge winners. This is a slot fact until an accepted request attests it. */
 function slotSelection(input: SlotCommit): SlotSelection | undefined {
   const { iteration, discovered, omitted, claimants } = input;
-  if (!omitted?.length || !claimants || discovered?.complete === false)
+  if (!claimants || discovered?.complete === false)
     return discovered && { iteration, ...discovered };
+  const rows: SelectionRow[] = [...(discovered?.rows ?? [])];
+  for (const { name, winner, competing } of input.collisions ?? []) {
+    if (!winner.tool) continue;
+    for (const loser of competing) {
+      if (!loser.tool) continue;
+      if (rows.length === MAX_SELECTION_ROWS) return { iteration, rows, complete: false };
+      rows.push({
+        kind: 'collision',
+        name,
+        tool: loser.tool,
+        party: loser.party,
+        winner: { tool: winner.tool, party: winner.party },
+      });
+    }
+  }
   const hidden = input.hiddenSkillIds && new Set(input.hiddenSkillIds);
-  const rows: (DiscoveryOmissions['rows'][number] | TopNOmission)[] = [...(discovered?.rows ?? [])];
-  for (const name of omitted) {
+  for (const name of omitted ?? []) {
     const tool = input.winningTools.get(name);
     const party = input.winners.get(name);
     if (!tool || !party) continue;

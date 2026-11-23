@@ -1,6 +1,7 @@
 import { flowChart, FlowChartExecutor } from 'footprintjs';
 import { expect, it } from 'vitest';
 import { mockClassifier } from '../../classify/mock.js';
+import { skillScopedTools } from '../../tools/skillScopedTools.js';
 import { staticTools } from '../../tool-providers/staticTools.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
 import { defineTool, type Tool } from '../../tools/tools.js';
@@ -34,11 +35,14 @@ async function prepare(input: {
   claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
   args?: Record<string, unknown>;
   top?: number;
+  events?: string[];
+  unrestrictedSkills?: boolean;
 }) {
   const cache = { current: [] };
   const provider = input.provider ?? staticTools(input.tools ?? [chosen, monitor, door]);
   const slot = buildToolsSlot({
     tools: [],
+    unrestrictedSkills: input.unrestrictedSkills,
     toolProvider: provider,
     toolClaimants: input.claimants ?? new Map(),
     toolChoice: { classifier, top: input.top },
@@ -51,6 +55,12 @@ async function prepare(input: {
     })
     .build();
   const executor = new FlowChartExecutor(chart);
+  executor.attachCombinedRecorder({
+    id: 'selection-events',
+    onEmit(event) {
+      if (event.name.startsWith('agentfootprint.tools.')) input.events?.push(event.name);
+    },
+  });
   await executor.run();
   return executor.getSnapshot()?.sharedState.wire;
 }
@@ -141,4 +151,111 @@ it('shares the discovery bound with eligible pick decisions and ignores hidden a
   expect(served.selection?.complete).toBe(false);
   expect(served.selection?.rows).toHaveLength(1024);
   expect(served.selection?.rows.at(-1)?.tool).toBe(tools[1]);
+});
+
+it('retains distinct competing implementations once while offering the first contract', async () => {
+  const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+  const first = make('monitor');
+  const second = make('monitor');
+  expect(await prepare({ served, tools: [first, second, first, second] })).toEqual([first.schema]);
+  expect(served.selection?.rows).toHaveLength(1);
+  const collision = served.selection?.rows[0];
+  expect(collision?.kind).toBe('collision');
+  if (collision?.kind !== 'collision') throw Error('missing collision decision');
+  expect(collision.tool).toBe(second);
+  expect(collision.winner.tool).toBe(first);
+  expect(collision.party).toEqual({ channel: 'provider', id: 'static' });
+  expect(collision.winner.party).toEqual({ channel: 'provider', id: 'static' });
+
+  await prepare({ served, tools: [first, first] });
+  expect(served.selection).toBeUndefined();
+});
+
+it('keeps a hidden competing implementation and an absent one indistinguishable', async () => {
+  const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+  const first = make('monitor');
+  const second = make('monitor');
+  const claimants = new Map<string, ToolClaim[]>([
+    ['monitor', [{ channel: 'skill', id: 'hidden', tool: second }]],
+  ]);
+  for (const tools of [[first, second], [first]]) {
+    expect(
+      await prepare({ served, tools, claimants, args: { hiddenSkillIds: ['hidden'] } }),
+    ).toEqual([first.schema]);
+    expect(served.selection).toBeUndefined();
+  }
+});
+
+it('reports an inactive visible claimant separately and leaves a role-hidden claimant silent', async () => {
+  const first = make('monitor');
+  const reserved = make('monitor');
+  const claims = new Map<string, ToolClaim[]>([
+    ['monitor', [{ channel: 'skill', id: 'triage', tool: reserved }]],
+  ]);
+  const eventsFor = async (hiddenSkillIds: string[] | undefined, claimants: typeof claims) => {
+    const events: string[] = [];
+    const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+    expect(
+      await prepare({ served, tools: [first], events, claimants, args: { hiddenSkillIds } }),
+    ).toEqual([first.schema]);
+    expect(served.selection).toBeUndefined();
+    return events;
+  };
+  const absent = await eventsFor(['triage'], new Map());
+  expect(await eventsFor(['triage'], claims)).toEqual(absent);
+  expect(await eventsFor(undefined, claims)).toEqual(absent);
+  const visible = await eventsFor([], claims);
+  expect(visible.filter((event) => event.endsWith('.claim_swallowed'))).toHaveLength(1);
+  expect(visible.some((event) => event.endsWith('.shadowed'))).toBe(false);
+});
+
+it('keeps a collision separate from a later top-N pick that removes its winning name', async () => {
+  const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+  const other = make('monitor');
+  expect(await prepare({ served, tools: [chosen, monitor, other], top: 1 })).toEqual([
+    chosen.schema,
+  ]);
+  const rows = served.selection?.rows ?? [];
+  expect(rows.map((r) => r.kind)).toEqual(['collision', 'top-N']);
+  expect(rows[0].tool).toBe(other);
+  expect(rows[1].tool).toBe(monitor);
+});
+
+it('bounds visible collision losers without letting repeats or hidden references consume evidence positions', async () => {
+  const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+  const first = make('monitor');
+  const hidden = make('monitor');
+  const others = Array.from({ length: 1025 }, () => make('monitor'));
+  const claimants = new Map<string, ToolClaim[]>([
+    ['monitor', [{ channel: 'skill', id: 'restricted', tool: hidden }]],
+  ]);
+  for (const count of [1024, 1025]) {
+    const tools = [first, hidden, others[0], ...others.slice(0, count)];
+    expect(
+      await prepare({ served, tools, claimants, args: { hiddenSkillIds: ['restricted'] } }),
+    ).toEqual([first.schema]);
+    expect(served.selection?.complete).toBe(count === 1024);
+    const rows = served.selection?.rows ?? [];
+    expect(rows).toHaveLength(1024);
+    expect(rows[0].tool).toBe(others[0]);
+    expect(rows.at(-1)?.tool).toBe(others[1023]);
+  }
+});
+
+it('uses explicit unrestricted visibility in discovery and gives a resolved hidden list precedence', async () => {
+  const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+  const claimants = new Map<string, ToolClaim[]>([
+    ['monitor', [{ channel: 'skill', id: 'triage', tool: monitor }]],
+  ]);
+  const input = {
+    served,
+    claimants,
+    provider: skillScopedTools('triage', [monitor]),
+    unrestrictedSkills: true,
+  };
+  await prepare(input);
+  expect(served.selection?.rows[0].kind).toBe('skill-scope');
+  expect(served.selection?.rows[0].tool).toBe(monitor);
+  await prepare({ ...input, args: { hiddenSkillIds: ['triage'] } });
+  expect(served.selection).toBeUndefined();
 });

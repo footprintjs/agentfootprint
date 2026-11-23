@@ -9,7 +9,7 @@ import { sourceSchemasOnWire } from '../agent/sourceContract.js';
  *
  */
 
-import { flowChart, isDevMode } from 'footprintjs';
+import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
@@ -31,11 +31,16 @@ import {
   type StepPlanFor,
   type StepPointerCarrier,
 } from '../../injection-engine/skillSteps.js';
-import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../../tools/tools.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
+import {
+  wireCollisions,
+  reportShadowedTools,
+  partyOfClaim,
+  type WireCandidate,
+} from './wireCollisions.js';
 import { commitServedTools, type ServedToolParties } from './commitServedTools.js';
 export type { ServedToolParties } from './commitServedTools.js';
 import { discoverTools, type ProviderToolCache } from './discoverTools.js';
@@ -69,19 +74,6 @@ export interface ToolsSlotRuntime {
 
 export type { ToolParty } from '../../tools/toolParty.js';
 
-/** One schema put forward for the wire, by whom — and WHICH implementation. */
-interface WireCandidate {
-  readonly schema: LLMToolSchema;
-  readonly party: ToolParty;
-  /**
-   * The implementation behind the contract. Identity is by implementation:
-   * two skills sharing ONE `Tool` reference (documented-legal) are one claim
-   * however many routes it arrives by, and draw nothing. Absent only on a
-   * chart with no claimant record (the message-API charts).
-   */
-  readonly tool?: Tool;
-}
-
 const FRAMEWORK_PARTY: ToolParty = { channel: 'framework' };
 
 /**
@@ -93,11 +85,6 @@ const sameContract = (a: LLMToolSchema, b: LLMToolSchema): boolean =>
   a.name === b.name &&
   a.description === b.description &&
   JSON.stringify(a.inputSchema ?? null) === JSON.stringify(b.inputSchema ?? null);
-
-const partyOfClaim = (c: ToolClaim): ToolParty => ({
-  channel: c.channel,
-  ...(c.id !== undefined && { id: c.id }),
-});
 
 /**
  * THE WIRE MERGE (9.92.0) — first occurrence wins, and the record of who won
@@ -124,14 +111,15 @@ const partyOfClaim = (c: ToolClaim): ToolParty => ({
  * ]);
  * merged.map((t) => t.description);            // ['a']
  * winners.get('x');                             // { channel: 'provider', id: 'p' }
- * losers.get('x');                              // [{ channel: 'skill', id: 's' }]
+ * losers.get('x')?.map((c) => c.party);          // [{ channel: 'skill', id: 's' }]
  * ```
  */
 export function mergeWire(candidates: readonly WireCandidate[]): {
   readonly merged: readonly LLMToolSchema[];
   readonly winners: ReadonlyMap<string, ToolParty>;
+  readonly putForward: ReadonlyMap<string, readonly WireCandidate[]>;
   /** Every candidate that lost its name, in candidate order — competing losers. */
-  readonly losers: ReadonlyMap<string, readonly ToolParty[]>;
+  readonly losers: ReadonlyMap<string, readonly WireCandidate[]>;
   /**
    * The winning IMPLEMENTATION per served name, where the candidate carried one
    * (honesty layer 2): the inputs layer decorates a served schema from the
@@ -143,28 +131,32 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 } {
   const merged: LLMToolSchema[] = [];
   const winners = new Map<string, ToolParty>();
-  const won = new Map<string, WireCandidate>();
-  const losers = new Map<string, ToolParty[]>();
+  const putForward = new Map<string, WireCandidate[]>();
+  const losers = new Map<string, WireCandidate[]>();
   const winningTools = new Map<string, Tool>();
   for (const candidate of candidates) {
     const { schema, party } = candidate;
-    const first = won.get(schema.name);
-    if (first !== undefined) {
+    const name = schema.name;
+    const already = putForward.get(name);
+    if (already) {
+      const first = already[0];
+      already.push(candidate);
       const sameImplementation =
-        (candidate.tool !== undefined && candidate.tool === first.tool) ||
-        (sameToolParty(party, first.party) && sameContract(schema, first.schema));
+        candidate.tool !== undefined && first.tool !== undefined
+          ? candidate.tool === first.tool
+          : sameToolParty(party, first.party) && sameContract(schema, first.schema);
       if (sameImplementation) continue;
-      const lost = losers.get(schema.name);
-      if (lost === undefined) losers.set(schema.name, [party]);
-      else lost.push(party);
+      const lost = losers.get(name);
+      if (lost === undefined) losers.set(name, [candidate]);
+      else lost.push(candidate);
       continue;
     }
-    won.set(schema.name, candidate);
-    winners.set(schema.name, party);
-    if (candidate.tool !== undefined) winningTools.set(schema.name, candidate.tool);
+    putForward.set(name, [candidate]);
+    winners.set(name, party);
+    if (candidate.tool !== undefined) winningTools.set(name, candidate.tool);
     merged.push(schema);
   }
-  return { merged, winners, losers, winningTools };
+  return { merged, winners, losers, putForward, winningTools };
 }
 
 /**
@@ -193,6 +185,8 @@ const SOURCES_SERVED = Object.freeze({ sources: true as const });
  */
 
 export interface ToolsSlotConfig {
+  /** The native owner established that no role policy governs skill visibility. */
+  readonly unrestrictedSkills?: boolean;
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
   readonly tools: readonly LLMToolSchema[];
   /**
@@ -417,6 +411,7 @@ const EMPTY_OFFER: readonly string[] = Object.freeze([]);
 export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const budgetCap = config.budgetCap ?? 2000;
   const staticTools = config.tools;
+  const defaultHiddenSkillIds = config.unrestrictedSkills ? EMPTY_OFFER : undefined;
   const readSkillFor = config.readSkillFor;
   const toolProvider = config.toolProvider;
   const stepPlanFor = config.stepPlanFor;
@@ -468,6 +463,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     await discoverTools(scope, {
       provider: toolProvider,
       cache: runtime?.providerToolCache,
+      defaultHiddenSkillIds,
       ...(toolClaimants && { claimants: toolClaimants }),
       callerIdentity: config.callerIdentity?.(scope),
     });
@@ -480,7 +476,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const runtime = config.runtime?.(scope);
     const providerToolCache = runtime?.providerToolCache;
     const servedTools = runtime?.servedTools;
-    const resolvedHidden = scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds;
+    const resolvedHidden =
+      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ??
+      defaultHiddenSkillIds;
     const hiddenSkillIds = resolvedHidden ?? EMPTY_OFFER;
     const args = scope.$getArgs<{
       iteration?: number;
@@ -797,7 +795,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ...(frameworkSkipStep !== undefined && { tool: frameworkSkipStep }),
       })),
     ];
-    const { merged, winners, losers, winningTools } = mergeWire(candidates);
+    const { merged, winners, losers, winningTools, putForward } = mergeWire(candidates);
+    const collisions = wireCollisions(putForward, losers, toolClaimants, resolvedHidden);
 
     // ── THE COMMIT — everything after the merge, as one closure ─────────
     // `served` is the list that goes on the record: the merged list itself
@@ -891,6 +890,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         commitServedTools(servedTools, {
           iteration,
           narrowedTo,
+          collisions,
           omitted,
           winners,
           winningTools,
@@ -934,14 +934,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         // run that simply never parked for a dead checker.
         runtime?.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
       }
-      reportShadowedTools(scope, {
-        iteration,
-        winners,
-        losers,
-        candidates,
-        ...(toolClaimants !== undefined && { claimants: toolClaimants }),
-        warnedShadow,
-      });
+      reportShadowedTools(scope, iteration, collisions, warnedShadow);
       const composition = composeSlot(
         'tools',
         iteration,
@@ -1040,107 +1033,4 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   })
     .addFunction('Compose', composeStage, 'compose', 'Compose tools slot')
     .build();
-}
-
-/** How a party is named in a sentence: `provider 'hub'`, `skill 'billing'`, `framework`. */
-const describeParty = (p: ToolParty): string =>
-  p.id === undefined ? p.channel : `${p.channel} '${p.id}'`;
-
-/**
- * Report every tool name more than one party claimed this epoch (8.7.0;
- * re-subjected 9.92.0).
- *
- * The SUBJECT is the wire crossed with dispatch: for each name on the wire,
- * the party whose contract won it — which, since dispatch follows the offer,
- * is also the party that answers — against every other party that claimed
- * the name. Two kinds of loser, two events:
- *
- *   • a COMPETING loser put a contract forward this epoch and lost the merge
- *     (`losers`, from `mergeWire`). The name draws ONE
- *     `agentfootprint.tools.shadowed` naming the wire's party in both halves —
- *     the shipped event, kept truthful — and one `tools.claim_swallowed` per
- *     loser;
- *   • a RESERVED loser is a build-time claimant that never reached the merge
- *     (`claimants`, from `buildToolRegistry`): a scoped skill's tool while the
- *     skill is inactive, a held-out step tool, the framework's `skip_step`
- *     between tenures. Its name is held by somebody else this epoch and its
- *     implementation cannot be reached by any call, so it draws
- *     `tools.claim_swallowed` — and NOT `tools.shadowed`, because no contract of
- *     its competed for the wire.
- *
- * Until 9.92.0 this loop walked `activeInjections` against the pre-merge
- * provider list and ASSERTED `schemaFrom: 'provider'`, which could not see an
- * inactive skill, a static `.tool()` or a framework auto-attach, and named the
- * provider on epochs whose wire carried the skill's contract (recorded-not-
- * built, entries 1 and 2). Reading the merge's own record is what makes both
- * sentences true by construction.
- *
- * The events fire every iteration — that is the channel that reaches
- * production, where a dynamic provider can start a collision on iteration 9
- * of a run nobody is watching. The console line is dev-mode only and latched
- * per tool name per built chart, so a 20-iteration loop prints once.
- */
-function reportShadowedTools(
-  scope: TypedScope<ToolsSubflowState>,
-  input: {
-    iteration: number;
-    winners: ReadonlyMap<string, ToolParty>;
-    losers: ReadonlyMap<string, readonly ToolParty[]>;
-    candidates: readonly WireCandidate[];
-    claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
-    /** Dedup latch for the console line, scoped to ONE built chart. */
-    warnedShadow: Set<string>;
-  },
-): void {
-  const { iteration, winners, losers, candidates, claimants, warnedShadow } = input;
-  for (const [toolName, winner] of winners) {
-    const competing = losers.get(toolName) ?? [];
-    // Reserved: every build-time claimant of the name that is neither the
-    // winner nor one of this epoch's candidates for it.
-    const putForward = candidates.filter((c) => c.schema.name === toolName);
-    const winning = putForward.find((c) => sameToolParty(c.party, winner));
-    const reserved = (claimants?.get(toolName) ?? [])
-      .filter(
-        (c) =>
-          // The same implementation is the same claim: a second skill sharing
-          // the winner's `Tool` reference lost nothing.
-          c.tool !== winning?.tool &&
-          !putForward.some((p) => p.tool === c.tool) &&
-          !sameToolParty(partyOfClaim(c), winner) &&
-          !putForward.some((p) => sameToolParty(p.party, partyOfClaim(c))),
-      )
-      .map(partyOfClaim);
-    if (competing.length === 0 && reserved.length === 0) continue;
-
-    if (competing.length > 0) {
-      typedEmit(scope, 'agentfootprint.tools.shadowed', {
-        toolName,
-        iteration,
-        schemaFrom: winner.channel,
-        ...(winner.id !== undefined && { schemaFromId: winner.id }),
-        dispatchTo: winner.channel,
-        ...(winner.id !== undefined && { dispatchToId: winner.id }),
-      });
-    }
-    for (const lost of [...competing, ...reserved]) {
-      typedEmit(scope, 'agentfootprint.tools.claim_swallowed', {
-        toolName,
-        iteration,
-        lostBy: lost.channel,
-        ...(lost.id !== undefined && { lostById: lost.id }),
-        wonBy: winner.channel,
-        ...(winner.id !== undefined && { wonById: winner.id }),
-      });
-    }
-    if (!isDevMode() || warnedShadow.has(toolName)) continue;
-    warnedShadow.add(toolName);
-    const others = [...competing, ...reserved].map(describeParty).join(', ');
-    // eslint-disable-next-line no-console
-    console.warn(
-      `agentfootprint tools: '${toolName}' is claimed by ${describeParty(winner)} AND by ` +
-        `${others}. The model is shown ${describeParty(winner)}'s contract and ` +
-        `${describeParty(winner)}'s implementation answers; the other claim answers no call ` +
-        `while the name is held. Rename one of them, or drop the duplicate.`,
-    );
-  }
 }

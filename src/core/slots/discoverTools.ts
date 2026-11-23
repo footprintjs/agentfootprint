@@ -40,6 +40,8 @@ export async function discoverTools(
     readonly cache?: ProviderToolCache;
     readonly callerIdentity?: ToolDispatchContext['callerIdentity'];
     readonly iteration?: number;
+    /** The mount has positively established unrestricted skill visibility. */
+    readonly defaultHiddenSkillIds?: readonly string[];
     /** A compose acquisition has the registry's ownership evidence. Reacquiring for dispatch is not a new offer. */
     readonly claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
   },
@@ -95,7 +97,10 @@ export async function discoverTools(
     const result =
       config.cache && claimants
         ? listWithSelectionDecisions(toolProvider, ctx, (candidate) => {
-            omissions ??= providerOmissions(claimants, args.hiddenSkillIds);
+            omissions ??= providerOmissions(
+              claimants,
+              args.hiddenSkillIds ?? config.defaultHiddenSkillIds,
+            );
             omissions.observe(candidate);
           })
         : toolProvider.list(ctx);
