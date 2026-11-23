@@ -153,7 +153,7 @@ assessed".
 
 ##### options?
 
-`false` \| \{ `standingLine?`: `boolean` \| \{ `when`: `StandingLineWhen`; \}; \}
+`false` \| \{ `standingLine?`: `boolean` \| \{ `raiseOn?`: readonly `AssessmentReason`[]; `when`: `StandingLineWhen`; \}; \}
 
 #### Returns
 

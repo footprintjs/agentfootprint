@@ -93,6 +93,7 @@ export function lifecycleShapes() {
       answerCoverage: boundAnswerCoverage,
       answerAssessment: boundAnswerAssessment,
       standingLineNames: recordOf(str),
+      standingLineOmittedByRaiseOn: bool,
       answerNegatives: boundAnswerNegatives,
       scripts: boundScripts,
       refused: shapeOf<At<PayloadOf<'agentfootprint.agent.turn_end'>, 'refused'>>({

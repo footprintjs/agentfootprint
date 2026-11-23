@@ -104,9 +104,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  (`'always'` for `standingLine: true`). Undefined when the layer is off,
    *  and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
-  readonly answerLayerOption?: {
-    readonly standingLine?: import('../../assessment/compose.js').StandingLineWhen;
-  };
+  readonly answerLayerOption?: import('../../assessment/answerLayerOptions.js').AnswerLayerArm;
 
   /** `.time()` (the time layer, `time/`): the fallback zone, as read.
    *  Undefined on every agent that did not ask — then no clock is read, no
