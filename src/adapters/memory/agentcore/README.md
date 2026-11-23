@@ -8,7 +8,7 @@ import these modules; the public memory door re-exports the facade.
 | `contract.ts` | Entry-semantic client, options, payload union and service ceilings |
 | `store.ts` | Existing MemoryStore lifecycle, CAS ordering and write funnel |
 | `identity.ts` | Injective identity addressing and length refusals |
-| `namespace.ts` | Scope admission, namespace rendering and record containment |
+| `namespace.ts` | Scope admission, detached request fields and record containment |
 | `storedEntry.ts` | Blob decoding and the present-but-unreadable refusal |
 | `sdkClient.ts` | Optional SDK loading and the four command translations |
 | `eventPayload.ts` | Detached projection, closed-choice admission, encoding and byte bounds |
@@ -31,6 +31,8 @@ file (file-size steps 1–3); the store facade holds wiring and its lifecycle.
 `agentCoreScope` moves the existing addressing bodies into the identity owner.
 Behavior changes are limited to the approved optional event projection and the
 adapter-specific forget documentation. No oversized source file remains here.
+The foreign-client probes also pin per-call namespace detachment: replacing a
+request's configuration cannot change the captured scope of later batch events.
 
 Behavior tests remain at `test/adapters/memory/agentcore*.test.ts`; the payload
 and native-record suites exercise this sealed implementation through its facade.

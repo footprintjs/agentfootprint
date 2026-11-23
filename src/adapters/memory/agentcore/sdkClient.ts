@@ -37,9 +37,15 @@ export function sdkModelsExtraction(mod: BedrockAgentCoreSdkModule): boolean {
 }
 
 /** SDK barrels may use export getters. Capture each model once for both declarations. */
-function sdkModels(mod: BedrockAgentCoreSdkModule): BedrockAgentCoreSdkModule {
+function sdkModels(
+  mod: BedrockAgentCoreSdkModule,
+  eventPayloadEnabled: boolean,
+): BedrockAgentCoreSdkModule {
+  const names = eventPayloadEnabled
+    ? (['CreateEventInput$', 'PayloadType$', 'Conversational$', 'Content$'] as const)
+    : (['CreateEventInput$'] as const);
   return Object.fromEntries(
-    (['CreateEventInput$', 'PayloadType$', 'Conversational$', 'Content$'] as const).map((name) => {
+    names.map((name) => {
       try {
         return [name, mod[name]];
       } catch {
@@ -57,6 +63,7 @@ function sdkModels(mod: BedrockAgentCoreSdkModule): BedrockAgentCoreSdkModule {
 export function createAgentCoreClient(
   region: string | undefined,
   injected?: BedrockAgentCoreSdkModule,
+  eventPayloadEnabled = false,
 ): AgentCoreLikeClient {
   let mod: BedrockAgentCoreSdkModule;
   if (injected) {
@@ -79,7 +86,7 @@ export function createAgentCoreClient(
     );
   }
   const sdk = new mod.BedrockAgentCoreClient({ ...(region && { region }) });
-  const models = sdkModels(mod);
+  const models = sdkModels(mod, eventPayloadEnabled);
 
   const send = async (
     Ctor: (new (input: never) => unknown) | undefined,

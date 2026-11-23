@@ -1,4 +1,21 @@
-import type { AgentCoreMemoryRecord } from './contract.js';
+import type { AgentCoreMemoryRecord, AgentCoreLikeClient } from './contract.js';
+
+type ExtractionFields = Pick<
+  Parameters<AgentCoreLikeClient['createEvent']>[0],
+  'extractionMode' | 'extractionConfig'
+>;
+
+/** A client receives its own wrapper; replacing it cannot redirect the next batch event. */
+export function detachedExtraction(fields: ExtractionFields): ExtractionFields {
+  return {
+    ...fields,
+    ...(fields.extractionConfig !== undefined && {
+      extractionConfig: {
+        namespaceVariables: frozenScope(fields.extractionConfig.namespaceVariables),
+      },
+    }),
+  };
+}
 /**
  * ── Namespace variables: AgentCore's domain, checked here ──
  *

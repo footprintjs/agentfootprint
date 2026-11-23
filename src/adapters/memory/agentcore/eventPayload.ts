@@ -2,6 +2,7 @@ import type { MemoryEntry } from '../../../memory/entry/index.js';
 import type {
   AgentCoreEventPayloadChoice,
   AgentCoreEventPayloadSelector,
+  AgentCoreLikeClient,
   BedrockAgentCoreSdkModule,
 } from './contract.js';
 
@@ -9,6 +10,15 @@ const MAX_TEXT_SCALARS = 100_000;
 const MAX_TEXT_BYTES = 100_000;
 const MAX_MIXED_EVENT_BYTES = 10_000_000;
 const ROLES = { user: 'USER', assistant: 'ASSISTANT', tool: 'TOOL', other: 'OTHER' } as const;
+
+/** An unreadable optional declaration grants no authority, while blob choices need none. */
+export function clientForwardsEventPayload(client: AgentCoreLikeClient): boolean {
+  try {
+    return client.forwardsEventPayload === true;
+  } catch {
+    return false;
+  }
+}
 
 /** Stop at the first malformed scalar or exceeded bound, without an encoded copy. */
 function scanUnicode(

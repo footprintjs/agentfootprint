@@ -48,6 +48,9 @@ npm run example examples/memory/14-agentcore-conversational-events.ts
 
 `eventPayload` receives detached entry data and returns synchronously:
 
+The memory door exports `AgentCoreEventPayloadSelector` for that callback and
+`AgentCoreEventPayloadChoice` for its closed blob-or-conversation result.
+
 - `{ kind: 'blob' }` keeps the existing format.
 - `{ kind: 'conversational', role, text }` adds a separate conversational payload
   item beside the canonical blob. Choose `user`, `assistant`, `tool` or `other`

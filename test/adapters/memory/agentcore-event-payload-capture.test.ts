@@ -11,6 +11,72 @@ import {
 import type { Choice, Selector } from './agentcore-event-payload.fixtures.js';
 
 describe('AgentCore event payload — one captured boundary declaration', () => {
+  it.each(['omitted', 'blob', 'conversational'] as const)(
+    'a client cannot change the captured namespace for a later batch event (%s)',
+    async (mode) => {
+      const scopes: unknown[] = [];
+      const fixture = clientFixture(true, (input) => {
+        scopes.push({ ...input.extractionConfig?.namespaceVariables });
+        if (input.entry.id === 'one') {
+          Reflect.set(input.extractionConfig!, 'namespaceVariables', { tenantid: 'other' });
+        }
+      });
+      const select: Selector | undefined =
+        mode === 'omitted'
+          ? undefined
+          : () =>
+              mode === 'blob'
+                ? { kind: 'blob' }
+                : { kind: 'conversational', role: 'user', text: 'owned' };
+      await clientStore(fixture.client, select).putMany(identity, [entry('one'), entry('two')], {
+        namespaceScope: { tenantid: 'acme' },
+      });
+      expect(scopes).toEqual([{ tenantid: 'acme' }, { tenantid: 'acme' }]);
+      expect(fixture.createEvent).toHaveBeenCalledTimes(2);
+    },
+  );
+  it('does not inspect the new client capability when the selector is omitted', async () => {
+    const fixture = clientFixture(false);
+    const read = vi.fn(() => {
+      throw new Error('optional declaration is unreadable');
+    });
+    Object.defineProperty(fixture.client, 'forwardsEventPayload', { get: read });
+    await clientStore(fixture.client).put(identity, entry());
+    expect(read).not.toHaveBeenCalled();
+    expect(fixture.createEvent).toHaveBeenCalledOnce();
+  });
+
+  it('an unreadable optional client declaration permits blobs and refuses conversation by name', async () => {
+    const fixture = clientFixture(false);
+    const failure = new Error('optional declaration is unreadable');
+    const read = vi.fn(() => {
+      throw failure;
+    });
+    Object.defineProperty(fixture.client, 'forwardsEventPayload', { get: read });
+    await clientStore(fixture.client, () => ({ kind: 'blob' })).put(identity, entry());
+    await expect(
+      clientStore(fixture.client, () => ({
+        kind: 'conversational',
+        role: 'user',
+        text: 'owned',
+      })).put(identity, entry()),
+    ).rejects.toThrow(/forwardsEventPayload/);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(fixture.createEvent).toHaveBeenCalledOnce();
+  });
+
+  it('does not inspect new SDK schemas when the selector is omitted', async () => {
+    const fixture = sdkFixture();
+    const read = vi.fn(() => {
+      throw new Error('unneeded schema');
+    });
+    for (const name of ['PayloadType$', 'Conversational$', 'Content$']) {
+      Object.defineProperty(fixture.sdk, name, { get: read });
+    }
+    await sdkStore(fixture).put(identity, entry());
+    expect(read).not.toHaveBeenCalled();
+    expect(fixture.send).toHaveBeenCalledOnce();
+  });
   it('captures the selector once and invokes it unbound for each actual write', async () => {
     const fixture = clientFixture();
     const receivers: unknown[] = [];

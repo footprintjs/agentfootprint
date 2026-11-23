@@ -34,9 +34,14 @@ import {
   assertSearchWithinScope,
   holdsActor,
   filedUnder,
+  detachedExtraction,
 } from './namespace.js';
 import { createAgentCoreClient } from './sdkClient.js';
-import { captureEventPayload, assertMixedEventSize } from './eventPayload.js';
+import {
+  captureEventPayload,
+  assertMixedEventSize,
+  clientForwardsEventPayload,
+} from './eventPayload.js';
 /**
  * AgentCore Memory-backed `MemoryStore`. Implements every method except `search()`.
  *
@@ -159,8 +164,10 @@ export class AgentCoreStore implements MemoryStore {
     }
     this.eventPayload = eventPayload;
     const injected = options._client ?? options.client;
-    this.client = injected ?? createAgentCoreClient(options.region, options.sdk);
-    this.forwardsEventPayload = this.client.forwardsEventPayload === true;
+    this.client =
+      injected ?? createAgentCoreClient(options.region, options.sdk, eventPayload !== undefined);
+    this.forwardsEventPayload =
+      eventPayload !== undefined && clientForwardsEventPayload(this.client);
     this.writeOptionsRefusal =
       this.client.forwardsWriteOptions === true
         ? undefined
@@ -251,7 +258,7 @@ export class AgentCoreStore implements MemoryStore {
       ...scope,
       entry: selected === undefined ? (entry as MemoryEntry) : selected.entry,
       ...(selected !== undefined && { eventPayload: selected.eventPayload }),
-      ...extraction,
+      ...detachedExtraction(extraction),
     });
   }
 
