@@ -451,7 +451,9 @@ describe('.compaction() — chart shapes', () => {
       .build();
 
     const answer = await agent.run({ message: 'go' });
-    expect(answer).toBe('final answer');
+    expect(answer).toBe(
+      'final answer\n\n---\n\nNot sure — 2 results from this turn were dropped from the conversation before the answer.',
+    );
 
     const folds = compactionsOf(agent).filter((r) => r.removedMessageCount > 0);
     expect(folds.length).toBeGreaterThan(0);

@@ -218,6 +218,12 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
       const pausedBeforeBeta = mode === 'sliding window, pausing before the second call';
       const rendersStanding =
         bothRetained || pausedBeforeBeta || mode === 'sliding window with standing';
+      const windowClause = bothEvicted
+        ? '2 results from this turn were dropped from the conversation before the answer'
+        : '1 result from this turn was dropped from the conversation before the answer';
+      const line =
+        'Not sure — a value a call ran with came from the model, with no source on the record' +
+        (windowed ? `; ${windowClause}.` : '.');
       const name = 'read_shelf';
       const read = (shelf: string, quote: string, id = 'reused') =>
         call(id, name, {
@@ -279,10 +285,7 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
             checkInApproved({ request: result.checkIn, by: 'fixture' }),
           );
         }
-        if (windowed && !rendersStanding)
-          expect(result).toBe(
-            'Read the shelf.\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record.',
-          );
+        if (windowed && !rendersStanding) expect(result).toBe(`Read the shelf.\n\n---\n\n${line}`);
         else if (paused) expect(isInputPause(result)).toBe(true);
         expect(entered).toEqual(bothEvicted ? ['alpha', 'beta', 'gamma'] : ['alpha', 'beta']);
         const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
@@ -360,8 +363,6 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
         const account = accountForAnswer(recording);
         if (rendersStanding) {
           expect((await agent.assessment())?.reasons).toEqual(assessment.reasons);
-          const line =
-            'Not sure — a value a call ran with came from the model, with no source on the record.';
           expect(result).toBe(`Read the shelf.\n\n---\n\n${line}`);
           expect(account.facts.limitsBlock.value).toBe(line);
         }
@@ -370,6 +371,10 @@ describe('standing reasons rebuilt from their committed witnesses', () => {
           (line) => line.template.id === 'howSure.reason.argumentUnverified',
         );
         expect(reason).toMatchObject({ pointers: [pointer] });
+        const windowWarning = standing?.find(
+          (line) => line.template.id === 'howSure.reason.resultDroppedFromWindow',
+        );
+        expect(windowWarning?.text).toBe(windowed ? `${windowClause}.` : undefined);
         expect(
           standing?.some((line) => line.template.id === 'howSure.reason.resultUnavailable'),
         ).toBe(windowed);

@@ -329,7 +329,7 @@ history occurrence. The provider can use the same ID again.
 |---|---|
 | `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `call-not-completed`, `result-cut`, `placed-unread`, `times-without-zone`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
 | `answer` | `value-contingent` (answer witness), `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
-| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `step-skipped`, `result-withheld`, `check-unreachable` |
+| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `step-skipped`, `result-withheld`, `result-dropped-from-window`, `check-unreachable` |
 
 **Why.** "Not sure — a tool said nothing matched" did not say which tool: when an
 answer rested on one call's rows and another call reported no matching results, a reader could not
@@ -410,6 +410,9 @@ const loadAttachment = defineTool({ name: 'load_attachment', displayName: 'loadi
 //    source: { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'load_attachment' }] } }]
 text; // 'One draft run: run-1.\n\n---\n\nNot sure — loading the attached data reported no matching results.'
 ```
+
+Version 10 adds the count of delivered results removed from the conversation window during
+the current turn. The live standing and the saved explanation use the same committed witnesses.
 
 The named clauses (`compose.ts` · `NAMED_REASON_WORDS`; `{who}` = the declared
 names, then "and N other call(s)"). They came in with `STANDING_LINE_VERSION` 2

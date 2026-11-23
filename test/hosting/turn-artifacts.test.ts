@@ -39,6 +39,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, inMemoryArtifacts, recordingPutInput } from '../../src/index.js';
 import type { ArtifactMeta, ArtifactStore } from '../../src/index.js';
+import { ARTIFACT_REF_PREFIX } from '../../src/artifacts/index.js';
 import type { AgentfootprintEvent } from '../../src/events.js';
 import { mock } from '../../src/llm-providers.js';
 import { memorySessions, nodeHost, standingAgent, toEnvelope } from '../../src/hosting/index.js';
@@ -728,11 +729,21 @@ describe('turnArtifacts — property: filed ⇒ redeemable by the same caller, b
 
 describe('turnArtifacts — security', () => {
   it('the hand-over carries no scope: nothing on it names a tenant, principal or conversation', async () => {
-    const { host } = await served(recordingAgent(), { verify: true });
-    const turn = boundOf(await host.deliver({ input: 'hi', sessionId: 's1', headers: ALICE }));
-    const text = JSON.stringify(turn);
+    const store = inMemoryArtifacts();
+    const { host } = await served(recordingAgent(store), { verify: true });
+    // Force an overlap while keeping the real artifact mint in use.
+    const sessionId = ARTIFACT_REF_PREFIX;
+    const turn = boundOf(await host.deliver({ input: 'hi', sessionId, headers: ALICE }));
+    const saved = await store.list({ conversationId: sessionId, principal: 'alice' });
+    expect(saved.artifacts).toHaveLength(1);
+    const filed = saved.artifacts[0]!;
+    expect(turn.recording).toEqual({ ref: filed.ref, bytes: filed.bytes });
+
+    const { ref, ...recording } = turn.recording!;
+    expect(ref).toContain(sessionId);
+    const text = JSON.stringify({ ...turn, recording });
     expect(text).not.toContain('alice');
-    expect(text).not.toContain('s1');
+    expect(text).not.toContain(sessionId);
     expect(Object.keys(turn).sort()).toEqual(['artifacts', 'bound', 'recording']);
     expect(Object.keys(turn.recording!).sort()).toEqual(['bytes', 'ref']);
     expect(Object.isFrozen(turn.recording)).toBe(true);

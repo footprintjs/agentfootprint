@@ -56,8 +56,11 @@ export const inventoriedCalls = [
   },
   {
     writer: `${agent}/honesty/libraryResultLimits`,
-    exportName: 'recordLibraryResultLimit',
-    sites: [[`${toolCalls}/execution/artifactsOperations.ts`, 'placeResults']],
+    exportName: 'recordLibraryResultLimits',
+    sites: [
+      [`${toolCalls}/execution/artifactsOperations.ts`, 'placeResults'],
+      [`${agent}/honesty/settledToolCalls.ts`, 'commitWindowResultDrops'],
+    ],
   },
   {
     writer: `${agent}/honesty/libraryResultLimits`,
