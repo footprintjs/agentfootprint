@@ -26,7 +26,7 @@
  *   fail, so a filled call's empty result stopped reading `empty-undeclared`
  *   and its absence stopped reading `declared-absent`;
  * - the unsupported-argument seam's grounded corpus
- *   (`core/agent/stages/callLLM.ts`) and the empty-lookup seam's producer
+ *   (`core/agent/stages/callLLM/acceptResponse.ts`) and the empty-lookup seam's producer
  *   corpus (`core/agent/stages/toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf`) — a value
  *   only the note carries is not one the run served.
  *
@@ -47,7 +47,7 @@
 // FOLD · the one owner of where a tool's own words end in a result message
 // consumers read this and never re-derive it: core/agent/evidence/evidenceIndex.ts · evidenceFromHistory,
 // core/agent/assessment/turnResults.ts · turnResults, answer-account/facts/inView.ts · readInView,
-// core/agent/stages/callLLM.ts · groundedTextOf, core/agent/stages/toolCalls/evidence/producerCorpus.ts · producerCorpusOf
+// core/agent/stages/callLLM/acceptResponse.ts · groundedTextOf, core/agent/stages/toolCalls/evidence/producerCorpus.ts · producerCorpusOf
 // detached: yes — a string cut from the content (or the content as given when it is not a string).
 /**
  * The tool's OWN text of a result message: `content` cut at the tool-bytes

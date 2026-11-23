@@ -5,7 +5,7 @@
  *          recordFindings`, `middleware/ledger.ts · recordDecisions`).
  * Role:    core/ layer leaf. Two call sites, one writer: the tools slot
  *          files the `pick` / `pick-error` row before the model call
- *          (`slots/buildToolsSlot.ts · composeStage`), `stages/callLLM.ts`
+ *          (`slots/buildToolsSlot.ts · composeStage`), `stages/callLLM/acceptResponse.ts`
  *          files the `outcome` row after the reply. Both go through
  *          `recordToolChoice`, so the key is appended one way and the
  *          matching event fires once per row.

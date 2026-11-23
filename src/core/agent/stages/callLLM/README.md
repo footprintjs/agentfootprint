@@ -50,4 +50,27 @@ so an adapter that ignores it still cannot hold the stage open, and an
 answer that lands after it is refused before anything records or bills
 it (`lib/abort.ts`, law 4).
 
-The oversized runtime stage still needs its step 2/3 extraction.
+Steps 2 and 3 split the runtime stage into request preparation, provider
+execution and accepted-response capture. Each owner stays below 600 lines;
+the stable facade keeps only their wiring and native admission.
+
+## Accepted-response ownership
+
+`callLLM.ts` wires one native stage. `prepareCall.ts` assembles its request and
+receipt, `executeCall.ts` owns provider attempts and contract normalization, and
+`acceptResponse.ts` commits usable response fields and the existing checks.
+Provider intervention admission happens between execution and acceptance, before
+tool arguments, output validation, replay or final-answer delivery can use a
+blocked or indeterminate response. The native terminal owner translates the
+admitted safe fact; raw provider trace never becomes chart state.
+
+`capturedResponse.ts` reads the foreign intervention once into owned data at
+the provider boundary. Terminal outcomes never read content, tool or replay
+fields; masking-only retains the documented response fields. Later predicates
+read that owned projection, so a changing foreign property cannot turn a block
+into success between the capability guard and native admission.
+
+`responseAccounting.ts` owns the token counter update on both usable and
+terminal completed responses. A terminal assessment emits one empty `llm_end`
+and the ordinary cost tick before native break; receiving and billing a response
+does not authorize tools, replay, final content or a final-memory write.

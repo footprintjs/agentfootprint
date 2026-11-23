@@ -105,6 +105,7 @@ import type {
   LLMResponse,
 } from '../provider-contract/types.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
+import { isProviderInterventionError } from '../provider-contract/intervention.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ export function withCircuitBreaker(
   }
 
   function recordFailure(err: unknown, hooks?: LLMCallHooks): void {
-    if (!shouldCount(err)) return;
+    if (isProviderInterventionError(err) || !shouldCount(err)) return;
     breaker.lastError = err;
     if (breaker.state === 'half-open') {
       // Probe failed — re-open the breaker.

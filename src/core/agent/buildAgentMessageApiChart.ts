@@ -1,3 +1,4 @@
+import { requireUsableProviderResponse, admitInterventionError } from '../providerIntervention.js';
 import { recordModelContext } from '../../recorders/core/recordModelContext.js';
 /**
  * buildAgentMessageApiChart — the Agent (ReAct) form of the messageAPI
@@ -242,7 +243,8 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
         // test/resilience/integration/resilience-decorator-visibility.test.ts.
         resilienceHooks(scope, receipt !== undefined),
       ),
-    );
+    ).catch((error: unknown) => admitInterventionError(scope, error));
+    requireUsableProviderResponse(scope, response);
     scope.answer = response.content;
     scope.toolCalls = response.toolCalls;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {

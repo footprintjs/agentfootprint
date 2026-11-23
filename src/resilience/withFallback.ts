@@ -48,6 +48,8 @@ import {
   nativeOutputSchemaFor,
 } from '../provider-contract/nativeOutputSchema.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
+import { isProviderInterventionError } from '../provider-contract/intervention.js';
+import { automaticReplayForbidden } from '../provider-contract/replaySafety.js';
 import { replayAttempts } from './replayAttempt.js';
 import { requestAttempt } from '../provider-contract/requestObserver.js';
 import { throwIfAborted } from '../lib/abort.js';
@@ -318,7 +320,12 @@ export function withFallback(
         // `shouldFallback` says: that would start a second billed call for a
         // caller who has gone (lib/abort.ts).
         throwIfAborted(req.signal);
-        if (!shouldFallback(err)) throw err;
+        if (
+          isProviderInterventionError(err) ||
+          automaticReplayForbidden(err) ||
+          !shouldFallback(err)
+        )
+          throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
         const fallbackRequest = requestFor(fallback, attempts.request);
@@ -383,7 +390,13 @@ export function withFallback(
         }
       } catch (err) {
         throwIfAborted(req.signal);
-        if (yieldedAny || !shouldFallback(err)) throw err;
+        if (
+          yieldedAny ||
+          isProviderInterventionError(err) ||
+          automaticReplayForbidden(err) ||
+          !shouldFallback(err)
+        )
+          throw err;
         onFallback?.(err);
         reportFellBack(hooks, err);
         yield* fromFallback();

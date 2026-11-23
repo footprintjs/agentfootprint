@@ -1,3 +1,4 @@
+import { requireUsableProviderResponse, admitInterventionError } from '../providerIntervention.js';
 import { recordModelContext } from '../../recorders/core/recordModelContext.js';
 /**
  * buildMessageApiChart — PROOF of the locked "messageAPI merge-tree" shape
@@ -24,8 +25,8 @@ import { recordModelContext } from '../../recorders/core/recordModelContext.js';
  * selector picks BOTH slots (a one-shot call engineers everything once).
  *
  * WHY messageAPI is a REAL stage: it assembles the LLM request bulk that the
- * agent's `callLLM` builds invisibly today (`buildCallLLMStage`,
- * callLLM.ts · buildCallLLMStage) — `systemPrompt`
+ * agent's `callLLM` builds invisibly today (`prepareCall`,
+ * callLLM/prepareCall.ts · prepareCall) — `systemPrompt`
  * (separate field) + `messages` (the conversation, incl. tool-results) → the
  * message-API payload. Making it a stage makes that assembly visible +
  * inspectable in Lens/Trace. (Tools is a separate field added at Call-LLM —
@@ -228,7 +229,8 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
         // Resilience-report channel — see buildAgentMessageApiChart.
         resilienceHooks(scope, receipt !== undefined),
       ),
-    );
+    ).catch((error: unknown) => admitInterventionError(scope, error));
+    requireUsableProviderResponse(scope, response);
     scope.answer = response.content;
     typedEmit(scope, 'agentfootprint.stream.llm_end', {
       iteration: scope.iteration,

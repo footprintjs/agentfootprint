@@ -52,6 +52,8 @@ import type {
 } from '../provider-contract/types.js';
 import { sleep } from '../lib/sleep.js';
 import { throwIfAborted } from '../lib/abort.js';
+import { isProviderInterventionError } from '../provider-contract/intervention.js';
+import { automaticReplayForbidden } from '../provider-contract/replaySafety.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';
 import { requestAttempt } from '../provider-contract/requestObserver.js';
@@ -191,7 +193,13 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // retry would re-send (and re-bill) a request nobody is waiting for. The
     // failure is the cancellation itself (lib/abort.ts).
     throwIfAborted(req.signal);
-    if (attempt >= maxAttempts || !shouldRetry(err, attempt)) throw err;
+    if (
+      isProviderInterventionError(err) ||
+      automaticReplayForbidden(err) ||
+      attempt >= maxAttempts ||
+      !shouldRetry(err, attempt)
+    )
+      throw err;
     const scheduled = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
     // The server's word beats our guess — waiting less than it asked only
     // spends an attempt on a refusal already announced. Capped by the same

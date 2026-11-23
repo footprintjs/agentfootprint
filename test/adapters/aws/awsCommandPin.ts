@@ -300,7 +300,7 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
   },
   {
     adapter: 'bedrock (LLM provider)',
-    sources: ['src/adapters/llm/BedrockProvider.ts'],
+    sources: ['src/adapters/llm/BedrockProvider/client.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-runtime',
     client: 'BedrockRuntimeClient',
     commands: ['ConverseCommand', 'ConverseStreamCommand'],

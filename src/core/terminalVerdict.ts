@@ -19,9 +19,14 @@ import { failFastErrorOf, type ReliabilityFailRecord } from '../reliability/fail
 import { PolicyHaltError, type PolicyHaltContext } from '../security/PolicyHaltError.js';
 import { UnsupportedValuesError, type UnsupportedValuesContext } from './agent/evidence/errors.js';
 import { MessageDeniedError, type MessageDeniedContext } from './agent/middleware/errors.js';
+import {
+  interventionErrorOf,
+  type ProviderIntervention,
+} from '../provider-contract/intervention.js';
 
 /** Each verdict keeps exactly what its error is built from. */
 export type TerminalVerdict =
+  | { readonly kind: 'provider-intervention'; readonly intervention: ProviderIntervention }
   | { readonly kind: 'reliability-fail-fast'; readonly record: ReliabilityFailRecord }
   | { readonly kind: 'policy-halt'; readonly halt: PolicyHaltContext }
   | { readonly kind: 'message-denied'; readonly denial: MessageDeniedContext }
@@ -31,6 +36,8 @@ export type TerminalVerdict =
 /** The typed error a verdict is raised as — the same one the agent's own run raises. */
 export function terminalErrorOf(verdict: TerminalVerdict, snapshot?: unknown): Error {
   switch (verdict.kind) {
+    case 'provider-intervention':
+      return interventionErrorOf(verdict.intervention);
     case 'reliability-fail-fast':
       return failFastErrorOf(verdict.record, snapshot);
     case 'policy-halt':

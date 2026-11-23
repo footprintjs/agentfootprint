@@ -20,11 +20,12 @@
  * surface here once.
  */
 
-import type { CombinedRecorder, FlowRunFailedEvent } from 'footprintjs';
+import type { CombinedRecorder, FlowRunFailedEvent, EmitEvent } from 'footprintjs';
 import type { EventDispatcher } from '../../events/dispatcher.js';
 import { buildEventMeta, type RunContext } from '../../bridge/eventMeta.js';
 import { humanizeLLMError } from '../../lib/humanizeLLMError.js';
 import { isDeferredPayloadSummary, type DeferredPayloadSummary } from './deferredPayload.js';
+import { EmitBridge } from './EmitBridge.js';
 
 interface FailureProjection {
   readonly message: string;
@@ -58,12 +59,26 @@ export class ErrorBridge implements CombinedRecorder {
   private readonly getRunContext: () => RunContext;
   private readonly fallback: ErrorBridgeOptions['fallback'];
   private projectedFailure?: FailureProjection;
+  private readonly admittedError: EmitBridge;
 
   constructor(options: ErrorBridgeOptions) {
     this.dispatcher = options.dispatcher;
     this.id = options.id ?? 'agentfootprint.error-bridge';
     this.getRunContext = options.getRunContext;
     this.fallback = options.fallback;
+    // An admitted response may end with a clean native break. It has no
+    // onRunFailed event, so forward its served terminal notification here,
+    // under the emitting stage's actual identity and native observer order.
+    this.admittedError = new EmitBridge({
+      id: `${this.id}.admitted-response`,
+      prefix: 'agentfootprint.error.fatal',
+      dispatcher: options.dispatcher,
+      getRunContext: options.getRunContext,
+    });
+  }
+
+  onEmit(event: EmitEvent | DeferredPayloadSummary): void {
+    this.admittedError.onEmit(event);
   }
 
   clear(): void {

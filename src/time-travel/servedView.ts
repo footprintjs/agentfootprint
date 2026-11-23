@@ -56,8 +56,8 @@
  *
  * ── EVERY CHART THAT SERVES A MODEL MINTS, EXCEPT WHERE IT CANNOT SALT ─────
  * Until 9.91.0 `buildReceipt` was called from exactly one place — the agent
- * charts' `call-llm` stage (`stages/callLLM.ts`) — and the three other charts
- * that hand a model a request (`LLMCall.ts` · `callLLM`,
+ * charts' `call-llm` stage (`stages/callLLM/prepareCall.ts`) — and the three other charts
+ * that hand a model a request (`LLMCall/chart.ts` · `callLLM`,
  * `buildMessageApiChart`, `buildAgentMessageApiChart`) left
  * `no-receipt-on-chart` on every view they produced. Two reasons were recorded
  * for that at the time. NEITHER survived.

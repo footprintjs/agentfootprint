@@ -39,6 +39,8 @@ const SCANNED_DIRS = [
 const SCANNED_FILES = [
   'src/hosting/stream.ts',
   'src/hosting/streamHandler.ts',
+  // The unchanged request/refusal writer moved beside the stream-handler facade.
+  'src/hosting/streamHandler/request.ts',
   'src/artifacts/recordingArtifact.ts',
   'src/memory/causal/evidenceRecorder.ts',
 ];

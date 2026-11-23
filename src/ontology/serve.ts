@@ -4,8 +4,8 @@
  * Pattern: one pure function over the committed spec (the twin of the
  *          replay-only `findings/serve.ts · findingsLedgerPiece`): no scope,
  *          no I/O, no clock, no call number. Same spec, same bytes.
- * Role:    Lens. `ontologyPiece` composes the piece `callLLM ·
- *          buildCallLLMStage` joins after the recovery piece (injections →
+ * Role:    Lens. `ontologyPiece` composes the piece `callLLM/prepareCall.ts ·
+ *          prepareCall` joins after the recovery piece (injections →
  *          recovery → ontology, FIXED; the findings DATA goes after history)
  *          and `servedView.ts · viewOf` recomposes from the run
  *          constant `ontology` in the same slot, so the receipt agrees by

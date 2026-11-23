@@ -88,7 +88,7 @@ describe('LLMCall — end-to-end', () => {
     });
     await llm.run({ message: 'hi' });
     // LLMCall mounts system-prompt + messages slots ONLY. Tools is
-    // Agent's affordance, not LLMCall's. See LLMCall.ts buildChart().
+    // Agent's affordance, not LLMCall's. See LLMCall/chart.ts buildCallChart().
     expect(composed.sort()).toEqual(['messages', 'system-prompt']);
   });
 

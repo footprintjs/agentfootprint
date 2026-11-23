@@ -1,18 +1,18 @@
 **Mixed** — two slot builders resolve what the model is served; the third is a
 record of it.
 Lens: `buildSystemPromptSlot.ts` (joined into the prompt by
-`../agent/stages/callLLM.ts` · `systemPrompt`) and `buildToolsSlot.ts` (the
+`../agent/stages/callLLM/prepareCall.ts` · `systemPrompt`) and `buildToolsSlot.ts` (the
 served tool list, the `read_skill` offer and the step narrowing; it reads
 `hiddenSkillIds` from its mount, resolved by the Injection Engine —
 `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`).
 Trace: `buildMessagesSlot.ts` — its own header says it is not the wire but the
 observability projection of the conversation.
 Correction to the text below: the three slots are not the whole wire. The
-request is assembled in `../agent/stages/callLLM.ts` · `buildCallLLMStage` —
-messages come from `scope.history` (`callLLM.ts` · `messages`), the tool list is
-EMPTIED on the wrap-up (`callLLM.ts` · `registeredToolSchemas`, the
+request is assembled in `../agent/stages/callLLM/prepareCall.ts` · `prepareCall` —
+messages come from `scope.history` (`callLLM/prepareCall.ts` · `messages`), the tool list is
+EMPTIED on the wrap-up (`callLLM/prepareCall.ts` · `registeredToolSchemas`, the
 `scope.wrapUpAsked` arm that yields `EMPTY_TOOL_SCHEMAS`; the other arm is the
-`scope.dynamicToolSchemas` fallback), and `callLLM.ts` appends request-only
+`scope.dynamicToolSchemas` fallback), and `callLLM/prepareCall.ts` appends request-only
 lines to `wireMessages` without passing through any slot (each one is sent on
 this request only and written to no history; its reason is the `requestOnly`
 entry the receipt keeps):
@@ -49,7 +49,7 @@ the conversation for observability. CallLLM assembles the request's messages fro
 | **Messages** | The conversation history | User message, assistant responses, tool results |
 | **Tools** | Which tools the LLM can call | Static registry, dynamic per-iteration filtering |
 
-The slots are the abstraction the library is built on, but they are not the whole wire: the wrap-up empties the tool list and `callLLM.ts` adds the request-only lines listed in the correction at the top of this page, outside every slot.
+The slots are the abstraction the library is built on, but they are not the whole wire: the wrap-up empties the tool list and `callLLM/prepareCall.ts` adds the request-only lines listed in the correction at the top of this page, outside every slot.
 
 ## Architectural decisions
 

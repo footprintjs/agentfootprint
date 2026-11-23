@@ -13,7 +13,7 @@
  * InjectionRecord per message, with the source, reason, role and
  * position a consumer needs to see what the turn was made of. It is not
  * the wire. The request's message list comes from `scope.history`
- * directly (`stages/callLLM.ts`), because the projection flattens away
+ * directly (`stages/callLLM/prepareCall.ts`), because the projection flattens away
  * the LLM-protocol shape a provider needs — an assistant turn's
  * `toolCalls[]`, a tool turn's `toolCallId`.
  *
