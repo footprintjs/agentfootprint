@@ -1,10 +1,10 @@
 import { readAnswerRows } from './answer/stage.js';
 import { readIntegrityFindings } from './choose/stage.js';
 import { composeWarning } from './compose/stage.js';
-import { gatherWarning, readPause } from './gather/stage.js';
+import { gatherWarning, prepareWarning, readPause } from './gather/stage.js';
 import { readArgumentAsk, readContingentRows, readInputs } from './inputs/stage.js';
 import type { RetainedReasonState } from './reasonDetails.js';
-import { readResultEvidence, readResultsCoverage } from './results/stage.js';
+import { readInitialResults, readResultEvidence, readResultsCoverage } from './results/stage.js';
 import type { AnswerAssessment, AssessmentDeclarations } from './types.js';
 
 /**
@@ -20,7 +20,9 @@ export function foldState(
   legacyEvents?: unknown,
   retain: RetainedReasonState = (_key, value) => value,
 ): AnswerAssessment {
-  const gathered = gatherWarning(recorded, served, declarationAddresses, legacyEvents);
+  const prepared = prepareWarning(recorded, served, declarationAddresses, legacyEvents);
+  readInitialResults(prepared);
+  const gathered = gatherWarning(prepared, declarationAddresses);
   const { state, argumentVerdicts, resolveCurrent, admission, g, places } = gathered;
   readPause(state, g);
   readArgumentAsk(state, argumentVerdicts, g);

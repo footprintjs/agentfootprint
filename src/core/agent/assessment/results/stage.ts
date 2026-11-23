@@ -2,13 +2,10 @@ import { issuedTicketsOf } from '../../placedTickets.js';
 import { retentionRefusalsOf } from '../../../../time/retentionRefusals.js';
 import type { ArgumentRowRead } from '../argumentRows.js';
 import { readConflicts } from '../conflicts.js';
-import type { WarningContext } from '../gather/stage.js';
-import { callPlacement } from '../gather/calls.js';
-import { fire, type Gathered } from '../gathered.js';
+import { fire } from '../gathered.js';
 import { PERIOD_REASONS, periodRows, readPeriodVerdicts } from '../periodRows.js';
 import { historyPointer, statePointer } from '../pointer.js';
-import { callIndexOf } from '../recordValues.js';
-import type { deliveredResults } from '../resultDispositions.js';
+import { callIndexOf, callPlacement } from '../recordValues.js';
 import {
   readCallOutcomes,
   readCoverageRows,
@@ -16,17 +13,13 @@ import {
   readTurnResults,
 } from '../resultEvidence.js';
 import { placeSettledResults, readSettledResults } from '../settledResults.js';
-import type { standingAdmission } from '../standingAdmission.js';
 import { recoveredCallOutcomes } from '../turnResults.js';
 import type { AssessmentDeclarations } from '../types.js';
+import type { PreparedWarning, WarningContext } from '../warningContext.js';
 import { libraryResultReasons } from './library-did/stage.js';
 
 /** File withholding and legacy period reasons before reading coverage. */
-export function readInitialResults(
-  admission: ReturnType<typeof standingAdmission>,
-  periods: ReturnType<typeof deliveredResults>['periods'],
-  g: Gathered,
-): void {
+export function readInitialResults({ admission, periods, g }: PreparedWarning): void {
   // An occurrence witness would reveal how many results the host withheld.
   if (admission.withheldReturn) g.fired.set('result-withheld', []);
   for (const { result, verdict } of admission.settlements === undefined ? periods : []) {

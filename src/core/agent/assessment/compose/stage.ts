@@ -1,4 +1,3 @@
-import type { WarningContext } from '../gather/stage.js';
 import type { IntegrityReading } from '../integrityReasons.js';
 import {
   assessmentValueOf,
@@ -7,6 +6,7 @@ import {
 } from '../reasonDetails.js';
 import { reasonEntry } from '../reasons.js';
 import type { AnswerAssessment, AssessmentReason } from '../types.js';
+import type { WarningContext } from '../warningContext.js';
 
 /** Finish the standing only after the fold knows whether it read withheld state. */
 export function composeWarning(
