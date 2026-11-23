@@ -87,7 +87,7 @@ test('four strict fresh roots, independent caches, real graph guards and exact o
     const metadata = readJson(join(request.rootRealPath, 'package.json'));
     assert(!Object.hasOwn(metadata, 'devDependencies'));
     assert.equal(metadata.dependencies.footprintjs, '14.0.0');
-    assert.equal(metadata.dependencies.foottrace, '2.1.0');
+    assert.equal(metadata.dependencies.foottrace, '2.3.2');
     if (caseId.startsWith('source-'))
       assert.deepEqual(metadata.peerDependencies, f.manifest.peerDependencies);
     else assert.equal(metadata.name, 'agentfootprint-context-package-consumer');
