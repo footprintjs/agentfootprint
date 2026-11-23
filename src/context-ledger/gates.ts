@@ -21,7 +21,7 @@ import type {
 } from '../injection-engine/entryScorer.js';
 import type { Injection } from '../injection-engine/types.js';
 import type { ToolGatePredicate } from '../tools/toolProvider.js';
-import { ledgerPredicate } from '../tools/ledgerListing.js';
+import { ledgerPredicate } from '../tools/selectionListing.js';
 import type { ContextLedger, PieceKind } from './types.js';
 
 /**

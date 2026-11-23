@@ -2,7 +2,7 @@ import type { TypedScope } from 'footprintjs';
 import type { ActiveInjection } from '../../injection-engine/types.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tools/toolProvider.js';
 import type { Tool } from '../../tools/tools.js';
-import { listWithLedgerDecisions } from '../../tools/ledgerListing.js';
+import { listWithSelectionDecisions } from '../../tools/selectionListing.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import { providerOmissions, type DiscoveryOmissions } from './providerOmissions.js';
 import { emitListUses } from '../../tools/mcpClientUse.js';
@@ -25,7 +25,7 @@ export interface ProviderToolCache {
   current: readonly Tool[];
   /** Successful acquisition in this component, including a genuinely empty list. */
   resolved?: true;
-  ledgerOmissions?: DiscoveryOmissions;
+  selectionOmissions?: DiscoveryOmissions;
 }
 
 /**
@@ -49,7 +49,7 @@ export async function discoverTools(
     clearProviderRowsets(config.cache);
     config.cache.current = [];
     delete config.cache.resolved;
-    delete config.cache.ledgerOmissions;
+    delete config.cache.selectionOmissions;
   }
   scope.$getEnv().signal?.throwIfAborted();
   const args = scope.$getArgs<{ iteration?: number; hiddenSkillIds?: readonly string[] }>();
@@ -94,7 +94,7 @@ export async function discoverTools(
     // Dynamic check — sync providers skip the await microtask.
     const result =
       config.cache && claimants
-        ? listWithLedgerDecisions(toolProvider, ctx, (candidate) => {
+        ? listWithSelectionDecisions(toolProvider, ctx, (candidate) => {
             omissions ??= providerOmissions(claimants, args.hiddenSkillIds);
             omissions.observe(candidate);
           })
@@ -144,7 +144,7 @@ export async function discoverTools(
   if (config.cache) {
     config.cache.current = visibleTools;
     const retained = omissions?.result();
-    if (retained) config.cache.ledgerOmissions = retained;
+    if (retained) config.cache.selectionOmissions = retained;
     holdProviderRowsets(config.cache, rowsetCatalog);
     config.cache.resolved = true;
   }

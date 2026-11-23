@@ -3,13 +3,20 @@ import type { Tool } from './tools.js';
 
 /** Private discovery evidence. Retain the actual implementation until composition can match it. */
 export interface LedgerOmission {
+  readonly kind: 'ledger';
   readonly name: string;
   readonly tool: Tool;
 }
 
 type Listing = ToolProvider['list'];
-type Observe = (omission: LedgerOmission) => void;
-type ObservedListing = (ctx: ToolDispatchContext, observe: Observe) => ReturnType<Listing>;
+interface InactiveSkill {
+  readonly kind: 'skill-scope';
+  readonly skillId: string;
+  readonly tools: readonly Tool[];
+}
+
+export type ObserveSelection = (decision: LedgerOmission | InactiveSkill) => void;
+type ObservedListing = (ctx: ToolDispatchContext, observe: ObserveSelection) => ReturnType<Listing>;
 
 // A provider's label and arbitrary predicate properties cannot establish a ledger decision.
 // Keep the witnesses off the public objects, including when providers are composed or replaced.
@@ -26,14 +33,19 @@ export function registerLedgerListing(
   gate: ToolGatePredicate,
   observed: ObservedListing,
 ): void {
-  if (ledgerGates.has(gate)) listings.set(provider, { list: provider.list, observed });
+  if (ledgerGates.has(gate)) registerSelectionListing(provider, observed);
+}
+
+// Only built-in selection providers register their original method and its observed variant.
+export function registerSelectionListing(provider: ToolProvider, observed: ObservedListing): void {
+  listings.set(provider, { list: provider.list, observed });
 }
 
 /** An opaque provider gets its ordinary invocation. No observer passes through its boundary. */
-export function listWithLedgerDecisions(
+export function listWithSelectionDecisions(
   provider: ToolProvider,
   ctx: ToolDispatchContext,
-  observe: Observe,
+  observe: ObserveSelection,
 ): ReturnType<Listing> {
   const list = provider.list;
   const known = listings.get(provider);

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { defineTool } from '../../tools/tools.js';
+import { defineTool, type Tool } from '../../tools/tools.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import { providerOmissions } from './providerOmissions.js';
 
@@ -24,14 +24,14 @@ it('requires a visible claim for the same implementation when a skill owns the n
     ],
   ]);
   const collector = providerOmissions(claims, ['restricted']);
-  collector.observe({ name: 'monitor', tool: restricted });
-  collector.observe({ name: 'monitor', tool: visible });
+  collector.observe({ kind: 'ledger', name: 'monitor', tool: restricted });
+  collector.observe({ kind: 'ledger', name: 'monitor', tool: visible });
   expect(collector.result()).toEqual({
-    rows: [{ name: 'monitor', tool: visible }],
+    rows: [{ kind: 'ledger', name: 'monitor', tool: visible }],
     complete: true,
   });
   const unresolved = providerOmissions(claims, undefined);
-  unresolved.observe({ name: 'monitor', tool: visible });
+  unresolved.observe({ kind: 'ledger', name: 'monitor', tool: visible });
   expect(unresolved.result()).toBeUndefined();
 });
 
@@ -43,14 +43,50 @@ it('filters restricted claims and repeats before applying the discovery bound', 
     ['closed'],
   );
   for (let i = 0; i < 2048; i++) {
-    collector.observe({ name: 'private', tool: restricted });
-    collector.observe({ name: 'monitor', tool: ordinary });
+    collector.observe({ kind: 'ledger', name: 'private', tool: restricted });
+    collector.observe({ kind: 'ledger', name: 'monitor', tool: ordinary });
   }
   for (let i = 1; i < 1024; i++)
-    collector.observe({ name: 'monitor-' + i, tool: tool('monitor-' + i) });
+    collector.observe({ kind: 'ledger', name: 'monitor-' + i, tool: tool('monitor-' + i) });
   expect(collector.result()?.rows).toHaveLength(1024);
   expect(collector.result()?.complete).toBe(true);
-  collector.observe({ name: 'monitor-last', tool: tool('monitor-last') });
+  collector.observe({ kind: 'ledger', name: 'monitor-last', tool: tool('monitor-last') });
   expect(collector.result()?.rows).toHaveLength(1024);
   expect(collector.result()?.complete).toBe(false);
+});
+
+it('keeps each distinct decision in provider order and withholds an ambiguous registration', () => {
+  const first = tool('first');
+  const second = tool('second');
+  const ambiguous = tool('alias');
+  const claim = (tool: Tool, id: string): ToolClaim => ({
+    channel: 'skill',
+    id,
+    tool,
+  });
+  const collector = providerOmissions(
+    new Map([
+      ['second', [claim(second, 'triage'), claim(second, 'other')]],
+      ['alias', [claim(ambiguous, 'triage')]],
+      ['also-alias', [claim(ambiguous, 'triage')]],
+      ['first', [claim(first, 'triage')]],
+    ]),
+    [],
+  );
+  collector.observe({
+    kind: 'skill-scope',
+    skillId: 'triage',
+    tools: [first, ambiguous, second, first],
+  });
+  collector.observe({ kind: 'skill-scope', skillId: 'other', tools: [second] });
+  collector.observe({ kind: 'ledger', name: 'second', tool: second });
+  expect(collector.result()).toEqual({
+    complete: true,
+    rows: [
+      { kind: 'skill-scope', skillId: 'triage', name: 'first', tool: first },
+      { kind: 'skill-scope', skillId: 'triage', name: 'second', tool: second },
+      { kind: 'skill-scope', skillId: 'other', name: 'second', tool: second },
+      { kind: 'ledger', name: 'second', tool: second },
+    ],
+  });
 });

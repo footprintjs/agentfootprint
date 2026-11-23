@@ -39,14 +39,14 @@ it('keeps the original ledger decision and tool, then clears it when parole offe
   const cache: ProviderToolCache = { current: [] };
   await discover(provider, cache);
   expect(cache.current).toEqual([]);
-  expect(cache.ledgerOmissions).toEqual({
-    rows: [{ name: 'monitor', tool: monitor }],
+  expect(cache.selectionOmissions).toEqual({
+    rows: [{ kind: 'ledger', name: 'monitor', tool: monitor }],
     complete: true,
   });
   expect(row).toHaveBeenCalledTimes(1);
   await discover(provider, cache);
   expect(cache.current).toEqual([monitor]);
-  expect(cache.ledgerOmissions).toBeUndefined();
+  expect(cache.selectionOmissions).toBeUndefined();
   expect(row).toHaveBeenCalledTimes(2);
 });
 
@@ -56,8 +56,8 @@ it('keeps an async inner attention decision through another ledger gate', async 
   const inner = gatedTools({ list: async () => [monitor] }, gate);
   const cache: ProviderToolCache = { current: [] };
   await discover(gatedTools(inner, outer.gate), cache);
-  expect(cache.ledgerOmissions).toEqual({
-    rows: [{ name: 'monitor', tool: monitor }],
+  expect(cache.selectionOmissions).toEqual({
+    rows: [{ kind: 'ledger', name: 'monitor', tool: monitor }],
     complete: true,
   });
   expect(outer.row).toHaveBeenCalledTimes(0);
@@ -69,10 +69,10 @@ it('treats opaque outer and inner gates as visibility boundaries', async () => {
   const hidden = gatedTools(staticTools([monitor]), demote().gate);
   await discover(gatedTools(hidden, outer), cache);
   expect(outer).toHaveBeenCalledTimes(0);
-  expect(cache.ledgerOmissions).toBeUndefined();
+  expect(cache.selectionOmissions).toBeUndefined();
   const withheld = gatedTools(staticTools([monitor]), () => false);
   await discover(gatedTools(withheld, demote().gate), cache);
-  expect(cache.ledgerOmissions).toBeUndefined();
+  expect(cache.selectionOmissions).toBeUndefined();
 });
 
 it('uses the provider method actually invoked and drops prior evidence on a rejected listing', async () => {
@@ -84,7 +84,7 @@ it('uses the provider method actually invoked and drops prior evidence on a reje
   await discover(provider, cache);
   expect(replacement).toHaveBeenCalledTimes(1);
   expect(cache.current).toEqual([monitor]);
-  expect(cache.ledgerOmissions).toBeUndefined();
+  expect(cache.selectionOmissions).toBeUndefined();
   await discover(gatedTools(staticTools([monitor]), demote().gate), cache);
   const error = Error('listing unavailable');
   await expect(
@@ -97,6 +97,6 @@ it('uses the provider method actually invoked and drops prior evidence on a reje
       cache,
     ),
   ).rejects.toBe(error);
-  expect(cache.ledgerOmissions).toBeUndefined();
+  expect(cache.selectionOmissions).toBeUndefined();
   expect(cache.resolved).toBeUndefined();
 });

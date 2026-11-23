@@ -35,10 +35,10 @@
 
 import type { Tool } from '../tools/tools.js';
 import {
-  listWithLedgerDecisions,
+  listWithSelectionDecisions,
   registerLedgerListing,
-  type LedgerOmission,
-} from '../tools/ledgerListing.js';
+  type ObserveSelection,
+} from '../tools/selectionListing.js';
 import type {
   ToolProvider,
   ToolDispatchContext,
@@ -53,13 +53,13 @@ import type {
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 // #region gatedTools
 export function gatedTools(inner: ToolProvider, predicate: ToolGatePredicate): ToolProvider {
-  function evaluate(ctx: ToolDispatchContext, observe?: (omission: LedgerOmission) => void) {
+  function evaluate(ctx: ToolDispatchContext, observe?: ObserveSelection) {
     // Pull from the inner provider first; each recomputation sees
     // the freshest state from any nested gates. Inner may be sync
     // or async — we mirror what we get back so a sync chain stays
     // sync (zero microtask overhead) and an async chain stays
     // async (no premature `Promise.resolve` wrapping).
-    const innerResult = observe ? listWithLedgerDecisions(inner, ctx, observe) : inner.list(ctx);
+    const innerResult = observe ? listWithSelectionDecisions(inner, ctx, observe) : inner.list(ctx);
     const filter = (innerTools: readonly Tool[]): readonly Tool[] =>
       // Filter by predicate — tool name from `tool.schema.name`.
       // Predicates throwing escape: a buggy predicate should crash
@@ -68,7 +68,7 @@ export function gatedTools(inner: ToolProvider, predicate: ToolGatePredicate): T
       innerTools.filter((tool) => {
         const name = tool.schema.name;
         const include = predicate(name, ctx);
-        if (!include && observe) observe({ name, tool });
+        if (!include && observe) observe({ kind: 'ledger', name, tool });
         return include;
       });
     return innerResult instanceof Promise ? innerResult.then(filter) : filter(innerResult);
