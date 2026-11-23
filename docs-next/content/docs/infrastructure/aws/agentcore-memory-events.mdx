@@ -1,0 +1,98 @@
+---
+title: Choose AgentCore memory events
+description: Select conversational text per memory entry, keep blob round-trips, and distinguish event acceptance from extraction and retention.
+---
+
+Use `AgentCoreStore`'s `eventPayload` option to choose which entries AgentCore can
+process as conversation. A selected event contains both your explicit role/text
+and the original entry blob. With no selector, writes keep the existing blob
+format.
+
+## Decide what may be extracted and retained
+
+Conversational payloads can feed the extraction strategies configured on your
+AgentCore memory resource. Blob payloads remain available as source events but
+do not feed that conversational extraction. A successful write acknowledges the
+event; it does not confirm that asynchronous extraction ran or completed.
+
+Source events and derived long-term records have separate lifecycles:
+
+| Operation | What it controls |
+| --- | --- |
+| `store.delete(identity, id)` | Deletes source events matching that entry id. |
+| `store.forget(identity)` | Deletes the session's source events and clears its local recognition/feedback state. |
+| Entry `ttl` | Hides expired entries from `get`/`list` and skips expired writes. It makes no DeleteEvent call. |
+| `extraction: 'skip'` | Keeps the current event out of extraction. It does not delete prior records or cancel earlier extraction. |
+
+Already-derived records can remain searchable after their source entry is hidden
+or its event is deleted. Configure the service's derived-record retention and
+deletion separately; these entry operations are not a complete erasure of the
+memory service. See AWS's [event deletion](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/short-term-delete-event.html)
+and [memory retention](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-create-a-memory-store.html) guidance.
+
+## Choose each event explicitly
+
+The example uses a scripted public SDK module. It makes no AWS or model calls
+and loads no credentials. Its selector marks a message as conversation and a
+scratch note as blob. A third message demonstrates the existing extraction-skip
+option. The fixture checks request bodies and blob round-trips; it does not
+simulate or verify live extraction.
+
+<CodeFile path="examples/memory/14-agentcore-conversational-events.ts" region="choose-events" title="Choose conversational and blob events" />
+
+Run the whole offline example:
+
+```bash
+npm run example examples/memory/14-agentcore-conversational-events.ts
+```
+
+`eventPayload` receives detached entry data and returns synchronously:
+
+- `{ kind: 'blob' }` keeps the existing format.
+- `{ kind: 'conversational', role, text }` adds a separate conversational payload
+  item beside the canonical blob. Choose `user`, `assistant`, `tool` or `other`
+  yourself; the adapter maps that declared role to AgentCore.
+
+The library does not guess roles, stringify arbitrary values into conversation,
+or strip rich/tool content to make a projection fit. Choose valid text explicitly
+or keep the entry as blob. Invalid results, asynchronous selectors and unsupported
+forwarding are refused; they do not silently fall back to blob.
+
+## Bounds and write behavior
+
+Conversation text must have 1–100,000 Unicode scalar values and at most
+100,000 UTF-8 bytes. When conversation is added, the generated event body must
+fit 10,000,000 UTF-8 bytes. These byte limits are conservative library ceilings.
+Malformed Unicode or excess data is refused before CreateEvent, without
+truncation. The existing blob-only path is unchanged.
+
+The selector runs once for each actual non-expired write. Empty batches and
+unapplied compare-and-swap writes do not invoke it. A successful CAS precondition
+for an already-expired entry retains its existing `applied: true` result while
+making no new write. Batches are sequential and non-atomic: a failure can leave
+an already-written prefix. There is no added adapter rollback or resend.
+
+Each admitted entry makes one adapter `client.createEvent` invocation and, with
+the built-in client, one `sdk.send` invocation. The SDK or your injected transport
+may make multiple wire attempts under its existing retry policy. Those counts
+prove neither one physical request nor exactly-once remote effects. A missing
+response leaves the outcome unknown under the existing error path.
+
+## SDKs, custom clients and namespace scope
+
+The built-in client requires serializer support for the conversational payload.
+You can pass a statically imported SDK module through the public `sdk` option;
+the same field checks apply. A module that cannot model the requested payload
+is refused before CreateEvent. Merely widening a TypeScript type is not proof
+that a serializer sends the field.
+
+A custom entry-semantic `client` must declare `forwardsEventPayload: true` and
+forward the projection it receives. Blob-only clients need no new declaration.
+This capability is separate from `forwardsWriteOptions`, which governs the
+existing extraction and namespace fields.
+
+`MemoryStore` and `MemoryWriteOptions` are unchanged. Existing
+[extraction and namespace options](doc:memory-and-stores) still apply to the
+same event, with the same tenant checks. Configure the memory resource's
+strategies and namespace templates to match the scope you pass; payload
+selection does not create strategies or change service retention settings.

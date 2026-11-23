@@ -550,7 +550,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the test double`s exhaustion error, thrown to whoever scripted it',
     },
   ],
-  'src/adapters/memory/agentcore.ts': [
+  'src/adapters/memory/agentcore/store.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
