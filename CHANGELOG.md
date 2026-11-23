@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.0.0] - 2026-11-23
+
+### Breaking
+
+- **Growing conversation records store appended message injections as deltas.**
+  Live and saved `context.injected` events keep their recency labels.
+
+  Migration: Native `messagesInjections` rows in a snapshot now carry
+  `recencyFromOrder: true` in place of a stored label. Use the last row of the
+  composition for `latest` and all earlier rows for `earlier`, or read the label
+  from `context.injected` events. Custom events retain the label their writer supplied,
+  including an omitted label.
+
+### Changed
+
+- **Raise the minimum supported Foottrace release.** The newer reader brings in fixes for browser replay and stale handoffs. If your application pins Foottrace, allow the minimum declared by AgentFootprint.
+
+### Fixed
+
+- **Answer warnings include the reason a tool gave for an unchecked or uncovered item.** The warning quotes permitted explanations within its existing text budget. Saved assessments also recognize the subject-only wording produced by earlier versions.
+
+- **Code-runner failures and clipped output reach the answer warning.** AgentFootprint records a failed run as an incomplete call and a clipped successful run as partial work. The warning gives the retained output size and the original size when the runner established it. The model still reads the same tool output, and output that fits exactly at the limit is recorded without a cut.
+
+- **Explain when the context window dropped tool results from this answer’s turn.** The answer’s standing and the saved explanation count visible results that left the model’s context. The warning follows the current request through a pause or retry and keeps withheld results anonymous.
+
 ## [16.4.0] - 2026-11-22
 
 ### Added
