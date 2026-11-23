@@ -166,6 +166,8 @@ export interface Narrowing {
   /** The names to commit, in the merged wire's order. */
   readonly served: readonly string[];
   readonly narrowed: boolean;
+  /** Original top-N exclusions, in wire order. Present only when the pick narrowed. */
+  readonly omitted?: readonly string[];
   readonly narrowedSkipped?: NarrowSkipReason;
 }
 
@@ -203,10 +205,13 @@ export function narrowServed(input: {
   if (candidates.length < top + 1) return skip('too-few');
   if (!pick.ok || pick.ranked.length < top) return skip('unavailable');
   const keep = new Set(pick.ranked.slice(0, top).map((r) => r.name));
-  return {
-    served: wire.filter((name) => doors.has(name) || keep.has(name)),
-    narrowed: true,
-  };
+  const served: string[] = [];
+  const omitted: string[] = [];
+  for (const name of wire) {
+    if (doors.has(name) || keep.has(name)) served.push(name);
+    else omitted.push(name);
+  }
+  return { served, omitted, narrowed: true };
 }
 
 /**

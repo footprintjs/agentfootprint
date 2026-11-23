@@ -36,6 +36,8 @@ import type { Tool } from '../../tools/tools.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
+import { commitServedTools, type ServedToolParties } from './commitServedTools.js';
+export type { ServedToolParties } from './commitServedTools.js';
 import { discoverTools, type ProviderToolCache } from './discoverTools.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
@@ -66,30 +68,6 @@ export interface ToolsSlotRuntime {
 }
 
 export type { ToolParty } from '../../tools/toolParty.js';
-
-/**
- * Private party metadata for the same wire Compose serves. Truncated history
- * closes uniqueness fallback; a later positive wire still proves its names.
- */
-export interface ServedToolParties {
-  /** Saved wire membership is closed until a fresh Compose replaces it. */
-  restored?: true;
-  truncated?: true;
-  argumentAskPending?: boolean;
-  currentProof?: ReadonlyMap<string, ToolParty>;
-  lastProof?: ReadonlyMap<string, ToolParty>;
-  /** Positive wire acquisition, including an actually empty offer. */
-  wireReady?: true;
-  pinned?: ReadonlyMap<string, ToolParty | null>;
-  current: ReadonlyMap<string, ToolParty | null>;
-  /**
-   * The party each name was LAST served under, across the epochs of one run
-   * (cleared on iteration 1). The off-wire fallback reads it: a name that
-   * left the wire may still be answered by the party the model last read it
-   * under — never by a party the model was never shown under that name.
-   */
-  readonly lastServed: Map<string, ToolParty>;
-}
 
 /** One schema put forward for the wire, by whom — and WHICH implementation. */
 interface WireCandidate {
@@ -484,10 +462,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // Sync providers still pay zero microtask overhead — the dynamic
   // `instanceof Promise` check skips await for non-Promise returns.
   const discoverStage = async (scope: TypedScope<ToolsSubflowState>): Promise<void> => {
+    const runtime = config.runtime?.(scope);
+    if (runtime?.servedTools) delete runtime.servedTools.selection;
     if (!toolProvider) return;
     await discoverTools(scope, {
       provider: toolProvider,
-      cache: config.runtime?.(scope).providerToolCache,
+      cache: runtime?.providerToolCache,
       ...(toolClaimants && { claimants: toolClaimants }),
       callerIdentity: config.callerIdentity?.(scope),
     });
@@ -500,8 +480,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const runtime = config.runtime?.(scope);
     const providerToolCache = runtime?.providerToolCache;
     const servedTools = runtime?.servedTools;
-    const hiddenSkillIds =
-      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ?? EMPTY_OFFER;
+    const resolvedHidden = scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds;
+    const hiddenSkillIds = resolvedHidden ?? EMPTY_OFFER;
     const args = scope.$getArgs<{
       iteration?: number;
       currentSkillId?: string;
@@ -832,6 +812,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       servedInjections: readonly InjectionRecord[],
       narrowedTo: ReadonlySet<string> | undefined,
       rules: RulesOnWire | undefined,
+      omitted?: readonly string[],
     ): void => {
       setEventSource(scope, INJECTION_KEYS.TOOLS, servedInjections);
       // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
@@ -907,26 +888,19 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         withSourcesArgument,
       );
       if (servedTools !== undefined) {
-        // Dispatch follows the OFFER: a name narrowed off this epoch's wire
-        // was not served, so it is not on `current` and takes the off-wire
-        // path (`toolResolver.ts · buildToolResolver`) — answered by the party the
-        // model last read it under, and recorded as `tools.answered_off_wire`.
-        const wireWinners =
-          narrowedTo === undefined
-            ? winners
-            : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
-        servedTools.current = wireWinners;
-        servedTools.currentProof = undefined;
-        servedTools.restored = undefined;
-        servedTools.wireReady = true;
-        // The run's memory of who served what (read by the off-wire fallback).
-        // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
-        // of a previous run on this same built chart is dropped here.
-        if (iteration === 1) {
-          servedTools.lastServed.clear();
-          servedTools.lastProof = undefined;
-        }
-        for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
+        commitServedTools(servedTools, {
+          iteration,
+          narrowedTo,
+          omitted,
+          winners,
+          winningTools,
+          claimants: toolClaimants,
+          hiddenSkillIds: resolvedHidden,
+          discovered:
+            toolProvider && providerToolCache?.resolved
+              ? providerToolCache.selectionOmissions
+              : undefined,
+        });
       }
       // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
       // Every list the merge reads is park-filtered (see the provider loop above).
@@ -1051,10 +1025,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         prior: args.priorToolChoices ?? [],
         wrapUpAsked: args.wrapUpAsked === true,
         toolsOff: args.toolsOffAfterRevision === true,
-      }).then(({ served, servedInjections, narrowedTo }) =>
+      }).then(({ served, servedInjections, narrowedTo, omitted }) =>
         loadingRules === undefined
-          ? commitWire(served, servedInjections, narrowedTo, undefined)
-          : loadingRules.then((rules) => commitWire(served, servedInjections, narrowedTo, rules)),
+          ? commitWire(served, servedInjections, narrowedTo, undefined, omitted)
+          : loadingRules.then((rules) =>
+              commitWire(served, servedInjections, narrowedTo, rules, omitted),
+            ),
       ),
     );
   };

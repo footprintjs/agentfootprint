@@ -56,7 +56,7 @@
     "src/core/codeRunnerTool.ts": 912,
     "src/core/consentRequest.ts": 1024,
     "src/core/RunnerBase.ts": 1149,
-    "src/core/slots/buildToolsSlot.ts": 1173,
+    "src/core/slots/buildToolsSlot.ts": 1146,
     "src/embedders/index.ts": 1486,
     "src/events/dispatcher.ts": 753,
     "src/events/registry.ts": 662,

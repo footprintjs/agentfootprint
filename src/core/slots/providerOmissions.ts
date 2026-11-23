@@ -10,6 +10,8 @@ interface SkillOmission {
   readonly tool: Tool;
 }
 
+export const MAX_SELECTION_ROWS = 1024;
+
 type Omission = LedgerOmission | SkillOmission;
 
 export interface DiscoveryOmissions {
@@ -32,7 +34,7 @@ export function providerOmissions(
     const tools = seen.get(scope) ?? new Map<Tool, Set<string>>();
     const names = tools.get(row.tool);
     if (names?.has(row.name)) return;
-    if (rows.length >= 1024) {
+    if (rows.length >= MAX_SELECTION_ROWS) {
       complete = false;
       return;
     }
@@ -68,17 +70,7 @@ export function providerOmissions(
     }
     // The registered ledger observed this actual tool in its incoming provider list.
     // For skill-owned names also require a visible claim on THIS implementation.
-    const claims = claimants.get(decision.name);
-    if (
-      claims?.some((c) => c.channel === 'skill') &&
-      !claims.some(
-        (c) =>
-          c.tool === decision.tool &&
-          (c.channel !== 'skill' ||
-            (c.id !== undefined && hidden !== undefined && !hidden.has(c.id))),
-      )
-    )
-      return;
+    if (!visibleToolClaim(claimants.get(decision.name), decision.tool, hidden)) return;
     retain(decision);
   };
 
@@ -88,4 +80,21 @@ export function providerOmissions(
       return rows.length ? { rows, complete } : undefined;
     },
   };
+}
+
+/** A skill-owned name requires a visible claim on the actual implementation. */
+export function visibleToolClaim(
+  claims: readonly ToolClaim[] | undefined,
+  tool: Tool,
+  hidden: ReadonlySet<string> | undefined,
+): boolean {
+  return (
+    !claims?.some((claim) => claim.channel === 'skill') ||
+    claims.some(
+      (claim) =>
+        claim.tool === tool &&
+        (claim.channel !== 'skill' ||
+          (claim.id !== undefined && hidden !== undefined && !hidden.has(claim.id))),
+    )
+  );
 }
