@@ -3,7 +3,7 @@ import { isPlaceholder } from '../../../../../redaction/marker.js';
 import type { CoverageRow } from '../../coverageRows.js';
 import { witnessRowIndex } from '../../pointer.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentToolWords } from '../../types.js';
-import { readDeclaredWords } from './declaredWords.js';
+import { readDeclaredWords, type DeclaredWord } from './declaredWords.js';
 
 const MAX_TOOL_WORDS_CHARS = 160;
 const MAX_TOOL_WORDS_ENTRIES = 3;
@@ -62,14 +62,15 @@ export function declaredWordsReader(
     let omitted = 0;
     const add = (
       kind: AssessmentToolWords['entries'][number]['kind'],
-      text: string,
+      words: DeclaredWord,
       toolName?: string,
     ) => {
+      const { text } = words;
       const key = JSON.stringify([kind, text, toolName]);
       if (seen.has(key)) return;
       seen.add(key);
       if (text.length <= remaining && entries.length < MAX_TOOL_WORDS_ENTRIES) {
-        entries.push({ kind, text, ...(toolName !== undefined && { toolName }) });
+        entries.push({ kind, ...words, ...(toolName !== undefined && { toolName }) });
         remaining -= text.length;
       } else {
         omitted++;
@@ -87,15 +88,23 @@ export function declaredWordsReader(
           : undefined;
       if (reason !== 'declared-absent') {
         for (const kind of ['notChecked', 'cannotCover'] as const) {
-          for (const text of row[kind].words) add(kind, text, toolName);
+          for (const words of row[kind].words) add(kind, words, toolName);
           omitted += row[kind].omitted;
         }
       }
       if (reason !== 'coverage-gap') {
-        if (row.tryInstead !== undefined) add('tryInstead', row.tryInstead, toolName);
+        if (row.tryInstead !== undefined) add('tryInstead', { text: row.tryInstead }, toolName);
         if (row.adviceOmitted) omitted++;
       }
     }
-    return entries.length > 0 || omitted > 0 ? { entries, omitted } : undefined;
+    if (entries.length === 0 && omitted === 0) return undefined;
+    // Select subjects before charging explanations so earlier recorded warnings
+    // can reconstruct their exact subject-only wording and omission count.
+    const bounded = entries.map(({ why, ...entry }) => {
+      if (why === undefined || why.length > remaining) return entry;
+      remaining -= why.length;
+      return { ...entry, why };
+    });
+    return { entries: bounded, omitted };
   };
 }

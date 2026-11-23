@@ -110,7 +110,7 @@ export async function run(input: string): Promise<string> {
   const expected =
     `${modelAnswer}\n\n---\n\n` +
     'Not sure — a tool said there is ground it did not check or cannot cover ' +
-    '(cannot cover “incidents filed by email”); ' +
+    '(cannot cover “incidents filed by email” because “email reports never enter this store”); ' +
     'a tool said nothing matched; model prose was not verified for negative claims.';
   if (answer !== expected)
     throw new Error('Expected the model text followed by the standing line.');
