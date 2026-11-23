@@ -54,7 +54,6 @@ import type { SourceLinkPolicy } from 'foottrace/cause';
 
 import type { RunContext, TurnEventMeta } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
-import type { EventMeta } from '../events/types.js';
 import { conversationRedaction } from './conversation.js';
 import { namesAnything } from './policy.js';
 import {
@@ -63,7 +62,7 @@ import {
   UNKNOWN_COVERAGE,
   type RedactionCoverage,
 } from './coverage.js';
-import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
+import { eventServing, REFUSING_SERVING, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
 import { createRunEventRelay } from './runEventRelay.js';
 import { retiredRule, ruleShowsPath, sourceLinkPolicyOfRule } from './sourceLinkPolicy.js';
@@ -418,24 +417,6 @@ export function outsideRunFor(declaration: RedactionCoverage): OutsideRun {
     },
   });
 }
-
-/**
- * The serving of a run whose state is unknown: every payload is the
- * placeholder, and so is the identity on its meta (who asked); the address is
- * kept.
- */
-const REFUSING_SERVING: EventServing = Object.freeze({
-  active: () => true,
-  payload: () => SERVED_PLACEHOLDER,
-  meta: <M extends EventMeta>(meta: M): M =>
-    meta.principal === undefined && meta.tenant === undefined
-      ? meta
-      : {
-          ...meta,
-          ...(meta.principal !== undefined && { principal: SERVED_PLACEHOLDER }),
-          ...(meta.tenant !== undefined && { tenant: SERVED_PLACEHOLDER }),
-        },
-}) as EventServing;
 
 /**
  * Tie `scope` to `outside` — the run of its runner's chart mounted outside any
