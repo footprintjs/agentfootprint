@@ -85,7 +85,9 @@ interface AnthropicStream {
 
 interface AnthropicStreamEvent {
   type: string;
-  delta?: { type: string; text?: string };
+  index?: number;
+  content_block?: { type: string };
+  delta?: { type: string; text?: string; thinking?: string };
 }
 
 // ─── Adapter ────────────────────────────────────────────────────────
@@ -261,6 +263,15 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
       const params = buildParams(preparation.request);
       const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
+      // Classify the actual request before passing its parameters to the SDK.
+      const thinking = params.thinking;
+      const display = thinking && 'display' in thinking ? thinking.display : undefined;
+      let thinkingKind: LLMChunk['thinkingKind'];
+      if (thinking?.type === 'adaptive' && display === 'summarized') {
+        thinkingKind = 'provider-summary';
+      } else if (thinking?.type === 'enabled' && display === undefined) {
+        thinkingKind = 'unclassified';
+      }
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let stream: AnthropicStream;
       try {
@@ -284,6 +295,24 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
             event.delta.text
           ) {
             yield { tokenIndex, content: event.delta.text, done: false };
+            tokenIndex++;
+            continue;
+          }
+          if (
+            thinkingKind !== undefined &&
+            event.type === 'content_block_delta' &&
+            event.delta?.type === 'thinking_delta' &&
+            typeof event.delta.thinking === 'string' &&
+            event.delta.thinking.length > 0 &&
+            toolArguments.hasOpenThinkingBlock(event.index)
+          ) {
+            yield {
+              tokenIndex,
+              content: '',
+              done: false,
+              thinkingDelta: event.delta.thinking,
+              thinkingKind,
+            };
             tokenIndex++;
           }
         }

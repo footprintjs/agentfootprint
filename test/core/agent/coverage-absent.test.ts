@@ -421,7 +421,11 @@ describe('regression: an absence is not retried, refused or re-asked by anything
     });
     const out = await t.agent.run('any FLOGI on fc1/3?');
     expect(out).toBe(
-      'Nothing on fc1/3.\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+      'Nothing on fc1/3.\n\n---\n\n' +
+        'Not sure — a tool said there is ground it did not check or cannot cover ' +
+        '(did not check “the archived FLOGI history” because “older than the 24h window”; ' +
+        'cannot cover “the peer fabric” because “this collector is scoped to one fabric”); ' +
+        `a tool said nothing matched (suggested “${DECL.tryInstead}”).`,
     );
     const iterationEnds = t.all.filter(
       (e) => e.name === 'agentfootprint.agent.iteration_end',

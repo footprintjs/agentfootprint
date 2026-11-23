@@ -10,12 +10,12 @@
  * keeps it and the agent can refuse a model that cannot think at build.
  *
  * Nothing leaves the process: the SDK client is replaced by a stand-in that
- * records each request body.
+ * records each request body and streams a scripted thinking fragment.
  *
  * Run:  npm run example examples/features/96-thinking-per-model.ts
  */
 import assert from 'node:assert/strict';
-import { Agent } from '../../src/index.js';
+import { Agent, allow } from '../../src/index.js';
 import {
   anthropic,
   forcedToolChoiceFor,
@@ -37,14 +37,20 @@ export const meta: ExampleMeta = {
 
 type Body = Record<string, unknown>;
 
-/** A stand-in for `@anthropic-ai/sdk`: records each request body, answers "ok". */
+const summary = 'Check whether the Mersenne number is prime.';
+const answer = 'Yes — it is a Mersenne prime.';
+
+/** A stand-in for `@anthropic-ai/sdk` that records each request body. */
 function recordingClient(bodies: Body[]) {
   const reply = {
     id: 'msg_1',
     type: 'message',
     role: 'assistant',
     model: 'stand-in',
-    content: [{ type: 'text', text: 'Yes — it is a Mersenne prime.' }],
+    content: [
+      { type: 'thinking', thinking: summary, signature: 'fixture-signature' },
+      { type: 'text', text: answer },
+    ],
     stop_reason: 'end_turn',
     usage: { input_tokens: 12, output_tokens: 9 },
   };
@@ -54,7 +60,33 @@ function recordingClient(bodies: Body[]) {
       create: async (params: unknown) => (record(params), reply),
       stream: (params: unknown) => {
         record(params);
-        return { async *[Symbol.asyncIterator]() {}, finalMessage: async () => reply };
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'content_block_start',
+              index: 0,
+              content_block: { type: 'thinking', thinking: '', signature: '' },
+            };
+            yield {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'thinking_delta', thinking: summary },
+            };
+            yield { type: 'content_block_stop', index: 0 };
+            yield {
+              type: 'content_block_start',
+              index: 1,
+              content_block: { type: 'text', text: '' },
+            };
+            yield {
+              type: 'content_block_delta',
+              index: 1,
+              delta: { type: 'text_delta', text: answer },
+            };
+            yield { type: 'content_block_stop', index: 1 };
+          },
+          finalMessage: async () => reply,
+        };
       },
     },
   } as never;
@@ -114,10 +146,37 @@ export async function run(input: string): Promise<unknown> {
   // #endregion forced-choice
   assert.equal(bodies.length, 2); // forced-choice refusal sent nothing either
 
+  // #region live-summary
+  const summaryAgent = Agent.create({
+    provider,
+    model: 'claude-opus-5-5',
+    liveThinkingWithHeldDrafts: 'provider-summary',
+  })
+    .thinking({ budget: 4000 })
+    .act({
+      output: [
+        {
+          name: 'trim-answer',
+          onMessage: ({ content }) => allow(content.trim(), 'Trim surrounding whitespace.'),
+        },
+      ],
+    })
+    .build();
+  const liveSummary: string[] = [];
+  summaryAgent.on('agentfootprint.stream.thinking_delta', ({ payload }) => {
+    if (payload.kind === 'provider-summary') {
+      liveSummary.push(payload.content); // or append the fragment to the UI
+    }
+  });
+  await summaryAgent.run({ message: input });
+  // #endregion live-summary
+  assert.deepEqual(liveSummary, [summary]);
+
   return {
     'claude-opus-5-5': bodies[0]!.thinking,
     'claude-haiku-4-5': bodies[1]!.thinking,
     'claude-3-haiku-20240307': refusal?.message,
+    liveSummary,
   };
 }
 

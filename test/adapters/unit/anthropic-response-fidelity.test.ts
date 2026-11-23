@@ -6,13 +6,19 @@ import {
   toAnthropicMessages,
   type AnthropicContentBlock,
   type AnthropicMessage,
+  type AnthropicMessagesBody,
   type AnthropicStreamEvent,
 } from '../../../src/adapters/llm/anthropicMessagesWire.js';
 import { AnthropicProvider } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { browserAnthropic } from '../../../src/adapters/llm/BrowserAnthropicProvider.js';
 import { prepareAnthropicReplay } from '../../../src/adapters/llm/anthropicThinkingReplay.js';
 import { anthropicThinkingHandler } from '../../../src/thinking/AnthropicThinkingHandler.js';
-import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
+import type {
+  LLMChunk,
+  LLMMessage,
+  LLMRequest,
+  LLMResponse,
+} from '../../../src/provider-contract/types.js';
 import {
   captureAnthropicReplay,
   omitAnthropicThinking,
@@ -67,6 +73,12 @@ async function* events(): AsyncIterable<AnthropicStreamEvent> {
         ? { ...block, input: {} }
         : block;
     yield { event: 'content_block_start', data: { index, content_block: initial } };
+    if (block.type === 'thinking') {
+      yield {
+        event: 'content_block_delta',
+        data: { index, delta: { type: 'thinking_delta', thinking: block.thinking.slice(0, 3) } },
+      };
+    }
   }
   for (const index of [6, 5, 4, 3, 2, 1, 0]) {
     const block = ordered[index]!;
@@ -75,7 +87,7 @@ async function* events(): AsyncIterable<AnthropicStreamEvent> {
         ? [{ type: 'text_delta', text: block.text }]
         : block.type === 'thinking'
         ? [
-            { type: 'thinking_delta', thinking: block.thinking },
+            { type: 'thinking_delta', thinking: block.thinking.slice(3) },
             { type: 'signature_delta', signature: block.signature },
           ]
         : block.type === 'tool_use'
@@ -89,6 +101,21 @@ async function* events(): AsyncIterable<AnthropicStreamEvent> {
     data: { delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 7 } },
   };
   yield { event: 'message_stop', data: {} };
+}
+
+function scriptedSdk(frames = events) {
+  const abort = vi.fn();
+  const finalMessage = vi.fn(async () => reply());
+  const stream = vi.fn((_params: AnthropicMessagesBody) => ({
+    async *[Symbol.asyncIterator]() {
+      for await (const event of frames()) {
+        yield { ...(event.data as Record<string, unknown>), type: event.event };
+      }
+    },
+    abort,
+    finalMessage,
+  }));
+  return { abort, finalMessage, messages: { create: finalMessage, stream } };
 }
 
 describe('Anthropic response fidelity', () => {
@@ -503,22 +530,7 @@ describe('Anthropic response fidelity', () => {
   it.each(['complete', 'stream'] as const)(
     'SDK %s uses the same response conversion',
     async (mode) => {
-      const sdk = {
-        messages: {
-          create: vi.fn(async () => reply()),
-          stream: vi.fn(() => ({
-            async *[Symbol.asyncIterator]() {
-              for await (const event of events()) {
-                yield { ...(event.data as Record<string, unknown>), type: event.event };
-              }
-            },
-            async finalMessage() {
-              return reply();
-            },
-          })),
-        },
-      };
-      const provider = new AnthropicProvider({ _client: sdk });
+      const provider = new AnthropicProvider({ _client: scriptedSdk() });
       const request = {
         model: 'claude-sonnet-4-6',
         messages: [{ role: 'user' as const, content: 'test' }],
@@ -531,4 +543,142 @@ describe('Anthropic response fidelity', () => {
       expect(toAnthropicMessages([stored(response!)])[0]?.content).toEqual(ordered);
     },
   );
+});
+
+describe('Anthropic SDK live thinking', () => {
+  const summaryRequest: LLMRequest = {
+    model: 'claude-haiku-5-5',
+    messages: [{ role: 'user', content: 'test' }],
+    thinking: { budget: 1500 },
+  };
+  const sdkDelta = (index: number, thinking: string): AnthropicStreamEvent => ({
+    event: 'content_block_delta',
+    data: { index, delta: { type: 'thinking_delta', thinking } },
+  });
+
+  it.each([
+    [
+      'adaptive summary',
+      summaryRequest,
+      { type: 'adaptive', display: 'summarized' },
+      'provider-summary',
+    ],
+    [
+      'budgeted reasoning',
+      { ...summaryRequest, model: 'claude-haiku-4-5-20251001' },
+      { type: 'enabled', budget_tokens: 1500 },
+      'unclassified',
+    ],
+    ['omitted display', { ...summaryRequest, thinking: undefined }, undefined, undefined],
+  ] as const)('classifies %s from the final request', async (_name, request, wire, kind) => {
+    const sdk = scriptedSdk();
+    const provider = new AnthropicProvider({ _client: sdk });
+    const chunks: LLMChunk[] = [];
+    for await (const chunk of provider.stream(request)) chunks.push(chunk);
+
+    expect(sdk.messages.stream.mock.calls[0]?.[0].thinking).toEqual(wire);
+    const liveThinking = (tokenIndex: number, thinkingDelta: string) => ({
+      tokenIndex,
+      content: '',
+      done: false,
+      thinkingDelta,
+      thinkingKind: kind,
+    });
+    expect(chunks.filter((chunk) => !chunk.done)).toEqual([
+      ...(kind ? [liveThinking(0, 'rea')] : []),
+      { tokenIndex: kind ? 1 : 0, content: 'after', done: false },
+      ...(kind ? [liveThinking(2, 'son\n')] : []),
+      { tokenIndex: kind ? 3 : 1, content: 'Before 🧭', done: false },
+    ]);
+    expect(toAnthropicMessages([stored(chunks.at(-1)!.response!)])[0]?.content).toEqual(ordered);
+  });
+
+  it.each(['private fixture A', 'other sealed fixture B'])(
+    'skips private and mismatched deltas (%s)',
+    async (hidden) => {
+      async function* mislabelled(): AsyncIterable<AnthropicStreamEvent> {
+        yield sdkDelta(1, hidden);
+        for await (const event of events()) {
+          yield event;
+          const { index } = event.data as { index?: number };
+          if (event.event === 'content_block_start' && index === 4) yield sdkDelta(4, hidden);
+          if (event.event === 'content_block_start' && index === 1) yield sdkDelta(1, '');
+          if (event.event === 'content_block_stop' && index === 1) yield sdkDelta(1, hidden);
+        }
+      }
+      const provider = new AnthropicProvider({ _client: scriptedSdk(mislabelled) });
+      const deltas: string[] = [];
+      for await (const chunk of provider.stream(summaryRequest)) {
+        if (chunk.thinkingDelta !== undefined) deltas.push(chunk.thinkingDelta);
+      }
+      expect(deltas).toEqual(['rea', 'son\n']);
+    },
+  );
+
+  it('retains an omitted block for replay without yielding a live chunk', async () => {
+    const block = { type: 'thinking', thinking: '', signature: 'sealed' } as const;
+    async function* signatureOnly(): AsyncIterable<AnthropicStreamEvent> {
+      yield {
+        event: 'content_block_start',
+        data: { index: 0, content_block: { type: 'thinking', thinking: '' } },
+      };
+      yield {
+        event: 'content_block_delta',
+        data: { index: 0, delta: { type: 'signature_delta', signature: block.signature } },
+      };
+      yield { event: 'content_block_stop', data: { index: 0 } };
+      yield { event: 'message_stop', data: {} };
+    }
+    const sdk = scriptedSdk(signatureOnly);
+    sdk.finalMessage.mockResolvedValue(reply([block]));
+    const provider = new AnthropicProvider({ _client: sdk });
+    const chunks: LLMChunk[] = [];
+    for await (const chunk of provider.stream({ ...summaryRequest, thinking: undefined })) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toMatchObject({ done: true, response: { rawThinking: [block] } });
+  });
+
+  it('keeps the outbound classification if the SDK mutates its arguments', async () => {
+    const sdk = scriptedSdk();
+    const open = sdk.messages.stream.getMockImplementation()!;
+    sdk.messages.stream.mockImplementationOnce((params) => {
+      delete params.thinking;
+      return open(params);
+    });
+    const provider = new AnthropicProvider({ _client: sdk });
+    const chunks: LLMChunk[] = [];
+    for await (const chunk of provider.stream(summaryRequest)) chunks.push(chunk);
+    expect(
+      chunks.filter((chunk) => chunk.thinkingDelta).map((chunk) => chunk.thinkingKind),
+    ).toEqual(['provider-summary', 'provider-summary']);
+  });
+
+  it('closes the SDK and refuses late deltas and finalMessage after abort', async () => {
+    const controller = new AbortController();
+    const reason = new Error('caller left');
+    async function* cancelled(): AsyncIterable<AnthropicStreamEvent> {
+      yield {
+        event: 'content_block_start',
+        data: { index: 0, content_block: { type: 'thinking', thinking: '' } },
+      };
+      yield sdkDelta(0, 'first');
+      controller.abort(reason);
+      yield sdkDelta(0, 'late');
+    }
+    const sdk = scriptedSdk(cancelled);
+    const provider = new AnthropicProvider({ _client: sdk });
+    const chunks: LLMChunk[] = [];
+    const consume = async () => {
+      for await (const chunk of provider.stream({ ...summaryRequest, signal: controller.signal })) {
+        chunks.push(chunk);
+      }
+    };
+
+    await expect(consume()).rejects.toBe(reason);
+    expect(chunks.map((chunk) => chunk.thinkingDelta)).toEqual(['first']);
+    expect(sdk.abort).toHaveBeenCalledOnce();
+    expect(sdk.finalMessage).not.toHaveBeenCalled();
+  });
 });

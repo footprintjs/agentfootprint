@@ -31,7 +31,7 @@ Defined in: [src/events/payloads/answer.ts:65](https://github.com/footprintjs/ag
 
 ### kind
 
-> `readonly` **kind**: `"none"` \| `"unknown"` \| `"not-found"` \| `"complete"`
+> `readonly` **kind**: `"unknown"` \| `"none"` \| `"not-found"` \| `"complete"`
 
 Defined in: [src/events/payloads/answer.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads/answer.ts#L59)
 

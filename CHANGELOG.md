@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [16.4.0] - 2026-11-22
+
+### Added
+
+- **Answer warnings explain tool failures and limits.** The default prose warning uses the engine’s failure category, such as a timeout, and bounded words from admitted tool declarations under the run’s redaction policy. The full assessment exposes those details. Typed answers keep their format, and the opt-in limits block still carries the longer declaration.
+
+- **Show provider summaries while answer drafts are held.** Set `liveThinkingWithHeldDrafts: 'provider-summary'` on `Agent.create` to receive classified provider summaries before the answer is approved. The summaries use the existing stream event, run redaction, and first-chunk retry rule. Draft answer text and other live thinking stay held under the output policy.
+
+### Fixed
+
+- **Say when an answer hits the model's output limit.** An accepted provider response that stops at the limit records why it ended. Its answer standing reports the cutoff, and eligible prose includes that warning. An earlier draft's stop does not warn about a later answer.
+
+## [16.3.0] - 2026-11-22
+
+### Added
+
+- **Watch provider thinking as it streams.** Agent stream subscribers receive Anthropic's requested summaries and structured reasoning from Ollama as they arrive. Live deltas carry `provider-summary`, `raw-reasoning`, or `unclassified`, so apps can choose what to display. The run's redaction policy applies to the served event.
+
+### Fixed
+
+- **The answer explains when the framework limited a tool result.** Its standing and replay now report a result cut short, a result stored by reference that no tool read, and dataset timestamps without a zone. The warning uses the tool’s display name and recorded counts when available.
+
+- **Findings and evidence recovery can continue after a signed tool call.** AgentFootprint preserves the findings context that preceded each signed response, including when resuming the same request after a transport error. Revisions append feedback while keeping the signed prefix stable. A revision governed by an enforcing answer check uses witnessed completion to withdraw the tools.
+
 ## [16.2.1] - 2026-11-21
 
 ### Fixed

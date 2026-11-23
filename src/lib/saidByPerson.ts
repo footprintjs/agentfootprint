@@ -141,6 +141,9 @@ export const TOOL_BATCH_FRAME_PREFIX = '[Tool batch refusal';
 
 export const FINDINGS_DATA_FRAME_PREFIX = '[AgentFootprint findings DATA v1]';
 
+/** Request-only feedback that cannot change a native tool turn's signed system prompt. */
+export const NATIVE_RECOVERY_FRAME_PREFIX = '[AgentFootprint internal recovery feedback.';
+
 /**
  * Every opening this library puts on a `role: 'user'` message it wrote itself.
  *
@@ -171,6 +174,7 @@ export const LIBRARY_AUTHORED_PREFIXES: readonly string[] = Object.freeze([
   STAGED_DATA_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
   TOOL_BATCH_FRAME_PREFIX,
+  NATIVE_RECOVERY_FRAME_PREFIX,
 ]);
 
 /** True when this user-role message opens with a frame this library authored. */
@@ -225,7 +229,7 @@ export function isSaidByPerson(msg: AuthoredMessage | undefined): boolean {
  *
  * The one reader of a record, so every reader of "where this turn begins" in
  * a record hands the rule the WHOLE entry: the answer's standing
- * (`core/agent/assessment/assess.ts` · `turnResults`) and the answer account
+ * (`core/agent/assessment/turnResults.ts` · `turnResults`) and the answer account
  * (`answer-account/facts/inView.ts`, `pausedLeg.ts`). A reader that copied
  * only `role`, `content` and `injectedBy` dropped `ephemeral`, so a retry's
  * one-request feedback line in a restored history started a "turn" for the

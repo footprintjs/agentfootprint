@@ -6,6 +6,10 @@ title: AgentOptions
 
 Defined in: [src/core/agent/types.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L52)
 
+## Extends
+
+- `AgentObservationOptions`
+
 ## Properties
 
 ### answerLayer?
@@ -619,6 +623,24 @@ and the `limit` on the record's `ledgerFacts` block.
 
 ***
 
+### liveThinkingWithHeldDrafts?
+
+> `readonly` `optional` **liveThinkingWithHeldDrafts?**: `"provider-summary"`
+
+Defined in: [src/core/agent/types/observation.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L50)
+
+Serve provider-classified summary fragments while output policy or answer
+validation holds draft answers. Omit to hold all live thinking deltas in
+that case. The completed thinking event keeps its existing behavior.
+This uses the normal thinking events, run redaction and first-chunk retry
+rule. The answer policy still owns draft answer text and final delivery.
+
+#### Inherited from
+
+`AgentObservationOptions.liveThinkingWithHeldDrafts`
+
+***
+
 ### maxIterations?
 
 > `readonly` `optional` **maxIterations?**: `number`
@@ -837,7 +859,7 @@ gate's `posture`; nothing here blocks, revises or rewrites anything.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types.ts:1156](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1156)
+Defined in: [src/core/agent/types/observation.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L36)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -867,17 +889,25 @@ For serverless / graceful shutdown, settle async listener work with
 `await agent.drainObservers({ timeoutMs })` before the process exits.
 Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
+#### Inherited from
+
+`AgentObservationOptions.observerDelivery`
+
 ***
 
 ### observerDeliveryOptions?
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types.ts:1162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1162)
+Defined in: [src/core/agent/types/observation.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L42)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
 `observerDelivery: 'deferred'` (no silently-ignored combinations).
+
+#### Inherited from
+
+`AgentObservationOptions.observerDeliveryOptions`
 
 ***
 

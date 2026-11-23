@@ -1,13 +1,14 @@
-import { readToolSettlements, type HistoryCall } from '../recordedCalls.js';
+import type { HistoryCall } from '../recordedCalls.js';
 import type { CoverageRow } from './coverageRows.js';
 import { fire, type Gathered } from './gathered.js';
 import { historyPointer, statePointer } from './pointer.js';
 import { readCallOutcomes } from './resultEvidence.js';
+import type { standingAdmission } from './standingAdmission.js';
 import type { TurnResult } from './turnResults.js';
 import type { AssessmentReason } from './types.js';
 import { hasOwnDeclarationWitness } from './results/coverage/declarations.js';
 
-type Settlements = NonNullable<ReturnType<typeof readToolSettlements>>;
+type Settlements = NonNullable<ReturnType<typeof standingAdmission>['settlements']>;
 
 /** Retained messages can place a witness or prove equal-argument recovery. */
 export function placeSettledResults(
@@ -53,6 +54,7 @@ export function readSettledResults(
   periodReasons: Readonly<Record<string, AssessmentReason>>,
   g: Gathered,
 ): void {
+  for (const at of settlements.windowDrops) fire(g, 'result-dropped-from-window', at);
   const absenceCalls = new Set(
     coverage.filter((row) => row.kind === 'absence').map((row) => row.occurrenceKey),
   );

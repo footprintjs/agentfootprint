@@ -52,6 +52,7 @@ const HELPER_FILES: Readonly<Record<string, string>> = {
   'bedrockModels.ts':
     'frozen model facts and synchronous exact-ID lookup; no client, I/O or provider construction',
   'googleGenAI.ts': 'the Google client resolver both Gemini doors share',
+  'ollamaErrors.ts': 'bounded wire-error parsing with no provider construction or I/O',
   'retryAfter.ts': 'Retry-After parsing',
   'wireManifest.ts': 'the manifest read back from a serialized body',
 };

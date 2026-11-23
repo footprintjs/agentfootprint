@@ -6,6 +6,8 @@ import type { TypedScope } from 'footprintjs';
 import type { MemoryStore } from '../../../../memory/store/index.js';
 import { resolveTurnNumber } from '../../../../memory/turn/index.js';
 import type { ToolTurnEvidence } from '../../recordedCalls/toolTurnCheckpoint.js';
+import type { RequestReplayValue } from '../../requestTurn/state.js';
+import { writeRequestReplay } from '../../requestTurn/native.js';
 
 /**
  * Raise `scope.turnNumber` to what the conversation's own stores know.
@@ -62,6 +64,7 @@ export interface PendingResumeHistory {
    */
   readonly turn?: number;
   readonly toolTurnEvidence?: ToolTurnEvidence;
+  readonly requestReplay?: RequestReplayValue;
   readonly negatives?: NegativeCheckpoint;
   readonly innerCallPolicyArgs?: import('../../../../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
   /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */
@@ -86,7 +89,7 @@ export interface PendingResumeHistory {
  *
  * With no chain, every arm yields the bytes the earlier releases committed.
  */
-export function historyForTurn(
+function historyForTurn(
   resume: PendingResumeHistory | undefined,
   message: string,
 ): readonly LLMMessage[] {
@@ -94,6 +97,19 @@ export function historyForTurn(
   if (resume === undefined) return [entry];
   if (resume.appendsUserTurn) return [...resume.history, entry];
   return resume.history.length > 0 ? [...resume.history] : [entry];
+}
+
+/** Restore the conversation and the private projection for the same failed request. */
+export function seedHistoryForTurn(
+  scope: TypedScope<AgentState>,
+  resume: PendingResumeHistory | undefined,
+  message: string,
+): readonly LLMMessage[] {
+  const history = historyForTurn(resume, message);
+  scope.history = history;
+  if (resume?.appendsUserTurn === false && resume.requestReplay !== undefined)
+    writeRequestReplay(scope, resume.requestReplay);
+  return history;
 }
 
 /**

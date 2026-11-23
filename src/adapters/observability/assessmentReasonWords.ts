@@ -3,6 +3,7 @@ import type { AssessmentReason } from '../../core/agent/assessment/types.js';
 /** Every reason of the answer's standing, as the audit chain's bounded mode keeps them. */
 const WORDS: { readonly [R in AssessmentReason]: true } = {
   'answer-check-failed': true,
+  'answer-output-limit': true,
   'argument-asked': true,
   'argument-assumed': true,
   'argument-read': true,
@@ -10,6 +11,10 @@ const WORDS: { readonly [R in AssessmentReason]: true } = {
   asked: true,
   'call-not-completed': true,
   'result-withheld': true,
+  'result-cut': true,
+  'placed-unread': true,
+  'times-without-zone': true,
+  'result-dropped-from-window': true,
   'work-not-finished': true,
   'check-unreachable': true,
   'claim-exceeds-search': true,

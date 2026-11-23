@@ -111,6 +111,8 @@ export interface ArtifactMeta {
    *  Validated at mint (a malformed one is refused, never repaired); absent =
    *  undeclared, and a consumer keeps its own heuristic. See `time/axis.ts`. */
   readonly timeAxis?: DatasetTimeAxis;
+  /** Number of values in the declared time column with no offset or source zone, when positive. */
+  readonly naiveCount?: number;
   /** Unix ms when the artifact was stored. */
   readonly createdAt: number;
 }

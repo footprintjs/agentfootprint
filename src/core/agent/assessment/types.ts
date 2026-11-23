@@ -19,6 +19,7 @@
  */
 
 import type { ContextErrorKind } from '../../../integrity/finding/types.js';
+import type { HeldSpan } from '../../../semantics/coverage/periodRow.js';
 
 /**
  * A leaf of the committed record a reason or a check rests on — an RFC 6901
@@ -63,6 +64,10 @@ export type AssessmentPointer =
  *   searched: silence recorded as silence;
  * - `call-not-completed` — a tool call of this turn recorded as refused or
  *   failed, with no later completion of the same call by recorded arguments;
+ * - `result-cut`, `placed-unread`, `times-without-zone` — this turn's recorded result
+ *   lost characters, stayed behind an unread reference, or included times with no zone;
+ * - `result-dropped-from-window` — a delivered tool result of this turn was
+ *   removed from the model's conversation window before the answer;
  * - `work-not-finished` — an admitted tool result of this turn recorded partial or
  *   pending work, with no later completion of the same call by recorded arguments;
  * - `sources-conflict` — two readings the model stood on disagree (a
@@ -74,6 +79,7 @@ export type AssessmentPointer =
  * - `value-survived-revision` — the same, after the one revision the gate
  *   asked for;
  * - `stopped-early` — a limit cut the turn short (`stoppedEarly`);
+ * - `answer-output-limit` — the delivered response stopped at the model's output limit;
  * - `step-skipped` — a committed witness shows the procedure advanced past a declared step;
  * - `answer-check-failed` — the app's answer checks (`.answerValidation()`)
  *   failed this answer;
@@ -162,6 +168,10 @@ export type AssessmentReason =
   | 'empty-undeclared'
   | 'call-not-completed'
   | 'result-withheld'
+  | 'result-cut'
+  | 'placed-unread'
+  | 'times-without-zone'
+  | 'result-dropped-from-window'
   | 'work-not-finished'
   | 'period-not-held'
   | 'period-partly-held'
@@ -175,6 +185,7 @@ export type AssessmentReason =
   | 'derived-from-reading'
   | 'script-unmatched'
   | 'stopped-early'
+  | 'answer-output-limit'
   | 'steps-unfinished'
   | 'step-skipped'
   | 'negative-prose-unverified'
@@ -233,6 +244,35 @@ export type AssessmentCheck =
 /** The honesty layer a reason or a check belongs to: 1 choose · 2 inputs · 3 results · 4 answer. */
 export type HonestyLayer = 1 | 2 | 3 | 4;
 
+/** Bounded words from a tool declaration that the run may serve. */
+export interface AssessmentToolWords {
+  readonly entries: readonly {
+    readonly kind: 'notChecked' | 'cannotCover' | 'tryInstead';
+    readonly text: string;
+    /** The admitted explanation for an unchecked or uncovered item. */
+    readonly why?: string;
+    /** Registered identity of the declaring tool, when retained. */
+    readonly toolName?: string;
+  }[];
+  readonly omitted: number;
+}
+
+/** Additional facts behind a reason, when the record holds them. */
+export interface AssessmentReasonDetail {
+  /** The one engine category represented by the classified failures for this reason. */
+  readonly category?: import('footprintjs').AttemptCategory;
+  readonly toolSays?: AssessmentToolWords;
+  /** A kept count with its unit, or a missing count out of a known whole. */
+  readonly counts?:
+    | { readonly kept: number; readonly total?: number; readonly unit: string }
+    | { readonly missing: number; readonly of: number };
+  /** The requested and held spans when the source retained both. */
+  readonly period?: {
+    readonly asked: HeldSpan['queried'];
+    readonly held: HeldSpan['held'];
+  };
+}
+
 /**
  * What a reason rests on — names and ids only, never a value or an argument.
  * The KIND is declared once per reason (`reasons.ts` · `REASONS`), never
@@ -265,6 +305,8 @@ export type AssessmentReasonSource =
         readonly toolName: string;
         /** The recorded outcome for a call behind `call-not-completed`. */
         readonly outcome?: 'refused' | 'failed';
+        /** The engine's classification of a tool exception. Never its message. */
+        readonly category?: import('footprintjs').AttemptCategory;
         /** The committed unfinished status behind work-not-finished. */
         readonly reportedStatus?: 'partial' | 'pending';
       }[];
@@ -301,6 +343,8 @@ export interface AnswerAssessment {
     readonly witness: readonly AssessmentPointer[];
     /** What it rests on — specific calls, the answer, or the run (see {@link AssessmentReasonSource}). */
     readonly source: AssessmentReasonSource;
+    /** Closed failure categories and bounded, admitted tool declarations. */
+    readonly detail?: AssessmentReasonDetail;
   }[];
   /** The row `known` stands on — present only when one does. */
   readonly support?: {

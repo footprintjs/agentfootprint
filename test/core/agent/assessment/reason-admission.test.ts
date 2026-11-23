@@ -8,6 +8,7 @@ import {
 import { REASONS } from '../../../../src/core/agent/assessment/reasons.js';
 import { REASON_WITNESS_CLASSES } from '../../../../src/core/agent/assessment/reasonClasses.js';
 import type { AssessmentReason } from '../../../../src/core/agent/assessment/types.js';
+import { MAX_ENTERED_TOOL_CALLS } from '../../../../src/core/agent/honesty/enteredToolCalls.js';
 
 type Row = Readonly<Record<string, unknown>>;
 type Seed = {
@@ -17,6 +18,12 @@ type Seed = {
 };
 
 const CALL = { toolCallId: 'current', toolName: 'lookup', iteration: 1, turn: 2 };
+const WINDOW_DROP = {
+  ...CALL,
+  kind: 'result-dropped-from-window',
+  callOccurrenceKey: [1, 0, 0, 0, 0],
+  strategy: 'sliding-window',
+};
 const PERSON = { role: 'user', content: 'Read the current index.' };
 const PROPOSAL = {
   role: 'assistant',
@@ -90,7 +97,44 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'value-contingent': argument({ source: 'result', setAside: 'open' }),
   'unsupported-argument': integrity('unsupported-argument'),
   'call-not-completed': { message: NOT_ENTERED },
+  'result-cut': {
+    state: {
+      libraryResultLimits: [
+        { ...CALL, kind: 'result-cut', keptChars: 10, maxChars: 100, totalChars: 300 },
+      ],
+    },
+  },
+  'placed-unread': {
+    state: {
+      libraryResultLimits: [{ ...CALL, kind: 'placed-unread', ref: 'art_0123456789012345678901' }],
+    },
+  },
+  'times-without-zone': {
+    state: {
+      libraryResultLimits: [
+        { ...CALL, kind: 'times-without-zone', naiveCount: 1, ref: 'art_0123456789012345678901' },
+      ],
+    },
+  },
   'result-withheld': { message: DENIED },
+  'result-dropped-from-window': {
+    state: {
+      settledToolCalls: [
+        {
+          callOccurrenceKey: [1, 0, 0, 0, 0],
+          execution: 'returned',
+          delivery: 'native',
+        },
+        {
+          callOccurrenceKey: [2, 0, 0, 0, 0],
+          execution: 'not-entered',
+          outcome: 'refused',
+        },
+      ],
+      settledToolCallsComplete: true,
+      libraryResultLimits: [WINDOW_DROP],
+    },
+  },
   'work-not-finished': { message: { reportedStatus: 'pending' } },
   'coverage-gap': coverage('ledger', { notChecked: ['late arrivals'] }),
   'declared-absent': coverage('absence'),
@@ -122,6 +166,7 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'derived-from-reading': ledger({ kind: 'time-derived', values: ['2026-03-03'] }),
   'script-unmatched': ledger({ kind: 'script-shown', label: 'unmatched' }),
   'stopped-early': { state: { stoppedEarly: { reason: 'max-iterations', iteration: 2 } } },
+  'answer-output-limit': { state: { llmLatestStopReason: 'max_tokens' } },
   'steps-unfinished': ledger({ kind: 'steps-unfinished' }),
   'step-skipped': ledger({ kind: 'step-skipped', policy: 'advance' }),
   'negative-prose-unverified': ledger({ kind: 'negative-claim-note' }),
@@ -216,7 +261,10 @@ describe('standing reason admission by witness', () => {
         expect
           .soft(reasonsOf(seed, REWRITTEN), 'served rewrite')
           .toEqual(
-            reason === 'sources-conflict' || NATIVE_DECLARATIONS.has(reason) ? [reason] : [],
+            ['sources-conflict', 'result-cut', 'placed-unread'].includes(reason) ||
+              NATIVE_DECLARATIONS.has(reason)
+              ? [reason]
+              : [],
           );
       }
     },
@@ -244,6 +292,59 @@ describe('standing reason admission by witness', () => {
       }
     },
   );
+
+  it('a bounded result-limit record cannot silently clear the standing', () => {
+    for (const state of [
+      { libraryResultLimitsIncomplete: true },
+      { libraryResultLimits: new Array(2_000) },
+    ]) {
+      const assessment = assessmentOf({ state }, RETURNED);
+      expect(assessment.standing).toBe('not-sure');
+      expect(assessment.reasons.map(({ reason }) => reason)).toEqual(['check-unreachable']);
+      expect(
+        standingLineOf(
+          assessmentDataOf(assessment),
+          [],
+          false,
+          standingFactsOf(assessment, new Map()),
+        ),
+      ).toContain("the record could not keep every limit on this turn's tool results");
+    }
+  });
+
+  it('window evidence shares the saved receipt limit with other fact kinds', () => {
+    const seed = SEEDS['result-dropped-from-window'];
+    const otherLimits = Array.from({ length: MAX_ENTERED_TOOL_CALLS }, (_, index) => ({
+      ...CALL,
+      toolCallId: `earlier-${index}`,
+      turn: CALL.turn - 1,
+      kind: 'result-cut',
+      keptChars: 10,
+      maxChars: 100,
+      totalChars: 300,
+    }));
+    const assessWith = (prefix: readonly Row[]) =>
+      assessmentOf(
+        { ...seed, state: { ...seed.state, libraryResultLimits: [...prefix, WINDOW_DROP] } },
+        NOT_ENTERED,
+      );
+
+    const atLimit = assessWith(otherLimits.slice(1));
+    expect(
+      atLimit.reasons.find(({ reason }) => reason === 'result-dropped-from-window')?.witness,
+    ).toEqual([
+      {
+        kind: 'state',
+        key: 'libraryResultLimits',
+        path: `/${MAX_ENTERED_TOOL_CALLS - 1}/strategy`,
+      },
+    ]);
+
+    const beyondLimit = assessWith(otherLimits);
+    const beyondReasons = beyondLimit.reasons.map(({ reason }) => reason);
+    expect(beyondReasons).toContain('check-unreachable');
+    expect(beyondReasons).not.toContain('result-dropped-from-window');
+  });
 
   it('an incomplete entry record says which check could not reach a verdict', () => {
     const assessment = assessmentOf(

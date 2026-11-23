@@ -390,7 +390,9 @@ describe('act — integration', () => {
     const toolMsg = spy.requests[1]?.messages.find((m) => m.role === 'tool')?.content ?? '';
     expect(toolMsg).toContain('"amount":100');
     expect(toolMsg).toContain('"reviewed":true');
-    expect(answer).toBe('the answer, from the project');
+    expect(answer).toBe(
+      'the answer, from the project\n\n---\n\nNot sure — 1 result from this turn was dropped from the conversation before the answer.',
+    );
   });
 
   it('LAW 4: a rule named under BOTH tool keys is attached once and speaks twice', async () => {

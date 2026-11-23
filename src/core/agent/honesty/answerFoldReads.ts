@@ -8,8 +8,11 @@ export type AnswerFoldKey =
   | 'enteredToolCalls'
   | 'enteredToolCallsComplete'
   | 'settledToolCalls'
+  | 'libraryResultLimitsIncomplete'
+  | 'libraryResultLimits'
   | 'settledToolCallsComplete'
   | 'stoppedEarly'
+  | 'llmLatestStopReason'
   | 'unsupportedValues'
   | 'answerValidation'
   | 'argumentAsk'
@@ -29,9 +32,13 @@ export type AnswerFoldKey =
  *   `stoppedEarly` — the Route decider writes it on EVERY agent
  *   (`stages/route.ts` · `recordEarlyStop`): a limit cuts a turn short
  *   whenever the model asked for calls, whether or not this agent registered
- *   a tool that could answer them;
+ *   a tool that could answer them. The call stage can commit `llmLatestStopReason`
+ *   when the provider reports a cutoff or served a native format. The stage
+ *   skips that read when the key is absent;
  * - a tool surface: `coverageDeclared` (only a tool that ran declares
  *   coverage), bounded per-turn entry and settlement facts, and their completeness;
+ * - a tool result cap, artifact store or window: bounded result-limit receipts
+ *   and their completeness, including any receipts recovered for the same request;
  * - the evidence gate: `unsupportedValues`;
  * - `.answerValidation()`: `answerValidation`;
  * - the inputs layer: `argumentAsk`;
@@ -51,6 +58,7 @@ export type AnswerFoldKey =
  */
 export function answerFoldReads(arms: {
   readonly tools: boolean;
+  readonly resultLimits?: boolean;
   readonly evidenceGate: boolean;
   readonly answerValidation: boolean;
   readonly inputs: boolean;
@@ -62,6 +70,7 @@ export function answerFoldReads(arms: {
     'pausedToolCallId',
     'findingsLedger',
     'stoppedEarly',
+    'llmLatestStopReason',
     ...(arms.tools
       ? ([
           'coverageDeclared',
@@ -70,6 +79,9 @@ export function answerFoldReads(arms: {
           'settledToolCalls',
           'settledToolCallsComplete',
         ] as const)
+      : []),
+    ...(arms.tools && arms.resultLimits
+      ? (['libraryResultLimits', 'libraryResultLimitsIncomplete'] as const)
       : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),

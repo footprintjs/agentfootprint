@@ -18,6 +18,7 @@ export {
 export { readCallOccurrences, type CallOccurrence } from './recordedCalls/events.js';
 export { declarationOccurrences, groupOccurrenceEvidence } from './recordedCalls/evidence.js';
 export {
+  readResultDispositionMark,
   resultDispositions,
   lastResultRewriteIndex,
   readResultRewriteName,
@@ -32,6 +33,8 @@ export {
   assessmentCallOutcome,
   callEntered,
   isRecordedBatchRefusal,
+  readToolFailureCategory,
+  recordedToolFailureCategory,
   recordedToolExecution,
   type RecordedToolExecution,
 } from './recordedCalls/execution.js';

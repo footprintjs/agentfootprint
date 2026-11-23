@@ -751,6 +751,7 @@
       "TeardownOptions",
       "TeardownReason",
       "TeardownScope",
+      "ThinkingDeltaKind",
       "TimeAnswerProblem",
       "TimeAnswerRow",
       "TimeAskMessageKey",

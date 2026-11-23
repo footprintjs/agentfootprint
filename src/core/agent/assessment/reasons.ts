@@ -136,6 +136,35 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
   },
   {
+    reason: 'result-cut',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was cut',
+  },
+  {
+    reason: 'placed-unread',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was stored by reference and not read',
+  },
+  {
+    reason: 'times-without-zone',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: some times in a dataset have no zone',
+  },
+  {
+    reason: 'result-dropped-from-window',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'libraryResultLimits and settledToolCalls: this turn’s delivered results removed by an applied window strategy',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',
@@ -269,6 +298,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "findingsLedger: a script-shown witness row of this turn with label 'unmatched' — a fenced block the answer showed equals no program this turn's calls submitted to a declared code-running tool (filed under code: 'match' while the answer layer is armed)",
   },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', source: 'run', reads: 'stoppedEarly' },
+  {
+    reason: 'answer-output-limit',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads: 'llmLatestStopReason (max_tokens)',
+  },
   {
     reason: 'steps-unfinished',
     layer: 4,

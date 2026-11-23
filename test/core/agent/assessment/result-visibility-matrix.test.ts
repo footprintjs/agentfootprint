@@ -7,6 +7,8 @@ import {
   defineTool,
   deny,
   describedResult,
+  inMemoryArtifacts,
+  withDatasetArtifacts,
   type AgentInput,
   type OutputSchemaParser,
   type ToolMiddleware,
@@ -21,6 +23,8 @@ const BODY = 'Here is what I can report.';
 const TYPED_BODY = JSON.stringify({ summary: BODY, negatives: [] });
 const WITHHELD_LINE = 'Not sure — a result was kept out by a rule.';
 const NAME = 'fixture_lookup';
+const PRIVATE_RESULT = 'private report '.repeat(180);
+const PUBLIC_REPLACEMENT = 'public report '.repeat(250);
 const QUERY = { from: '2026-10-08T15:40:00Z', to: '2026-10-09T15:40:00Z' };
 const OLDER = { from: '2026-06-08T15:40:00Z', to: '2026-06-09T15:40:00Z' };
 const PARTLY_HELD = { from: QUERY.from, to: '2026-10-09T03:40:00Z' };
@@ -38,6 +42,9 @@ function described(held: typeof QUERY | 'unknown', queried = QUERY) {
 }
 
 const FIXTURES = {
+  'result-cut': PRIVATE_RESULT,
+  'placed-unread': PRIVATE_RESULT,
+  'times-without-zone': [{ ts: '2026-10-09T12:00:00' }],
   'work-not-finished': { content: 'A private job is waiting.', effects: [], status: 'pending' },
   'coverage-gap': coverage([{ entry: 'private' }], {
     checked: ['one shelf'],
@@ -126,6 +133,7 @@ function fixtureAgent(
   mode: Mode,
   observerDelivery: Delivery,
   keepConflict = false,
+  policyText?: string,
 ) {
   const conflict = reason === 'sources-conflict';
   const typed = reason === 'declaration-overclaimed';
@@ -152,6 +160,11 @@ function fixtureAgent(
     provider: mock({ chunkDelayMs: 0, replies }),
     model: 'mock',
     observerDelivery,
+    ...(reason === 'result-cut' && { maxToolResultChars: 500 }),
+    ...(reason === 'placed-unread' && {
+      artifacts: { store: inMemoryArtifacts(), placement: { maxInlineChars: 500 } },
+    }),
+    ...(reason === 'times-without-zone' && { artifacts: inMemoryArtifacts() }),
     // Typed negative-claims turn_end currently carries a live scope value.
     ...(typed &&
       observerDelivery === 'deferred' && { observerDeliveryOptions: { capture: 'ref' as const } }),
@@ -165,44 +178,63 @@ function fixtureAgent(
         : { content: 'Service payments does not exist.', effects: [], status: 'denied' };
     return FIXTURES[reason];
   });
-  builder.tool(
-    defineTool({
-      name: NAME,
-      description: 'Read a fixture archive.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          ...(conflict && { host: { type: 'string' } }),
-          ...(typed && { service: { type: 'string' } }),
-          ...(constrained && { start: { type: 'integer' }, end: { type: 'integer' } }),
-        },
+  const tool = defineTool({
+    name: NAME,
+    description: 'Read a fixture archive.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...(conflict && { host: { type: 'string' } }),
+        ...(typed && { service: { type: 'string' } }),
+        ...(constrained && { start: { type: 'integer' }, end: { type: 'integer' } }),
       },
-      ...(typed && {
-        effects: 'read' as const,
-        search: {
-          source: { what: 'incident store', said: ['incident store'] },
-          subject: { what: 'incidents', said: ['incidents'] },
-          arguments: [{ name: 'service', role: 'population' as const }],
-          complete: 'within-arguments' as const,
-        },
-      }),
-      ...(column && { resultColumns: { logical_unit_number: 'number' } }),
-      ...(constrained && {
-        askOrAssume: { start: { ask: 'From when?' }, end: { ask: 'Until when?' } },
-        period: {
-          ...(reason === 'period-beyond-retention' && { retention: '90d' }),
-          forms: [
-            {
-              kind: 'bounds',
-              from: { argument: 'start', as: 'epoch-ms' },
-              to: { argument: 'end', as: 'epoch-ms', edge: 'exclusive' },
-            },
-          ],
-        },
-      }),
-      execute,
+    },
+    ...(typed && {
+      effects: 'read' as const,
+      search: {
+        source: { what: 'incident store', said: ['incident store'] },
+        subject: { what: 'incidents', said: ['incidents'] },
+        arguments: [{ name: 'service', role: 'population' as const }],
+        complete: 'within-arguments' as const,
+      },
     }),
+    ...(column && { resultColumns: { logical_unit_number: 'number' } }),
+    ...(constrained && {
+      askOrAssume: { start: { ask: 'From when?' }, end: { ask: 'Until when?' } },
+      period: {
+        ...(reason === 'period-beyond-retention' && { retention: '90d' }),
+        forms: [
+          {
+            kind: 'bounds',
+            from: { argument: 'start', as: 'epoch-ms' },
+            to: { argument: 'end', as: 'epoch-ms', edge: 'exclusive' },
+          },
+        ],
+      },
+    }),
+    execute,
+  });
+  builder.tool(
+    reason === 'times-without-zone'
+      ? withDatasetArtifacts(tool, {
+          describe: (result) => ({
+            datasets: [
+              {
+                key: 'clock',
+                artifact: {
+                  kind: 'dataset/clock',
+                  mediaType: 'application/json',
+                  data: result,
+                  timeAxis: { column: 'ts', unit: 'iso' },
+                },
+              },
+            ],
+            project: ([publication]) => ({ ticket: publication!.artifact }),
+          }),
+        })
+      : tool,
   );
+
   if (conflict) builder.findings();
   if (constrained) builder.time({ zone: 'UTC' });
   else builder.resultsLayer();
@@ -217,9 +249,9 @@ function fixtureAgent(
   const policy = vi.fn<Hook>(({ toolCallId }) => {
     if (toolCallId !== 'target' || mode === 'control') return allow();
     return mode === 'deny'
-      ? deny('Archive result is unavailable.')
+      ? deny(policyText ?? 'Archive result is unavailable.')
       : allow(
-          conflict ? [{ port: 'p1', status: rewrittenStatus }] : deliveredRows,
+          policyText ?? (conflict ? [{ port: 'p1', status: rewrittenStatus }] : deliveredRows),
           'Serve the public index.',
         );
   });
@@ -236,8 +268,15 @@ async function prove(
   mode: Mode,
   delivery: Delivery,
   keepConflict = false,
+  policyText?: string,
 ): Promise<Proof> {
-  const { agent, input, execute, policy } = fixtureAgent(reason, mode, delivery, keepConflict);
+  const { agent, input, execute, policy } = fixtureAgent(
+    reason,
+    mode,
+    delivery,
+    keepConflict,
+    policyText,
+  );
   try {
     const proof = await observeStanding(agent, input);
     expect(execute).toHaveBeenCalledTimes(
@@ -318,6 +357,102 @@ describe('result witness privacy through a live answer', () => {
           ]),
         );
       }
+    }
+  });
+
+  it.each(
+    (['inline', 'deferred'] as const).flatMap((delivery) =>
+      (['result-cut', 'placed-unread'] as const).map((reason) => ({ delivery, reason })),
+    ),
+  )(
+    'reports the $reason of a served replacement but hides a denial ($delivery)',
+    async ({ delivery, reason }) => {
+      const replacement = await prove(reason, 'rewrite', delivery, false, PUBLIC_REPLACEMENT);
+      checkSurfaces(replacement, [reason]);
+      if (reason === 'result-cut') {
+        expect(replacement.returned).toContain(
+          `of ${PUBLIC_REPLACEMENT.length.toLocaleString('en-US')} characters`,
+        );
+        expect(replacement.returned).not.toContain(PRIVATE_RESULT.length.toLocaleString('en-US'));
+      } else {
+        expect(replacement.returned).toContain('stored by reference');
+      }
+
+      const denied = await prove(reason, 'deny', delivery, false, PUBLIC_REPLACEMENT);
+      checkSurfaces(denied, ['result-withheld']);
+      expect(denied.saved.reasons[0]?.witness ?? []).toEqual([]);
+      expect(denied.returned).toBe(`${BODY}\n\n---\n\n${WITHHELD_LINE}`);
+    },
+  );
+
+  it('keeps a withheld call separate from a later cut with the same provider call ID', async () => {
+    const tool = defineTool<{ source: string }, string>({
+      name: NAME,
+      description: 'Read a selected archive.',
+      inputSchema: {
+        type: 'object',
+        properties: { source: { type: 'string' } },
+        required: ['source'],
+      },
+      execute: ({ source }) => (source === 'private' ? PRIVATE_RESULT : PUBLIC_REPLACEMENT),
+    });
+    const agent = Agent.create({
+      model: 'mock',
+      provider: mock({
+        replies: [
+          toolCall('repeated', { source: 'private' }),
+          toolCall('repeated', { source: 'public' }),
+          BODY,
+        ],
+        chunkDelayMs: 0,
+      }),
+      maxToolResultChars: 500,
+    })
+      .tool(tool)
+      .toolMiddleware({
+        name: 'private_archive',
+        onToolResult: ({ result }) => (result === PRIVATE_RESULT ? deny('Unavailable.') : allow()),
+      })
+      .limitsTravelWithTheAnswer()
+      .build();
+    try {
+      const proof = await observeStanding(agent, { message: 'Check both archives.' });
+      checkSurfaces(proof, ['result-withheld', 'result-cut']);
+      expect(proof.returned).toContain(PUBLIC_REPLACEMENT.length.toLocaleString('en-US'));
+      expect(proof.returned).not.toContain(PRIVATE_RESULT.length.toLocaleString('en-US'));
+    } finally {
+      await agent.shutdown();
+    }
+  });
+
+  it('keeps an unreturned working dataset out of the answer', async () => {
+    const tool = defineTool({
+      name: NAME,
+      description: 'Save a working dataset, then look up public rows.',
+      execute: async (_args, ctx) => {
+        await ctx.artifacts.put({
+          kind: 'dataset/working',
+          mediaType: 'application/json',
+          timeAxis: { column: 'ts', unit: 'iso' },
+          data: [{ ts: '2026-10-09T12:00:00' }, { ts: '2026-10-09T13:00:00' }],
+        });
+        return deliveredRows;
+      },
+    });
+    const agent = Agent.create({
+      model: 'mock',
+      provider: mock({ replies: [toolCall(), BODY], chunkDelayMs: 0 }),
+      artifacts: inMemoryArtifacts(),
+    })
+      .tool(tool)
+      .limitsTravelWithTheAnswer()
+      .build();
+    try {
+      const proof = await observeStanding(agent, { message: 'Check the public index.' });
+      checkSurfaces(proof, []);
+      expect(proof.returned).toBe(BODY);
+    } finally {
+      await agent.shutdown();
     }
   });
 
