@@ -9,7 +9,7 @@ import strictJson from './strictJson.cjs';
 
 const { inspectPublishedDependency } = dependency;
 const hash = (bytes, algorithm = 'sha256', encoding = 'hex') => createHash(algorithm).update(bytes).digest(encoding);
-const versions = { footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
+const versions = { footprintjs: '14.0.0', foottrace: '2.3.2', contextfootprint: '0.1.1' };
 const manifest = (name) => ({ name, version: versions[name] });
 const expected = (name, bytes) => ({ name, version: versions[name], integrity: 'sha512-' + hash(bytes, 'sha512', 'base64') });
 const code = (run, refusal) => assert.throws(run, (error) => canonical.archiveRefusalCode(error) === refusal);
@@ -35,13 +35,13 @@ for (const name of Object.keys(versions)) {
 for (const [name, version] of [
   ['footprintjs', '13.0.0'], ['footprintjs', '14.0.0-rc.0'], ['footprintjs', '14.0.1'],
   ['footprintjs', '14.0.0-rc.1'], ['footprintjs', '14.0.0-rc.00'],
-  ['foottrace', '2.0.0'], ['foottrace', '2.1.1'],
+  ['foottrace', '2.0.0'], ['foottrace', '2.1.0'], ['foottrace', '2.3.3'],
 ]) test(`refuses unselected ${name}@${version} even with matching archive identity and SRI`, () => {
   const bytes = archiveBytes({ name, version });
   code(() => inspectPublishedDependency(bytes, { ...expected(name, bytes), version }), 'dependency-input');
 });
 
-for (const [name, version] of [['footprintjs', '13.0.0'], ['foottrace', '2.0.0']])
+for (const [name, version] of [['footprintjs', '13.0.0'], ['foottrace', '2.1.0']])
   test(`refuses old ${name} archive bytes presented as the selected cohort`, () => {
     const bytes = archiveBytes({ name, version });
     code(() => inspectPublishedDependency(bytes, expected(name, bytes)), 'dependency-identity');
@@ -103,7 +103,7 @@ test('Context publishConfig accepts only the observed public registry shape', ()
 test('refuses unsupported package/version and all caller policy overrides', () => {
   const bytes = archiveBytes(manifest('foottrace')), selected = expected('foottrace', bytes);
   for (const patch of [
-    { name: 'other' }, { version: '2.1.1' }, { integrity: 'sha512-YQ==' },
+    { name: 'other' }, { version: '2.3.3' }, { integrity: 'sha512-YQ==' },
     { maxFiles: 1 }, { roots: ['package/'] }, { profile: 'contextfootprint' },
   ]) code(() => inspectPublishedDependency(bytes, { ...selected, ...patch }), 'dependency-input');
   let reads = 0;
@@ -115,8 +115,8 @@ test('refuses unsupported package/version and all caller policy overrides', () =
 });
 
 for (const [label, metadata] of [
-  ['name', { name: 'other', version: '2.1.0' }],
-  ['version', { name: 'foottrace', version: '2.1.1' }],
+  ['name', { name: 'other', version: '2.3.2' }],
+  ['version', { name: 'foottrace', version: '2.3.3' }],
 ]) test(`checks decoded manifest ${label} against the selected identity`, () => {
   const bytes = archiveBytes(metadata);
   code(() => inspectPublishedDependency(bytes, expected('foottrace', bytes)), 'dependency-identity');
@@ -148,8 +148,8 @@ test('Context roots and publishConfig never widen the native dependency profiles
 });
 
 for (const [label, bytes] of [
-  ['decoded duplicate key', Buffer.from('{"name":"foottrace","na\\u006de":"foottrace","version":"2.1.0"}')],
-  ['nested duplicate key', Buffer.from('{"name":"foottrace","version":"2.1.0","extra":{"a":1,"\\u0061":2}}')],
+  ['decoded duplicate key', Buffer.from('{"name":"foottrace","na\\u006de":"foottrace","version":"2.3.2"}')],
+  ['nested duplicate key', Buffer.from('{"name":"foottrace","version":"2.3.2","extra":{"a":1,"\\u0061":2}}')],
   ['malformed UTF8', Buffer.from([0xff])],
   ['excessive depth', Buffer.from('{"extra":' + '['.repeat(65) + '0' + ']'.repeat(65) + '}')],
   ['excessive values', Buffer.from('{"extra":[' + '0,'.repeat(100000) + '0]}')],

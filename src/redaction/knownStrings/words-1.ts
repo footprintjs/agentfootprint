@@ -233,6 +233,7 @@ export const words1 = {
   result: true,
   'result-capped': true,
   'result-cut': true,
+  'result-dropped-from-window': true,
   'result-period': true,
   'result-shape': true,
   'result-withheld': true,
@@ -299,5 +300,4 @@ export const words1 = {
   subject: true,
   submitted: true,
   succeeded: true,
-  success: true,
 } as const;

@@ -307,7 +307,10 @@ describe('code runner settlement from runner facts', () => {
     expect
       .soft(state?.settledToolCalls?.map(({ outputCounts }) => outputCounts))
       .toEqual(entry.evict ? [entry.counts, undefined] : [entry.counts]);
-    const reasons = entry.reason === undefined ? [] : [entry.reason];
+    const reasons = [
+      ...(entry.evict === true ? ['result-dropped-from-window'] : []),
+      ...(entry.reason === undefined ? [] : [entry.reason]),
+    ];
     expect.soft(live?.reasons.map(({ reason }) => reason)).toEqual(reasons);
     expect.soft(saved.reasons.map(({ reason }) => reason)).toEqual(reasons);
     const reason = saved.reasons.find(({ reason }) => reason === entry.reason);
@@ -318,6 +321,9 @@ describe('code runner settlement from runner facts', () => {
       expect
         .soft(reason?.witness)
         .toEqual([{ kind: 'state', key: 'settledToolCalls', path: '/0/reportedStatus' }]);
+      const removal = saved.reasons.find(({ reason }) => reason === 'result-dropped-from-window');
+      expect.soft(removal?.detail).toBeUndefined();
+      expect(answer).toContain('1 result from this turn was dropped from the conversation');
     }
     expect.soft(live).toEqual(saved);
     if (entry.reason === undefined) expect(answer).toBe(MODEL_ANSWER);

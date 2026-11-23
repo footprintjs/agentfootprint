@@ -157,6 +157,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     reads: 'libraryResultLimits: some times in a dataset have no zone',
   },
   {
+    reason: 'result-dropped-from-window',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'libraryResultLimits and settledToolCalls: this turn’s delivered results removed by an applied window strategy',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',

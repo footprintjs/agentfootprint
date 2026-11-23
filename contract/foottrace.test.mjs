@@ -181,18 +181,23 @@ function contracts(ft, cause, paths) {
       assert.deepEqual(ft.findReadSources([...earlierWrites, pinnedReader], 2, 'input'), {
         before: 0,
         during: [],
+        initialStatePresence: 'unknown',
       });
       assert.deepEqual(ft.findReadSources([...earlierWrites, overlappingReader], 2, 'input'), {
         before: 0,
         during: [1],
+        initialStatePresence: 'unknown',
       });
       assert.deepEqual(ft.findReadSources([...earlierWrites, unstampedReader], 2, 'input'), {
         before: 1,
         during: [],
+        initialStatePresence: 'unknown',
       });
       assert.deepEqual(ft.findReadSources([...earlierWrites, pinnedReader], 2, 'missing'), {
         before: -1,
         during: [],
+        absenceReason: 'never-written',
+        initialStatePresence: 'unknown',
       });
     },
     'foottrace:flattenCausalDAG': () =>

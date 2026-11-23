@@ -93,7 +93,9 @@ describe('a delivered injection folds under the window like any other turn', () 
       evicted.push(e.payload as unknown as { contentHash: string }),
     );
 
-    expect(await agent.run({ message: 'is it raining?' })).toBe('done');
+    expect(await agent.run({ message: 'is it raining?' })).toBe(
+      'done\n\n---\n\nNot sure — 2 results from this turn were dropped from the conversation before the answer.',
+    );
 
     // It was delivered…
     expect(requests[0]!.messages.some((m) => m.content === LONG_NOTE)).toBe(true);
