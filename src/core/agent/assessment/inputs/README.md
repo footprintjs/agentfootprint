@@ -1,4 +1,4 @@
-# Inputs
+**Fold** — input evidence and argument decisions for the current turn.
 
 The inputs stage reads waiting argument asks, argument verdicts and contingent
 values from the current turn's committed record. Admission identifies which

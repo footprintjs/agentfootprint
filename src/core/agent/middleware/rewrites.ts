@@ -53,7 +53,7 @@ export function rewriteCallAddress(row: { readonly toolCallId?: unknown }): stri
 }
 
 // FOLD · the one owner of "which argument of which call a before-tool rewrite superseded"
-// consumers read this and never re-derive it: assessment/assess.ts · readArgumentVerdicts,
+// consumers read this and never re-derive it: assessment/inputs/stage.ts · readArgumentVerdicts,
 // arguments/serve/assumed.ts · assumedBlockOf
 // detached: yes — fresh maps of plain entries, rebuilt per read.
 /**

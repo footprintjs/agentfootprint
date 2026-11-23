@@ -485,7 +485,7 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
    where a selected state key was. The fold reads such a key as ABSENT (a
    `pausedToolCallId` of `'REDACTED'` is not a pause), and when it asks for one
    at all it gives no standing: `not-assessed`, with the keys it needed in
-   `keptOut` (`assess.ts` · `keptOutGuard`). `agent.assessment()` reads the
+   `keptOut` (`gather/stage.ts` · `keptOutGuard`). `agent.assessment()` reads the
    live run, where nothing is kept out.
 
    ```ts
