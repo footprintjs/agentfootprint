@@ -664,7 +664,8 @@ describe('integration: the tool turn in a JSON checkpoint still carries the type
     expect(out).toBe(
       'Nothing was collected for it.\n\n---\n\n' +
         'Not sure — a tool said there is ground it did not check or cannot cover ' +
-        `(did not check “${EXISTENCE.what}”); a tool said nothing matched (suggested “${FLAGSHIP_TEXT}”).`,
+        `(did not check “${EXISTENCE.what}” because “${EXISTENCE.why}”); ` +
+        `a tool said nothing matched (suggested “${FLAGSHIP_TEXT}”).`,
     );
 
     const resumedTurn = second.sent[0]?.find((m) => m.role === 'tool' && m.toolCallId === 't1');
