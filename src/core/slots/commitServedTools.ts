@@ -1,3 +1,4 @@
+import type { AttemptRef } from 'footprintjs';
 import type { WireCollision } from './wireCollisions.js';
 import type { Tool } from '../../tools/tools.js';
 import type { ToolParty } from '../../tools/toolParty.js';
@@ -52,6 +53,8 @@ interface CollisionOmission {
 type SelectionRow = DiscoveryOmissions['rows'][number] | TopNOmission | CollisionOmission;
 
 interface SlotSelection {
+  /** Successful model response whose adapter attested the selected name did not reach its wire. */
+  accepted?: Pick<SlotSelection, 'iteration' | 'rows'> & { readonly consumer: AttemptRef };
   readonly iteration: number;
   readonly rows: readonly SelectionRow[];
   readonly complete: boolean;

@@ -35,6 +35,7 @@ export interface RequestEnvironment {
 export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      servedTools: run.value.servedTools,
       onResponseCommitted: () => {
         run.value.modelResponseCommitted = true;
       },

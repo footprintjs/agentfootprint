@@ -31,6 +31,14 @@ row. Observing a retry of the same request leaves one row. The original
 provider hooks still carry request observations and close when the invocation
 settles.
 
+`selectionAtRequest.ts` binds a visible tool-selection exclusion to the native
+call that accepted the response. It retains the implementation privately when
+the prepared catalog survives to the observed attempt and the adapter reports
+that the name was absent. A winner still offered under the same name requires
+separate collision evidence. A local fallback, missing manifest, altered observed tool
+contract, or reused response object supplies no witness. Saved replay and
+answer relevance require their own evidence.
+
 `liveChunks.ts` emits an attempt's thinking and visible text in provider order.
 It applies the served-event redaction policy. Calls that protect draft output
 may opt in to classified provider summaries through `AgentOptions`. The answer

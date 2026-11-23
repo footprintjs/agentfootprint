@@ -43,7 +43,8 @@ import type {
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
+import { recordWireFindings } from './callLLM/recordWireFindings.js';
+import { selectionAtRequest } from './callLLM/selectionAtRequest.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
 import {
   declaredEnumValuesOf,
@@ -123,6 +124,7 @@ export function buildCallLLMStage(
   deps: CallLLMStageDeps,
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
+    if (deps.servedTools?.selection?.accepted) delete deps.servedTools.selection.accepted;
     // The answer-text scanner (`findings/peel.ts`), loaded ONCE per call and
     // only under `.findings()` — the optional-family law of docs-next's site
     // budget: an unarmed agent never loads the module. Every armed use below
@@ -411,6 +413,15 @@ export function buildCallLLMStage(
       continuing,
     );
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const selection =
+      deps.servedTools?.selection &&
+      selectionAtRequest(
+        deps.servedTools,
+        iteration,
+        scope.$attempt?.(),
+        baseRequest,
+        withheld !== null,
+      );
     const serving =
       deps.recordReceipt === false
         ? undefined
@@ -627,11 +638,13 @@ export function buildCallLLMStage(
       let candidate = deps.findings === true ? capture(req) : undefined;
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
+      const selectionAttempt = selection?.attempt();
       const attemptHooks = observeCallRequests(
         attempts.hooks,
-        serving === undefined && deps.findings !== true && !preserveReplay
+        !selectionAttempt && serving === undefined && deps.findings !== true && !preserveReplay
           ? undefined
           : (request) => {
+              selectionAttempt?.observe(request);
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
               if (preserveReplay)
@@ -718,7 +731,9 @@ export function buildCallLLMStage(
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
       acceptedProjection = stableProjection;
-      return attempts.response(answered);
+      const result = attempts.response(answered);
+      selectionAttempt?.finish(result);
+      return result;
     };
 
     // v2.13 — build the output-schema validator hook when both
@@ -850,6 +865,7 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
+    if (!localFallback) selection?.accept(response);
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
@@ -902,41 +918,14 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
-    // this reads what the ADAPTER says actually crossed — the manifest read
-    // back from the serialized body — against the schemas this very call
-    // assembled. The recorded defect lived exactly in that gap: a clean
-    // frame, four retained schemas on the wire. No manifest stated → the
-    // call is incomparable and nothing is guessed. Same seen-list rail as
-    // the compose backstop, freshest copy first, so one defect files once
-    // per run however many calls re-detect it.
-    // The composed side is llmRequest — the exact object HANDED TO the
-    // adapter, after the cache strategy's transform — so a strategy edit
-    // is never blamed on the adapter.
-    const wireFindings = wireViolationsOf(
-      {
-        names: (llmRequest.tools ?? []).map((t) => t.name),
-        provenance: 'callLLM (assembled request)',
-      },
-      response.wireManifest === undefined
-        ? undefined
-        : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
+    recordWireFindings(
+      scope,
+      llmRequest,
+      response,
+      answeredBy.provider,
       iteration,
+      deps.integrityLedger,
     );
-    // The disposition: a provider stating no manifest leaves this call
-    // UNREACHABLE — the check could not see the wire, which is a different
-    // fact from "the wire was clean", and the ledger keeps them apart.
-    deps.integrityLedger?.current?.note(
-      'invariant-violation',
-      'wire',
-      response.wireManifest === undefined
-        ? 'unreachable'
-        : wireFindings.length > 0
-        ? 'checked-fail'
-        : 'checked-pass',
-      wireFindings.length > 0 ? Date.now() : undefined,
-    );
-    fileIntegrityFindings(scope, wireFindings, iteration, deps.integrityLedger);
 
     // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
     // asks what the library put in front of the model; this asks what the
