@@ -223,3 +223,5 @@ name collision commits byte-identical logs and served views
 a shared-reference pair among them).
 
 `discoverTools.ts` acquires the actual catalogue once and refuses newly discovered private argument views before model offering when the native run has no private-record capability. The guard reads no scope for tools without a view mapper.
+
+Tool discovery can retain the ledger's original demotion in the native component's private catalog. For skill-owned names it checks the same implementation's visible ownership before counting or retaining a row. A repeated decision uses one position. At most 1,024 distinct decisions survive a listing, and exceeding that bound marks its evidence incomplete. A failed listing clears the previous discovery. These rows describe selection inside the provider. The final offer and any answer warning need separate evidence from the accepted model request.

@@ -2,6 +2,9 @@ import type { TypedScope } from 'footprintjs';
 import type { ActiveInjection } from '../../injection-engine/types.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tools/toolProvider.js';
 import type { Tool } from '../../tools/tools.js';
+import { listWithLedgerDecisions } from '../../tools/ledgerListing.js';
+import type { ToolClaim } from '../agent/buildToolRegistry.js';
+import { providerOmissions, type DiscoveryOmissions } from './providerOmissions.js';
 import { emitListUses } from '../../tools/mcpClientUse.js';
 import { requirePrivateQuestionSupport } from '../agent/arguments/privateAnswers.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
@@ -17,6 +20,14 @@ type DiscoveryScope = Pick<
   '$getArgs' | '$getEnv' | '$getValue' | '$emit'
 >;
 
+/** Native component's private catalog. An omission here describes discovery only. */
+export interface ProviderToolCache {
+  current: readonly Tool[];
+  /** Successful acquisition in this component, including a genuinely empty list. */
+  resolved?: true;
+  ledgerOmissions?: DiscoveryOmissions;
+}
+
 /**
  * One current catalog acquisition for normal Discover and fresh pause resume.
  * Executable tools remain private to the admitted native component. No saved
@@ -26,9 +37,11 @@ export async function discoverTools(
   scope: DiscoveryScope,
   config: {
     readonly provider: ToolProvider;
-    readonly cache?: { current: readonly Tool[]; resolved?: true };
+    readonly cache?: ProviderToolCache;
     readonly callerIdentity?: ToolDispatchContext['callerIdentity'];
     readonly iteration?: number;
+    /** A compose acquisition has the registry's ownership evidence. Reacquiring for dispatch is not a new offer. */
+    readonly claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
   },
 ): Promise<void> {
   const toolProvider = config.provider;
@@ -36,9 +49,10 @@ export async function discoverTools(
     clearProviderRowsets(config.cache);
     config.cache.current = [];
     delete config.cache.resolved;
+    delete config.cache.ledgerOmissions;
   }
   scope.$getEnv().signal?.throwIfAborted();
-  const args = scope.$getArgs<{ iteration?: number }>();
+  const args = scope.$getArgs<{ iteration?: number; hiddenSkillIds?: readonly string[] }>();
   const iteration = config.iteration ?? args.iteration ?? 1;
   const env = scope.$getEnv();
   const activatedIds =
@@ -73,10 +87,18 @@ export async function discoverTools(
 
   const startMs = Date.now();
   let visibleTools: readonly Tool[];
+  let omissions: ReturnType<typeof providerOmissions> | undefined;
+  const claimants = config.claimants;
   let rowsetCatalog: ResultRowsetCatalog;
   try {
     // Dynamic check — sync providers skip the await microtask.
-    const result = toolProvider.list(ctx);
+    const result =
+      config.cache && claimants
+        ? listWithLedgerDecisions(toolProvider, ctx, (candidate) => {
+            omissions ??= providerOmissions(claimants, args.hiddenSkillIds);
+            omissions.observe(candidate);
+          })
+        : toolProvider.list(ctx);
     visibleTools = result instanceof Promise ? await result : result;
     scope.$getEnv().signal?.throwIfAborted();
     rowsetCatalog = resultRowsetCatalog(
@@ -121,6 +143,8 @@ export async function discoverTools(
   // `structuredClone`d into the transactional memory layer.
   if (config.cache) {
     config.cache.current = visibleTools;
+    const retained = omissions?.result();
+    if (retained) config.cache.ledgerOmissions = retained;
     holdProviderRowsets(config.cache, rowsetCatalog);
     config.cache.resolved = true;
   }

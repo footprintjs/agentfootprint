@@ -34,6 +34,11 @@
  */
 
 import type { Tool } from '../tools/tools.js';
+import {
+  listWithLedgerDecisions,
+  registerLedgerListing,
+  type LedgerOmission,
+} from '../tools/ledgerListing.js';
 import type {
   ToolProvider,
   ToolDispatchContext,
@@ -42,30 +47,34 @@ import type {
 
 // LENS · tool-list · request-ephemeral
 // reads: nothing of its own — a caller-supplied predicate over the inner provider, recomputed per iteration
-// known gap: the omission is unclassified and unrecorded here. The predicate may be an AUTHORITY gate (a
-// permission policy, which must be invisible) or an ATTENTION gate (a budget or scope, which must be
-// visible); this seam cannot tell them apart. src/security/index.ts · "A local allowlist and a remote policy engine differ in one way that
-// matters here" states the distinction.
+// Only a framework ledger gate can contribute an attention decision. Arbitrary predicates may implement
+// authority policy and must conceal exclusions, including decisions made inside their provider.
+// The local allowlist and remote policy distinction is described in src/security/index.ts.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 // #region gatedTools
 export function gatedTools(inner: ToolProvider, predicate: ToolGatePredicate): ToolProvider {
-  return {
-    id: 'gated',
-    list(ctx: ToolDispatchContext): readonly Tool[] | Promise<readonly Tool[]> {
-      // Pull from the inner provider first; each recomputation sees
-      // the freshest state from any nested gates. Inner may be sync
-      // or async — we mirror what we get back so a sync chain stays
-      // sync (zero microtask overhead) and an async chain stays
-      // async (no premature `Promise.resolve` wrapping).
-      const innerResult = inner.list(ctx);
-      const filter = (innerTools: readonly Tool[]): readonly Tool[] =>
-        // Filter by predicate — tool name from `tool.schema.name`.
-        // Predicates throwing escape: a buggy predicate should crash
-        // loudly, not silently allow tools through. Per the
-        // permission-as-defense-in-depth principle.
-        innerTools.filter((t) => predicate(t.schema.name, ctx));
-      return innerResult instanceof Promise ? innerResult.then(filter) : filter(innerResult);
-    },
-  };
+  function evaluate(ctx: ToolDispatchContext, observe?: (omission: LedgerOmission) => void) {
+    // Pull from the inner provider first; each recomputation sees
+    // the freshest state from any nested gates. Inner may be sync
+    // or async — we mirror what we get back so a sync chain stays
+    // sync (zero microtask overhead) and an async chain stays
+    // async (no premature `Promise.resolve` wrapping).
+    const innerResult = observe ? listWithLedgerDecisions(inner, ctx, observe) : inner.list(ctx);
+    const filter = (innerTools: readonly Tool[]): readonly Tool[] =>
+      // Filter by predicate — tool name from `tool.schema.name`.
+      // Predicates throwing escape: a buggy predicate should crash
+      // loudly, not silently allow tools through. Per the
+      // permission-as-defense-in-depth principle.
+      innerTools.filter((tool) => {
+        const name = tool.schema.name;
+        const include = predicate(name, ctx);
+        if (!include && observe) observe({ name, tool });
+        return include;
+      });
+    return innerResult instanceof Promise ? innerResult.then(filter) : filter(innerResult);
+  }
+  const provider: ToolProvider = { id: 'gated', list: (ctx) => evaluate(ctx) };
+  registerLedgerListing(provider, predicate, evaluate);
+  return provider;
 }
 // #endregion gatedTools

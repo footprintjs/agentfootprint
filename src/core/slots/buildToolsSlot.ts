@@ -36,7 +36,7 @@ import type { Tool } from '../../tools/tools.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
-import { discoverTools } from './discoverTools.js';
+import { discoverTools, type ProviderToolCache } from './discoverTools.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
   ownsReservedArgument,
@@ -54,11 +54,7 @@ import type { TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js'
  * Compose's provider discovery shared with dispatch in one native component.
  * Independent mounts never share executable tools or repeat the list call.
  */
-export interface ProviderToolCache {
-  current: readonly Tool[];
-  /** Successful acquisition in THIS component, including a genuinely empty list. */
-  resolved?: true;
-}
+export type { ProviderToolCache } from './discoverTools.js';
 
 /** The private state shared by the slot and dispatch for this component only. */
 export interface ToolsSlotRuntime {
@@ -492,6 +488,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     await discoverTools(scope, {
       provider: toolProvider,
       cache: config.runtime?.(scope).providerToolCache,
+      ...(toolClaimants && { claimants: toolClaimants }),
       callerIdentity: config.callerIdentity?.(scope),
     });
   };
