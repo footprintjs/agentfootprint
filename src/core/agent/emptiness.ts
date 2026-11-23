@@ -149,6 +149,11 @@ export interface ReturnedDoor {
   readonly described?: unknown;
 }
 
+/** A native declaration cannot classify the replacement's bytes or erase its own declaration. */
+export function deliveredDeclarationDoor<T>(rewritten: boolean, nativeDoor: T): T | undefined {
+  return rewritten ? undefined : nativeDoor;
+}
+
 export interface EmptinessContext {
   /** The call and its conversation's issued placements, when the record carries them. */
   readonly placement?: { readonly toolCallId: string | undefined; readonly issued: IssuedPairs };

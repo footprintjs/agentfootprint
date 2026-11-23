@@ -1,5 +1,5 @@
 import { readCallOccurrenceKey } from '../../../../../lib/callOccurrence.js';
-import { declaredByValue } from '../../../emptiness.js';
+import { declaredByValue, deliveredDeclarationDoor } from '../../../emptiness.js';
 import type { CoverageRow } from '../../coverageRows.js';
 import type { TurnResult } from '../../turnResults.js';
 
@@ -19,11 +19,6 @@ export function declaredResultAdmitted(
     ((row.kind === 'ledger' || row.kind === 'absence' || row.kind === 'period') &&
       proof.returned(address, readCallOccurrenceKey(row)))
   );
-}
-
-/** A native declaration cannot classify the replacement's bytes or erase its own declaration. */
-export function deliveredDeclarationDoor<T>(rewritten: boolean, nativeDoor: T): T | undefined {
-  return rewritten ? undefined : nativeDoor;
 }
 
 export function declarationsForResult(result: TurnResult, nativeRows: readonly CoverageRow[]) {

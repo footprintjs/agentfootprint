@@ -42,7 +42,7 @@ import {
   type HistoryCall,
 } from '../../core/agent/recordedCalls.js';
 import { strip } from '../../semantics/coverage/read.js';
-import { deliveredDeclarationDoor } from '../../core/agent/assessment/results/coverage/declarations.js';
+import { deliveredDeclarationDoor } from '../../core/agent/emptiness.js';
 import { reportedStatusOf } from '../../semantics/toolOutcome.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 import { v } from '../render.js';

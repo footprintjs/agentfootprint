@@ -29,6 +29,8 @@ const NATIVE_ABSENCE = absent({
   },
 });
 const NATIVE_PENDING = { content: PRIVATE_STATUS, effects: [], status: 'pending' as const };
+const NATIVE_REASONS = ['coverage-gap', 'declared-absent', 'period-not-held'];
+const NATIVE_STANDING = `${BODY}${DIVIDER}Not sure — a tool said there is ground it did not check or cannot cover (cannot cover “${PRIVATE_GAP}” because “not connected”); a tool said nothing matched; a tool's data does not reach the time the question asked about (cannot cover “${PRIVATE_GAP}” because “not connected”).`;
 
 async function run({
   hook,
@@ -156,18 +158,18 @@ describe('standing reads results within the host rule', () => {
     expect(proof.sse).toBe(proof.returned);
   });
 
-  it('REGRESSION — a rewrite can remove an absence, gap, and period', async () => {
+  it('REGRESSION — a plain rewrite preserves the native absence, gap, and period', async () => {
     const proof = await run({
       hook: () => allow({ items: ['backup record'] }, 'Serve only the public index.'),
     });
-    expect.soft(proof.eventAssessment.reasons).toEqual([]);
+    expect.soft(proof.eventAssessment.reasons).toEqual(NATIVE_REASONS);
     expect.soft(proof.turnEnd.answerAssessment).toEqual(proof.eventAssessment);
     expect.soft(assessmentDataOf(proof.saved)).toEqual(proof.eventAssessment);
-    expect.soft(proof.returned).not.toContain('nothing matched');
+    expect.soft(proof.returned).toBe(NATIVE_STANDING);
     expect.soft(proof.sse).toBe(proof.returned);
   });
 
-  it('REGRESSION — a rewrite can keep an absence and drop its original gap and period', async () => {
+  it('REGRESSION — a rewritten absence preserves its original gap and period', async () => {
     const proof = await run({
       hook: () =>
         allow(
@@ -175,10 +177,10 @@ describe('standing reads results within the host rule', () => {
           'Serve the visible partition only.',
         ),
     });
-    expect.soft(proof.eventAssessment.reasons).toEqual(['declared-absent']);
+    expect.soft(proof.eventAssessment.reasons).toEqual(NATIVE_REASONS);
     expect.soft(proof.turnEnd.answerAssessment).toEqual(proof.eventAssessment);
     expect.soft(assessmentDataOf(proof.saved)).toEqual(proof.eventAssessment);
-    expect.soft(proof.returned).toBe(`${BODY}${DIVIDER}Not sure — a tool said nothing matched.`);
+    expect.soft(proof.returned).toBe(NATIVE_STANDING);
     expect.soft(proof.sse).toBe(proof.returned);
   });
 
