@@ -289,18 +289,22 @@ function buildPipeline(options: DefineMemoryOptions): MemoryPipeline {
 
 function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
   const s = options.strategy;
+  const configBase = {
+    store: options.store,
+    ...(options.recording !== undefined && { recording: options.recording }),
+  };
 
   switch (s.kind) {
     case MEMORY_STRATEGIES.WINDOW: {
       const w = s as MemoryWindowStrategy;
-      const config: DefaultPipelineConfig = { store: options.store, loadCount: w.size };
+      const config: DefaultPipelineConfig = { ...configBase, loadCount: w.size };
       return defaultPipeline(config);
     }
 
     case MEMORY_STRATEGIES.BUDGET: {
       const b = s as BudgetStrategy;
       const config: DefaultPipelineConfig = {
-        store: options.store,
+        ...configBase,
         ...(b.reserveTokens !== undefined && { reserveTokens: b.reserveTokens }),
         ...(b.minimumTokens !== undefined && { minimumTokens: b.minimumTokens }),
         ...(b.maxEntries !== undefined && { maxEntries: b.maxEntries }),
@@ -309,18 +313,12 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
     }
 
     case MEMORY_STRATEGIES.SUMMARIZE: {
-      // Wired in 9.14.0. Through 9.13.0 this arm built `defaultPipeline({
-      // loadCount: recent })` — the last `recent` entries, verbatim, with the
-      // `summarize` stage composed into nothing and the required `llm` never
-      // called. Eight turns through it with a counting provider made zero
-      // `complete()` calls. What it needed before it could be wired was
-      // exactly what this arm now demands: a named model, and a summary that
-      // is written back so the call is paid once instead of once per recall.
+      // Persist the summary so the model call is paid once, even across recalls.
       const sum = s as SummarizeStrategy;
       const size = sum.size ?? DEFAULT_SUMMARIZE_WINDOW;
       requireSummarizeConfig(options, sum, size);
       const config: DefaultPipelineConfig = {
-        store: options.store,
+        ...configBase,
         loadCount: size,
         summarize: {
           llm: sum.llm,
@@ -389,7 +387,7 @@ function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
         );
       }
       const config: DefaultPipelineConfig = {
-        store: options.store,
+        ...configBase,
         decay: {
           halfLifeMs: d.halfLifeMs,
           ...(d.minScore !== undefined && { minScore: d.minScore }),
@@ -504,6 +502,9 @@ function requireSummarizeConfig(
 
 function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
   const s = options.strategy;
+  if (options.recording !== undefined && s.kind !== MEMORY_STRATEGIES.TOP_K) {
+    throw new Error(`defineMemory[${options.id}]: semantic recording requires TOP_K retrieval.`);
+  }
 
   switch (s.kind) {
     case MEMORY_STRATEGIES.TOP_K: {
@@ -533,6 +534,7 @@ function buildSemanticPipeline(options: DefineSemanticOptions): MemoryPipeline {
       }
       const config: SemanticPipelineConfig = {
         store: options.store,
+        ...(options.recording !== undefined && { recording: options.recording }),
         ...(t.embedder !== undefined && { embedder: t.embedder }),
         ...(t.topK !== undefined && { k: t.topK }),
         ...(t.threshold !== undefined && { minScore: t.threshold }),

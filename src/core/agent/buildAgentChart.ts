@@ -54,7 +54,11 @@ import {
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
 
-import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
+import {
+  memoryInjectionKey,
+  memoryRecallOutcomesKey,
+  retrievalEvidenceKey,
+} from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
@@ -214,6 +218,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
       // The retrieval record, lifted into ROOT state so a backward slice
       // can reach the passage instead of stopping at this mount.
       evidenceKey: retrievalEvidenceKey(m.id),
+      recallOutcomesKey: memoryRecallOutcomesKey(m.id),
       readSubflowId: `sf-memory-read-${m.id}`,
       // A corpus reads under its OWN namespace, not the run's identity.
       ...(m.corpus !== undefined && { identityOverride: m.corpus }),

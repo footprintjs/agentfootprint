@@ -59,7 +59,11 @@ import {
   type ActiveBySlot,
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
-import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
+import {
+  memoryInjectionKey,
+  memoryRecallOutcomesKey,
+  retrievalEvidenceKey,
+} from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
@@ -87,6 +91,7 @@ import {
   startFinalBranch,
 } from './honesty/mounts.js';
 import { responseStopFields } from './honesty/responseStop.js';
+import { retrievalFindingsOf } from './honesty/retrievalRequests.js';
 import type { AgentState } from './types.js';
 import { dynamicTurnSeed } from './dynamicTurnSeed.js';
 import { memberRunArg } from '../memberRun.js';
@@ -543,6 +548,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       // The retrieval record, lifted into ROOT state so a backward slice
       // can reach the passage instead of stopping at this mount.
       evidenceKey: retrievalEvidenceKey(m.id),
+      recallOutcomesKey: memoryRecallOutcomesKey(m.id),
       readSubflowId: `sf-memory-read-${m.id}`,
       // A corpus reads under its OWN namespace, not the run's identity.
       ...(m.corpus !== undefined && { identityOverride: m.corpus }),
@@ -606,6 +612,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         for (const m of deps.memories) {
           const key = memoryInjectionKey(m.id);
           memoryKeys[key] = p[key];
+          const evidence = retrievalEvidenceKey(m.id);
+          if (p[evidence] !== undefined) memoryKeys[evidence] = p[evidence];
+          const outcomes = memoryRecallOutcomesKey(m.id);
+          if (p[outcomes] !== undefined) memoryKeys[outcomes] = p[outcomes];
         }
         return {
           // Read-only working inputs (stages read, never write these).
@@ -724,6 +734,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(p.resolvedInstructions !== undefined && {
             resolvedInstructions: p.resolvedInstructions,
           }),
+          ...(deps.memories.length > 0 && { turnNumber: p.turnNumber }),
           ...memoryKeys,
           // Cross-iteration accumulators under prior* aliases — frozen
           // here, copied to writable working keys by dynamicTurnSeed.
@@ -743,9 +754,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           priorSkillHistory: p.skillHistory,
         };
       },
-      outputMapper: (sf) => {
+      outputMapper: (sf, parent) => {
         const s = sf as Record<string, unknown>;
         return {
+          ...retrievalFindingsOf(s, parent as Record<string, unknown>),
           // LLM result the outer Route / tool-calls / final read.
           llmLatestContent: s.llmLatestContent,
           llmLatestToolCalls: s.llmLatestToolCalls,

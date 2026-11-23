@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
 import type { Recorder } from 'footprintjs';
 import { pickByBudget } from '../../../src/memory/stages/pickByBudget';
+import { recallOutcome } from '../../../src/memory/retrieval/outcome.js';
 import type { MemoryState } from '../../../src/memory/stages/types';
 import type { MemoryEntry } from '../../../src/memory/entry';
 import type { Message } from '../../../src/types/messages';
@@ -71,6 +72,7 @@ async function runPick(
       scope.selected = seed.selected;
       scope.formatted = seed.formatted;
       scope.newMessages = seed.newMessages;
+      if (seed.recallOutcomes !== undefined) scope.recallOutcomes = seed.recallOutcomes;
     },
     'seed',
   );
@@ -376,4 +378,40 @@ describe('pickByBudget — security', () => {
     // regressions in the tie-break key.
     expect(selected.map((e) => e.id)).toEqual(['z-entry', 'm-entry', 'a-entry']);
   });
+});
+
+it('retains exact scoreless budget counts when the recorded candidate sample is bounded', async () => {
+  const loaded = Array.from({ length: 148 }, (_, i) =>
+    makeEntry(`item-${i}`, msg('user', 'memory'), i),
+  );
+  const read = recallOutcome(
+    1,
+    'test',
+    loaded.map((entry, i) => ({
+      id: entry.id,
+      order: i + 1,
+      admitted: true,
+    })),
+    true,
+  );
+  const { state } = await runPick(
+    {},
+    {
+      loaded,
+      recallOutcomes: [read],
+      contextTokensRemaining: 0,
+    },
+  );
+  expect(state.recallOutcomes?.[0]).toMatchObject({
+    kind: 'ok',
+    complete: true,
+    candidatesComplete: false,
+    candidateCount: 148,
+    admittedCount: 0,
+    exclusions: { 'over-budget': 148 },
+  });
+  expect(state.recallOutcomes?.[0]?.candidates).toHaveLength(128);
+  expect(state.recallOutcomes?.[0]?.candidates?.every((row) => row.reason === 'over-budget')).toBe(
+    true,
+  );
 });

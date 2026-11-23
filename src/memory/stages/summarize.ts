@@ -94,6 +94,7 @@
  * @see ../../core/agent/window/strategies/summarizeOldest.ts  the same laws
  *      applied to the LIVE window instead of to recall
  */
+import { unprovenRecallOutcomes } from '../retrieval/outcome.js';
 import type { TypedScope } from 'footprintjs';
 import type { MemoryEntry } from '../entry/index.js';
 import type {
@@ -398,15 +399,7 @@ export function summarize(config: SummarizeConfig) {
     const raw = rawAll.filter((e) => !covered.has(e.id));
     const droppedByCoverage = rawAll.length - raw.length;
 
-    /**
-     * Write recall back: summaries first and oldest-coverage first, then what
-     * stayed verbatim. Every summary stands for material older than every raw
-     * entry that survived, so this IS chronological order.
-     *
-     * Idempotent on purpose — a stage that replaces `loaded` with an identical
-     * array files a write nobody made, and a turn where nothing was folded
-     * should look like a turn where nothing was folded.
-     */
+    // Summaries precede the unchanged verbatim tail. Reordering alone keeps attribution.
     const settle = (kept: readonly MemoryEntry<Message>[]): void => {
       const ordered = [...summaries].sort(
         (a, b) => (summaryCoverage(a)?.toTurn ?? 0) - (summaryCoverage(b)?.toTurn ?? 0),
@@ -414,6 +407,14 @@ export function summarize(config: SummarizeConfig) {
       const next = [...ordered, ...kept];
       if (next.length === loaded.length && next.every((entry, i) => entry === loaded[i])) return;
       scope.loaded = next;
+      const outcomes = scope.recallOutcomes;
+      const origins = outcomes === undefined ? undefined : new Set(loaded);
+      if (
+        outcomes !== undefined &&
+        (next.length !== loaded.length || next.some((entry) => !origins?.has(entry)))
+      ) {
+        scope.recallOutcomes = unprovenRecallOutcomes(outcomes);
+      }
     };
 
     // ── 2. Is there a fold to make? ──────────────────────────────────

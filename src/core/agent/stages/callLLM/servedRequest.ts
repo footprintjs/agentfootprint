@@ -7,7 +7,11 @@ import type {
   LLMProvider,
   LLMRequest,
 } from '../../../../provider-contract/types.js';
-import { observeRequests, requestAttempt } from '../../../../provider-contract/requestObserver.js';
+import {
+  observeRequests,
+  requestAttempt,
+  type RequestSettlement,
+} from '../../../../provider-contract/requestObserver.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
 
@@ -125,10 +129,13 @@ export async function completeObserved(
   signal: AbortSignal | undefined,
 ) {
   const attempt = requestAttempt(hooks, request);
+  let settlement: RequestSettlement = 'failed';
   try {
-    return await untilAborted(provider.complete(request, attempt.hooks), signal);
+    const response = await untilAborted(provider.complete(request, attempt.hooks), signal);
+    settlement = 'response';
+    return response;
   } finally {
-    attempt.close();
+    attempt.close(settlement);
   }
 }
 
@@ -141,8 +148,16 @@ export async function* streamObserved(
   if (provider.stream === undefined) return;
   const attempt = requestAttempt(hooks, request);
   try {
-    yield* abortableIterable(provider.stream(request, attempt.hooks), signal);
+    const stream = abortableIterable(provider.stream(request, attempt.hooks), signal);
+    if (attempt.observeChunk === undefined) {
+      yield* stream;
+    } else {
+      for await (const chunk of stream) {
+        attempt.observeChunk(chunk);
+        yield chunk;
+      }
+    }
   } finally {
-    attempt.close();
+    attempt.close('no-response');
   }
 }

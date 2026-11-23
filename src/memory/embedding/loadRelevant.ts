@@ -58,26 +58,30 @@
  */
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage as Message } from '../../provider-contract/types.js';
-import type { MemoryStore, ScoredEntry } from '../store/index.js';
+import type { MemoryStore, ScoredEntry, SearchResultEntry } from '../store/index.js';
+import { readMemorySearch, supportsRecallSearch } from '../store/readOutcome.js';
 import type { MemoryState } from '../stages/index.js';
 import { identityNamespace } from '../identity/index.js';
 import { resolveRankingMode } from '../store/capability.js';
 import { fnv1a } from '../../lib/fnv1a.js';
 import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
 import { topK } from '../retrieval/topK.js';
+import { recallOutcome, recallTimeout, type MemoryRecallCandidate } from '../retrieval/outcome.js';
 import type {
   RetrievalEvidence,
+  RetrievalRecording,
   RetrievalStrategy,
   RetrievalVerdict,
   RetrievedCandidate,
 } from '../retrieval/types.js';
 import type { Embedder } from './types.js';
 import { emitEmbedding } from './emitEmbedding.js';
-import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
+import { emitServed, policyInForce, type EmitScope } from '../../redaction/runRedaction.js';
 
 export interface LoadRelevantConfig {
-  /** The vector-capable store. Must implement `search()`. */
+  /** A store supporting legacy or outcome-aware search. */
   readonly store: MemoryStore;
+  readonly recording?: RetrievalRecording;
 
   /**
    * Embedder used to turn the query text into a vector.
@@ -160,11 +164,15 @@ function emit(scope: TypedScope<MemoryState>, type: string, payload: unknown): v
   if (typeof emitter === 'function') emitServed(scope as unknown as EmitScope, type, payload);
 }
 
+function hasScore<T>(result: SearchResultEntry<T>): result is ScoredEntry<T> {
+  return typeof result.score === 'number' && Number.isFinite(result.score);
+}
+
 export function loadRelevant(config: LoadRelevantConfig) {
   const { store, embedder } = config;
-  if (!store.search) {
+  if (!supportsRecallSearch(store)) {
     throw new Error(
-      'loadRelevant: the configured store does not implement search(). ' +
+      'loadRelevant: the configured store does not implement search() or searchWithOutcome(). ' +
         'Use a store that can retrieve (InMemoryStore, sqliteVectorStore, pgVectorStore, ' +
         's3VectorsStore, ...).',
     );
@@ -211,6 +219,7 @@ export function loadRelevant(config: LoadRelevantConfig) {
       ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
       selectionOrder: 'recency' as const,
       namespace,
+      ...(config.recording !== undefined && { recording: config.recording }),
     };
 
     if (text.length === 0) {
@@ -256,29 +265,36 @@ export function loadRelevant(config: LoadRelevantConfig) {
       });
     }
 
-    // store.search optional on MemoryStore but required when an embedder
-    // is configured (validated upstream by defineMemory).
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const results = (await store.search!(identity, queryVec, {
-      k: poolSize,
-      // `minScore` is deliberately NOT forwarded — see the header proof.
-      ...(config.tiers && { tiers: config.tiers }),
-      ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
-      text,
-    })) as readonly ScoredEntry<unknown>[];
-
-    // A store that ranks server-side may return entries without a usable
-    // score. We report that rather than printing a number we did not get.
-    const scoresUsable = results.every(
-      (r) => typeof r.score === 'number' && Number.isFinite(r.score),
+    const read = await readMemorySearch(
+      store,
+      identity,
+      queryVec,
+      {
+        k: poolSize,
+        // minScore stays in the strategy, so the recorded pool includes near misses.
+        ...(config.tiers && { tiers: config.tiers }),
+        ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
+        text,
+      },
+      signal,
     );
-
+    if (!read.ok) {
+      scope.loaded = [];
+      scope.recallOutcomes = [
+        ...(scope.recallOutcomes ?? []),
+        recallTimeout(scope.turnNumber, namespace),
+      ];
+      return;
+    }
+    const results = read.value;
+    const scoresUsable = results.every(hasScore);
     const verdicts: readonly RetrievalVerdict[] = scoresUsable
-      ? strategy.select(results.map((r) => ({ entry: r.entry, score: r.score })))
-      : // No comparable scores to rule on. The store already ranked, so we
-        // honour its order and take the first `k` — and say in the record
-        // that we could not see the candidates ourselves.
-        results.map((_, i): RetrievalVerdict => ({ admitted: i < strategy.k }));
+      ? strategy.select(results.map(({ entry, score }) => ({ entry, score })))
+      : // The store's order is evidence. A score-based floor is unavailable here.
+        results.map(
+          (_, i): RetrievalVerdict =>
+            i < strategy.k ? { admitted: true } : { admitted: false, reason: 'over-max-entries' },
+        );
 
     // ── The SIZE bound, spent in rank order (8.19.0) ──────────────────
     // `k` bounds how MANY passages reach the prompt and says nothing about
@@ -317,25 +333,48 @@ export function loadRelevant(config: LoadRelevantConfig) {
       });
     }
 
-    const admitted: ScoredEntry<unknown>[] = [];
+    const admitted: SearchResultEntry[] = [];
     const candidates: RetrievedCandidate[] = [];
+    const recallCandidates: MemoryRecallCandidate[] = [];
     results.forEach((result, i) => {
-      // `verdicts` is built from `results` above, one per element.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const verdict = verdicts[i]!;
+      // verdicts is built from results, one per element.
+      const verdict = verdicts[i];
+      if (verdict === undefined)
+        throw new TypeError('Retrieval strategy omitted a candidate verdict.');
       const overChars = droppedForChars.has(i);
       const isAdmitted = verdict.admitted && !overChars;
       if (isAdmitted) admitted.push(result);
       const reason = overChars ? ('over-char-budget' as const) : verdict.reason;
-      candidates.push({
-        id: result.entry.id,
-        score: result.score,
-        rank: i + 1,
+      const id = result.entry.id;
+      const order = i + 1;
+      recallCandidates.push({
+        id,
+        order,
         admitted: isAdmitted,
+        ...(hasScore(result) && { score: result.score }),
         ...(reason !== undefined && { reason }),
-        ...chunkProvenance(result.entry.value),
       });
+      if (scoresUsable && hasScore(result)) {
+        candidates.push({
+          id,
+          score: result.score,
+          rank: order,
+          admitted: isAdmitted,
+          ...(reason !== undefined && { reason }),
+          ...(config.recording !== 'ids-only' && chunkProvenance(result.entry.value)),
+        });
+      }
     });
+    scope.recallOutcomes = [
+      ...(scope.recallOutcomes ?? []),
+      recallOutcome(
+        scope.turnNumber,
+        namespace,
+        recallCandidates,
+        results.length < poolSize,
+        scoresUsable ? strategy.threshold : undefined,
+      ),
+    ];
 
     const evidence: RetrievalEvidence = {
       ...baseEvidence,
@@ -388,11 +427,9 @@ export function loadRelevant(config: LoadRelevantConfig) {
       namespace: evidence.namespace,
     });
 
-    // An empty namespace is almost never "the corpus has nothing to say".
-    // It is almost always "the corpus was indexed under a different
-    // identity than the one being queried" — the failure that used to be
-    // completely silent. Say it once per process, naming both sides.
-    if (evidence.corpusEmpty) warnEmptyCorpus(namespace);
+    // This read returned nothing. Only a run with no caller policy names
+    // its search namespace in an out-of-band diagnostic.
+    if (evidence.corpusEmpty && policyInForce(scope) === undefined) warnEmptyCorpus(namespace);
   };
 }
 
@@ -402,10 +439,9 @@ function warnEmptyCorpus(namespace: string): void {
   if (warnedNamespaces.has(namespace)) return;
   warnedNamespaces.add(namespace);
   console.warn(
-    `[agentfootprint] Semantic retrieval found NO entries at all in namespace '${namespace}'.\n` +
-      `  Nothing was injected, and the answer will come from the model alone.\n` +
-      `  The usual cause is that the corpus was indexed under a different identity than the one\n` +
-      `  being queried: indexDocuments() defaults to { conversationId: '_global' }, and a memory\n` +
+    `[agentfootprint] Semantic retrieval returned NO entries for this search in namespace '${namespace}'.\n` +
+      `  If the corpus was indexed under a different identity, check the identity\n` +
+      `  used by this search: indexDocuments() defaults to { conversationId: '_global' }, and a memory\n` +
       `  reads under the identity passed to agent.run() unless the retriever declares its own\n` +
       `  \`corpus\`. defineRAG() defaults \`corpus\` to { conversationId: '_global' } so the two\n` +
       `  sides meet; pass \`corpus\` explicitly when you index per tenant.`,

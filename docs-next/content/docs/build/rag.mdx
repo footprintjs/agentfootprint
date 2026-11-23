@@ -28,11 +28,11 @@ In agentfootprint, RAG runs on **the same machinery as `defineMemory({ type: SEM
 
 ## Define a retriever, attach to an agent
 
-`defineRAG({ id, store, embedder, description?, embedderId?, corpus?, topK?, threshold?, maxChars?, retrieval? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). It throws at construction time if `store` lacks `search()`. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
+`defineRAG({ id, store, embedder, description?, embedderId?, corpus?, topK?, threshold?, maxChars?, retrieval? })` returns a `MemoryDefinition`. `agent.rag(definition)` attaches it (alias for `.memory(definition)` — same plumbing, clearer intent). Supply a store with a search method. Pair `embedderId` here with the same value passed to `indexDocuments` so a later embedder swap is filtered out of results:
 
 <CodeFile path="examples/context-engineering/07-rag.ts" region="define-and-attach" title="examples/context-engineering/07-rag.ts (region: define-and-attach)" />
 
-The store is a `MemoryStore` with vector-search support (it must implement `search()` — `defineRAG` throws at construction time if it doesn't). `InMemoryStore` works for dev. Durable vector backends are not yet shipped — wire your own `MemoryStore` adapter against `src/memory/store/types.ts` until then.
+`InMemoryStore` works for local development. See [Memory store adapters](doc:memory-and-stores) for durable backends and outcome-aware adapters.
 
 ### The corpus namespace
 
@@ -45,11 +45,11 @@ await indexDocuments(store, embedder, docs, { identity: { tenant: 'acme' } });
 const acmeDocs = defineRAG({ id: 'docs', store, embedder, corpus: { tenant: 'acme' } });
 ```
 
-If they ever disagree, you no longer find out by getting a vague answer: the retrieval reports `corpusEmpty: true` on `agentfootprint.memory.retrieved`, and the first time it happens in a process a warning names the namespace it searched.
+If the search returns no candidates, the legacy `corpusEmpty` flag on `agentfootprint.memory.retrieved` describes that read. Check the namespace if you expected matches. Backend filters can also produce an empty result.
 
 ## Strict threshold semantics
 
-`threshold` is **strict**. When no chunk meets the threshold, NO injection happens — the LLM gets no context and answers from its own weights. This is intentional: weak low-confidence chunks pollute the prompt and make a confident wrong answer MORE likely, not less. Nothing throws; the turn simply proceeds without context.
+`threshold` is **strict**. When no chunk meets the threshold, the turn continues without passages from this retriever.
 
 What changed in 8.8.0 is that "no context" is now a **readable outcome instead of an absence**. The near-misses and their scores are on the `agentfootprint.memory.retrieved` event, so the right threshold is a number you read off a run rather than one you guess:
 
@@ -260,7 +260,7 @@ const agent = Agent.create({ provider })
 
 Every retrieval leaves a record, and it names what it rejected as well as what it used.
 
-**On the event stream** — `agentfootprint.memory.retrieved` fires once per retrieval with every candidate, and `agentfootprint.memory.attached` once per chunk that reached the prompt:
+**On the event stream**, `agentfootprint.memory.retrieved` reports counts and a bounded candidate sample. `agentfootprint.memory.attached` reports each chunk that was formatted for recall.
 
 ```ts
 agent.on('agentfootprint.memory.retrieved', (e) => {
@@ -278,6 +278,30 @@ agent.on('agentfootprint.memory.retrieved', (e) => {
 **In the trace** — the record is lifted onto root state as `retrievalEvidence_<id>`, so a backward slice from the answer reaches the passage instead of stopping at the memory subflow boundary.
 
 Two orderings are recorded and they are not the same thing: `rank` is how the chunk scored, `promptPosition` is where the budget picker put it in the message. Under the default recency ordering the best-scoring chunk can land last.
+
+### Distinguish empty recall from a timeout
+
+A successful search can return zero matches. The answer proceeds as usual. An outcome-aware store can report a timeout, and the agent can continue without that store's passages. When the run proves no recalled content reached any relevant model request, the answer assessment can add `memory-retrieval-timeout` or `memory-retrieval-excluded` to explain the result. A request that included recall, even on an earlier attempt, suppresses that zero-inclusion warning. Legacy recordings and requests with incomplete evidence leave inclusion unknown.
+
+The assessment uses the request observed at the provider adapter. The earlier retrieval and attachment events describe what the retriever found and prepared. For structured output, the reason travels with the assessment and the JSON keeps its schema.
+
+### Read the current turn's retrieval outcomes
+
+Use `memoryRecallOutcomesKey` from `agentfootprint/memory` to look up a retriever's outcomes in the snapshot. It builds the state key from `MEMORY_RECALL_OUTCOMES_KEY_PREFIX` and the retriever ID. Filter by the recorded turn when a conversation spans several requests.
+
+<CodeFile path="examples/rag/02-retrieval-outcomes.ts" region="read-outcomes" title="Read retrieval outcomes from the current turn" />
+
+A `MemoryRecallOutcome` describes one read and its selection stages. Its counts describe the returned pool and prepared entries when those are known. Each `MemoryRecallCandidate` in the bounded sample has a store position and admission result. `MemoryRecallExclusionReason` distinguishes exclusions at a score floor, by decay, or at a budget. Check `candidatesComplete` before using the sample to count candidates. The scalar totals carry the stage counts even when the sample is incomplete.
+
+The separate request receipt establishes what reached the provider adapter. A missing aggregate receipt leaves request inclusion unknown.
+
+### Keep retrieval evidence compact
+
+The `RetrievalRecording` option controls what the retriever keeps in its evidence. Set `recording: 'ids-only'` on `defineRAG`, or on `defineMemory` with semantic Top-K or episodic recall. The mode retains allowed IDs, counts, exclusion reasons and available scores, ranks and thresholds. Retrieval evidence omits passage text, source headings, URIs and summaries. The model receives the same passages and source coordinates. The host's redaction rules still apply to the evidence. Configure those rules separately for request capture, stored prompt and history values.
+
+<CodeFile path="examples/rag/02-retrieval-outcomes.ts" region="ids-only" title="Record retrieval IDs and selection metadata" />
+
+Run the example with `npm run example examples/rag/02-retrieval-outcomes.ts`. It compares a successful empty search, a store timeout and a matching passage without contacting a service.
 
 ### Replacing the retrieval rule
 

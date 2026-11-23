@@ -51,13 +51,19 @@ import type { MemoryEntry } from '../entry/index.js';
 import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
 import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
-import type { RetrievedCandidate } from '../retrieval/types.js';
+import type {
+  RetrievalChunkRange,
+  RetrievalRecording,
+  RetrievedCandidate,
+} from '../retrieval/types.js';
+import { SERVED_PLACEHOLDER } from '../../redaction/placeholder.js';
 import { emitServed, type EmitScope } from '../../redaction/runRedaction.js';
 
 /** Which claim the injected block is making about its entries. */
 export type MemoryFormatFlavor = 'memory' | 'rag';
 
 export interface FormatDefaultConfig {
+  readonly recording?: RetrievalRecording;
   /**
    * Header prepended to the injected message. Explains to the LLM what
    * follows and what it's for. Override if your app has specific phrasing
@@ -196,11 +202,20 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
     }
 
     const evidence = scope.retrieved;
+    const idsOnly = (config.recording ?? evidence?.recording) === 'ids-only';
     const byId = new Map<string, RetrievedCandidate>(
       (evidence?.candidates ?? []).map((c) => [c.id, c]),
     );
 
-    const blocks = selected.map((entry) => renderEntry(entry, byId.get(entry.id)));
+    const blocks = selected.map((entry) => {
+      const candidate = byId.get(entry.id);
+      return renderEntry(
+        entry,
+        idsOnly && candidate !== undefined
+          ? { ...candidate, ...chunkProvenance(entry.value) }
+          : candidate,
+      );
+    });
     const content =
       (header ? `${header}\n\n` : '') + blocks.join('\n\n') + (footer ? `\n\n${footer}` : '');
 
@@ -217,7 +232,37 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
     // order while the prompt is assembled in the PICKER's order: without
     // it, rejoining the fragments reproduces the right bytes in the wrong
     // sequence, which is a prompt the model never saw.
-    if (evidence) {
+    if (evidence && idsOnly) {
+      let offset = 0;
+      const promptRanges = selected.map((entry, i): RetrievalChunkRange => {
+        const length =
+          (blocks[i]?.length ?? 0) +
+          (i === 0 && header ? header.length + 2 : 0) +
+          (i === selected.length - 1 && footer ? footer.length + 2 : 0);
+        const start = offset;
+        const end = start + length;
+        offset = end + 2;
+        const candidate = byId.get(entry.id);
+        return {
+          id: entry.id,
+          start,
+          end,
+          ...(candidate !== undefined && { score: candidate.score, rank: candidate.rank }),
+        };
+      });
+      const positions = new Map(promptRanges.map((range, i) => [range.id, i]));
+      scope.retrieved = {
+        ...evidence,
+        recording: 'ids-only',
+        promptRanges,
+        ...(evidence.candidates !== undefined && {
+          candidates: evidence.candidates.map((candidate) => {
+            const promptPosition = positions.get(candidate.id);
+            return promptPosition === undefined ? candidate : { ...candidate, promptPosition };
+          }),
+        }),
+      };
+    } else if (evidence) {
       const fragments = blocks.map((block, i) => {
         const withHeader = i === 0 && header ? `${header}\n\n${block}` : block;
         return i === blocks.length - 1 && footer ? `${withHeader}\n\n${footer}` : withHeader;
@@ -248,7 +293,7 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
       const candidate = byId.get(entry.id);
       emit(scope, 'agentfootprint.memory.attached', {
         memoryId: entry.id,
-        contentSummary: summarize(chunkText(entry.value)),
+        contentSummary: idsOnly ? SERVED_PLACEHOLDER : summarize(chunkText(entry.value)),
         ...(candidate?.score !== undefined && { score: candidate.score }),
         ...(candidate?.rank !== undefined && { rank: candidate.rank }),
         source: 'store' as const,

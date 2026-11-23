@@ -35,6 +35,7 @@
  * would produce `NaN`, and `NaN >= minScore` is false, which would silently
  * drop every entry from such a store.
  */
+import { refineRecallOutcomes, type RecallExclusion } from '../retrieval/outcome.js';
 import type { TypedScope } from 'footprintjs';
 import { computeDecayFactor } from '../entry/decay.js';
 import type { DecayPolicy } from '../entry/types.js';
@@ -93,7 +94,8 @@ export function filterByDecay(config: FilterByDecayConfig) {
     // score the same, whatever the loop costs.
     const now = clock();
 
-    scope.loaded = loaded.filter((entry) => {
+    const removed = new Map<string, RecallExclusion>();
+    const kept = loaded.filter((entry) => {
       if (!Number.isFinite(entry.lastAccessedAt)) return true;
       // `accessCount` is normalised for the same reason `lastAccessedAt` is
       // guarded: a store that never set it would make the exponent `NaN`,
@@ -102,7 +104,15 @@ export function filterByDecay(config: FilterByDecayConfig) {
         lastAccessedAt: entry.lastAccessedAt,
         accessCount: Number.isFinite(entry.accessCount) ? entry.accessCount : 0,
       };
-      return computeDecayFactor(scored, now, policy) >= minScore;
+      const score = computeDecayFactor(scored, now, policy);
+      if (score >= minScore) return true;
+      removed.set(entry.id, { reason: 'decayed', score, floor: minScore });
+      return false;
     });
+    scope.loaded = kept;
+    const outcomes = scope.recallOutcomes;
+    if (outcomes !== undefined && removed.size !== 0) {
+      scope.recallOutcomes = refineRecallOutcomes(outcomes, removed, loaded.length, kept.length);
+    }
   };
 }

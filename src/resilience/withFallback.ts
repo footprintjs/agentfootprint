@@ -49,7 +49,7 @@ import {
 } from '../provider-contract/nativeOutputSchema.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
-import { requestAttempt } from '../provider-contract/requestObserver.js';
+import { requestAttempt, type RequestSettlement } from '../provider-contract/requestObserver.js';
 import { throwIfAborted } from '../lib/abort.js';
 
 /**
@@ -306,12 +306,15 @@ export function withFallback(
       try {
         const primaryRequest = requestFor(primary, attempts.request);
         const attempt = requestAttempt(attempts.hooks, primaryRequest);
+        let settlement: RequestSettlement = 'failed';
         try {
-          return attempts.response(
+          const response = attempts.response(
             answered(await primary.complete(primaryRequest, attempt.hooks), 'primary'),
           );
+          settlement = 'response';
+          return response;
         } finally {
-          attempt.close();
+          attempt.close(settlement);
         }
       } catch (err) {
         // A cancelled call never moves to the other side, whatever
@@ -323,12 +326,15 @@ export function withFallback(
         reportFellBack(hooks, err);
         const fallbackRequest = requestFor(fallback, attempts.request);
         const attempt = requestAttempt(attempts.hooks, fallbackRequest);
+        let settlement: RequestSettlement = 'failed';
         try {
-          return attempts.response(
+          const response = attempts.response(
             answered(await fallback.complete(fallbackRequest, attempt.hooks), 'fallback'),
           );
+          settlement = 'response';
+          return response;
         } finally {
-          attempt.close();
+          attempt.close(settlement);
         }
       }
     },
@@ -356,10 +362,12 @@ export function withFallback(
               ? fallback.stream(fallbackReq, attempt.hooks)
               : completeAsStream(fallback, fallbackReq, attempt.hooks),
             'fallback',
-          ))
+          )) {
+            attempt.observeChunk?.(chunk);
             yield attempts.chunk(chunk);
+          }
         } finally {
-          attempt.close();
+          attempt.close('no-response');
         }
       };
       if (!primary.stream) {
@@ -376,10 +384,11 @@ export function withFallback(
             'primary',
           )) {
             yieldedAny = true;
+            attempt.observeChunk?.(chunk);
             yield attempts.chunk(chunk);
           }
         } finally {
-          attempt.close();
+          attempt.close('no-response');
         }
       } catch (err) {
         throwIfAborted(req.signal);
