@@ -47,7 +47,8 @@ const final = (content: string) => ({ content, toolCalls: [], stopReason: 'stop'
 const CONFIDENT = 'Replication is healthy. Everything looks fine.';
 const COVERAGE_WARNING =
   'Not sure — a tool said there is ground it did not check or cannot cover ' +
-  '(did not check “NDM migration sessions”; cannot cover “host-side multipathing”).';
+  '(did not check “NDM migration sessions” because “the API timed out — ask again”; ' +
+  'cannot cover “host-side multipathing” because “no collector runs on the ESX hosts”).';
 
 type Ev = Record<string, unknown>;
 const capture = () => {

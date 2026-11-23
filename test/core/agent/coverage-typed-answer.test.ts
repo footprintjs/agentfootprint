@@ -47,8 +47,10 @@ const VERDICT: Verdict = { healthy: true, summary: 'Replication is healthy.' };
 const JSON_ANSWER = JSON.stringify(VERDICT);
 const COVERAGE_STANDING =
   'Not sure — a tool said there is ground it did not check or cannot cover ' +
-  '(a tool did not check “NDM migration sessions”; a tool cannot cover “multipathing”; ' +
-  'a tool cannot cover “host-side multipathing”); a tool said nothing matched.';
+  '(a tool did not check “NDM migration sessions” because “the API timed out — ask again”; ' +
+  'a tool cannot cover “multipathing” because “no collector runs on the ESX hosts”; ' +
+  'a tool cannot cover “host-side multipathing” because “no collector runs on the ESX hosts”); ' +
+  'a tool said nothing matched.';
 
 const LEDGER = {
   checked: ['SRDF pair state on all 4 arrays (live query)'],
