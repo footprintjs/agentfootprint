@@ -13,6 +13,7 @@ import {
   summarizeOldest,
   type AgentOptions,
   type ToolMiddleware,
+  type WindowStrategy,
 } from '../../../../src/index.js';
 import { mock } from '../../../../src/llm-providers.js';
 import {
@@ -41,6 +42,13 @@ const SUMMARY = 'Synthetic summary output.';
 const WINDOW_MATERIAL = 'Retained synthetic fixture material. '.repeat(35);
 const PRIVATE_NOTICE = 'This result is private.';
 const WITHHELD = `${DONE}\n\n---\n\nNot sure — a result was kept out by a rule.`;
+const DROP_REASON = 'result-dropped-from-window';
+const dropClause = (count: number) =>
+  `${count} ${
+    count === 1 ? 'result from this turn was' : 'results from this turn were'
+  } dropped from the conversation before the answer`;
+const withheldWithDrop = (answer = DONE) =>
+  `${answer}\n\n---\n\nNot sure — a result was kept out by a rule; ${dropClause(1)}.`;
 const call = (name: string, id: string, args: Record<string, unknown> = {}) => ({
   content: '',
   toolCalls: [{ name, id, args }],
@@ -89,16 +97,22 @@ interface Shape {
   readonly defaultPins?: true;
   readonly windowPressure?: true;
   readonly memory?: MemoryDefinition;
+  readonly answerLayerOff?: true;
+  readonly windowStrategy?: WindowStrategy;
 }
 
 function build(shape: Shape, evicts: boolean | WindowDoor) {
   const replies = shape.replies ?? [call('lookup', 'c1'), call('filler', 'c2'), DONE];
   const historyAtRequest: string[][] = [];
   const summaryAtRequest: boolean[] = [];
+  const providerInputs: string[] = [];
   let i = 0;
   const provider = mock({
     chunkDelayMs: 0,
     respond(request) {
+      const { signal, ...input } = request;
+      void signal;
+      providerInputs.push(JSON.stringify(input));
       historyAtRequest.push(
         request.messages.flatMap((entry) =>
           entry.role === 'tool' && entry.toolCallId !== undefined ? [entry.toolCallId] : [],
@@ -118,14 +132,15 @@ function build(shape: Shape, evicts: boolean | WindowDoor) {
     model: 'mock',
     ...(evicts && !shape.defaultPins && { keepLastToolResults: false as const }),
     ...shape.options,
-  })
-    .tools([
-      ...(shape.tools ?? [tool('lookup', shape.execute ?? rows)]),
-      filler(shape.windowPressure ? WINDOW_MATERIAL : undefined),
-    ])
-    .answerLayer({ standingLine: true });
+  }).tools([
+    ...(shape.tools ?? [tool('lookup', shape.execute ?? rows)]),
+    filler(shape.windowPressure ? WINDOW_MATERIAL : undefined),
+  ]);
+  builder.answerLayer(shape.answerLayerOff ? false : { standingLine: true });
   if (evicts === true)
-    builder.window(slidingWindow({ keepRecentTurns: shape.defaultPins ? 2 : 1 }));
+    builder.window(
+      shape.windowStrategy ?? slidingWindow({ keepRecentTurns: shape.defaultPins ? 2 : 1 }),
+    );
   if (evicts === 'act-sliding') builder.act({ window: slidingWindow({ keepRecentTurns: 1 }) });
   if (evicts === 'compaction' || evicts === 'direct-summarize') {
     const options = {
@@ -139,7 +154,7 @@ function build(shape: Shape, evicts: boolean | WindowDoor) {
   }
   if (shape.rule !== undefined) builder.toolMiddleware(shape.rule);
   if (shape.memory !== undefined) builder.memory(shape.memory);
-  return { agent: builder.build(), historyAtRequest, summaryAtRequest };
+  return { agent: builder.build(), historyAtRequest, summaryAtRequest, providerInputs };
 }
 
 async function read(agent: Agent, drive = () => agent.run(QUESTION), mounted = false) {
@@ -244,8 +259,13 @@ describe('the window keeps no authority over recorded call evidence', () => {
       expect(retained.historyAtRequest.at(-1)).toEqual(['c1', 'c2']);
       expect(evicted.historyAtRequest.at(-1)).toEqual(['c2']);
       expect(before.event.reasons).toEqual([shape.reason]);
-      expect(after.event.reasons).toEqual(before.event.reasons);
-      expect(after.returned).toBe(before.returned);
+      const withheldOrSynthetic =
+        shape.reason === 'result-withheld' || shape.reason === 'call-not-completed';
+      expect([...after.event.reasons].sort()).toEqual(
+        (withheldOrSynthetic ? [shape.reason] : [shape.reason, DROP_REASON]).sort(),
+      );
+      if (withheldOrSynthetic) expect(after.returned).toBe(before.returned);
+      else expect(after.returned).toContain(dropClause(1));
       if (shape.wording !== undefined) {
         expect(after.returned).toBe(`${DONE}\n\n---\n\n${shape.wording}`);
         for (const { recording } of [before, after]) {
@@ -264,6 +284,121 @@ const doorCases: readonly (Shape & { name: string; reason?: AssessmentReason })[
   ...cases,
   { name: 'clean control' },
 ];
+
+it.each(windowDoors)('discloses visible current-turn results lost through %s', async (door) => {
+  const calls = [
+    call('lookup', 'c1'),
+    ...Array.from({ length: 4 }, (_, index) => call('filler', `c${index + 2}`)),
+  ];
+  const shape: Shape = {
+    options: { reactMode: 'dynamic' },
+    windowPressure: true,
+    replies: [...calls.map((reply) => ({ ...reply, content: WINDOW_MATERIAL })), DONE],
+  };
+  const retained = build(shape, false);
+  const evicted = build(shape, door);
+  const drive = (agent: Agent) => agent.run({ message: WINDOW_MATERIAL });
+  try {
+    const before = await read(retained.agent, () => drive(retained.agent));
+    const after = await read(evicted.agent, () => drive(evicted.agent));
+    const delivered = evicted.historyAtRequest.at(-1)!;
+    const lost = retained.historyAtRequest.at(-1)!.filter((id) => !delivered.includes(id));
+    expect(lost).toContain('c1');
+    expect(delivered).toContain('c5');
+    expect(before.event.standing).toBe('consistent');
+    expect(before.returned).not.toContain('dropped from the conversation');
+    expect(after.event.standing).toBe('not-sure');
+    const warning = dropClause(lost.length);
+    expect(after.returned).toContain(warning);
+    expect(accountForAnswer(after.recording).facts.limitsBlock.value).toContain(warning);
+  } finally {
+    await retained.agent.shutdown();
+    await evicted.agent.shutdown();
+  }
+});
+
+it('keeps unarmed answer bytes even when the configured window drops a result', async () => {
+  const shape: Shape = { answerLayerOff: true };
+  const retained = build(shape, false);
+  const evicted = build(shape, true);
+  try {
+    expect(await retained.agent.run(QUESTION)).toBe(DONE);
+    expect(await evicted.agent.run(QUESTION)).toBe(DONE);
+    expect(evicted.historyAtRequest.at(-1)).toEqual(['c2']);
+    expect(evicted.agent.getLastSnapshot()?.sharedState).not.toHaveProperty('libraryResultLimits');
+  } finally {
+    await retained.agent.shutdown();
+    await evicted.agent.shutdown();
+  }
+});
+
+it('does not count a strategy report for a result kept in the applied window', async () => {
+  const strategy = slidingWindow({ keepRecentTurns: 1 });
+  const control = build({}, false);
+  const kept = build(
+    {
+      windowStrategy: {
+        name: strategy.name,
+        async plan(input) {
+          const result = await strategy.plan(input);
+          if (result === undefined || result.window === undefined) return result;
+          return {
+            ...result,
+            window: input.history,
+            rebase: { headCount: input.history.length, keptTailCount: 0 },
+          };
+        },
+      },
+    },
+    true,
+  );
+  try {
+    const before = await read(control.agent);
+    const after = await read(kept.agent);
+    expect(kept.historyAtRequest.at(-1)).toEqual(['c1', 'c2']);
+    expect(after.returned).toBe(before.returned);
+    expect(after.event).toEqual(before.event);
+    expect(kept.agent.getLastSnapshot()?.sharedState).not.toHaveProperty('libraryResultLimits');
+  } finally {
+    await control.agent.shutdown();
+    await kept.agent.shutdown();
+  }
+});
+
+it.each(['dynamic', 'dynamic-grouped'] as const)(
+  'discloses an applied removal with no strategy eviction in %s',
+  async (reactMode) => {
+    const strategy = slidingWindow({ keepRecentTurns: 1 });
+    const control = build({ options: { reactMode }, windowStrategy: strategy }, true);
+    const omitted = build(
+      {
+        options: { reactMode },
+        windowStrategy: {
+          name: strategy.name,
+          async plan(input) {
+            const result = await strategy.plan(input);
+            return result?.window === undefined ? result : { ...result, evictions: [] };
+          },
+        },
+      },
+      true,
+    );
+    try {
+      const normal = await read(control.agent);
+      const missing = await read(omitted.agent);
+      expect(omitted.providerInputs).toEqual(control.providerInputs);
+      expect(omitted.historyAtRequest.at(-1)).toEqual(['c2']);
+      expect(normal.event.reasons).toEqual([DROP_REASON]);
+      expect(missing.event.reasons).toEqual([DROP_REASON]);
+      expect(missing.saved.reasons).toEqual(normal.saved.reasons);
+      expect(missing.returned).toBe(normal.returned);
+      expect(missing.returned).toContain(dropClause(1));
+    } finally {
+      await control.agent.shutdown();
+      await omitted.agent.shutdown();
+    }
+  },
+);
 
 describe.each(windowDoors)('standing through %s', (door) => {
   it.each(doorCases)('retains the verdict for $name', async (fixture) => {
@@ -300,13 +435,17 @@ describe.each(windowDoors)('standing through %s', (door) => {
       expect(savedFirstResult(retained.agent)).toBe(true);
       expect(savedFirstResult(evicted.agent)).toBe(false);
       expect(before.event.reasons).toEqual(fixture.reason === undefined ? [] : [fixture.reason]);
-      expect(after.event.reasons).toEqual(before.event.reasons);
-      if (fixture.reason === undefined) {
-        expect(before.event.standing).toBe('consistent');
-        expect(after.event.standing).toBe('not-assessed');
-      } else {
-        expect(after.returned).toBe(before.returned);
-      }
+      expect([...after.event.reasons].sort()).toEqual(
+        [...before.event.reasons, DROP_REASON].sort(),
+      );
+      if (fixture.reason === undefined) expect(before.event.standing).toBe('consistent');
+      const delivered = evicted.historyAtRequest.at(-1)!;
+      const withheldOrSynthetic =
+        fixture.reason === 'result-withheld' || fixture.reason === 'call-not-completed';
+      const visible = withheldOrSynthetic ? ['c2', 'c3', 'c4'] : ['c1', 'c2', 'c3', 'c4'];
+      const lost = visible.filter((id) => !delivered.includes(id));
+      expect(after.event.standing).toBe('not-sure');
+      expect(after.returned).toContain(dropClause(lost.length));
     } finally {
       await retained.agent.shutdown();
       await evicted.agent.shutdown();
@@ -388,17 +527,24 @@ describe('anonymous withholding when the tool result leaves history', () => {
           );
           expect(historyAtRequest.at(-1)).not.toContain('c1');
           expect(proof.returned).toBe(
-            `${finalAnswer}\n\n---\n\nNot sure — a result was kept out by a rule.`,
+            pauses
+              ? withheldWithDrop(finalAnswer)
+              : `${finalAnswer}\n\n---\n\nNot sure — a result was kept out by a rule.`,
           );
           expect(proof.sse).toBe(proof.returned);
           expect(proof.aguiText).toBe(proof.returned);
           expect(proof.turnEnd.finalContent).toBe(proof.returned);
-          expect(proof.eventAssessment.reasons).toEqual(['result-withheld']);
+          expect(proof.eventAssessment.reasons).toEqual(
+            pauses ? ['result-withheld', DROP_REASON] : ['result-withheld'],
+          );
           expect(proof.turnEnd.answerAssessment).toEqual(proof.eventAssessment);
           expect(assessmentDataOf(proof.saved)).toEqual(proof.eventAssessment);
-          expect(proof.saved.reasons).toMatchObject([
-            { reason: 'result-withheld', source: { kind: 'run' }, witness: [] },
-          ]);
+          expect(proof.saved.reasons[0]).toMatchObject({
+            reason: 'result-withheld',
+            source: { kind: 'run' },
+            witness: [],
+          });
+          if (pauses) expect(proof.saved.reasons[1]?.witness).toHaveLength(1);
           const current = publicAnswerBytes(proof);
           reference ??= current;
           expect(current, name).toEqual(reference);
@@ -421,8 +567,10 @@ describe('anonymous withholding when the tool result leaves history', () => {
           resumed.agent.resume(checkpoint, { approved: true }),
         );
         expect(resumed.historyAtRequest.at(-1)?.includes('c1')).toBe(!evicts);
-        expect(proof.event.reasons).toEqual(['result-withheld']);
-        expect(proof.returned).toBe(WITHHELD);
+        expect(proof.event.reasons).toEqual(
+          evicts ? ['result-withheld', DROP_REASON] : ['result-withheld'],
+        );
+        expect(proof.returned).toBe(evicts ? withheldWithDrop() : WITHHELD);
       } finally {
         await first.agent.shutdown();
         await resumed.agent.shutdown();
@@ -452,11 +600,15 @@ describe('recorded settlement across the coordinator window axes', () => {
   });
 
   it.each([
-    { name: 'two results', first: [call('lookup', 'c1'), call('lookup', 'c2')] },
-    { name: 'one batch member', first: [batch(call('lookup', 'c1'), call('filler', 'c2'))] },
+    { name: 'two results', first: [call('lookup', 'c1'), call('lookup', 'c2')], visible: false },
+    {
+      name: 'one batch member',
+      first: [batch(call('lookup', 'c1'), call('filler', 'c2'))],
+      visible: true,
+    },
   ])(
     'only one anonymous reason is visible for $name with or without eviction',
-    async ({ first }) => {
+    async ({ first, visible }) => {
       for (const evicts of [false, true]) {
         const { agent, historyAtRequest } = build(
           {
@@ -468,11 +620,17 @@ describe('recorded settlement across the coordinator window axes', () => {
         try {
           const proof = await read(agent);
           expect(historyAtRequest.at(-1)).toEqual(evicts ? ['c3'] : ['c1', 'c2', 'c3']);
-          expect(proof.event.reasons).toEqual(['result-withheld']);
-          expect(proof.saved.reasons).toMatchObject([
-            { reason: 'result-withheld', source: { kind: 'run' }, witness: [] },
-          ]);
-          expect(proof.returned).toBe(WITHHELD);
+          const lost = evicts && visible;
+          expect(proof.event.reasons).toEqual(
+            lost ? ['result-withheld', DROP_REASON] : ['result-withheld'],
+          );
+          expect(proof.saved.reasons[0]).toMatchObject({
+            reason: 'result-withheld',
+            source: { kind: 'run' },
+            witness: [],
+          });
+          if (lost) expect(proof.saved.reasons[1]?.witness).toHaveLength(1);
+          expect(proof.returned).toBe(lost ? withheldWithDrop() : WITHHELD);
         } finally {
           await agent.shutdown();
         }
@@ -507,8 +665,8 @@ describe('recorded settlement across the coordinator window axes', () => {
         expect(retained.historyAtRequest.at(-1)).toEqual(['c1', 'c2']);
         expect(evicted.historyAtRequest.at(-1)).toEqual(['c2']);
         expect(before.event.reasons).toEqual(reasons);
-        expect(after.event.reasons).toEqual(before.event.reasons);
-        expect(after.returned).toBe(before.returned);
+        expect([...after.event.reasons].sort()).toEqual([...reasons, DROP_REASON].sort());
+        expect(after.returned).toContain(dropClause(1));
       } finally {
         await retained.agent.shutdown();
         await evicted.agent.shutdown();
@@ -556,9 +714,17 @@ describe('recorded settlement across the coordinator window axes', () => {
     );
     try {
       const proof = await read(agent);
-      expect(proof.event.reasons).toEqual(['result-withheld']);
+      expect(proof.event.reasons).toEqual(['result-withheld', 'result-dropped-from-window']);
       const { commitLog, sharedState } = agent.getLastSnapshot()!;
       const writes = commitLog.flatMap(({ trace }) => trace);
+      const drops = (sharedState.libraryResultLimits ?? []).filter(
+        ({ kind, turn }) => kind === DROP_REASON && turn === sharedState.turnNumber,
+      );
+      expect(drops).toHaveLength(20);
+      expect(new Set(drops.map(readCallOccurrenceKey)).size).toBe(20);
+      expect(
+        writes.filter(({ path }) => path === 'libraryResultLimits').map(({ verb }) => verb),
+      ).toEqual(['set', ...Array<string>(19).fill('append')]);
       for (const [list, complete] of [
         ['enteredToolCalls', 'enteredToolCallsComplete'],
         ['settledToolCalls', 'settledToolCallsComplete'],
@@ -636,15 +802,26 @@ describe('recorded settlement across the coordinator window axes', () => {
           const proof = await read(agent);
           expect(historyAtRequest.at(-1)?.includes('c1')).toBe(!evicts);
           expect(historyAtRequest.at(-1)).toContain('c2');
-          expect(proof.event.reasons).toEqual(!evicts && canRecover ? [] : [reason]);
-          return proof.returned;
+          const reasons = !evicts && canRecover ? [] : [reason];
+          expect([...proof.event.reasons].sort()).toEqual(
+            (evicts ? [...reasons, DROP_REASON] : reasons).sort(),
+          );
+          if (evicts) {
+            const kept = historyAtRequest.at(-1)!;
+            const visible =
+              reason === 'result-withheld' || reason === 'call-not-completed'
+                ? ['c3', 'c4', 'c5']
+                : ['c1', 'c3', 'c4', 'c5'];
+            expect(proof.returned).toContain(
+              dropClause(visible.filter((id) => !kept.includes(id)).length),
+            );
+          }
         } finally {
           await agent.shutdown();
         }
       }
-      const retained = await run(false);
-      const evicted = await run(true);
-      if (!canRecover) expect(evicted).toBe(retained);
+      await run(false);
+      await run(true);
     },
   );
 

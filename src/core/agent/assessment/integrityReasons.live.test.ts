@@ -264,7 +264,7 @@ describe('SCENARIO — each kind a run can file', () => {
       .build();
     const r = await run(agent, () => agent.run({ message: 'Walk the floor.' }));
     expect(notesOf(r.saved)).toEqual(['dangling-reference']);
-    expect(r.saved.reasons).toEqual([]);
+    expect(reasonsOf(r.saved)).toEqual(['result-dropped-from-window']);
   });
 
   it('prior-turn-evidence is a note on the turn it was filed on', async () => {

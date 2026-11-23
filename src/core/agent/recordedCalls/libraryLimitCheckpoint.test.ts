@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_ENTERED_TOOL_CALLS } from '../honesty/enteredToolCalls.js';
 import {
   captureDatasetLimit,
+  recordLibraryResultLimits,
   recordServedLimits,
   type LibraryResultLimit,
   type PendingDatasetLimits,
@@ -33,6 +34,40 @@ describe('result-limit receipts at the tool and checkpoint boundaries', () => {
     });
     expect(() =>
       admitToolTurnEvidence({ toolTurnEvidence: { libraryResultLimits: [...full, first] } }),
+    ).toThrow(/malformed/);
+  });
+
+  it('shares the remaining receipt space with window drops and recovers metadata without payloads', () => {
+    const prior = Array<LibraryResultLimit>(MAX_ENTERED_TOOL_CALLS - 1).fill(first);
+    const state: Partial<AgentState> = { turnNumber: 1, libraryResultLimits: prior };
+    const scope = state as Parameters<typeof recordLibraryResultLimits>[0];
+    const dropped = { ...call, toolCallId: 'dropped', content: 'secret result' };
+    const other = { ...call, toolCallId: 'overflow', callOccurrenceKey: [1, 2, 3, 4, 1] as const };
+    const fact = { kind: 'result-dropped-from-window', strategy: 'sliding-window' } as const;
+    recordLibraryResultLimits(scope, [
+      { call: dropped, fact },
+      { call: other, fact },
+    ]);
+
+    expect(state.libraryResultLimits).toHaveLength(MAX_ENTERED_TOOL_CALLS);
+    expect(state.libraryResultLimitsIncomplete).toBe(true);
+    const evidence = toolTurnEvidenceFrom(state);
+    const recovered = admitToolTurnEvidence(
+      JSON.parse(JSON.stringify({ toolTurnEvidence: evidence })),
+    );
+    expect(recovered?.libraryResultLimits?.at(-1)).toEqual({
+      ...call,
+      toolCallId: 'dropped',
+      turn: 1,
+      ...fact,
+    });
+    expect(recovered?.libraryResultLimitsIncomplete).toBe(true);
+    expect(() =>
+      admitToolTurnEvidence({
+        toolTurnEvidence: {
+          libraryResultLimits: [{ ...call, turn: 1, ...fact, callOccurrenceKey: undefined }],
+        },
+      }),
     ).toThrow(/malformed/);
   });
 

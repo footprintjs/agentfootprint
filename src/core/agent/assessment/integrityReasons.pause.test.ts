@@ -184,7 +184,10 @@ describe('BOUNDARY — a pause inside the grouped boundary, resumed fresh', () =
 
     const r = await resumeFresh(build(), paused);
     expect(r.saved.standing).toBe('not-sure');
-    expect(r.saved.reasons.map((x) => x.reason)).toEqual(['missing-column']);
+    expect(r.saved.reasons.map((x) => x.reason)).toEqual([
+      'result-dropped-from-window',
+      'missing-column',
+    ]);
     expect(r.saved.notes?.map((n) => n.finding)).toEqual(['dangling-reference']);
     expect(finding(r.rows)).toEqual(['missing-column', 'dangling-reference']);
     expect(r.state.integrityFindingRows).toBeUndefined();

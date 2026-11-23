@@ -24,6 +24,7 @@ export interface StandingNames {
   readonly details?: ReadonlyMap<AssessmentReason, AssessmentReasonDetail>;
   readonly libraryLimits?: ReadonlyMap<AssessmentReason, readonly string[]>;
   readonly skippedSteps?: number;
+  readonly windowDrops?: number;
   readonly batchRefused?: true;
   readonly settledSiblings?: number;
   readonly evictedOutcomes?: EvictedCallOutcomes;
@@ -66,6 +67,8 @@ export function standingFactsOf(
 ): StandingNames {
   const libraryLimits = libraryLimitClauses(assessment, displayNames, state);
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
+  const windowDrops = assessment.reasons.find((r) => r.reason === 'result-dropped-from-window')
+    ?.witness.length;
   const settlements = assessment.reasons.find((r) => r.reason === 'call-not-completed')?.witness;
   const settledSiblings = settlements?.filter(settledSiblingWitness).length;
   const evictedOutcomes = evictedCallOutcomes(settlements, state, retainedSettlements);
@@ -87,6 +90,7 @@ export function standingFactsOf(
       ),
     ),
     ...(skippedSteps !== undefined && { skippedSteps }),
+    ...(windowDrops !== undefined && { windowDrops }),
     ...(batchRefused && { batchRefused: true as const }),
     ...(settledSiblings !== undefined && { settledSiblings }),
     ...(evictedOutcomes !== undefined && { evictedOutcomes }),
