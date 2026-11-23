@@ -168,6 +168,7 @@ it.each(
       const assessment = assessAnswer(saved);
       expect(assessment).toEqual(await agent.assessment());
       expect(assessment.reasons.map(({ reason }) => reason)).toEqual([
+        ...(evicts ? ['result-dropped-from-window'] : []),
         'coverage-gap',
         'declared-absent',
         'period-not-held',

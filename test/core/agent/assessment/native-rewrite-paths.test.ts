@@ -144,6 +144,7 @@ async function run(path: Path, observerDelivery: 'inline' | 'deferred', evicts: 
     const folded = assessAnswer(saved);
     expect(folded).toEqual(live);
     expect(folded.reasons.map(({ reason }) => reason)).toEqual([
+      ...(evicts ? ['result-dropped-from-window'] : []),
       'coverage-gap',
       'declared-absent',
       'period-not-held',
