@@ -408,12 +408,11 @@ export function summarize(config: SummarizeConfig) {
       if (next.length === loaded.length && next.every((entry, i) => entry === loaded[i])) return;
       scope.loaded = next;
       const outcomes = scope.recallOutcomes;
-      const origins = outcomes === undefined ? undefined : new Set(loaded);
-      if (
-        outcomes !== undefined &&
-        (next.length !== loaded.length || next.some((entry) => !origins?.has(entry)))
-      ) {
-        scope.recallOutcomes = unprovenRecallOutcomes(outcomes);
+      if (outcomes !== undefined) {
+        const origins = new Set(loaded);
+        if (next.length !== loaded.length || next.some((entry) => !origins.has(entry))) {
+          scope.recallOutcomes = unprovenRecallOutcomes(outcomes);
+        }
       }
     };
 

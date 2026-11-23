@@ -288,11 +288,8 @@ function buildPipeline(options: DefineMemoryOptions): MemoryPipeline {
 // ─── EPISODIC type ─────────────────────────────────────────────────
 
 function buildEpisodicPipeline(options: DefineEpisodicOptions): MemoryPipeline {
-  const s = options.strategy;
-  const configBase = {
-    store: options.store,
-    ...(options.recording !== undefined && { recording: options.recording }),
-  };
+  const { strategy: s, store, recording } = options;
+  const configBase = { store, ...(recording !== undefined && { recording }) };
 
   switch (s.kind) {
     case MEMORY_STRATEGIES.WINDOW: {

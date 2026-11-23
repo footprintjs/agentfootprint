@@ -65,7 +65,8 @@ import {
   retrievalEvidenceKey,
 } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { llmCallReadsInto } from './llmCallReads.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
@@ -531,29 +532,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     description: 'Agent: ReAct loop',
   });
 
-  // Memory READ subflows — TURN_START timing (once per turn, OUTSIDE
-  // the LLM-call loop body). Each writes `memoryInjection_${id}` to the
-  // outer scope; the boundary inputMapper below threads those into the
-  // subflow so the slots consume them.
-  for (const m of deps.memories) {
-    builder = mountMemoryRead(builder, {
-      pipeline: {
-        read: unwrapMemoryFlowChart(m.read) as never,
-        ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
-      },
-      identityKey: 'runIdentity',
-      turnNumberKey: 'turnNumber',
-      contextTokensKey: 'contextTokensRemaining',
-      injectionKey: memoryInjectionKey(m.id),
-      // The retrieval record, lifted into ROOT state so a backward slice
-      // can reach the passage instead of stopping at this mount.
-      evidenceKey: retrievalEvidenceKey(m.id),
-      recallOutcomesKey: memoryRecallOutcomesKey(m.id),
-      readSubflowId: `sf-memory-read-${m.id}`,
-      // A corpus reads under its OWN namespace, not the run's identity.
-      ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-    });
-  }
+  builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — once per turn on the OUTER scope, before the
   // sf-llm-call loop (its loop target). ONE stage, two possible occupants,

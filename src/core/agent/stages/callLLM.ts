@@ -5,10 +5,9 @@ import { groundedTextOf } from './callLLM/groundedText.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
-  completeObserved,
+  callObserved,
   observeCallRequests,
   servedRequestRecorder,
-  streamObserved,
 } from './callLLM/servedRequest.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
@@ -651,7 +650,6 @@ export function buildCallLLMStage(
         serving?.discard,
       );
       const attemptHooks = recall?.hooks(ordinaryHooks) ?? ordinaryHooks;
-      let resp: LLMResponse | undefined;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
       // goes through the scanner the answer's peel uses, so a token never
       // carries the model's `_findings` notes — not even when a chunk ends
@@ -667,40 +665,23 @@ export function buildCallLLMStage(
         textFilter: shown,
         onFirstChunk: hooks.onFirstChunk,
       });
-      if (selectedProvider.stream) {
-        for await (const chunk of streamObserved(
-          selectedProvider,
-          attempts.request,
-          attemptHooks,
-          runSignal,
-        )) {
-          if (chunk.done) {
-            if (chunk.response) resp = chunk.response;
-            break;
-          }
-          liveChunks.push(chunk);
-        }
-      }
-      liveChunks.finish();
-      if (!resp) {
-        // No `stream()` OR stream finished without a response payload.
-        // Raw errors propagate so the reliability loop can classify them;
-        // friendly translation happens at the terminal ErrorBridge.
-        //
-        // Hooks are passed to BOTH phases. A decorated provider that falls
-        // back in each reports twice — deliberately NOT deduped, because
-        // those are two genuinely billed calls and collapsing them would
-        // hide real double-billing. (That this branch can re-call at all
-        // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        const completion = selectedProvider.stream
-          ? dispatchFor.select(attempts.request, selectedProvider)
-          : attempts.request;
-        dispatch = describeProviderDispatch(selectedProvider, completion);
-        if (deps.findings === true) candidate = capture(completion);
-        if (preserveReplay)
-          stableProjection = sameReplayProjection(wireMessages, completion.messages);
-        resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
-      }
+      let resp = await callObserved(
+        selectedProvider,
+        attempts.request,
+        attemptHooks,
+        runSignal,
+        liveChunks,
+        () => {
+          const completion = selectedProvider.stream
+            ? dispatchFor.select(attempts.request, selectedProvider)
+            : attempts.request;
+          dispatch = describeProviderDispatch(selectedProvider, completion);
+          if (deps.findings === true) candidate = capture(completion);
+          if (preserveReplay)
+            stableProjection = sameReplayProjection(wireMessages, completion.messages);
+          return completion;
+        },
+      );
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
       throwIfAborted(runSignal);
