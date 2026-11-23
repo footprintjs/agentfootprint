@@ -72,6 +72,15 @@ function contracts(ft, cause, paths) {
       },
     ]);
   }
+  const sourceLinkRow = {
+    kind: 'source-link',
+    version: 1,
+    consumer: 'answer#1',
+    linkBasis: 'match',
+    check: 'value-found',
+    input: { key: 'history', element: 0 },
+    output: { key: 'answer', checkedIn: 'written' },
+  };
   const cases = {
     'foottrace:CommitRangeIndex': () => {
       const index = new ft.CommitRangeIndex();
@@ -312,6 +321,43 @@ function contracts(ft, cause, paths) {
       assert.equal(result.confidence, 'incomplete');
       assert.ok(result.gaps.some((gap) => gap.code === 'not-collected'));
       assert.deepEqual(result.nodes, []);
+    },
+    'foottrace/cause:bindSourceLinkWrites': () => {
+      const key = 'sourceLinkRows';
+      const answer = log[1];
+      const scope = {
+        initialState: { [key]: [] },
+        commitLog: [
+          log[0],
+          {
+            ...answer,
+            trace: [...answer.trace, { path: key, verb: 'append' }],
+            overwrite: { ...answer.overwrite, [key]: [sourceLinkRow] },
+          },
+        ],
+      };
+      const witness = { runtimeStageId: 'answer#1', commitIdx: 1, key, element: 0 };
+      assert.deepEqual(cause.bindSourceLinkWrites(scope, [{ ...witness, element: 1 }, witness]), {
+        writes: [undefined, { runtimeStageId: 'answer#1', commitIdx: 1 }],
+        complete: true,
+      });
+    },
+    'foottrace/cause:readServedRow': () => {
+      const served = {
+        kind: 'served',
+        version: 1,
+        consumer: 'answer#1',
+        served: [{ key: 'history', elements: [[0, 2]] }],
+      };
+      assert.deepEqual(cause.readServedRow(served), served);
+      assert.equal(
+        cause.readServedRow({ ...served, served: [{ key: 'history', elements: [[2, 1]] }] }),
+        undefined,
+      );
+    },
+    'foottrace/cause:readSourceLinkRow': () => {
+      assert.deepEqual(cause.readSourceLinkRow(sourceLinkRow), sourceLinkRow);
+      assert.equal(cause.readSourceLinkRow({ ...sourceLinkRow, check: 'redeemed' }), undefined);
     },
     'foottrace/cause:explain': async () => {
       const g = graph();

@@ -1,3 +1,4 @@
+import type { SourceLinkRow } from 'foottrace/cause';
 import type { FindingsLedger } from '../../findings/types.js';
 import type { DeclaredCoverage } from '../../../../semantics/coverage/index.js';
 import type { ClaimLedgerRow } from '../../../../integrity/unsupported-claim/check.js';
@@ -17,7 +18,7 @@ export interface RecordsState {
   /** The exact served consumer for this scope's latest accepted model response. */
   sourceLinkConsumer?: SourceLinkConsumer;
   /** Source-link witnesses appended by the native stage that made each check. */
-  sourceLinkRows?: readonly import('foottrace/cause').SourceLinkRow[];
+  sourceLinkRows?: readonly SourceLinkRow[];
   /** A native check had more witnesses than the record could keep. */
   sourceLinkRowsBounded?: true;
 
