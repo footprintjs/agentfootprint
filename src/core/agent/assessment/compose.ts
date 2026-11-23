@@ -38,17 +38,19 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import { assumedClauses, type StandingAssumedValue } from './assumedValues.js';
 import { declaredStandingClause } from './declaredStandingWords.js';
 import {
   callNotCompletedClause,
   unfinishedWorkClause,
   withPrintedOutputCounts,
 } from './callStandingWords.js';
+import { windowDropClause } from './results/window/stage.js';
 import { recordedStandingNameVariants, type StandingNames } from './standingFacts.js';
 import { LIBRARY_LIMIT_WORDS, INCOMPLETE_LIMIT_WORDS } from './results/library-did/stage.js';
 import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
 
-export { assumedValuesSourceOf } from './assumedValues.js';
+export { assumedValuesSourceOf, type StandingAssumedValue } from './assumedValues.js';
 export { settledSiblingWitness } from './callStandingWords.js';
 export { reasonUsesToolWords } from './reasonDetails.js';
 export {
@@ -68,8 +70,9 @@ export {
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
  * 7: dispatch proof gaps. 8: older conflicts with unplaced readings.
  * 9: independent check causes are shown together, and replay keeps older attribution.
+ * 10: current-turn window removals.
  */
-export const STANDING_LINE_VERSION = 9;
+export const STANDING_LINE_VERSION = 10;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -143,14 +146,6 @@ export interface AnswerAssessmentData {
     readonly ran: number;
     readonly of: number;
   }[];
-}
-
-/** One value a tool's rule assumed this turn — the "Assumed" block's line, as data. */
-export interface StandingAssumedValue {
-  readonly toolName: string;
-  readonly argument: string;
-  readonly value: string;
-  readonly hidden: boolean;
 }
 
 /**
@@ -264,6 +259,8 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'call-not-completed': 'a call did not complete',
   'result-withheld': 'a result was kept out by a rule',
   ...LIBRARY_LIMIT_WORDS,
+  'result-dropped-from-window':
+    'a result from this turn was dropped from the conversation before the answer',
   'work-not-finished': 'a tool reported unfinished work',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
@@ -391,30 +388,6 @@ export function standingDisplayNames(
   return names;
 }
 
-/** The clause for one assumed value — its value only in the tool's own view; the tool in the app's words when it declares them. */
-function assumedClause(line: StandingAssumedValue, displayName: string | undefined): string {
-  const by = displayName === undefined ? `${line.toolName}'s rule` : `the rule of ${displayName}`;
-  return line.hidden
-    ? `${line.argument} was assumed by ${by} (its value is hidden by the tool's view), not given by you`
-    : `${line.argument} = ${JSON.stringify(line.value)} was assumed by ${by}, not given by you`;
-}
-
-/** One clause per distinct (tool, argument, shown value), in the order the rows were filed. */
-function assumedClauses(
-  lines: readonly StandingAssumedValue[],
-  names: StandingNames | undefined,
-): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const line of lines) {
-    const key = JSON.stringify([line.toolName, line.argument, line.hidden ? '' : line.value]);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(assumedClause(line, names?.displayNames.get(line.toolName)));
-  }
-  return out;
-}
-
 const DISPATCH_PROOF_WORDS = 'the record could not establish tool entry for every checked call';
 
 /** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
@@ -424,6 +397,8 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  if (reason === 'result-dropped-from-window' && names?.windowDrops !== undefined)
+    return windowDropClause(names.windowDrops);
   if (reason === 'check-unreachable' && (names?.legacyConflictGap || names?.libraryLimitsGap)) {
     const causes: string[] = [];
     if (names.legacyConflictGap)
@@ -493,7 +468,7 @@ function reasonClauses(
   for (const reason of data.reasons) {
     if (reason === 'argument-assumed') {
       // Never cut (see MAX_CLAUSES): the line owns the assumed sentence.
-      clauses.push(...assumedClauses(assumed, names));
+      clauses.push(...assumedClauses(assumed, names?.displayNames));
       // A before-tool rewrite with no declared origin fires the same reason and
       // names no row the block would print: said once, without a value.
       if (rewritten || assumed.length === 0) {

@@ -15,6 +15,7 @@ import type { ToolResultCut } from '../toolResultCap.js';
 export type LibraryResultLimitFact =
   | ({ readonly kind: 'result-cut' } & ToolResultCut)
   | { readonly kind: 'placed-unread'; readonly ref: string }
+  | { readonly kind: 'result-dropped-from-window'; readonly strategy: string }
   | {
       readonly kind: 'times-without-zone';
       readonly naiveCount: number;
@@ -30,6 +31,11 @@ interface LimitCall {
 }
 
 export type LibraryResultLimit = LimitCall & { readonly turn: number } & LibraryResultLimitFact;
+
+interface LibraryResultLimitWrite {
+  readonly call: LimitCall;
+  readonly fact: LibraryResultLimitFact;
+}
 
 type TimeLimit = Extract<LibraryResultLimitFact, { readonly kind: 'times-without-zone' }>;
 
@@ -82,7 +88,10 @@ export function recordServedLimits(
     if (incomplete && scope.libraryResultLimitsIncomplete !== true)
       scope.libraryResultLimitsIncomplete = true;
   }
-  if (facts.length) appendLimits(scope, call, facts);
+  recordLibraryResultLimits(
+    scope,
+    facts.map((fact) => ({ call, fact })),
+  );
 }
 
 /** Detached admission at the replay and checkpoint boundaries. Never read a tool payload. */
@@ -92,15 +101,22 @@ export function copyLibraryResultLimit(value: unknown): LibraryResultLimit | und
   const turn = read('turn');
   const toolName = read('toolName');
   const toolCallId = read('toolCallId');
+  const occurrence = readCallOccurrenceKey(value);
   if (
     !count(turn) ||
     typeof toolName !== 'string' ||
     typeof toolCallId !== 'string' ||
-    readCallOccurrenceKey(value) === null
+    occurrence === null
   )
     return undefined;
   const call = { turn, toolName, toolCallId, ...storedCallOccurrenceField(value) };
   const kind = read('kind');
+  if (kind === 'result-dropped-from-window') {
+    const strategy = read('strategy');
+    return occurrence !== undefined && typeof strategy === 'string'
+      ? { ...call, kind, strategy }
+      : undefined;
+  }
   if (kind === 'result-cut') {
     const maxChars = read('maxChars');
     const keptChars = read('keptChars');
@@ -135,27 +151,19 @@ function count(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-export function recordLibraryResultLimit(
+export function recordLibraryResultLimits(
   scope: TypedScope<AgentState>,
-  call: LimitCall,
-  fact: LibraryResultLimitFact,
+  receipts: readonly LibraryResultLimitWrite[],
 ): void {
-  appendLimits(scope, call, [fact]);
-}
-
-function appendLimits(
-  scope: TypedScope<AgentState>,
-  call: LimitCall,
-  facts: readonly LibraryResultLimitFact[],
-): void {
+  if (receipts.length === 0) return;
   const prior = scope.libraryResultLimits ?? [];
   const room = Math.max(0, MAX_ENTERED_TOOL_CALLS - prior.length);
-  if (facts.length > room && scope.libraryResultLimitsIncomplete !== true)
+  if (receipts.length > room && scope.libraryResultLimitsIncomplete !== true)
     scope.libraryResultLimitsIncomplete = true;
   if (room === 0) return;
   const turn = scope.turnNumber;
-  const added = facts.slice(0, room).map(
-    (fact): LibraryResultLimit => ({
+  const added = receipts.slice(0, room).map(
+    ({ call, fact }): LibraryResultLimit => ({
       turn,
       toolName: call.toolName,
       toolCallId: call.toolCallId,

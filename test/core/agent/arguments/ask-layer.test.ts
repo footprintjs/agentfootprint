@@ -667,7 +667,7 @@ describe('the readers of a pause', () => {
     ).toBe('');
     const done = await agent.resume(stored(paused), replyTo(paused, { f1: '7d' }));
     expect(done).toBe(
-      'done\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; a tool did not say what time its result covers.',
+      'done\n\n---\n\nNot sure — a value a call ran with came from the model, with no source on the record; 1 result from this turn was dropped from the conversation before the answer; a tool did not say what time its result covers.',
     );
     expect(ran).toEqual([
       { service: 'checkout', window: '7d' },

@@ -52,7 +52,9 @@ async function recordHistory(windowed: boolean, result: string, redact?: Redacti
   const recorder = recordRun(agent);
   try {
     expect(await agent.run(`Read the labels. ${'Start the sampling exercise. '.repeat(18)}`)).toBe(
-      'Finished.',
+      windowed
+        ? 'Finished.\n\n---\n\nNot sure — 3 results from this turn were dropped from the conversation before the answer.'
+        : 'Finished.',
     );
     return { recording: recorder.toRecording(), requests };
   } finally {

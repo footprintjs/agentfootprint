@@ -20,6 +20,7 @@ complete witness table in `reasonClasses.ts`.
 | `result-cut` | 3 | `libraryResultLimits`: a tool result was cut. |
 | `placed-unread` | 3 | `libraryResultLimits`: a tool result was stored by reference and not read. |
 | `times-without-zone` | 3 | `libraryResultLimits`: some times in a dataset have no zone. |
+| `result-dropped-from-window` | 3 | `libraryResultLimits` receipts joined to `settledToolCalls` by occurrence. The standing counts delivered results removed by an applied window change in the current turn. |
 | `work-not-finished` | 3 | `history`: a tool message of this turn records `partial` or `pending` without an `outcome`. The same completed-retry rule applies. |
 | `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
 | `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |

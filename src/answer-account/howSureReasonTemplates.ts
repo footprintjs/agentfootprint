@@ -54,6 +54,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.resultCut': t('A tool result was cut.'),
   'howSure.reason.placedUnread': t('A tool result was stored by reference and not read.'),
   'howSure.reason.timesWithoutZone': t('Some times in a dataset have no zone.'),
+  'howSure.reason.resultDroppedFromWindow': t(
+    "{{count:n,'result from this turn was','results from this turn were'}} dropped from the conversation before the answer.",
+  ),
   'howSure.reason.workNotFinished': t(
     "{{count:n,'call reported','calls reported'}} unfinished work.",
   ),

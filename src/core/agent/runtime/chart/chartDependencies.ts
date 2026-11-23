@@ -195,7 +195,8 @@ export function chartDependencies(
           tools: environment.canCallTools,
           resultLimits:
             this.configuration.maxToolResultChars !== undefined ||
-            this.configuration.artifactStore !== undefined,
+            this.configuration.artifactStore !== undefined ||
+            environment.windowStage !== undefined,
           evidenceGate: this.configuration.evidenceGate !== undefined,
           answerValidation: this.configuration.answerValidationConfig !== undefined,
           inputs: environment.inputsArmed,

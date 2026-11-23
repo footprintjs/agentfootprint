@@ -14,6 +14,7 @@ const WORDS: { readonly [R in AssessmentReason]: true } = {
   'result-cut': true,
   'placed-unread': true,
   'times-without-zone': true,
+  'result-dropped-from-window': true,
   'work-not-finished': true,
   'check-unreachable': true,
   'claim-exceeds-search': true,

@@ -66,6 +66,8 @@ export type AssessmentPointer =
  *   failed, with no later completion of the same call by recorded arguments;
  * - `result-cut`, `placed-unread`, `times-without-zone` — this turn's recorded result
  *   lost characters, stayed behind an unread reference, or included times with no zone;
+ * - `result-dropped-from-window` — a delivered tool result of this turn was
+ *   removed from the model's conversation window before the answer;
  * - `work-not-finished` — an admitted tool result of this turn recorded partial or
  *   pending work, with no later completion of the same call by recorded arguments;
  * - `sources-conflict` — two readings the model stood on disagree (a
@@ -169,6 +171,7 @@ export type AssessmentReason =
   | 'result-cut'
   | 'placed-unread'
   | 'times-without-zone'
+  | 'result-dropped-from-window'
   | 'work-not-finished'
   | 'period-not-held'
   | 'period-partly-held'
