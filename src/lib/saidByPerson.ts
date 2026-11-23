@@ -229,7 +229,7 @@ export function isSaidByPerson(msg: AuthoredMessage | undefined): boolean {
  *
  * The one reader of a record, so every reader of "where this turn begins" in
  * a record hands the rule the WHOLE entry: the answer's standing
- * (`core/agent/assessment/assess.ts` · `turnResults`) and the answer account
+ * (`core/agent/assessment/turnResults.ts` · `turnResults`) and the answer account
  * (`answer-account/facts/inView.ts`, `pausedLeg.ts`). A reader that copied
  * only `role`, `content` and `injectedBy` dropped `ephemeral`, so a retry's
  * one-request feedback line in a restored history started a "turn" for the
