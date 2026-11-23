@@ -46,7 +46,7 @@ export function publishedFixture(t, hooks = {}) {
   });
   write(join(base, 'keep-parent.txt'), 'keep parent');
   write(join(sourceRoot, 'keep-source.txt'), 'keep source');
-  const versions = { footprintjs: '14.0.0', foottrace: '2.1.0', contextfootprint: '0.1.1' };
+  const versions = { footprintjs: '14.0.0', foottrace: '2.3.2', contextfootprint: '0.1.1' };
   const archives = {},
     payloads = {},
     selected = {};
@@ -91,7 +91,7 @@ export function publishedFixture(t, hooks = {}) {
     main: 'dist/index.js',
     type: 'commonjs',
     exports,
-    dependencies: { foottrace: '^2.1.0', contextfootprint: '0.1.1' },
+    dependencies: { foottrace: '^2.3.2', contextfootprint: '0.1.1' },
     peerDependencies: { footprintjs: '^14.0.0' },
     devDependencies: { footprintjs: '^14.0.0', typescript: '~5.4.5' },
   };

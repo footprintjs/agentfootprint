@@ -62,7 +62,7 @@ const contextRoots = Object.freeze(['package/package.json', 'package/README.md',
 const normalLimits = Object.freeze({ maxArchive: 16 * 1024 * 1024, maxExpanded: 64 * 1024 * 1024, maxFiles: 10000 });
 const profiles = Object.freeze({
   footprintjs: Object.freeze({ version: '14.0.0', roots: nativeRoots, prefixes: Object.freeze(['package/dist/']), limits: normalLimits }),
-  foottrace: Object.freeze({ version: '2.1.0', roots: nativeRoots, prefixes: Object.freeze(['package/dist/']), limits: normalLimits }),
+  foottrace: Object.freeze({ version: '2.3.2', roots: nativeRoots, prefixes: Object.freeze(['package/dist/']), limits: normalLimits }),
   contextfootprint: Object.freeze({ version: '0.1.1', roots: contextRoots, prefixes: Object.freeze(['package/dist/', 'package/examples/']), limits: normalLimits }),
 });
 function publishedProfile(name) {
