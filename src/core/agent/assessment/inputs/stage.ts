@@ -1,8 +1,7 @@
 import { waitingArgumentIteration, type ArgumentRowRead } from '../argumentRows.js';
 import { fire, type Gathered } from '../gathered.js';
-import { callPlacement, type CallPlaces } from '../gather/calls.js';
 import { statePointer } from '../pointer.js';
-import { isRecord } from '../recordValues.js';
+import { callPlacement, isRecord, type CallPlaces } from '../recordValues.js';
 import { rewritesByOccurrence } from '../rewrittenArguments.js';
 import { rowList } from '../sources.js';
 import type { standingAdmission } from '../standingAdmission.js';

@@ -31,7 +31,34 @@ export interface StandingNames {
   readonly libraryLimitsGap?: true;
   readonly dispatchProofGap?: true;
   readonly legacyConflictGap?: true;
+  readonly omitDeclaredWhy?: true;
   readonly answerValidationGap?: true;
+}
+
+/** Reconstruct exact older warning variants from the same retained evidence. */
+export function recordedStandingNameVariants(
+  reasons: readonly AssessmentReason[],
+  names: StandingNames,
+): readonly StandingNames[] {
+  const { legacyConflictGap, ...earlierFacts } = names;
+  const versions = [names];
+  if (
+    legacyConflictGap &&
+    reasons.includes('check-unreachable') &&
+    (names.dispatchProofGap || names.answerValidationGap)
+  ) {
+    versions.push(earlierFacts);
+  }
+  const details = names.details;
+  if (!details?.size) return versions;
+  const generic = versions.map((facts) => ({ ...facts, details: new Map() }));
+  const hasWhy = [...details.values()].some((detail) =>
+    detail.toolSays?.entries.some(({ why }) => why !== undefined),
+  );
+  const subjectsOnly = hasWhy
+    ? versions.map((facts) => ({ ...facts, omitDeclaredWhy: true as const }))
+    : [];
+  return [...versions, ...subjectsOnly, ...generic];
 }
 
 /** The fold's sources keyed by reason — what {@link StandingNames} carries. */

@@ -46,7 +46,7 @@ import {
   withPrintedOutputCounts,
 } from './callStandingWords.js';
 import { windowDropClause } from './results/window/stage.js';
-import type { StandingNames } from './standingFacts.js';
+import { recordedStandingNameVariants, type StandingNames } from './standingFacts.js';
 import { LIBRARY_LIMIT_WORDS, INCOMPLETE_LIMIT_WORDS } from './results/library-did/stage.js';
 import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
 
@@ -443,7 +443,13 @@ function reasonClause(
   }
   const words = names.details?.get(reason)?.toolSays;
   if (words !== undefined) {
-    return declaredStandingClause(REASON_WORDS[reason], named, words, names.displayNames);
+    return declaredStandingClause(
+      REASON_WORDS[reason],
+      named,
+      words,
+      names.displayNames,
+      names.omitDeclaredWhy,
+    );
   }
   const who = namedCalls(source.calls, source.unnamed ?? 0, (tool) => names.displayNames.get(tool));
   return who === undefined ? REASON_WORDS[reason] : named(who);
@@ -555,17 +561,6 @@ export function recordedStandingLinesOf(
   names?: StandingNames,
 ): readonly string[] {
   if (names === undefined) return [standingLineOf(data, assumed, rewritten)];
-  const { legacyConflictGap, ...earlierFacts } = names;
-  const versions = [names];
-  if (
-    legacyConflictGap &&
-    data.reasons.includes('check-unreachable') &&
-    (names.dispatchProofGap || names.answerValidationGap)
-  ) {
-    versions.push(earlierFacts);
-  }
-  if (names.details?.size) {
-    versions.push(...versions.map((facts) => ({ ...facts, details: new Map() })));
-  }
+  const versions = recordedStandingNameVariants(data.reasons, names);
   return [...new Set(versions.map((facts) => standingLineOf(data, assumed, rewritten, facts)))];
 }

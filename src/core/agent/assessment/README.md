@@ -35,16 +35,18 @@ The live stage and replay run the same flow over one committed record. This tabl
 
 | Step | Folder | Function |
 | --- | --- | --- |
-| 1 | [gather](gather/README.md) | gatherWarning |
-| 2 | [gather](gather/README.md) | readPause |
-| 3 | [inputs](inputs/README.md) | readArgumentAsk |
-| 4 | [inputs](inputs/README.md) | readInputs |
-| 5 | [results](results/README.md) | readResultsCoverage |
-| 6 | [inputs](inputs/README.md) | readContingentRows |
-| 7 | [results](results/README.md) | readResultEvidence |
-| 8 | [answer](answer/README.md) | readAnswerRows |
-| 9 | [choose](choose/README.md) | readIntegrityFindings |
-| 10 | [compose](compose/README.md) | composeWarning |
+| 1 | [gather](gather/README.md) | prepareWarning |
+| 2 | [results](results/README.md) | readInitialResults |
+| 3 | [gather](gather/README.md) | gatherWarning |
+| 4 | [gather](gather/README.md) | readPause |
+| 5 | [inputs](inputs/README.md) | readArgumentAsk |
+| 6 | [inputs](inputs/README.md) | readInputs |
+| 7 | [results](results/README.md) | readResultsCoverage |
+| 8 | [inputs](inputs/README.md) | readContingentRows |
+| 9 | [results](results/README.md) | readResultEvidence |
+| 10 | [answer](answer/README.md) | readAnswerRows |
+| 11 | [choose](choose/README.md) | readIntegrityFindings |
+| 12 | [compose](compose/README.md) | composeWarning |
 
 <!-- answer-warning-stages:end -->
 

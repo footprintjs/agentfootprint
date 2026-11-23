@@ -20,6 +20,7 @@ for (const statement of chart.statements) {
 }
 
 const rows = [];
+const stageSources = new Map();
 function documentStep(expression) {
   if (!expression || !ts.isCallExpression(expression)) return;
   if (!ts.isIdentifier(expression.expression)) {
@@ -28,8 +29,11 @@ function documentStep(expression) {
   const step = expression.expression.text;
   const folder = imports.get(step)?.match(/^\.\/([a-z-]+)\/stage\.js$/)?.[1];
   if (!folder) throw new Error('Place answer warning step ' + step + ' in its own stage folder');
-  const definition = readFileSync(new URL(folder + '/stage.ts', assessment), 'utf8');
-  const stage = ts.createSourceFile('stage.ts', definition, ts.ScriptTarget.Latest, true);
+  if (!stageSources.has(folder)) {
+    const definition = readFileSync(new URL(folder + '/stage.ts', assessment), 'utf8');
+    stageSources.set(folder, ts.createSourceFile('stage.ts', definition, ts.ScriptTarget.Latest, true));
+  }
+  const stage = stageSources.get(folder);
   const declared = stage.statements.some(
     (statement) =>
       ts.isFunctionDeclaration(statement) &&
@@ -52,6 +56,15 @@ for (const statement of fold.body.statements) {
   }
 }
 if (rows.length === 0) throw new Error('No answer warning stages found');
+for (const [folder, stage] of stageSources) {
+  for (const statement of stage.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const sibling = statement.moduleSpecifier.text.match(/^\.\.\/([a-z-]+)\//)?.[1];
+    if (sibling !== folder && stageSources.has(sibling)) {
+      throw new Error(folder + ' must not import the sibling warning stage ' + sibling);
+    }
+  }
+}
 const readme = new URL('README.md', assessment);
 const existing = readFileSync(readme, 'utf8');
 const from = existing.indexOf(start);

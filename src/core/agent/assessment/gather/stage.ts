@@ -8,9 +8,9 @@ import { statePointer } from '../pointer.js';
 import { callIndexOf } from '../recordValues.js';
 import { deliveredResults } from '../resultDispositions.js';
 import { readResults } from '../resultEvidence.js';
-import { readInitialResults } from '../results/stage.js';
 import { standingAdmission } from '../standingAdmission.js';
 import { turnResults } from '../turnResults.js';
+import type { PreparedWarning, WarningContext } from '../warningContext.js';
 
 /**
  * `state` as the fold may read it. A key the record keeps out (an agent's
@@ -58,12 +58,12 @@ export function readPause(state: Readonly<Record<string, unknown>>, g: Gathered)
 }
 
 /** The prepared facts and one private accumulator for this fold. */
-export function gatherWarning(
+export function prepareWarning(
   recorded: Readonly<Record<string, unknown>>,
   served: boolean,
   declarationAddresses?: ReadonlyMap<number, number>,
   legacyEvents?: unknown,
-) {
+): PreparedWarning {
   const { state, asked } = served
     ? keptOutGuard(recorded)
     : { state: recorded, asked: new Set<string>() };
@@ -83,7 +83,6 @@ export function gatherWarning(
     legacyEvents,
   );
   const g: Gathered = { admit: admission.admit, fired: new Map(), checked: [] };
-  const nativeFacts = admission.nativeResult;
   if (admission.entryIncomplete)
     fire(
       g,
@@ -95,13 +94,36 @@ export function gatherWarning(
   if (admission.settlements?.complete === false)
     fire(g, 'check-unreachable', statePointer('settledToolCallsComplete'));
   const { results, periods } = deliveredResults(recordedResults, admission.dispositions);
-  readInitialResults(admission, periods, g);
+  return {
+    state,
+    recorded,
+    admission,
+    g,
+    results,
+    periods,
+    history,
+    current,
+    historyCalls,
+    from,
+    begins,
+    asked,
+    resolveCurrent,
+    argumentVerdicts,
+  };
+}
+
+/** Prepare coverage after the chart files withholding and legacy period witnesses. */
+export function gatherWarning(
+  prepared: PreparedWarning,
+  declarationAddresses?: ReadonlyMap<number, number>,
+): WarningContext {
+  const { state, admission, results, history, historyCalls, begins, resolveCurrent } = prepared;
   const places = { history, resolve: historyCallResolver(historyCalls), begins };
   const coverage = coverageRows(
     state.coverageDeclared,
     (row) => callIndexOf(row, resolveCurrent),
     declarationAddresses,
-    nativeFacts,
+    admission.nativeResult,
   );
   const reads = readResults(
     results.filter((result) => admission.returned(result.index)),
@@ -112,25 +134,5 @@ export function gatherWarning(
   // without admitting its error notice as a result or as a witness.
   const resultOpportunities =
     reads.length + results.filter((result) => admission.threw(result.index)).length;
-  return {
-    state,
-    recorded,
-    admission,
-    g,
-    results,
-    history,
-    current,
-    historyCalls,
-    from,
-    begins,
-    asked,
-    places,
-    coverage,
-    reads,
-    resultOpportunities,
-    resolveCurrent,
-    argumentVerdicts,
-  };
+  return { ...prepared, places, coverage, reads, resultOpportunities };
 }
-
-export type WarningContext = ReturnType<typeof gatherWarning>;

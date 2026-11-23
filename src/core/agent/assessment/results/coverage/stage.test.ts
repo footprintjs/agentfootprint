@@ -59,3 +59,31 @@ describe('bounded declaration words', () => {
     expect(read('declared-absent', [statePointer('coverageDeclared', 0)])).toBeUndefined();
   });
 });
+
+it('spends only the remaining quote budget on reasons after admitting subjects', () => {
+  const cut = { what: 'Archived stock', why: 'A'.repeat(100) };
+  const row = {
+    ...absence(0, 'archive'),
+    notChecked: [
+      cut,
+      cut,
+      { what: 'Archived orders', why: 'B'.repeat(100) },
+      { what: 'Archived returns' },
+      { what: 'Previous quarter' },
+    ],
+  };
+  const words = readRows([row])('coverage-gap', [statePointer('coverageDeclared', 0)]);
+  expect(words).toEqual({
+    entries: [
+      {
+        kind: 'notChecked',
+        text: 'Archived stock',
+        why: `${'A'.repeat(79)}…`,
+        toolName: 'archive',
+      },
+      { kind: 'notChecked', text: 'Archived orders', toolName: 'archive' },
+      { kind: 'notChecked', text: 'Archived returns', toolName: 'archive' },
+    ],
+    omitted: 1,
+  });
+});
