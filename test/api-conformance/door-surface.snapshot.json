@@ -1618,6 +1618,8 @@
     ],
     "types": [
       "AgentCoreEvent",
+      "AgentCoreEventPayloadChoice",
+      "AgentCoreEventPayloadSelector",
       "AgentCoreLikeClient",
       "AgentCoreMemoryRecord",
       "AgentCoreStoreOptions",

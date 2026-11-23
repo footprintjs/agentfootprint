@@ -1,4 +1,4 @@
-# AgentCore memory adapter
+**Support** — AgentCore memory adapter.
 
 Sealed implementation behind `../agentcore.ts`. Only that facade and this folder
 import these modules; the public memory door re-exports the facade.
