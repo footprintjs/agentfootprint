@@ -60,6 +60,7 @@ export function buildToolContextOperations(
     ToolCallsHandlerDeps,
     | 'emitForRun'
     | 'currentRun'
+    | 'sourceConsultation'
     | 'isRunRetired'
     | 'time'
     | 'artifactStore'
@@ -295,7 +296,12 @@ export function buildToolContextOperations(
         history: call.history,
         binding: call.binding,
       }),
-      record: (facts) => recordInnerToolCall(scope, call, facts),
+      record: (facts) => {
+        recordInnerToolCall(scope, call, facts);
+        if (facts.entered && facts.tool !== undefined && !deps.isRunRetired()) {
+          deps.sourceConsultation?.innerAttempt(scope, facts.toolName, facts.tool);
+        }
+      },
       prepareRecord: (tool, args) => prepareInnerCallRecord(scope, tool, args),
       outer: call.binding,
       ...(signal !== undefined && { signal }),

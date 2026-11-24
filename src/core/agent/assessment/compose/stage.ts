@@ -14,6 +14,7 @@ export function composeWarning(
   integrity: IntegrityReading,
   declarationAddresses: ReadonlyMap<number, number> | undefined,
   retain: RetainedReasonState,
+  unusedTools: readonly string[],
 ): AnswerAssessment {
   const { asked, from, g, current, coverage, state, admission, results, historyCalls, begins } =
     gathered;
@@ -46,6 +47,7 @@ export function composeWarning(
       failureCategories: detail.failureByHistory,
     },
     detail,
+    unusedTools,
   );
   return {
     assessment,

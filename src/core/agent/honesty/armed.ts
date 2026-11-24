@@ -41,6 +41,8 @@ export interface HonestyLayers {
    * (`assessment/witness.ts`).
    */
   readonly answer?: true;
+  /** The opt-in declared-source choice check runs inside the answer layer. */
+  readonly sourceNotConsulted?: true;
 }
 
 /**
@@ -121,6 +123,7 @@ export function honestyLayersOf(armed: {
   readonly declarationCorrection?: 'once';
   readonly results?: boolean;
   readonly answer: boolean;
+  readonly sourceNotConsulted?: boolean;
 }): HonestyLayers | undefined {
   if (!armed.inputs && armed.results !== true && !armed.answer) return undefined;
   return {
@@ -132,5 +135,6 @@ export function honestyLayersOf(armed: {
       }),
     ...(armed.results === true && { results: true as const }),
     ...(armed.answer && { answer: true as const }),
+    ...(armed.answer && armed.sourceNotConsulted === true && { sourceNotConsulted: true as const }),
   };
 }

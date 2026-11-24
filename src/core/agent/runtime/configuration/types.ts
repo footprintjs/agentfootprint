@@ -22,6 +22,7 @@ import type { ResolvedOutputFallback } from '../../../outputFallback.js';
 import type { OutputSchemaParser } from '../../../../answer-validation/outputSchema.js';
 import type { ReadTimeOptions } from '../../../../time/clock.js';
 import type { ResolvedOutputEnforcement } from '../../outputEnforcement.js';
+import type { AnswerLayerArm } from '../../assessment/answerLayerOptions.js';
 
 import type { ToolProvider } from '../../../../tools/toolProvider.js';
 import type {
@@ -105,7 +106,7 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  (`'always'` for `standingLine: true`). Undefined when the layer is off,
    *  and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
-  readonly answerLayerOption?: import('../../assessment/answerLayerOptions.js').AnswerLayerArm;
+  readonly answerLayerOption?: AnswerLayerArm;
 
   /** `.time()` (the time layer, `time/`): the fallback zone, as read.
    *  Undefined on every agent that did not ask — then no clock is read, no
