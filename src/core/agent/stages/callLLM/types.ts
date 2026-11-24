@@ -1,3 +1,4 @@
+import type { TypedScope } from 'footprintjs';
 import type {
   LLMCallHooks,
   LLMProvider,
@@ -14,8 +15,20 @@ import type { ReliabilityConfig } from '../../../../reliability/types.js';
 import type { OutputSchemaParser } from '../../../../answer-validation/outputSchema.js';
 
 import type { FindingsAnswerAsk, FindingsServeMode } from '../../findings/serve.js';
+import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
+import type { AgentState } from '../../types.js';
 
 export interface CallLLMStageDeps {
+  readonly registrations?: import('../toolResolver.js').ToolRegistrations;
+  readonly servedTools?: import('../../../slots/commitServedTools.js').ServedToolParties;
+  /** Whether this native run can retain newly disclosed catalog names on its receipt. */
+  readonly canRecordToolSelection?: () => boolean;
+  /** Present only when retrieval request evidence is armed, independent of receipt capture. */
+  readonly recallRequests?: (
+    scope: TypedScope<AgentState>,
+    iteration: number,
+    summary: RecallRequestSummary,
+  ) => void;
   /** Mark the accepted model response on this native leg before checks run. */
   readonly onResponseCommitted?: () => void;
   /** Preserve approved replay retirement for recovery before transport. */

@@ -9,7 +9,7 @@ import { sourceSchemasOnWire } from '../agent/sourceContract.js';
  *
  */
 
-import { flowChart, isDevMode } from 'footprintjs';
+import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
@@ -18,7 +18,8 @@ import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
-import { menuOutstanding, type TurnRoute } from '../../injection-engine/routingPolicy.js';
+import { composeSkillCatalog, type ReadSkillFor } from './composeSkillCatalog.js';
+import type { TurnRoute } from '../../injection-engine/routingPolicy.js';
 import { composeViolationsOf } from '../../integrity/invariant-violation/check.js';
 import { fileIntegrityFindings } from '../agent/integrityFindings.js';
 import { buildSkipStepTool } from '../../injection-engine/skillTools.js';
@@ -31,12 +32,19 @@ import {
   type StepPlanFor,
   type StepPointerCarrier,
 } from '../../injection-engine/skillSteps.js';
-import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../../tools/tools.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
-import { discoverTools } from './discoverTools.js';
+import {
+  wireCollisions,
+  reportShadowedTools,
+  partyOfClaim,
+  type WireCandidate,
+} from './wireCollisions.js';
+import { commitServedTools, type ServedToolParties } from './commitServedTools.js';
+export type { ServedToolParties } from './commitServedTools.js';
+import { discoverTools, type ProviderToolCache } from './discoverTools.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
   ownsReservedArgument,
@@ -54,11 +62,7 @@ import type { TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js'
  * Compose's provider discovery shared with dispatch in one native component.
  * Independent mounts never share executable tools or repeat the list call.
  */
-export interface ProviderToolCache {
-  current: readonly Tool[];
-  /** Successful acquisition in THIS component, including a genuinely empty list. */
-  resolved?: true;
-}
+export type { ProviderToolCache } from './discoverTools.js';
 
 /** The private state shared by the slot and dispatch for this component only. */
 export interface ToolsSlotRuntime {
@@ -71,43 +75,6 @@ export interface ToolsSlotRuntime {
 
 export type { ToolParty } from '../../tools/toolParty.js';
 
-/**
- * Private party metadata for the same wire Compose serves. Truncated history
- * closes uniqueness fallback; a later positive wire still proves its names.
- */
-export interface ServedToolParties {
-  /** Saved wire membership is closed until a fresh Compose replaces it. */
-  restored?: true;
-  truncated?: true;
-  argumentAskPending?: boolean;
-  currentProof?: ReadonlyMap<string, ToolParty>;
-  lastProof?: ReadonlyMap<string, ToolParty>;
-  /** Positive wire acquisition, including an actually empty offer. */
-  wireReady?: true;
-  pinned?: ReadonlyMap<string, ToolParty | null>;
-  current: ReadonlyMap<string, ToolParty | null>;
-  /**
-   * The party each name was LAST served under, across the epochs of one run
-   * (cleared on iteration 1). The off-wire fallback reads it: a name that
-   * left the wire may still be answered by the party the model last read it
-   * under — never by a party the model was never shown under that name.
-   */
-  readonly lastServed: Map<string, ToolParty>;
-}
-
-/** One schema put forward for the wire, by whom — and WHICH implementation. */
-interface WireCandidate {
-  readonly schema: LLMToolSchema;
-  readonly party: ToolParty;
-  /**
-   * The implementation behind the contract. Identity is by implementation:
-   * two skills sharing ONE `Tool` reference (documented-legal) are one claim
-   * however many routes it arrives by, and draw nothing. Absent only on a
-   * chart with no claimant record (the message-API charts).
-   */
-  readonly tool?: Tool;
-}
-
 const FRAMEWORK_PARTY: ToolParty = { channel: 'framework' };
 
 /**
@@ -119,11 +86,6 @@ const sameContract = (a: LLMToolSchema, b: LLMToolSchema): boolean =>
   a.name === b.name &&
   a.description === b.description &&
   JSON.stringify(a.inputSchema ?? null) === JSON.stringify(b.inputSchema ?? null);
-
-const partyOfClaim = (c: ToolClaim): ToolParty => ({
-  channel: c.channel,
-  ...(c.id !== undefined && { id: c.id }),
-});
 
 /**
  * THE WIRE MERGE (9.92.0) — first occurrence wins, and the record of who won
@@ -150,14 +112,15 @@ const partyOfClaim = (c: ToolClaim): ToolParty => ({
  * ]);
  * merged.map((t) => t.description);            // ['a']
  * winners.get('x');                             // { channel: 'provider', id: 'p' }
- * losers.get('x');                              // [{ channel: 'skill', id: 's' }]
+ * losers.get('x')?.map((c) => c.party);          // [{ channel: 'skill', id: 's' }]
  * ```
  */
 export function mergeWire(candidates: readonly WireCandidate[]): {
   readonly merged: readonly LLMToolSchema[];
   readonly winners: ReadonlyMap<string, ToolParty>;
+  readonly putForward: ReadonlyMap<string, readonly WireCandidate[]>;
   /** Every candidate that lost its name, in candidate order — competing losers. */
-  readonly losers: ReadonlyMap<string, readonly ToolParty[]>;
+  readonly losers: ReadonlyMap<string, readonly WireCandidate[]>;
   /**
    * The winning IMPLEMENTATION per served name, where the candidate carried one
    * (honesty layer 2): the inputs layer decorates a served schema from the
@@ -169,28 +132,32 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 } {
   const merged: LLMToolSchema[] = [];
   const winners = new Map<string, ToolParty>();
-  const won = new Map<string, WireCandidate>();
-  const losers = new Map<string, ToolParty[]>();
+  const putForward = new Map<string, WireCandidate[]>();
+  const losers = new Map<string, WireCandidate[]>();
   const winningTools = new Map<string, Tool>();
   for (const candidate of candidates) {
     const { schema, party } = candidate;
-    const first = won.get(schema.name);
-    if (first !== undefined) {
+    const name = schema.name;
+    const already = putForward.get(name);
+    if (already) {
+      const first = already[0];
+      already.push(candidate);
       const sameImplementation =
-        (candidate.tool !== undefined && candidate.tool === first.tool) ||
-        (sameToolParty(party, first.party) && sameContract(schema, first.schema));
+        candidate.tool !== undefined && first.tool !== undefined
+          ? candidate.tool === first.tool
+          : sameToolParty(party, first.party) && sameContract(schema, first.schema);
       if (sameImplementation) continue;
-      const lost = losers.get(schema.name);
-      if (lost === undefined) losers.set(schema.name, [party]);
-      else lost.push(party);
+      const lost = losers.get(name);
+      if (lost === undefined) losers.set(name, [candidate]);
+      else lost.push(candidate);
       continue;
     }
-    won.set(schema.name, candidate);
-    winners.set(schema.name, party);
-    if (candidate.tool !== undefined) winningTools.set(schema.name, candidate.tool);
+    putForward.set(name, [candidate]);
+    winners.set(name, party);
+    if (candidate.tool !== undefined) winningTools.set(name, candidate.tool);
     merged.push(schema);
   }
-  return { merged, winners, losers, winningTools };
+  return { merged, winners, losers, putForward, winningTools };
 }
 
 /**
@@ -219,6 +186,8 @@ const SOURCES_SERVED = Object.freeze({ sources: true as const });
  */
 
 export interface ToolsSlotConfig {
+  /** The native owner established that no role policy governs skill visibility. */
+  readonly unrestrictedSkills?: boolean;
   /** Tool registry exposed to the LLM. Empty → empty slot (LLMCall case). */
   readonly tools: readonly LLMToolSchema[];
   /**
@@ -271,8 +240,7 @@ export interface ToolsSlotConfig {
   /**
    * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
    *
-   * Set only for a `.skillGraph()` agent in a per-iteration ReAct mode. The tool's
-   * enum is the full catalog and never changes; what varies is the DESCRIPTION —
+   * A role filter narrows the enum. For graph agents the description also names
    * which ids the gate will actually grant from where the cursor stands. Without it
    * the menu advertised every registered skill on every iteration while the gate
    * admitted a subset, so the model was routinely offered ids it would be refused.
@@ -280,25 +248,7 @@ export interface ToolsSlotConfig {
    * Substituted by NAME in Compose, so dispatch is untouched: the tool-calls handler
    * resolves executables from `registryByName`, never from the schema list.
    */
-  readonly readSkillFor?: (args: {
-    readonly currentSkillId?: string;
-    readonly hiddenSkillIds?: readonly string[];
-    /** The turn-start MENU (SG-C), passed only while the turn's menu verdict
-     *  is outstanding — see the Compose stage. */
-    readonly menu?: {
-      readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
-      readonly cursorId?: string;
-      readonly stay?: boolean;
-    };
-    /**
-     * `undefined` means the OFFER is withheld for this iteration: the schema
-     * leaves the request and the model is not invited to call `read_skill`
-     * (9.86.0 — a `.tree()` with no open skills, where every pick is refused
-     * by construction). Dispatch is untouched, as the substitution note above
-     * says: the name stays in `registryByName`, so a model that calls it from
-     * a restored transcript still reaches the gate and reads its refusal.
-     */
-  }) => LLMToolSchema | undefined;
+  readonly readSkillFor?: ReadSkillFor;
   /** Budget cap (chars). Default: 2000. Set from the public door as
    *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
@@ -443,6 +393,7 @@ const EMPTY_OFFER: readonly string[] = Object.freeze([]);
 export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const budgetCap = config.budgetCap ?? 2000;
   const staticTools = config.tools;
+  const defaultHiddenSkillIds = config.unrestrictedSkills ? EMPTY_OFFER : undefined;
   const readSkillFor = config.readSkillFor;
   const toolProvider = config.toolProvider;
   const stepPlanFor = config.stepPlanFor;
@@ -488,10 +439,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // Sync providers still pay zero microtask overhead — the dynamic
   // `instanceof Promise` check skips await for non-Promise returns.
   const discoverStage = async (scope: TypedScope<ToolsSubflowState>): Promise<void> => {
+    const runtime = config.runtime?.(scope);
+    if (runtime?.servedTools) delete runtime.servedTools.selection;
     if (!toolProvider) return;
     await discoverTools(scope, {
       provider: toolProvider,
-      cache: config.runtime?.(scope).providerToolCache,
+      cache: runtime?.providerToolCache,
+      defaultHiddenSkillIds,
+      ...(toolClaimants && { claimants: toolClaimants }),
       callerIdentity: config.callerIdentity?.(scope),
     });
   };
@@ -503,8 +458,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const runtime = config.runtime?.(scope);
     const providerToolCache = runtime?.providerToolCache;
     const servedTools = runtime?.servedTools;
-    const hiddenSkillIds =
-      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ?? EMPTY_OFFER;
+    const resolvedHidden =
+      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ??
+      defaultHiddenSkillIds;
     const args = scope.$getArgs<{
       iteration?: number;
       currentSkillId?: string;
@@ -574,43 +530,13 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           }
         : schema;
 
-    // The turn-start MENU (SG-C) — composed from the SAME verdict the record
-    // carries (`scope.turnRoute`, threaded by the mount mappers), and only
-    // while it is OUTSTANDING: once an accepted pick moves the cursor, the
-    // description stops offering a menu the turn has already resolved.
-    // `menuOutstanding` is the one shared implementation (routingPolicy.ts).
-    // Advisory relevance rides beside each candidate when the scorer ranked it.
-    const turnRoute = args.turnRoute;
-    const menu =
-      turnRoute?.offered !== undefined && menuOutstanding(turnRoute, args.currentSkillId)
-        ? {
-            candidates: turnRoute.offered.map((id) => {
-              const rel = turnRoute.relevance?.find((r) => r.id === id)?.relevance;
-              return { id, ...(rel !== undefined && { relevance: rel }) };
-            }),
-            ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
-            ...(turnRoute.stayOffered === true && { stay: true }),
-          }
-        : undefined;
-
-    // Per-iteration `read_skill` offer. The cursor arriving here is THIS iteration's:
-    // the Injection Engine already advanced it and its outputMapper wrote it to the
-    // parent before this slot mounts — the same value the read_skill gate will read
-    // when the model answers. Substituted by name so nothing else in the list moves.
-    const substituted = readSkillFor
-      ? staticTools.flatMap((t) => {
-          if (t.name !== 'read_skill') return [t];
-          // `undefined` = the offer is WITHHELD this iteration (see
-          // `readSkillFor`): the schema comes off the wire, the name stays in
-          // the dispatch map. Position governs the offer, never dispatch.
-          const offered = readSkillFor({
-            ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
-            ...(hiddenSkillIds.length > 0 && { hiddenSkillIds }),
-            ...(menu !== undefined && { menu }),
-          });
-          return offered === undefined ? [] : [offered];
-        })
-      : staticTools;
+    const { schemas: substituted, withheldSkillIds } = composeSkillCatalog(
+      staticTools,
+      readSkillFor,
+      resolvedHidden,
+      args.currentSkillId,
+      args.turnRoute,
+    );
     // Step narrowing over the STATIC list (9.18.0): hold out the stepped
     // skill's other tools (sole-owner names only — see stepHoldOut), lead the
     // current step's tool with the banner. No step in progress → the exact
@@ -820,7 +746,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         ...(frameworkSkipStep !== undefined && { tool: frameworkSkipStep }),
       })),
     ];
-    const { merged, winners, losers, winningTools } = mergeWire(candidates);
+    const { merged, winners, losers, winningTools, putForward } = mergeWire(candidates);
+    const collisions = wireCollisions(putForward, losers, toolClaimants, resolvedHidden);
 
     // ── THE COMMIT — everything after the merge, as one closure ─────────
     // `served` is the list that goes on the record: the merged list itself
@@ -835,6 +762,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       servedInjections: readonly InjectionRecord[],
       narrowedTo: ReadonlySet<string> | undefined,
       rules: RulesOnWire | undefined,
+      omitted?: readonly string[],
     ): void => {
       setEventSource(scope, INJECTION_KEYS.TOOLS, servedInjections);
       // THE ONE DECORATION SITE (9.101.0). With `.findings()` armed, every
@@ -910,26 +838,21 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         withSourcesArgument,
       );
       if (servedTools !== undefined) {
-        // Dispatch follows the OFFER: a name narrowed off this epoch's wire
-        // was not served, so it is not on `current` and takes the off-wire
-        // path (`toolResolver.ts · buildToolResolver`) — answered by the party the
-        // model last read it under, and recorded as `tools.answered_off_wire`.
-        const wireWinners =
-          narrowedTo === undefined
-            ? winners
-            : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
-        servedTools.current = wireWinners;
-        servedTools.currentProof = undefined;
-        servedTools.restored = undefined;
-        servedTools.wireReady = true;
-        // The run's memory of who served what (read by the off-wire fallback).
-        // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
-        // of a previous run on this same built chart is dropped here.
-        if (iteration === 1) {
-          servedTools.lastServed.clear();
-          servedTools.lastProof = undefined;
-        }
-        for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
+        commitServedTools(servedTools, {
+          iteration,
+          narrowedTo,
+          collisions,
+          withheldSkillIds,
+          omitted,
+          winners,
+          winningTools,
+          claimants: toolClaimants,
+          hiddenSkillIds: resolvedHidden,
+          discovered:
+            toolProvider && providerToolCache?.resolved
+              ? providerToolCache.selectionOmissions
+              : undefined,
+        });
       }
       // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
       // Every list the merge reads is park-filtered (see the provider loop above).
@@ -963,14 +886,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         // run that simply never parked for a dead checker.
         runtime?.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
       }
-      reportShadowedTools(scope, {
-        iteration,
-        winners,
-        losers,
-        candidates,
-        ...(toolClaimants !== undefined && { claimants: toolClaimants }),
-        warnedShadow,
-      });
+      reportShadowedTools(scope, iteration, collisions, warnedShadow);
       const composition = composeSlot(
         'tools',
         iteration,
@@ -1054,10 +970,12 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         prior: args.priorToolChoices ?? [],
         wrapUpAsked: args.wrapUpAsked === true,
         toolsOff: args.toolsOffAfterRevision === true,
-      }).then(({ served, servedInjections, narrowedTo }) =>
+      }).then(({ served, servedInjections, narrowedTo, omitted }) =>
         loadingRules === undefined
-          ? commitWire(served, servedInjections, narrowedTo, undefined)
-          : loadingRules.then((rules) => commitWire(served, servedInjections, narrowedTo, rules)),
+          ? commitWire(served, servedInjections, narrowedTo, undefined, omitted)
+          : loadingRules.then((rules) =>
+              commitWire(served, servedInjections, narrowedTo, rules, omitted),
+            ),
       ),
     );
   };
@@ -1067,107 +985,4 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   })
     .addFunction('Compose', composeStage, 'compose', 'Compose tools slot')
     .build();
-}
-
-/** How a party is named in a sentence: `provider 'hub'`, `skill 'billing'`, `framework`. */
-const describeParty = (p: ToolParty): string =>
-  p.id === undefined ? p.channel : `${p.channel} '${p.id}'`;
-
-/**
- * Report every tool name more than one party claimed this epoch (8.7.0;
- * re-subjected 9.92.0).
- *
- * The SUBJECT is the wire crossed with dispatch: for each name on the wire,
- * the party whose contract won it — which, since dispatch follows the offer,
- * is also the party that answers — against every other party that claimed
- * the name. Two kinds of loser, two events:
- *
- *   • a COMPETING loser put a contract forward this epoch and lost the merge
- *     (`losers`, from `mergeWire`). The name draws ONE
- *     `agentfootprint.tools.shadowed` naming the wire's party in both halves —
- *     the shipped event, kept truthful — and one `tools.claim_swallowed` per
- *     loser;
- *   • a RESERVED loser is a build-time claimant that never reached the merge
- *     (`claimants`, from `buildToolRegistry`): a scoped skill's tool while the
- *     skill is inactive, a held-out step tool, the framework's `skip_step`
- *     between tenures. Its name is held by somebody else this epoch and its
- *     implementation cannot be reached by any call, so it draws
- *     `tools.claim_swallowed` — and NOT `tools.shadowed`, because no contract of
- *     its competed for the wire.
- *
- * Until 9.92.0 this loop walked `activeInjections` against the pre-merge
- * provider list and ASSERTED `schemaFrom: 'provider'`, which could not see an
- * inactive skill, a static `.tool()` or a framework auto-attach, and named the
- * provider on epochs whose wire carried the skill's contract (recorded-not-
- * built, entries 1 and 2). Reading the merge's own record is what makes both
- * sentences true by construction.
- *
- * The events fire every iteration — that is the channel that reaches
- * production, where a dynamic provider can start a collision on iteration 9
- * of a run nobody is watching. The console line is dev-mode only and latched
- * per tool name per built chart, so a 20-iteration loop prints once.
- */
-function reportShadowedTools(
-  scope: TypedScope<ToolsSubflowState>,
-  input: {
-    iteration: number;
-    winners: ReadonlyMap<string, ToolParty>;
-    losers: ReadonlyMap<string, readonly ToolParty[]>;
-    candidates: readonly WireCandidate[];
-    claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
-    /** Dedup latch for the console line, scoped to ONE built chart. */
-    warnedShadow: Set<string>;
-  },
-): void {
-  const { iteration, winners, losers, candidates, claimants, warnedShadow } = input;
-  for (const [toolName, winner] of winners) {
-    const competing = losers.get(toolName) ?? [];
-    // Reserved: every build-time claimant of the name that is neither the
-    // winner nor one of this epoch's candidates for it.
-    const putForward = candidates.filter((c) => c.schema.name === toolName);
-    const winning = putForward.find((c) => sameToolParty(c.party, winner));
-    const reserved = (claimants?.get(toolName) ?? [])
-      .filter(
-        (c) =>
-          // The same implementation is the same claim: a second skill sharing
-          // the winner's `Tool` reference lost nothing.
-          c.tool !== winning?.tool &&
-          !putForward.some((p) => p.tool === c.tool) &&
-          !sameToolParty(partyOfClaim(c), winner) &&
-          !putForward.some((p) => sameToolParty(p.party, partyOfClaim(c))),
-      )
-      .map(partyOfClaim);
-    if (competing.length === 0 && reserved.length === 0) continue;
-
-    if (competing.length > 0) {
-      typedEmit(scope, 'agentfootprint.tools.shadowed', {
-        toolName,
-        iteration,
-        schemaFrom: winner.channel,
-        ...(winner.id !== undefined && { schemaFromId: winner.id }),
-        dispatchTo: winner.channel,
-        ...(winner.id !== undefined && { dispatchToId: winner.id }),
-      });
-    }
-    for (const lost of [...competing, ...reserved]) {
-      typedEmit(scope, 'agentfootprint.tools.claim_swallowed', {
-        toolName,
-        iteration,
-        lostBy: lost.channel,
-        ...(lost.id !== undefined && { lostById: lost.id }),
-        wonBy: winner.channel,
-        ...(winner.id !== undefined && { wonById: winner.id }),
-      });
-    }
-    if (!isDevMode() || warnedShadow.has(toolName)) continue;
-    warnedShadow.add(toolName);
-    const others = [...competing, ...reserved].map(describeParty).join(', ');
-    // eslint-disable-next-line no-console
-    console.warn(
-      `agentfootprint tools: '${toolName}' is claimed by ${describeParty(winner)} AND by ` +
-        `${others}. The model is shown ${describeParty(winner)}'s contract and ` +
-        `${describeParty(winner)}'s implementation answers; the other claim answers no call ` +
-        `while the name is held. Rename one of them, or drop the duplicate.`,
-    );
-  }
 }

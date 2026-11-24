@@ -150,7 +150,6 @@ describe('ONE denominator', () => {
         userMessage: 'x',
         cumulativeInputTokens: 0,
         cachingDisabled: false,
-        history: [],
         systemPromptCachePolicy: 'never',
       } as never);
       // …is the number the injection engine would report.

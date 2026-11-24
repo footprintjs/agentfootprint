@@ -1,4 +1,6 @@
 export interface HonestyState {
+  /** A grouped call's committed recall observation, lifted into the outer findings ledger. */
+  retrievalRequest?: import('../../honesty/retrievalRequests.js').RetrievalRequestRow;
   /** Some result-limit facts could not be retained in this turn's bounded list. */
   libraryResultLimitsIncomplete?: true;
   /** Framework-imposed limits on this turn’s tool results, recorded where each limit takes effect. */
@@ -48,6 +50,9 @@ export interface HonestyState {
    * `answerStandingLine`.
    */
   answerStandingNames?: Readonly<Record<string, string>>;
+
+  /** The opt-in reason filter omitted this turn's otherwise eligible standing line. */
+  answerStandingLineOmittedByRaiseOn?: true;
   /**
    * What the inputs layer (honesty layer 2) hands ToolCalls for the batch it
    * resolved — per call, the declared defaults to FILL, or the sentence the

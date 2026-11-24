@@ -10,11 +10,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool } from '../../src/index.js';
 import { BreakpointCacheStrategy } from '../../src/cache/index.js';
-import { defineSteering } from '../../src/injection-engine.js';
+import { defineFact, defineSteering } from '../../src/injection-engine.js';
 import { mock } from '../../src/llm-providers.js';
+import { recordRun } from '../../src/observe.js';
 
 const cacheWork = vi.hoisted(() => ({
-  prefixVisits: undefined as number[] | undefined,
+  historyVisits: undefined as number[] | undefined,
 }));
 
 vi.mock(import('../../src/cache/CacheDecisionSubflow.js'), async (importOriginal) => {
@@ -24,7 +25,7 @@ vi.mock(import('../../src/cache/CacheDecisionSubflow.js'), async (importOriginal
     cacheDecisionStage: (...args: Parameters<typeof original.cacheDecisionStage>) => {
       const stage = original.cacheDecisionStage(...args);
       return (scope: Parameters<typeof stage>[0]) => {
-        const visits = cacheWork.prefixVisits;
+        const visits = cacheWork.historyVisits;
         if (visits === undefined) return stage(scope);
 
         let rows = 0;
@@ -196,7 +197,7 @@ describe('agent-chart cache integration — security', () => {
 
 describe('agent-chart cache integration — performance', () => {
   it.each([2, 8])(
-    'visits the cache prefix at most twice per row on %i model turns',
+    'keeps conversation history out of the cache decision on %i model turns',
     async (turns) => {
       const lookup = defineTool({
         name: 'lookup',
@@ -247,30 +248,28 @@ describe('agent-chart cache integration — performance', () => {
           .tool(lookup)
           .build();
 
-        const prefixVisits: number[] = [];
-        cacheWork.prefixVisits = prefixVisits;
+        const historyVisits: number[] = [];
+        cacheWork.historyVisits = historyVisits;
         try {
           expect(await agent.run({ message: 'go' })).toBe('done');
         } finally {
-          cacheWork.prefixVisits = undefined;
+          cacheWork.historyVisits = undefined;
         }
         expect(prepare).toHaveBeenCalledTimes(turns);
         expect(requests).toHaveLength(turns);
         expect(requests.map(({ prefixLength }) => prefixLength)).toEqual(
           Array.from({ length: turns }, (_, index) => 2 * index + 1),
         );
-        return { requests, prefixVisits };
+        return { requests, historyVisits };
       }
 
       const off = await run('off');
       const on = await run();
-      expect(off.prefixVisits).toEqual(Array<number>(turns).fill(0));
-      expect(on.prefixVisits).toHaveLength(turns);
+      expect(off.historyVisits).toEqual(Array<number>(turns).fill(0));
+      expect(on.historyVisits).toEqual(Array<number>(turns).fill(0));
       for (const [index, { prefixLength, tail }] of on.requests.entries()) {
         expect(off.requests[index]?.markerCount).toBe(0);
         expect(tail).toBe(prefixLength - 1);
-        expect(on.prefixVisits[index]).toBeGreaterThanOrEqual(prefixLength);
-        expect(on.prefixVisits[index]).toBeLessThanOrEqual(2 * prefixLength);
       }
     },
   );
@@ -291,4 +290,85 @@ describe('agent-chart cache integration — ROI', () => {
     expect(spec.subflows).toBeDefined();
     expect(spec.subflows?.['sf-cache']).toBeDefined();
   });
+});
+
+describe('recorded cache mount input', () => {
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    'records positions without copying message bodies in %s',
+    async (reactMode) => {
+      const requests: { messages: readonly { readonly content: unknown }[]; tail?: number }[] = [];
+      const userBody = 'ordinary conversation fixture';
+      const deliveredBody = 'cacheable delivered fixture';
+      const provider = mock({
+        respond(request) {
+          requests.push({
+            messages: JSON.parse(JSON.stringify(request.messages)),
+            tail: request.cacheMarkers?.find(({ field }) => field === 'messages')?.boundaryIndex,
+          });
+          return 'done';
+        },
+      });
+      const agent = Agent.create({
+        provider,
+        model: 'mock',
+        reactMode,
+        cacheStrategy: new BreakpointCacheStrategy({
+          mode: 'breakpoints',
+          maxBreakpoints: 4,
+          reportsUsage: false,
+        }),
+      })
+        .system('test prompt', { cache: 'always' })
+        .fact(
+          defineFact({
+            id: 'cached-fact',
+            data: deliveredBody,
+            slot: 'messages',
+            role: 'assistant',
+            cache: 'always',
+          }),
+        )
+        .build();
+      const recorder = recordRun(agent, { boundaryDetail: 'full' });
+      try {
+        expect(await agent.run({ message: userBody })).toBe('done');
+        expect(requests).toHaveLength(1);
+        const request = requests[0]!;
+        const position = request.messages.findIndex(({ content }) => content === deliveredBody);
+        expect(position).toBeGreaterThan(0);
+        expect(request.messages[0]?.content).toBe(userBody);
+        expect(request.tail).toBe(position);
+
+        const steps = recorder.boundary.getSteps();
+        const cache = steps.find(
+          (event) => event.type === 'subflow.entry' && event.localSubflowId === 'sf-cache',
+        );
+        const injection = steps.find(
+          (event) =>
+            event.type === 'subflow.entry' && event.localSubflowId === 'sf-injection-engine',
+        );
+        expect(cache).toBeDefined();
+        expect(injection).toBeDefined();
+        const snapshots = recorder.toRecording().snapshot?.subflowResults;
+        const cacheSeed = snapshots?.[cache!.runtimeStageId]?.treeContext?.history[0]?.overwrite;
+        const injectionSeed =
+          snapshots?.[injection!.runtimeStageId]?.treeContext?.history[0]?.overwrite;
+        const expected = {
+          length: 2,
+          deliveries: [{ index: position, injectionId: 'cached-fact', flavor: 'fact' }],
+        };
+        expect(injection?.payload).toMatchObject({
+          history: [{ role: 'user', content: userBody }],
+        });
+        expect(injectionSeed).toMatchObject({ history: [{ role: 'user', content: userBody }] });
+        expect(cache?.payload).toMatchObject({ cacheHistory: expected });
+        expect(cache?.payload).not.toHaveProperty('history');
+        expect(cacheSeed).toMatchObject({ cacheHistory: expected });
+        expect(cacheSeed).not.toHaveProperty('history');
+      } finally {
+        recorder.stop();
+        await agent.shutdown();
+      }
+    },
+  );
 });

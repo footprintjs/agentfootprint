@@ -21,6 +21,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  cacheHistoryFor,
   computeCacheMarkers,
   evaluateCachePolicy,
   injectionTargetSlots,
@@ -440,7 +441,11 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
     markers.filter((m) => m.field === 'messages' && m.reason.startsWith('conversation tail'));
 
   it('unit: marks the LAST history message when everything before it is cacheable', () => {
-    const markers = runSubflow({ ...base, activeInjections: [], history: turn });
+    const markers = runSubflow({
+      ...base,
+      activeInjections: [],
+      cacheHistory: cacheHistoryFor(turn),
+    });
     expect(tailOf(markers)).toEqual([
       expect.objectContaining({ field: 'messages', boundaryIndex: 2, ttl: 'short' }),
     ]);
@@ -449,13 +454,19 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
   });
 
   it('boundary: no history → no tail marker', () => {
-    expect(tailOf(runSubflow({ ...base, activeInjections: [], history: [] }))).toEqual([]);
+    expect(
+      tailOf(runSubflow({ ...base, activeInjections: [], cacheHistory: cacheHistoryFor([]) })),
+    ).toEqual([]);
     expect(tailOf(runSubflow({ ...base, activeInjections: [] }))).toEqual([]);
   });
 
   it("scenario: a system piece whose policy says 'never' stops it (fail-closed)", () => {
     const volatile = makeInjection({ id: 'clock', flavor: 'instructions', systemPrompt: 'now: …' });
-    const markers = runSubflow({ ...base, activeInjections: [volatile], history: turn });
+    const markers = runSubflow({
+      ...base,
+      activeInjections: [volatile],
+      cacheHistory: cacheHistoryFor(turn),
+    });
     expect(tailOf(markers)).toEqual([]);
   });
 
@@ -464,7 +475,7 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
       ...base,
       systemPromptCachePolicy: 'never',
       activeInjections: [],
-      history: turn,
+      cacheHistory: cacheHistoryFor(turn),
     });
     expect(tailOf(markers)).toEqual([]);
   });
@@ -475,7 +486,13 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
       ...turn.slice(1),
     ];
     expect(
-      tailOf(runSubflow({ ...base, activeInjections: [], history: history as never })),
+      tailOf(
+        runSubflow({
+          ...base,
+          activeInjections: [],
+          cacheHistory: cacheHistoryFor(history as never),
+        }),
+      ),
     ).toEqual([]);
   });
 
@@ -483,7 +500,7 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
     const markers = runSubflow({
       ...base,
       activeInjections: [makeInjection({ id: 's', cache: 'always', systemPrompt: 'steer' })],
-      history: turn,
+      cacheHistory: cacheHistoryFor(turn),
       toolsVaryPerCall: true,
     });
     expect(markers).toEqual([]);
@@ -501,7 +518,7 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
     const markers = runSubflow({
       ...base,
       activeInjections: [delivered],
-      history: history as never,
+      cacheHistory: cacheHistoryFor(history as never),
     });
     expect(markers.filter((m) => m.field === 'messages')).toHaveLength(1);
   });
@@ -512,7 +529,9 @@ describe('CacheDecision subflow — the moving breakpoint on the conversation ta
         role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
         content: `m${i}`,
       }));
-      const [tail] = tailOf(runSubflow({ ...base, activeInjections: [], history }));
+      const [tail] = tailOf(
+        runSubflow({ ...base, activeInjections: [], cacheHistory: cacheHistoryFor(history) }),
+      );
       expect(tail?.boundaryIndex).toBe(n - 1);
     }
   });

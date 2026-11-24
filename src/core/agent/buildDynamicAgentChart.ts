@@ -58,10 +58,15 @@ import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
-import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
+import {
+  memoryInjectionKey,
+  memoryRecallOutcomesKey,
+  retrievalEvidenceKey,
+} from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { llmCallReadsInto } from './llmCallReads.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
@@ -73,7 +78,7 @@ import {
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
-import { buildCacheSubflow } from './buildCacheSubflow.js';
+import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import {
   timeClockArg,
   timeLimitsArg,
@@ -87,6 +92,7 @@ import {
   startFinalBranch,
 } from './honesty/mounts.js';
 import { responseStopFields } from './honesty/responseStop.js';
+import { retrievalFindingsOf } from './honesty/retrievalRequests.js';
 import type { AgentState } from './types.js';
 import { dynamicTurnSeed } from './dynamicTurnSeed.js';
 import { memberRunArg } from '../memberRun.js';
@@ -472,23 +478,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // The findings offer re-decorates every tool per call — see
     // buildAgentChart's mount. Closed over at build time.
     .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-        }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window as it will be sent — a messages marker's index is a
-        // position in THAT array. See buildAgentChart's mount for the why.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
+      inputMapper: (parent) => cacheMountInput(parent, deps),
       outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
       arrayMerge: ArrayMergeMode.Replace,
     })
@@ -526,28 +516,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     description: 'Agent: ReAct loop',
   });
 
-  // Memory READ subflows — TURN_START timing (once per turn, OUTSIDE
-  // the LLM-call loop body). Each writes `memoryInjection_${id}` to the
-  // outer scope; the boundary inputMapper below threads those into the
-  // subflow so the slots consume them.
-  for (const m of deps.memories) {
-    builder = mountMemoryRead(builder, {
-      pipeline: {
-        read: unwrapMemoryFlowChart(m.read) as never,
-        ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
-      },
-      identityKey: 'runIdentity',
-      turnNumberKey: 'turnNumber',
-      contextTokensKey: 'contextTokensRemaining',
-      injectionKey: memoryInjectionKey(m.id),
-      // The retrieval record, lifted into ROOT state so a backward slice
-      // can reach the passage instead of stopping at this mount.
-      evidenceKey: retrievalEvidenceKey(m.id),
-      readSubflowId: `sf-memory-read-${m.id}`,
-      // A corpus reads under its OWN namespace, not the run's identity.
-      ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-    });
-  }
+  builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — once per turn on the OUTER scope, before the
   // sf-llm-call loop (its loop target). ONE stage, two possible occupants,
@@ -606,6 +575,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         for (const m of deps.memories) {
           const key = memoryInjectionKey(m.id);
           memoryKeys[key] = p[key];
+          const evidence = retrievalEvidenceKey(m.id);
+          if (p[evidence] !== undefined) memoryKeys[evidence] = p[evidence];
+          const outcomes = memoryRecallOutcomesKey(m.id);
+          if (p[outcomes] !== undefined) memoryKeys[outcomes] = p[outcomes];
         }
         return {
           // Read-only working inputs (stages read, never write these).
@@ -724,6 +697,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(p.resolvedInstructions !== undefined && {
             resolvedInstructions: p.resolvedInstructions,
           }),
+          ...(deps.memories.length > 0 && { turnNumber: p.turnNumber }),
           ...memoryKeys,
           // Cross-iteration accumulators under prior* aliases — frozen
           // here, copied to writable working keys by dynamicTurnSeed.
@@ -743,9 +717,10 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           priorSkillHistory: p.skillHistory,
         };
       },
-      outputMapper: (sf) => {
+      outputMapper: (sf, parent) => {
         const s = sf as Record<string, unknown>;
         return {
+          ...retrievalFindingsOf(s, parent as Record<string, unknown>),
           // LLM result the outer Route / tool-calls / final read.
           llmLatestContent: s.llmLatestContent,
           llmLatestToolCalls: s.llmLatestToolCalls,

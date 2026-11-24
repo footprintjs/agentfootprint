@@ -5,10 +5,9 @@ import { groundedTextOf } from './callLLM/groundedText.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
-  completeObserved,
+  callObserved,
   observeCallRequests,
   servedRequestRecorder,
-  streamObserved,
 } from './callLLM/servedRequest.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
@@ -43,7 +42,9 @@ import type {
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
+import { recordToolSelection } from './callLLM/recordToolSelection.js';
+import { recordWireFindings } from './callLLM/recordWireFindings.js';
+import { selectionAtRequest } from './callLLM/selectionAtRequest.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
 import {
   declaredEnumValuesOf,
@@ -87,6 +88,7 @@ import { captureReplayPrefix, replayCacheMarkers } from '../requestTurn/replayPr
 import { afterReplayResponse, sameReplayProjection } from '../requestTurn/state.js';
 import { writeRequestReplay } from '../requestTurn/native.js';
 import { projectCallHistory } from './callLLM/requestProjection.js';
+import { trackRecallRequests } from './callLLM/recallRequest.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import type { ToolChoiceLedger } from '../toolChoice/types.js';
 import type { OntologyPiece } from '../../../ontology/serve.js';
@@ -123,6 +125,7 @@ export function buildCallLLMStage(
   deps: CallLLMStageDeps,
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
+    if (deps.servedTools?.selection?.accepted) delete deps.servedTools.selection.accepted;
     // The answer-text scanner (`findings/peel.ts`), loaded ONCE per call and
     // only under `.findings()` — the optional-family law of docs-next's site
     // budget: an unarmed agent never loads the module. Every armed use below
@@ -411,6 +414,9 @@ export function buildCallLLMStage(
       continuing,
     );
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const selection =
+      deps.servedTools?.selection &&
+      selectionAtRequest(deps, iteration, scope.$attempt?.(), baseRequest, withheld !== null);
     const serving =
       deps.recordReceipt === false
         ? undefined
@@ -599,6 +605,16 @@ export function buildCallLLMStage(
       deps.recordReceipt !== false,
       deps.onReplayPrepared,
     );
+    const recall =
+      deps.recallRequests === undefined
+        ? undefined
+        : trackRecallRequests(
+            systemPieces,
+            committed,
+            wireMessages,
+            continuing?.historyPositions,
+            systemPrompt,
+          );
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
@@ -627,11 +643,13 @@ export function buildCallLLMStage(
       let candidate = deps.findings === true ? capture(req) : undefined;
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
-      const attemptHooks = observeCallRequests(
+      const selectionAttempt = selection?.attempt();
+      const ordinaryHooks = observeCallRequests(
         attempts.hooks,
-        serving === undefined && deps.findings !== true && !preserveReplay
+        !selectionAttempt && serving === undefined && deps.findings !== true && !preserveReplay
           ? undefined
           : (request) => {
+              selectionAttempt?.observe(request);
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
               if (preserveReplay)
@@ -639,7 +657,7 @@ export function buildCallLLMStage(
             },
         serving?.discard,
       );
-      let resp: LLMResponse | undefined;
+      const attemptHooks = recall?.hooks(ordinaryHooks) ?? ordinaryHooks;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
       // goes through the scanner the answer's peel uses, so a token never
       // carries the model's `_findings` notes — not even when a chunk ends
@@ -655,40 +673,23 @@ export function buildCallLLMStage(
         textFilter: shown,
         onFirstChunk: hooks.onFirstChunk,
       });
-      if (selectedProvider.stream) {
-        for await (const chunk of streamObserved(
-          selectedProvider,
-          attempts.request,
-          attemptHooks,
-          runSignal,
-        )) {
-          if (chunk.done) {
-            if (chunk.response) resp = chunk.response;
-            break;
-          }
-          liveChunks.push(chunk);
-        }
-      }
-      liveChunks.finish();
-      if (!resp) {
-        // No `stream()` OR stream finished without a response payload.
-        // Raw errors propagate so the reliability loop can classify them;
-        // friendly translation happens at the terminal ErrorBridge.
-        //
-        // Hooks are passed to BOTH phases. A decorated provider that falls
-        // back in each reports twice — deliberately NOT deduped, because
-        // those are two genuinely billed calls and collapsing them would
-        // hide real double-billing. (That this branch can re-call at all
-        // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        const completion = selectedProvider.stream
-          ? dispatchFor.select(attempts.request, selectedProvider)
-          : attempts.request;
-        dispatch = describeProviderDispatch(selectedProvider, completion);
-        if (deps.findings === true) candidate = capture(completion);
-        if (preserveReplay)
-          stableProjection = sameReplayProjection(wireMessages, completion.messages);
-        resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
-      }
+      let resp = await callObserved(
+        selectedProvider,
+        attempts.request,
+        attemptHooks,
+        runSignal,
+        liveChunks,
+        () => {
+          const completion = selectedProvider.stream
+            ? dispatchFor.select(attempts.request, selectedProvider)
+            : attempts.request;
+          dispatch = describeProviderDispatch(selectedProvider, completion);
+          if (deps.findings === true) candidate = capture(completion);
+          if (preserveReplay)
+            stableProjection = sameReplayProjection(wireMessages, completion.messages);
+          return completion;
+        },
+      );
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
       throwIfAborted(runSignal);
@@ -718,7 +719,9 @@ export function buildCallLLMStage(
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
       acceptedProjection = stableProjection;
-      return attempts.response(answered);
+      const result = attempts.response(answered);
+      selectionAttempt?.finish(result);
+      return result;
     };
 
     // v2.13 — build the output-schema validator hook when both
@@ -810,8 +813,12 @@ export function buildCallLLMStage(
       // fail-fast path. It already wrote scope state and called
       // `$break(reason)` — `Agent.run()` translates the propagated
       // break into a `ReliabilityFailFastError` at the API boundary.
-      // Skip the post-call state writes; there is no response to commit.
-      if (response === undefined) return;
+      // File the incomplete request when armed. There is no response to commit.
+      if (response === undefined) {
+        if (recall !== undefined)
+          deps.recallRequests?.(scope, iteration, recall.summary('incomplete'));
+        return;
+      }
     } else {
       response = await singleProviderCall(llmRequest, {});
     }
@@ -850,6 +857,8 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
+    if (recall !== undefined)
+      deps.recallRequests?.(scope, iteration, recall.summary(localFallback ? 'local' : 'provider'));
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
@@ -902,41 +911,7 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
-    // this reads what the ADAPTER says actually crossed — the manifest read
-    // back from the serialized body — against the schemas this very call
-    // assembled. The recorded defect lived exactly in that gap: a clean
-    // frame, four retained schemas on the wire. No manifest stated → the
-    // call is incomparable and nothing is guessed. Same seen-list rail as
-    // the compose backstop, freshest copy first, so one defect files once
-    // per run however many calls re-detect it.
-    // The composed side is llmRequest — the exact object HANDED TO the
-    // adapter, after the cache strategy's transform — so a strategy edit
-    // is never blamed on the adapter.
-    const wireFindings = wireViolationsOf(
-      {
-        names: (llmRequest.tools ?? []).map((t) => t.name),
-        provenance: 'callLLM (assembled request)',
-      },
-      response.wireManifest === undefined
-        ? undefined
-        : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
-      iteration,
-    );
-    // The disposition: a provider stating no manifest leaves this call
-    // UNREACHABLE — the check could not see the wire, which is a different
-    // fact from "the wire was clean", and the ledger keeps them apart.
-    deps.integrityLedger?.current?.note(
-      'invariant-violation',
-      'wire',
-      response.wireManifest === undefined
-        ? 'unreachable'
-        : wireFindings.length > 0
-        ? 'checked-fail'
-        : 'checked-pass',
-      wireFindings.length > 0 ? Date.now() : undefined,
-    );
-    fileIntegrityFindings(scope, wireFindings, iteration, deps.integrityLedger);
+    recordWireFindings(scope, llmRequest, response, answeredBy, iteration, deps);
 
     // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
     // asks what the library put in front of the model; this asks what the
@@ -1109,6 +1084,9 @@ export function buildCallLLMStage(
 
     // Attribute the successful response to its actual selected transport/model.
     emitCostTick(scope, deps.pricingTable, deps.costBudget, answeredBy, response.usage);
+    const selected = localFallback ? undefined : selection?.accept(response);
+    if (selected && deps.servedTools && deps.canRecordToolSelection?.())
+      recordToolSelection(scope, selected, deps.servedTools);
   };
 }
 

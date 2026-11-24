@@ -165,6 +165,22 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'libraryResultLimits and settledToolCalls: this turn’s delivered results removed by an applied window strategy',
   },
   {
+    reason: 'memory-retrieval-timeout',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'findingsLedger: a current-turn retrieval timed out and every relevant request had no recall',
+  },
+  {
+    reason: 'memory-retrieval-excluded',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'findingsLedger: a current-turn retrieval excluded all returned candidates and every relevant request had no recall',
+  },
+  {
     reason: 'work-not-finished',
     layer: 3,
     class: 'not-sure',
