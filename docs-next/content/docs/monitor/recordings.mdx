@@ -69,6 +69,33 @@ An older recording or an incomplete log can have no index. Individual paths can 
 
 The default index withholds both the type and the length of a redacted field. If its shape was previously visible, the index records the change to `unknown` at that commit. When the shape was already unknown, the index can omit the entry. The field stays unknown through partial updates until a later public write replaces it. If a masked array update leaves the final position of a hidden item ambiguous, the index withholds element details. The array can still have a recorded length. The recorder also treats the literal strings `REDACTED` and `[REDACTED]` as redaction markers, so their type is unknown.
 
+## Follow a redeemed artifact back to its source
+
+Suppose a tool places a large report in artifact storage. A later tool redeems
+the reference from its argument. The recording can link that argument to the
+earlier tool result that carried the reference in the model call's recorded view.
+The link shows the source used by the redemption. The report's accuracy remains
+a separate question.
+
+The source needs to have reached that call whole and the native check must
+have run in the same execution leg. Link collection currently covers the flat
+chart's artifact check. Ruled arguments are checked in a separate inputs sub-flow.
+
+When you open a saved native history with `readStoredCauseArtifacts` from
+`agentfootprint/observe`, supply the host's `sourceLinkPolicy` for exact
+locators in that history. The saved reader starts with disclosure closed.
+A scope-level redaction message describes the policy in force. A redaction
+gap on an authorized artifact argument can describe a redemption the run
+already made public.
+`sourceLinksOf` from `agentfootprint/observe` projects the source-link channel
+from a native record scope. The adapter still needs the host policy to disclose
+individual locations.
+
+On a long recording, the source-link reader can reach its work allowance.
+A partial channel keeps the links it could bind and reports
+`budget-exhausted`.
+Treat an absent channel, including in older recordings, as uncollected evidence.
+
 ## Measure a saved run
 
 Use `recordingSizeReport` on the parsed recording to see which snapshot fields,

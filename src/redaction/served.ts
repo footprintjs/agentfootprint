@@ -66,6 +66,24 @@ export interface EventServing {
 }
 
 /**
+ * The serving of a run whose state is unknown: every payload is the
+ * placeholder, and so is the identity on its meta (who asked); the address is
+ * kept.
+ */
+export const REFUSING_SERVING: EventServing = Object.freeze({
+  active: () => true,
+  payload: () => SERVED_PLACEHOLDER,
+  meta: <M extends EventMeta>(meta: M): M =>
+    meta.principal === undefined && meta.tenant === undefined
+      ? meta
+      : {
+          ...meta,
+          ...(meta.principal !== undefined && { principal: SERVED_PLACEHOLDER }),
+          ...(meta.tenant !== undefined && { tenant: SERVED_PLACEHOLDER }),
+        },
+}) as EventServing;
+
+/**
  * Serving through `ruleOf()` — read on every event, because the rule a run
  * decides with is the executor's own and footprintjs builds a fresh one per
  * leg (a resume continues the paused run's marks on a new rule).
