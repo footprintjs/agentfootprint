@@ -129,6 +129,19 @@ export function readPlacement(
     : { issued: false };
 }
 
+/** Check the exact retained result addressed by a native placement receipt. */
+export function carriesPlacedTicket(
+  message: { readonly role: string; readonly content: string } | undefined,
+  occurrence: string,
+  ref: string,
+): boolean {
+  if (message?.role !== 'tool' || readCallOccurrenceKey(message) !== occurrence) return false;
+  const content: unknown = Object.getOwnPropertyDescriptor(message, 'content')?.value;
+  if (typeof content !== 'string') return false;
+  const value = leadingJsonValue(content);
+  return isPlacedToolResult(value) && value.ref === ref;
+}
+
 /**
  * The tickets a stored conversation keeps: only those whose call is still a
  * `role: 'tool'` message of the stored `history`, so the list is bounded by

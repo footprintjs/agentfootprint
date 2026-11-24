@@ -5,6 +5,8 @@ import type { CallArtifactInputs } from '../contracts/invocationInputs.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { captureArtifactRedemption } from './artifactSourceLink.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 
@@ -13,6 +15,10 @@ interface AdmitWantedArgumentsFrame {
     typeof buildToolArtifactsOperations
   >['resolveWantsAtDispatch'];
   readonly tc: DispatchCall;
+  readonly runId: string | undefined;
+  readonly callIndex: number;
+  readonly proposedArgs: DispatchCall['args'] | undefined;
+  readonly history: readonly LLMMessage[];
   readonly tool: NonNullable<CallStartFacts['tool']>;
   readonly callArguments: CallArguments;
   readonly wanted: CallArtifactInputs;
@@ -24,16 +30,19 @@ export async function admitWantedArguments(
   scope: TypedScope<AgentState>,
   frame: AdmitWantedArgumentsFrame,
 ) {
+  const capture = captureArtifactRedemption(scope, frame);
   const resolution = await frame.resolveWantsAtDispatch(
     scope,
     frame.tc.name,
     frame.tool.wants!,
     frame.callArguments.callArgs,
     frame.tool.schema.inputSchema,
+    capture?.recordRef,
   );
   if (resolution.ok) {
     frame.callArguments.callArgs = resolution.args;
     frame.wanted.wantedMeta = resolution.wanted;
+    capture?.commit(resolution.wanted);
   } else {
     frame.wanted.wantsBlocked = true;
     frame.outcome.error = true;

@@ -53,7 +53,8 @@
     ]],
     [15, [
       [["receipt"], "object"],
-      [["sourceLinkServedRows"], "array", 1]
+      [["sourceLinkServedRows"], "array", 1],
+      [["sourceLinkConsumer"], "object"]
     ]],
     [16, [
       [["answerGuarantee"], "string"]

@@ -1,10 +1,13 @@
 import type { StoredRecordLimits } from 'foottrace';
+import type { SourceLinkPolicy } from 'foottrace/cause';
 import type { CaptureReason, SnapshotCapture } from './causeCapture.js';
 import type { TraceCauseArtifacts } from './causeTypes.js';
 
 /** Host-only options for one already authorized saved root; no model storage selector. */
 export interface ReadStoredCauseOptions {
   readonly runId: string;
+  /** Host grant for exact source-link locators in this saved root. Defaults to closed. */
+  readonly sourceLinkPolicy?: SourceLinkPolicy;
   /**
    * Structural producer-reader allowances: finite non-negative integers only.
    * Defaults: entries 16,384; missingCommits 4,096; drillDepth 64; addressLength 2,048.

@@ -98,6 +98,8 @@ export function narrativeFrom(snapshot: {
  *                  `recordRun(...).toRecording()` — live, or parsed back
  *                  from JSON — or the same recording packed
  *                  (`packRecording`), which is expanded first.
+ * @param options the host's policy for exact source-link locators in this recording.
+ *                A recording never supplies its own authority.
  *
  * A packed recording is expanded only when its plain form is within
  * `unpackRecording`'s default bound (`DEFAULT_UNPACK_MAX_BYTES`, 512 MiB): the
@@ -113,7 +115,10 @@ export function narrativeFrom(snapshot: {
  *         happened", which is the one answer a debugging session must
  *         never be given by mistake.
  */
-export function openRecording(input: OpenableRecording | PackedRecording): TraceToolpackArtifacts {
+export function openRecording(
+  input: OpenableRecording | PackedRecording,
+  options?: Pick<TraceToolpackArtifacts, 'sourceLinkPolicy'>,
+): TraceToolpackArtifacts {
   const recording = unpackRecording(input) as OpenableRecording | undefined;
   const snapshot = recording?.snapshot as
     | (RuntimeSnapshot & { recorders?: readonly RecorderRow[] })
@@ -147,8 +152,13 @@ export function openRecording(input: OpenableRecording | PackedRecording): Trace
 
   const narrative = narrativeFrom(snapshot);
   const events = recording?.events;
+  const sourceLinkPolicy =
+    options === undefined
+      ? undefined
+      : Object.getOwnPropertyDescriptor(options, 'sourceLinkPolicy')?.value;
   return {
     snapshot,
+    ...(typeof sourceLinkPolicy === 'function' && { sourceLinkPolicy }),
     // controlDeps is deliberately absent — see the header. The toolpack
     // already says "⚠ control edges unavailable" rather than pretending.
     ...(narrative !== undefined && { narrative }),
