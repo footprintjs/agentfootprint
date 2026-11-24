@@ -51,6 +51,7 @@ import {
 } from '../scripts/attachment.js';
 import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
 import type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
+import { finalStandingOf, type StandingLineEvidence } from './prepareFinal/standing.js';
 export type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
 
 type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
@@ -119,7 +120,7 @@ const captureTurnPayload = (
   answerCoverage?: AnswerCoverage,
   answerAssessment?: AnswerAssessmentData,
   releaseTokens = false,
-  standingLineNames?: Readonly<Record<string, string>>,
+  standing?: StandingLineEvidence,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
@@ -195,8 +196,7 @@ const captureTurnPayload = (
     // The answer layer's standing (honesty layer 4) — only on an agent that
     // armed it; every other turn emits the exact payload it always did.
     ...(answerAssessment !== undefined && { answerAssessment }),
-    // The app's words the standing line named calls in — only when it named one.
-    ...(standingLineNames !== undefined && { standingLineNames }),
+    ...standing,
     // The scripts the library attached (`.scriptTravelsWithTheAnswer()`) —
     // on every answer under the arm, a typed one included; absent otherwise.
     ...(attached !== undefined && {
@@ -692,9 +692,7 @@ export function prepareFinalWithAnswerLayerStage(
       );
       return;
     }
-    const line = o.standingLine ? scope.answerStandingLine ?? '' : '';
-    // The app's words the line named calls in, kept on `turn_end` — only when it named one.
-    const names = o.standingLine ? scope.answerStandingNames : undefined;
+    const { line, standing } = finalStandingOf(scope, o.standingLine);
     const declared = o.limits ? scope.coverageDeclared ?? [] : [];
     let assumed = '';
     // The "Assumed" block when no line names the assumed values: the line arm is
@@ -728,14 +726,6 @@ export function prepareFinalWithAnswerLayerStage(
             scripts,
           )
         : scope.llmLatestContent;
-    captureTurnPayload(
-      scope,
-      answer,
-      false,
-      undefined,
-      assessed,
-      releaseTokens,
-      names === undefined ? undefined : { ...names },
-    );
+    captureTurnPayload(scope, answer, false, undefined, assessed, releaseTokens, standing);
   };
 }

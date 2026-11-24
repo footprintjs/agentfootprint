@@ -55,6 +55,7 @@ export const TURN_END_FIELDS = {
   answerAssessment: 'record',
   // The app's declared display names.
   standingLineNames: 'record',
+  standingLineOmittedByRaiseOn: 'record',
   // Statements naming the population a search covered.
   answerNegatives: 'content',
   // Each attached program (`shown[].text`) beside its labels and counts.

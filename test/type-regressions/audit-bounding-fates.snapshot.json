@@ -222,6 +222,7 @@
     "scripts.shown[].truncated.shownBytes": "kept",
     "scripts.withheldFromText": "kept",
     "standingLineNames.k1": "kept",
+    "standingLineOmittedByRaiseOn": "kept",
     "stoppedEarly.iteration": "kept",
     "stoppedEarly.pendingToolCalls": "kept",
     "stoppedEarly.reason": "kept",

@@ -103,6 +103,25 @@ describe('SCENARIO — the answer standing defaults to warnings only', () => {
 });
 
 describe('BOUNDARY — hosts can turn off the layer or its warning text', () => {
+  it('records suppression only on the turn whose reasons missed the filter', async () => {
+    const agent = builder([call('c1', 'read_ports'), ANSWER, call('c2', 'submit'), ANSWER])
+      .tool(tool('read_ports', () => []))
+      .tool(pendingTool)
+      .answerLayer({ standingLine: { when: 'not-sure-or-ask', raiseOn: ['work-not-finished'] } })
+      .build();
+    const events = capture(agent);
+    expect(await agent.run({ message: 'Read the ports.' })).toBe(ANSWER);
+    expect(assessmentAtEnd(events, ANSWER)).toMatchObject({ reasons: ['empty-undeclared'] });
+    expect(events.turnEnd[0]).toHaveProperty('standingLineOmittedByRaiseOn', true);
+
+    const next = withLine(ANSWER, PENDING);
+    expect(await agent.run({ message: 'Now submit.', continueFrom: agent.checkpoint()! })).toBe(
+      next,
+    );
+    expect(assessmentAtEnd(events, next, 1)).toMatchObject({ reasons: ['work-not-finished'] });
+    expect(events.turnEnd[1]).not.toHaveProperty('standingLineOmittedByRaiseOn');
+  });
+
   it.each(['builder', 'options'] as const)('both off settings through %s', async (door) => {
     for (const option of [false, { standingLine: false }] as const) {
       const setup = builder(replies, door === 'options' ? { answerLayer: option } : {}).tool(
@@ -201,11 +220,25 @@ describe('BOUNDARY — the default assessment travels beside exact output contra
 });
 
 describe('SCENARIO — standing follows a pause and continued conversation', () => {
-  it('the pause has no delivered assessment, then resume keeps this turn’s pending work', async () => {
+  it.each([
+    { mode: 'default', line: undefined, expected: withLine(ANSWER, PENDING) },
+    {
+      mode: 'matching filter',
+      line: { when: 'not-sure-or-ask', raiseOn: ['work-not-finished'] } as const,
+      expected: withLine(ANSWER, PENDING),
+    },
+    {
+      mode: 'suppressing filter',
+      line: { when: 'not-sure-or-ask', raiseOn: [] } as const,
+      expected: ANSWER,
+    },
+  ])('keeps the same pause and assesses on resume with $mode', async ({ line, expected }) => {
     const confirmation = tool('confirm', () => askHuman({ question: 'Keep waiting?' }));
-    const agent = builder([call('c1', 'submit'), call('c2', 'confirm'), ANSWER])
-      .tools([pendingTool, confirmation])
-      .build();
+    const setup = builder([call('c1', 'submit'), call('c2', 'confirm'), ANSWER]).tools([
+      pendingTool,
+      confirmation,
+    ]);
+    const agent = (line === undefined ? setup : setup.answerLayer({ standingLine: line })).build();
     const events = capture(agent);
     const recorder = recordRun(agent);
     try {
@@ -216,14 +249,16 @@ describe('SCENARIO — standing follows a pause and continued conversation', () 
       expect(assessAnswer(recorder.toRecording()).standing).toBe('ask');
 
       const checkpoint = JSON.parse(JSON.stringify(paused.checkpoint));
-      const text = withLine(ANSWER, PENDING);
-      expect(await agent.resume(checkpoint, 'Yes.')).toBe(text);
+      expect(await agent.resume(checkpoint, 'Yes.')).toBe(expected);
       expect(events.assessed).toHaveLength(1);
-      expect(assessmentAtEnd(events, text)).toMatchObject({
+      expect(assessmentAtEnd(events, expected)).toMatchObject({
         turn: 1,
         standing: 'not-sure',
         reasons: ['work-not-finished'],
       });
+      if (expected === ANSWER)
+        expect(events.turnEnd[0]).toHaveProperty('standingLineOmittedByRaiseOn', true);
+      else expect(events.turnEnd[0]).not.toHaveProperty('standingLineOmittedByRaiseOn');
     } finally {
       recorder.stop();
     }
