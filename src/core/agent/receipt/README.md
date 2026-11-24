@@ -43,7 +43,11 @@ and the truncated digest can be ambiguous.
 
 An accepted request can add `toolSelection` to its receipt. The attempt's
 `consumer` identifies the call. Each `absent` row contains a visible tool name
-and the selection decision that excluded it. A `bounded` flag means the saved
+and the selection decision that excluded it. A `shadowed` row identifies a visible
+competing implementation by its position in this request’s list, in merge order.
+`name` was offered, `wonBy` identifies the winning channel and `lostBy` the losing
+channel. Two distinct implementations from the same channel can have identical rows.
+These positions apply to one request. A `bounded` flag means the saved
 list is incomplete. An absent field leaves the tool selection unknown.
 
 The recorder retains up to 1,024 omission rows per user turn. A new question

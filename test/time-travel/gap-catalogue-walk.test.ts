@@ -656,6 +656,9 @@ describe('the field list is derived, not written down', () => {
         'toolSelection.consumer',
         'toolSelection.absent.name',
         'toolSelection.absent.reason',
+        'toolSelection.shadowed.name',
+        'toolSelection.shadowed.wonBy',
+        'toolSelection.shadowed.lostBy',
         'toolSelection.bounded',
       ]),
     );

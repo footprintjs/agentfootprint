@@ -6,4 +6,4 @@ An inactive built-in skill scope can retain the visible skill’s registered too
 An actual top-N pick retains the eligible tools it excluded, bound to that slot’s winning implementations.
 Distinct visible implementations that compete for a name retain their winner and loser identities. Tool collision events omit role-hidden skill claims.
 An omitted visible name is associated with the accepted model response only when the adapter confirms which names it offered.
-Saved model-call receipts can now show which visible tools a top-N pick, skill scope or ledger decision left out of that particular request.
+Saved model-call receipts can now show which visible tools a top-N pick, skill scope or ledger decision left out of that particular request. When a registered implementation wins a name, the receipt separately lists each visible competing implementation that lost it, with the winning and losing channels.

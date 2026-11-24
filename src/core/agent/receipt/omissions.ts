@@ -1,4 +1,5 @@
 import type { AttemptRef } from 'footprintjs';
+import type { ToolNameChannel } from '../../../events/payloads.js';
 
 /** What a budget dropped before the request was composed — the window's
  *  evictions at this iteration's head. */
@@ -15,6 +16,13 @@ export interface ReceiptToolSelection {
   readonly absent: readonly {
     readonly name: string;
     readonly reason: 'top-N' | 'skill-scope' | 'ledger';
+  }[];
+  /** One visible losing implementation per row in merge order. The winner offered
+   * this name on the accepted request. Party channels describe roles, not durable IDs. */
+  readonly shadowed?: readonly {
+    readonly name: string;
+    readonly wonBy: ToolNameChannel;
+    readonly lostBy: ToolNameChannel;
   }[];
   /** Additional visible entries could not be retained within the turn or label budget. */
   readonly bounded?: true;

@@ -53,3 +53,34 @@ it('preserves other receipt annotations and withholds rows with unknown headroom
   });
   expect(JSON.stringify(result)).not.toContain('private description');
 });
+
+it('shares turn headroom between absent names and individual shadowed implementations', () => {
+  const scope = { receipt: { basis: { epoch: 1 } } } as unknown as TypedScope<AgentState>;
+  const budget = { remainingToolOmissions: 2 };
+  const second = defineTool({
+    name: 'fixture',
+    description: 'Alternative.',
+    execute: () => 'other',
+  });
+  const absent = { kind: 'ledger', name: 'hidden-by-ledger', tool } as const;
+  const shadowed = {
+    kind: 'collision',
+    name: 'fixture',
+    tool: second,
+    party: { channel: 'provider', id: 'private' },
+    winner: { tool, party: { channel: 'registry' } },
+  } as const;
+  recordToolSelection(
+    scope,
+    { consumer, iteration: 1, rows: [absent, absent, shadowed, { ...absent, name: 'overflow' }] },
+    budget,
+  );
+  expect(scope.receipt?.toolSelection).toEqual({
+    consumer,
+    absent: [{ name: 'hidden-by-ledger', reason: 'ledger' }],
+    shadowed: [{ name: 'fixture', wonBy: 'registry', lostBy: 'provider' }],
+    bounded: true,
+  });
+  expect(budget.remainingToolOmissions).toBe(0);
+  expect(step(['next'], budget)?.toolSelection).toEqual({ consumer, absent: [], bounded: true });
+});

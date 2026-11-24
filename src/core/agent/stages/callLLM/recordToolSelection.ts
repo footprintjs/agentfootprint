@@ -5,7 +5,7 @@ import type { AcceptedToolSelection } from '../../../slots/commitServedTools.js'
 import type { ReceiptToolSelection } from '../../receipt/omissions.js';
 import type { AgentState } from '../../types.js';
 
-/** The receipt carries only a visible name and the original decision. Executable tools,
+/** The receipt carries visible names, selection decisions and collision channels. Executable tools,
  * party IDs and schemas remain private. A missing turn budget cannot start a new budget. */
 export function recordToolSelection(
   scope: TypedScope<AgentState>,
@@ -17,28 +17,41 @@ export function recordToolSelection(
   const receipt = scope[RECEIPT_KEY];
   if (receipt?.basis.epoch !== proof.iteration) return;
   const absent: Array<ReceiptToolSelection['absent'][number]> = [];
+  const shadowed: Array<NonNullable<ReceiptToolSelection['shadowed']>[number]> = [];
   const namesByReason = new Map<string, Set<string>>();
   let bounded = false;
-  for (const { kind, name } of proof.rows) {
-    if (kind === 'collision') continue;
+  for (const row of proof.rows) {
+    const { kind, name } = row;
     if (name.length > 1024 || jsonBytes(name) > 1024) {
       bounded = true;
       continue;
     }
-    const names = namesByReason.get(kind) ?? new Set<string>();
-    if (names.has(name)) continue;
-    if (absent.length === remaining) {
+    const names = namesByReason.get(kind);
+    if (names?.has(name)) continue;
+    if (absent.length + shadowed.length === remaining) {
       bounded = true;
       break;
     }
-    names.add(name);
-    namesByReason.set(kind, names);
-    absent.push({ name, reason: kind });
+    if (row.kind === 'collision') {
+      // The wire merge already deduplicated by implementation. Distinct losers
+      // can share the same name and channel, and each consumes one position.
+      shadowed.push({ name, wonBy: row.winner.party.channel, lostBy: row.party.channel });
+    } else {
+      if (names) names.add(name);
+      else namesByReason.set(kind, new Set([name]));
+      absent.push({ name, reason: row.kind });
+    }
   }
-  if (!bounded && absent.length === 0) return;
+  const retained = absent.length + shadowed.length;
+  if (!bounded && retained === 0) return;
   scope[RECEIPT_KEY] = {
     ...receipt,
-    toolSelection: { consumer: proof.consumer, absent, ...(bounded && { bounded: true }) },
+    toolSelection: {
+      consumer: proof.consumer,
+      absent,
+      ...(shadowed.length > 0 && { shadowed }),
+      ...(bounded && { bounded: true }),
+    },
   };
-  budget.remainingToolOmissions = remaining - absent.length;
+  budget.remainingToolOmissions = remaining - retained;
 }

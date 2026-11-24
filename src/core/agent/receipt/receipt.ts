@@ -324,7 +324,7 @@ export interface ReceiptParams {
  * ```
  */
 export interface Receipt {
-  /** Visible tool names a recorded decision excluded from this accepted request. */
+  /** Visible tool exclusions and competing claims proved on this accepted request. */
   readonly toolSelection?: ReceiptToolSelection;
   /**
    * Actual leaf-provider preparation omitted thinking after this port receipt

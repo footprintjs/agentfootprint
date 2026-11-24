@@ -240,4 +240,4 @@ Why the tool list is empty when it would not otherwise be.
 
 Defined in: [src/core/agent/receipt/receipt.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L328)
 
-Visible tool names a recorded decision excluded from this accepted request.
+Visible tool exclusions and competing claims proved on this accepted request.
