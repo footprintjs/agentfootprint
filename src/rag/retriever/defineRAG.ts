@@ -118,6 +118,8 @@
  * ```
  */
 
+import { supportsRecallSearch } from '../../memory/store/readOutcome.js';
+import type { RetrievalRecording } from '../../memory/retrieval/types.js';
 import type { Embedder } from '../../memory/embedding/index.js';
 import type { MemoryStore } from '../../memory/store/index.js';
 import type { MemoryIdentity } from '../../memory/identity/index.js';
@@ -158,6 +160,9 @@ export interface DefineRAGOptions {
    * own index rather than one built here — see {@link embedder}.
    */
   readonly store: MemoryStore;
+
+  /** Keep retrieval evidence free of passage text and source coordinates. */
+  readonly recording?: RetrievalRecording;
 
   /**
    * Embedder used for the read-side query. Pass the SAME embedder
@@ -364,9 +369,9 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
         `ranks the question on its own side, so there is nothing to embed here).`,
     );
   }
-  if (!opts.store.search) {
+  if (!supportsRecallSearch(opts.store)) {
     throw new Error(
-      `defineRAG[${opts.id}]: store must implement search(). ` +
+      `defineRAG[${opts.id}]: store must implement search() or searchWithOutcome(). ` +
         'Pass a vector-capable adapter (InMemoryStore, pgvector, Pinecone, ...).',
     );
   }
@@ -417,6 +422,7 @@ export function defineRAG(opts: DefineRAGOptions): MemoryDefinition {
             ...(opts.maxChars !== undefined && { maxChars: opts.maxChars }),
           },
     store: opts.store,
+    ...(opts.recording !== undefined && { recording: opts.recording }),
     // A corpus is not a conversation log — see the header.
     readOnly: true,
     corpus: opts.corpus ?? DEFAULT_CORPUS_IDENTITY,

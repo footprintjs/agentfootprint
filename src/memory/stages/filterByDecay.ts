@@ -35,9 +35,16 @@
  * would produce `NaN`, and `NaN >= minScore` is false, which would silently
  * drop every entry from such a store.
  */
+import {
+  omitAmbiguousRetrievalCandidates,
+  refineRecallOutcomes,
+  retrievalCandidateIdsAmbiguous,
+  type RecallExclusion,
+} from '../retrieval/outcome.js';
 import type { TypedScope } from 'footprintjs';
 import { computeDecayFactor } from '../entry/decay.js';
 import type { DecayPolicy } from '../entry/types.js';
+import { chunkText } from '../retrieval/provenance.js';
 import type { MemoryState } from './types.js';
 
 export interface FilterByDecayConfig {
@@ -87,13 +94,15 @@ export function filterByDecay(config: FilterByDecayConfig) {
 
   return async (scope: TypedScope<MemoryState>): Promise<void> => {
     const loaded = scope.loaded ?? [];
-    if (loaded.length === 0) return;
+    const inputCount = loaded.length;
+    if (inputCount === 0) return;
 
     // One clock read for the whole batch: two entries of the same age must
     // score the same, whatever the loop costs.
     const now = clock();
 
-    scope.loaded = loaded.filter((entry) => {
+    const removed: RecallExclusion[] = [];
+    const kept = loaded.filter((entry) => {
       if (!Number.isFinite(entry.lastAccessedAt)) return true;
       // `accessCount` is normalised for the same reason `lastAccessedAt` is
       // guarded: a store that never set it would make the exponent `NaN`,
@@ -102,7 +111,43 @@ export function filterByDecay(config: FilterByDecayConfig) {
         lastAccessedAt: entry.lastAccessedAt,
         accessCount: Number.isFinite(entry.accessCount) ? entry.accessCount : 0,
       };
-      return computeDecayFactor(scored, now, policy) >= minScore;
+      const score = computeDecayFactor(scored, now, policy);
+      if (score >= minScore) return true;
+      removed.push({ id: entry.id, reason: 'decayed', score, floor: minScore });
+      return false;
     });
+    // The loaded reference follows writes to its scope key. Read the input
+    // evidence before publishing the survivors.
+    const outcomes = scope.recallOutcomes;
+    const evidence = scope.retrieved;
+    const ambiguous = retrievalCandidateIdsAmbiguous(evidence, loaded);
+    if (outcomes !== undefined && (removed.length !== 0 || ambiguous)) {
+      scope.recallOutcomes = refineRecallOutcomes(
+        outcomes,
+        removed,
+        inputCount,
+        kept.length,
+        ambiguous,
+      );
+    }
+    if (evidence !== undefined && (removed.length !== 0 || ambiguous)) {
+      const revised = ambiguous ? omitAmbiguousRetrievalCandidates(evidence) : evidence;
+      const decayedIds = new Set(removed.map(({ id }) => id));
+      const candidates = revised.candidates?.map((candidate) =>
+        candidate.admitted && decayedIds.has(candidate.id)
+          ? { ...candidate, admitted: false, reason: 'decayed' as const }
+          : candidate,
+      );
+      scope.retrieved = {
+        ...revised,
+        ...(candidates !== undefined && { candidates }),
+        admittedCount: kept.length,
+        rejectedCount: evidence.consideredCount - kept.length,
+        ...(evidence.maxChars !== undefined && {
+          charsUsed: kept.reduce((total, entry) => total + chunkText(entry.value).length, 0),
+        }),
+      };
+    }
+    scope.loaded = kept;
   };
 }

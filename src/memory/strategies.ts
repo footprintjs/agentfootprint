@@ -35,6 +35,7 @@
  * @see ../influence-core/strategies.ts  for the exemplar this follows
  */
 
+import { supportsRecallSearch } from './store/readOutcome.js';
 import {
   MEMORY_STRATEGIES,
   MEMORY_TYPES,
@@ -399,7 +400,9 @@ function isSatisfied(
       }
       return s.embedder !== undefined;
     case 'vector-store':
-      return typeof store.search === 'function';
+      return type === MEMORY_TYPES.CAUSAL
+        ? typeof store.search === 'function'
+        : supportsRecallSearch(store);
     case 'llm':
       return s.llm !== undefined;
     case 'model':

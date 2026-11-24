@@ -54,9 +54,9 @@ import {
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
 
-import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { readerWindowsOf } from '../../time/windows.js';
@@ -197,28 +197,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     description: reactMode === 'classic' ? 'Agent: Classic ReAct loop' : 'Agent: ReAct loop',
   });
 
-  // Memory READ subflows — mounted between Initialize and InjectionEngine
-  // for TURN_START timing (default). Each memory writes to its own
-  // scope key (`memoryInjection_${id}`) so multiple `.memory()`
-  // registrations layer without colliding.
-  for (const m of deps.memories) {
-    builder = mountMemoryRead(builder, {
-      pipeline: {
-        read: unwrapMemoryFlowChart(m.read) as never,
-        ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
-      },
-      identityKey: 'runIdentity',
-      turnNumberKey: 'turnNumber',
-      contextTokensKey: 'contextTokensRemaining',
-      injectionKey: memoryInjectionKey(m.id),
-      // The retrieval record, lifted into ROOT state so a backward slice
-      // can reach the passage instead of stopping at this mount.
-      evidenceKey: retrievalEvidenceKey(m.id),
-      readSubflowId: `sf-memory-read-${m.id}`,
-      // A corpus reads under its OWN namespace, not the run's identity.
-      ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-    });
-  }
+  builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — ONE stage, two possible occupants, same id
   // (recorded structures stay stable). RouteTurn is the SG-C cascade

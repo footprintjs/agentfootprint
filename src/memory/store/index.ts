@@ -6,6 +6,8 @@ export type {
   PutIfVersionResult,
   SearchOptions,
   ScoredEntry,
+  MemoryReadOutcome,
+  SearchResultEntry,
 } from './types.js';
 export { InMemoryStore } from './InMemoryStore.js';
 // The declared-capability readers (9.3.0). `resolveRankingMode` is exported so

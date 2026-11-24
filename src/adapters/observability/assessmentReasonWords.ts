@@ -15,6 +15,8 @@ const WORDS: { readonly [R in AssessmentReason]: true } = {
   'placed-unread': true,
   'times-without-zone': true,
   'result-dropped-from-window': true,
+  'memory-retrieval-timeout': true,
+  'memory-retrieval-excluded': true,
   'work-not-finished': true,
   'check-unreachable': true,
   'claim-exceeds-search': true,

@@ -6,10 +6,9 @@ import { captureFindingsRequest, type FindingsRequest } from '../findings/admiss
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
   commitAcceptedResponse,
-  completeObserved,
+  callObserved,
   observeCallRequests,
   servedRequestRecorder,
-  streamObserved,
 } from './callLLM/servedRequest.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
@@ -54,7 +53,6 @@ import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
-import { recordResponseStop } from '../honesty/responseStop.js';
 import { liveChunkEmitter } from './callLLM/liveChunks.js';
 import { recoveryFeedback, requestOnlyMessages } from './callLLM/requestOnly.js';
 import {
@@ -87,6 +85,7 @@ import { captureReplayPrefix, replayCacheMarkers } from '../requestTurn/replayPr
 import { afterReplayResponse, sameReplayProjection } from '../requestTurn/state.js';
 import { writeRequestReplay } from '../requestTurn/native.js';
 import { projectCallHistory } from './callLLM/requestProjection.js';
+import { trackRecallRequests } from './callLLM/recallRequest.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import type { ToolChoiceLedger } from '../toolChoice/types.js';
 import type { OntologyPiece } from '../../../ontology/serve.js';
@@ -599,6 +598,16 @@ export function buildCallLLMStage(
       deps.recordReceipt !== false,
       deps.onReplayPrepared,
     );
+    const recall =
+      deps.recallRequests === undefined
+        ? undefined
+        : trackRecallRequests(
+            systemPieces,
+            committed,
+            wireMessages,
+            continuing?.historyPositions,
+            systemPrompt,
+          );
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
@@ -627,7 +636,7 @@ export function buildCallLLMStage(
       let candidate = deps.findings === true ? capture(req) : undefined;
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
-      const attemptHooks = observeCallRequests(
+      const ordinaryHooks = observeCallRequests(
         attempts.hooks,
         serving === undefined && deps.findings !== true && !preserveReplay
           ? undefined
@@ -639,7 +648,7 @@ export function buildCallLLMStage(
             },
         serving?.discard,
       );
-      let resp: LLMResponse | undefined;
+      const attemptHooks = recall?.hooks(ordinaryHooks) ?? ordinaryHooks;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
       // goes through the scanner the answer's peel uses, so a token never
       // carries the model's `_findings` notes — not even when a chunk ends
@@ -655,40 +664,23 @@ export function buildCallLLMStage(
         textFilter: shown,
         onFirstChunk: hooks.onFirstChunk,
       });
-      if (selectedProvider.stream) {
-        for await (const chunk of streamObserved(
-          selectedProvider,
-          attempts.request,
-          attemptHooks,
-          runSignal,
-        )) {
-          if (chunk.done) {
-            if (chunk.response) resp = chunk.response;
-            break;
-          }
-          liveChunks.push(chunk);
-        }
-      }
-      liveChunks.finish();
-      if (!resp) {
-        // No `stream()` OR stream finished without a response payload.
-        // Raw errors propagate so the reliability loop can classify them;
-        // friendly translation happens at the terminal ErrorBridge.
-        //
-        // Hooks are passed to BOTH phases. A decorated provider that falls
-        // back in each reports twice — deliberately NOT deduped, because
-        // those are two genuinely billed calls and collapsing them would
-        // hide real double-billing. (That this branch can re-call at all
-        // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        const completion = selectedProvider.stream
-          ? dispatchFor.select(attempts.request, selectedProvider)
-          : attempts.request;
-        dispatch = describeProviderDispatch(selectedProvider, completion);
-        if (deps.findings === true) candidate = capture(completion);
-        if (preserveReplay)
-          stableProjection = sameReplayProjection(wireMessages, completion.messages);
-        resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
-      }
+      let resp = await callObserved(
+        selectedProvider,
+        attempts.request,
+        attemptHooks,
+        runSignal,
+        liveChunks,
+        () => {
+          const completion = selectedProvider.stream
+            ? dispatchFor.select(attempts.request, selectedProvider)
+            : attempts.request;
+          dispatch = describeProviderDispatch(selectedProvider, completion);
+          if (deps.findings === true) candidate = capture(completion);
+          if (preserveReplay)
+            stableProjection = sameReplayProjection(wireMessages, completion.messages);
+          return completion;
+        },
+      );
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
       throwIfAborted(runSignal);
@@ -810,8 +802,12 @@ export function buildCallLLMStage(
       // fail-fast path. It already wrote scope state and called
       // `$break(reason)` — `Agent.run()` translates the propagated
       // break into a `ReliabilityFailFastError` at the API boundary.
-      // Skip the post-call state writes; there is no response to commit.
-      if (response === undefined) return;
+      // File the incomplete request when armed. There is no response to commit.
+      if (response === undefined) {
+        if (recall !== undefined)
+          deps.recallRequests?.(scope, iteration, recall.summary('incomplete'));
+        return;
+      }
     } else {
       response = await singleProviderCall(llmRequest, {});
     }
@@ -849,13 +845,11 @@ export function buildCallLLMStage(
     if (deps.findings === true)
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps);
-    recordResponseStop(
-      scope,
-      localFallback ? undefined : response.stopReason,
+    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps, {
+      recall: recall?.summary(localFallback ? 'local' : 'provider'),
+      stopReason: localFallback ? undefined : response.stopReason,
       nativeOutput,
-      deps.outputFormat !== undefined,
-    );
+    });
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

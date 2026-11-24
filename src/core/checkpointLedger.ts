@@ -6,6 +6,7 @@ import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
 import { scriptRowIsWellFormed } from './agent/scripts/rows.js';
 import { isTimeRowKind, timeRowIsWellFormed } from '../time/rows.js';
 import { isClaimVerificationRow } from './agent/findings/verificationRow.js';
+import { readRetrievalRequest } from './agent/honesty/retrievalRequests.js';
 import { ownConfigArray } from '../integrity/claim-binding/scope.js';
 import { BASIS_VALUES, EXPECT_VALUES, STANDING_VALUES } from './agent/findings/types.js';
 
@@ -27,6 +28,7 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     return negativeProseRowIsWellFormed(row);
   if (kind?.value === 'claim-verification') return isClaimVerificationRow(row);
   if (kind?.value === 'reference-refusal') return referenceRefusalRowIsWellFormed(row);
+  if (kind?.value === 'retrieval-request') return readRetrievalRequest(row) !== undefined;
   const r = row as Record<string, unknown>;
   const isIn = (value: unknown, vocabulary: readonly string[]) =>
     typeof value === 'string' && vocabulary.includes(value);
@@ -209,6 +211,7 @@ export function validateCheckpointLedger(checkpoint: { readonly findingsLedger?:
           "'time-reading' (with turn, iteration, reader, tzdata, mentions and, per mention, " +
           'mention with quote, parses, candidates and choice, or refused) or ' +
           "'time-answer' (with turn, iteration, mention, from, to, zone, how: confirmed | edited); " +
+          "or 'retrieval-request' (with turn, iteration, observed recall and bounded source outcomes); " +
           "or 'claim-verification' (the closed scoped-comparison protocol); " +
           "or 'negative-claim' / 'negative-claim-note' (bounded observe-only prose findings); " +
           'a row of any kind may carry a numeric turn. ' +

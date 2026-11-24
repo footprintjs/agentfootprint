@@ -45,6 +45,8 @@ export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'call-not-completed',
   'work-not-finished',
   'result-dropped-from-window',
+  'memory-retrieval-timeout',
+  'memory-retrieval-excluded',
   'step-skipped',
 ]);
 
@@ -159,6 +161,8 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'times-without-zone': 'howSure.reason.timesWithoutZone',
   'result-dropped-from-window': 'howSure.reason.resultDroppedFromWindow',
   'work-not-finished': 'howSure.reason.workNotFinished',
+  'memory-retrieval-timeout': 'howSure.reason.memoryRetrievalTimeout',
+  'memory-retrieval-excluded': 'howSure.reason.memoryRetrievalExcluded',
   'period-not-held': 'howSure.reason.periodNotHeld',
   'period-partly-held': 'howSure.reason.periodPartlyHeld',
   'period-unknown': 'howSure.reason.periodUnknown',

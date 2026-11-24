@@ -104,6 +104,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../provider-contract/types.js';
+import { refuseObservedRequest } from '../provider-contract/requestObserver.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 
 // ─── Public options ──────────────────────────────────────────────────
@@ -291,6 +292,7 @@ export function withCircuitBreaker(
 
   function rejectFastIfOpen(hooks?: LLMCallHooks): void {
     if (!admit(hooks)) {
+      refuseObservedRequest(hooks);
       throw new CircuitOpenError(inner.name, breaker.lastError, breaker.openedAt + cooldownMs);
     }
   }

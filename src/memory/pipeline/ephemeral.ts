@@ -24,6 +24,7 @@
  * // → { read: FlowChart, write: undefined }
  * ```
  */
+import type { RetrievalRecording } from '../retrieval/types.js';
 import { flowChart } from 'footprintjs';
 
 import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
@@ -34,6 +35,7 @@ import type { MemoryStore } from '../store/index.js';
 import type { MemoryPipeline } from './types.js';
 
 export interface EphemeralPipelineConfig {
+  readonly recording?: RetrievalRecording;
   /** The store to read from. Writes never happen — backend can be read-only. */
   readonly store: MemoryStore;
 
@@ -78,6 +80,7 @@ export function ephemeralPipeline(config: EphemeralPipelineConfig): MemoryPipeli
     ...(config.maxEntries !== undefined && { maxEntries: config.maxEntries }),
   };
   const formatConfig: FormatDefaultConfig = {
+    ...(config.recording !== undefined && { recording: config.recording }),
     ...(config.formatHeader !== undefined && { header: config.formatHeader }),
     ...(config.formatFooter !== undefined && { footer: config.formatFooter }),
   };
