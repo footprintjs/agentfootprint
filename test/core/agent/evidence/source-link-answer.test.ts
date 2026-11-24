@@ -5,6 +5,7 @@ import type { RuntimeSnapshot } from 'footprintjs';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import { Agent, allow, defineTool, slidingWindow } from '../../../../src/index.js';
 import { mock } from '../../../../src/providers.js';
+import { CredentialConsentRequiredError } from '../../../../src/identity.js';
 import { openRecording, recordRun } from '../../../../src/observe.js';
 import {
   epochLocations,
@@ -46,6 +47,76 @@ function answerRows(snapshot: RuntimeSnapshot) {
   const fold = keyedFold(snapshot);
   return fold.valueAt('sourceLinkRows', fold.length - 1) as readonly SourceLinkRow[] | undefined;
 }
+
+it.each(['required', 'issued'] as const)(
+  'records answer-match provenance only when delivery proceeds with consent %s',
+  async (consent) => {
+    let metadataRead = false;
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { content: '', toolCalls: [{ id: 'c1', name: 'capacity', args: {} }] },
+          { content: '', toolCalls: [{ id: 'c2', name: 'metadata', args: {} }] },
+          { content: answer },
+        ],
+      }),
+      model: 'mock',
+      onAuthorizationRequired: 'tell-model',
+      credentials: {
+        id: 'fixture-consent',
+        getCredential: async () =>
+          consent === 'issued'
+            ? { status: 'issued', credential: { kind: 'fixture', toHeaders: () => ({}) } }
+            : {
+                status: 'authorization-required',
+                authorizationUrl: 'https://example.invalid/consent',
+                sessionId: 'fixture-session',
+              },
+      },
+    })
+      .tool(capacity(answer))
+      .tool(
+        defineTool({
+          name: 'metadata',
+          description: 'Read the inventory metadata.',
+          inputSchema: { type: 'object' },
+          needs: { credential: 'inventory', mode: 'user', scopes: ['test.read'] },
+          execute: () => {
+            metadataRead = true;
+            return 'Inventory metadata read.';
+          },
+        }),
+      )
+      .namesAndNumbersFromEvidence({ posture: 'assist' })
+      .build();
+    try {
+      const result = agent.run('What is the storage capacity?');
+      if (consent === 'required') {
+        await expect(result).rejects.toBeInstanceOf(CredentialConsentRequiredError);
+      } else {
+        await expect(result).resolves.toBe(answer);
+      }
+      expect(metadataRead).toBe(consent === 'issued');
+
+      const snapshot = agent.getSnapshot();
+      assert(snapshot);
+      const fold = keyedFold(snapshot);
+      expect(fold.valueAt('history', fold.length - 1)).toContainEqual(
+        expect.objectContaining({ role: 'tool', content: answer, toolCallId: 'c1' }),
+      );
+      const links = (answerRows(snapshot) ?? []).filter(
+        ({ linkBasis, output }) => linkBasis === 'match' && output.key === 'llmLatestContent',
+      );
+      if (consent === 'required') {
+        expect(links).toEqual([]);
+      } else {
+        expect(links).toMatchObject([{ check: 'value-found', input: { key: 'history' } }]);
+      }
+    } finally {
+      await agent.shutdown();
+    }
+  },
+);
 
 it('binds the checked answer span to an exact served history entry on live and JSON-saved records', async () => {
   const agent = Agent.create({

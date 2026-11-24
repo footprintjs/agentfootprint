@@ -32,6 +32,7 @@ export function routeFactory(
 ) {
   return (run: RunnerScopeValues<AgentRunValues>) => {
     const resolve = environment.resolverForValues(run.value);
+    const hasOutstandingConsent = () => run.value.consentOutstanding.size > 0;
     const baseRouteDecider = buildRouteDeciderStage(
       this.configuration.messageMiddleware,
       this.configuration.outputEnforcement,
@@ -77,7 +78,7 @@ export function routeFactory(
             this.configuration.answerValidationConfig,
             this.configuration.outputSchemaParser,
             environment.artifactStore,
-            () => run.value.consentOutstanding.size > 0,
+            hasOutstandingConsent,
             this.configuration.outputEnforcement?.outputFormat !== undefined,
             // Read only when `agentChecks` lists 'claims' (the agent's own rows).
             this.configuration.claimContract,
@@ -94,7 +95,7 @@ export function routeFactory(
       this.configuration.negativeClaimsConfig?.mode === 'prose'
         ? withNegativeProse(validatedRouteDecider, {
             runId: () => run.context.runId,
-            hasOutstandingConsent: () => run.value.consentOutstanding.size > 0,
+            hasOutstandingConsent,
             structured: this.configuration.outputSchemaParser !== undefined,
             phrases: this.configuration.negativeClaimsConfig.phrases,
           })
@@ -126,18 +127,18 @@ export function routeFactory(
         ? withCitationAssessment(
             terminalRouteDecider,
             this.configuration.citationOptions,
-            () => run.value.consentOutstanding.size > 0,
+            hasOutstandingConsent,
           )
         : terminalRouteDecider;
     if (this.configuration.evidenceGate === undefined) return assessedRouteDecider;
     return async (scope: Parameters<typeof assessedRouteDecider>[0]) => {
-      let final = false;
+      let deliverable = false;
       try {
         const branch = await assessedRouteDecider(scope);
-        final = branch === 'final';
+        deliverable = branch === 'final' && !hasOutstandingConsent();
         return branch;
       } finally {
-        finishAnswerEvidence(scope, run.context.runId, final);
+        finishAnswerEvidence(scope, run.context.runId, deliverable);
       }
     };
   };
