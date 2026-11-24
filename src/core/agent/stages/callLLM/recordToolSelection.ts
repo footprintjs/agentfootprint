@@ -18,6 +18,7 @@ export function recordToolSelection(
   if (receipt?.basis.epoch !== proof.iteration) return;
   const absent: Array<ReceiptToolSelection['absent'][number]> = [];
   const shadowed: Array<NonNullable<ReceiptToolSelection['shadowed']>[number]> = [];
+  const skills: string[] = [];
   const namesByReason = new Map<string, Set<string>>();
   let bounded = false;
   for (const row of proof.rows) {
@@ -28,7 +29,7 @@ export function recordToolSelection(
     }
     const names = namesByReason.get(kind);
     if (names?.has(name)) continue;
-    if (absent.length + shadowed.length === remaining) {
+    if (absent.length + shadowed.length + skills.length === remaining) {
       bounded = true;
       break;
     }
@@ -39,10 +40,11 @@ export function recordToolSelection(
     } else {
       if (names) names.add(name);
       else namesByReason.set(kind, new Set([name]));
-      absent.push({ name, reason: row.kind });
+      if (row.kind === 'tree-routed') skills.push(name);
+      else absent.push({ name, reason: row.kind });
     }
   }
-  const retained = absent.length + shadowed.length;
+  const retained = absent.length + shadowed.length + skills.length;
   if (!bounded && retained === 0) return;
   scope[RECEIPT_KEY] = {
     ...receipt,
@@ -50,6 +52,9 @@ export function recordToolSelection(
       consumer: proof.consumer,
       absent,
       ...(shadowed.length > 0 && { shadowed }),
+      ...(skills.length > 0 && {
+        skillCatalog: { names: skills, count: skills.length, reason: 'tree-routed' as const },
+      }),
       ...(bounded && { bounded: true }),
     },
   };

@@ -47,6 +47,11 @@ and the selection decision that excluded it. A `shadowed` row identifies a visib
 competing implementation by its position in this request’s list, in merge order.
 `name` was offered, `wonBy` identifies the winning channel and `lostBy` the losing
 channel. Two distinct implementations from the same channel can have identical rows.
+When a decision tree withholds its read_skill menu, `skillCatalog` contains the
+visible names left out of that menu, their retained count and the reason
+`tree-routed`. A routed skill may still contribute instructions. A visible
+off-route ID offered in the enum has no catalog omission. The skill rows
+share the same turn budget and accepted-request witness as the tool rows.
 These positions apply to one request. A `bounded` flag means the saved
 list is incomplete. An absent field leaves the tool selection unknown.
 

@@ -84,3 +84,29 @@ it('shares turn headroom between absent names and individual shadowed implementa
   expect(budget.remainingToolOmissions).toBe(0);
   expect(step(['next'], budget)?.toolSelection).toEqual({ consumer, absent: [], bounded: true });
 });
+
+it('counts visible catalog IDs once and shares the turn budget with tool omissions', () => {
+  const budget = { remainingToolOmissions: 2 };
+  const scope = { receipt: { basis: { epoch: 1 } } } as unknown as TypedScope<AgentState>;
+  recordToolSelection(
+    scope,
+    {
+      consumer,
+      iteration: 1,
+      rows: [
+        { kind: 'ledger', name: 'daily', tool },
+        { kind: 'tree-routed', name: 'daily' },
+        { kind: 'tree-routed', name: 'daily' },
+        { kind: 'tree-routed', name: 'weekly' },
+      ],
+    },
+    budget,
+  );
+  expect(scope.receipt?.toolSelection).toEqual({
+    consumer,
+    absent: [{ name: 'daily', reason: 'ledger' }],
+    skillCatalog: { names: ['daily'], count: 1, reason: 'tree-routed' },
+    bounded: true,
+  });
+  expect(budget.remainingToolOmissions).toBe(0);
+});

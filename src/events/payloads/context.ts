@@ -151,7 +151,7 @@ export interface ContextEvaluatedPayload {
   readonly activeCount: number;
   /** Number skipped (predicate false counts as neither — only errors/unknown land here). */
   readonly skippedCount: number;
-  /** Total injections evaluated (the full declared list). */
+  /** Total role-visible injections evaluated. */
   readonly evaluatedTotal: number;
   /** Ids of the active injections, in evaluation order. */
   readonly activeIds: readonly string[];
@@ -176,11 +176,11 @@ export interface ContextEvaluatedPayload {
   /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */
   readonly triggerKindCounts: Readonly<Record<string, number>>;
   /**
-   * The Skill CATALOG the LLM was offered this turn — every registered Skill's
+   * The Skill CATALOG the LLM was offered this turn — each role-visible Skill's
    * `id` + `description` (the same text that lands in the `read_skill` tool
    * description). Lets observers pair "what was offered" against "what the LLM
    * chose" (`read_skill` → `activatedInjectionIds`) when debugging a missed or
-   * wrong activation. Empty when no Skills are registered. Static across turns.
+   * wrong activation. Empty when no Skills are visible. Uses this iteration’s visibility decision.
    */
   readonly skillCatalog: readonly { readonly id: string; readonly description: string }[];
   /**

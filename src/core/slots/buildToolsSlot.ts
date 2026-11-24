@@ -18,7 +18,8 @@ import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
-import { menuOutstanding, type TurnRoute } from '../../injection-engine/routingPolicy.js';
+import { composeSkillCatalog, type ReadSkillFor } from './composeSkillCatalog.js';
+import type { TurnRoute } from '../../injection-engine/routingPolicy.js';
 import { composeViolationsOf } from '../../integrity/invariant-violation/check.js';
 import { fileIntegrityFindings } from '../agent/integrityFindings.js';
 import { buildSkipStepTool } from '../../injection-engine/skillTools.js';
@@ -239,8 +240,7 @@ export interface ToolsSlotConfig {
   /**
    * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
    *
-   * Set only for a `.skillGraph()` agent in a per-iteration ReAct mode. The tool's
-   * enum is the full catalog and never changes; what varies is the DESCRIPTION —
+   * A role filter narrows the enum. For graph agents the description also names
    * which ids the gate will actually grant from where the cursor stands. Without it
    * the menu advertised every registered skill on every iteration while the gate
    * admitted a subset, so the model was routinely offered ids it would be refused.
@@ -248,25 +248,7 @@ export interface ToolsSlotConfig {
    * Substituted by NAME in Compose, so dispatch is untouched: the tool-calls handler
    * resolves executables from `registryByName`, never from the schema list.
    */
-  readonly readSkillFor?: (args: {
-    readonly currentSkillId?: string;
-    readonly hiddenSkillIds?: readonly string[];
-    /** The turn-start MENU (SG-C), passed only while the turn's menu verdict
-     *  is outstanding — see the Compose stage. */
-    readonly menu?: {
-      readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
-      readonly cursorId?: string;
-      readonly stay?: boolean;
-    };
-    /**
-     * `undefined` means the OFFER is withheld for this iteration: the schema
-     * leaves the request and the model is not invited to call `read_skill`
-     * (9.86.0 — a `.tree()` with no open skills, where every pick is refused
-     * by construction). Dispatch is untouched, as the substitution note above
-     * says: the name stays in `registryByName`, so a model that calls it from
-     * a restored transcript still reaches the gate and reads its refusal.
-     */
-  }) => LLMToolSchema | undefined;
+  readonly readSkillFor?: ReadSkillFor;
   /** Budget cap (chars). Default: 2000. Set from the public door as
    *  `contextBudget.tools` on `AgentOptions`. */
   readonly budgetCap?: number;
@@ -479,7 +461,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     const resolvedHidden =
       scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ??
       defaultHiddenSkillIds;
-    const hiddenSkillIds = resolvedHidden ?? EMPTY_OFFER;
     const args = scope.$getArgs<{
       iteration?: number;
       currentSkillId?: string;
@@ -549,43 +530,13 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           }
         : schema;
 
-    // The turn-start MENU (SG-C) — composed from the SAME verdict the record
-    // carries (`scope.turnRoute`, threaded by the mount mappers), and only
-    // while it is OUTSTANDING: once an accepted pick moves the cursor, the
-    // description stops offering a menu the turn has already resolved.
-    // `menuOutstanding` is the one shared implementation (routingPolicy.ts).
-    // Advisory relevance rides beside each candidate when the scorer ranked it.
-    const turnRoute = args.turnRoute;
-    const menu =
-      turnRoute?.offered !== undefined && menuOutstanding(turnRoute, args.currentSkillId)
-        ? {
-            candidates: turnRoute.offered.map((id) => {
-              const rel = turnRoute.relevance?.find((r) => r.id === id)?.relevance;
-              return { id, ...(rel !== undefined && { relevance: rel }) };
-            }),
-            ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
-            ...(turnRoute.stayOffered === true && { stay: true }),
-          }
-        : undefined;
-
-    // Per-iteration `read_skill` offer. The cursor arriving here is THIS iteration's:
-    // the Injection Engine already advanced it and its outputMapper wrote it to the
-    // parent before this slot mounts — the same value the read_skill gate will read
-    // when the model answers. Substituted by name so nothing else in the list moves.
-    const substituted = readSkillFor
-      ? staticTools.flatMap((t) => {
-          if (t.name !== 'read_skill') return [t];
-          // `undefined` = the offer is WITHHELD this iteration (see
-          // `readSkillFor`): the schema comes off the wire, the name stays in
-          // the dispatch map. Position governs the offer, never dispatch.
-          const offered = readSkillFor({
-            ...(args.currentSkillId !== undefined && { currentSkillId: args.currentSkillId }),
-            ...(hiddenSkillIds.length > 0 && { hiddenSkillIds }),
-            ...(menu !== undefined && { menu }),
-          });
-          return offered === undefined ? [] : [offered];
-        })
-      : staticTools;
+    const { schemas: substituted, withheldSkillIds } = composeSkillCatalog(
+      staticTools,
+      readSkillFor,
+      resolvedHidden,
+      args.currentSkillId,
+      args.turnRoute,
+    );
     // Step narrowing over the STATIC list (9.18.0): hold out the stepped
     // skill's other tools (sole-owner names only — see stepHoldOut), lead the
     // current step's tool with the banner. No step in progress → the exact
@@ -891,6 +842,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           iteration,
           narrowedTo,
           collisions,
+          withheldSkillIds,
           omitted,
           winners,
           winningTools,

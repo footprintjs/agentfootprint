@@ -55,7 +55,16 @@ interface CollisionOmission {
   readonly winner: { readonly tool: Tool; readonly party: ToolParty };
 }
 
-type SelectionRow = DiscoveryOmissions['rows'][number] | TopNOmission | CollisionOmission;
+interface SkillCatalogOmission {
+  readonly kind: 'tree-routed';
+  readonly name: string;
+}
+
+type SelectionRow =
+  | SkillCatalogOmission
+  | DiscoveryOmissions['rows'][number]
+  | TopNOmission
+  | CollisionOmission;
 
 export type AcceptedToolSelection = Pick<SlotSelection, 'iteration' | 'rows'> & {
   readonly consumer: AttemptRef;
@@ -72,6 +81,7 @@ interface SlotSelection {
 interface SlotCommit {
   readonly iteration: number;
   readonly collisions?: readonly WireCollision[];
+  readonly withheldSkillIds?: readonly string[];
   readonly narrowedTo?: ReadonlySet<string>;
   readonly omitted?: readonly string[];
   readonly winners: ReadonlyMap<string, ToolParty>;
@@ -87,6 +97,12 @@ function slotSelection(input: SlotCommit): SlotSelection | undefined {
   if (!claimants || discovered?.complete === false)
     return discovered && { iteration, ...discovered };
   const rows: SelectionRow[] = [...(discovered?.rows ?? [])];
+  const hidden = input.hiddenSkillIds && new Set(input.hiddenSkillIds);
+  for (const name of new Set(input.withheldSkillIds)) {
+    if (!hidden || hidden.has(name)) continue;
+    if (rows.length === MAX_SELECTION_ROWS) return { iteration, rows, complete: false };
+    rows.push({ kind: 'tree-routed', name });
+  }
   for (const { name, winner, competing } of input.collisions ?? []) {
     if (!winner.tool) continue;
     for (const loser of competing) {
@@ -101,7 +117,6 @@ function slotSelection(input: SlotCommit): SlotSelection | undefined {
       });
     }
   }
-  const hidden = input.hiddenSkillIds && new Set(input.hiddenSkillIds);
   for (const name of omitted ?? []) {
     const tool = input.winningTools.get(name);
     const party = input.winners.get(name);

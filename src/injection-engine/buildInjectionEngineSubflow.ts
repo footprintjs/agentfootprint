@@ -60,6 +60,7 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { iterationsRemainingOf } from '../lib/iterationBudget.js';
+import { evaluationCatalog } from './evaluationCatalog.js';
 import { routingEntriesOf } from './routingEntries.js';
 import { evaluateInjections } from './evaluator.js';
 import type { InjectionEvaluation } from './types.js';
@@ -765,15 +766,9 @@ function makeEvaluateStage(
     typedEmit(scope, 'agentfootprint.context.evaluated', {
       iteration: ctx.iteration,
       activeCount: evaluation.active.length,
-      skippedCount: evaluation.skipped.length,
-      evaluatedTotal: injections.length,
+      ...evaluationCatalog(injections, evaluation.skipped, hidden),
       activeIds: evaluation.active.map((i) => i.id),
-      skippedDetails: evaluation.skipped,
       triggerKindCounts: countTriggerKinds(evaluation.active),
-      // The Skill menu the LLM was offered (same text as the read_skill tool
-      // description) — pair "offered" with "chosen" (activatedInjectionIds) to
-      // debug a missed/wrong read_skill call.
-      skillCatalog: skillCatalogOf(injections),
       // Routing PROVENANCE for active skill-graph injections — the decision path
       // / edge that reached each. Undefined when none came from a skillGraph().
       //
@@ -887,16 +882,6 @@ function diffSlot(
     removed: [...priorIds].filter((id) => !currentIds.has(id)),
     kept: [...currentIds].filter((id) => priorIds.has(id)),
   };
-}
-
-/** The Skill catalog the LLM was offered — id + description for every Skill
- *  injection, mirroring buildReadSkillTool's `(no description)` fallback. */
-function skillCatalogOf(
-  injections: readonly Injection[],
-): readonly { id: string; description: string }[] {
-  return injections
-    .filter((i) => i.flavor === 'skill')
-    .map((i) => ({ id: i.id, description: i.description ?? '(no description)' }));
 }
 
 /** Count active injections by trigger kind (observability metric). */

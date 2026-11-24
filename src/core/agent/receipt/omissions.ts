@@ -24,6 +24,13 @@ export interface ReceiptToolSelection {
     readonly wonBy: ToolNameChannel;
     readonly lostBy: ToolNameChannel;
   }[];
+  /** Role-visible skill IDs excluded when the tree withheld its read_skill catalog.
+   * Count covers the retained names within this request's shared omission budget. */
+  readonly skillCatalog?: {
+    readonly names: readonly string[];
+    readonly count: number;
+    readonly reason: 'tree-routed';
+  };
   /** Additional visible entries could not be retained within the turn or label budget. */
   readonly bounded?: true;
 }

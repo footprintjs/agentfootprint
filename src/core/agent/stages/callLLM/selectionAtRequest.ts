@@ -72,6 +72,8 @@ export function selectionAtRequest(
   const eligibleRows = (candidates: AcceptedToolSelection['rows']) => {
     const bindings = new Map<string, Tool | undefined>();
     return candidates.filter((row) => {
+      if (row.kind === 'tree-routed')
+        return !offered.has('read_skill') && !offered.has('list_skills');
       if (row.kind !== 'collision') return !offered.has(row.name);
       const { name, winner } = row;
       if (
