@@ -4,6 +4,7 @@ import { buildRouteDeciderStage } from '../../stages/route.js';
 import { withNegativeProse } from '../../negativeClaims/observe.js';
 import { withCitationAssessment } from '../../citations/observe.js';
 import { withAnswerValidation } from '../../stages/answerValidation.js';
+import { finishAnswerEvidence } from '../../stages/answerEvidence.js';
 import { withAnswerCoverage } from '../../stages/answerCoverage.js';
 import { buildToolResolver } from '../../stages/toolResolver.js';
 import { evidenceExemptArm } from './exemptArm.js';
@@ -31,6 +32,7 @@ export function routeFactory(
 ) {
   return (run: RunnerScopeValues<AgentRunValues>) => {
     const resolve = environment.resolverForValues(run.value);
+    const hasOutstandingConsent = () => run.value.consentOutstanding.size > 0;
     const baseRouteDecider = buildRouteDeciderStage(
       this.configuration.messageMiddleware,
       this.configuration.outputEnforcement,
@@ -76,7 +78,7 @@ export function routeFactory(
             this.configuration.answerValidationConfig,
             this.configuration.outputSchemaParser,
             environment.artifactStore,
-            () => run.value.consentOutstanding.size > 0,
+            hasOutstandingConsent,
             this.configuration.outputEnforcement?.outputFormat !== undefined,
             // Read only when `agentChecks` lists 'claims' (the agent's own rows).
             this.configuration.claimContract,
@@ -93,7 +95,7 @@ export function routeFactory(
       this.configuration.negativeClaimsConfig?.mode === 'prose'
         ? withNegativeProse(validatedRouteDecider, {
             runId: () => run.context.runId,
-            hasOutstandingConsent: () => run.value.consentOutstanding.size > 0,
+            hasOutstandingConsent,
             structured: this.configuration.outputSchemaParser !== undefined,
             phrases: this.configuration.negativeClaimsConfig.phrases,
           })
@@ -119,13 +121,25 @@ export function routeFactory(
       : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls/index.ts (v2.11.2).
-    return this.configuration.citationOptions !== undefined &&
+    const assessedRouteDecider =
+      this.configuration.citationOptions !== undefined &&
       this.configuration.outputSchemaParser === undefined
-      ? withCitationAssessment(
-          terminalRouteDecider,
-          this.configuration.citationOptions,
-          () => run.value.consentOutstanding.size > 0,
-        )
-      : terminalRouteDecider;
+        ? withCitationAssessment(
+            terminalRouteDecider,
+            this.configuration.citationOptions,
+            hasOutstandingConsent,
+          )
+        : terminalRouteDecider;
+    if (this.configuration.evidenceGate === undefined) return assessedRouteDecider;
+    return async (scope: Parameters<typeof assessedRouteDecider>[0]) => {
+      let deliverable = false;
+      try {
+        const branch = await assessedRouteDecider(scope);
+        deliverable = branch === 'final' && !hasOutstandingConsent();
+        return branch;
+      } finally {
+        finishAnswerEvidence(scope, run.context.runId, deliverable);
+      }
+    };
   };
 }
