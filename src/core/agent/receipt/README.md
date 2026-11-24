@@ -45,3 +45,8 @@ An accepted request can add `toolSelection` to its receipt. The attempt's
 `consumer` identifies the call. Each `absent` row contains a visible tool name
 and the selection decision that excluded it. A `bounded` flag means the saved
 list is incomplete. An absent field leaves the tool selection unknown.
+
+The recorder retains up to 1,024 omission rows per user turn. A new question
+starts a fresh allowance. When restoring an interrupted turn on another executor, the
+checkpoint does not prove how many rows remain. The recorder leaves selection
+evidence out of subsequent receipts while that allowance is unknown.

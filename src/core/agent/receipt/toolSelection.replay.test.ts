@@ -1,19 +1,25 @@
 import { expect, it } from 'vitest';
-import { Agent, defineTool, epochLocations, receiptAt, servedAt } from '../../../index.js';
+import {
+  Agent,
+  defineTool,
+  epochLocations,
+  isPaused,
+  pauseHere,
+  receiptAt,
+  RunCheckpointError,
+  servedAt,
+} from '../../../index.js';
 import { mock } from '../../../adapters/llm/MockProvider.js';
 import { mockClassifier } from '../../../classify/mock.js';
 import { defineSkill } from '../../../injection-engine.js';
 import { type Recording, recordRun } from '../../../recorders/observability/recordRun.js';
 import type { AgentOptions } from '../types.js';
 
-async function record(options: Partial<AgentOptions>, missingWire = false, hiddenSkill = false) {
-  const base = mock({
-    replies: [
-      { toolCalls: [{ id: 'lookup-1', name: 'chosen', args: {} }] },
-      { content: 'finished' },
-    ],
-  });
-  let step = 0;
+function selectionAgent(
+  provider: AgentOptions['provider'],
+  options: Partial<AgentOptions> = {},
+  fixture: { hiddenSkill?: boolean; pauseOnChosen?: boolean } = {},
+) {
   const classifier = mockClassifier(() => ({
     model: 'fixture',
     latencyMs: 1,
@@ -27,23 +33,14 @@ async function record(options: Partial<AgentOptions>, missingWire = false, hidde
       name,
       description: 'private schema wording',
       inputSchema: { type: 'object', properties: {} },
-      execute: () => 'ok',
+      execute: () =>
+        name === 'chosen' && fixture.pauseOnChosen ? pauseHere({ question: 'Continue?' }) : 'ok',
     });
-  const builder = Agent.create({
-    provider: {
-      name: 'fixture',
-      async complete(request) {
-        const response = await base.complete(request);
-        return ++step === 2 || missingWire ? { ...response, wireManifest: undefined } : response;
-      },
-    },
-    model: 'mock',
-    ...options,
-  })
+  const builder = Agent.create({ ...options, provider, model: 'mock' })
     .tool(tool('chosen'))
     .tool(tool('monitor'))
     .toolChoice({ classifier, serve: { top: 1 } });
-  if (hiddenSkill) {
+  if (fixture.hiddenSkill) {
     builder.skill(
       defineSkill({
         id: 'restricted',
@@ -54,13 +51,35 @@ async function record(options: Partial<AgentOptions>, missingWire = false, hidde
       }),
     );
   }
-  const agent = builder.build();
+  return builder.build();
+}
+
+async function record(options: Partial<AgentOptions>, missingWire = false, hiddenSkill = false) {
+  const base = mock({
+    replies: [
+      { toolCalls: [{ id: 'lookup-1', name: 'chosen', args: {} }] },
+      { content: 'finished' },
+    ],
+  });
+  let step = 0;
+  const agent = selectionAgent(
+    {
+      name: 'fixture',
+      async complete(request) {
+        const response = await base.complete(request);
+        return ++step === 2 || missingWire ? { ...response, wireManifest: undefined } : response;
+      },
+    },
+    options,
+    { hiddenSkill },
+  );
   const recorder = recordRun(agent);
   try {
     expect(await agent.run({ message: 'Check.' })).toBe('finished');
     return JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
   } finally {
     recorder.stop();
+    await agent.shutdown();
   }
 }
 
@@ -118,5 +137,94 @@ it('keeps a hidden skill and an unregistered skill indistinguishable in the save
     expect(selection?.absent).toEqual([{ name: 'monitor', reason: 'top-N' }]);
     expect(selection).not.toHaveProperty('bounded');
     expect(receiptAt(recording.snapshot, 2)).not.toHaveProperty('toolSelection');
+  }
+});
+
+function finishingProvider(offers: string[][]) {
+  return mock({
+    respond: (request) => {
+      offers.push((request.tools ?? []).map((tool) => tool.name));
+      return 'Finished.';
+    },
+  });
+}
+
+function lastCallReceipt(snapshot: unknown) {
+  const at = epochLocations(snapshot).at(-1);
+  if (!at) throw new Error('Expected the new model call in replay.');
+  const receipt = receiptAt(snapshot, at.epoch);
+  expect(receipt?.basis.epoch).toBe(at.epoch);
+  return { at, receipt };
+}
+
+it.each(['resume', 'new question'] as const)(
+  'replays the selection evidence for a %s from a saved crash checkpoint',
+  async (continuation) => {
+    let calls = 0;
+    const first = selectionAgent(
+      mock({
+        respond: () => {
+          if (++calls === 1) return { toolCalls: [{ id: 'first', name: 'chosen', args: {} }] };
+          throw new Error('Provider lost the second request.');
+        },
+      }),
+    );
+    const offers: string[][] = [];
+    const next = selectionAgent(finishingProvider(offers));
+    const recorder = recordRun(next);
+    try {
+      const failure: unknown = await first.run({ message: 'Check.' }).catch((error) => error);
+      if (!(failure instanceof RunCheckpointError)) throw new Error('Expected a crash checkpoint.');
+      expect(calls).toBe(2);
+      const saved = JSON.parse(JSON.stringify(failure.checkpoint)) as typeof failure.checkpoint;
+      const answer =
+        continuation === 'resume'
+          ? await next.resumeOnError(saved)
+          : await next.run({ message: 'Check again.', continueFrom: saved });
+      expect(answer).toBe('Finished.');
+      expect(offers).toEqual([['chosen']]);
+      const { snapshot } = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+      const { at, receipt } = lastCallReceipt(snapshot);
+      // A new user turn gets its own allowance. The saved checkpoint cannot
+      // attest how many omission rows the interrupted turn already consumed.
+      if (continuation === 'resume') {
+        expect(receipt).not.toHaveProperty('toolSelection');
+      } else {
+        expect(receipt?.toolSelection).toEqual({
+          consumer: { series: at.callRuntimeStageId, attempt: 1 },
+          absent: [{ name: 'monitor', reason: 'top-N' }],
+        });
+      }
+    } finally {
+      recorder.stop();
+      await first.shutdown();
+      await next.shutdown();
+    }
+  },
+);
+
+it('does not borrow an unrelated turn’s omission allowance after an in-tool pause', async () => {
+  const first = selectionAgent(
+    mock({ replies: [{ toolCalls: [{ id: 'pause', name: 'chosen', args: {} }] }] }),
+    {},
+    { pauseOnChosen: true },
+  );
+  const offers: string[][] = [];
+  const next = selectionAgent(finishingProvider(offers), {}, { pauseOnChosen: true });
+  try {
+    const paused = await first.run({ message: 'Ask before continuing.' });
+    if (!isPaused(paused)) throw new Error('Expected a tool pause.');
+    const saved = JSON.parse(JSON.stringify(paused.checkpoint)) as typeof paused.checkpoint;
+    await expect(next.run({ message: 'An unrelated question.' })).resolves.toBe('Finished.');
+    expect(receiptAt(next.getLastSnapshot(), 1)?.toolSelection?.absent).toEqual([
+      { name: 'monitor', reason: 'top-N' },
+    ]);
+    await expect(next.resume(saved, 'Continue.')).resolves.toBe('Finished.');
+    expect(offers).toEqual([['chosen'], ['chosen']]);
+    const { receipt } = lastCallReceipt(next.getLastSnapshot());
+    expect(receipt).not.toHaveProperty('toolSelection');
+  } finally {
+    await first.shutdown();
+    await next.shutdown();
   }
 });
