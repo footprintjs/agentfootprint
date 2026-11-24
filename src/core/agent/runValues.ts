@@ -35,6 +35,8 @@ export interface AgentRunValues extends RunnerCoreValues {
   compactionMeter?: CompactionMeterHandle;
   resources?: ComponentResources;
   servingConversation?: string;
+  hostTurn?: import('./hostEnd/entry.js').HostDecision & { readonly hasInput: boolean };
+  hostSettlement?: import('../../provider-contract/types.js').LLMMessage;
   hadAdmitted: boolean;
   modelResponseCommitted: boolean;
   pauseOutcome?: RunnerPauseOutcome;

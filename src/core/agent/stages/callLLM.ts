@@ -849,7 +849,7 @@ export function buildCallLLMStage(
     scope.llmLatestContent = response.content;
     if (recall !== undefined)
       deps.recallRequests?.(scope, iteration, recall.summary(localFallback ? 'local' : 'provider'));
-    deps.onResponseCommitted?.();
+    deps.onResponseCommitted?.(scope, localFallback);
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
     recordResponseStop(

@@ -26,7 +26,7 @@ export interface CallLLMStageDeps {
     summary: RecallRequestSummary,
   ) => void;
   /** Mark the accepted model response on this native leg before checks run. */
-  readonly onResponseCommitted?: () => void;
+  readonly onResponseCommitted?: (scope: TypedScope<AgentState>, localFallback: boolean) => void;
   /** Preserve approved replay retirement for recovery before transport. */
   readonly onReplayPrepared?: LLMCallHooks['onReplayPrepared'];
   /** The LLM provider to invoke. */

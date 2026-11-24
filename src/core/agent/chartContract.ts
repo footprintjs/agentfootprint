@@ -33,6 +33,9 @@ export interface AgentChartDeps {
   readonly maxIterations: number;
 
   // ─ Stage handlers ───────────────────────────────────────────────
+  readonly chooseHostTurn?: (
+    scope: import('footprintjs').TypedScope<import('./types.js').AgentState>,
+  ) => string | Promise<string>;
   readonly seed: (scope: never) => void | Promise<void>;
   readonly callLLM: (scope: never) => Promise<void>;
   readonly routeDecider: (scope: never) => RouteBranch | Promise<RouteBranch>;

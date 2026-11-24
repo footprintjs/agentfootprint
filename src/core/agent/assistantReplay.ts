@@ -36,3 +36,31 @@ export function assistantReplayFields(
     ...(blocks !== undefined && blocks.length > 0 && { thinkingBlocks: blocks }),
   });
 }
+
+/** Capture the settled text with its own provider evidence. Legacy and local
+ * replies carry no origin. A memory writer also keeps its unsigned thinking. */
+export function settledModelReply(
+  state: Parameters<typeof assistantReplayFields>[0] & Pick<Partial<AgentState>, 'modelReplyRunId'>,
+  content: string,
+  memory = false,
+): LLMMessage {
+  const runId = 'modelReplyRunId' in state ? state.modelReplyRunId : undefined;
+  const thinking = memory ? state.thinkingBlocks : undefined;
+  return {
+    role: 'assistant',
+    content,
+    ...(runId !== undefined && { replyOrigin: { kind: 'model', runId } }),
+    ...(thinking?.length && { thinkingBlocks: thinking }),
+    ...assistantReplayFields(state),
+  };
+}
+
+/** Atomic tuple + Replace in the grouped mapper: never merge a former layout or
+ * binding into a new provider proof. Present undefined clears it. */
+export function acceptedResponseFields(state: Record<string, unknown>): Record<string, unknown> {
+  return {
+    modelReplyRunId: state.modelReplyRunId,
+    ...(Object.hasOwn(state, 'llmLatestReplay') && { llmLatestReplay: state.llmLatestReplay }),
+    ...(Object.hasOwn(state, 'requestReplay') && { requestReplay: state.requestReplay }),
+  };
+}

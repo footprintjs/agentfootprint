@@ -13,7 +13,7 @@ import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../event
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock, ThinkingDeltaKind } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
-import type { ToolResultRecord } from './toolResultRecord.js';
+import type { MessageRecord } from './replyOrigin.js';
 import type { WireRole } from './wireRole.js';
 export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
@@ -22,7 +22,7 @@ export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
-export interface LLMMessage extends ToolResultRecord {
+export interface LLMMessage extends MessageRecord {
   readonly role: ContextRole;
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */

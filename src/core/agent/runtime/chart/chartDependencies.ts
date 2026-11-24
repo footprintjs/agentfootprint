@@ -1,3 +1,4 @@
+import { chooseHostTurn } from '../../hostEnd/settle.js';
 import type { NativeMappingBinding } from 'footprintjs';
 import { componentEvidence } from '../../componentObservers.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../../../../cache/CacheGateDecider.js';
@@ -66,6 +67,9 @@ export function chartDependencies(
     }),
     systemPromptCachePolicy: environment.systemPromptCachePolicy,
     maxIterations: environment.maxIterations,
+    chooseHostTurn: (
+      scope: import('footprintjs').TypedScope<import('../../types.js').AgentState>,
+    ) => chooseHostTurn(scope, this.native.runExecution().forScope(scope), this.configuration),
     seed: environment.seed,
     callLLM: environment.callLLM,
     routeDecider: environment.terminalRouteDecider,

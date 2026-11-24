@@ -49,6 +49,7 @@
  * designed — this builder is Dynamic-only.
  */
 
+import { acceptedResponseFields } from './assistantReplay.js';
 import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart, select } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
@@ -64,8 +65,8 @@ import {
   memoryRecallOutcomesKey,
   retrievalEvidenceKey,
 } from '../../memory/define.types.js';
-import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryWrites } from './memoryWrites.js';
+import { mountHostTurn } from './hostEnd/chart.js';
 import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { llmCallReadsInto } from './llmCallReads.js';
@@ -123,25 +124,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     prepareFinalFor(deps),
     deps.structureRecorders,
   );
-  for (const m of deps.memories) {
-    if (m.write) {
-      finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
-        pipeline: {
-          read: unwrapMemoryFlowChart(m.read) as never,
-          write: unwrapMemoryFlowChart(m.write) as never,
-        },
-        identityKey: 'runIdentity',
-        turnNumberKey: 'turnNumber',
-        contextTokensKey: 'contextTokensRemaining',
-        newMessagesKey: 'newMessages',
-        writeSubflowId: `sf-memory-write-${m.id}`,
-        ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-        // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
-        ...(m.type === 'causal' &&
-          deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
-      });
-    }
-  }
+  finalBranchBuilder = mountAgentMemoryWrites(finalBranchBuilder, deps);
   const finalBranchChart = finalBranchBuilder
     .addFunction(
       'BreakFinal',
@@ -532,6 +515,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     description: 'Agent: ReAct loop',
   });
 
+  builder = mountHostTurn(builder, deps);
   builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — once per turn on the OUTER scope, before the
@@ -742,10 +726,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           llmLatestToolCalls: s.llmLatestToolCalls,
           ...(deps.hasFindingsLedger === true && { findingsRequest: s.findingsRequest }),
           thinkingBlocks: s.thinkingBlocks,
-          // Atomic tuple + Replace below: never merge a former layout or
-          // binding into a new provider proof. Present undefined clears it.
-          ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
-          ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
+          ...acceptedResponseFields(s),
           // Native candidates and prose cutoffs carry stop evidence. Ordinary
           // replies without earlier stop evidence leave the mapper byte-identical.
           ...responseStopFields(s),

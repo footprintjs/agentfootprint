@@ -10,7 +10,7 @@ import { ticketsStillServed } from '../../placedTickets.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation, type RunnerSelection } from '../../../runnerExecution.js';
-import { assistantReplayFields } from '../../assistantReplay.js';
+import { settledModelReply } from '../../assistantReplay.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { MemoryIdentity } from '../../../../memory/identity/types.js';
@@ -96,15 +96,14 @@ export function checkpointFor(
   if (this.lastInputRefused(selected?.view)) return undefined;
   const recorded = (state?.history ?? []) as readonly LLMMessage[];
   const history: LLMMessage[] = [...recorded];
-  if (
+  if (selected!.value.hostSettlement && selected!.value.answer !== undefined) {
+    history.push(selected!.value.hostSettlement);
+  } else if (
+    selected!.value.hostTurn === undefined &&
     selected!.value.answer !== undefined &&
     (selected!.value.answer.length > 0 || state?.llmLatestReplay !== undefined)
   ) {
-    history.push({
-      role: 'assistant',
-      content: selected!.value.answer,
-      ...assistantReplayFields(state ?? {}),
-    });
+    history.push(settledModelReply(state ?? {}, selected!.value.answer));
   }
   const folded = foldedSpansOf(state);
   const owner = this.conversationOwner(selected!.value);

@@ -1,3 +1,4 @@
+import { fileTime } from './seedTime.js';
 import { sourceSchemasOnWire } from '../sourceContract.js';
 import { withoutEarlierScriptText } from '../scripts/rows.js';
 import { seedStagedRefs } from './stagedRefsNudge.js';
@@ -58,6 +59,8 @@ import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
 export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
 export interface SeedStageDeps {
+  readonly hostOnly?: boolean;
+  readonly hostDecision?: boolean;
   readonly sourceEvidenceMaxReceipts?: number;
   readonly consumePendingResumeSourceEvidence?: () => SourceEvidenceIndex | undefined;
   readonly negativeClaimsArmed?: boolean;
@@ -451,21 +454,6 @@ function buildSeedBody(
 }
 
 /**
- * The time layer's half of seed — the turn's clock stamp, then the person's
- * words read for time (`./timeLayer.ts` · `stampClock`, `readTimeWords`),
- * filed LAST, after the turn number is final. Loaded through `import()` only
- * when `.time()` armed the agent — the optional-family law of docs-next's
- * site budget — so a plain seed never loads it and stays synchronous.
- */
-function fileTime(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Promise<void> {
-  if (deps.timeClock === undefined && deps.timeReader === undefined) return;
-  return import('./timeLayer.js').then((time) => {
-    time.stampClock(scope, deps);
-    return time.readTimeWords(scope, deps);
-  });
-}
-
-/**
  * Initialise every mutable field of `AgentState` from `message` + the run
  * args. Split out so the message the run proceeds with can come either
  * straight from the caller or from the `'input'` middleware chain — one
@@ -482,7 +470,7 @@ function seedFrom(
   decorate: RuleDecoration | undefined,
 ): void {
   const args = scope.$getArgs<AgentInput>();
-  scope.userMessage = message;
+  if (!deps.hostOnly) scope.userMessage = message;
 
   // A MEMBER — this chart run by another runner's executor — is decided FIRST:
   // every hand-off below that lives on the instance (`continueFrom`,
@@ -506,7 +494,7 @@ function seedFrom(
     correction?.spent === true
   )
     scope.sourceDeclarationCorrectionSpent = true;
-  const history = seedHistoryForTurn(scope, resume, message);
+  const history = seedHistoryForTurn(scope, resume, deps.hostOnly ? undefined : message);
   seedToolEvidence(scope, deps, resume);
   restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);

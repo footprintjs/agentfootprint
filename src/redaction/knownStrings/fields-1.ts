@@ -168,6 +168,7 @@ export const fields1 = {
   replace: true,
   replaceAll: true,
   replay: true,
+  replyOrigin: true,
   reportedStatus: true,
   request: true,
   requestId: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   temperature: true,
   tenantChanged: true,
   terminatedBy: true,
-  text: true,
 } as const;

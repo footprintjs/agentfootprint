@@ -45,7 +45,8 @@ export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
       ...(recallRequests !== undefined && { recallRequests }),
-      onResponseCommitted: () => {
+      onResponseCommitted: (scope, localFallback) => {
+        scope.modelReplyRunId = localFallback ? undefined : run.context.runId;
         run.value.modelResponseCommitted = true;
       },
       onReplayPrepared: (preparation) => {

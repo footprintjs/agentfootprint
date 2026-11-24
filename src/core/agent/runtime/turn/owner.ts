@@ -116,7 +116,10 @@ export async function runLeg(
   // Normalize or refuse BEFORE anything is created. A bare string is the
   // message; anything that is not a message is named and refused here
   // rather than becoming `content: undefined` inside the messages slot.
-  const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
+  const runInput =
+    invocation.value.hostTurn?.hasInput === false && typeof input === 'object'
+      ? input
+      : normalizeRunInput<AgentInput>(input, 'Agent.run');
   // Who wrote the message (declared sources' one reader): one of two words,
   // or nothing — a typo would read as the person's words, so it is refused.
   const messageFrom = (runInput as { readonly messageFrom?: unknown }).messageFrom;
@@ -213,7 +216,7 @@ export async function runLeg(
         kind: 'run',
         options: {
           input: {
-            message: runInput.message,
+            ...(invocation.value.hostTurn?.hasInput === false ? {} : { message: runInput.message }),
             ...(invocation.value.identity !== undefined && {
               identity: invocation.value.identity,
             }),
