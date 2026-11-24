@@ -204,9 +204,7 @@ export function chartDependencies(
           inputs: environment.inputsArmed,
           toolMiddleware: this.configuration.toolMiddleware.length > 0,
         }),
-        ...(this.configuration.answerLayerOption.standingLine !== undefined && {
-          standingLine: this.configuration.answerLayerOption.standingLine,
-        }),
+        ...this.configuration.answerLayerOption,
         ...(this.configuration.answerValidationConfig !== undefined && {
           validated: true as const,
         }),

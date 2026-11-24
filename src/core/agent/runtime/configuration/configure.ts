@@ -254,7 +254,10 @@ export function configureAgent(
       line === true
         ? { standingLine: 'always' }
         : typeof line === 'object' && line !== null
-        ? { standingLine: line.when }
+        ? {
+            standingLine: line.when,
+            ...(line.raiseOn !== undefined && { standingLineRaiseOn: line.raiseOn }),
+          }
         : {};
   }
   // The time layer's door (`.time()` / `AgentOptions.time`): `true` or the
