@@ -71,6 +71,65 @@ describe('declared sources named in the question', () => {
     ]);
   });
 
+  describe('overlapping aliases', () => {
+    const map = defineOntology({
+      id: 'access',
+      version: '1',
+      sources: {
+        control_checks: { meaning: 'Current access controls' },
+        access_audit: { meaning: 'Past access reports' },
+        equipment_registry: { meaning: 'Equipment records' },
+      },
+      nodes: {
+        access_policy: {
+          meaning: 'An access control check',
+          aliases: [
+            'access control',
+            'control status',
+            'status report',
+            'control snapshot',
+            'full access control',
+          ],
+          sources: [{ source: 'control_checks', via: ['read_controls'] }],
+        },
+        access_history: {
+          meaning: 'An access audit entry',
+          aliases: ['report history', 'snapshot', 'full access'],
+          sources: [{ source: 'access_audit', via: ['read_audit'] }],
+        },
+        owned_equipment: {
+          meaning: 'A catalog entry',
+          sources: [{ source: 'equipment_registry', via: ['read_inventory'] }],
+        },
+      },
+    });
+    const controls = { source: 'control_checks', tools: ['read_controls'] };
+    const equipment = { source: 'equipment_registry', tools: ['read_inventory'] };
+
+    it.each(['access control status', 'access control status report'])(
+      'admits %s once when all overlapping aliases belong to one term',
+      (phrase) => {
+        expect(declaredSourceGroups(map, `Check ${phrase} and owned equipment.`)).toEqual([
+          controls,
+          equipment,
+        ]);
+      },
+    );
+
+    it.each(['access control status report history', 'access control snapshot'])(
+      'keeps %s ambiguous when it overlaps a competing term',
+      (phrase) => {
+        expect(declaredSourceGroups(map, `Check ${phrase} and owned equipment.`)).toEqual([
+          equipment,
+        ]);
+      },
+    );
+
+    it('accepts the longest declared phrase when it fully contains a competing alias', () => {
+      expect(declaredSourceGroups(map, 'Check full access control.')).toEqual([controls]);
+    });
+  });
+
   it('uses neither relations, tool names, meanings, nor longer words as question matches', () => {
     expect(
       declaredSourceGroups(

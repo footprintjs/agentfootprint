@@ -56,29 +56,28 @@ function explicitDeclarations(ontology: OntologySpec, question: string): readonl
     }
   }
 
-  // A longer declared phrase can contain a shorter one. Two different owners
-  // of the whole phrase, or incompatible partial overlaps, are ambiguous.
-  // An independent mention elsewhere in the question is still evidence.
+  // Aliases of one declaration can overlap without changing the named source.
+  // With competing declarations, a single longest phrase must contain all
+  // other matches in the span, and it cannot be shared. Separate spans
+  // are evaluated independently.
   mentions.sort((a, b) => a.start - b.start || b.end - a.end);
   const explicit = new Set<Declaration>();
   let index = 0;
   let first = mentions[index++];
   while (first !== undefined) {
     let end = first.end;
-    let ambiguous = false;
+    let competing = false;
+    let sharedLongest = false;
     let overlap = mentions[index];
     while (overlap !== undefined && overlap.start < end) {
       end = Math.max(end, overlap.end);
-      if (
-        overlap.start === first.start &&
-        overlap.end === first.end &&
-        overlap.declaration !== first.declaration
-      ) {
-        ambiguous = true;
+      if (overlap.declaration !== first.declaration) {
+        competing = true;
+        sharedLongest ||= overlap.start === first.start && overlap.end === first.end;
       }
       overlap = mentions[++index];
     }
-    if (!ambiguous && end === first.end) explicit.add(first.declaration);
+    if (!competing || (!sharedLongest && end === first.end)) explicit.add(first.declaration);
     first = mentions[index++];
   }
   return [...explicit];
