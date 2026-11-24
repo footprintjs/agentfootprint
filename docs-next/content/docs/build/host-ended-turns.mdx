@@ -18,7 +18,7 @@ Use the string returned by `endTurn` for display. Output middleware can rewrite 
 candidate or refuse it. If the turn needs a model judge, use an ordinary model turn.
 To preserve real inbound text, pass `{ message }` as the second argument. A host with
 an `aroundTurn` wrapper requires that input. To continue a saved conversation, pass
-`{ continueFrom: checkpoint }` there as well. See [Conversations](./conversations).
+`{ continueFrom: checkpoint }` there as well. See [Conversations](doc:conversations).
 
 Cancellation before delivery leaves the notice out of the stream, checkpoint and
 episodic stores. Once the terminal checks pass, the stream and checkpoint receive
