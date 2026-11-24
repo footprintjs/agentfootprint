@@ -1,0 +1,4 @@
+# Paid run folders (run.mjs's default --out for the open set) never belong in a commit, and a
+# closed set's rows never land inside this checkout at all (RULE.md § 9; run.mjs refuses it).
+runs/
+closed-looks.jsonl
