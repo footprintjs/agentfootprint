@@ -1074,7 +1074,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/agent/assessment/answer/citations/collect/collect.test.ts': [
     {
       kind: 'not-model-facing',
-      count: 8,
+      count: 14,
       why: 'literal prose and markup fixtures read only by the citation collector tests. No provider receives them',
     },
   ],
@@ -1473,13 +1473,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Agent runtime split: the same seven host-only literals now have four owners.
         // The combined ledger includes the resume sentence and journal links.
         // The checkpoint ledger split moved one host-only refusal to a new file.
-        // Prose citations add one request system instruction and nine test literals.
+        // Prose citations add one request system instruction and fifteen test literals.
         files: 135,
-        total: 225,
+        total: 231,
         registry: 8,
         ephemeral: 29,
         unrepaired: 36,
-        notModelFacing: 152,
+        notModelFacing: 158,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

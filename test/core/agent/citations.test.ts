@@ -258,3 +258,52 @@ it('leaves a plain SDK request and assessment alone with citations disabled', as
   expect(JSON.stringify(seen[1].system) ?? '').not.toContain('citation marker');
   expect((await agent.assessment())?.citations).toBeUndefined();
 });
+
+it.each([
+  { punctuation: '.', adjacentProse: false },
+  { punctuation: ';', adjacentProse: false },
+  { punctuation: '.', adjacentProse: true },
+  { punctuation: ';', adjacentProse: true },
+])(
+  'leaves inline-code markers literal across "$punctuation" (adjacent prose: $adjacentProse)',
+  async ({ punctuation, adjacentProse }) => {
+    const claim = 'North recorded 12 mm';
+    let code = '';
+    const { provider, seen } = fixture(undefined, (marker) => {
+      code = `Example \`${claim} ${marker}${punctuation} Next example.\`.`;
+      return adjacentProse ? `${code} ${claim} ${marker}.` : code;
+    });
+    const agent = Agent.create({
+      provider,
+      model: 'claude-sonnet-4-6',
+      citations: measurementCitations,
+    })
+      .tool(tool)
+      .build();
+    const recording = recordRun(agent);
+    await expect(agent.run({ message: 'Read discount in mm.' })).resolves.toMatch(
+      /\[c:[A-Za-z0-9_-]+:1\]/u,
+    );
+    expect(seen).toHaveLength(2);
+    expect(JSON.stringify(seen[1].system)).toContain('submitted tool result block 1');
+    const answerCitations = recording.toRecording().snapshot?.sharedState?.answerCitations;
+    const start = code.length + 1;
+    const span = { start, end: start + claim.length };
+    expect(answerCitations).toEqual({
+      complete: true,
+      findings: adjacentProse
+        ? [
+            { kind: 'citation', ...span, slot: 1, outcome: 'supported' },
+            {
+              kind: 'column',
+              ...span,
+              slot: 1,
+              reason: 'ungrounded-entity',
+              name: 'discount',
+              nearestName: 'amount',
+            },
+          ]
+        : [],
+    });
+  },
+);
