@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Agent, defineTool, epochLocations, receiptAt } from '../../../index.js';
+import { Agent, defineTool, epochLocations, receiptAt, servedAt } from '../../../index.js';
 import { mock } from '../../../adapters/llm/MockProvider.js';
 import { mockClassifier } from '../../../classify/mock.js';
 import { defineSkill } from '../../../injection-engine.js';
@@ -88,6 +88,17 @@ it('keeps missing wire evidence, redacted catalogs and receipt-disabled calls ou
     expect(receiptAt(recording.snapshot, 1)?.toolSelection).toBeUndefined();
     expect(JSON.stringify(recording.snapshot)).not.toContain('"toolSelection"');
   }
+});
+
+it('names lost selection evidence when the whole receipt is missing', async () => {
+  const saved = await record({});
+  expect(receiptAt(saved.snapshot, 1)?.toolSelection?.absent).toEqual([
+    { name: 'monitor', reason: 'top-N' },
+  ]);
+  const disabled = await record({ recordReceipt: false });
+  expect(receiptAt(disabled.snapshot, 1)).toBeUndefined();
+  const gap = servedAt(disabled.snapshot, 1)?.gaps.find((row) => row.gap === 'no-receipt-on-chart');
+  expect(gap?.fields).toContain('toolSelection');
 });
 
 it('keeps a hidden skill and an unregistered skill indistinguishable in the saved selection', async () => {
