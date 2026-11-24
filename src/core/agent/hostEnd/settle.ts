@@ -2,7 +2,7 @@ import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../../provider-contract/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
 import { applyOutputSchema } from '../../../answer-validation/outputSchema.js';
-import { typedEmit, emitTurnEnd } from '../../../recorders/core/typedEmit.js';
+import type { hostWriters } from './projection.js';
 import { acceptedTurnMessages } from '../assistantReplay.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import type { AgentState } from '../types.js';
@@ -12,10 +12,11 @@ import type { RunnerScopeValues } from '../../runnerExecution.js';
 
 /** Only deterministic output checks may admit a host reply. The candidate
  * stays outside recorded scope until those checks have accepted its wording. */
-export async function settleHostReply(
+async function admitHostReply(
   scope: TypedScope<AgentState>,
   run: RunnerScopeValues<AgentRunValues>,
   config: AgentConfiguration,
+  writers: ReturnType<typeof hostWriters>,
 ): Promise<void> {
   const decision = run.value.hostTurn;
   if (!decision) throw new Error('A host decision is required');
@@ -78,37 +79,28 @@ export async function settleHostReply(
     content: verdict.content,
     replyOrigin: { kind: 'host', runId: run.context.runId },
   };
-  scope.finalContent = reply.content;
-  scope.newMessages = acceptedTurnMessages(
-    decision.hasInput ? scope.userMessage : undefined,
+  run.value.hostAdmission = {
     reply,
-  );
-  run.value.hostSettlement = reply;
-}
-
-export function finishHostReply(scope: TypedScope<AgentState>): string {
-  scope.$getEnv()?.signal?.throwIfAborted();
-  const content = scope.finalContent;
-  if (content.length)
-    typedEmit(scope, 'agentfootprint.stream.token', { iteration: 0, tokenIndex: 0, content });
-  emitTurnEnd(scope, {
-    turnIndex: 0,
-    finalContent: content,
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    iterationCount: 0,
-    durationMs: Date.now() - scope.turnStartMs,
-  });
-  scope.$break('Host reply delivered');
-  return content;
+    writers,
+    signal,
+    deadline: scope.$getEnv()?.deadline,
+    turnStartMs: scope.turnStartMs,
+    memoryInput: {
+      runIdentity: { ...scope.runIdentity },
+      turnNumber: scope.turnNumber,
+      contextTokensRemaining: scope.contextTokensRemaining,
+      newMessages: acceptedTurnMessages(decision.hasInput ? scope.userMessage : undefined, reply),
+    },
+  };
 }
 
 export function chooseHostTurn(
   scope: TypedScope<AgentState>,
   run: RunnerScopeValues<AgentRunValues>,
   config: AgentConfiguration,
+  writers: ReturnType<typeof hostWriters>,
 ): string | Promise<string> {
   if (!run.value.hostTurn) return 'model';
   scope.hostEndReason = run.value.hostTurn.reason;
-  return settleHostReply(scope, run, config).then(() => 'host');
+  return admitHostReply(scope, run, config, writers).then(() => 'host');
 }

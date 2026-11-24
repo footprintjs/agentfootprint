@@ -37,6 +37,7 @@ export interface AgentRunValues extends RunnerCoreValues {
   resources?: ComponentResources;
   servingConversation?: string;
   hostTurn?: import('./hostEnd/entry.js').HostDecision & { readonly hasInput: boolean };
+  hostAdmission?: import('./hostEnd/delivery.js').HostAdmission;
   hostSettlement?: import('../../provider-contract/types.js').LLMMessage;
   hadAdmitted: boolean;
   modelResponseCommitted: boolean;

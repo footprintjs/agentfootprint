@@ -20,3 +20,11 @@ A refused output records the middleware name and outcome. Its explanation
 uses fixed wording because an application callback can quote the private
 candidate in a refusal or exception. Cancellation reaches the output middleware
 through the same signal as the run.
+
+After the chart finishes admission, the turn owner checks its terminal verdict,
+integrity and cancellation. It commits the checkpoint entry, then emits the reply
+and its root turn-end through the owning run's serving policy. A saved recording
+carries delivery in that turn-end event, joined by run ID. The admission reason
+alone cannot establish delivery. Each episodic projection reuses its compiled
+writer and native input mapper and finishes under the same agent lease. A
+rejection after a store wrote data leaves persistence unknown for that writer.

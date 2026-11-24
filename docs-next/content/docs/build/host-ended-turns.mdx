@@ -19,3 +19,14 @@ candidate or refuse it. If the turn needs a model judge, use an ordinary model t
 To preserve real inbound text, pass `{ message }` as the second argument. A host with
 an `aroundTurn` wrapper requires that input. To continue a saved conversation, pass
 `{ continueFrom: checkpoint }` there as well. See [Conversations](./conversations).
+
+Cancellation before delivery leaves the notice out of the stream, checkpoint and
+episodic stores. Once the terminal checks pass, the stream and checkpoint receive
+the admitted wording. The saved `agent.turn_end` event identifies the host as
+`replyAuthor` and carries the run ID. The configured episodic window writers then
+run in order, while this turn still owns the agent.
+
+Each writer reports `agentfootprint.memory.write_outcome` with its memory ID.
+`acknowledged` means the writer completed. `unknown` means it could have stored
+some, all or none of the messages. A later cancellation or lost acknowledgment
+leaves the delivered reply intact. Read the outcome for each store before retrying a write.

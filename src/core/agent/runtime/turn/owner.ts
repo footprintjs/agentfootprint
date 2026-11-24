@@ -1,3 +1,4 @@
+import { deliverHostReply } from '../../hostEnd/delivery.js';
 import { startRunRecording } from '../recording/recording.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import {
@@ -234,8 +235,15 @@ export async function runLeg(
       prepared.setup,
       prepared.binding,
     );
-    const finalized = this.finalizeResult(invocation, result);
-    if (typeof finalized === 'string') invocation.value.answer = finalized;
+    // The host branch returns control without putting a deliverable string in
+    // the traversal record. Give the terminal checks the admitted wording.
+    const admitted = invocation.value.hostAdmission;
+    const finalized = this.finalizeResult(
+      invocation,
+      admitted && typeof result === 'string' ? admitted.reply.content : result,
+    );
+    if (!invocation.value.hostTurn && typeof finalized === 'string')
+      invocation.value.answer = finalized;
     this.recordPendingQuestion(invocation.value, finalized);
     // The answer is FINISHED before this line and cannot be changed by it.
     // The liveness theorems (9.60.0, dev posture only) — a run that would
@@ -246,6 +254,13 @@ export async function runLeg(
     this.assertIntegrityAlive(invocation);
     // See `runtime/recording/recording.ts · fileRunRecording` for why the write is awaited rather than left
     // in flight, and why it can never fail the run.
+    if (invocation.value.hostTurn && typeof finalized === 'string') {
+      if (!admitted || finalized !== admitted.reply.content)
+        throw new Error('Host turn finished without its admitted reply');
+      options?.signal?.throwIfAborted();
+      options?.env?.signal?.throwIfAborted();
+      return await deliverHostReply(invocation, admitted, this.native.getDispatcher(), recording);
+    }
     recording?.complete(finalized);
     return finalized;
   } catch (cause) {
@@ -314,6 +329,7 @@ export async function runLeg(
     // The time layer's per-run inputs end with the run: a stale draft would
     // be stamped by the next seed this agent did not start (a composition
     // mounting its chart) as if the app had declared it.
+    invocation.value.hostAdmission = undefined;
     invocation.value.clockDraft = undefined;
     invocation.value.resumePassedTime = undefined;
     // The run's disposition rows, on EVERY path — success, failure, pause —

@@ -19,6 +19,8 @@ export interface AgentAroundTurnFailedPayload {
 }
 
 export interface AgentTurnEndPayload {
+  /** A host-supplied reply settled under the run ID on this event. */
+  readonly replyAuthor?: 'host';
   readonly turnIndex: number;
   readonly finalContent: string;
   readonly totalInputTokens: number;

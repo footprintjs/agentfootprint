@@ -16,6 +16,7 @@ export const words0 = {
   'absence-kind-normalized': true,
   absent: true,
   accepted: true,
+  acknowledged: true,
   adapter: true,
   advance: true,
   'after-miss': true,
@@ -90,6 +91,7 @@ export const words0 = {
   'agentfootprint.memory.detached': true,
   'agentfootprint.memory.retrieved': true,
   'agentfootprint.memory.strategy_applied': true,
+  'agentfootprint.memory.write_outcome': true,
   'agentfootprint.memory.written': true,
   'agentfootprint.middleware.decision': true,
   'agentfootprint.ontology.served': true,
@@ -300,6 +302,4 @@ export const words0 = {
   fallback: true,
   filter: true,
   final: true,
-  findings: true,
-  flagged: true,
 } as const;

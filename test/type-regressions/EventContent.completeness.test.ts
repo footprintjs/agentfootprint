@@ -152,6 +152,7 @@ export const EVENT_CONTENT = {
   'agentfootprint.memory.detached': 'structure',
   'agentfootprint.memory.retrieved': 'shape',
   'agentfootprint.memory.strategy_applied': 'fields',
+  'agentfootprint.memory.write_outcome': 'structure',
   'agentfootprint.memory.written': 'fields',
   // middleware.*
   'agentfootprint.middleware.decision': 'shape',
