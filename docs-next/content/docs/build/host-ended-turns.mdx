@@ -1,0 +1,21 @@
+---
+title: End a turn with a host notice
+description: Deliver a host decision through the output policy and find its author in the saved conversation.
+---
+
+When your application reaches a request cap, it can supply the reply itself. Enable
+`hostEndedTurns` when constructing the agent, then call `endTurn` when the host makes
+its decision. The host can send a notice without inventing a user message.
+
+<CodeFile path="examples/deploy/host-ended-turn.ts" region="host-ended-turn" title="Deliver a host notice" />
+
+Run the example locally with `npm run example examples/deploy/host-ended-turn.ts`.
+The result shows the delivered text, the author `host` and the run ID saved with that
+assistant entry. The mock provider throws if called, so a successful run also checks
+that the notice used no model call.
+
+Use the string returned by `endTurn` for display. Output middleware can rewrite the
+candidate or refuse it. If the turn needs a model judge, use an ordinary model turn.
+To preserve real inbound text, pass `{ message }` as the second argument. A host with
+an `aroundTurn` wrapper requires that input. To continue a saved conversation, pass
+`{ continueFrom: checkpoint }` there as well. See [Conversations](./conversations).

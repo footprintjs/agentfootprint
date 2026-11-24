@@ -6,6 +6,7 @@
     "agent",
     "recipes",
     "conversations",
+    "host-ended-turns",
     "dynamic-react",
     "swarm",
     "patterns",
