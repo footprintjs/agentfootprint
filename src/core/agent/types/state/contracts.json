@@ -4,6 +4,8 @@
   "sourceSha256": "b66238dea0877374fa69f073aff37854e98d7bc6877c368c14a8bfd2d279b24e",
   "contract": {
     "fields": {
+      "sourceConsultation": ["5c6cd741ace3c8707c3c79bcec22fa55a6e19d48c025a3f8384781cf5c6eee18",true,false],
+      "sourceConsultationInterrupted": ["44b845f61c46910592484d0514819a5f1c33403ace6266e3a5d5ef62b5df9d33",true,false],
       "retrievalRequest": ["e39a0605e29c1e30b58a2f54c0dad0ef3dc7741705a9cbe7a966cbcf9ca7b432",true,false],
       "libraryResultLimitsIncomplete": ["44b845f61c46910592484d0514819a5f1c33403ace6266e3a5d5ef62b5df9d33",true,false],
       "libraryResultLimits": ["2ace6d5d1b26e292d330eba6403e54e29f8e4224e33858e996fb59a976b8b18b",true,false],
@@ -242,6 +244,7 @@
       "eab18a54ab21261af3abebda4c228f265016a91865ae68072d31676aa91cfd4b": 1,
       "d23cb9b8885bce275b0b6012e3c1f268f635256fa09c8f283b548ba7b95244a5": 1,
       "6d014e13311261e48d08c63ae7963772c19447b2583d8f3fac186e742c1b120f": 1,
+      "bedf73a812853cf9b5fd8eaf627355ecfe2afca7294599a782be53cd8fc77b8c": 1,
       "bf1e3ffb158736d080d42d365fcdac24393825629b04f98510dd98e68782a994": 1,
       "a18b5f9c57c3b54b67351dd414a2842bbbdb8cb59f5cf655865d52f4c278d0be": 1,
       "0791cfff02ec76b248dca70775c76c72dc0ff87b78e0dfa9b89c99160f584a71": 1,
@@ -282,6 +285,7 @@
       "c15a9e50c6ce3b0caaff9385c4c7c7f79a0b7d7a9073d0c65fbc6c7e1fe72112": 1,
       "fe9f8008ba0c6831bddc584d51ee953012ac91801183cf43bb0eca4efa4cbd1f": 1,
       "81a7c755274009e78fa6e00b86985534dd5793b2ad1ed9a66f6bf9d6228fb7d6": 1,
+      "827e789b1581abfdc4f30704f4e7f54490154a9555413c9fc06e775b8c71641f": 1,
       "8335d72a1480fdb2dd29cf9c5bdf40a6880f3591dbab531586bc172a68c5e5cc": 1,
       "ae5d7aee6c6cf3cf8f841131d7ebef76dbdc7ae11584e31f82eb3cbdc7d0799f": 1,
       "eb8d51ff94162a1af5a6cde43cdfa65a658630c26ac96d7bd535e9c0ed9e78e4": 1,

@@ -90,7 +90,6 @@ import { writeRequestReplay } from '../requestTurn/native.js';
 import { projectCallHistory } from './callLLM/requestProjection.js';
 import { trackRecallRequests } from './callLLM/recallRequest.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
-import type { ToolChoiceLedger } from '../toolChoice/types.js';
 import type { OntologyPiece } from '../../../ontology/serve.js';
 import type { OntologyRecord } from '../../../ontology/types.js';
 import {
@@ -618,6 +617,8 @@ export function buildCallLLMStage(
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
+    const choice = deps.sourceConsultation;
+    let acceptedOffer: ReturnType<NonNullable<typeof choice>['capture']> | undefined;
     const preserveReplay =
       deps.hasEvidenceRecovery === true ||
       deps.hasFindingsLedger === true ||
@@ -641,17 +642,23 @@ export function buildCallLLMStage(
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
+      let offer = choice?.capture(scope, req, baseRequest);
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
       const selectionAttempt = selection?.attempt();
       const ordinaryHooks = observeCallRequests(
         attempts.hooks,
-        !selectionAttempt && serving === undefined && deps.findings !== true && !preserveReplay
+        !selectionAttempt &&
+          serving === undefined &&
+          deps.findings !== true &&
+          !preserveReplay &&
+          choice === undefined
           ? undefined
           : (request) => {
               selectionAttempt?.observe(request);
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
+              if (choice !== undefined) offer = choice.capture(scope, request, baseRequest, offer);
               if (preserveReplay)
                 stableProjection = sameReplayProjection(wireMessages, request.messages);
             },
@@ -685,6 +692,7 @@ export function buildCallLLMStage(
             : attempts.request;
           dispatch = describeProviderDispatch(selectedProvider, completion);
           if (deps.findings === true) candidate = capture(completion);
+          if (choice !== undefined) offer = choice.capture(scope, completion, baseRequest);
           if (preserveReplay)
             stableProjection = sameReplayProjection(wireMessages, completion.messages);
           return completion;
@@ -718,6 +726,7 @@ export function buildCallLLMStage(
           : tagThinkingResponse(resp, String(hooks.providerIndex));
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
+      acceptedOffer = offer;
       acceptedProjection = stableProjection;
       const result = attempts.response(answered);
       selectionAttempt?.finish(result);
@@ -858,6 +867,12 @@ export function buildCallLLMStage(
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     const recallSummary = recall?.summary(localFallback ? 'local' : 'provider');
     const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps, recallSummary);
+    choice?.accepted(
+      scope,
+      localFallback ? undefined : acceptedOffer,
+      localFallback ? undefined : response.wireManifest,
+      acceptedToolCalls,
+    );
     const providerStop = localFallback ? undefined : response.stopReason;
     recordResponseStop(scope, providerStop, nativeOutput, deps.outputFormat !== undefined);
     // A response owns its replay evidence, never the previous response's.
@@ -1045,33 +1060,16 @@ export function buildCallLLMStage(
       }
     }
 
-    // THE OUTCOME (9.105.0, `.toolChoice()`). The tools slot filed the pick
-    // before this call; the reply is in; the comparison is made HERE, the
-    // one moment both readings exist, and filed as its own row — the model's
-    // call stays the emission, the pick stays a second reading, and neither
-    // is rewritten. `called` is what the model asked for, in order (a
-    // `'tool-forced'` answer was already taken off the list at the seam);
-    // a miss is a call outside the NARROWED served list. Gated on the arm,
-    // and on a pick having been attempted for this iteration (a call with
-    // nothing to choose among filed no pick and gets no outcome).
     if (deps.toolChoice === true) {
       // `import()` — the optional-family law of docs-next's site budget (the
       // `toolCalls/evidence/judgeLanded.ts · judgeLanded` precedent): an unarmed agent never loads
       // the module; the slot loads the same one under the same gate.
-      const { outcomeRowFor, pickAttemptedFor, pickRowFor, recordToolChoice } = await import(
-        '../toolChoice/record.js'
+      const { recordToolChoiceOutcome } = await import('../toolChoice/record.js');
+      recordToolChoiceOutcome(
+        scope as unknown as Parameters<typeof recordToolChoiceOutcome>[0],
+        response,
+        iteration,
       );
-      const rows = scope.toolChoices as ToolChoiceLedger | undefined;
-      if (pickAttemptedFor(rows, iteration)) {
-        recordToolChoice(
-          scope as unknown as Parameters<typeof recordToolChoice>[0],
-          outcomeRowFor(
-            pickRowFor(rows, iteration),
-            response.toolCalls.map((c) => c.name),
-            iteration,
-          ),
-        );
-      }
     }
 
     // Attribute the successful response to its actual selected transport/model.

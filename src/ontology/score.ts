@@ -33,6 +33,7 @@
  *   does at build.
  */
 
+import { mentionsDeclaredName } from './declaredSourceGroups.js';
 import type { OntologySpec } from './types.js';
 
 /** What a bench question declares about itself, before the run. */
@@ -146,11 +147,11 @@ export function scoreAbsence(
   }
   const names = namesOf(spec, gap);
   const neighbours = neighboursOf(spec, gap, kind);
-  const where = neighbours.filter((id) => mentions(turn.answer, namesOf(spec, id)));
+  const where = neighbours.filter((id) => mentionsDeclaredName(turn.answer, namesOf(spec, id)));
   return {
     gap,
     gapKind: kind,
-    namedGap: mentions(turn.answer, names),
+    namedGap: mentionsDeclaredName(turn.answer, names),
     namedWhere: neighbours.length === 0 ? undefined : where.length > 0,
     where,
     neighbours,
@@ -228,25 +229,6 @@ function namesOf(spec: OntologySpec, id: string): readonly string[] {
     ? spec.sources[id]
     : undefined;
   return declared === undefined ? [id] : [id, ...(declared.aliases ?? [])];
-}
-
-// ─── Matching — declared strings, whole word, nothing fuzzier ─────────
-
-function mentions(answer: string, names: readonly string[]): boolean {
-  return names.some((name) => patternOf(name).test(answer));
-}
-
-/**
- * One declared string as a whole-word, case-insensitive pattern; an `_` in
- * the id stands for a space, a hyphen or itself, so `vmkernel_log` meets
- * "vmkernel log" and `esxi_host` meets "ESXi host"; a trailing `s` is
- * allowed (9.109.1), so "vmkernel logs" and "change records" meet their
- * ids — a plural is a form of the declared word, not another word.
- * Everything else is escaped: a declared string is matched as itself.
- */
-function patternOf(name: string): RegExp {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/_/g, '[ _-]');
-  return new RegExp(`(?<![\\w])${escaped}s?(?![\\w])`, 'i');
 }
 
 function wordsOf(answer: string): string[] {

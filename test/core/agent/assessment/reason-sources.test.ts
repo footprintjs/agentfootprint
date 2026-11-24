@@ -193,6 +193,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'memory-retrieval-excluded',
         'result-dropped-from-window',
         'result-withheld',
+        'source-not-consulted',
         'step-skipped',
         'steps-unfinished',
         'stopped-early',

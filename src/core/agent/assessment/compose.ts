@@ -39,6 +39,7 @@
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
 import { assumedClauses, type StandingAssumedValue } from './assumedValues.js';
+import { sourceConsultationClause } from './choose/sourceConsultation.js';
 import { declaredStandingClause } from './declaredStandingWords.js';
 import {
   callNotCompletedClause,
@@ -71,8 +72,9 @@ export {
  * 7: dispatch proof gaps. 8: older conflicts with unplaced readings.
  * 9: independent check causes are shown together, and replay keeps older attribution.
  * 10: current-turn window removals.
+ * 11: witnessed offers for declared sources that were left unchecked.
  */
-export const STANDING_LINE_VERSION = 10;
+export const STANDING_LINE_VERSION = 11;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -266,6 +268,7 @@ const CHECK_WORDS: Readonly<Record<AssessmentCheck, string>> = {
 const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'>, string>> = {
   asked: 'a question the run asked is still waiting for its answer',
   'argument-asked': 'the run asked you for values its calls need, and the answer has not come yet',
+  'source-not-consulted': sourceConsultationClause([]),
   'argument-unverified':
     'a value a call ran with came from the model, with no source on the record',
   'argument-read':
@@ -416,8 +419,11 @@ function reasonClause(
 ): string {
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
+  const detail = names?.details?.get(reason);
   if (reason === 'result-dropped-from-window' && names?.windowDrops !== undefined)
     return windowDropClause(names.windowDrops);
+  if (reason === 'source-not-consulted' && detail?.unusedTools !== undefined)
+    return sourceConsultationClause(detail.unusedTools);
   if (reason === 'check-unreachable' && (names?.legacyConflictGap || names?.libraryLimitsGap)) {
     const causes: string[] = [];
     if (names.legacyConflictGap)
@@ -434,7 +440,7 @@ function reasonClause(
     return 'a value in the answer came from a result the model had set aside';
   }
   if (names !== undefined && source !== undefined) {
-    const counts = names.details?.get(reason)?.counts;
+    const counts = detail?.counts;
     if (reason === 'call-not-completed') {
       return withPrintedOutputCounts(
         callNotCompletedClause(

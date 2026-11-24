@@ -101,6 +101,16 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'argument-asked': {
     state: { argumentAsk: { waiting: { requestId: 'question' }, iteration: 2 } },
   },
+  'source-not-consulted': {
+    state: {
+      sourceConsultation: {
+        complete: true,
+        offers: [{ group: '0', callable: 0 }],
+        attempted: [],
+        groups: [{ group: '0', callables: [0] }],
+      },
+    },
+  },
   'argument-assumed': argument({ source: 'default' }),
   'argument-unverified': argument({ source: 'model' }),
   'argument-read': argument({ source: 'said', reading: true }),

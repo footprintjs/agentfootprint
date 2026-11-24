@@ -1,4 +1,5 @@
 import { readAnswerRows } from './answer/stage.js';
+import { readSourceConsultation } from './choose/sourceConsultation.js';
 import { readIntegrityFindings } from './choose/stage.js';
 import { composeWarning } from './compose/stage.js';
 import { gatherWarning, prepareWarning, readPause } from './gather/stage.js';
@@ -32,5 +33,9 @@ export function foldState(
   readResultEvidence(gathered, declarations, enteredArguments, retainedHistory);
   readAnswerRows(state, g);
   const integrity = readIntegrityFindings(state, g);
-  return composeWarning(gathered, integrity, declarationAddresses, retain);
+  const unusedTools =
+    g.fired.has('asked') || g.fired.has('argument-asked')
+      ? []
+      : readSourceConsultation(recorded, g, retain);
+  return composeWarning(gathered, integrity, declarationAddresses, retain, unusedTools);
 }
