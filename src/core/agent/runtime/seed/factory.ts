@@ -1,3 +1,4 @@
+import { MAX_SELECTION_ROWS } from '../../../slots/providerOmissions.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
@@ -110,6 +111,8 @@ export function seedFactory(environment: SeedEnvironment) {
       },
       consumePendingResumeHistory: () => {
         const h = run.value.pendingResumeHistory;
+        run.value.servedTools.remainingToolOmissions =
+          !h || h.appendsUserTurn ? MAX_SELECTION_ROWS : undefined;
         run.value.pendingResumeHistory = undefined;
         return h;
       },
