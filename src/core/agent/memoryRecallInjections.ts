@@ -44,6 +44,7 @@
 import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import type { MemoryFlavor } from '../../memory/define.types.js';
 import type { RetrievalEvidence } from '../../memory/retrieval/index.js';
+import { hasRepeatedCandidateIds } from '../../memory/retrieval/outcome.js';
 import type { ContextRole, ContextSource } from '../../events/types.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
 
@@ -138,8 +139,21 @@ function chunkInjections(
   systemContent: string,
 ): ActiveInjection[] | undefined {
   const evidence = parent[retrievalEvidenceKey(id)] as RetrievalEvidence | undefined;
-  const candidates = evidence?.candidates;
-  if (!candidates || candidates.length === 0) return undefined;
+  if (evidence === undefined) return undefined;
+  const { candidates } = evidence;
+  // A legacy record can rejoin the exact bytes even when two occurrences
+  // share an ID. The rejoin proves text, but it cannot establish which row
+  // supplied the score or provenance. Use the whole recall in that case.
+  if (
+    evidence.candidateIdsAmbiguous === true ||
+    !Array.isArray(candidates) ||
+    candidates.length === 0 ||
+    candidates.some((candidate) => typeof candidate?.id !== 'string') ||
+    hasRepeatedCandidateIds(candidates)
+  )
+    return undefined;
+  if (evidence.recording === 'ids-only')
+    return rangeInjections(evidence, id, flavor, systemContent);
 
   // In PROMPT order, not score order. The record is stored best-scoring
   // first; the message was assembled in the budget picker's order. Joining
@@ -165,10 +179,67 @@ function chunkInjections(
     retrieval: {
       score: c.score,
       rank: c.rank,
-      ...(evidence?.threshold !== undefined && { threshold: evidence.threshold }),
+      ...(evidence.threshold !== undefined && { threshold: evidence.threshold }),
     },
     inject: { systemPrompt: c.promptFragment ?? '' },
   }));
+}
+
+/** Rebuild from the persisted prompt without retaining another copy of the fragments. */
+function rangeInjections(
+  evidence: RetrievalEvidence,
+  memoryId: string,
+  flavor: MemoryFlavor | undefined,
+  systemContent: string,
+): ActiveInjection[] | undefined {
+  const ranges = evidence.promptRanges;
+  if (!Array.isArray(ranges) || ranges.length === 0) return undefined;
+  const injections: ActiveInjection[] = [];
+  const ids = new Set<string>();
+  let cursor = 0;
+  for (const [index, range] of ranges.entries()) {
+    if (
+      range == null ||
+      range.start !== cursor ||
+      !Number.isSafeInteger(range.end) ||
+      range.end < cursor ||
+      range.end > systemContent.length ||
+      typeof range.id !== 'string' ||
+      ids.has(range.id)
+    ) {
+      return undefined;
+    }
+    ids.add(range.id);
+    const fragment = systemContent.slice(range.start, range.end);
+    const { score, rank } = range;
+    const retrieval =
+      typeof score === 'number' &&
+      Number.isFinite(score) &&
+      rank !== undefined &&
+      Number.isSafeInteger(rank)
+        ? {
+            score,
+            rank,
+            ...(evidence.threshold !== undefined && { threshold: evidence.threshold }),
+          }
+        : undefined;
+    injections.push({
+      id: `memory:${memoryId}#${range.id}`,
+      flavor: sourceOf(flavor),
+      description: retrieval
+        ? `retrieved '${range.id}' (rank ${retrieval.rank}, score ${retrieval.score.toFixed(2)})`
+        : `retrieved '${range.id}'`,
+      ...(retrieval !== undefined && { retrieval }),
+      inject: { systemPrompt: fragment },
+    });
+    if (index + 1 < ranges.length && systemContent.slice(range.end, range.end + 2) !== '\n\n') {
+      return undefined;
+    }
+    cursor = range.end + 2;
+  }
+  if (injections.map((entry) => entry.inject.systemPrompt).join('\n\n') !== systemContent)
+    return undefined;
+  return injections;
 }
 
 /**

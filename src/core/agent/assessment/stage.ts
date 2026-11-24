@@ -51,6 +51,7 @@ import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
 import { retainedStateValue } from '../../../redaction/runRedaction.js';
 import type { AnswerLayerArm } from './answerLayerOptions.js';
 import { isLibraryLimit } from './results/library-did/stage.js';
+import { isRetrievalReason } from './results/retrieval/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
 import type { AnswerAssessment } from './types.js';
@@ -171,6 +172,7 @@ export async function assessAnswerStage(
       data.reasons.some(
         (reason) =>
           isLibraryLimit(reason) ||
+          isRetrievalReason(reason) ||
           reason === 'check-unreachable' ||
           reason === 'call-not-completed' ||
           reason === 'work-not-finished' ||

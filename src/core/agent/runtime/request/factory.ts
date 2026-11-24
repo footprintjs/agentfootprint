@@ -4,6 +4,7 @@ import { buildBrainFor } from '../../skillBrains.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import { retainReplayRetirements } from '../../../runCheckpoint.js';
 import { buildCallLLMStage } from '../../stages/callLLM.js';
+import { retrievalRequestWriter } from '../../honesty/retrievalRequests.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { ToolRegistrations } from '../../stages/toolResolver.js';
 import type { buildSlots } from '../slots/buildSlots.js';
@@ -35,6 +36,14 @@ export interface RequestEnvironment {
 
 /** Keep per-invocation stage creation inside the native component's existing memo. */
 export function requestFactory(environment: RequestEnvironment) {
+  const { memories, reactMode } = environment.configuration;
+  const recallRequests =
+    memories.length === 0
+      ? undefined
+      : retrievalRequestWriter(
+          memories.map(({ id }) => id),
+          reactMode === 'dynamic-grouped',
+        );
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
       servedTools: run.value.servedTools,
@@ -46,6 +55,7 @@ export function requestFactory(environment: RequestEnvironment) {
             return policy?.coverage.state === 'declared-none' && !policy.serving.active();
           },
         }),
+      ...(recallRequests !== undefined && { recallRequests }),
       onResponseCommitted: () => {
         run.value.modelResponseCommitted = true;
       },

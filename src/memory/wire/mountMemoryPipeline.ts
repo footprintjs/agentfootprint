@@ -107,6 +107,7 @@ export interface MountMemoryPipelineConfig<ParentState> {
    * unaffected (they never write the record in the first place).
    */
   readonly evidenceKey?: keyof ParentState & string;
+  readonly recallOutcomesKey?: keyof ParentState & string;
 
   /**
    * Evidence source for CAUSAL pipelines (the evidence bridge, backlog #5).
@@ -160,7 +161,7 @@ export function mountMemoryRead<ParentState>(
   const injectionKey = config.injectionKey ?? DEFAULTS.injectionKey;
   const readSubflowId = config.readSubflowId ?? DEFAULTS.readSubflowId;
 
-  const evidenceKey = config.evidenceKey;
+  const { evidenceKey, recallOutcomesKey } = config;
   const identityOverride = config.identityOverride;
 
   return builder.addSubFlowChartNext(readSubflowId, config.pipeline.read, 'Load Memory', {
@@ -181,6 +182,9 @@ export function mountMemoryRead<ParentState>(
     }),
     outputMapper: (subflowState: Record<string, unknown>) => ({
       [injectionKey]: subflowState.formatted,
+      ...(recallOutcomesKey !== undefined && {
+        [recallOutcomesKey]: subflowState.recallOutcomes ?? [],
+      }),
       // The retrieval record, lifted to the parent so it lands in the ROOT
       // commit log. Only present for pipelines that actually retrieve.
       ...(evidenceKey !== undefined &&
