@@ -5,11 +5,18 @@ import {
   type StreamHandlerOptions,
   type StreamHandler,
   type Held,
-  type Turn,
+  type AcceptedStreamTurn,
 } from './streamHandler/types.js';
 import { settleClosed, noConversation } from './streamHandler/conversation.js';
 import { failedSettlement } from './streamHandler/settlement.js';
-import { failure, refusal, headersOf, readBody, positive } from './streamHandler/request.js';
+import {
+  failure,
+  refusal,
+  headersOf,
+  readBody,
+  positive,
+  notFound,
+} from './streamHandler/request.js';
 export {
   DEFAULT_STREAM_MAX_BODY_BYTES,
   DEFAULT_STREAM_HEARTBEAT_MS,
@@ -159,14 +166,6 @@ export function streamHandler<TRequest, TEvent>(
   /** Runners already used, by identity — so a factory that shares one is caught. */
   const used = new WeakSet<object>();
 
-  /** One answer for "none", "another's" and "nobody's" — a caller learns no ids. */
-  const notFound = (): WireRequestRefusal =>
-    new WireRequestRefusal(
-      'ERR_SESSION_NOT_FOUND',
-      `'${name}': that conversation is not one you can open.`,
-      404,
-    );
-
   /** Bind the conversation the request names to its caller — the app's port decides. */
   async function bind(request: TRequest, headers: Readonly<Record<string, string>>) {
     if (threads === undefined) return undefined;
@@ -191,7 +190,7 @@ export function streamHandler<TRequest, TEvent>(
     // Whose conversation this is, before a line of it is read. One answer for
     // "none", "another's" and "nobody's", so a caller learns no ids.
     if (stored !== undefined && envelopeOwner(stored) !== thread.identity?.principal)
-      throw notFound();
+      throw notFound(name);
     return stored;
   }
 
@@ -264,7 +263,7 @@ export function streamHandler<TRequest, TEvent>(
 
   /** Keep what the run left behind, then say how it ended — kept FIRST, told after. */
   async function keep(
-    turn: Turn<TEvent>,
+    turn: AcceptedStreamTurn<TEvent>,
     out: unknown,
     recordRunId: string | undefined,
   ): Promise<RunSettlement> {
@@ -304,11 +303,11 @@ export function streamHandler<TRequest, TEvent>(
   }
 
   /**
-   * Close the pause an answer could not reach (`Turn.closes`): the
+   * Close the pause an answer could not reach (`AcceptedStreamTurn.closes`): the
    * conversation it goes on from replaces it in the store — the run ends
    * cancelled, nothing having run.
    */
-  async function keepClosed(turn: Turn<TEvent>): Promise<RunSettlement> {
+  async function keepClosed(turn: AcceptedStreamTurn<TEvent>): Promise<RunSettlement> {
     const { thread, held } = turn;
     if (sessions !== undefined && thread !== undefined && held.prior !== undefined)
       await sessions.persist(thread.sessionId, toEnvelope(held.prior));
@@ -317,7 +316,7 @@ export function streamHandler<TRequest, TEvent>(
 
   /** Run the turn; every event the run serves goes through the translation; settle once. */
   async function serve(
-    turn: Turn<TEvent>,
+    turn: AcceptedStreamTurn<TEvent>,
     write: (events: readonly TEvent[]) => void,
     signal: AbortSignal,
     release: () => void,
@@ -425,7 +424,11 @@ export function streamHandler<TRequest, TEvent>(
     void runner.shutdown?.({ stop: false })?.catch(() => undefined);
   }
 
-  function respond(turn: Turn<TEvent>, request: Request, release: () => void): Response {
+  function respond(
+    turn: AcceptedStreamTurn<TEvent>,
+    request: Request,
+    release: () => void,
+  ): Response {
     const abort = new AbortController();
     const hangUp = (): void => abort.abort();
     // A caller already gone never starts its run.
@@ -525,7 +528,7 @@ export function streamHandler<TRequest, TEvent>(
         const principal = thread.identity?.principal;
         if (inFlight.has(thread.sessionId)) {
           // Even before a first turn has stored anything: the claimant is the owner.
-          if (inFlight.get(thread.sessionId) !== principal) throw notFound();
+          if (inFlight.get(thread.sessionId) !== principal) throw notFound(name);
           return refusal(
             409,
             `[hosting] '${name}': a turn of that conversation is already in flight. Send the ` +

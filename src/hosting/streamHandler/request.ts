@@ -87,3 +87,12 @@ export function positive(
   }
   return value;
 }
+
+/** One answer for "none", "another's" and "nobody's" — a caller learns no ids. */
+export function notFound(name: string): WireRequestRefusal {
+  return new WireRequestRefusal(
+    'ERR_SESSION_NOT_FOUND',
+    `'${name}': that conversation is not one you can open.`,
+    404,
+  );
+}

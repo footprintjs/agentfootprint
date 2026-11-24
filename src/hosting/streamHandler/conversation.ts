@@ -2,7 +2,7 @@ import type { AgentRunCheckpoint } from '../../core/runCheckpoint.js';
 import { closedConversation } from '../answeredPause.js';
 import type { ThreadBinding } from '../protocolAdapter.js';
 import type { SessionLifecycle } from '../types.js';
-import type { Held, Turn, StreamRunner } from './types.js';
+import type { Held, AcceptedStreamTurn, StreamRunner } from './types.js';
 
 /**
  * A held thread whose pause no answer can reach, with the conversation it goes
@@ -26,7 +26,7 @@ export async function settleClosed(
  * message, and whose it is.
  */
 export function noConversation(
-  turn: Turn<unknown>,
+  turn: AcceptedStreamTurn<unknown>,
   recordRunId: string | undefined,
   identity: ThreadBinding['identity'],
 ): AgentRunCheckpoint {

@@ -126,7 +126,7 @@ export interface BedrockProviderOptions {
   readonly _client?: BedrockClient;
   /**
    * @internal Test override for the SDK's command constructors. Real
-   * use goes through the dynamic `require('@aws-sdk/client-bedrock-runtime')`.
+   * use resolves the optional AWS SDK through `client.ts · resolveClient`.
    */
   readonly _commands?: {
     readonly Converse: new (input: BedrockConverseCommand) => unknown;

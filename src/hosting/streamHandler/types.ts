@@ -99,7 +99,7 @@ export interface Held {
 }
 
 /** Everything one accepted request runs with. */
-export interface Turn<TEvent> {
+export interface AcceptedStreamTurn<TEvent> {
   readonly plan: ProtocolPlan;
   readonly held: Held;
   readonly thread?: ThreadBinding;
