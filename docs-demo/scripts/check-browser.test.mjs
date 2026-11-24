@@ -129,9 +129,49 @@ async function inspectDynamicReactSubflows(page, view) {
   ok(await chart.evaluate((element) => document.activeElement === element));
   await chart.getByRole('button', { name: 'LLM', exact: true }).press('Enter');
   await systemPrompt.waitFor();
-  await systemPrompt.focus();
-  await page.keyboard.press('Space');
-  await compose.waitFor();
+  const space = await chart.evaluateHandle((element) => {
+    const describe = (target) =>
+      target instanceof HTMLElement
+        ? { tag: target.tagName, nodeId: target.dataset.id, label: target.getAttribute('aria-label') }
+        : null;
+    const describeCompose = () => {
+      const rendered = element.querySelector('[data-id="sf-llm-call/sf-system-prompt/compose"]');
+      if (rendered === null) return { mounted: false };
+      const { width, height } = rendered.getBoundingClientRect();
+      return { mounted: true, cssVisibility: getComputedStyle(rendered).visibility, width, height };
+    };
+    const snapshot = () => ({
+      focus: describe(document.activeElement),
+      subflow: element.querySelector('[aria-label="Subflow breadcrumb"] button:disabled')
+        ?.textContent,
+      compose: describeCompose(),
+    });
+    const listener = new AbortController();
+    let keydown;
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        keydown = { key: event.key, target: describe(event.target), ...snapshot() };
+      },
+      { capture: true, once: true, signal: listener.signal },
+    );
+    return {
+      read: () => ({ keydown, afterWait: snapshot() }),
+      stop: () => listener.abort(),
+    };
+  });
+  try {
+    await systemPrompt.focus();
+    await page.keyboard.press('Space');
+    await compose.waitFor();
+  } catch (error) {
+    const diagnostic = await space.evaluate((observer) => observer.read()).catch(() => undefined);
+    if (diagnostic) console.error('Space drill diagnostic', JSON.stringify(diagnostic));
+    throw error;
+  } finally {
+    await space.evaluate((observer) => observer.stop()).catch(() => {});
+    await space.dispose();
+  }
   await chart.getByRole('button', { name: 'Chart', exact: true }).click();
   const call = node('sf-llm-call');
   await call.waitFor();
