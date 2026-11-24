@@ -52,6 +52,7 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
   'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),
   'howSure.reason.resultWithheld': t('A result was kept out by a rule.'),
+  'howSure.reason.sourceNotConsulted': t('A declared source was left unchecked.'),
   'howSure.reason.libraryLimitsIncomplete': t(
     "The record could not keep every limit on this turn's tool results.",
   ),

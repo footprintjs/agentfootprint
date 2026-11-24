@@ -149,15 +149,18 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
             answerLayer:
               answerLayer === false
                 ? false
-                : answerLayer.standingLine === undefined
+                : answerLayer.standingLine === undefined && answerLayer.sourceNotConsulted !== true
                 ? true
                 : {
-                    standingLine: {
-                      when: answerLayer.standingLine,
-                      ...(answerLayer.standingLineRaiseOn !== undefined && {
-                        raiseOn: answerLayer.standingLineRaiseOn,
-                      }),
-                    },
+                    ...(answerLayer.sourceNotConsulted === true && { sourceNotConsulted: true }),
+                    ...(answerLayer.standingLine !== undefined && {
+                      standingLine: {
+                        when: answerLayer.standingLine,
+                        ...(answerLayer.standingLineRaiseOn !== undefined && {
+                          raiseOn: answerLayer.standingLineRaiseOn,
+                        }),
+                      },
+                    }),
                   },
           }),
           // The time layer, the same door grammar — the builder's value wins
