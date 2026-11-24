@@ -94,8 +94,12 @@ it('keeps the visible gap when a sibling notChecked field is redacted', async ()
           coverage([{ available: true }], {
             checked: ['Current stock'],
             notChecked: [
-              { what: `Private record field ${hidden}`, short: hidden },
-              { what: 'Returns inventory from the archive', short: 'Returns inventory' },
+              { what: `Private record field ${hidden}`, short: hidden, why: `Reason ${hidden}` },
+              {
+                what: 'Returns inventory from the archive',
+                short: 'Returns inventory',
+                why: 'scan pending',
+              },
             ],
           }),
         ),
@@ -107,10 +111,12 @@ it('keeps the visible gap when a sibling notChecked field is redacted', async ()
 
   expect(first.answer).toEqual(second.answer);
   for (const { answer, live } of [first, second]) {
-    expect(answer).toContain('did not check “Returns inventory”');
+    expect(answer).toContain('did not check “Returns inventory” because “scan pending”');
     expect(answer).not.toContain('hidden_field_');
     expect(live.reasons.find(({ reason }) => reason === 'coverage-gap')?.detail?.toolSays).toEqual({
-      entries: [{ kind: 'notChecked', text: 'Returns inventory', toolName: 'archive' }],
+      entries: [
+        { kind: 'notChecked', text: 'Returns inventory', why: 'scan pending', toolName: 'archive' },
+      ],
       omitted: 0,
     });
   }
@@ -141,4 +147,64 @@ it('keeps a selected oversized suggestion and its omission out of both readers',
   expect(
     selected.live.reasons.find(({ reason }) => reason === 'declared-absent')?.detail,
   ).toBeUndefined();
+});
+
+it('quotes the admitted reason each coverage item declared', async () => {
+  const { answer, live } = await runFixture([
+    lookup('archive', 'Archive lookup', () =>
+      coverage([{ available: true }], {
+        checked: ['Current stock'],
+        notChecked: [
+          { what: 'Older inventory records', short: 'Older archives', why: 'collector offline' },
+        ],
+        cannotCover: [{ what: 'Return counts', why: 'access was refused' }],
+      }),
+    ),
+  ]);
+  expect(answer).toContain('did not check “Older archives” because “collector offline”');
+  expect(answer).toContain('cannot cover “Return counts” because “access was refused”');
+  expect(
+    live.reasons.find(({ reason }) => reason === 'coverage-gap')?.detail?.toolSays?.entries,
+  ).toEqual([
+    { kind: 'notChecked', text: 'Older archives', why: 'collector offline', toolName: 'archive' },
+    { kind: 'cannotCover', text: 'Return counts', why: 'access was refused', toolName: 'archive' },
+  ]);
+});
+
+it('keeps exact subject-only wording when the explanation is absent or selected', async () => {
+  const read = (why?: string, redact?: AgentOptions['redact']) =>
+    runFixture(
+      [
+        lookup('archive', 'Archive lookup', () =>
+          coverage([{ available: true }], {
+            checked: ['Current stock'],
+            notChecked: [
+              {
+                what: 'Older inventory records',
+                short: 'Older archives',
+                ...(why === undefined ? {} : { why }),
+              },
+            ],
+          }),
+        ),
+      ],
+      redact,
+    );
+  const absentWhy = await read();
+  const redact = { fields: { coverageDeclared: ['0.notChecked.0.why'] } };
+  const hiddenA = await read('Defer until the archival scan', redact);
+  const hiddenB = await read('A separate private timing detail', redact);
+  expect(absentWhy.answer).toBe(
+    ANSWER +
+      '\n\n---\n\nNot sure — Archive lookup declared ground that was not checked or cannot be covered (did not check “Older archives”).',
+  );
+  for (const value of [hiddenA, hiddenB]) {
+    expect(value.answer).toBe(absentWhy.answer);
+    expect(
+      value.live.reasons.find(({ reason }) => reason === 'coverage-gap')?.detail?.toolSays,
+    ).toEqual({
+      entries: [{ kind: 'notChecked', text: 'Older archives', toolName: 'archive' }],
+      omitted: 0,
+    });
+  }
 });

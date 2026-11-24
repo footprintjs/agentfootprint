@@ -1,7 +1,7 @@
 **Mixed** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed — read after the run, and (honesty layer 4, the answer layer) inside it.
-Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on, and `rowList`, the one way a list on a row is read).
+Fold: `assess.ts` reads saved or live state and runs the shared warning flow in `chart.ts`. `reasons.ts` holds the closed reason table, and `sources.ts` holds what each reason rests on and the shared row-list reader.
 Map: `witness.ts` (the answer layer's committed witness rows — `grounded`, `steps-unfinished`, `script-shown` — filed by the Route decider).
-Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
+Walker: `stage.ts` (the recorded `AssessAnswer` stage at the head of the final branch, which runs the same shared flow as replay).
 Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
 Support: `answerLayerOptions.ts` (the rules `.answerLayer()` and its option door share).
 
@@ -26,6 +26,29 @@ answer one question — a bare `[]` reads "not sure" (`empty-undeclared`), an
 `absent()` that names a gap reads "not sure" with the reasons a person can act on
 (`coverage-gap`, `declared-absent`), and rows with nothing declared read
 "consistent with the record" — never "known".
+
+## Warning flow
+
+The live stage and replay run the same flow over one committed record. This table lists the direct calls in chart.ts. Repeated folders reflect the established check and witness order.
+
+<!-- answer-warning-stages:start -->
+
+| Step | Folder | Function |
+| --- | --- | --- |
+| 1 | [gather](gather/README.md) | prepareWarning |
+| 2 | [results](results/README.md) | readInitialResults |
+| 3 | [gather](gather/README.md) | gatherWarning |
+| 4 | [gather](gather/README.md) | readPause |
+| 5 | [inputs](inputs/README.md) | readArgumentAsk |
+| 6 | [inputs](inputs/README.md) | readInputs |
+| 7 | [results](results/README.md) | readResultsCoverage |
+| 8 | [inputs](inputs/README.md) | readContingentRows |
+| 9 | [results](results/README.md) | readResultEvidence |
+| 10 | [answer](answer/README.md) | readAnswerRows |
+| 11 | [choose](choose/README.md) | readIntegrityFindings |
+| 12 | [compose](compose/README.md) | composeWarning |
+
+<!-- answer-warning-stages:end -->
 
 ## In the run — the answer layer
 
@@ -467,7 +490,7 @@ accountForAnswer(recording).facts.standing.value; // 'ask'
    where a selected state key was. The fold reads such a key as ABSENT (a
    `pausedToolCallId` of `'REDACTED'` is not a pause), and when it asks for one
    at all it gives no standing: `not-assessed`, with the keys it needed in
-   `keptOut` (`assess.ts` · `keptOutGuard`). `agent.assessment()` reads the
+   `keptOut` (`gather/stage.ts` · `keptOutGuard`). `agent.assessment()` reads the
    live run, where nothing is kept out.
 
    ```ts

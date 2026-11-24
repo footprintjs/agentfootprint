@@ -119,6 +119,9 @@ export interface AgentTurnEndPayload {
    * them so a reader rebuilds the very line from the record.
    */
   readonly standingLineNames?: Readonly<Record<string, string>>;
+
+  /** Present when the reason filter omitted this turn's otherwise eligible standing line. */
+  readonly standingLineOmittedByRaiseOn?: true;
   /** Runtime-composed typed negatives, with verification and delivery kept separate. */
   readonly answerNegatives?: AnswerNegativesPayload;
   /**

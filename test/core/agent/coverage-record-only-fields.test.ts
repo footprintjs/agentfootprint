@@ -306,13 +306,16 @@ describe('record-only fields — a declaring tool changes the record, never the 
       expect(plainAnswer).toBe(`${prefix}${absence}.`);
       expect(declaredAnswer).toBe(plainAnswer);
     } else {
+      // The long subjects leave room only for the shorter explanation.
       expect(plainAnswer).toBe(
         `${prefix} (did not check “whether that name is a storage array, and which VM disks are on it”; ` +
-          `cannot cover “hosts that are not VMware — AIX LPARs and physical servers”)${absence}.`,
+          `cannot cover “hosts that are not VMware — AIX LPARs and physical servers” ` +
+          `because “RVTools sees VMware only”)${absence}.`,
       );
       expect(declaredAnswer).toBe(
-        `${prefix} (did not check “whether that name is a storage array”; ` +
-          `cannot cover “hosts that are not VMware”)${absence}.`,
+        `${prefix} (did not check “whether that name is a storage array” ` +
+          `because “this tool places disks, it does not list arrays”; ` +
+          `cannot cover “hosts that are not VMware” because “RVTools sees VMware only”)${absence}.`,
       );
     }
     // History additionally carries the recorded addresses. Compare their

@@ -78,7 +78,8 @@ const DECL = {
 
 const LOOKUP_WARNING_REASONS =
   'a tool said there is ground it did not check or cannot cover ' +
-  '(did not check “fabric B”; cannot cover “hosts outside the collected inventory”); ' +
+  '(did not check “fabric B” because “the person has not said which fabric the host is on”; ' +
+  'cannot cover “hosts outside the collected inventory” because “never collected”); ' +
   'a tool said nothing matched (suggested “Ask which fabric the host is cabled to, then look there.”).';
 
 const QUESTION = {
@@ -764,8 +765,8 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
       expect(done).toBe(
         'done\n\n---\n\nNot sure — a call did not run; ' +
           'a tool said there is ground it did not check or cannot cover ' +
-          '(Returning lookup did not check “fabric B”; ' +
-          'Returning lookup cannot cover “hosts outside the collected inventory”; ' +
+          '(Returning lookup did not check “fabric B” because “the person has not said which fabric the host is on”; ' +
+          'Returning lookup cannot cover “hosts outside the collected inventory” because “never collected”; ' +
           'Pausing lookup did not check “fabric B”; 1 more in the run record); ' +
           'a tool said nothing matched ' +
           '(Returning lookup suggested “Ask which fabric the host is cabled to, then look there.”; ' +
