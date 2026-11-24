@@ -33,8 +33,7 @@ import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
-import type { HonestyLayers } from '../honesty/armed.js';
-import { seedToolEvidence } from '../honesty/settledToolCalls.js';
+import { seedToolEvidence, type ToolEvidenceSeedOptions } from '../honesty/settledToolCalls.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../../tools/tools.js';
@@ -56,7 +55,7 @@ import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
 
 export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
-export interface SeedStageDeps {
+export interface SeedStageDeps extends ToolEvidenceSeedOptions {
   readonly sourceEvidenceMaxReceipts?: number;
   readonly consumePendingResumeSourceEvidence?: () => SourceEvidenceIndex | undefined;
   readonly negativeClaimsArmed?: boolean;
@@ -133,11 +132,6 @@ export interface SeedStageDeps {
    * later call's. Absent → the registry list, by reference.
    */
   readonly ruledTools?: ReadonlyMap<string, Tool>;
-  /**
-   * Which honesty layers this run armed (`honesty/armed.ts`) — the one run
-   * constant, written once. Absent → nothing is written.
-   */
-  readonly honestyLayers?: HonestyLayers;
   /**
    * THE TIME LAYER'S CLOCK (`.time()`) — the current run's clock draft, read
    * once, after the turn is known: seed completes it with the turn's start

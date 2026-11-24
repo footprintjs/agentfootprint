@@ -56,6 +56,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare credentialProvider?: AgentConfiguration['credentialProvider'];
   declare artifactStore?: AgentConfiguration['artifactStore'];
   declare sourceEvidenceConfig?: AgentConfiguration['sourceEvidenceConfig'];
+  declare lateRecordNotes?: AgentConfiguration['lateRecordNotes'];
   declare citationOptions?: AgentConfiguration['citationOptions'];
   declare artifactPlacement?: AgentConfiguration['artifactPlacement'];
   declare artifactRecordings?: AgentConfiguration['artifactRecordings'];

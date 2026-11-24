@@ -6,6 +6,7 @@ import { conversationAt } from './conversation.js';
 import { findingsAt } from './findings.js';
 import { ontologyAt } from './ontology.js';
 import { toolsAt } from './tools.js';
+import { lateRecordNoteAt } from './lateRecordNote.js';
 import { requestOnlyAt } from './requestOnly.js';
 import { gapsOf } from './gaps.js';
 import { readReceipt } from './recordReads.js';
@@ -46,9 +47,12 @@ export function viewOf(location: EpochLocation, served: boolean): ServedView {
   );
   const gaps = gapsOf(location, layoutUnknown, conversation, read, forced, served);
 
+  const lateRecordNote = lateRecordNoteAt(location);
+
   return frozenView({
     epoch: location.epoch,
     callRuntimeStageId: location.callRuntimeStageId,
+    ...(lateRecordNote !== undefined && { lateRecordNote }),
     ...(receipt !== undefined && {
       basis: {
         model: receipt.basis.model,

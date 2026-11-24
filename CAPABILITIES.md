@@ -213,6 +213,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 | writing a run's Server-Sent Events in a different frame shape — the framing is a strategy: `toSSE({ framing })`, default the frames it always wrote | `SseFraming` + `agentfootprintSse` (`agentfootprint/observe`) | `src/hosting/stream.ts` | 10.4.0 |
 | close a full or text SSE stream after its own invocation succeeds, fails, or pauses. Start after subscribing and drain all admitted events in order. Text streams of compositions carry the admitted token transcript | `toSSE` + `ToSSEOptions.start` (`agentfootprint/observe`) | `src/hosting/stream.ts` | 16.1.0 |
 | checking prose citations against authorized results submitted by the plain Anthropic SDK, including scoped claim verdicts, disagreements between same-scope sources, and missing requested columns with a complete visible schema | `Agent.create({ citations })` + `AnswerAssessment` | `src/core/agent/assessment/` | unreleased |
+| adding a bounded, attributed note about recorded open points to an eligible model request, with a receipt for the accepted attempt | `Agent.create({ lateRecordNotes: true })` + `lateRecordNoteReceipt` | `src/core/agent/types/state/records.ts` | unreleased |
 
 **Maintaining this table:** a new public capability adds a row, in the same
 change that adds the capability. `test/docs/capability-index.test.ts` fails if a

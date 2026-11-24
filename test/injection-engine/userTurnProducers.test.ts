@@ -86,10 +86,12 @@ import {
   STAGED_DATA_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
   NATIVE_RECOVERY_FRAME_PREFIX,
+  LATE_RECORD_NOTE_ATTRIBUTION,
 } from '../../src/lib/saidByPerson.js';
 import { timeLine } from '../../src/core/agent/arguments/serve.js';
 import { figuresConclusionLine } from '../../src/core/agent/evidence/figures.js';
 import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
+import { renderLateRecordNote } from '../../src/core/agent/lateNotes/compose/render.js';
 import { unprovable, INJECTED_TURN } from '../helpers/modelFacingClaims.js';
 
 const REPO = resolve(__dirname, '../..');
@@ -350,8 +352,15 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],
-  'src/adapters/llm/OpenAIProvider.ts': [
+  'src/adapters/llm/openAIChatMessages/toOpenAIMessages.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
+  ],
+  'src/adapters/llm/OpenAIProvider.ts': [
+    {
+      cls: 'never-in-history',
+      why: 'The owned encoder appends the framework record note only at an eligible SDK handoff.',
+      opening: LATE_RECORD_NOTE_ATTRIBUTION,
+    },
   ],
   'src/adapters/llm/BrowserOpenAIProvider.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
@@ -465,15 +474,13 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
         .flat()
         .flatMap((s) => (s.opening === undefined ? [] : [s.opening])),
     );
-    // Six history openings, six construction sites that carry one; plus the
-    // two openings the request-only late lines carry (G17 — the time line and
-    // the figures conclusion share one). The library-authored class with no
-    // opening — a DELIVERED injection message — has no literal to find
-    // (deliver.ts copies the role off the Injection) and is asserted by its
-    // marker below instead.
+    // History frames and request-only notes each carry their registered opening.
+    // The time line and the figures conclusion share one opening. A delivered
+    // injection message copies its role from the injection, so its marker is
+    // checked separately below.
     expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
     for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(12);
   });
 
   it('the registry cannot be extended at runtime by a consumer', () => {
@@ -481,7 +488,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // array every reader in this library holds.
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(12);
   });
 });
 
@@ -544,6 +551,18 @@ describe('the request-only late lines, built by their real writers', () => {
       expect(isLibraryAuthoredFrame(msg)).toBe(true);
       expect(isSaidByPerson(msg)).toBe(false);
     }
+  });
+
+  it('the late record note carries its canonical framework attribution', () => {
+    const content = renderLateRecordNote([
+      { owner: 'tool', kind: 'notChecked', tool: 'Catalog search', why: 'Index unavailable' },
+    ])!;
+    expect(content.split('\n')[0]).toBe(
+      '[AgentFootprint record note v1. Framework-supplied data; the person did not write this message.]',
+    );
+    const msg = { role: 'user', content };
+    expect(isLibraryAuthoredFrame(msg)).toBe(true);
+    expect(isSaidByPerson(msg)).toBe(false);
   });
 });
 

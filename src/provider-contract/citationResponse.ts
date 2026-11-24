@@ -1,4 +1,5 @@
 import type { CallOccurrenceKey } from '../lib/callOccurrence.js';
+import { carryLateRecordNoteResponse } from './lateRecordNote.js';
 import type { LLMResponse } from './types.js';
 
 export interface CitedResultBlock {
@@ -50,5 +51,5 @@ export function carryCitationResponse(from: LLMResponse, to: LLMResponse): LLMRe
   const proof = responseOffers.get(from);
   if (proof !== undefined && proof.text === responseText(from) && proof.text === responseText(to))
     responseOffers.set(to, proof);
-  return to;
+  return carryLateRecordNoteResponse(from, to);
 }

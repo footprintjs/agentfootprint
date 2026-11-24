@@ -22,6 +22,7 @@ import type { buildToolCallsHandler } from './stages/toolCalls/index.js';
 import type { buildRouteDeciderStage } from './stages/route.js';
 import type { SourceEvidenceIndex } from '../../artifacts/sourceEvidence/types.js';
 import type { HostedRecording } from '../runnerLive.js';
+import type { LateRecordWork } from './lateNotes/types.js';
 import type { SourceConsultation } from './honesty/sourceConsultation.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
@@ -69,6 +70,7 @@ export interface AgentRunValues extends RunnerCoreValues {
   readonly providerToolCache: ProviderToolCache;
   readonly servedTools: ServedToolParties;
   sourceConsultation?: SourceConsultation;
+  lateRecordWork?: LateRecordWork;
   readonly receiptDigests: ReceiptDigests;
   readonly evictedTurnsHandle?: EvictedTurnsHandle;
   callLLM?: ReturnType<typeof buildCallLLMStage>;

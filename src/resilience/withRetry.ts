@@ -54,6 +54,7 @@ import { sleep } from '../lib/sleep.js';
 import { throwIfAborted } from '../lib/abort.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';
+import { lateRecordNoteRouter } from '../provider-contract/lateRecordNote.js';
 import { requestAttempt } from '../provider-contract/requestObserver.js';
 
 export interface WithRetryOptions {
@@ -161,7 +162,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       // not a recovered fact.
       const startedMs = Date.now();
       for (let attempt = 1; ; attempt++) {
-        const invocation = requestAttempt(attempts.hooks, attempts.request);
+        const invocation = requestAttempt(attempts.hooks, attempts.request, provider);
         try {
           const res = await provider.complete(attempts.request, invocation.hooks);
           invocation.close('response');
@@ -239,7 +240,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       const attempts = replayAttempts(req, hooks);
       const startedMs = Date.now();
       for (let attempt = 1; ; attempt++) {
-        const invocation = requestAttempt(attempts.hooks, attempts.request);
+        const invocation = requestAttempt(attempts.hooks, attempts.request, provider);
         try {
           const iterator = attempts.iterator(
             innerStream(attempts.request, invocation.hooks)[Symbol.asyncIterator](),
@@ -295,7 +296,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     };
   }
 
-  return wrapped;
+  return lateRecordNoteRouter(wrapped);
 }
 
 /**

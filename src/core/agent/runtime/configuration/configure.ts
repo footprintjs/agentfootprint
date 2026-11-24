@@ -540,6 +540,10 @@ export function configureAgent(
     if (!config.artifactStore) throw new Error('Agent.sourceEvidence requires an artifact store.');
     config.sourceEvidenceConfig = resolveSourceEvidenceOptions(opts.sourceEvidence);
   }
+  if (opts.lateRecordNotes === true) {
+    config.lateRecordNotes = true;
+    declarePrivateFields(runner);
+  }
   if (opts.citations !== undefined) {
     config.citationOptions = resolveProseCitations(opts.citations);
     declarePrivateFields(runner);

@@ -105,10 +105,36 @@ recording can number a turn differently from the receipt that turn minted.
 
 > `readonly` **gaps**: readonly [`ServedGap`](/docs/api/interfaces/ServedGap)[]
 
-Defined in: [src/time-travel/servedView.ts:417](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L417)
+Defined in: [src/time-travel/servedView.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L422)
 
 What this rebuild could NOT recover, each naming the receipt field it
  explains. Never empty — see [SERVED\_GAPS](/docs/api/variables/SERVED_GAPS).
+
+***
+
+### lateRecordNote?
+
+> `readonly` `optional` **lateRecordNote?**: `object`
+
+Defined in: [src/time-travel/servedView.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L393)
+
+The accepted native leaf's record-note disposition, when retained. Note text is unavailable in served replay.
+
+#### disposition
+
+> `readonly` **disposition**: `LateNoteDisposition`
+
+#### pointer?
+
+> `readonly` `optional` **pointer?**: `object`
+
+##### pointer.callRuntimeStageId
+
+> `readonly` **callRuntimeStageId**: `string`
+
+##### pointer.ordinal
+
+> `readonly` **ordinal**: `number`
 
 ***
 
@@ -116,7 +142,7 @@ What this rebuild could NOT recover, each naming the receipt field it
 
 > `readonly` **messages**: `object`
 
-Defined in: [src/time-travel/servedView.ts:396](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L396)
+Defined in: [src/time-travel/servedView.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L401)
 
 #### asSent
 
@@ -138,7 +164,7 @@ Lines composed for this request and written to no history.
 
 > `readonly` **system**: `object`
 
-Defined in: [src/time-travel/servedView.ts:392](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L392)
+Defined in: [src/time-travel/servedView.ts:397](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L397)
 
 #### pieces
 
@@ -154,7 +180,7 @@ Defined in: [src/time-travel/servedView.ts:392](https://github.com/footprintjs/a
 
 > `readonly` **tools**: `object`
 
-Defined in: [src/time-travel/servedView.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L404)
+Defined in: [src/time-travel/servedView.ts:409](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L409)
 
 #### forced?
 

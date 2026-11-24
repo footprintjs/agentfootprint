@@ -22,7 +22,6 @@
 import type {
   LLMCallHooks,
   LLMChunk,
-  LLMMessage,
   LLMProvider,
   LLMRequest,
   LLMResponse,
@@ -35,6 +34,12 @@ import { openAIThinkingHandler } from '../../thinking/OpenAIThinkingHandler.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
+import { beginLateRecordNote } from '../../provider-contract/lateRecordNote.js';
+import {
+  type OpenAIMessage,
+  type OpenAIToolCall,
+  toOpenAIMessages,
+} from './openAIChatMessages/toOpenAIMessages.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { azureBaseUrl } from './azureUrl.js';
 import { AZURE_AI_SCOPE, AZURE_COGNITIVE_SERVICES_SCOPE } from '../identity/azure.js';
@@ -64,10 +69,17 @@ function createUnder(
   client: OpenAIClient,
   params: OpenAICreateParams,
   signal: AbortSignal | undefined,
+  lateNote: ReturnType<typeof beginLateRecordNote>,
 ): Promise<OpenAIChatCompletion> | AsyncIterable<OpenAIStreamChunk> {
-  return signal
-    ? client.chat.completions.create(params, { signal })
-    : client.chat.completions.create(params);
+  const completions = client.chat.completions;
+  const create = completions.create;
+  if (lateNote !== undefined && typeof create === 'function') {
+    const ownBlock: OpenAIMessage | undefined =
+      lateNote.note === undefined ? undefined : { role: 'user', content: lateNote.note };
+    if (ownBlock !== undefined) params.messages.push(ownBlock);
+    lateNote.handoff(params.messages, ownBlock);
+  }
+  return Reflect.apply(create, completions, signal ? [params, { signal }] : [params]);
 }
 
 /** The SDK stream's own close, where it has one (`Stream.controller`). */
@@ -92,22 +104,6 @@ interface OpenAICreateParams {
   /** v7.26 — forced choice of one named tool, OpenAI's dialect of
    *  `LLMRequest.toolChoice`. */
   tool_choice?: { type: 'function'; function: { name: string } };
-}
-
-interface OpenAIMessage {
-  role: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
-  content: string | null;
-  tool_calls?: OpenAIToolCall[];
-  tool_call_id?: string;
-}
-
-interface OpenAIToolCall {
-  id: string;
-  type: 'function';
-  function: {
-    name: string;
-    arguments: string; // JSON-stringified args
-  };
 }
 
 interface OpenAITool {
@@ -316,6 +312,7 @@ const OPENAI_PROMPT_CACHING: PromptCaching = Object.freeze({
  */
 export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
   const connect = createClientResolver(options);
+  const scriptedClient = options._client;
   const defaultModel = options.defaultModel ?? 'gpt-4o-mini';
   const defaultMaxTokens = options.defaultMaxTokens;
   // A custom baseURL means an OpenAI-COMPATIBLE endpoint (Ollama/vLLM/Together/Groq),
@@ -335,6 +332,19 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     streamUsage: options.streamUsage === true,
   };
 
+  const nativeChatRoute = options.baseURL === undefined && !legacyEndpoint;
+  function observeSdkHandoff(client: OpenAIClient, hooks: LLMCallHooks | undefined) {
+    const proof = nativeChatRoute ? beginLateRecordNote(hooks, provider, 'plain') : undefined;
+    if (proof === undefined) return undefined;
+    // The resolved SDK may honor an ambient endpoint even when this factory
+    // was given no baseURL. Admit the default wire and the injected test SDK.
+    const baseURL = Object.getOwnPropertyDescriptor(client, 'baseURL');
+    return baseURL?.value === 'https://api.openai.com/v1' ||
+      (client === scriptedClient && baseURL === undefined && !('baseURL' in client))
+      ? proof
+      : undefined;
+  }
+
   const provider: LLMProvider = {
     name: 'openai',
     carriesInMessages: CARRIES_IN_MESSAGES,
@@ -347,7 +357,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
     carriesForcedToolChoice: !legacyEndpoint,
     ...(!legacyEndpoint && { promptCaching: OPENAI_PROMPT_CACHING }),
     thinkingHandler: openAIThinkingHandler,
-    async complete(req: LLMRequest): Promise<LLMResponse> {
+    async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       // A cancelled call sends nothing — checked again once the credential is
       // in hand, because asking for it can take a while (lib/abort.ts, law 1).
       throwIfAborted(req.signal);
@@ -356,23 +366,27 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
       // since the last call is a new token and not a 401.
       const client = await untilAborted(connect(), req.signal);
       throwIfAborted(req.signal);
+      const lateNote = observeSdkHandoff(client, hooks);
       try {
         // The signal rides the SDK's request options, so an abort cancels the
         // HTTP request itself; the race refuses an answer that lands after it.
         const response = (await untilAborted<unknown>(
-          createUnder(client, params, req.signal),
+          createUnder(client, params, req.signal, lateNote),
           req.signal,
         )) as OpenAIChatCompletion;
-        return fromOpenAIResponse(response);
+        const answer = fromOpenAIResponse(response);
+        if (!req.signal?.aborted) lateNote?.accept(answer);
+        return answer;
       } catch (err) {
         throw wrapError(err, req.signal);
       }
     },
-    async *stream(req: LLMRequest): AsyncIterable<LLMChunk> {
+    async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
       const params = buildParams(req, { ...cfg, stream: true });
       const client = await untilAborted(connect(), req.signal);
       throwIfAborted(req.signal);
+      const lateNote = observeSdkHandoff(client, hooks);
       let stream: AsyncIterable<OpenAIStreamChunk>;
       try {
         // AWAIT, then check. The SDK's `create()` returns an `APIPromise` — a
@@ -384,7 +398,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
         // from `create()`, which is why the guard accepts BOTH shapes: `await`
         // on a non-thenable is the identity.
         stream = await untilAborted(
-          asChunkStream(createUnder(client, params, req.signal)),
+          asChunkStream(createUnder(client, params, req.signal, lateNote)),
           req.signal,
         );
       } catch (err) {
@@ -454,6 +468,7 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
           stopReason: normalizeStopReason(lastFinishReason ?? 'stop'),
           providerRef: lastId,
         };
+        if (!req.signal?.aborted) lateNote?.accept(response);
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
         throw wrapError(err, req.signal);
@@ -1022,66 +1037,6 @@ function buildParams(req: LLMRequest, cfg: BuildConfig): OpenAICreateParams {
     params.tool_choice = { type: 'function', function: { name: req.toolChoice.name } };
   }
   return params;
-}
-
-/**
- * messages → OpenAI messages.
- *
- * Roles map 1:1: system/user/assistant/tool. For reasoning models the system role
- * becomes `developer` (its replacement). Assistant turns with `toolCalls` get those
- * serialized into `message.tool_calls` (args JSON-stringified per OpenAI's contract).
- * Tool messages map to `role: 'tool'` with `tool_call_id`.
- */
-function toOpenAIMessages(
-  messages: readonly LLMMessage[],
-  systemPrompt: string | undefined,
-  reasoning: boolean,
-): OpenAIMessage[] {
-  const systemRole: 'system' | 'developer' = reasoning ? 'developer' : 'system';
-  const result: OpenAIMessage[] = [];
-  // OpenAI accepts the system/developer role IN the messages array (unlike Anthropic's
-  // separate `system` field). Prepend systemPrompt as the first such message; subsequent
-  // in-message system entries pass through.
-  if (systemPrompt) {
-    result.push({ role: systemRole, content: systemPrompt });
-  }
-  for (const m of messages) {
-    if (m.role === 'system') {
-      result.push({ role: systemRole, content: m.content });
-      continue;
-    }
-    if (m.role === 'user') {
-      result.push({ role: 'user', content: m.content });
-      continue;
-    }
-    if (m.role === 'assistant') {
-      const msg: OpenAIMessage = {
-        role: 'assistant',
-        content: m.content || null,
-      };
-      if (m.toolCalls && m.toolCalls.length > 0) {
-        msg.tool_calls = m.toolCalls.map((tc) => ({
-          id: tc.id,
-          type: 'function',
-          function: {
-            name: tc.name,
-            arguments: JSON.stringify(tc.args),
-          },
-        }));
-      }
-      result.push(msg);
-      continue;
-    }
-    if (m.role === 'tool') {
-      result.push({
-        role: 'tool',
-        content: m.content,
-        tool_call_id: m.toolCallId ?? '',
-      });
-      continue;
-    }
-  }
-  return result;
 }
 
 function toOpenAITool(schema: LLMToolSchema): OpenAITool {

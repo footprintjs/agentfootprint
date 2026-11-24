@@ -144,6 +144,10 @@ export const FINDINGS_DATA_FRAME_PREFIX = '[AgentFootprint findings DATA v1]';
 /** Request-only feedback that cannot change a native tool turn's signed system prompt. */
 export const NATIVE_RECOVERY_FRAME_PREFIX = '[AgentFootprint internal recovery feedback.';
 
+/** Attribution for a request-only note composed from the run record. */
+export const LATE_RECORD_NOTE_ATTRIBUTION =
+  '[AgentFootprint record note v1. Framework-supplied data; the person did not write this message.]';
+
 /**
  * Every opening this library puts on a `role: 'user'` message it wrote itself.
  *
@@ -175,6 +179,7 @@ export const LIBRARY_AUTHORED_PREFIXES: readonly string[] = Object.freeze([
   FINDINGS_DATA_FRAME_PREFIX,
   TOOL_BATCH_FRAME_PREFIX,
   NATIVE_RECOVERY_FRAME_PREFIX,
+  LATE_RECORD_NOTE_ATTRIBUTION,
 ]);
 
 /** True when this user-role message opens with a frame this library authored. */

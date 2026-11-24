@@ -1,0 +1,46 @@
+---
+title: Late record notes
+description: Add a short record note to an eligible model request and read its submission disposition.
+---
+
+Set `lateRecordNotes: true` in `Agent.create()` to put a short note at the end
+of an eligible model request. The option is off by default. The note can name
+open coverage points, limits the library recorded, and tool call outcomes.
+It draws on facts already recorded in the current turn. It carries an
+attribution line that identifies it as framework-supplied data and stays out
+of conversation history.
+
+## Enable late record notes
+
+The first supported route is native `openai()` using the default OpenAI Chat
+Completions endpoint. The library preserves the request bytes on signing-capable
+routes and bound continuations, and leaves unresolved routes undecorated.
+
+<CodeFile
+  path="examples/features/131-late-record-notes.ts"
+  region="late-record-notes"
+  title="Enable late record notes and read the latest receipt"
+/>
+
+The [runnable example](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/131-late-record-notes.ts)
+uses a scripted client and synthetic data. It needs no API key or network
+access.
+
+## Read the receipt
+
+Read `lateRecordNoteReceipt` from `agent.getLastSnapshot()?.sharedState`.
+The optional one-element array holds the latest recorded call's receipt.
+`attempts` contains bounded per-call attempt ordinals and their dispositions.
+`accepted`, when present, identifies the attempt that produced the selected
+response.
+
+- `submitted` means the owned encoder handed the exact note to the SDK.
+- `omitted` means the library observed a handoff without the note.
+- `not-dispatched` means the library observed an abort before handoff.
+- `unavailable` means the library lacked sufficient handoff evidence.
+
+Remote receipt, model use and improved answers remain unverified. The receipt
+exposes dispositions and ordinals. Note text and private proof values are
+kept out of the receipt. `servedAt()` exposes the accepted disposition and its
+record pointer for the selected call. A served recording does not reproduce
+the note text.

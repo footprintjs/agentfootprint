@@ -114,6 +114,7 @@
       "mapEngagement": ["132cd057c474fa1fedd6ddac250da2b048b890010d40e01df84f06fc8075cef9",true,false],
       "sourceLinkServedRows": ["54362579910e8ecc857d4822cb3c46985ec78042851a6443f5dd4c410e202a48",true,false],
       "coverageDeclared": ["dce5d55803f1873e1c10041913ca0b71c5a81642f3cdb48c1d87d59e172a4ba0",true,false],
+      "lateRecordNoteReceipt": ["68a8f9ad825d507c4dfeede42dfba4c04153c3872748409b33e3412190a2aaed",true,false],
       "citationSources": ["147c48947c927f1a93cef9b44b9336d17bfb8cf2728b5b2080b92ac06dd0a344",true,false],
       "acceptedCitationOffer": ["a7b6cb874b5c20a38115dd828b35f182c611a3e11e72410dcde5d3a9753deaf4",true,false],
       "answerCitations": ["26e9d45a2e6fb7d103158a81bbe56e58a45a27fadb92af306f4405ab0e9fcf64",true,false],
@@ -169,6 +170,7 @@
       "settledToolCallsComplete": ["3b4c223ff55b39025cefdafb25bd0e5131735182688da0b3f11f896a28ac6357",true,false]
     },
     "comments": {
+      "89b14dde43c249bf55172a7ba3abb3e270b69d09804ccda559ad3fc5dcc69f56": 1,
       "e70f854e5a7e4bc2ea48a197f018b595342b6a46536a84f935f213e4faad6f8d": 1,
       "b521a6056464b657c0ea9e411f345f1688035b80764896afa948eea043e73337": 1,
       "e642ffe3c5b13e551dd036e0c8727a448eb3a62b78cb3d2af7108c9b2f053304": 1,

@@ -389,6 +389,11 @@ export interface ServedView {
     /** The salt every hash on this epoch's receipt was taken with. */
     readonly runId: string;
   };
+  /** The accepted native leaf's record-note disposition, when retained. Note text is unavailable in served replay. */
+  readonly lateRecordNote?: {
+    readonly disposition: import('../provider-contract/lateRecordNote.js').LateNoteDisposition;
+    readonly pointer?: { readonly callRuntimeStageId: string; readonly ordinal: number };
+  };
   readonly system: {
     readonly text: string;
     readonly pieces: readonly ServedPiece[];

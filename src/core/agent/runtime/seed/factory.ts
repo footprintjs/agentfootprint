@@ -71,6 +71,7 @@ export function seedFactory(environment: SeedEnvironment) {
       get ruledTools() {
         return environment.seededRuledTools;
       },
+      ...(environment.configuration.lateRecordNotes === true && { lateRecordNotes: true }),
       get honestyLayers() {
         return environment.seededHonestyLayers;
       },

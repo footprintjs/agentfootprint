@@ -47,6 +47,7 @@ import type { ResolvedProseCitations } from '../../citations/config.js';
 /** Static run-policy and service declarations, resolved once at construction. */
 export interface AgentConfiguration extends ModelConfiguration {
   readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
+  readonly lateRecordNotes?: true;
   readonly citationOptions?: ResolvedProseCitations;
   /** Side channel for the conversation's inherited skill cursor (SG-C) —
    *  stashed by `applyContinuation`, consumed-and-cleared by seed. */

@@ -55,6 +55,8 @@ import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import { commitAcceptedResponse } from './callLLM/commitResponse.js';
+import { commitLateNoteReceipt } from '../lateNotes/receipt.js';
+import { carryLateRecordNoteResponse } from '../../../provider-contract/lateRecordNote.js';
 import { prepareCitationProjection } from './callLLM/citationProjection.js';
 import { liveChunkEmitter } from './callLLM/liveChunks.js';
 import { recoveryFeedback, requestOnlyMessages } from './callLLM/requestOnly.js';
@@ -76,7 +78,7 @@ import { tagThinkingResponse } from '../../../thinking/dispatch.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { emitCostTick } from '../../cost.js';
 
-import { applyOutputSchema } from '../../../answer-validation/outputSchema.js';
+import { postValidateOutput } from './callLLM/postValidateOutput.js';
 import {
   carriesFindingsDecoration,
   splitFindings,
@@ -92,12 +94,7 @@ import { trackRecallRequests } from './callLLM/recallRequest.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
 import type { OntologyPiece } from '../../../ontology/serve.js';
 import type { OntologyRecord } from '../../../ontology/types.js';
-import {
-  executeWithReliability,
-  ValidationFailure,
-  type OutputSchemaValidator,
-  type LLMCallFn,
-} from './reliabilityExecution.js';
+import { executeWithReliability, type LLMCallFn } from './reliabilityExecution.js';
 import type { AgentState } from '../types.js';
 
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
@@ -327,13 +324,14 @@ export function buildCallLLMStage(
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;
 
-    const freshNotes = requestOnlyMessages(scope, deps, {
+    const { messages: freshNotes, lateNote } = requestOnlyMessages(scope, deps, {
       iteration,
       committed,
       messages,
       ledger,
       registeredToolSchemas,
       withheld,
+      continuing: continuing !== undefined || closure !== undefined,
     });
     const recoveryContext = closure ?? recoveryNote;
     const tail = recoveryContext === undefined ? freshNotes : [recoveryContext, ...freshNotes];
@@ -675,7 +673,8 @@ export function buildCallLLMStage(
             },
         serving?.discard,
       );
-      const attemptHooks = recall?.hooks(ordinaryHooks) ?? ordinaryHooks;
+      const observing = recall?.hooks(ordinaryHooks) ?? ordinaryHooks;
+      const attemptHooks = lateNote?.hooks(observing) ?? observing;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
       // goes through the scanner the answer's peel uses, so a token never
       // carries the model's `_findings` notes — not even when a chunk ends
@@ -734,7 +733,10 @@ export function buildCallLLMStage(
       const answered =
         hooks.providerIndex === undefined
           ? resp
-          : tagThinkingResponse(resp, String(hooks.providerIndex));
+          : carryLateRecordNoteResponse(
+              resp,
+              tagThinkingResponse(resp, String(hooks.providerIndex)),
+            );
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
       acceptedOffer = offer;
@@ -744,103 +746,55 @@ export function buildCallLLMStage(
       return result;
     };
 
-    // v2.13 — build the output-schema validator hook when both
-    // reliability + outputSchemaParser are configured. The reliability
-    // loop applies the validator only on terminal turns (toolCalls
-    // empty) so tool-using turns aren't rejected for failing the final-
-    // answer schema. ValidationFailure carries `stage` + `path` for the
-    // typed event payload.
-    let postValidate: OutputSchemaValidator | undefined;
-    if (deps.outputSchemaParser !== undefined) {
-      const parser = deps.outputSchemaParser;
-      postValidate = (response) => {
-        try {
-          // Judged with the reserved answer key peeled under the arm
-          // (9.101.0): this runs BEFORE the route decider's own peel, and a
-          // strict schema must see the answer the model meant, not the
-          // envelope its standings rode in on. Unarmed: the content itself.
-          applyOutputSchema(
-            peel !== undefined
-              ? peel.peelAnswerFindings(response.content).content
-              : response.content,
-            parser,
-          );
-        } catch (err) {
-          // applyOutputSchema throws OutputSchemaError with
-          // {stage, rawOutput, cause}. Convert to ValidationFailure for
-          // the gate's typed handling. Pull a `path` if the underlying
-          // cause exposes Zod-style issues. Use the cause's message
-          // (the actual parser error) when available, falling back to
-          // the wrapper's message for parsers without a cause.
-          const e = err as {
-            message: string;
-            stage?: 'json-parse' | 'schema-validate';
-            rawOutput?: string;
-            cause?: {
-              message?: string;
-              issues?: ReadonlyArray<{ path?: ReadonlyArray<string | number> }>;
-            };
-          };
-          let path: string | undefined;
-          const firstIssue = e.cause?.issues?.[0];
-          if (firstIssue?.path && firstIssue.path.length > 0) {
-            path = firstIssue.path.join('.');
-          }
-          // Use cause message when present (parsers like Zod attach the
-          // real error as cause); fall back to wrapper message.
-          const message = e.cause?.message ?? e.message;
-          throw new ValidationFailure({
-            message,
-            stage: e.stage ?? 'schema-validate',
-            ...(path !== undefined && { path }),
-            ...(e.rawOutput !== undefined && { rawOutput: e.rawOutput }),
-          });
-        }
-      };
-    }
+    const postValidate = postValidateOutput(deps.outputSchemaParser, peel?.peelAnswerFindings);
 
     let response: LLMResponse | undefined;
-    if (deps.reliability) {
-      response = await executeWithReliability(
-        scope,
-        llmRequest,
-        deps.reliability,
-        provider,
-        provider.name,
-        model,
-        singleProviderCall,
-        postValidate,
-        {
-          ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
-          providerHooks,
-          prepareFallback: (request: LLMRequest) => {
-            serving?.discard();
-            const witness = deps.findings === true ? capture(request) : undefined;
-            return () => {
-              // A local answer does not inherit the replaced provider's stop reason
-              // or native generation. The callback may return arbitrary text.
-              localFallback = true;
-              acceptedFindingsRequest = witness;
-            };
+    try {
+      if (deps.reliability) {
+        response = await executeWithReliability(
+          scope,
+          llmRequest,
+          deps.reliability,
+          provider,
+          provider.name,
+          model,
+          singleProviderCall,
+          postValidate,
+          {
+            ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
+            providerHooks,
+            prepareFallback: (request: LLMRequest) => {
+              serving?.discard();
+              const witness = deps.findings === true ? capture(request) : undefined;
+              return () => {
+                // A local answer does not inherit the replaced provider's stop reason
+                // or native generation. The callback may return arbitrary text.
+                localFallback = true;
+                acceptedFindingsRequest = witness;
+              };
+            },
+            ...(deps.outputFormat !== undefined && {
+              isTerminalRefusal: (response: LLMResponse) =>
+                answeredBy.native && response.stopReason === 'refusal',
+            }),
           },
-          ...(deps.outputFormat !== undefined && {
-            isTerminalRefusal: (response: LLMResponse) =>
-              answeredBy.native && response.stopReason === 'refusal',
-          }),
-        },
-      );
-      // `executeWithReliability` returns `undefined` when it took the
-      // fail-fast path. It already wrote scope state and called
-      // `$break(reason)` — `Agent.run()` translates the propagated
-      // break into a `ReliabilityFailFastError` at the API boundary.
-      // File the incomplete request when armed. There is no response to commit.
-      if (response === undefined) {
-        if (recall !== undefined)
-          deps.recallRequests?.(scope, iteration, recall.summary('incomplete'));
-        return;
+        );
+        // `executeWithReliability` returns `undefined` when it took the
+        // fail-fast path. It already wrote scope state and called
+        // `$break(reason)` — `Agent.run()` translates the propagated
+        // break into a `ReliabilityFailFastError` at the API boundary.
+        // File the incomplete request when armed. There is no response to commit.
+        if (response === undefined) {
+          if (recall !== undefined)
+            deps.recallRequests?.(scope, iteration, recall.summary('incomplete'));
+          return;
+        }
+      } else {
+        response = await singleProviderCall(llmRequest, {});
       }
-    } else {
-      response = await singleProviderCall(llmRequest, {});
+    } finally {
+      if (lateNote !== undefined && response === undefined)
+        commitLateNoteReceipt(scope, lateNote, undefined);
     }
     // Preserve the pending carrier if the provider fails, so crash recovery
     // retries the same instruction. The prior committed value proves delivery.
@@ -854,15 +808,23 @@ export function buildCallLLMStage(
     if (typeof response.usage.cacheRead === 'number') {
       scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
     }
-    const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
-      localFallback,
-      answeredBy,
-      findingsRequest: acceptedFindingsRequest,
-      citationOffer: citations?.accepted(response),
-      sourceOffer: acceptedOffer,
-      iteration,
-      recall: recall?.summary(localFallback ? 'local' : 'provider'),
-    });
+    let acceptedToolCalls: ReturnType<typeof commitAcceptedResponse> | undefined;
+    try {
+      acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
+        localFallback,
+        answeredBy,
+        findingsRequest: acceptedFindingsRequest,
+        citationOffer: citations?.accepted(response),
+        sourceOffer: acceptedOffer,
+        iteration,
+        recall: recall?.summary(localFallback ? 'local' : 'provider'),
+      });
+    } finally {
+      if (lateNote !== undefined) {
+        const accepted = acceptedToolCalls !== undefined && !localFallback ? response : undefined;
+        commitLateNoteReceipt(scope, lateNote, accepted);
+      }
+    }
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

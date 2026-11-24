@@ -49,6 +49,10 @@ import {
 } from '../provider-contract/nativeOutputSchema.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
+import {
+  carryLateRecordNoteResponse,
+  lateRecordNoteRouter,
+} from '../provider-contract/lateRecordNote.js';
 import { requestAttempt, type RequestSettlement } from '../provider-contract/requestObserver.js';
 import { throwIfAborted } from '../lib/abort.js';
 
@@ -245,7 +249,7 @@ export function withFallback(
   const tagsThinking = primary.thinkingHandler !== fallback.thinkingHandler;
   /** A response as the pair returns it: thinking tagged when the sides differ. */
   const answered = (res: LLMResponse, side: Side): LLMResponse =>
-    tagsThinking ? tagThinkingResponse(res, side) : res;
+    tagsThinking ? carryLateRecordNoteResponse(res, tagThinkingResponse(res, side)) : res;
   async function* answeredStream(chunks: AsyncIterable<LLMChunk>, side: Side) {
     for await (const chunk of chunks) {
       yield chunk.response === undefined
@@ -305,7 +309,7 @@ export function withFallback(
       const attempts = replayAttempts(req, hooks);
       try {
         const primaryRequest = requestFor(primary, attempts.request);
-        const attempt = requestAttempt(attempts.hooks, primaryRequest);
+        const attempt = requestAttempt(attempts.hooks, primaryRequest, primary);
         let settlement: RequestSettlement = 'failed';
         try {
           const response = attempts.response(
@@ -325,7 +329,7 @@ export function withFallback(
         onFallback?.(err);
         reportFellBack(hooks, err);
         const fallbackRequest = requestFor(fallback, attempts.request);
-        const attempt = requestAttempt(attempts.hooks, fallbackRequest);
+        const attempt = requestAttempt(attempts.hooks, fallbackRequest, fallback);
         let settlement: RequestSettlement = 'failed';
         try {
           const response = attempts.response(
@@ -355,7 +359,7 @@ export function withFallback(
       // `stream()`. Calling this a fallback would be a lie.
       const fromFallback = async function* (): AsyncIterable<LLMChunk> {
         const fallbackReq = requestFor(fallback, attempts.request);
-        const attempt = requestAttempt(attempts.hooks, fallbackReq);
+        const attempt = requestAttempt(attempts.hooks, fallbackReq, fallback);
         try {
           for await (const chunk of answeredStream(
             fallback.stream
@@ -377,7 +381,7 @@ export function withFallback(
       let yieldedAny = false;
       try {
         const primaryRequest = requestFor(primary, attempts.request);
-        const attempt = requestAttempt(attempts.hooks, primaryRequest);
+        const attempt = requestAttempt(attempts.hooks, primaryRequest, primary);
         try {
           for await (const chunk of answeredStream(
             primary.stream(primaryRequest, attempt.hooks),
@@ -400,7 +404,7 @@ export function withFallback(
     };
   }
 
-  return wrapped;
+  return lateRecordNoteRouter(wrapped);
 }
 
 // ── Defaults ────────────────────────────────────────────────────────

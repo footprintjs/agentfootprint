@@ -5,6 +5,7 @@ import {
 } from '../../memory/define.types.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
 import { integrityRailInto } from './integrityFindings.js';
+import { lateNoteReadsInto } from './lateNotes/stage.js';
 import { llmCallReadsInto } from './llmCallReads.js';
 
 type TurnInputDeps = Pick<
@@ -14,6 +15,7 @@ type TurnInputDeps = Pick<
   | 'negativeRecheckStage'
   | 'hasSteps'
   | 'engagementPlan'
+  | 'lateRecordNotes'
   | 'hasOntology'
   | 'sourceNotConsulted'
   | 'hasEscalation'
@@ -89,6 +91,7 @@ export function dynamicTurnInput(p: Readonly<Record<string, unknown>>, deps: Tur
     ...integrityRailInto(p),
     // The run records CallLLM reads inside this boundary, written outside
     // it: the window ledger, the findings ledger and the ticket receipt.
+    ...(deps.lateRecordNotes !== undefined && lateNoteReadsInto(p)),
     ...llmCallReadsInto(p),
     // The declared ontology (9.106.0) — the same lesson: `callLLM`
     // composes the ontology piece from the run constant `ontology`,

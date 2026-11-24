@@ -5,6 +5,8 @@ import type { ProseCitationOptions } from '../citations/config.js';
 
 /** Options for the events an Agent serves to live observers. */
 export interface AgentObservationOptions {
+  /** Default-off record notes on proved plain native requests. */
+  readonly lateRecordNotes?: boolean;
   /** Offer citations in prose on adapters that can prove which tool bodies were submitted. */
   readonly citations?: ProseCitationOptions;
   /**
