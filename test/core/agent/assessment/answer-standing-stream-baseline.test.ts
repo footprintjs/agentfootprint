@@ -17,7 +17,7 @@ const submit = defineTool({
   execute: () => ({ content: 'Request received.', effects: [], status: 'pending' }),
 });
 
-describe.each(['default', 'explicit'] as const)(
+describe.each(['default', 'explicit', 'filtered'] as const)(
   'SCENARIO — the %s standing line and streaming',
   (arm) => {
     it.each(['ordinary', 'output admission'] as const)('%s', async (stream) => {
@@ -28,8 +28,11 @@ describe.each(['default', 'explicit'] as const)(
         }),
         model: 'mock',
       }).tool(submit);
-      if (arm === 'explicit') {
-        builder.answerLayer({ standingLine: { when: 'not-sure-or-ask' } });
+      const expected = arm === 'filtered' ? ANSWER : DELIVERED;
+      if (arm !== 'default') {
+        builder.answerLayer({
+          standingLine: { when: 'not-sure-or-ask', ...(arm === 'filtered' && { raiseOn: [] }) },
+        });
       }
       if (stream === 'output admission') {
         builder.messageMiddleware({ name: 'pass-through', onMessage: () => allow() });
@@ -43,7 +46,7 @@ describe.each(['default', 'explicit'] as const)(
       agent.on('agentfootprint.agent.turn_end', ({ payload }) =>
         final.push({ text: payload.finalContent, assessment: payload.answerAssessment }),
       );
-      expect(await agent.run({ message: 'Please do the work.' })).toBe(DELIVERED);
+      expect(await agent.run({ message: 'Please do the work.' })).toBe(expected);
       expect(assessed).toEqual([
         expect.objectContaining({
           turn: 1,
@@ -55,7 +58,7 @@ describe.each(['default', 'explicit'] as const)(
       ]);
       expect(final).toEqual([
         {
-          text: DELIVERED,
+          text: expected,
           assessment: {
             assessment: assessed[0]!.assessment,
             standing: assessed[0]!.standing,
@@ -64,7 +67,7 @@ describe.each(['default', 'explicit'] as const)(
           },
         },
       ]);
-      if (stream === 'output admission') expect(tokens).toEqual([DELIVERED]);
+      if (stream === 'output admission') expect(tokens).toEqual([expected]);
       else expect(tokens.join('')).toBe(ANSWER);
     });
   },

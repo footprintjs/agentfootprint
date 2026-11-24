@@ -151,7 +151,14 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
                 ? false
                 : answerLayer.standingLine === undefined
                 ? true
-                : { standingLine: { when: answerLayer.standingLine } },
+                : {
+                    standingLine: {
+                      when: answerLayer.standingLine,
+                      ...(answerLayer.standingLineRaiseOn !== undefined && {
+                        raiseOn: answerLayer.standingLineRaiseOn,
+                      }),
+                    },
+                  },
           }),
           // The time layer, the same door grammar — the builder's value wins
           // over an `AgentOptions.time` given to `Agent.create`.
