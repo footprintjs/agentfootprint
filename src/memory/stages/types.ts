@@ -90,6 +90,9 @@ export interface MemoryState {
    */
   retrieved?: import('../retrieval/types.js').RetrievalEvidence;
 
+  /** Current-turn read-side evidence, bounded by the producers. */
+  recallOutcomes?: readonly import('../retrieval/outcome.js').MemoryRecallOutcome[];
+
   /**
    * Write-side input: messages to persist at the end of this turn. The
    * wire layer populates from the agent's final message state;

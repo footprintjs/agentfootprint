@@ -160,6 +160,7 @@ const NAMES = {
     // `turn_end.scripts` is a model-written string the value-kind rule already
     // serves as the placeholder.
     'findingsLedger',
+    'retrievalRequest',
     'findingsRequest',
     // This private native projection can also contain prior findings DATA.
     'requestReplay',
@@ -239,10 +240,13 @@ const NAMES = {
 
 /**
  * Keys named per memory or retrieval definition — `memoryInjection_<id>`,
- * `retrievalEvidence_<id>` (`memory/define.types.ts` · `memoryInjectionKey`,
- * `retrievalEvidenceKey`) — matched by their prefix.
+ * `retrievalEvidence_<id>` and `memoryRecallOutcomes_<id>` — matched by their prefix.
  */
-const PATTERN_PREFIXES: readonly string[] = ['memoryInjection_', 'retrievalEvidence_'];
+const PATTERN_PREFIXES: readonly string[] = [
+  'memoryInjection_',
+  'retrievalEvidence_',
+  'memoryRecallOutcomes_',
+];
 const PATTERNS: readonly RegExp[] = PATTERN_PREFIXES.map((prefix) => new RegExp(`^${prefix}`));
 
 /**

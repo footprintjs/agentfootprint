@@ -35,6 +35,8 @@
  * });
  * ```
  */
+import { supportsRecallSearch } from '../store/readOutcome.js';
+import type { RetrievalRecording } from '../retrieval/types.js';
 import { flowChart } from 'footprintjs';
 
 import { pickByBudget, type PickByBudgetConfig } from '../stages/pickByBudget.js';
@@ -58,6 +60,7 @@ import {
 import type { Embedder } from '../embedding/types.js';
 
 export interface SemanticPipelineConfig {
+  readonly recording?: RetrievalRecording;
   /** Vector-capable store. Must implement `search()`. */
   readonly store: MemoryStore;
 
@@ -133,14 +136,15 @@ export interface SemanticPipelineConfig {
  * Returns `{ read, write }` ready to pass to `Agent.memory()` via the appropriate `defineMemory` config (or used directly via `mountMemoryRead`/`mountMemoryWrite`).
  */
 export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline {
-  if (!config.store.search) {
+  if (!supportsRecallSearch(config.store)) {
     throw new Error(
-      'semanticPipeline: the configured store does not implement search(). ' +
+      'semanticPipeline: the configured store does not implement search() or searchWithOutcome(). ' +
         'Pass a vector-capable adapter (InMemoryStore, pgvector, Pinecone, ...).',
     );
   }
 
   const loadConfig: LoadRelevantConfig = {
+    ...(config.recording !== undefined && { recording: config.recording }),
     store: config.store,
     ...(config.embedder !== undefined && { embedder: config.embedder }),
     ...(config.embedderId !== undefined && { embedderId: config.embedderId }),
@@ -156,6 +160,7 @@ export function semanticPipeline(config: SemanticPipelineConfig): MemoryPipeline
     ...(config.maxEntries !== undefined && { maxEntries: config.maxEntries }),
   };
   const formatConfig: FormatDefaultConfig = {
+    ...(config.recording !== undefined && { recording: config.recording }),
     ...(config.formatHeader !== undefined && { header: config.formatHeader }),
     ...(config.formatFooter !== undefined && { footer: config.formatFooter }),
     ...(config.flavor !== undefined && { flavor: config.flavor }),

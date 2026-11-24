@@ -44,7 +44,7 @@ import type { Embedder } from './embedding/index.js';
 import type { MemoryStore } from './store/index.js';
 import type { MemoryNamespaceScope, MemoryWriteOptionsConfig } from './store/writeOptions.js';
 import type { MemoryIdentity } from './identity/index.js';
-import type { RetrievalStrategy } from './retrieval/types.js';
+import type { RetrievalRecording, RetrievalStrategy } from './retrieval/types.js';
 
 // ─── Const-objects (SSOT) ───────────────────────────────────────────
 
@@ -579,11 +579,16 @@ export interface DefineMemoryOptionsBase {
 
 export interface DefineEpisodicOptions extends DefineMemoryOptionsBase {
   readonly type: typeof MEMORY_TYPES.EPISODIC;
+  /** Keep retrieval evidence and attachment events free of passage text. */
+  readonly recording?: RetrievalRecording;
 }
 
-export interface DefineSemanticOptions extends DefineMemoryOptionsBase {
+export type DefineSemanticOptions = DefineMemoryOptionsBase & {
   readonly type: typeof MEMORY_TYPES.SEMANTIC;
-}
+} & (
+    | { readonly strategy: TopKStrategy; readonly recording?: RetrievalRecording }
+    | { readonly recording?: never }
+  );
 
 export interface DefineNarrativeOptions extends DefineMemoryOptionsBase {
   readonly type: typeof MEMORY_TYPES.NARRATIVE;
@@ -638,17 +643,7 @@ export function isMemoryInjectionKey(key: string): boolean {
   return key.startsWith(MEMORY_INJECTION_KEY_PREFIX);
 }
 
-/**
- * Scope-key prefix for the retrieval record a memory lifts to the parent
- * scope (8.8.0), one key per memory id — the same layering rule as
- * `memoryInjection_`.
- *
- * This key is the reason a backward slice can now reach a passage. It is
- * ORDINARY root state, so `sliceForKey('finalContent')` walks the
- * system-prompt write, and the record naming every candidate id and score
- * is one hop away. Before 8.8.0 the scores existed only inside the memory
- * subflow, which the root commit log never sees.
- */
+/** Lift retrieval evidence to root so replay can slice back to a passage. */
 export const RETRIEVAL_EVIDENCE_KEY_PREFIX = 'retrievalEvidence_' as const;
 
 export function retrievalEvidenceKey(id: string): string {
@@ -657,4 +652,9 @@ export function retrievalEvidenceKey(id: string): string {
 
 export function isRetrievalEvidenceKey(key: string): boolean {
   return key.startsWith(RETRIEVAL_EVIDENCE_KEY_PREFIX);
+}
+
+export const MEMORY_RECALL_OUTCOMES_KEY_PREFIX = 'memoryRecallOutcomes_' as const;
+export function memoryRecallOutcomesKey(id: string): `memoryRecallOutcomes_${string}` {
+  return `${MEMORY_RECALL_OUTCOMES_KEY_PREFIX}${id}`;
 }

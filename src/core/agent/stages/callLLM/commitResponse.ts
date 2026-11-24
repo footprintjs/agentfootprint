@@ -4,6 +4,7 @@ import type { LLMResponse } from '../../../../provider-contract/types.js';
 import { acceptedAnswerDigest } from '../../citations/accepted.js';
 import type { FindingsRequest } from '../../findings/admission.js';
 import { recordResponseStop } from '../../honesty/responseStop.js';
+import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
 import type { AgentState } from '../../types.js';
 import { identifyAcceptedToolCalls } from './acceptedCalls.js';
 import type { CallLLMStageDeps } from './types.js';
@@ -13,7 +14,12 @@ export function commitAcceptedResponse(
   scope: TypedScope<AgentState>,
   deps: Pick<
     CallLLMStageDeps,
-    'outputFormat' | 'nativeOutputAuto' | 'findings' | 'offerCitations' | 'onResponseCommitted'
+    | 'outputFormat'
+    | 'nativeOutputAuto'
+    | 'findings'
+    | 'offerCitations'
+    | 'onResponseCommitted'
+    | 'recallRequests'
   >,
   response: LLMResponse,
   accepted: {
@@ -21,6 +27,8 @@ export function commitAcceptedResponse(
     readonly answeredBy: { readonly provider: string; readonly native: boolean };
     readonly findingsRequest: FindingsRequest | undefined;
     readonly citationOffer: SubmittedCitationOffer | undefined;
+    readonly iteration: number;
+    readonly recall: RecallRequestSummary | undefined;
   },
 ) {
   const { localFallback, answeredBy, findingsRequest, citationOffer } = accepted;
@@ -56,6 +64,8 @@ export function commitAcceptedResponse(
         : [{ submitted: citationOffer, answerDigest }];
   }
   scope.llmLatestContent = response.content;
+  if (accepted.recall !== undefined)
+    deps.recallRequests?.(scope, accepted.iteration, accepted.recall);
   deps.onResponseCommitted?.();
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
