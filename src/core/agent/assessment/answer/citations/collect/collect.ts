@@ -19,8 +19,8 @@ interface OfferedSlots {
 
 const MAX_MARKER_CHARS = 74;
 const MARKER = /\[c:([A-Za-z0-9_-]{1,64}):([1-9]\d{0,2})\]/u;
-const BLOCK_BREAK = /\r?\n[ \t]*\r?\n/gu;
-const MARKER_REFERENCE_DEFINITION = new RegExp(`^[ \\t]{0,3}${MARKER.source}:`, 'imu');
+const BLOCK_BREAK = /(?:\r\n|\n|\r(?!\n))[ \t]*(?:\r\n|\n|\r(?!\n))/gu;
+const MARKER_REFERENCE_DEFINITION = new RegExp(`^ {0,3}${MARKER.source}:`, 'iu');
 
 const INLINE_CONTENT = 1;
 const INLINE_OPEN = 2;
@@ -107,8 +107,11 @@ function suffix(answer: string, start: number, end: number, code: Uint8Array) {
 /** Collect only whole-answer, bounded suffix associations. A limit yields no partial verdicts. */
 export function collectCitations(answer: string, offer: OfferedSlots | undefined) {
   if (answer.length > MAX_CITATION_PROSE_CHARS) return { complete: false, spans: [] } as const;
-  if (MARKER_REFERENCE_DEFINITION.test(answer)) return { complete: false, spans: [] } as const;
-  const { units, inlineCode } = unitsOf(answer);
+  let defined = false;
+  const { units, inlineCode } = unitsOf(answer, (body) => {
+    defined ||= MARKER_REFERENCE_DEFINITION.test(body);
+  });
+  if (defined) return { complete: false, spans: [] } as const;
   const code = inlineCodeMask(answer, inlineCode);
   const safe = plainBlocks(answer, code);
   const slots = new Set(offer?.results.map(({ slot }) => slot));

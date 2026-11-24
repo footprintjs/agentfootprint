@@ -81,6 +81,40 @@ describe('citations in simple prose', () => {
     expect(collectCitations(text, offer('now')).spans[0]?.references[0]?.resolvedSlot).toBe(1);
   });
 
+  it.each([
+    '- \x60\x60\x60text\n\n  North [c:now:1].\n\n  \x60\x60\x60',
+    '1. > ~~~~text\n   >\n   > North [c:now:1].\n   >\n   > ~~~\n   >\n   > North [c:now:1].\n   > ~~~~',
+    '- Example\n\n  - Child\n\n    ~~~\n\n    North [c:now:1].\n\n    ~~~',
+    '- ~~~\n\n  North [c:now:1].',
+    '\x60\x60\x60text\n[c:now:1]: sample\n\x60\x60\x60',
+    '- ~~~text\n\n  [c:now:1]: sample\n\n  ~~~',
+    '~~~text\n~~~\u00a0\n\nNorth [c:now:1].\n\n~~~',
+    '- # A heading\nOutside the list\n  ~~~text\n\nNorth [c:now:1].\n  ~~~',
+    '- Parent paragraph\nLazy continuation\n\n    ~~~text\n\n  North [c:now:1].\n    ~~~',
+  ])('keeps a fenced example literal before the next prose span (%s)', (example) => {
+    const offset = example.length + 2;
+    const result = collectCitations(example + '\n\nNorth [c:now:1].', offer('now'));
+    expect(result).toEqual({
+      complete: true,
+      spans: [
+        {
+          start: offset,
+          end: offset + 5,
+          references: [{ marker: { offer: 'now', slot: 1 }, resolvedSlot: 1 }],
+        },
+      ],
+    });
+  });
+
+  it.each(['\r\n', '\r'])('preserves fence and prose offsets with %j line breaks', (newline) => {
+    const example = ['- ~~~text', '', '  North [c:now:1].', '', '  ~~~', '', ''].join(newline);
+    const result = collectCitations(example + 'North [c:now:1].', offer('now'));
+    expect(result.complete).toBe(true);
+    expect(result.spans.map(({ start, end }) => [start, end])).toEqual([
+      [example.length, example.length + 5],
+    ]);
+  });
+
   it('keeps a separate suffix after complete code and leaves a split code span literal', () => {
     const text = '`North` recorded 12 mm [c:current:1].';
     const spans = collectCitations(text, offer('current')).spans;
@@ -107,7 +141,9 @@ describe('citations in simple prose', () => {
   it('reports a scan limit and a reference-definition ambiguity without partial results', () => {
     const overLimit = 'North [c:now:1]. '.repeat(257);
     expect(collectCitations(overLimit, offer('now'))).toEqual({ complete: false, spans: [] });
-    const defined = 'North [c:now:1].\n\n[c:now:1]: https://example.invalid';
-    expect(collectCitations(defined, offer('now'))).toEqual({ complete: false, spans: [] });
+    for (const prefix of ['', '- ', '> ']) {
+      const defined = 'North [c:now:1].\n\n' + prefix + '[c:now:1]: https://example.invalid';
+      expect(collectCitations(defined, offer('now'))).toEqual({ complete: false, spans: [] });
+    }
   });
 });

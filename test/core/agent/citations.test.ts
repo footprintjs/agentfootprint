@@ -260,6 +260,47 @@ it('leaves a plain SDK request and assessment alone with citations disabled', as
 });
 
 it.each([
+  { label: 'list fence', definition: false },
+  { label: 'definition inside a fence', definition: true },
+])('preserves citation boundaries for a $label in a native SDK answer', async ({ definition }) => {
+  const claim = 'North recorded 12 mm';
+  const fence = '\x60\x60\x60';
+  let proseStart = 0;
+  const { provider } = fixture(undefined, (marker) => {
+    if (!definition)
+      return ['- ' + fence + 'text', '', '  ' + claim + ' ' + marker + '.', '', '  ' + fence].join(
+        '\n',
+      );
+    const example = [fence + 'text', marker + ': sample', fence, '', ''].join('\n');
+    proseStart = example.length;
+    return example + claim + ' ' + marker + '.';
+  });
+  const agent = Agent.create({
+    provider,
+    model: 'claude-sonnet-4-6',
+    citations: measurementCitations,
+  })
+    .tool(tool)
+    .build();
+  const recording = recordRun(agent);
+  await agent.run({ message: 'Read the amount.' });
+  expect(recording.toRecording().snapshot?.sharedState?.answerCitations).toEqual({
+    complete: true,
+    findings: definition
+      ? [
+          {
+            kind: 'citation',
+            outcome: 'supported',
+            slot: 1,
+            start: proseStart,
+            end: proseStart + claim.length,
+          },
+        ]
+      : [],
+  });
+});
+
+it.each([
   { punctuation: '.', adjacentProse: false },
   { punctuation: ';', adjacentProse: false },
   { punctuation: '.', adjacentProse: true },
