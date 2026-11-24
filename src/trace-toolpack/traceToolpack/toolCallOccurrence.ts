@@ -11,10 +11,10 @@ import type { LLMMessage } from '../../provider-contract/types.js';
 import { readNotDispatched } from '../../semantics/toolRan.js';
 
 type SettledMarker = NonNullable<LLMMessage['notDispatched']>;
-export type Settlement = SettledMarker | 'malformed';
+export type ToolCallSettlement = SettledMarker | 'malformed';
 
 /** Keep an unreadable marker distinct from an absent one when choosing the record to read. */
-export function settlementMarkerOf(value: unknown): Settlement | undefined {
+export function settlementMarkerOf(value: unknown): ToolCallSettlement | undefined {
   switch (readNotDispatched(value)) {
     case 'settled':
       return value as SettledMarker;

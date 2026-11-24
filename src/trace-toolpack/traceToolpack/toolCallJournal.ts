@@ -22,7 +22,7 @@ import {
   resumeRefusalOf,
   settlementMarkerOf,
   unboundDecisionFor,
-  type Settlement,
+  type ToolCallSettlement,
   type HistoryTurn,
   type ToolMiddlewareDecisionRow,
   type ToolBracketEvent,
@@ -54,7 +54,7 @@ interface ToolCallFacts {
    * its `result` — the bracket of a call that produced no result, never the
    * record of a tool that ran.
    */
-  readonly notDispatched?: Settlement;
+  readonly notDispatched?: ToolCallSettlement;
 }
 
 /** The joined view of a run's tool calls, shared by the two tools that read it. */
@@ -163,9 +163,9 @@ function buildToolCallReader(
   const settledIn = (
     turns: readonly HistoryTurn[],
     toolCallId: string,
-  ): { seen: boolean; marker?: Settlement } => {
+  ): { seen: boolean; marker?: ToolCallSettlement } => {
     let seen = false;
-    let marker: Settlement | undefined;
+    let marker: ToolCallSettlement | undefined;
     for (const turn of turns) {
       if (turn.toolCalls?.some((call) => call.id === toolCallId)) {
         seen = true;
@@ -200,7 +200,7 @@ function buildToolCallReader(
     toolCallId: string,
     stepId: string | undefined,
     bracket: ToolBracketEvent | undefined,
-  ): Settlement | undefined =>
+  ): ToolCallSettlement | undefined =>
     settlementMarkerOf(bracket?.payload.notDispatched) ??
     (bracket?.type === 'agentfootprint.stream.tool_start'
       ? undefined
