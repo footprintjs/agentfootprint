@@ -109,4 +109,26 @@ describe('confirmed conversion records the actual range sent on a coarse grid', 
       },
     });
   });
+
+  it.each(['form', 'tool'] as const)(
+    'checks the actual widened bounds against the %s cap',
+    (cap) => {
+      const form = {
+        ...seconds,
+        to: { ...seconds.to, as: 'iso' },
+        ...(cap === 'form' && { maxRange: '45m' }),
+      } as const;
+      const facts = cap === 'tool' ? { maxRange: '45m' as const } : undefined;
+      expect(
+        convertForTool(confirmed({ from: asked.from, to }), [form], facts, context),
+      ).toMatchObject({
+        conversion: { sent: { from, to }, rounded: true },
+      });
+      for (const cutoff of ['2026-11-13T18:45:00.0005Z', '2026-11-13T18:45:00.000000001Z']) {
+        expect(
+          convertForTool(confirmed({ from: asked.from, to: cutoff }), [form], facts, context),
+        ).toEqual({ refused: 'no-form-holds' });
+      }
+    },
+  );
 });

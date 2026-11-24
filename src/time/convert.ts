@@ -248,17 +248,9 @@ export function convertWidened(
       ? lookbackWidened(window, form, ctx)
       : undefined;
     if (done === undefined || done.extra.length === 0) continue;
-    // The read's reach, judged as `periodFactProblem` judges a window (`range.ts` · `reachMs`):
-    // a look-back `[now − L, now]` reaches `L`, so one exactly `maxRange` long is read at once.
     if (widestMs !== undefined) {
-      const from = instantOf(done.sent.from, 'strict');
-      const to = instantOf(done.sent.to, 'strict');
-      if (
-        from === undefined ||
-        to === undefined ||
-        reachMs(from.ms, to.ms) + (to.nanos - from.nanos) / 1_000_000 > widestMs
-      )
-        continue;
+      const reach = formReach(window, done.sent);
+      if (reach === undefined || reach > widestMs) continue;
     }
     return { form: i, ...done };
   }
@@ -400,15 +392,16 @@ function convertWithinFormCaps(
   return undefined;
 }
 
-function formReach(window: WindowToConvert): number | undefined {
-  if (window.endpoint === undefined) {
-    const from = msOf(window.range.from);
-    const to = msOf(window.range.to);
-    return from === undefined || to === undefined ? undefined : reachMs(from.ms, to.ms);
-  }
-  const from = instantOf(window.range.from, 'strict');
-  const cutoff = instantOf(window.endpoint.cutoff, 'strict');
+function formReach(window: WindowToConvert, sent?: TimeRange): number | undefined {
+  const range = sent ?? window.range;
+  const end = sent?.to ?? window.endpoint?.cutoff ?? range.to;
+  const from = instantOf(range.from, 'strict');
+  const cutoff = instantOf(end, 'strict');
   if (from === undefined || cutoff === undefined) return undefined;
+  if (window.endpoint === undefined) {
+    const fractional = sent === undefined ? 0 : (cutoff.nanos - from.nanos) / 1_000_000;
+    return reachMs(from.ms, cutoff.ms) + fractional;
+  }
   return cutoff.ms - from.ms + (cutoff.nanos - from.nanos) / 1_000_000;
 }
 
