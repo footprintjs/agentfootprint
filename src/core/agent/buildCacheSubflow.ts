@@ -31,10 +31,43 @@ import { flowChart, type FlowChart } from 'footprintjs';
 import {
   cacheDecisionStage,
   type CacheDecisionStageOptions,
+  type CacheDecisionState,
+  cacheHistoryFor,
 } from '../../cache/CacheDecisionSubflow.js';
-import { cacheGateDecide } from '../../cache/CacheGateDecider.js';
+import { cacheGateDecide, type CacheGateState } from '../../cache/CacheGateDecider.js';
+import type { Injection } from '../../injection-engine/types.js';
 import { STAGE_IDS } from '../../lib/conventions.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
+import type { AgentChartDeps } from './chartContract.js';
 import type { AgentState } from './types.js';
+
+/** Map the same post-window cache inputs for the flat and grouped charts. */
+export function cacheMountInput(
+  parent: Readonly<Partial<AgentState>>,
+  deps: Pick<AgentChartDeps, 'maxIterations' | 'systemPromptCachePolicy'>,
+): Omit<CacheDecisionState, 'cacheMarkers'> & CacheGateState {
+  return {
+    activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
+    iteration: (parent.iteration as number | undefined) ?? 1,
+    maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
+    userMessage: (parent.userMessage as string | undefined) ?? '',
+    ...(parent.lastToolResult !== undefined && {
+      lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
+    }),
+    cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
+    systemPromptCachePolicy: deps.systemPromptCachePolicy,
+    cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
+    // The window AS IT WILL BE SENT (7.21). A cache marker for messages
+    // names a position in the request's message array, so it has to be
+    // computed against that array — post-window, post-delivery — and not
+    // against a count of injections, which used to point at the wrong message.
+    cacheHistory: cacheHistoryFor((parent.history as readonly LLMMessage[] | undefined) ?? []),
+    // CacheGate reads these values. The main loop updates skillHistory and
+    // does not map it back out of the cache subflow.
+    recentHitRate: parent.recentHitRate as number | undefined,
+    skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
+  };
+}
 
 /**
  * Build the `sf-cache` subflow chart. Called by `buildAgentChart` and
