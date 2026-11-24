@@ -52,7 +52,12 @@ export async function readStoredCauseArtifacts(
     const history = captureOwn(result, 'history');
     const { projectStoredCause } = await import('./storedCauseProjection.js');
     if (storedCauseCancelled(configured.signal)) return unknown('cancelled');
-    const projected = projectStoredCause(history, configured.runId, configured.maxBytes);
+    const projected = projectStoredCause(
+      history,
+      configured.runId,
+      configured.maxBytes,
+      configured.sourceLinkPolicy,
+    );
     return storedCauseCancelled(configured.signal) ? unknown('cancelled') : projected;
   } catch {
     return unknown(storedCauseCancelled(configured.signal) ? 'cancelled' : 'unavailable');
