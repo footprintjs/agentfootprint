@@ -67,6 +67,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
 import { checkpointWithCarriers } from './agent/sourceEvidence/checkpointValidation.js';
+import { checkpointNegatives, citationSourcesOf } from './agent/citations/checkpoint.js';
 import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
 import {
   negativeCheckpointOf,
@@ -411,11 +412,16 @@ export function buildCheckpoint(
   sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
   placed?: unknown,
   state?: unknown,
+  citationSources?: AgentRunCheckpoint['citationSources'],
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
       ? undefined
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
+  const sources =
+    citationSources === undefined
+      ? undefined
+      : citationSourcesOf({ citationSources }, verification);
   const history = checkpointReplayHistory(tracker.history, tracker);
   const placedTickets = ticketsStillServed(placed, history);
   const innerCallPolicyArgs = innerCallPolicyFor(state, history);
@@ -448,7 +454,8 @@ export function buildCheckpoint(
     ...(turnNumber !== undefined && { turnNumber }),
     ...(placedTickets !== undefined && { placedTickets }),
     ...(verification !== undefined && { claimVerification: verification }),
-    ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
+    ...(sources !== undefined && { citationSources: sources }),
+    ...(negativeClaims === undefined ? {} : checkpointNegatives(negativeClaims, sources)),
     ...(sourceEvidence === undefined
       ? {}
       : { sourceEvidence: sourceEvidenceOf({ sourceEvidence }) }),
@@ -553,13 +560,15 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   innerCallPolicyReferences(c.history);
   admitFoldedInnerCallPolicy(c.folded);
   const innerCallPolicyArgs = innerCallPolicyOf(c);
-  negativeCheckpointOf(c);
+  const citationSources = citationSourcesOf(c, claimVerification);
+  negativeCheckpointOf(c, citationSources === undefined ? undefined : claimVerification);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
   return sourceDeclarationCorrection === undefined &&
     innerCallPolicyArgs === undefined &&
     toolTurnEvidence === undefined &&
-    requestReplay === undefined
+    requestReplay === undefined &&
+    citationSources === undefined
     ? checkpoint
     : {
         ...checkpoint,
@@ -567,5 +576,6 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
         ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
         ...(requestReplay !== undefined && { requestReplay }),
+        ...(citationSources !== undefined && { citationSources }),
       };
 }

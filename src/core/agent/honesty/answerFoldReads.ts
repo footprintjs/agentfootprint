@@ -17,6 +17,7 @@ export type AnswerFoldKey =
   | 'llmLatestStopReason'
   | 'unsupportedValues'
   | 'answerValidation'
+  | 'answerCitations'
   | 'argumentAsk'
   | 'middlewareDecisions';
 
@@ -64,6 +65,7 @@ export function answerFoldReads(arms: {
   readonly retrieval?: boolean;
   readonly evidenceGate: boolean;
   readonly answerValidation: boolean;
+  readonly citations?: boolean;
   readonly inputs: boolean;
   readonly toolMiddleware: boolean;
   readonly sourceNotConsulted?: boolean;
@@ -91,6 +93,7 @@ export function answerFoldReads(arms: {
     ...(arms.sourceNotConsulted === true ? (['sourceConsultation'] as const) : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
+    ...(arms.citations ? (['answerCitations'] as const) : []),
     ...(arms.inputs ? (['argumentAsk'] as const) : []),
     ...(arms.toolMiddleware && (arms.tools || arms.inputs)
       ? (['middlewareDecisions'] as const)

@@ -48,6 +48,7 @@ export function requestFactory(environment: RequestEnvironment) {
         );
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(environment.configuration.citationOptions !== undefined && { offerCitations: true }),
       ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
         sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({
           ...(environment.configuration.ontology !== undefined && {
