@@ -69,6 +69,7 @@ const compute = defineTool<{ dataset: string; op: string }, string>({
 });
 
 const HEAD_MATH_ANSWER = 'Total capacity is 3,672 GB across the four arrays.';
+const UNREAD_PLACEMENT = 'a tool result was stored by reference and not read';
 const SAFE_ANSWER = 'The rows are exported and staged for computation.';
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
@@ -220,7 +221,7 @@ describe('functional: the staged-refs nudge', () => {
     const out = await agent.run({ message: 'total?' }, { sessionId: 'observe' });
 
     expect(out).toBe(
-      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`,
+      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — ${UNREAD_PLACEMENT}; names or numbers in the answer appear in no tool result.`,
     );
     expect(of('agentfootprint.agent.grounding_nudged')).toHaveLength(1);
     const checks = of('agentfootprint.agent.evidence_checked');
@@ -745,7 +746,7 @@ describe('integration: revise teaches the compute route', () => {
     // Revise is not refuse: the answer ships, with the record showing both
     // attempts and the same values surviving each.
     expect(out).toBe(
-      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result, even after one revision.`,
+      `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — ${UNREAD_PLACEMENT}; names or numbers in the answer appear in no tool result, even after one revision.`,
     );
     const checks = of('agentfootprint.agent.evidence_checked');
     expect(checks.map((c) => c.action)).toEqual(['revision-asked', 'flagged']);
@@ -864,8 +865,8 @@ describe('regression: absent means today, proven on prompts AND records', () => 
       expect(r.all.some((e) => e.name === 'agentfootprint.agent.grounding_nudged')).toBe(false);
       expect(stableHistory(r.history)).toBe(baseline);
     }
-    expect(bare.out).toBe(HEAD_MATH_ANSWER);
-    const flaggedAnswer = `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`;
+    expect(bare.out).toBe(`${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — ${UNREAD_PLACEMENT}.`);
+    const flaggedAnswer = `${HEAD_MATH_ANSWER}\n\n---\n\nNot sure — ${UNREAD_PLACEMENT}; names or numbers in the answer appear in no tool result.`;
     expect(gateOnly.out).toBe(flaggedAnswer);
     expect(nudgeOff.out).toBe(flaggedAnswer);
 

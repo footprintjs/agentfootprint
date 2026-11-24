@@ -1528,7 +1528,9 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
 
   it("the window's record never lists it among the dropped results", async () => {
     const { answer, state } = await judgedRun('evicting');
-    expect(answer).toBe('done\n\n---\n\nNot sure — a call was refused and a call did not run.');
+    expect(answer).toBe(
+      'done\n\n---\n\nNot sure — a call was refused and a call did not run; 3 results from this turn were dropped from the conversation before the answer.',
+    );
     const dropped = (state.compactions ?? []).flatMap((r) => r.droppedStandings ?? []);
     // The batch turn left: its results are listed with the standing the model
     // declared (or none) — and the settled call, which had no result, is not.

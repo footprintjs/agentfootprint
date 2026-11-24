@@ -420,8 +420,8 @@ function trackedScope(snapshot: RuntimeSnapshot): RecordScope {
   return { address: logAddress, commitLog, initialState, reads };
 }
 
-it('keeps the answered prefix when binding a real artifact recording exhausts the scope budget', async () => {
-  const redemptions = 90;
+it('keeps the answered prefix when a real artifact recording exceeds the commit budget', async () => {
+  const redemptions = 110;
   const store = inMemoryArtifacts();
   const getReport = defineTool({
     name: 'get_report',
@@ -478,6 +478,7 @@ it('keeps the answered prefix when binding a real artifact recording exhausts th
     expect(rows).toHaveLength(redemptions);
 
     const scope = trackedScope(snapshot);
+    expect(scope.commitLog.length).toBeGreaterThan(4096);
     const result = sourceLinksOf(scope);
     assert(result);
     expect(result).toMatchObject({ status: 'partial', limitations: ['budget-exhausted'] });

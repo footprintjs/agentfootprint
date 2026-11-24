@@ -41,6 +41,7 @@ import { toolManifestOf } from './wireManifest.js';
 import { AnthropicToolArguments } from './anthropicToolArguments.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
+import { anthropicCitationProjection } from './anthropicCitationOffer.js';
 // The request body has ONE owner, shared with browserAnthropic() and
 // invokeModelGateway() — a private copy here once drifted from it, and a
 // second copy of the thinking rule would drift the same way.
@@ -85,7 +86,9 @@ interface AnthropicStream {
 
 interface AnthropicStreamEvent {
   type: string;
-  delta?: { type: string; text?: string };
+  index?: number;
+  content_block?: { type: string };
+  delta?: { type: string; text?: string; thinking?: string };
 }
 
 // ─── Adapter ────────────────────────────────────────────────────────
@@ -193,9 +196,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const modelOf = (model: string): string => (model === 'anthropic' ? defaultModel : model);
   /** The ONE mode function: declared below and used for every body. */
   const modeOf = thinkingModeWith(options.thinkingMode);
-  const buildParams = (req: LLMRequest): AnthropicCreateParams => {
+  const buildParams = (req: LLMRequest, hooks: LLMCallHooks | undefined) => {
     const model = modelOf(req.model);
-    return {
+    const citations = anthropicCitationProjection(req, hooks);
+    const params: AnthropicCreateParams = {
       model,
       ...buildMessagesBody(req, {
         model,
@@ -204,8 +208,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         maxTokensDefault: defaultMaxTokens,
         ...(parallelToolCalls !== undefined && { parallelToolCalls }),
         nativeOutputSchema: anthropicTakesNativeOutputSchema,
+        ...(citations !== undefined && { observeToolResult: citations.observeToolResult }),
       }),
     };
+    return { params, offer: citations?.prepare(params) };
   };
 
   const provider: LLMProvider = {
@@ -232,7 +238,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       // A cancelled call sends nothing (lib/abort.ts, law 1).
       throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
-      const params = buildParams(preparation.request);
+      const { params, offer } = buildParams(preparation.request, hooks);
       const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       try {
@@ -247,11 +253,13 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         // Manifest read from the FINAL params — after tool mapping and cache
         // markers — because the whole point is catching what the body says,
         // not what the request intended (wireManifest.ts).
-        return {
+        const response: LLMResponse = {
           ...fromAnthropicResponse(message, message.id ? bindingFactory(message.id) : undefined),
           wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
+        if (offer !== undefined && !req.signal?.aborted) offer.accept(response);
+        return response;
       } catch (err) {
         throw wrapError(err, req.signal);
       }
@@ -259,8 +267,17 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
-      const params = buildParams(preparation.request);
+      const { params, offer } = buildParams(preparation.request, hooks);
       const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
+      // Classify the actual request before passing its parameters to the SDK.
+      const thinking = params.thinking;
+      const display = thinking && 'display' in thinking ? thinking.display : undefined;
+      let thinkingKind: LLMChunk['thinkingKind'];
+      if (thinking?.type === 'adaptive' && display === 'summarized') {
+        thinkingKind = 'provider-summary';
+      } else if (thinking?.type === 'enabled' && display === undefined) {
+        thinkingKind = 'unclassified';
+      }
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let stream: AnthropicStream;
       try {
@@ -284,6 +301,24 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
             event.delta.text
           ) {
             yield { tokenIndex, content: event.delta.text, done: false };
+            tokenIndex++;
+            continue;
+          }
+          if (
+            thinkingKind !== undefined &&
+            event.type === 'content_block_delta' &&
+            event.delta?.type === 'thinking_delta' &&
+            typeof event.delta.thinking === 'string' &&
+            event.delta.thinking.length > 0 &&
+            toolArguments.hasOpenThinkingBlock(event.index)
+          ) {
+            yield {
+              tokenIndex,
+              content: '',
+              done: false,
+              thinkingDelta: event.delta.thinking,
+              thinkingKind,
+            };
             tokenIndex++;
           }
         }
@@ -311,6 +346,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
+        if (offer !== undefined && !req.signal?.aborted) offer.accept(response);
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
         throw wrapError(err, req.signal);

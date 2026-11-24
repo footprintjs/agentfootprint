@@ -17,6 +17,8 @@ import {
   type SourcePublicationReceipt,
 } from '../sourceEvidence/publications.js';
 import { judgeGovernedRowsets, noteUnansweredRowsets, type RowsetCall } from './judge.js';
+import { captureCitationResult } from '../citations/capture.js';
+import { privateFieldsInForce, runKeepsOut } from '../../../redaction/runRedaction.js';
 
 export interface ResultFinalizationLanding extends SourceCaptureLanding {
   readonly unavailableReason?: ToolRowsetCheckReason;
@@ -24,7 +26,8 @@ export interface ResultFinalizationLanding extends SourceCaptureLanding {
 export interface NativeResultFinalizer {
   (served: unknown, landing: ResultFinalizationLanding): Promise<string | undefined>;
   readonly needsPublications: boolean;
-  entered(context: ToolExecutionContext): void;
+  entered(context: ToolExecutionContext, args: unknown, resultId?: string): void;
+  captureReturned?(original: unknown): void;
   returned(): void;
   withheld(): void;
   assertFinalized(): void;
@@ -45,13 +48,24 @@ export function nativeResultFinalizer(
     | 'resultRowsetsFor'
     | 'integrityLedger'
     | 'sourceEvidenceConfig'
+    | 'citationOptions'
     | 'currentRun'
     | 'isRunRetired'
   >,
   runId: string | undefined,
   party?: ToolParty,
 ): NativeResultFinalizer | undefined {
-  if (!tool || (deps.columnCheckMode === undefined && deps.sourceEvidenceConfig === undefined))
+  if (!tool) return undefined;
+  const privateKeys =
+    deps.citationOptions === undefined ? undefined : privateFieldsInForce(scope)?.keys;
+  const citations =
+    deps.citationOptions !== undefined &&
+    runId !== undefined &&
+    privateKeys?.includes('citationSources') &&
+    privateKeys.includes('resultIdentities')
+      ? captureCitationResult(scope, call, runId, deps.citationOptions)
+      : undefined;
+  if (deps.columnCheckMode === undefined && deps.sourceEvidenceConfig === undefined && !citations)
     return undefined;
   const declarations =
     deps.columnCheckMode === undefined
@@ -61,7 +75,7 @@ export function nativeResultFinalizer(
       : deps.resultRowsetsFor(call.toolName, tool, party);
   const sourceWanted =
     deps.sourceEvidenceConfig !== undefined && sourceEvidenceDescriptor(tool) !== undefined;
-  if (declarations === undefined && !sourceWanted) return undefined;
+  if (declarations === undefined && !sourceWanted && !citations) return undefined;
   const active = () => !deps.isRunRetired() && deps.currentRun?.().runId === runId;
   let context: ToolExecutionContext | undefined;
   let receipt: SourcePublicationReceipt | undefined;
@@ -82,6 +96,7 @@ export function nativeResultFinalizer(
     if (!accounted && active() && (!returned || withheld || context?.signal?.aborted))
       noteUnansweredRowsets(deps.integrityLedger, declarations);
     closed = true;
+    citations?.discard();
     capture?.withheld();
     if (context?.hasArtifacts) closeSourcePublications(context.artifacts);
     if (missingJudgment)
@@ -119,6 +134,15 @@ export function nativeResultFinalizer(
               unavailableReason,
             );
       accounted = true;
+      if (
+        citations !== undefined &&
+        refusal === undefined &&
+        unavailableReason === undefined &&
+        !context.signal?.aborted &&
+        active() &&
+        !['history', 'toolResults', 'args', 'result'].some((key) => runKeepsOut(scope, key))
+      )
+        citations.finalize(served);
       if (refusal === undefined && capture !== undefined)
         await capture(served, { ...landing, eligible: landing.eligible && !withheld && returned });
       return refusal;
@@ -133,7 +157,8 @@ export function nativeResultFinalizer(
     needsPublications:
       sourceWanted ||
       declarations?.some((entry) => entry.source.kind === 'published-dataset') === true,
-    entered(actual: ToolExecutionContext) {
+    ...(citations !== undefined && { captureReturned: citations.returned }),
+    entered(actual: ToolExecutionContext, args: unknown, resultId?: string) {
       if (closed || context !== undefined) throw new Error('Result finalization already entered.');
       context = actual;
       capture = nativeSourceCapture(
@@ -144,6 +169,7 @@ export function nativeResultFinalizer(
         active,
         () => receipt,
       );
+      citations?.entered(args, resultId);
     },
     returned() {
       if (closed || !context || returned) return;
@@ -153,6 +179,7 @@ export function nativeResultFinalizer(
     },
     withheld() {
       withheld = true;
+      citations?.discard();
       capture?.withheld();
       if (context?.hasArtifacts) closeSourcePublications(context.artifacts);
     },

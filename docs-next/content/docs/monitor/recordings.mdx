@@ -87,6 +87,10 @@ locators in that history. The saved reader starts with disclosure closed.
 A scope-level redaction message describes the policy in force. A redaction
 gap on an authorized artifact argument can describe a redemption the run
 already made public.
+`sourceLinksOf` from `agentfootprint/observe` projects the source-link channel
+from a native record scope. The adapter still needs the host policy to disclose
+individual locations.
+
 On a long recording, the source-link reader can reach its work allowance.
 A partial channel keeps the links it could bind and reports
 `budget-exhausted`.
@@ -104,6 +108,25 @@ the deterministic check matched. The tool's reading can still be wrong.
 
 Use the same host disclosure policy when presenting answer links from a saved
 run. A protected source or a missing exact match leaves no public answer link.
+
+## Measure a saved run
+
+Use `recordingSizeReport` on the parsed recording to see which snapshot fields,
+event types and subflow entries use the most space. The count uses compact
+UTF-8 JSON. Each section's `framingBytes` accounts for its keys and punctuation.
+The shared state and subflow tables break down fields already counted in the snapshot.
+A latest-path alias and its matching mount each contribute bytes when both are stored.
+`RecordingSizeReport` contains the totals. `RecordingSizeFields` groups a snapshot
+or shared-state table of `RecordingSizeRow` entries. A `RecordingSizeMount` also
+identifies the entry as a mount or path alias and gives its recorded commit count.
+
+<CodeFile path="examples/features/94-packed-recording.ts" region="size" title="Measure a recording after unpacking" />
+
+Measure the plain served recording. For a packed file, unpack under an explicit
+byte limit first. The report refuses more than 64 MiB of plain JSON, nesting past
+256 levels, more than 16,384 named rows, or a name longer than 1,024 UTF-16 code
+units. It returns structural names, counts and sizes. Review application-defined
+keys and mount IDs before sharing a report.
 
 ## Save a long run: pack it
 
@@ -423,6 +446,13 @@ when it has a `displayName` and reports whether the call was refused or failed.
 
 An admitted tool result that reports `partial` or `pending` adds `work-not-finished` when the call has no recorded failure or refusal. The same retry rule clears this warning when a later call completes with the same recorded tool and arguments. A tool's plain result text supplies no status for this check.
 
+When the final provider response stops at the model's output limit,
+`answer-output-limit` makes the standing `not-sure`. An earlier draft's stop has
+no effect on a later answer. A saved recording with no committed stop reason
+does not supply this warning.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-output-limit" title="A model stops at its output limit" />
+
 With the answer layer armed, `step-skipped` counts declared steps the procedure advanced past after a skip. Under the hold policy the request stays on the record and the step stays required.
 
 Other reasons include a tool declaring ground it did not check (`coverage-gap`)
@@ -491,8 +521,7 @@ person. The standing line names a reason's calls only in those words: "Not sure 
 loading the attached data reported no matching results." With several calls behind one reason it
 names the declared ones and counts the rest ("loading the attached data and 1 other
 call reported no matching results"). The limits block marks the items each call declared the same
-way. Without a `displayName` nothing changes, word for word, and a reason's calls are
-never named by the registered tool name, which your app may not want a person to see.
+way. A call without a `displayName` gets generic wording in the warning.
 Not every surface uses `displayName` yet: the time layer's limits lines, the answer
 account's rows, and — for a tool that declares none — the assumed clause and the
 `Period:` / "In progress" lines still print the registered name (a known follow-up).
@@ -520,7 +549,42 @@ runs at the start of the final branch, after the checks have filed their verdict
 When the answer's standing is `not-sure` or `ask`, a prose answer includes a line
 explaining why. The standing travels as data for every delivered answer.
 
-<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-standing-default" title="A tool reports pending work" />
+A tool exception that the engine classifies gets wording for that category, such as
+“Collector check timed out.” An unclassified exception gets a generic failure warning.
+The full `AnswerAssessment.reasons[].detail` can carry the category without the exception
+message. It can also carry short words from an admitted tool declaration for a coverage
+gap, an absence or a period reason. The warning bounds those words, counts extra entries
+and applies the run's redaction policy before displaying them. Use
+`.limitsTravelWithTheAnswer()` to attach the longer coverage block.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="answer-standing-default" title="Default warnings for pending work, timeouts and coverage gaps" />
+
+The warning also covers limits the framework introduced while serving tool results.
+A cut result names the tool and reports how many characters of the original reached the model.
+The cap includes the truncation notice, so the retained text can be shorter than the configured cap.
+A result stored by reference carries a warning if no tool read that reference before the answer.
+For a staged dataset with a declared time column, the ticket and the answer report how many
+timestamps lack a zone when those values cannot be interpreted as instants. The count follows
+the saved rows even if the caller edits the original array while the write is pending.
+
+<CodeFile path="examples/features/123-answer-standing-default.ts" region="recorded-result-cut" title="A result cut before the model saw the final event" />
+
+
+### Disclose a skipped declared source
+
+Opt in with `.answerLayer({ sourceNotConsulted: true })`. The check follows direct
+sources in the ontology when the person's question names a declared term or
+source. It also reads a typed `tryInsteadTool` suggestion from a tool's served
+absence. An adapter's recorded wire manifest must show that the relevant tool
+was offered on an accepted request. An attempt through another eligible holder
+of the same source fulfills that check.
+
+Use `displayName` on a tool to let the prose warning refer to it in the app's
+words. The reason also travels in the saved assessment as
+`source-not-consulted`. A request without a manifest leaves the offers for that
+request unknown. The check preserves earlier proved offers within the turn.
+
+<CodeFile path="examples/features/130-source-not-consulted.ts" region="source-not-consulted" title="A skipped link monitor appears in the answer warning" />
 
 The answer layer serves the standing in these places:
 
@@ -538,6 +602,11 @@ The answer layer serves the standing in these places:
 - `{ standingLine: { when } }` says the line only when it matters:
   `'always'` (also `true`), `'unless-consistent'`, or `'not-sure-or-ask'`
   (the default, covering "not sure" and "ask"). `ask` is included in every mode.
+- Add `raiseOn` to choose which recorded reasons trigger a "not sure" line.
+  For example, `{ standingLine: { when: 'not-sure-or-ask', raiseOn: ['missing-column', 'value-unsupported'] } }`
+  shows the full warning if either reason fires. An empty list suppresses
+  "not sure" lines. The assessment, limits, and "ask" behavior stay the same,
+  and configured checks still need to be armed.
 - Call `.answerLayer()` or `.answerLayer({ standingLine: false })` for data only.
   Call `.answerLayer(false)` to turn the layer off. You can also set these
   options through `AgentOptions.answerLayer`.
@@ -574,9 +643,10 @@ Gotchas:
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With
   nothing to append there is no separator.
-- **Silence is never a check.** Under `'not-sure-or-ask'`, an answer with no line
-  means no reason fired — which includes "nothing could be checked". The data still
-  tells the two apart (`standing`, `checked`). If your app hides both the line and
+- **Silence is never a check.** Under `'not-sure-or-ask'` without a `raiseOn`
+  filter, an answer with no line can include "nothing could be checked". With a
+  filter, reasons outside the list can still fire. Read `standing`, `reasons`, and
+  `checked` to see what happened. If your app hides both the line and
   the data, the person cannot tell "checked" from "not assessed"; the limits block,
   the answer's material limitations, stays visible in every mode.
 

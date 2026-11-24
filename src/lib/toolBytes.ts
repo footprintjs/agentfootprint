@@ -46,7 +46,7 @@
 
 // FOLD · the one owner of where a tool's own words end in a result message
 // consumers read this and never re-derive it: core/agent/evidence/evidenceIndex.ts · evidenceFromHistory,
-// core/agent/assessment/assess.ts · turnResults, answer-account/facts/inView.ts · readInView,
+// core/agent/assessment/turnResults.ts · turnResults, answer-account/facts/inView.ts · readInView,
 // core/agent/stages/callLLM.ts · groundedTextOf, core/agent/stages/toolCalls/evidence/producerCorpus.ts · producerCorpusOf
 // detached: yes — a string cut from the content (or the content as given when it is not a string).
 /**

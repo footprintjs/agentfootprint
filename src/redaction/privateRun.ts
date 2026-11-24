@@ -5,6 +5,7 @@ import { carriedRunPolicy } from './conversation.js';
 import { PRIVATE_CALLER_NONE } from './privateCaller.js';
 import {
   addPrivateRecordFields,
+  CITATION_PRIVATE_ROOTS,
   mergePrivateRecordFields,
   PRIVATE_FIELDS_KEY,
   privateRecordPolicy,
@@ -49,6 +50,7 @@ interface RuleNames {
 }
 // Actual native-rule identity only; names and admitted selectors, never values or scopes.
 const ruleNames = new WeakMap<RedactionRule, RuleNames>();
+const citationRoots: ReadonlySet<string> = new Set(CITATION_PRIVATE_ROOTS);
 
 export function carryPrivateRuleNames(from: RedactionRule, to: RedactionRule): void {
   const known = ruleNames.get(from);
@@ -141,7 +143,8 @@ export function createPrivateRun(
 
 /**
  * Only positively admitted private fields can avoid the existing value-kind
- * restriction. Whole-root keys and every unknown native mark stay conservative.
+ * restriction. Whole-root marks stay conservative except for closed citation
+ * working fields whose values never feed a public event.
  */
 export function privateMarksNeedDefaultDeny(
   rule: RedactionRule,
@@ -151,9 +154,10 @@ export function privateMarksNeedDefaultDeny(
   if (known?.caller !== undefined || known?.recordMarks !== undefined) return true;
   carrier = known?.fields ?? carrier;
   if (carrier === undefined) return !rule.isInert();
-  if (carrier.keys.length > 0) return true;
+  if (carrier.keys.some((key) => !citationRoots.has(key))) return true;
+  const admittedKeys: ReadonlySet<string> = new Set([PRIVATE_FIELDS_KEY, ...carrier.keys]);
   const marks = rule.marksForCheckpoint();
-  if (marks?.keys.some((key) => key !== PRIVATE_FIELDS_KEY)) return true;
+  if (marks?.keys.some((key) => !admittedKeys.has(key))) return true;
   for (const [key, paths] of Object.entries(marks?.fields ?? {})) {
     const known = carrier.fields[key as PrivateFieldRoot];
     if (known === undefined || paths.some((path) => !known.includes(path))) return true;

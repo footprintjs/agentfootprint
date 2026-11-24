@@ -2,17 +2,22 @@ import type { TypedScope } from 'footprintjs';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
+import { readToolOutputCounts } from '../recordedCalls/outputCounts.js';
 import { readNotDispatched } from '../../../semantics/toolRan.js';
 import type { AgentState } from '../types.js';
 import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 import { declaredByValue, readEmptiness } from '../emptiness.js';
 import {
   assessmentCallOutcome,
+  recordedToolFailureCategory,
   recordedToolExecution,
+  readResultDispositionMark,
   readRewrittenToolResult,
+  readToolSettlements,
   type RecordedToolSettlement,
 } from '../recordedCalls.js';
 import { MAX_ENTERED_TOOL_CALLS, seedEnteredToolCalls } from './enteredToolCalls.js';
+import { recordLibraryResultLimits } from './libraryResultLimits.js';
 import type { HonestyLayers } from './armed.js';
 
 type Coverage = NonNullable<AgentState['coverageDeclared']>;
@@ -46,14 +51,20 @@ export function toolSettlementOf(
       : readNotDispatched(message.notDispatched) === 'settled'
       ? 'settled'
       : assessmentCallOutcome({ ...message });
+  const failureCategory = recordedToolFailureCategory(message);
   const settlement: RecordedToolSettlement = {
     callOccurrenceKey,
     execution,
     ...(outcome !== undefined && { outcome }),
+    ...(failureCategory !== undefined && { failureCategory }),
   };
   if (execution !== 'returned') return settlement;
 
   const reportedStatus = rewrite !== undefined ? rewrite.reportedStatus : message.reportedStatus;
+  const outputCounts =
+    rewrite === undefined && (outcome === 'failed' || reportedStatus === 'partial')
+      ? readToolOutputCounts(message.toolOutputCounts)
+      : undefined;
   const content = rewrite === undefined ? unwrapped : rewrite.content;
   const rows =
     rewrite === undefined ? coverage.filter((row) => readCallOccurrenceKey(row) === key) : [];
@@ -79,6 +90,7 @@ export function toolSettlementOf(
     ...settlement,
     delivery: rewrite === undefined ? 'native' : 'rewritten',
     ...((reportedStatus === 'partial' || reportedStatus === 'pending') && { reportedStatus }),
+    ...(outputCounts !== undefined && { outputCounts }),
     ...(empty !== undefined && { empty }),
     ...(gap && { gap: true as const }),
     ...(rewrite?.period !== undefined && { rewrittenPeriod: rewrite.period }),
@@ -104,13 +116,13 @@ export function seedToolEvidence(
 ): void {
   const continuing = resume !== undefined && !resume.appendsUserTurn;
   const recovered = continuing ? resume.toolTurnEvidence : undefined;
+  if (recovered?.libraryResultLimits !== undefined) {
+    scope.libraryResultLimits = [...recovered.libraryResultLimits];
+  }
+  if (recovered?.libraryResultLimitsIncomplete === true) scope.libraryResultLimitsIncomplete = true;
   seedEnteredToolCalls(scope, deps, continuing, recovered?.entries);
-  seedToolSettlements(
-    scope,
-    deps.honestyLayers?.answer === true,
-    continuing,
-    recovered?.settlements,
-  );
+  const armed = deps.honestyLayers?.answer === true;
+  seedToolSettlements(scope, armed, continuing, recovered?.settlements);
 }
 
 /** Commit the facts at the same boundary as the newly settled messages. */
@@ -135,4 +147,74 @@ export function commitSettledToolHistory(
     if (added.length > 0) scope.settledToolCalls = [...prior, ...added];
   }
   scope.history = history;
+}
+
+/** Append evidence of this turn's visible results removed by the applied window. */
+export function commitWindowResultDrops(
+  scope: TypedScope<AgentState>,
+  nextHistory: readonly LLMMessage[],
+  strategy: string,
+): void {
+  if (!Object.hasOwn(scope, 'settledToolCalls')) return;
+  const prior = scope.$getValue('settledToolCalls') as AgentState['settledToolCalls'];
+  if (prior === undefined || prior.length === 0) return;
+  const settlements = readToolSettlements(prior, true);
+  if (settlements === undefined || settlements.byKey.size === 0) return;
+  const previous = scope.$getValue('history') as readonly LLMMessage[];
+  // Only the applied window can prove a removal. Restrict the comparison to the bounded
+  // settlement index for this turn, and leave duplicated history occurrences ambiguous.
+  const dropped = new Map<string, LLMMessage | null>();
+  for (const message of previous) {
+    if (message.role !== 'tool') continue;
+    const key = readCallOccurrenceKey(message);
+    if (typeof key === 'string' && settlements.byKey.has(key))
+      dropped.set(key, dropped.has(key) ? null : message);
+  }
+  if (dropped.size === 0) return;
+  for (const message of nextHistory) {
+    if (message.role !== 'tool') continue;
+    const key = readCallOccurrenceKey(message);
+    if (typeof key === 'string') dropped.delete(key);
+    if (dropped.size === 0) return;
+  }
+  const receipts = [];
+  for (const [key, message] of dropped) {
+    const fact = settlements.byKey.get(key)?.fact;
+    if (
+      message === null ||
+      fact?.execution !== 'returned' ||
+      (fact.delivery !== 'native' && fact.delivery !== 'rewritten') ||
+      typeof message.toolName !== 'string' ||
+      typeof message.toolCallId !== 'string'
+    )
+      continue;
+    const mark = readResultDispositionMark(message);
+    if (
+      mark === 'withheld' ||
+      mark === 'unknown' ||
+      recordedToolExecution({ ...message }) !== 'returned'
+    )
+      continue;
+    receipts.push({
+      call: {
+        toolName: message.toolName,
+        toolCallId: message.toolCallId,
+        callOccurrenceKey: fact.callOccurrenceKey,
+      },
+      fact: { kind: 'result-dropped-from-window' as const, strategy },
+    });
+  }
+  if (receipts.length === 0) return;
+  const turn = scope.turnNumber;
+  const existing =
+    (scope.$getValue('libraryResultLimits') as AgentState['libraryResultLimits']) ?? [];
+  const seen = new Set(
+    existing
+      .filter((row) => row.kind === 'result-dropped-from-window' && row.turn === turn)
+      .map(readCallOccurrenceKey),
+  );
+  recordLibraryResultLimits(
+    scope,
+    receipts.filter(({ call }) => !seen.has(readCallOccurrenceKey(call))),
+  );
 }

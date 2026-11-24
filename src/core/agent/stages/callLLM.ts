@@ -2,15 +2,12 @@ import { projectSourceInstructions } from '../sourceContract.js';
 import { recordModelContext } from '../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './callLLM/types.js';
 import { groundedTextOf } from './callLLM/groundedText.js';
-import { FINDINGS_LAYOUT, findingsContext, findingsContextBytes } from '../findings/context.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
 import {
-  commitAcceptedResponse,
-  completeObserved,
+  callObserved,
   observeCallRequests,
   servedRequestRecorder,
-  streamObserved,
 } from './callLLM/servedRequest.js';
 /**
  * callLLM — the LLM-invocation stage of the agent's chart.
@@ -45,16 +42,22 @@ import type {
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
+import { recordToolSelection } from './callLLM/recordToolSelection.js';
+import { recordWireFindings } from './callLLM/recordWireFindings.js';
+import { selectionAtRequest } from './callLLM/selectionAtRequest.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
 import {
   declaredEnumValuesOf,
   unsupportedArgumentsOf,
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
-import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
+import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
+import { commitAcceptedResponse } from './callLLM/commitResponse.js';
+import { prepareCitationProjection } from './callLLM/citationProjection.js';
+import { liveChunkEmitter } from './callLLM/liveChunks.js';
+import { recoveryFeedback, requestOnlyMessages } from './callLLM/requestOnly.js';
 import {
   assertForcedRequestSupported,
   describeProviderDispatch,
@@ -65,7 +68,6 @@ import {
 } from './callLLM/providerRequest.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
-import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
@@ -82,8 +84,12 @@ import {
 } from '../findings/reserved.js';
 import { collapseJudged } from '../findings/serve.js';
 import type { FindingsLedger } from '../findings/types.js';
+import { captureReplayPrefix, replayCacheMarkers } from '../requestTurn/replayPrefix.js';
+import { afterReplayResponse, sameReplayProjection } from '../requestTurn/state.js';
+import { writeRequestReplay } from '../requestTurn/native.js';
+import { projectCallHistory } from './callLLM/requestProjection.js';
+import { trackRecallRequests } from './callLLM/recallRequest.js';
 import { readSchemaToolAnswer } from '../outputEnforcement.js';
-import type { ToolChoiceLedger } from '../toolChoice/types.js';
 import type { OntologyPiece } from '../../../ontology/serve.js';
 import type { OntologyRecord } from '../../../ontology/types.js';
 import {
@@ -118,6 +124,7 @@ export function buildCallLLMStage(
   deps: CallLLMStageDeps,
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
+    if (deps.servedTools?.selection?.accepted) delete deps.servedTools.selection.accepted;
     // The answer-text scanner (`findings/peel.ts`), loaded ONCE per call and
     // only under `.findings()` — the optional-family law of docs-next's site
     // budget: an unarmed agent never loads the module. Every armed use below
@@ -228,7 +235,7 @@ export function buildCallLLMStage(
       deps.hasFindingsLedger === true
         ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
         : committed;
-    const messages = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
+    const rendered = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
     // function of the spec and nothing else (no call number, no clock — the
@@ -292,14 +299,25 @@ export function buildCallLLMStage(
       withheld !== null
         ? EMPTY_TOOL_SCHEMAS
         : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
+    const { replayFrames, closure, continuing, messages } = projectCallHistory(
+      scope,
+      history,
+      rendered,
+      recoveryPiece !== undefined && withheld !== null,
+    );
     // The forced schema rides on the wire and in `llm_start`. Offered contracts
     // specialize the findings instruction in request-only copies that replay rebuilds.
+    const recoveryNote =
+      recoveryPiece !== undefined && continuing !== undefined && withheld === null
+        ? recoveryFeedback(recoveryPiece.rawContent)
+        : undefined;
+    const systemRecovery = recoveryNote === undefined ? recoveryPiece : undefined;
     const systemPieces = projectSourceInstructions(
-      recoveryPiece === undefined && ontologyPieceRecord === undefined
+      systemRecovery === undefined && ontologyPieceRecord === undefined
         ? systemPromptInjections
         : [
             ...systemPromptInjections,
-            ...(recoveryPiece === undefined ? [] : [recoveryPiece]),
+            ...(systemRecovery === undefined ? [] : [systemRecovery]),
             ...(ontologyPieceRecord === undefined ? [] : [ontologyPieceRecord]),
           ],
       registeredToolSchemas,
@@ -309,72 +327,29 @@ export function buildCallLLMStage(
       ? [...registeredToolSchemas, deps.schemaTool]
       : registeredToolSchemas;
 
-    // THE STAGED-REFS NUDGE (`nudge: true` on the evidence gate). Judged on
-    // `registeredToolSchemas` — the tools REALLY served this call, so the
-    // wrap-up's withheld surface arms nothing and a synthetic schema tool is
-    // never named a spender. The line is request-only: `scope.history` is
-    // untouched, so it never enters the exempt corpus and never persists —
-    // recomposed each iteration, present exactly while both conditions hold.
-    let wireMessages = messages;
-    // Lines composed for THIS request and written to no history — each with
-    // the mechanism that composed it, so the receipt can say a line existed
-    // without saying what it said.
-    const requestOnly: { readonly message: LLMMessage; readonly reason: string }[] = [];
-    const nudge =
-      deps.toolWants === undefined
-        ? undefined
-        : stagedRefsNudgeFor(scope, messages, deps.toolWants, registeredToolSchemas, iteration);
-    if (nudge !== undefined) {
-      requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
-      wireMessages = [...messages, nudge];
-    }
-    // THE TIME LINE (step T6b, `.time({ reader })` only) — the library's conclusion about the
-    // person's time words, LAST, at the decision point: a settled window with its source and each
-    // tool's values, or a quote not confirmed yet and the one move that asks the person. Composed
-    // by the tools slot from the tools it served (`agent/arguments/serve/windows.ts` · `timeWindowsLine`)
-    // and served only on the iteration that composed it — a slot that did not re-run (classic
-    // mode) leaves an older line, which is never served. Request-only like the nudge above; not
-    // on the wrap-up call, whose tools are withheld. `servedView` rebuilds it from the same key.
-    const timeLine = deps.timeLine === true ? scope.timeLine : undefined;
-    if (
-      timeLine !== undefined &&
-      timeLine.iteration === iteration &&
-      timeLine.text.length > 0 &&
-      // `wrapUpAsked` is read here as it always was (an unarmed agent's reads
-      // are unchanged); `withheld` adds the revision's rule.
-      scope.wrapUpAsked !== true &&
-      withheld === null
-    ) {
-      const line: LLMMessage = { role: 'user', content: timeLine.text };
-      requestOnly.push({ message: line, reason: 'time-window-line' });
-      wireMessages = [...wireMessages, line];
-    }
-    // THE EVIDENCE CONCLUSION (the figures dial) — the library's finding about
-    // the numbers it flagged, LAST, on the one call that serves the revision
-    // instruction (`evidence/figures.ts` · `figuresConclusionLine`). Absent
-    // whenever the dial is off or no flagged value was a number.
-    const conclusion =
-      deps.hasEvidenceRecovery === true
-        ? evidenceConclusionLine(scope.evidenceRecovery, scope.evidenceRecoveryUsed, iteration)
-        : undefined;
-    if (conclusion !== undefined) {
-      const line: LLMMessage = { role: 'user', content: conclusion };
-      requestOnly.push({ message: line, reason: 'evidence-conclusion' });
-      wireMessages = [...wireMessages, line];
-    }
-
-    if (deps.hasFindingsLedger === true) {
-      // A resumed leg can have a different host configuration from its checkpoint.
-      // Record the layout actually used by THIS call; replay reads its commit.
-      scope.findingsLayout = FINDINGS_LAYOUT;
-      scope.findingsContextBytes = findingsContextBytes(deps.findingsContextBytes);
-      const line: LLMMessage = {
-        role: 'user',
-        content: findingsContext(committed, ledger, deps.findingsContextBytes),
-      };
-      requestOnly.push({ message: line, reason: 'findings-data' });
-      wireMessages = [...wireMessages, line];
-    }
+    const freshNotes = requestOnlyMessages(scope, deps, {
+      iteration,
+      committed,
+      messages,
+      ledger,
+      registeredToolSchemas,
+      withheld,
+    });
+    const recoveryContext = closure ?? recoveryNote;
+    const tail = recoveryContext === undefined ? freshNotes : [recoveryContext, ...freshNotes];
+    const prefixWire = continuing?.wire ?? messages;
+    const wireMessages =
+      tail.length === 0 ? prefixWire : [...prefixWire, ...tail.map(({ message }) => message)];
+    const requestOnly =
+      continuing === undefined
+        ? tail
+        : [
+            ...continuing.additions.map(({ message, reason, wireIndex }) => ({
+              message,
+              reason: `native-turn-prefix:${wireIndex}:${reason}`,
+            })),
+            ...tail,
+          ];
 
     typedEmit(scope, 'agentfootprint.stream.llm_start', {
       iteration,
@@ -433,8 +408,24 @@ export function buildCallLLMStage(
     // A custom strategy can create remote cache handles, so refuse a known
     // unsupported effective request before even that preparation does I/O.
     assertForcedRequestSupported(provider, baseRequest);
-    const cacheMarkers = (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [];
+    const cacheMarkers = replayCacheMarkers(
+      (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [],
+      continuing,
+    );
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const citations = prepareCitationProjection(
+      scope,
+      deps.offerCitations === true &&
+        continuing === undefined &&
+        deps.outputSchemaParser === undefined &&
+        deps.outputFormat === undefined,
+      committed,
+      wireMessages,
+      detached.request.messages,
+    );
+    const selection =
+      deps.servedTools?.selection &&
+      selectionAtRequest(deps, iteration, scope.$attempt?.(), baseRequest, withheld !== null);
     const serving =
       deps.recordReceipt === false
         ? undefined
@@ -526,7 +517,7 @@ export function buildCallLLMStage(
       iteration,
       systemPieces,
       tools: activeToolSchemas,
-      requestOnly,
+      requestOnly: freshNotes,
     }));
 
     // THE CLOSURE CHECK (9.60.0, dangling-reference). At assembly, BEFORE the
@@ -599,8 +590,8 @@ export function buildCallLLMStage(
 
     // Streaming-first: when the provider implements `stream()` we
     // consume chunk-by-chunk so consumers see tokens as they arrive
-    // instead of waiting for the full LLM call to finish. Each
-    // non-terminal chunk fires `agentfootprint.stream.token`. The
+    // instead of waiting for the full LLM call to finish. Non-terminal
+    // chunks can carry thinking, visible text, or both. The
     // terminal chunk SHOULD carry the authoritative `LLMResponse`;
     // when it doesn't (older providers, partial implementations) we
     // fall back to `complete()` for the authoritative payload —
@@ -618,14 +609,33 @@ export function buildCallLLMStage(
     // once per stage — reused across reliability-loop
     // iterations. Named to avoid shadowing `singleProviderCall`'s own
     // `hooks` parameter, which is the unrelated `{ onFirstChunk }` bag.
-    const providerHooks = resilienceHooks(
+    const ordinaryProviderHooks = resilienceHooks(
       scope,
       deps.recordReceipt !== false,
       deps.onReplayPrepared,
     );
+    const providerHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
+    const recall =
+      deps.recallRequests === undefined
+        ? undefined
+        : trackRecallRequests(
+            systemPieces,
+            committed,
+            wireMessages,
+            continuing?.historyPositions,
+            systemPrompt,
+          );
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
+    const choice = deps.sourceConsultation;
+    let acceptedOffer: ReturnType<NonNullable<typeof choice>['capture']> | undefined;
+    const preserveReplay =
+      deps.hasEvidenceRecovery === true ||
+      deps.hasFindingsLedger === true ||
+      tail.length > 0 ||
+      continuing !== undefined;
+    let acceptedProjection = false;
     const issued = deps.findings === true ? issuedTicketsOf(scope.placedTickets) : undefined;
     const capture = (req: LLMRequest) => captureFindingsRequest(req, committed, iteration, issued);
     // The run signal reaches the wire. See callLLM/README.md#dispatch-lifetime.
@@ -643,105 +653,62 @@ export function buildCallLLMStage(
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
+      let offer = choice?.capture(scope, req, baseRequest);
+      let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
-      const attemptHooks = observeCallRequests(
+      const selectionAttempt = selection?.attempt();
+      const ordinaryHooks = observeCallRequests(
         attempts.hooks,
-        serving === undefined && deps.findings !== true
+        !selectionAttempt &&
+          serving === undefined &&
+          deps.findings !== true &&
+          !preserveReplay &&
+          choice === undefined
           ? undefined
           : (request) => {
+              selectionAttempt?.observe(request);
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
+              if (choice !== undefined) offer = choice.capture(scope, request, baseRequest, offer);
+              if (preserveReplay)
+                stableProjection = sameReplayProjection(wireMessages, request.messages);
             },
         serving?.discard,
       );
-      let resp: LLMResponse | undefined;
-      let firstChunkFired = false;
+      const attemptHooks = recall?.hooks(ordinaryHooks) ?? ordinaryHooks;
       // THE STREAM CARRIES WHAT STANDS (9.114.2, `.findings()`): each chunk
       // goes through the scanner the answer's peel uses, so a token never
       // carries the model's `_findings` notes — not even when a chunk ends
       // part way through the key — and the tokens join to exactly the text
       // the run hands back. A fresh scanner per attempt; unarmed, the chunks
       // go out as the provider sent them.
-      const shown =
-        peel !== undefined && deps.suppressDraftTokens !== true
-          ? peel.reservedMemberFilter()
-          : undefined;
-      let lastTokenIndex = -1;
-      if (selectedProvider.stream) {
-        for await (const chunk of streamObserved(
-          selectedProvider,
-          attempts.request,
-          attemptHooks,
-          runSignal,
-        )) {
-          if (chunk.done) {
-            if (chunk.response) resp = chunk.response;
-            break;
-          }
-          // A provider is a port anyone can implement, and a non-terminal
-          // chunk that carries no `content` used to die on the next line as
-          // `Cannot read properties of undefined (reading 'length')` —
-          // naming neither the provider nor the contract it missed. The
-          // commonest shape of the mistake is a chunk that ends the stream
-          // with its own marker instead of `done: true`, which is why the
-          // refusal says what the terminal chunk looks like.
-          if (typeof (chunk.content as unknown) !== 'string') {
-            throw new TypeError(
-              `provider '${selectedProvider.name}' yielded a stream chunk whose \`content\` is ` +
-                `${chunk.content === undefined ? 'missing' : `a ${typeof chunk.content}`}. ` +
-                `Every chunk from LLMProvider.stream() is ` +
-                `{ tokenIndex: number, content: string, done: boolean }, and the LAST one is ` +
-                `{ content: '', done: true, response } — the response payload rides the ` +
-                `terminal chunk. A chunk that ends the stream any other way is not seen as ` +
-                `terminal, and its missing content stops the run here.`,
-            );
-          }
-          if (chunk.content.length > 0) {
-            if (!firstChunkFired) {
-              firstChunkFired = true;
-              hooks.onFirstChunk?.();
-            }
-            if (deps.suppressDraftTokens !== true) {
-              const content = shown === undefined ? chunk.content : shown.push(chunk.content);
-              lastTokenIndex = chunk.tokenIndex;
-              if (content.length > 0) {
-                typedEmit(scope, 'agentfootprint.stream.token', {
-                  iteration,
-                  tokenIndex: chunk.tokenIndex,
-                  content,
-                });
-              }
-            }
-          }
-        }
-      }
-      // What the scanner still held when the stream ended goes out as one
-      // last token (whitespace, a key it was reading, a `{`…).
-      const held = shown?.end() ?? '';
-      if (held.length > 0) {
-        typedEmit(scope, 'agentfootprint.stream.token', {
-          iteration,
-          tokenIndex: lastTokenIndex + 1,
-          content: held,
-        });
-      }
-      if (!resp) {
-        // No `stream()` OR stream finished without a response payload.
-        // Raw errors propagate so the reliability loop can classify them;
-        // friendly translation happens at the terminal ErrorBridge.
-        //
-        // Hooks are passed to BOTH phases. A decorated provider that falls
-        // back in each reports twice — deliberately NOT deduped, because
-        // those are two genuinely billed calls and collapsing them would
-        // hide real double-billing. (That this branch can re-call at all
-        // after a stream is a pre-existing quirk; see MENTAL_MODEL §14.)
-        const completion = selectedProvider.stream
-          ? dispatchFor.select(attempts.request, selectedProvider)
-          : attempts.request;
-        dispatch = describeProviderDispatch(selectedProvider, completion);
-        if (deps.findings === true) candidate = capture(completion);
-        resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
-      }
+      const shown = deps.suppressDraftTokens === true ? undefined : peel?.reservedMemberFilter();
+      const liveChunks = liveChunkEmitter(scope, runSignal, {
+        providerName: selectedProvider.name,
+        iteration,
+        suppressDraftTokens: deps.suppressDraftTokens === true,
+        allowHeldProviderSummary: deps.allowHeldProviderSummary === true,
+        textFilter: shown,
+        onFirstChunk: hooks.onFirstChunk,
+      });
+      let resp = await callObserved(
+        selectedProvider,
+        attempts.request,
+        attemptHooks,
+        runSignal,
+        liveChunks,
+        () => {
+          const completion = selectedProvider.stream
+            ? dispatchFor.select(attempts.request, selectedProvider)
+            : attempts.request;
+          dispatch = describeProviderDispatch(selectedProvider, completion);
+          if (deps.findings === true) candidate = capture(completion);
+          if (choice !== undefined) offer = choice.capture(scope, completion, baseRequest);
+          if (preserveReplay)
+            stableProjection = sameReplayProjection(wireMessages, completion.messages);
+          return completion;
+        },
+      );
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
       throwIfAborted(runSignal);
@@ -770,7 +737,11 @@ export function buildCallLLMStage(
           : tagThinkingResponse(resp, String(hooks.providerIndex));
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
-      return attempts.response(answered);
+      acceptedOffer = offer;
+      acceptedProjection = stableProjection;
+      const result = attempts.response(answered);
+      selectionAttempt?.finish(result);
+      return result;
     };
 
     // v2.13 — build the output-schema validator hook when both
@@ -842,20 +813,16 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
-          ...((deps.findings === true ||
-            deps.outputFormat !== undefined ||
-            serving !== undefined) && {
-            prepareFallback: (request: LLMRequest) => {
-              serving?.discard();
-              const witness = deps.findings === true ? capture(request) : undefined;
-              return () => {
-                // A callback may return arbitrary text; it did not inherit
-                // native generation from the provider response it replaces.
-                localFallback = true;
-                acceptedFindingsRequest = witness;
-              };
-            },
-          }),
+          prepareFallback: (request: LLMRequest) => {
+            serving?.discard();
+            const witness = deps.findings === true ? capture(request) : undefined;
+            return () => {
+              // A local answer does not inherit the replaced provider's stop reason
+              // or native generation. The callback may return arbitrary text.
+              localFallback = true;
+              acceptedFindingsRequest = witness;
+            };
+          },
           ...(deps.outputFormat !== undefined && {
             isTerminalRefusal: (response: LLMResponse) =>
               answeredBy.native && response.stopReason === 'refusal',
@@ -866,8 +833,12 @@ export function buildCallLLMStage(
       // fail-fast path. It already wrote scope state and called
       // `$break(reason)` — `Agent.run()` translates the propagated
       // break into a `ReliabilityFailFastError` at the API boundary.
-      // Skip the post-call state writes; there is no response to commit.
-      if (response === undefined) return;
+      // File the incomplete request when armed. There is no response to commit.
+      if (response === undefined) {
+        if (recall !== undefined)
+          deps.recallRequests?.(scope, iteration, recall.summary('incomplete'));
+        return;
+      }
     } else {
       response = await singleProviderCall(llmRequest, {});
     }
@@ -875,7 +846,6 @@ export function buildCallLLMStage(
     // retries the same instruction. The prior committed value proves delivery.
     if (recoveryPiece !== undefined) scope.evidenceRecoveryUsed = true;
     const durationMs = Date.now() - startMs;
-
     scope.totalInputTokens = scope.totalInputTokens + response.usage.input;
     scope.totalOutputTokens = scope.totalOutputTokens + response.usage.output;
     // Cache reads as a cost (9.110.0) — VALUE-conditional: the key exists
@@ -884,42 +854,32 @@ export function buildCallLLMStage(
     if (typeof response.usage.cacheRead === 'number') {
       scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
     }
-    const nativeOutput =
-      deps.outputFormat !== undefined &&
-      !localFallback &&
-      (deps.nativeOutputAuto !== true || answeredBy.native);
-    // A provider that states its manifest (wireManifest.ts)
-    // and says no format crossed sent the request unconstrained while it
-    // declared the capability — refused, never delivered as constrained.
-    if (
-      nativeOutput &&
-      response.wireManifest !== undefined &&
-      response.wireManifest.outputFormat === undefined
-    ) {
-      throw new Error(
-        `Agent: native structured output — '${answeredBy.provider}' ` +
-          `declares a native structured-output format, but its wire manifest says the request ` +
-          `it sent carried none. The answer was not constrained, so it is not delivered as if ` +
-          `it were.`,
-      );
-    }
-    if (deps.findings === true)
-      scope.findingsRequest =
-        acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps.getRunId?.());
-    // Native candidates only, every call (so it is never stale): the stop reason the
-    // Route decider judges a constrained answer by — a 'refusal' or
-    // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
-    // nativeStopFailure). Absent on every other agent, so their bytes are unchanged.
-    if (deps.outputFormat !== undefined) {
-      scope.llmLatestStopReason = nativeOutput ? response.stopReason : undefined;
-      scope.llmLatestNativeOutput = nativeOutput;
-    }
+    const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, serving, {
+      localFallback,
+      answeredBy,
+      findingsRequest: acceptedFindingsRequest,
+      citationOffer: citations?.accepted(response),
+      sourceOffer: acceptedOffer,
+      iteration,
+      recall: recall?.summary(localFallback ? 'local' : 'provider'),
+    });
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {
       scope.llmLatestReplay = response.replay === undefined ? undefined : [response.replay];
     }
+    const nextReplay =
+      !localFallback && acceptedProjection
+        ? afterReplayResponse(
+            response,
+            continuing === undefined ? [] : replayFrames ?? [],
+            (replay) =>
+              captureReplayPrefix(replay, history, messages, tail, continuing?.frozenBefore ?? 0),
+            deps.toolsOffAfterRevision === true,
+          )
+        : undefined;
+    if (nextReplay !== undefined || replayFrames !== undefined)
+      writeRequestReplay(scope, nextReplay);
     // v2.14 — hand provider-specific raw thinking data to the
     // NormalizeThinking sub-subflow (the next stage in sf-call-llm
     // when a ThinkingHandler is configured). Undefined when the
@@ -946,41 +906,7 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
-    // this reads what the ADAPTER says actually crossed — the manifest read
-    // back from the serialized body — against the schemas this very call
-    // assembled. The recorded defect lived exactly in that gap: a clean
-    // frame, four retained schemas on the wire. No manifest stated → the
-    // call is incomparable and nothing is guessed. Same seen-list rail as
-    // the compose backstop, freshest copy first, so one defect files once
-    // per run however many calls re-detect it.
-    // The composed side is llmRequest — the exact object HANDED TO the
-    // adapter, after the cache strategy's transform — so a strategy edit
-    // is never blamed on the adapter.
-    const wireFindings = wireViolationsOf(
-      {
-        names: (llmRequest.tools ?? []).map((t) => t.name),
-        provenance: 'callLLM (assembled request)',
-      },
-      response.wireManifest === undefined
-        ? undefined
-        : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
-      iteration,
-    );
-    // The disposition: a provider stating no manifest leaves this call
-    // UNREACHABLE — the check could not see the wire, which is a different
-    // fact from "the wire was clean", and the ledger keeps them apart.
-    deps.integrityLedger?.current?.note(
-      'invariant-violation',
-      'wire',
-      response.wireManifest === undefined
-        ? 'unreachable'
-        : wireFindings.length > 0
-        ? 'checked-fail'
-        : 'checked-pass',
-      wireFindings.length > 0 ? Date.now() : undefined,
-    );
-    fileIntegrityFindings(scope, wireFindings, iteration, deps.integrityLedger);
+    recordWireFindings(scope, llmRequest, response, answeredBy, iteration, deps);
 
     // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
     // asks what the library put in front of the model; this asks what the
@@ -1049,7 +975,7 @@ export function buildCallLLMStage(
               // The recovery piece quotes the model's words; only the trusted
               // system injections count as grounds when that piece is present.
               // Findings DATA is a request-only message after history.
-              ...(recoveryPiece === undefined
+              ...(systemRecovery === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []
                   : [llmRequest.systemPrompt]
@@ -1061,7 +987,7 @@ export function buildCallLLMStage(
                 : []),
               // Every tool result as the TOOL's own bytes — the inputs layer's note
               // after a filled call's result is the library's words (`groundedTextOf`).
-              ...groundedTextOf(frameMessages, committed),
+              ...groundedTextOf(frameMessages, committed, continuing?.historyPositions),
             ],
             assistant: frameMessages.filter((m) => m.role === 'assistant').map((m) => m.content),
             ...(external.length > 0 && { external }),
@@ -1122,37 +1048,23 @@ export function buildCallLLMStage(
       }
     }
 
-    // THE OUTCOME (9.105.0, `.toolChoice()`). The tools slot filed the pick
-    // before this call; the reply is in; the comparison is made HERE, the
-    // one moment both readings exist, and filed as its own row — the model's
-    // call stays the emission, the pick stays a second reading, and neither
-    // is rewritten. `called` is what the model asked for, in order (a
-    // `'tool-forced'` answer was already taken off the list at the seam);
-    // a miss is a call outside the NARROWED served list. Gated on the arm,
-    // and on a pick having been attempted for this iteration (a call with
-    // nothing to choose among filed no pick and gets no outcome).
     if (deps.toolChoice === true) {
       // `import()` — the optional-family law of docs-next's site budget (the
       // `toolCalls/evidence/judgeLanded.ts · judgeLanded` precedent): an unarmed agent never loads
       // the module; the slot loads the same one under the same gate.
-      const { outcomeRowFor, pickAttemptedFor, pickRowFor, recordToolChoice } = await import(
-        '../toolChoice/record.js'
+      const { recordToolChoiceOutcome } = await import('../toolChoice/record.js');
+      recordToolChoiceOutcome(
+        scope as unknown as Parameters<typeof recordToolChoiceOutcome>[0],
+        response,
+        iteration,
       );
-      const rows = scope.toolChoices as ToolChoiceLedger | undefined;
-      if (pickAttemptedFor(rows, iteration)) {
-        recordToolChoice(
-          scope as unknown as Parameters<typeof recordToolChoice>[0],
-          outcomeRowFor(
-            pickRowFor(rows, iteration),
-            response.toolCalls.map((c) => c.name),
-            iteration,
-          ),
-        );
-      }
     }
 
     // Attribute the successful response to its actual selected transport/model.
     emitCostTick(scope, deps.pricingTable, deps.costBudget, answeredBy, response.usage);
+    const selected = localFallback ? undefined : selection?.accept(response);
+    if (selected && deps.servedTools && deps.canRecordToolSelection?.())
+      recordToolSelection(scope, selected, deps.servedTools);
   };
 }
 

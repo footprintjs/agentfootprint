@@ -109,8 +109,7 @@ export interface MemoryRetrievedPayload {
   readonly candidatesComplete: boolean;
   readonly candidatesOmittedReason?: string;
   /**
-   * The namespace held nothing at all. Almost always means the corpus was
-   * indexed under a different identity than the one being queried.
+   * This scoped search returned no entries. The corpus itself may still contain data.
    */
   readonly corpusEmpty: boolean;
   /** The namespace that was searched. */

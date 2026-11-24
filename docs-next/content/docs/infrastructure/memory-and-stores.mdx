@@ -1,6 +1,6 @@
 ---
 title: Memory & stores
-description: The MemoryStore port — eleven required members, one optional method, and two declared capability bits. Seven adapters with their supported and missing operations stated honestly, the strategy axes that sit above them, and what each store's search() actually ranks.
+description: MemoryStore adapters, their storage and ranking capabilities, and the optional outcome-aware retrieval methods.
 ---
 
 > Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
@@ -49,16 +49,22 @@ contains the number requested. Zero has no "all rows" or "empty rows" meaning.
 
 ### The optional, feature-detected members
 
-Four, and each answers a different question:
-
 | Member | Question | Absence means |
 |---|---|---|
-| `search?(identity, query, options?)` | Does this store rank at all? | No vector search. Callers feature-detect with `if (store.search)` |
+| `search?(identity, query, options?)` | Can the store rank entries for the legacy search API? | Check whether it supplies `searchWithOutcome` for semantic recall |
 | `supportsVectorSearch?: boolean` | Can you serve back the embeddings **I wrote**? | Undeclared — behaves exactly as before this bit existed |
 | `ranksBy?: 'vector' \| 'server-text'` | What **query form** does your `search()` take? | Undeclared — nothing refuses, nothing changes |
 | `writeOptions?: ('extraction' \| 'namespaceScope')[]` | Which **write options** do you honour? | **None** — any write option is refused by name (see *Write options* below) |
 
-The next two sections are why the second and third exist.
+### Outcome-aware retrieval
+
+Implement `searchWithOutcome` for semantic retrieval or `listWithOutcome` for recent memory. Both receive the same identity and options as the corresponding legacy method. A list still uses the existing cursor contract. Retrieval prefers the outcome-aware method when present and otherwise calls the legacy method. Each read picks one path.
+
+Return `{ ok: true, value }` for success, including an empty search or page. Use `{ ok: false, code: 'timeout' }` for a timeout your adapter can identify and the agent can recover from. The turn continues without passages from that read. A typed timeout triggers no second read through the legacy method. Keep cancellation, authorization errors and unclassified failures on your existing error path.
+
+<CodeFile path="examples/rag/02-retrieval-outcomes.ts" region="outcome-aware-store" title="Report a successful read or explicit timeout" />
+
+`MemoryReadOutcome` and `SearchResultEntry` are available from `agentfootprint/memory`. An outcome-aware search can provide ranked entries without scores. The recording then uses the order it received and leaves the missing scores unknown.
 
 ## The adapters
 

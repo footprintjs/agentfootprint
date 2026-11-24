@@ -17,9 +17,9 @@
  *   `core/agent/buildAgentMessageApiChart.ts` · `toolExec`, which runs no tool
  *   function at all (it answers `[name result]` for any name). Its brackets
  *   leave entry unrecorded.
- * - `toolRanOf` is the reader: the answer account (`answer-account/facts/
- *   calls.ts` · `outcomeOf`), the tool-call ledger (`answer-validation/
- *   toolLedger.ts` · `toolOutcomeOf`), the trace toolpack
+ * - `toolRanOf` is the reader: the answer account
+ *   (`answer-account/facts/calls.ts` · `outcomeOf`), the tool-call ledger
+ *   (`answer-validation/toolLedger.ts` · `toolOutcomeOf`), the trace toolpack
  *   (`trace-toolpack/traceToolpack/toolCallJournal.ts`), teaching commentary
  *   and the chat-interface door (`ag-ui/toolResultWords.ts`) ask it. Readers
  *   that do not ask it yet are listed in `answer-account/README.md`.

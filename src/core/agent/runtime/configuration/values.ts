@@ -56,6 +56,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare credentialProvider?: AgentConfiguration['credentialProvider'];
   declare artifactStore?: AgentConfiguration['artifactStore'];
   declare sourceEvidenceConfig?: AgentConfiguration['sourceEvidenceConfig'];
+  declare citationOptions?: AgentConfiguration['citationOptions'];
   declare artifactPlacement?: AgentConfiguration['artifactPlacement'];
   declare artifactRecordings?: AgentConfiguration['artifactRecordings'];
   declare repeatedCallNudge?: AgentConfiguration['repeatedCallNudge'];
@@ -80,6 +81,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare reliabilityConfig?: AgentConfiguration['reliabilityConfig'];
   declare thinkingHandler?: AgentConfiguration['thinkingHandler'];
   declare thinkingBudget?: AgentConfiguration['thinkingBudget'];
+  declare liveThinkingWithHeldDrafts?: AgentConfiguration['liveThinkingWithHeldDrafts'];
   declare structureRecorders?: AgentConfiguration['structureRecorders'];
   declare agentGroupTranslator?: AgentConfiguration['agentGroupTranslator'];
   declare reactMode: AgentConfiguration['reactMode'];

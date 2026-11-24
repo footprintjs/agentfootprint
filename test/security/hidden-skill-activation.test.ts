@@ -256,8 +256,8 @@ describe('the keyword path: user text never surfaces a hidden skill', () => {
       expect(rec.routed).toEqual([]); // no cascade ran
       // The turn entered the next visible entry instead.
       expect(rec.evaluated[0]!.cursorMove).toMatchObject({ to: 'billing', by: 'entry' });
-      expect(rec.evaluated[0]!.skippedDetails).toContainEqual(
-        expect.objectContaining({ id: 'vip', reason: 'hidden' }),
+      expect(rec.evaluated[0]!.skippedDetails).not.toContainEqual(
+        expect.objectContaining({ id: 'vip' }),
       );
     });
 

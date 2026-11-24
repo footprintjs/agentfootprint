@@ -5,6 +5,95 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.0.0] - 2026-11-23
+
+### Breaking
+
+- **Growing conversation records store appended message injections as deltas.**
+  Live and saved `context.injected` events keep their recency labels.
+
+  Migration: Native `messagesInjections` rows in a snapshot now carry
+  `recencyFromOrder: true` in place of a stored label. Use the last row of the
+  composition for `latest` and all earlier rows for `earlier`, or read the label
+  from `context.injected` events. Custom events retain the label their writer supplied,
+  including an omitted label.
+
+### Changed
+
+- **Raise the minimum supported Foottrace release.** The newer reader brings in fixes for browser replay and stale handoffs. If your application pins Foottrace, allow the minimum declared by AgentFootprint.
+
+### Fixed
+
+- **Answer warnings include the reason a tool gave for an unchecked or uncovered item.** The warning quotes permitted explanations within its existing text budget. Saved assessments also recognize the subject-only wording produced by earlier versions.
+
+- **Code-runner failures and clipped output reach the answer warning.** AgentFootprint records a failed run as an incomplete call and a clipped successful run as partial work. The warning gives the retained output size and the original size when the runner established it. The model still reads the same tool output, and output that fits exactly at the limit is recorded without a cut.
+
+- **Explain when the context window dropped tool results from this answer’s turn.** The answer’s standing and the saved explanation count visible results that left the model’s context. The warning follows the current request through a pause or retry and keeps withheld results anonymous.
+
+## [16.4.0] - 2026-11-22
+
+### Added
+
+- **Answer warnings explain tool failures and limits.** The default prose warning uses the engine’s failure category, such as a timeout, and bounded words from admitted tool declarations under the run’s redaction policy. The full assessment exposes those details. Typed answers keep their format, and the opt-in limits block still carries the longer declaration.
+
+- **Show provider summaries while answer drafts are held.** Set `liveThinkingWithHeldDrafts: 'provider-summary'` on `Agent.create` to receive classified provider summaries before the answer is approved. The summaries use the existing stream event, run redaction, and first-chunk retry rule. Draft answer text and other live thinking stay held under the output policy.
+
+### Fixed
+
+- **Say when an answer hits the model's output limit.** An accepted provider response that stops at the limit records why it ended. Its answer standing reports the cutoff, and eligible prose includes that warning. An earlier draft's stop does not warn about a later answer.
+
+## [16.3.0] - 2026-11-22
+
+### Added
+
+- **Watch provider thinking as it streams.** Agent stream subscribers receive Anthropic's requested summaries and structured reasoning from Ollama as they arrive. Live deltas carry `provider-summary`, `raw-reasoning`, or `unclassified`, so apps can choose what to display. The run's redaction policy applies to the served event.
+
+### Fixed
+
+- **The answer explains when the framework limited a tool result.** Its standing and replay now report a result cut short, a result stored by reference that no tool read, and dataset timestamps without a zone. The warning uses the tool’s display name and recorded counts when available.
+
+- **Findings and evidence recovery can continue after a signed tool call.** AgentFootprint preserves the findings context that preceded each signed response, including when resuming the same request after a transport error. Revisions append feedback while keeping the signed prefix stable. A revision governed by an enforcing answer check uses witnessed completion to withdraw the tools.
+
+## [16.2.1] - 2026-11-21
+
+### Fixed
+
+- **Show uncertainty when an older recording cannot place a conflict's readings.**
+  An answer and its explanation now report that evidence gap when a current-turn
+  conflict has missing readings. Independent answer checks remain visible, and replay
+  preserves the library attribution of their older standing lines. Conflict
+  attribution still requires admitted tool results.
+
+## [16.2.0] - 2026-11-21
+
+### Added
+
+- Recordings made with receipts enabled can now include `sourceLinkServedRows`. The key holds the current turn’s rows, which contain only the positions of complete history entries offered in each request.
+
+### Fixed
+
+- A typed run with negative claims no longer leaves a stream open under deferred delivery. A failed run delivers its terminal error even with explicit summary capture. If a native emit is delivered as a summary, the run's observer statistics now report it separately from queue overflow.
+
+- **Time-zone replies can ask for confirmation in development mode.** A correction
+  can open another form before the model responds. Integrity checks now track
+  model responses in each invocation, so the form can open and a silent checker
+  still fails after a real response.
+
+## [16.1.0] - 2026-11-21
+
+### Added
+
+- **End an SSE stream when its invocation settles.** Pass `start` to `toSSE()` to
+  start the run after subscribing and deliver its admitted frames through
+  success, failure, or a pause. In text format a composition streams its token
+  transcript. The promise returned from `start` carries the composition's answer.
+
+### Fixed
+
+- **Close SSE streams when a composition fails.** Both `toSSE()` formats now close
+  on a composition's fatal error, including when the first step fails before any
+  Agent turn ends. The run's promise still rejects with its error.
+
 ## [16.0.1] - 2026-11-20
 
 ### Security

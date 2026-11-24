@@ -23,7 +23,12 @@ import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 import type { DispatchSettlement } from '../../../../../semantics/toolOutcome.js';
-import { outcomeField, reportedStatusField, toolResultExecutionField } from './outcomeField.js';
+import {
+  outcomeField,
+  reportedStatusField,
+  toolFailureCategoryField,
+  toolResultExecutionField,
+} from './outcomeField.js';
 import { missingResultFields } from '../batch/settle.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
@@ -252,10 +257,24 @@ export function landCallResult(
         frame.execution.haltContext !== undefined ||
         frame.skillRoute.skillRejected ||
         frame.delivery.modelResultCapped,
+      {
+        scope,
+        counts: frame.outcome.toolEnvelope?.outputCounts,
+        disposition: frame.delivery.toolResultDisposition,
+      },
     ),
     ...(frame.delivery.toolResultDisposition !== undefined && {
       toolResultDisposition: frame.delivery.toolResultDisposition,
     }),
+    ...toolFailureCategoryField(
+      frame.execution,
+      settled,
+      frame.delivery.toolResultDisposition !== undefined ||
+        frame.execution.haltContext !== undefined ||
+        frame.execution.ceilingRefused ||
+        frame.skillRoute.skillRejected ||
+        frame.delivery.modelResultCapped,
+    ),
     ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },

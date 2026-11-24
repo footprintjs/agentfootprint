@@ -606,8 +606,10 @@
  * whole `commitLog` plus `servedAt(k)` for every located epoch, after ONE
  * normalisation: the values that differ between two runs of the same
  * configuration (run ids, salted digests, clocks) are replaced by a marker.
- * Nothing else is dropped, so a new key, a reordered list or a changed verb
- * anywhere in the log fails here by name.
+ * The Messages record migration is reversed only for its own writes so the
+ * historical files and hashes stay pinned. The native append law is checked
+ * separately by message-injection-growth.test.ts. Every other recorded key,
+ * list order and write verb still compares here by name.
  *
  * Deliberately NOT here: a multi-turn `buildAgentMessageApiChart` run. Its
  * tools slot accumulated across turns until 9.92.0 (`['weather','weather']` on
@@ -622,6 +624,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { legacyMessageInjectionLog } from '../../helpers/legacyMessageInjectionLog.js';
 import { normalizeCallOccurrences } from '../../helpers/normalizeCallOccurrences.js';
 import { removeVerifiedSourceLinkConsumers } from './source-link-consumer-reference.js';
 import {
@@ -1687,7 +1690,9 @@ function projection(snapshot: Snapshot, scenario?: string): unknown {
   const epochs = epochLocations(snapshot);
   const record = normalizeCallOccurrences(
     normalise({
-      commitLog: JSON.parse(JSON.stringify(snapshot.commitLog)),
+      commitLog: JSON.parse(
+        JSON.stringify(legacyMessageInjectionLog(snapshot.commitLog, snapshot.initialState)),
+      ),
       served: epochs.map(({ epoch }) => ({
         epoch,
         view: JSON.parse(JSON.stringify(servedAt(snapshot, epoch) ?? null)),

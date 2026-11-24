@@ -2,6 +2,7 @@ import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { buildRouteDeciderStage } from '../../stages/route.js';
 import { withNegativeProse } from '../../negativeClaims/observe.js';
+import { withCitationAssessment } from '../../citations/observe.js';
 import { withAnswerValidation } from '../../stages/answerValidation.js';
 import { finishAnswerEvidence } from '../../stages/answerEvidence.js';
 import { withAnswerCoverage } from '../../stages/answerCoverage.js';
@@ -119,11 +120,20 @@ export function routeFactory(
       : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls/index.ts (v2.11.2).
-    if (this.configuration.evidenceGate === undefined) return terminalRouteDecider;
-    return async (scope: Parameters<typeof terminalRouteDecider>[0]) => {
+    const assessedRouteDecider =
+      this.configuration.citationOptions !== undefined &&
+      this.configuration.outputSchemaParser === undefined
+        ? withCitationAssessment(
+            terminalRouteDecider,
+            this.configuration.citationOptions,
+            () => run.value.consentOutstanding.size > 0,
+          )
+        : terminalRouteDecider;
+    if (this.configuration.evidenceGate === undefined) return assessedRouteDecider;
+    return async (scope: Parameters<typeof assessedRouteDecider>[0]) => {
       let final = false;
       try {
-        const branch = await terminalRouteDecider(scope);
+        const branch = await assessedRouteDecider(scope);
         final = branch === 'final';
         return branch;
       } finally {

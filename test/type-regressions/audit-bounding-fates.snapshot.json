@@ -222,6 +222,7 @@
     "scripts.shown[].truncated.shownBytes": "kept",
     "scripts.withheldFromText": "kept",
     "standingLineNames.k1": "kept",
+    "standingLineOmittedByRaiseOn": "kept",
     "stoppedEarly.iteration": "kept",
     "stoppedEarly.pendingToolCalls": "kept",
     "stoppedEarly.reason": "kept",
@@ -265,6 +266,7 @@
     "kind": "kept",
     "label": "chars",
     "mediaType": "kept",
+    "naiveCount": "kept",
     "origin.runId": "kept",
     "origin.toolCallId": "kept",
     "parentRefs[]": "kept",
@@ -1078,6 +1080,7 @@
   "agentfootprint.stream.thinking_delta": {
     "content": "chars",
     "iteration": "kept",
+    "kind": "kept",
     "tokenIndex": "kept"
   },
   "agentfootprint.stream.thinking_end": {

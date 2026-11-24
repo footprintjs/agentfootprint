@@ -22,6 +22,7 @@ import {
   packRecording,
   PackedRecordingTooLargeError,
   recordRun,
+  recordingSizeReport,
   unpackRecording,
 } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -65,7 +66,7 @@ export async function run(input: string): Promise<unknown> {
   const packed = JSON.stringify(packRecording(recording)); // what you store or send
 
   // Reading it back: one call reads either shape.
-  const readBack = unpackRecording(JSON.parse(packed));
+  const readBack = unpackRecording(JSON.parse(packed), { maxBytes: 64 * 1024 * 1024 });
   // #endregion pack
 
   assert.equal(JSON.stringify(readBack), plain);
@@ -85,11 +86,21 @@ export async function run(input: string): Promise<unknown> {
   // #endregion bound
 
   assert.ok(refused);
+
+  // #region size
+  const report = recordingSizeReport(readBack);
+  const largestSnapshotFields = [...(report.snapshot?.fields ?? [])]
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, 3);
+  // #endregion size
+
+  assert.equal(report.bytes, Buffer.byteLength(plain));
   return {
     plainKB: Math.round(plain.length / 1024),
     packedKB: Math.round(packed.length / 1024),
     events: readBack.events.length,
     refusedOver16MiB: refused,
+    largestSnapshotFields,
   };
 }
 

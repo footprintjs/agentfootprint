@@ -1,3 +1,8 @@
+import {
+  markPlacedResultRead,
+  captureDatasetLimit,
+  type PendingDatasetLimits,
+} from '../../../honesty/libraryResultLimits.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -55,6 +60,7 @@ export function buildToolContextOperations(
     ToolCallsHandlerDeps,
     | 'emitForRun'
     | 'currentRun'
+    | 'sourceConsultation'
     | 'isRunRetired'
     | 'time'
     | 'artifactStore'
@@ -131,6 +137,8 @@ export function buildToolContextOperations(
     toolCallId: string,
     capturePublications = false,
     callOccurrenceKey?: CallOccurrenceKey,
+    binding?: OuterCallBinding,
+    pending?: PendingDatasetLimits,
   ): Pick<ToolExecutionContext, 'artifacts' | 'hasArtifacts'> => {
     const bindRun = links.runFactsOf(scope);
     const occurrence = callOccurrenceField(callOccurrenceKey);
@@ -169,24 +177,41 @@ export function buildToolContextOperations(
             ...(meta.origin !== undefined && { origin: meta.origin }),
             ...(meta.parentRefs !== undefined && { parentRefs: meta.parentRefs }),
             ...(meta.timeAxis !== undefined && { timeAxis: meta.timeAxis }),
+            ...(meta.naiveCount !== undefined && { naiveCount: meta.naiveCount }),
             tool: toolName,
           });
           // Under `.time()` (step T8): a dataset whose declared axis names a
           // zone is a wall-clock source — one `source-clock` row per call and
           // zone, for the limits block's `Clocks` lines. Only in the run the
           // binding was made in (a late mint's run has ended).
-          const zone = meta.timeAxis?.zone;
-          if (
-            deps.time !== undefined &&
-            zone !== undefined &&
+          const activeRun =
             !deps.isRunRetired() &&
-            (madeInRun(bindRun) === undefined || madeInRun(bindRun) === deps.currentRun?.().runId)
+            (madeInRun(bindRun) === undefined || madeInRun(bindRun) === deps.currentRun?.().runId);
+          if (
+            activeRun &&
+            binding !== undefined &&
+            !binding.ended &&
+            pending !== undefined &&
+            meta.naiveCount !== undefined
           ) {
+            captureDatasetLimit(pending, meta.ref, meta.naiveCount);
+          }
+          const zone = meta.timeAxis?.zone;
+          if (deps.time !== undefined && zone !== undefined && activeRun) {
             recordSourceClock(scope, { toolCallId, toolName, ...occurrence }, zone);
           }
           return;
         }
         case 'resolved':
+          if (
+            fact.via === 'get' &&
+            binding !== undefined &&
+            !binding.ended &&
+            !deps.isRunRetired() &&
+            madeInRun(bindRun) === deps.currentRun?.().runId
+          ) {
+            markPlacedResultRead(scope, fact.ref);
+          }
           emitFact('agentfootprint.artifacts.resolved', {
             ref: fact.ref,
             via: fact.via,
@@ -271,7 +296,12 @@ export function buildToolContextOperations(
         history: call.history,
         binding: call.binding,
       }),
-      record: (facts) => recordInnerToolCall(scope, call, facts),
+      record: (facts) => {
+        recordInnerToolCall(scope, call, facts);
+        if (facts.entered && facts.tool !== undefined && !deps.isRunRetired()) {
+          deps.sourceConsultation?.innerAttempt(scope, facts.toolName, facts.tool);
+        }
+      },
       prepareRecord: (tool, args) => prepareInnerCallRecord(scope, tool, args),
       outer: call.binding,
       ...(signal !== undefined && { signal }),
@@ -307,7 +337,11 @@ export function buildToolContextOperations(
             ...(facts?.identity !== undefined && { identity: facts.identity }),
             ...(facts?.runId !== undefined && { runId: facts.runId }),
             ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),
-            ...readerAccess(scope, toolArtifacts(scope, name, innerId).artifacts, name),
+            ...readerAccess(
+              scope,
+              toolArtifacts(scope, name, innerId, false, undefined, call.binding).artifacts,
+              name,
+            ),
           }),
         };
       },

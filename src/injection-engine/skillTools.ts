@@ -86,7 +86,7 @@ export function buildListSkillsTool(skills: readonly Injection[]): Tool | undefi
  * guard or filter undefined out of their tool list.
  *
  * Pass `offer` to scope the DESCRIPTION to what the graph's gate will actually
- * grant from the current cursor (8.5.0); the enum stays the full catalog either
+ * grant from the current cursor (8.5.0); the enum retains every role-visible id either
  * way. Omit it and the tool is byte-identical to what it has always been.
  */
 export function buildReadSkillTool(

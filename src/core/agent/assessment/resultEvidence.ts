@@ -21,7 +21,7 @@ export function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered):
  * committed coverage rows, and — only when there are none — the envelope in
  * the result itself (`agent/emptiness.ts` · `declaredByValue`).
  */
-interface ResultRead {
+export interface ResultRead {
   readonly result: TurnResult;
   readonly at: AssessmentPointer;
   readonly rows: readonly CoverageRow[];

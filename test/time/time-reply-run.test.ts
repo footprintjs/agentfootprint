@@ -11,6 +11,7 @@ import {
   defineTool,
   englishTimeReader,
   isInputPause,
+  type AgentOptions,
   type InputValue,
 } from '../../src/index.js';
 import { recordRun } from '../../src/observe.js';
@@ -39,6 +40,7 @@ type Mode = 'dynamic' | 'dynamic-grouped';
 function make(
   options: {
     mode?: Mode;
+    integrityPosture?: AgentOptions['integrityPosture'];
     privateAccount?: boolean;
     privatePeriod?: boolean;
     seen?: Record<string, unknown>[];
@@ -97,6 +99,7 @@ function make(
     model: 'mock',
     maxIterations: 5,
     reactMode: options.mode ?? 'dynamic',
+    integrityPosture: options.integrityPosture ?? 'observe',
   })
     .tool(actualTool)
     .time({
@@ -303,6 +306,28 @@ describe('native correction meanings', () => {
     expect(made.requests).toHaveLength(1);
     await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
     expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
+  });
+
+  it('dev: an ordinary zone correction opens another confirmation without calling the model', async () => {
+    const made = make({ integrityPosture: 'dev' });
+    const first = await start(made);
+    const second = paused(
+      await reply(made.agent, first, {
+        [pair(first).correction.id]: 'today 8 AM to 8:40 AM in America/New_York',
+      }),
+    );
+    expect(choice(second)).toBe('2026-11-06T08:00:00-05:00/2026-11-06T08:41:00-05:00');
+    expect(pair(second).range.labels?.join(' ')).toContain(NY);
+    expect(made.requests).toHaveLength(1);
+    expect(made.seen).toEqual([]);
+    await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
+    expect(made.requests).toHaveLength(2);
+    expect(made.seen).toEqual([
+      {
+        from: Date.parse('2026-11-06T13:00:00Z'),
+        to: Date.parse('2026-11-06T13:41:00Z'),
+      },
+    ]);
   });
 
   it('re-resolves time words at the saved clock, then asks to confirm the changed interval', async () => {

@@ -293,6 +293,7 @@ export interface AgentChartDeps {
    * This flag never makes the cache subflow suppress findings cache markers.
    */
   readonly hasFindingsLedger?: boolean;
+  readonly hasCitations?: true;
 
   /**
    * The inputs layer is armed (honesty layer 2) — present ONLY when a tool
@@ -348,6 +349,8 @@ export interface AgentChartDeps {
    * Absent — the default — the boundary maps exactly the keys it always did.
    */
   readonly hasOntology?: boolean;
+  /** Carry the opted-in source evidence through the grouped request boundary. */
+  readonly sourceNotConsulted?: true;
 
   /**
    * ReAct loop semantics. `'dynamic'` (default) re-runs the InjectionEngine +

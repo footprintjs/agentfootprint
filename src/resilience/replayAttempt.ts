@@ -1,4 +1,5 @@
 /** Carry only a leaf-approved replay retirement across one call's attempts. */
+import { carryCitationResponse } from '../provider-contract/citationResponse.js';
 import type {
   LLMCallHooks,
   LLMChunk,
@@ -29,7 +30,7 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
       omissions.every((item, index) => omissionKey(item) === omissionKey(existing[index]))
     )
       return answer;
-    return { ...answer, replayOmissions: omissions };
+    return carryCitationResponse(answer, { ...answer, replayOmissions: omissions });
   }
 
   function chunk(item: LLMChunk): LLMChunk {
@@ -55,16 +56,26 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
     response,
     chunk,
     /** Preserve the underlying iterator's cancellation/throw protocol. */
-    iterator(inner: AsyncIterator<LLMChunk>): AsyncIterator<LLMChunk> {
+    iterator(
+      inner: AsyncIterator<LLMChunk>,
+      observeChunk?: (chunk: LLMChunk) => void,
+    ): AsyncIterator<LLMChunk> {
       const close = inner.return?.bind(inner);
       const raise = inner.throw?.bind(inner);
+      const observe =
+        observeChunk === undefined
+          ? result
+          : (item: IteratorResult<LLMChunk>) => {
+              if (!item.done) observeChunk(item.value);
+              return result(item);
+            };
       return {
-        next: async (...args) => result(await inner.next(...args)),
+        next: async (...args) => observe(await inner.next(...args)),
         ...(close && {
-          return: async (...args: Parameters<typeof close>) => result(await close(...args)),
+          return: async (...args: Parameters<typeof close>) => observe(await close(...args)),
         }),
         ...(raise && {
-          throw: async (...args: Parameters<typeof raise>) => result(await raise(...args)),
+          throw: async (...args: Parameters<typeof raise>) => observe(await raise(...args)),
         }),
       };
     },

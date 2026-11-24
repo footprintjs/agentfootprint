@@ -49,6 +49,12 @@ import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
 import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize.js';
 import { chunkText } from '../retrieval/provenance.js';
+import {
+  omitAmbiguousRetrievalCandidates,
+  refineRecallOutcomes,
+  retrievalCandidateIdsAmbiguous,
+  type RecallExclusion,
+} from '../retrieval/outcome.js';
 
 /**
  * Reusable shape for a **composable pipeline segment** — a function that
@@ -145,14 +151,14 @@ function buildPickDecider(config: PickByBudgetConfig) {
  */
 const skipStage = (scope: TypedScope<MemoryState>): void => {
   scope.selected = [];
-  reviseAdmitted(scope, () => false, undefined, 0);
+  const loaded = scope.loaded ?? [];
+  const removed = loaded.map(({ id }): RecallExclusion => ({ id, reason: 'over-budget' }));
+  reviseAdmitted(scope, loaded, removed, 0, 0);
 };
 
 /**
- * Re-mark the retrieval record against what the budget picker actually
- * kept. `keptIds` is consulted only for candidates the strategy already
- * admitted — a below-threshold candidate keeps its own reason, because
- * the budget never got the chance to reject it.
+ * Re-mark the retrieval record using the picker’s own reasons.
+ * Candidates already rejected by ranking keep their recorded reason.
  *
  * `charsKept` re-states the retriever's `maxChars` spend against what
  * survived here (8.19.0). The retrieval recorded what IT spent; if this
@@ -163,29 +169,32 @@ const skipStage = (scope: TypedScope<MemoryState>): void => {
  */
 function reviseAdmitted(
   scope: TypedScope<MemoryState>,
-  wasKept: (id: string) => boolean,
-  overCap: ((id: string) => boolean) | undefined,
+  loaded: readonly MemoryEntry<Message>[],
+  removed: readonly RecallExclusion[],
+  after: number,
   charsKept: number,
 ): void {
-  const evidence = scope.retrieved;
-  if (!evidence?.candidates) return;
+  const outcomes = scope.recallOutcomes;
+  const prior = scope.retrieved;
+  const ambiguous = retrievalCandidateIdsAmbiguous(prior, loaded);
+  if (outcomes !== undefined && (removed.length !== 0 || ambiguous)) {
+    scope.recallOutcomes = refineRecallOutcomes(outcomes, removed, loaded.length, after, ambiguous);
+  }
 
-  let admittedCount = 0;
-  const candidates = evidence.candidates.map((c) => {
-    if (!c.admitted) return c;
-    if (wasKept(c.id)) {
-      admittedCount += 1;
-      return c;
-    }
-    const reason = overCap?.(c.id) ? 'over-max-entries' : 'over-budget';
-    return { ...c, admitted: false, reason } as typeof c;
+  if (!prior) return;
+  const evidence = ambiguous ? omitAmbiguousRetrievalCandidates(prior) : prior;
+  const byId = evidence.candidates && new Map(removed.map((decision) => [decision.id, decision]));
+  const candidates = evidence.candidates?.map((candidate) => {
+    const decision = byId?.get(candidate.id);
+    if (!candidate.admitted || decision === undefined || decision.reason === 'decayed')
+      return candidate;
+    return { ...candidate, admitted: false, reason: decision.reason };
   });
-
   scope.retrieved = {
     ...evidence,
-    candidates,
-    admittedCount,
-    rejectedCount: candidates.length - admittedCount,
+    ...(candidates !== undefined && { candidates }),
+    admittedCount: after,
+    rejectedCount: evidence.consideredCount - after,
     ...(evidence.maxChars !== undefined && { charsUsed: charsKept }),
   };
 }
@@ -210,7 +219,7 @@ function buildPickStage(config: PickByBudgetConfig) {
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
     const picked: MemoryEntry<Message>[] = [];
-    const overCap = new Set<string>();
+    const removed: RecallExclusion[] = [];
     let used = 0;
 
     for (const entry of byNewest) {
@@ -223,12 +232,15 @@ function buildPickStage(config: PickByBudgetConfig) {
         // remaining entries can be NAMED as cap-rejected — and it cannot
         // change what is picked, because once the cap is reached the
         // condition stays true for every later iteration.
-        overCap.add(entry.id);
+        removed.push({ id: entry.id, reason: 'over-max-entries' });
         continue;
       }
 
       const cost = countMessageTokens(entry.value, countTokens);
-      if (used + cost > budget) continue; // skip this entry, try smaller ones
+      if (used + cost > budget) {
+        removed.push({ id: entry.id, reason: 'over-budget' });
+        continue;
+      }
       picked.push(entry);
       used += cost;
     }
@@ -236,16 +248,10 @@ function buildPickStage(config: PickByBudgetConfig) {
     // Emit in chronological order — `picked` is newest-first; reverse.
     scope.selected = picked.reverse();
 
-    const kept = new Set(picked.map((e) => e.id));
     // Measured through the SAME accessor the retriever spent its character
     // budget with, so the two numbers are the same kind of number.
     const charsKept = picked.reduce((total, entry) => total + chunkText(entry.value).length, 0);
-    reviseAdmitted(
-      scope,
-      (id) => kept.has(id),
-      (id) => overCap.has(id),
-      charsKept,
-    );
+    reviseAdmitted(scope, loaded, removed, picked.length, charsKept);
   };
 }
 

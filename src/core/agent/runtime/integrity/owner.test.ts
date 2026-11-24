@@ -16,7 +16,8 @@
  * counts quarantined; one event per run).
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as integrityLifecycle from '../../../../integrity/disposition/lifecycle.js';
 import {
   beginIntegrityRun,
   type IntegrityChecksPresent,
@@ -234,6 +235,40 @@ const screen = () =>
   });
 
 describe('functional: the run files its disposition rows', () => {
+  it('dev: a silent wire checker still fails after a real empty response with zero usage', async () => {
+    const begin = beginIntegrityRun;
+    const silentWire = vi
+      .spyOn(integrityLifecycle, 'beginIntegrityRun')
+      .mockImplementation((present, posture) => {
+        const ledger = begin(present, posture);
+        const note = ledger.note;
+        ledger.note = (kind, seam, disposition, at) => {
+          if (seam !== 'wire') note(kind, seam, disposition, at);
+        };
+        return ledger;
+      });
+    const agent = Agent.create({
+      provider: {
+        name: 'empty-response',
+        async complete() {
+          return { content: '', toolCalls: [], usage: { input: 0, output: 0 } };
+        },
+      },
+      model: 'mock',
+      integrityPosture: 'dev',
+    }).build();
+    try {
+      await expect(agent.run('go')).rejects.toMatchObject({
+        name: 'CheckerDeadError',
+        check: 'invariant-violation',
+        seam: 'wire',
+      });
+    } finally {
+      silentWire.mockRestore();
+      await agent.shutdown();
+    }
+  });
+
   it('a healthy default agent: one event, a checked-pass wire row PLUS the eight opt-ins as not-applicable', async () => {
     // This agent declares no maps plan, no `argumentsFrom` tool, no claims
     // contract — the exact "nothing armed" shape the per-check registration

@@ -76,6 +76,12 @@ const DECL = {
   tryInsteadTool: { tool: 'fabric_inventory', why: 'it lists what each fabric holds' },
 };
 
+const LOOKUP_WARNING_REASONS =
+  'a tool said there is ground it did not check or cannot cover ' +
+  '(did not check “fabric B” because “the person has not said which fabric the host is on”; ' +
+  'cannot cover “hosts outside the collected inventory” because “never collected”); ' +
+  'a tool said nothing matched (suggested “Ask which fabric the host is cabled to, then look there.”).';
+
 const QUESTION = {
   id: 'fabric',
   question: 'Which fabric is the host cabled to?',
@@ -432,10 +438,7 @@ describe('integration: a raising lookup files what a returning lookup files', ()
         requestId: paused.awaitingInput.requestId,
         values: { fabric: 'A' },
       });
-      expect(done).toBe(
-        answer.content +
-          '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-      );
+      expect(done).toBe(`${answer.content}\n\n---\n\nNot sure — ${LOOKUP_WARNING_REASONS}`);
       expect(payloadsOf(raised, 'agentfootprint.tools.absent')).toHaveLength(1);
       expect(JSON.stringify(stateOf(raised.agent).coverageDeclared)).toBe(rowsAtRaise);
       // The paused call's served result is the person's answer — never the envelope.
@@ -612,10 +615,7 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(
-      answer.content +
-        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-    );
+    expect(done).toBe(`${answer.content}\n\n---\n\nNot sure — ${LOOKUP_WARNING_REASONS}`);
     expect(filedUnder).toEqual(['outer_proc/c1']);
   });
 
@@ -687,10 +687,7 @@ describe("integration: a raise inside a composed call is the OUTER call's raise"
       requestId: paused.awaitingInput.requestId,
       values: { fabric: 'A' },
     });
-    expect(done).toBe(
-      answer.content +
-        '\n\n---\n\nNot sure — a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
-    );
+    expect(done).toBe(`${answer.content}\n\n---\n\nNot sure — ${LOOKUP_WARNING_REASONS}`);
     expect(filedUnder).toEqual(['outer/c1']);
   });
 });
@@ -731,6 +728,7 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
       const ran: string[] = [];
       const returnsMiss = defineTool({
         name: 'returns_miss',
+        displayName: 'Returning lookup',
         description: 'a lookup that returns its miss',
         inputSchema: { type: 'object', properties: {} },
         execute: (_args, ctx) => {
@@ -740,6 +738,7 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
       });
       const raisesMiss = defineTool({
         name: 'raises_miss',
+        displayName: 'Pausing lookup',
         description: 'a lookup that asks the person about its miss',
         inputSchema: { type: 'object', properties: {} },
         execute: () => requestInput({ ...QUESTION, absence: absent(DECL) }),
@@ -765,7 +764,13 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
       });
       expect(done).toBe(
         'done\n\n---\n\nNot sure — a call did not run; ' +
-          'a tool said there is ground it did not check or cannot cover; a tool said nothing matched.',
+          'a tool said there is ground it did not check or cannot cover ' +
+          '(Returning lookup did not check “fabric B” because “the person has not said which fabric the host is on”; ' +
+          'Returning lookup cannot cover “hosts outside the collected inventory” because “never collected”; ' +
+          'Pausing lookup did not check “fabric B”; 1 more in the run record); ' +
+          'a tool said nothing matched ' +
+          '(Returning lookup suggested “Ask which fabric the host is cabled to, then look there.”; ' +
+          'Pausing lookup suggested “Ask which fabric the host is cabled to, then look there.”).',
       );
 
       // The settlement is unchanged: c3 never ran, and its result is the sentence.
@@ -802,7 +807,13 @@ const REFERENCE = resolve(__dirname, 'reference/paused-lookup-no-absence.json');
 
 /** Expected-side recorded metadata; historical behavior, payload and order stay exact. */
 const recordedMetadataKeys = (legacy: readonly string[], savedPause = false): string[] => {
-  const added = ['runIdentitySource', 'runSessionId', 'sourceLinkServedRows', 'toolResourceOwner'];
+  const added = [
+    'runIdentitySource',
+    'runSessionId',
+    'sourceLinkConsumer',
+    'sourceLinkServedRows',
+    'toolResourceOwner',
+  ];
   if (savedPause) added.push('servedToolParties');
   for (const key of added) expect(legacy).not.toContain(key);
   return [...legacy, ...added].sort();

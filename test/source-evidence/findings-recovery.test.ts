@@ -215,7 +215,7 @@ describe('mounted retained-source recovery after strict findings refusal', () =>
         expect(readSeen).toBe(mode === 'retained');
         expect(output).toBe(
           mode === 'retained'
-            ? 'Inspected.\n\n---\n\nNot sure — a call was refused.'
+            ? 'Inspected.\n\n---\n\nNot sure — a call was refused; 2 results from this turn were dropped from the conversation before the answer.'
             : 'Unavailable.\n\n---\n\nNot sure — a call was refused.',
         );
       } finally {

@@ -58,12 +58,12 @@ import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
-import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
-import { llmCallReadsInto } from './llmCallReads.js';
+import { llmCallResponseFields } from './llmCallReads.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import {
   breakFinalStage,
@@ -73,7 +73,7 @@ import {
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
-import { buildCacheSubflow } from './buildCacheSubflow.js';
+import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import {
   timeClockArg,
   timeLimitsArg,
@@ -86,88 +86,11 @@ import {
   RESULTS_LOOP_TARGET,
   startFinalBranch,
 } from './honesty/mounts.js';
+import { retrievalFindingsOf } from './honesty/retrievalRequests.js';
 import type { AgentState } from './types.js';
-import type { ToolChoiceEntry } from './toolChoice/types.js';
+import { dynamicTurnInput } from './dynamicTurnInput.js';
+import { dynamicTurnSeed } from './dynamicTurnSeed.js';
 import { memberRunArg } from '../memberRun.js';
-
-/**
- * Inner seed for the `sf-llm-call` subflow. Initialises the per-turn
- * working keys (the ones the OUTER seed set on the flat chart) and
- * copies the cross-iteration accumulators from their read-only `prior*`
- * inputs into the writable working keys.
- *
- * Why the `prior*` indirection: `inputMapper` values are frozen inside
- * the subflow (any `scope.set` on them throws). callLLM does
- * `scope.totalInputTokens += usage` — so `totalInputTokens` must be a
- * writable working key, seeded here from the frozen `priorTotalInputTokens`.
- */
-function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
-  const args = scope.$getArgs<{
-    priorTotalInputTokens?: number;
-    priorTotalOutputTokens?: number;
-    priorTotalCacheReadTokens?: number;
-    priorCumTokensInput?: number;
-    priorCumTokensOutput?: number;
-    priorCumEstimatedUsd?: number;
-    priorCostBudgetHit?: boolean;
-    priorSkillHistory?: readonly (string | undefined)[];
-    priorHistory?: readonly LLMMessage[];
-    priorDeliveredMessageKeys?: readonly string[];
-    priorEvidenceRecoveryUsed?: boolean;
-    priorToolChoices?: readonly ToolChoiceEntry[];
-    priorLatestReplay?: AgentState['llmLatestReplay'];
-  }>();
-
-  // Cross-iteration accumulators — seed working keys from prior totals
-  // so they continue to accumulate across loop re-entries.
-  scope.totalInputTokens = args.priorTotalInputTokens ?? 0;
-  scope.totalOutputTokens = args.priorTotalOutputTokens ?? 0;
-  // Cache reads (9.110.0) — value-conditional both ways: seeded only when a
-  // provider has reported one, so a run on a provider that reports none
-  // crosses no new key.
-  if (args.priorTotalCacheReadTokens !== undefined) {
-    scope.totalCacheReadTokens = args.priorTotalCacheReadTokens;
-  }
-  scope.cumTokensInput = args.priorCumTokensInput ?? 0;
-  scope.cumTokensOutput = args.priorCumTokensOutput ?? 0;
-  scope.cumEstimatedUsd = args.priorCumEstimatedUsd ?? 0;
-  scope.costBudgetHit = args.priorCostBudgetHit ?? false;
-  scope.skillHistory = args.priorSkillHistory ?? [];
-
-  // The WINDOW, as a writable working key (7.21). It used to arrive as the
-  // read-only `history` input, which was fine while nothing inside the
-  // subflow changed it — the Deliver stage does. Seeding it here from
-  // `priorHistory` (and bubbling it out at the boundary) is what makes the
-  // one-past law hold in the grouped shape too: what this iteration sends is
-  // what the next iteration's window stage sees. The delivery ledger takes
-  // the same trip so a delivered message is not re-delivered next turn.
-  scope.history = args.priorHistory ?? [];
-  scope.deliveredMessageKeys = args.priorDeliveredMessageKeys ?? [];
-  if (args.priorEvidenceRecoveryUsed !== undefined) {
-    scope.evidenceRecoveryUsed = args.priorEvidenceRecoveryUsed;
-  }
-  // The classifier's rows (9.105.0), the `history` trip: the Tools branch
-  // inside this boundary reads them, the call-llm stage appends to them, and
-  // the boundary bubbles them out — so they arrive under an alias and become
-  // the writable working key here. Value-conditional: an unarmed agent, and
-  // an armed one on its first call, seeds no key.
-  if (args.priorToolChoices !== undefined) scope.toolChoices = args.priorToolChoices;
-  // Carry presence across the fresh inner scope so a reply with no replay
-  // evidence can explicitly clear the outer turn's former evidence.
-  if (args.priorLatestReplay !== undefined) scope.llmLatestReplay = args.priorLatestReplay;
-
-  // Per-iteration working keys — fresh each turn (slots + cache + callLLM
-  // populate these inside the subflow; nothing outside reads the
-  // injection arrays, so they stay subflow-internal).
-  scope.activeInjections = [];
-  scope.systemPromptInjections = [];
-  scope.messagesInjections = [];
-  scope.toolsInjections = [];
-  scope.cacheMarkers = [];
-  scope.llmLatestContent = '';
-  scope.llmLatestToolCalls = [];
-  scope.thinkingBlocks = [];
-}
 
 /**
  * Build the Dynamic-ReAct agent chart from the shared `AgentChartDeps`.
@@ -550,23 +473,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // The findings offer re-decorates every tool per call — see
     // buildAgentChart's mount. Closed over at build time.
     .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-        }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window as it will be sent — a messages marker's index is a
-        // position in THAT array. See buildAgentChart's mount for the why.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
+      inputMapper: (parent) => cacheMountInput(parent, deps),
       outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
       arrayMerge: ArrayMergeMode.Replace,
     })
@@ -604,28 +511,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     description: 'Agent: ReAct loop',
   });
 
-  // Memory READ subflows — TURN_START timing (once per turn, OUTSIDE
-  // the LLM-call loop body). Each writes `memoryInjection_${id}` to the
-  // outer scope; the boundary inputMapper below threads those into the
-  // subflow so the slots consume them.
-  for (const m of deps.memories) {
-    builder = mountMemoryRead(builder, {
-      pipeline: {
-        read: unwrapMemoryFlowChart(m.read) as never,
-        ...(m.write !== undefined && { write: unwrapMemoryFlowChart(m.write) as never }),
-      },
-      identityKey: 'runIdentity',
-      turnNumberKey: 'turnNumber',
-      contextTokensKey: 'contextTokensRemaining',
-      injectionKey: memoryInjectionKey(m.id),
-      // The retrieval record, lifted into ROOT state so a backward slice
-      // can reach the passage instead of stopping at this mount.
-      evidenceKey: retrievalEvidenceKey(m.id),
-      readSubflowId: `sf-memory-read-${m.id}`,
-      // A corpus reads under its OWN namespace, not the run's identity.
-      ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-    });
-  }
+  builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — once per turn on the OUTER scope, before the
   // sf-llm-call loop (its loop target). ONE stage, two possible occupants,
@@ -677,165 +563,27 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
 
   const withLlmCall = builder
     .addSubFlowChartNext(SUBFLOW_IDS.LLM_CALL, llmCallSubflow, 'LLM', {
-      inputMapper: (parent) => {
-        const p = parent as Record<string, unknown>;
-        // Per-memory injection content the slots consume inside.
-        const memoryKeys: Record<string, unknown> = {};
-        for (const m of deps.memories) {
-          const key = memoryInjectionKey(m.id);
-          memoryKeys[key] = p[key];
-        }
-        return {
-          // Read-only working inputs (stages read, never write these).
-          userMessage: p.userMessage,
-          ...((deps.evidenceRecheckStage !== undefined ||
-            deps.negativeRecheckStage !== undefined) &&
-            p.evidenceRecovery !== undefined && {
-              evidenceRecovery: p.evidenceRecovery,
-              priorEvidenceRecoveryUsed: p.evidenceRecoveryUsed,
-            }),
-          iteration: p.iteration,
-          maxIterations: p.maxIterations,
-          runIdentity: p.runIdentity,
-          // A composition member's run, crossed into sf-llm-call so the engine's
-          // Gather stage checks skill visibility under the MEMBER's caller, not
-          // under no identity at all. Value-conditional: the agent's own runs
-          // cross no key.
-          ...(p.memberRun !== undefined && { memberRun: p.memberRun }),
-          cachingDisabled: p.cachingDisabled,
-          recentHitRate: p.recentHitRate,
-          activatedInjectionIds: p.activatedInjectionIds,
-          lastToolResult: p.lastToolResult,
-          // The iteration's whole tool batch (9.16.0) — same direct
-          // cross-iteration read as lastToolResult, of which it is the plural.
-          toolResults: p.toolResults,
-          // Skill-graph cursor carried into sf-llm-call (like activatedInjectionIds
-          // / lastToolResult — a direct cross-iteration read, not a prior* alias).
-          currentSkillId: p.currentSkillId,
-          // The model's accepted `read_skill` pick — written by tool-calls on the
-          // OUTER chart, read by the injection engine inside this boundary.
-          pendingSkillPick: p.pendingSkillPick,
-          // Relevance entry ranking — carried in so defineRelevanceHint can read it.
-          entryScores: p.entryScores,
-          entryScorer: p.entryScorer,
-          // The turn-start verdict (SG-C) — written once by RouteTurn on the
-          // OUTER scope, read inside by the engine mapper and the tools slot.
-          turnRoute: p.turnRoute,
-          // The step pointer (9.18.0) — a direct cross-iteration read, like
-          // currentSkillId one block up: the outer key holds the value the
-          // LAST iteration's boundary bubbled out (plus tool-calls' moves).
-          ...(deps.hasSteps === true && { stepPointer: p.stepPointer }),
-          // The typed tool-effects carriers (9.19.0) — written by tool-calls
-          // on the OUTER scope, read inside by the engine mapper. Value-
-          // conditional: the keys exist only after a tool granted one.
-          ...(p.pendingToolTransition !== undefined && {
-            pendingToolTransition: p.pendingToolTransition,
-          }),
-          ...(p.instructionLeases !== undefined && {
-            instructionLeases: p.instructionLeases,
-          }),
-          // The mount kernel's engagement state (9.58.0) — a direct
-          // cross-iteration read like the step pointer one block up.
-          ...(deps.engagementPlan !== undefined &&
-            p.mapEngagement !== undefined && { mapEngagement: p.mapEngagement }),
-          // The integrity dedup seen-list (9.60.0) — crosses into
-          // sf-llm-call so the tools slot's compose backstop files one
-          // finding per defect per RUN, not per pass. Value-conditional.
-          ...integrityRailInto(p),
-          // The run records CallLLM reads inside this boundary, written outside
-          // it: the window ledger, the findings ledger and the ticket receipt.
-          ...llmCallReadsInto(p),
-          // The declared ontology (9.106.0) — the same lesson: `callLLM`
-          // composes the ontology piece from the run constant `ontology`,
-          // which seed wrote on the OUTER scope, and `callLLM` lives INSIDE
-          // this boundary. Gated on the arm AND value-conditional, so an
-          // unarmed agent crosses no new key and reads none. Read-only
-          // inside, so no outputMapper line is needed.
-          ...(deps.hasOntology === true && p.ontology !== undefined && { ontology: p.ontology }),
-          // The classifier's rows (9.105.0) — in under the alias, because the
-          // call-llm stage WRITES the key inside this boundary (the `history`
-          // shape, not the read-only `findingsLedger` one). Value-conditional.
-          ...(p.toolChoices !== undefined && { priorToolChoices: p.toolChoices }),
-          ...(p.llmLatestReplay !== undefined && { priorLatestReplay: p.llmLatestReplay }),
-          // The kernel's PER-PASS pick feed (9.59.0) — written by tool-calls
-          // on the OUTER scope, read by the engine mapper INSIDE this
-          // boundary. Same gate as the engagement state above.
-          ...(deps.engagementPlan !== undefined && {
-            acceptedSkillPicks: (p.acceptedSkillPicks as readonly string[] | undefined) ?? [],
-          }),
-          // The kernel's SERVED carrier (9.59.0) — outer key into
-          // sf-llm-call, so the inner engine mapper one level down can read
-          // it. Same gate as the engagement state above.
-          ...(deps.engagementPlan !== undefined && {
-            servedInjectionIds: (p.servedInjectionIds as readonly string[] | undefined) ?? [],
-          }),
-          // The escalation flip (9.19.0) — written by tool-calls on the
-          // OUTER scope, read by callLLM INSIDE this boundary (`brainFor`'s
-          // second argument). Gated on the policy being declared, so every
-          // other agent's boundary args are the exact bytes they always
-          // were; seed writes the key from turn start, so the value-spread
-          // is stable within a run.
-          ...(deps.hasEscalation === true &&
-            p.skillEscalated !== undefined && { skillEscalated: p.skillEscalated }),
-          // The out-of-budget wrap-up (9.56.0) — written by the WrapUp branch
-          // on the OUTER scope, read by callLLM INSIDE this boundary, which is
-          // where the request is assembled and therefore where the tools come
-          // off. Value-conditional: the key exists only on the one turn that
-          // ran out of budget, so every other boundary's args are the exact
-          // bytes they always were.
-          ...(p.wrapUpAsked === true && { wrapUpAsked: true }),
-          // The tools off after the evidence revision (an enforcing answer
-          // validation) — the same trip: written by the EvidenceRecheck branch
-          // on the OUTER scope, read by callLLM in here. Value-conditional, so
-          // every other boundary's args are the exact bytes they always were.
-          ...(p.toolsOffAfterRevision === true && { toolsOffAfterRevision: true }),
-          // `.configure()` results, resolved + committed by seed on the OUTER
-          // chart. callLLM and the System Prompt slot both live in here, so
-          // the values have to cross the boundary. Read-only inside (nothing
-          // in the turn re-decides them), and the keys are omitted entirely
-          // for an agent without `.configure()`.
-          ...(p.resolvedModel !== undefined && { resolvedModel: p.resolvedModel }),
-          ...(p.resolvedInstructions !== undefined && {
-            resolvedInstructions: p.resolvedInstructions,
-          }),
-          ...memoryKeys,
-          // Cross-iteration accumulators under prior* aliases — frozen
-          // here, copied to writable working keys by dynamicTurnSeed.
-          // `history` joined them in 7.21: the Deliver stage writes the
-          // window, so it can no longer arrive under its own name.
-          priorHistory: p.history,
-          priorDeliveredMessageKeys: p.deliveredMessageKeys,
-          priorTotalInputTokens: p.totalInputTokens,
-          priorTotalOutputTokens: p.totalOutputTokens,
-          ...(p.totalCacheReadTokens !== undefined && {
-            priorTotalCacheReadTokens: p.totalCacheReadTokens,
-          }),
-          priorCumTokensInput: p.cumTokensInput,
-          priorCumTokensOutput: p.cumTokensOutput,
-          priorCumEstimatedUsd: p.cumEstimatedUsd,
-          priorCostBudgetHit: p.costBudgetHit,
-          priorSkillHistory: p.skillHistory,
-        };
-      },
-      outputMapper: (sf) => {
+      inputMapper: (parent) => dynamicTurnInput(parent as Record<string, unknown>, deps),
+      outputMapper: (sf, parent) => {
         const s = sf as Record<string, unknown>;
         return {
+          ...retrievalFindingsOf(s, parent as Record<string, unknown>),
           // LLM result the outer Route / tool-calls / final read.
           llmLatestContent: s.llmLatestContent,
           llmLatestToolCalls: s.llmLatestToolCalls,
           ...(deps.hasFindingsLedger === true && { findingsRequest: s.findingsRequest }),
+          ...(deps.sourceNotConsulted === true &&
+            s.sourceConsultation !== undefined && {
+              sourceConsultation: s.sourceConsultation,
+            }),
           thinkingBlocks: s.thinkingBlocks,
           // Atomic tuple + Replace below: never merge a former layout or
           // binding into a new provider proof. Present undefined clears it.
           ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
-          // Native output candidates only — absent otherwise, so the mapper
-          // is byte-identical for every other agent (see AgentState).
-          ...(Object.hasOwn(s, 'llmLatestStopReason') && {
-            llmLatestStopReason: s.llmLatestStopReason,
-          }),
-          ...(Object.hasOwn(s, 'llmLatestNativeOutput') && {
-            llmLatestNativeOutput: s.llmLatestNativeOutput,
-          }),
+          ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
+          // Native candidates and prose cutoffs carry stop evidence. Ordinary
+          // replies without earlier stop evidence leave the mapper byte-identical.
+          ...llmCallResponseFields(s, deps.hasCitations === true),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.

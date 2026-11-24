@@ -7,6 +7,7 @@ import { contextRecordedRecorder } from '../recorders/core/ContextRecordedRecord
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { agentRecorder } from '../recorders/core/AgentRecorder.js';
 import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
+import { errorBridge } from '../recorders/core/ErrorBridge.js';
 
 /** Composition-native recorder wiring; all retain the captured invocation. */
 export function compositionRecorders(
@@ -23,6 +24,7 @@ export function compositionRecorders(
     streamRecorder({ dispatcher, getRunContext }),
     agentRecorder({ dispatcher, getRunContext }),
     compositionRecorder({ dispatcher, getRunContext }),
+    errorBridge({ dispatcher, getRunContext, fallback: 'run' }),
     ...extra,
     ...attached,
   ];

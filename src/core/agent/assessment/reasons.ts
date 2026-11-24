@@ -80,6 +80,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'findingsLedger: an integrity-finding row of this turn — the tools the model was offered contradict what the run composed or parked (at the write that served them, or on the wire)',
   },
   {
+    reason: 'source-not-consulted',
+    layer: 1,
+    class: 'not-sure',
+    source: 'run',
+    reads: 'sourceConsultation: a declared source had a witnessed offer but no recorded attempt',
+  },
+  {
     reason: 'argument-assumed',
     layer: 2,
     class: 'not-sure',
@@ -134,6 +141,51 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     source: 'run',
     reads:
       'this turn’s retained return-withholding fact or a retained return with an after-tool denial',
+  },
+  {
+    reason: 'result-cut',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was cut',
+  },
+  {
+    reason: 'placed-unread',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: a tool result was stored by reference and not read',
+  },
+  {
+    reason: 'times-without-zone',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads: 'libraryResultLimits: some times in a dataset have no zone',
+  },
+  {
+    reason: 'result-dropped-from-window',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'libraryResultLimits and settledToolCalls: this turn’s delivered results removed by an applied window strategy',
+  },
+  {
+    reason: 'memory-retrieval-timeout',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'findingsLedger: a current-turn retrieval timed out and every relevant request had no recall',
+  },
+  {
+    reason: 'memory-retrieval-excluded',
+    layer: 3,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'findingsLedger: a current-turn retrieval excluded all returned candidates and every relevant request had no recall',
   },
   {
     reason: 'work-not-finished',
@@ -220,7 +272,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assess.ts · conflictOfThisTurn)',
+      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assessment/conflicts.ts · conflictOfThisTurn). answerCitations.conflicts: two comparable submitted results disagree',
   },
   {
     reason: 'column-type-mismatch',
@@ -270,6 +322,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
   },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', source: 'run', reads: 'stoppedEarly' },
   {
+    reason: 'answer-output-limit',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads: 'llmLatestStopReason (max_tokens)',
+  },
+  {
     reason: 'steps-unfinished',
     layer: 4,
     class: 'not-sure',
@@ -294,12 +353,19 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'findingsLedger: a negative-claim or negative-claim-note row of this turn; model prose never establishes a negative claim',
   },
   {
+    reason: 'ungrounded-entity',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads: 'answerCitations.findings: a requested column missing from the complete cited schema',
+  },
+  {
     reason: 'unsupported-claim',
     layer: 4,
     class: 'not-sure',
     source: 'answer',
     reads:
-      "findingsLedger: an integrity-finding row of this turn — a .claims() field disagrees with the fact the run's tools settled, or declines to state it (the row's advisory)",
+      "findingsLedger: an integrity-finding row of this turn — a .claims() field disagrees with the fact the run's tools settled, or declines to state it (the row's advisory). answerCitations.findings: a scoped claim contradicts the result it cites",
   },
   {
     reason: 'claim-unsettled',
@@ -336,7 +402,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'run',
     reads:
-      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish)",
+      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish). findingsLedger: a legacy conflict row of this turn whose readings cannot all be placed",
   },
 ]);
 

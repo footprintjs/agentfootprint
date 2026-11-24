@@ -56,6 +56,15 @@ describe('stripFrameworkFields keeps call occurrence keys on the record', () => 
     expect(projectedResult).not.toHaveProperty('callOccurrenceKey');
   });
 
+  it.each(['timeout', undefined] as const)(
+    'keeps a sole failure category off the provider wire (%s)',
+    (toolFailureCategory) => {
+      const [projected] = stripFrameworkFields([{ ...result, toolFailureCategory }]);
+      expect(projected).toEqual(result);
+      expect(projected).not.toHaveProperty('toolFailureCategory');
+    },
+  );
+
   it('reuses a stable projection and rebuilds it when either side changes', () => {
     const recordedResult = { ...result, content: 'found', callOccurrenceKey: occurrence };
     const history = [recordedResult];

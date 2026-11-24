@@ -67,6 +67,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
 import { checkpointWithCarriers } from './agent/sourceEvidence/checkpointValidation.js';
+import { checkpointNegatives, citationSourcesOf } from './agent/citations/checkpoint.js';
 import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
 import {
   negativeCheckpointOf,
@@ -76,6 +77,10 @@ import type { ClaimVerificationState } from './agent/findings/verificationState.
 import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
 import { admitStoredHistory, checkpointReplayHistory } from './checkpointHistory.js';
 import { validateCheckpointLedger } from './checkpointLedger.js';
+import {
+  admitRequestReplayCheckpoint,
+  captureRequestReplayCheckpoint,
+} from './agent/requestTurn/checkpoint.js';
 import {
   admitToolTurnEvidence,
   toolTurnEvidenceFrom,
@@ -95,6 +100,7 @@ import {
 // ─── Public types ────────────────────────────────────────────────────
 
 export type { AgentRunCheckpoint, EvidenceRecoveryCheckpoint } from './runCheckpointTypes.js';
+export { classifyFailurePhase } from './checkpointFailurePhase.js';
 
 /**
  * Thrown by `agent.run()` when a fault occurs mid-run. Carries the
@@ -406,15 +412,21 @@ export function buildCheckpoint(
   sourceDeclarationCorrection?: AgentRunCheckpoint['sourceDeclarationCorrection'],
   placed?: unknown,
   state?: unknown,
+  citationSources?: AgentRunCheckpoint['citationSources'],
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
       ? undefined
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
+  const sources =
+    citationSources === undefined
+      ? undefined
+      : citationSourcesOf({ citationSources }, verification);
   const history = checkpointReplayHistory(tracker.history, tracker);
   const placedTickets = ticketsStillServed(placed, history);
   const innerCallPolicyArgs = innerCallPolicyFor(state, history);
   const toolTurnEvidence = toolTurnEvidenceFrom(state);
+  const requestReplay = captureRequestReplayCheckpoint(state, history);
   return {
     version: 1,
     runId: tracker.runId,
@@ -425,6 +437,7 @@ export function buildCheckpoint(
     checkpointedAt: Date.now(),
     ...(failurePoint && { failurePoint }),
     ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
+    ...(requestReplay !== undefined && { requestReplay }),
     ...(folded !== undefined && folded.length > 0 && { folded }),
     ...(owner?.identity !== undefined && { identity: owner.identity }),
     ...(owner?.agentId !== undefined && { agent: { id: owner.agentId } }),
@@ -441,7 +454,8 @@ export function buildCheckpoint(
     ...(turnNumber !== undefined && { turnNumber }),
     ...(placedTickets !== undefined && { placedTickets }),
     ...(verification !== undefined && { claimVerification: verification }),
-    ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
+    ...(sources !== undefined && { citationSources: sources }),
+    ...(negativeClaims === undefined ? {} : checkpointNegatives(negativeClaims, sources)),
     ...(sourceEvidence === undefined
       ? {}
       : { sourceEvidence: sourceEvidenceOf({ sourceEvidence }) }),
@@ -542,55 +556,26 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
     );
   }
   admitStoredHistory(c.history, c.folded);
+  const requestReplay = admitRequestReplayCheckpoint(c, c.history);
   innerCallPolicyReferences(c.history);
   admitFoldedInnerCallPolicy(c.folded);
   const innerCallPolicyArgs = innerCallPolicyOf(c);
-  negativeCheckpointOf(c);
+  const citationSources = citationSourcesOf(c, claimVerification);
+  negativeCheckpointOf(c, citationSources === undefined ? undefined : claimVerification);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
   return sourceDeclarationCorrection === undefined &&
     innerCallPolicyArgs === undefined &&
-    toolTurnEvidence === undefined
+    toolTurnEvidence === undefined &&
+    requestReplay === undefined &&
+    citationSources === undefined
     ? checkpoint
     : {
         ...checkpoint,
         ...(sourceDeclarationCorrection !== undefined && { sourceDeclarationCorrection }),
         ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
         ...(toolTurnEvidence !== undefined && { toolTurnEvidence }),
+        ...(requestReplay !== undefined && { requestReplay }),
+        ...(citationSources !== undefined && { citationSources }),
       };
-}
-
-/**
- * Classify a thrown error into one of the failure-point phase
- * buckets. Heuristic — uses error name / code / message inspection.
- * Fast path returns 'unknown' so unrecognized errors still produce
- * a checkpoint (the cause itself is preserved in
- * `RunCheckpointError.cause`).
- *
- * **The FALLBACK since 8.14.0.** It only runs when the tracker observed no
- * open bracket, because an error's own text is the weakest available evidence
- * about where it happened: `TypeError: Load failed` — WebKit's entire message
- * for a failed `fetch` — matches nothing here and produced `'unknown'` on a
- * real production report while the run knew the LLM call was open. Observation
- * first, this second.
- */
-export function classifyFailurePhase(err: Error): 'iteration' | 'tool' | 'llm' | 'unknown' {
-  const name = err.name;
-  const code = (err as { code?: string }).code ?? '';
-  const msg = err.message ?? '';
-  // LLM provider failures: known codes + name patterns.
-  if (
-    code === 'ERR_CIRCUIT_OPEN' || // our own circuit breaker
-    name === 'AnthropicError' ||
-    name === 'OpenAIError' ||
-    name === 'BedrockError' ||
-    /\b(LLM|provider|anthropic|openai|bedrock)\b/i.test(msg)
-  ) {
-    return 'llm';
-  }
-  if (/\b(tool|tool_call)\b/i.test(name) || /\bTool\b/.test(msg)) {
-    return 'tool';
-  }
-  if (/iteration/i.test(msg)) return 'iteration';
-  return 'unknown';
 }

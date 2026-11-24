@@ -82,7 +82,8 @@ export function configureAnswerLayer<TReceiver extends AnswerLayerPort>(
   if (options !== undefined && (typeof options !== 'object' || options === null)) {
     throw new Error(
       'AgentBuilder.answerLayer: options must be an object — ' +
-        "{ standingLine?: boolean | { when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } } " +
+        '{ sourceNotConsulted?: boolean, standingLine?: boolean | ' +
+        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } } " +
         '— or omitted. Pass false to turn the layer off.',
     );
   }

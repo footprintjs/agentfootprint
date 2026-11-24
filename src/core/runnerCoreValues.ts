@@ -6,6 +6,8 @@ import type { RequestContext } from '../identity/requestContext.js';
 import type { ParentRunRecord } from './memberRun.js';
 
 export interface RunnerCoreValues {
+  /** Native emit envelopes delivered as summaries on this execution's observer queue. */
+  summarizedEmits?: number;
   /** Private policy/serving for this execution; never tracked chart state. */
   redaction?: RunRedaction;
   privateFields?: PrivateRecordFields;

@@ -31,6 +31,26 @@ row. Observing a retry of the same request leaves one row. The original
 provider hooks still carry request observations and close when the invocation
 settles.
 
+`selectionAtRequest.ts` binds a visible tool-selection exclusion to the native
+call that accepted the response. It retains the implementation privately when
+the prepared catalog survives to the observed attempt and the adapter reports
+that the name was absent. When two implementations compete for an offered name,
+the native dispatch registry can establish which one won. The witness checks
+the winning party and exact tool reference before the request and again when the
+response is accepted. A dynamic provider's label cannot establish that binding.
+The receipt puts competing implementations in `shadowed`, separately from absent names. Each row keeps the name and party channels. A local fallback, missing manifest, altered observed tool
+contract, or reused response object supplies no witness. On a receipt-enabled native turn with no active redaction,
+`recordToolSelection.ts` adds visible names and reasons to that call's receipt.
+It shares one row budget across the turn. Unknown capacity on recovery
+withholds the annotation. Deciding whether a source mattered to the answer
+requires separate evidence of its declared ground and later use.
+
+`liveChunks.ts` emits an attempt's thinking and visible text in provider order.
+It applies the served-event redaction policy. Calls that protect draft output
+may opt in to classified provider summaries through `AgentOptions`. The answer
+policy still owns draft text delivery. The call stage owns the terminal response
+and cancellation.
+
 ## Dispatch lifetime
 
 Every attempt carries the run’s signal on its
