@@ -1,3 +1,5 @@
+**Lens** — renders already served evidence into one bounded model-facing note.
+
 # Compose the late record note
 
 `renderLateRecordNote()` receives ranked points after the caller has applied

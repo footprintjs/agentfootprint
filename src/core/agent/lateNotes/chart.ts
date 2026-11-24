@@ -16,7 +16,7 @@ export function buildLateRecordNoteMount(
       'GatherLateRecordPoints',
       noteGatherStage(runValues),
       'gather-late-record-points',
-      { description: 'Use the current call’s admitted and served record facts' },
+      { description: 'Gathers admitted and served record facts for the current request' },
     )
       .addDeciderFunction(
         'LateRecordNoteGate',

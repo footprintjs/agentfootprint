@@ -1,3 +1,5 @@
+**Support** — translates already composed messages into the Chat Completions wire shape.
+
 # OpenAI Chat Completions messages
 
 `toOpenAIMessages` maps the provider-port messages onto the owned Chat

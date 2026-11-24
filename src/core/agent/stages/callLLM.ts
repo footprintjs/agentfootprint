@@ -55,7 +55,7 @@ import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
 import { commitAcceptedResponse } from './callLLM/commitResponse.js';
-import { commitLateNoteReceipt } from '../lateNotes/receipt.js';
+import { commitLateNoteReceipt } from '../lateNotes/commitLateNoteReceipt.js';
 import { carryLateRecordNoteResponse } from '../../../provider-contract/lateRecordNote.js';
 import { prepareCitationProjection } from './callLLM/citationProjection.js';
 import { liveChunkEmitter } from './callLLM/liveChunks.js';
