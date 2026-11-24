@@ -14,12 +14,12 @@ for (const commitValues of ['delta', 'full'] as const) {
       const day = defineSkill({
         id: 'day',
         description: 'Day shift',
-        body: 'Use the morning schedule.',
+        body: 'The morning shift starts at 08:00.',
       });
       const night = defineSkill({
         id: 'night',
         description: 'Night shift',
-        body: 'Use the evening schedule.',
+        body: 'The evening shift starts at 20:00.',
       });
       const builder = Agent.create({
         model: 'mock',
