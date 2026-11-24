@@ -31,7 +31,7 @@ export function foldState(
   readResultsCoverage(gathered);
   readContingentRows(state, places, g);
   readResultEvidence(gathered, declarations, enteredArguments, retainedHistory);
-  readAnswerRows(state, g);
+  readAnswerRows(state, g, served);
   const integrity = readIntegrityFindings(state, g);
   const consultation =
     g.fired.has('asked') || g.fired.has('argument-asked')

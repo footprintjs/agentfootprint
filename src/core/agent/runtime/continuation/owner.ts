@@ -2,9 +2,9 @@ import * as nativeOperations from '../native/operations.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseFollowUpIdentity } from '../../resumeAnswer.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
-import { assertIdentityShape } from '../../callerIdentity.js';
+import { assertIdentityShape, sameIdentity } from '../../callerIdentity.js';
 import { validateCheckpoint, type AgentRunCheckpoint } from '../../../runCheckpoint.js';
-import { NoConversationError } from '../../../conversation.js';
+import { NoConversationError, ResumeIdentityConflictError } from '../../../conversation.js';
 import type { AgentOutput } from '../../types.js';
 import { requestOf } from '../../../requestOfRun.js';
 import type { AgentContext } from '../contracts.js';
@@ -57,6 +57,12 @@ export async function resumeOnError(
 ): Promise<AgentOutput | RunnerPauseOutcome> {
   return this.native.runExecution().withRun(async (invocation) => {
     const cp = validateCheckpoint(checkpoint);
+    const identity = options?.identity;
+    if (cp.citationSources !== undefined && identity !== undefined) {
+      assertIdentityShape(identity, 'Agent.resumeOnError');
+      if (cp.identity === undefined || !sameIdentity(cp.identity, identity))
+        throw new ResumeIdentityConflictError('resumeOnError');
+    }
     // The timing guards run HERE, not only inside `run()`, because the line
     // below writes the side channel: a refusal after that write would leave a
     // restored history armed and the NEXT run would silently continue somebody

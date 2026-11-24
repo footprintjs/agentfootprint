@@ -24,3 +24,11 @@ export function witnessRowIndex(path: string): number | undefined {
   const index = Number(first);
   return Number.isSafeInteger(index) ? index : undefined;
 }
+
+/** Slot pairs are admitted by the citation fold after checking its submitted result record. */
+export const citationConflictIndex = (pointer: AssessmentPointer): number | undefined =>
+  pointer.kind === 'state' &&
+  pointer.key === 'answerCitations' &&
+  pointer.path.startsWith('/conflicts/')
+    ? witnessRowIndex(pointer.path.slice('/conflicts'.length))
+    : undefined;

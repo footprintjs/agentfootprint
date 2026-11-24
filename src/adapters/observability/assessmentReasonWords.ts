@@ -44,6 +44,7 @@ const WORDS: { readonly [R in AssessmentReason]: true } = {
   'unsupported-argument': true,
   'source-not-consulted': true,
   'unsupported-claim': true,
+  'ungrounded-entity': true,
   'value-contingent': true,
   'value-survived-revision': true,
   'value-unsupported': true,

@@ -7,12 +7,13 @@
  *          split into sentences (a `.`/`!`/`?` before a space or the end, so an identifier's
  *          dots never split one). Every unit is then split into clauses at "but", "however",
  *          "except", "although" and `;`, each clause its own unit with its own polarity.
- * Role:    integrity/ layer (L3), read by `detect.ts` only.
+ * Role:    integrity/ layer (L3), shared by the negative-claim and citation folds.
  *
  * Inline code (a backtick run closed by a run of the same length, CommonMark's rule) is returned
  * as spans, so a claim entirely inside one is noted, not judged.
  */
 
+import { blockLines } from './blockLines.js';
 import { tokensOf } from './matcher.js';
 
 /** A span of the text as given: `[start, end)`. */
@@ -42,17 +43,15 @@ interface Line {
 function linesOf(text: string): Line[] {
   const out: Line[] = [];
   let start = 0;
-  for (let i = 0; i <= text.length; i += 1) {
-    if (i === text.length || text[i] === '\n') {
-      const end = i > start && text[i - 1] === '\r' ? i - 1 : i;
-      out.push({ start, end, text: text.slice(start, end) });
-      start = i + 1;
-    }
+  for (const lineBreak of text.matchAll(/\r\n?|\n/gu)) {
+    const end = lineBreak.index;
+    out.push({ start, end, text: text.slice(start, end) });
+    start = end + lineBreak[0].length;
   }
+  out.push({ start, end: text.length, text: text.slice(start) });
   return out;
 }
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const TABLE_SEPARATOR = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
 const LIST_ITEM = /^\s*(?:[-*+]|\d{1,9}[.)])\s+/;
 const HEADING = /^ {0,3}#{1,6}\s+/;
@@ -134,14 +133,14 @@ function inlineCodeOf(line: Line): TextSpan[] {
 }
 
 /** Split a reply into units. */
-export function unitsOf(text: string): Units {
+export function unitsOf(text: string, observeProseLine?: (body: string) => void): Units {
   const units: Unit[] = [];
   const inlineCode: TextSpan[] = [];
   const push = (span: TextSpan | undefined, fenced: boolean) => {
     if (span === undefined) return;
     for (const clause of clausesOf(text, span)) units.push({ ...clause, fenced });
   };
-  let fence: { char: string; length: number } | undefined;
+  const classify = blockLines();
   let paragraph: { start: number; end: number } | undefined;
   const flush = () => {
     if (paragraph === undefined) return;
@@ -150,22 +149,14 @@ export function unitsOf(text: string): Units {
   };
 
   for (const line of linesOf(text)) {
-    const marker = FENCE.exec(line.text);
-    if (fence !== undefined) {
-      const closes =
-        marker !== null &&
-        marker[1]?.[0] === fence.char &&
-        (marker[1]?.length ?? 0) >= fence.length &&
-        line.text.slice(marker[0].length).trim() === '';
-      if (closes) fence = undefined;
-      else for (const s of sentencesOf(text, line.start, line.end)) push(s, true);
-      continue;
-    }
-    if (marker !== null) {
+    const block = classify(line.text);
+    if (block.kind !== 'prose') {
       flush();
-      fence = { char: marker[1]?.[0] ?? '`', length: marker[1]?.length ?? 3 };
+      if (block.kind === 'code')
+        for (const sentence of sentencesOf(text, line.start, line.end)) push(sentence, true);
       continue;
     }
+    observeProseLine?.(block.body);
     if (line.text.trim() === '') {
       flush();
       continue;

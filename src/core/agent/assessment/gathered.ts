@@ -9,6 +9,7 @@ export interface Gathered {
   readonly fired: Map<AssessmentReason, AssessmentPointer[]>;
   readonly checked: CheckRan[];
   support?: AnswerAssessment['support'];
+  citations?: AnswerAssessment['citations'];
 }
 
 export function fire(g: Gathered, reason: AssessmentReason, witness: AssessmentPointer): boolean {

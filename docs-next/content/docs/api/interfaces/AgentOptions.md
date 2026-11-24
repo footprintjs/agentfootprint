@@ -195,6 +195,20 @@ law, not an exception to it.
 
 ***
 
+### citations?
+
+> `readonly` `optional` **citations?**: `ProseCitationOptions`
+
+Defined in: [src/core/agent/types/observation.ts:9](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L9)
+
+Offer citations in prose on adapters that can prove which tool bodies were submitted.
+
+#### Inherited from
+
+`AgentObservationOptions.citations`
+
+***
+
 ### commitValues?
 
 > `readonly` `optional` **commitValues?**: `CommitValuesMode`
@@ -627,7 +641,7 @@ and the `limit` on the record's `ledgerFacts` block.
 
 > `readonly` `optional` **liveThinkingWithHeldDrafts?**: `"provider-summary"`
 
-Defined in: [src/core/agent/types/observation.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L50)
+Defined in: [src/core/agent/types/observation.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L53)
 
 Serve provider-classified summary fragments while output policy or answer
 validation holds draft answers. Omit to hold all live thinking deltas in
@@ -859,7 +873,7 @@ gate's `posture`; nothing here blocks, revises or rewrites anything.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types/observation.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L36)
+Defined in: [src/core/agent/types/observation.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L39)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -899,7 +913,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types/observation.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L42)
+Defined in: [src/core/agent/types/observation.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L45)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without

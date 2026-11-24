@@ -1,9 +1,12 @@
 import type { AttachRecorderOptions, FlowChartExecutorOptions } from 'footprintjs';
+import type { ProseCitationOptions } from '../citations/config.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
 /** Options for the events an Agent serves to live observers. */
 export interface AgentObservationOptions {
+  /** Offer citations in prose on adapters that can prove which tool bodies were submitted. */
+  readonly citations?: ProseCitationOptions;
   /**
    * Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
    * byte-identical to every prior release: the Agent's bridge recorders
