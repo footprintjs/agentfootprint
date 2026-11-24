@@ -119,7 +119,13 @@ function toolValues(
       ? `${argument} (hidden by the tool's view)`
       : `${argument} ${printedArgument(value)}`,
   );
-  const wider = 'sent' in conversion ? ' (a wider read than the words named)' : '';
+  const wider =
+    'sent' in conversion
+      ? ' (a wider read than the words named)'
+      : conversion.coversAtDispatch === true
+      ? " (a length counted back from the tool's own clock; the library lengthens it when the " +
+        'call is handed over, so it still reaches the start of the window)'
+      : '';
   return `${pt.name} ${values.join(', ')}${wider}`;
 }
 

@@ -119,12 +119,14 @@ describe('frozen look-back conversion', () => {
     expect(convertExact(window, [relative, absolute], ctx)).toEqual({ form: 1, values });
   });
 
-  it('refuses relative-only, calendar, and mixed wall/absolute forms without changing legacy dispatch', () => {
-    expect(convertForTool(window, [relative], undefined, ctx)).toEqual({
-      refused: 'no-form-holds',
-    });
+  it('reads a length-only form as a look-back to lengthen at dispatch, and refuses calendar and wall forms alone', () => {
+    const covering = { form: 0, values: { duration: '2h' }, coversAtDispatch: true };
+    expect(convertForTool(window, [relative], undefined, ctx)).toEqual({ conversion: covering });
     expect(
       convertForTool(window, [relative, wall, { kind: 'day', argument: 'date' }], undefined, ctx),
+    ).toEqual({ conversion: covering });
+    expect(
+      convertForTool(window, [wall, { kind: 'day', argument: 'date' }], undefined, ctx),
     ).toEqual({ refused: 'no-form-holds' });
     expect(convertForTool({ range, lookback: '2h' }, [relative, absolute], undefined, ctx)).toEqual(
       {
@@ -133,14 +135,18 @@ describe('frozen look-back conversion', () => {
     );
   });
 
-  it('skips a capped absolute form and never falls back to an uncapped duration', () => {
+  it('skips a capped absolute form, prefers another absolute form, and only then the look-back', () => {
     const short = { ...absolute, maxRange: '1h' } as const;
     expect(convertForTool(window, [relative, short, absolute], undefined, ctx)).toEqual({
       conversion: { form: 2, values },
     });
     expect(convertForTool(window, [relative, short], undefined, ctx)).toEqual({
-      refused: 'no-form-holds',
+      conversion: { form: 0, values: { duration: '2h' }, coversAtDispatch: true },
     });
+    // The look-back's own cap still holds: a length past it is not read.
+    expect(
+      convertForTool(window, [{ ...relative, maxRange: '1h' }, short], undefined, ctx),
+    ).toEqual({ refused: 'no-form-holds' });
   });
 
   it('prefers an exact form and records actual widening if only an epoch-second form can hold it', () => {
@@ -173,12 +179,16 @@ describe('frozen look-back conversion', () => {
     });
   });
 
-  it('refuses when the requested interval fits the cap but the inferred wider bounds do not', () => {
+  it('skips absolute bounds whose rounded read is past the cap, and holds the look-back to the same cap', () => {
     const ragged = {
       ...window,
       range: { from: '2026-11-13T18:00:00.75Z', to: '2026-11-13T20:00:00.25Z' },
     };
+    // The epoch-second bounds round outward past two hours; the look-back's own length fits.
     expect(convertForTool(ragged, [relative, coarse], { maxRange: '2h' }, ctx)).toEqual({
+      conversion: { form: 0, values: { duration: '2h' }, rounded: true, coversAtDispatch: true },
+    });
+    expect(convertForTool(ragged, [coarse], { maxRange: '2h' }, ctx)).toEqual({
       refused: 'no-form-holds',
     });
   });

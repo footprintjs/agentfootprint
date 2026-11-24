@@ -394,8 +394,20 @@ function isRangeList(value: unknown): boolean {
   return Array.isArray(value) && value.length >= 1 && value.length <= 2 && value.every(isTimeRange);
 }
 
-/** A widened fill's fields: `sent` with exactly one of `differs` / `trimmedByTool`, or none of the three. */
+/**
+ * A widened fill's fields: `sent` with exactly one of `differs` / `trimmedByTool`, or none of
+ * the three. A fill that covers at dispatch has no `sent` yet (the `call` row holds it) and may
+ * still say the tool trims.
+ */
 function widenedOk(row: Readonly<Record<string, unknown>>): boolean {
+  if (row.coversAtDispatch !== undefined) {
+    return (
+      row.coversAtDispatch === true &&
+      row.sent === undefined &&
+      row.differs === undefined &&
+      (row.trimmedByTool === undefined || row.trimmedByTool === true)
+    );
+  }
   if (row.sent === undefined) return row.differs === undefined && row.trimmedByTool === undefined;
   if (!isTimeRange(row.sent)) return false;
   if (row.trimmedByTool !== undefined)
@@ -421,6 +433,7 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
       'sent',
       'differs',
       'trimmedByTool',
+      'coversAtDispatch',
       'partlyBeyondRetention',
       'refused',
       'argument',
@@ -439,6 +452,7 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
           'sent',
           'differs',
           'trimmedByTool',
+          'coversAtDispatch',
           'partlyBeyondRetention',
         ) &&
         formOk &&
@@ -494,7 +508,13 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
 function isCallDrift(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const d = value as Record<string, unknown>;
-  if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs) || d.byMs === 0) return false;
+  if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs)) return false;
+  // A covering look-back is recorded on every such call: the window is closed at dispatch, so
+  // the clock never ran backwards past it, and it may not have moved at all.
+  if (d.outcome === 'covered') {
+    return Object.keys(d).length === 4 && d.byMs >= 0 && isCount(d.form) && isTimeRange(d.sent);
+  }
+  if (d.byMs === 0) return false;
   if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);
   return d.outcome === 'shifted' && Object.keys(d).length === 2;
 }

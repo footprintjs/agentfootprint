@@ -194,17 +194,21 @@ export function callWindowRow(
     case 'filled': {
       const c = decision.conversion;
       const widened = 'sent' in c ? c : undefined;
+      // A length-only form admits no absolute encoding of the look-back: `frozenLookback` stays off.
+      const covers = c.coversAtDispatch === true;
       return {
         ...base,
         form: c.form,
         asked: { from: decision.window.range.from, to: decision.window.range.to },
-        person: personOf(decision.window, true),
+        person: personOf(decision.window, !covers),
         ...(c.rounded === true && { rounded: true as const }),
         ...(widened !== undefined && { sent: widened.sent }),
         ...(widened !== undefined &&
           (decision.trimmedByTool === true
             ? { trimmedByTool: true as const }
             : { differs: { extra: widened.extra } })),
+        ...(covers && decision.trimmedByTool === true && { trimmedByTool: true as const }),
+        ...(covers && { coversAtDispatch: true as const }),
         ...partly,
       };
     }

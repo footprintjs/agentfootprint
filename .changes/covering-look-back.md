@@ -1,0 +1,6 @@
+---
+type: changed
+---
+**A confirmed look-back still runs on a tool that takes only a length of time.** Such a source counts the length back from its own clock when it is handed the call, so the same length sent after a confirmation click would start late and lose the oldest part of the window. The library now sends the smallest length, in the form's own units, that still reaches the start of the confirmed window from the dispatch moment (a two-hour look-back handed over 61 seconds late is sent as `122m`). The call's `call` row records `drift: { outcome: 'covered', form, sent }`, the `call-window` row says `coversAtDispatch`, the result check reads what was sent unless the result declares what it queried, and the model's note names the value that ran and says the source's clock decided the exact bounds. A window still running at dispatch, or a length past the form's `maxRange`, does not run and the model reads why.
+
+**A look-back of the model's own beside a confirmed one is recorded, not refused.** A call whose period arguments all name one other window (a longer look-back, or that look-back with matching bounds) runs as sent and is recorded `model-chosen` beside the person's window, as a different absolute range already was. A call whose own forms name different windows is still refused.

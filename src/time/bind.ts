@@ -44,7 +44,10 @@
  *   runs, marked. An open reading the tool can read in NO reading is refused
  *   too, and never asked.
  * - **A present window normally runs as sent.** A duration equivalent to an
- *   admitted frozen look-back uses the clock-bound absolute form. Other
+ *   admitted frozen look-back is the library's fill: the clock-bound
+ *   absolute form, or for a length-only tool the look-back lengthened at
+ *   dispatch. A call whose forms all name one OTHER window is the model's
+ *   own; forms of one call that name different windows are refused. Other
  *   present windows are bound by quote (the model's
  *   declared `user` quote names a recorded mention) or by value (the sent
  *   value, read back, IS a window of this turn); otherwise it runs as sent and
@@ -277,12 +280,13 @@ function filledWindow(call: CallToBind, window: TurnWindow, ctx: BindContext): C
   if ('refused' in read) {
     return { how: 'refused', refused: read.refused, asked: window.range, person: window };
   }
+  // A read wider than the window — widened now, or lengthened at dispatch — that the tool trims.
+  const readsMore = 'sent' in read.conversion || read.conversion.coversAtDispatch === true;
   return {
     how: 'filled',
     window,
     conversion: read.conversion,
-    ...('sent' in read.conversion &&
-      call.facts?.filtersToAsked === true && { trimmedByTool: true as const }),
+    ...(readsMore && call.facts?.filtersToAsked === true && { trimmedByTool: true as const }),
     ...(read.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
   };
 }
@@ -315,8 +319,13 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
     (window) => window.endpoint !== undefined && window.lookback !== undefined,
   );
   if (relativeForms.length > 0 && frozen.length > 0) {
-    return freezePresentWindow(call, frozen, relativeForms, ctx);
+    return freezePresentWindow(call, turn, frozen, relativeForms, ctx);
   }
+  return sentWindow(call, turn, ctx);
+}
+
+/** A window sent as it stands: bound by quote or value, else the model's own, else unread. */
+function sentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): CallWindow {
   // The first form whose arguments read back as a range.
   let form = -1;
   let asked: TimeRange | undefined;
@@ -369,6 +378,7 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
 
 function freezePresentWindow(
   call: CallToBind,
+  turn: TurnWindows,
   windows: readonly TurnWindow[],
   relativeForms: readonly PeriodForm[],
   ctx: BindContext,
@@ -379,20 +389,29 @@ function freezePresentWindow(
   }
   const { cutoff } = window.endpoint;
   const legacy = lookbackRange(cutoff, window.lookback, 'smhdw');
-  const equivalent = relativeForms.every((form) => {
-    const requested = readBack(call.args, form, { now: cutoff });
-    return requested !== undefined && sameRange(requested, legacy);
-  });
-  const conflicting = call.forms.some((form) => {
-    if (form.kind === 'lookback') return false;
+  // What each sent form names on the frozen clock: a look-back as `[cutoff − L, cutoff)`.
+  const lengths = relativeForms.map((form) => readBack(call.args, form, { now: cutoff }));
+  const bounds = call.forms.flatMap((form) => {
+    if (form.kind === 'lookback') return [];
     const range = readBack(call.args, form, { ...ctx, precise: true });
-    return range !== undefined && !sameRange(range, window.range);
+    return range === undefined ? [] : [range];
   });
-  if (!equivalent || conflicting) {
-    return { how: 'refused', refused: 'no-form-holds', asked: window.range, person: window };
+  const equivalent = lengths.every((sent) => sent !== undefined && sameRange(sent, legacy));
+  const conflicting = bounds.some((range) => !sameRange(range, window.range));
+  if (equivalent && !conflicting) {
+    const decision = filledWindow(call, window, ctx);
+    return decision.how === 'filled' ? { ...decision, replacedForm: true } : decision;
   }
-  const decision = filledWindow(call, window, ctx);
-  return decision.how === 'filled' ? { ...decision, replacedForm: true } : decision;
+  // The call names ONE other window in every form it sent: the model's own (§ 7.3). It runs
+  // as sent, recorded `model-chosen` beside the person's — a look-back and a range alike.
+  const first = lengths[0];
+  const oneWindow =
+    first !== undefined &&
+    lengths.every((sent) => sent !== undefined && sameRange(sent, first)) &&
+    bounds.every((range) => sameRange(range, { from: first.from, to: cutoff }));
+  if (oneWindow) return sentWindow(call, turn, ctx);
+  // Forms of one call that name different windows: which one the tool would read is unknown.
+  return { how: 'refused', refused: 'no-form-holds', asked: window.range, person: window };
 }
 
 /** No form reads the call back: a sent wall time the zone skips is refused (§ 7.2); anything else runs `unread`. */

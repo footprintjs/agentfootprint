@@ -6,7 +6,7 @@ import { validatePropertyValue } from '../../../../../tools/toolArgsValidation.j
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf } from '../../../../../tools/declare.js';
 import type { BatchAddress } from '../../batchAddress.js';
 import { memberAddresses, windowAddressKey } from '../../askAddresses.js';
-import type { BatchCall, ToolOf } from '../../resolve.js';
+import { widerOf, type BatchCall, type ToolOf } from '../../resolve.js';
 import { WINDOW_FORM_EXPECTATION } from '../constants.js';
 import { refusalExpectation } from '../fields.js';
 import type { AskField, AskTime, WindowFill } from '../types.js';
@@ -51,12 +51,7 @@ export function windowFills(
       return { expected: refusalExpectation(read.refused, toolFacts(forms, facts)) };
     }
     const conversion = read.conversion;
-    const wider =
-      'sent' in conversion
-        ? facts.filtersToAsked === true
-          ? ('tool-trims' as const)
-          : ('reads-more' as const)
-        : undefined;
+    const wider = widerOf(conversion, facts.filtersToAsked === true);
     for (const address of memberAddresses(member)) {
       const key = windowAddressKey(field, address);
       if (Object.hasOwn(fills, key) || !byAddress.has(address)) continue;
@@ -78,7 +73,9 @@ export function windowFills(
           how: 'filled',
           window: answered,
           conversion,
-          ...(wider === 'tool-trims' && { trimmedByTool: true as const }),
+          ...((wider === 'tool-trims' || wider === 'source-clock-trims') && {
+            trimmedByTool: true as const,
+          }),
           ...(read.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
         },
       };

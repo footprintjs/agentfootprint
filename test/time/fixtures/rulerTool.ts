@@ -1,5 +1,11 @@
 import { defineTool, type PeriodForm, type ToolPeriod } from '../../../src/index.js';
-import { compareInstants, instantOf, shiftInstant } from '../../../src/time/instant.js';
+import { durationMs } from '../../../src/time/duration.js';
+import {
+  compareInstants,
+  instantOf,
+  shiftInstant,
+  spellInstant,
+} from '../../../src/time/instant.js';
 import { sugarForms } from '../../../src/time/periodForm.js';
 import type { Edge } from '../../../src/time/range.js';
 
@@ -45,12 +51,30 @@ export function rulerRows(
   );
 }
 
+/**
+ * A source that takes only a length reads `[its now − length, its now]`, both
+ * ends inside — the rows a duration names on the clock the source reads it at.
+ */
+export function rulerRowsBack(length: unknown, sourceNow: unknown): string[] {
+  const at = instantOf(sourceNow, 'strict');
+  const ms = typeof length === 'string' ? durationMs(length.replace(/^-/, ''), 'smhdw') : undefined;
+  if (at === undefined || ms === undefined) {
+    throw new TypeError('The ruler requires a duration and the clock it is read at.');
+  }
+  const from = spellInstant(shiftInstant({ ms: at.ms, nanos: at.nanos }, -ms), 0);
+  const to = spellInstant({ ms: at.ms, nanos: at.nanos }, 0);
+  return rulerRows({ from, to }, 'inclusive');
+}
+
 export function rulerTool({
   period = { forms: [rulerBounds], granularity: '1m' },
   onCall,
+  sourceNow,
 }: {
   readonly period?: ToolPeriod;
   readonly onCall?: (args: Readonly<Record<string, unknown>>) => void;
+  /** The source's own clock for a duration; absent, the moment the call was handed over. */
+  readonly sourceNow?: () => string;
 } = {}) {
   const forms = sugarForms(period);
   const bounds = forms.find((form) => form.kind === 'bounds');
@@ -74,11 +98,18 @@ export function rulerTool({
       ...(duration !== undefined && { [duration]: { ask: 'What is the duration?' } }),
     },
     period,
-    execute: (args) => {
+    execute: (args, ctx) => {
       onCall?.({ ...args });
-      if (bounds === undefined) throw new TypeError('The ruler requires its absolute bounds form.');
-      const range = { from: args[bounds.from.argument], to: args[bounds.to.argument] };
-      return JSON.stringify(rulerRows(range, bounds.to.edge));
+      if (bounds !== undefined && args[bounds.from.argument] !== undefined) {
+        const range = { from: args[bounds.from.argument], to: args[bounds.to.argument] };
+        return JSON.stringify(rulerRows(range, bounds.to.edge));
+      }
+      if (duration === undefined || args[duration] === undefined) {
+        throw new TypeError('The ruler requires its absolute bounds form.');
+      }
+      return JSON.stringify(
+        rulerRowsBack(args[duration], sourceNow?.() ?? ctx?.time?.dispatchedAt),
+      );
     },
   });
 }

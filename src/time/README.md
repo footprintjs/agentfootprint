@@ -27,7 +27,7 @@ It is a leaf: it imports nothing outside itself, and `readers/` imports only the
 | `convert.ts` + [`convert/`](convert/README.md) | a tool's period FORMS (§ 7.1: `bounds` · `joined` · `object` · `day` · `lookback`, each bound `iso` · `epoch-ms` · `epoch-s` · `date` · `wall`) and the facts about its source (`PeriodFacts`); the sugar (`sugarForms` — today's `{ argument, spelling }`, `accepts`, `wall-range` + `zoneArgument`); one form's own rules (`formIssue`, `formArguments`, `parsesUnderForm`); the EXACT rows of § 7.2 (`convertExact`) and the inverse a binding reads (`readBack`, `sameRange`); the INEXACT rows (`convertWidened` — a range inside one day → that `day`, a range ending before now → the covering look-back; each with the range it reads and what it adds); `convertForTool` — the ONE answer to "can this tool read this window, and how" (a fact it breaks, else exact, else wider, else `multi-day`, else `no-form-holds`) that the fill, the time ask and the served line all ask; and the refusal tests (`spansDaysForDayOnly`, `wallGapArgument`); a range against the facts (`periodFactProblem`, `partlyBeyondRetention`, `TimeRefusal`) |
 | `bind.ts` | which window a call carries (§ 5.6, § 7.3): the turn's windows read from the record (`turnWindowsOf` — a mention the person settled in the time ask, `answered`; a `model` reader's reading waiting for confirmation; the clock's `control` window — a `rule` reading the person has not answered settles nothing) and one call's decision (`callWindowOf`: `filled` — exactly, or widened · `bound` by quote or value · `model-chosen` · `model` · `unread` · `not-filled` · `refused` before dispatch on a fact, a multi-day range to a `day`-only tool, a window no form can read (`no-form-holds`), or a skipped wall time) |
 | `windows.ts` | the turn's windows read from the record (`turnWindowsOf`, `pendingQuotesOf`, `readerWindowsOf` and their shapes); the one owner of "a time the person wrote that still waits on them" (`isOpenForPerson`: a reading to confirm, a zone to name, or words not read); the one input every door converts a window from (`windowToConvert`, with `offeredLookback`) — the record half of `bind.ts`, split out BY FILE because the Tools mount's synchronous `inputMapper` and the evidence gate's lineage read it; imports only the leaves and `rows.ts`; `bind.ts` re-exports every name |
-| `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent) |
+| `drift.ts` | the clock at dispatch (§ 7.4): `driftAtDispatch` — a call that sent a look-back, dispatched more than the tool's step after the turn's `now`, is `redrawn` (the library's own fill, re-sent as the asked range in the tool's first absolute form) or `shifted` (the model's look-back, or no absolute form — runs as sent); `coverAtDispatch` — a confirmed look-back in a length-only form is `covered`: lengthened to still reach the window's start from the dispatch moment, or not run |
 | `wire.ts` | the JSON that crosses a transport (§ 7.5): `TimeContext` — `ctx.time` in process, the `tools/call` request's `_meta.agentfootprint.time` over MCP — versioned (`timeContextOf`, `readTimeContext`) |
 | `check.ts` | the result checks (§ 9.2, § 9.4, § 9.6, step T8): `periodTimeCheck` — what one call READ (the result's declared `queried`, read back with the tool's step; else a widened fill's `sent`; else a look-back shifted by its drift; else the asked range) against what it ASKED (for a window the model chose, the person's window): `differs { missing, extra }`, `shifted`, `beyondRetention`, `partlyBeyondRetention`; a closed end read as open (1 ms) is no difference, and a look-back read moved LATER within the tool's step (§ 7.4's first row only — never earlier, never a bounds window, never with a recorded drift) is the asked range; `rangeDifference`; `clocksDiffer` over the wall-clock sources (a declared axis zone — never a period's offset) |
 | `checkRecord.ts` | the record half of the result checks: the row's shapes (`PeriodDiffers`, `ReadSource`, `SourceClock`, `ClocksDiffer`), the checkpoint door's tests (`isPeriodDiffers`, `isShifted`) and the two clock reads (`distinctSources`, `clocksDiffer`) — split out BY FILE because `coverage/period.ts` · `periodRowIsWellFormed` is on every agent's graph; `check.ts` re-exports every name |
@@ -277,9 +277,35 @@ Saved historical rows retain their stored bounds.
 
 **Confirmed look-backs use absolute bounds.** The accepted window keeps the run's recorded
 `time.now`. A tool with both duration and absolute forms receives the absolute range
-regardless of form order. A tool with no compatible absolute form receives no call for that
-confirmed look-back. The existing period evidence distinguishes the requested bounds from a
-wider or narrower read. In this repository, the native clock and dispatch checks call
+regardless of form order. The existing period evidence distinguishes the requested bounds from a
+wider or narrower read.
+
+**A length-only source gets the covering look-back, measured at dispatch.** When no absolute
+form holds a confirmed look-back — the tool declares only a length, or its absolute form's own
+`maxRange` is too small — the widening law applies to it like any closed range: read MORE and
+say so. A length is counted back by the SOURCE from its own clock when it is handed the call,
+so the same length sent after a confirmation click would start later and lose the oldest part
+of the window. The fill therefore holds the window's own length (`convert/covering.ts` ·
+`sourceClockLookback`; the `call-window` row says `coversAtDispatch`, never `frozenLookback`),
+and at dispatch the library replaces it with the smallest length in the form's units that still
+reaches the window's start from that moment (`drift.ts` · `coverAtDispatch`): a two-hour look-back
+handed over 61 seconds late is sent as `122m`. The `call` row records `drift: { outcome:
+'covered', form, sent }` on every such call, the result check reads `sent` (a result's declared
+`queried` still wins), and the note tells the model the value that ran, that it reads wider, and
+that the source's clock decided the exact bounds. Nothing is shortened to fit: a window still
+running at dispatch (a look-back ends at now) and a length past the form's `maxRange` do not run,
+and the model reads why. The final arguments must still hold the library's own look-back and no
+other period argument (`frozenDispatch.ts` · `coveringDispatchMatches`): a value a middleware
+wrote is never replaced. Declaring bounds stays the exact answer; this is the honest one for a
+source that cannot take them.
+
+**The model's own look-back is the model's own window.** Beside a confirmed look-back, a call
+that sends a length naming the SAME window is the library's fill (frozen bounds, or the covering
+look-back above). A call whose forms all name one OTHER window — a longer look-back, or that
+look-back and matching bounds — runs as sent and is recorded `model-chosen` beside the
+person's, exactly as a different absolute range does: a drill-down, a baseline and a comparison
+are normal work, and the standing reads "not sure". Only a call whose own forms name
+different windows does not run (`no-form-holds`): which one the tool would read is unknown. In this repository, the native clock and dispatch checks call
 `rulerTool({ period })` from `test/time/fixtures/rulerTool.ts` through ordinary `Agent.run` and
 `resume`.
 
@@ -471,10 +497,10 @@ routing and admission must prevent incompatible downgrade before adoption.
 
 ## Not covered yet
 
-- The covering look-back the time ask fills is spelled at the turn's `now`; the person answers
-  later, so on a tool with no absolute form it runs after the clock moved on and is recorded
-  `shifted` (the result check then reads the front it missed) — it is not re-spelled from the
-  dispatch clock. A start and end the person gave argument by argument are judged together, but
+- A confirmed LOOK-BACK on a tool with no absolute form is re-spelled from the dispatch clock
+  (`coversAtDispatch`, above). The covering look-back for a closed past RANGE is not yet: it is
+  spelled at the turn's `now`; the person answers later, so it runs after the clock moved on and
+  is recorded `shifted` (the result check then reads the front it missed). A start and end the person gave argument by argument are judged together, but
   their call's `call-window` row stays `not-filled` (`ctx.time.asked` is absent there). A turn with
   no time words does not carry the last window yet (`time-carried`, § 5.6).
 - The result checks (T8) read what the record holds and nothing else: a call whose tool declares
