@@ -70,6 +70,11 @@ export const inventoriedCalls = [
   {
     writer: `${agent}/honesty/responseStop`,
     exportName: 'recordResponseStop',
+    sites: [[`${agent}/stages/callLLM/commitResponse.ts`, 'commitAcceptedResponse']],
+  },
+  {
+    writer: `${agent}/stages/callLLM/commitResponse`,
+    exportName: 'commitAcceptedResponse',
     sites: [[`${agent}/stages/callLLM/acceptResponse.ts`, 'acceptResponse']],
   },
 ] as const;

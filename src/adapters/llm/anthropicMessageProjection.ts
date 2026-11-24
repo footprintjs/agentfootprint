@@ -4,8 +4,14 @@ import type {
   AnthropicMessageParam,
   AnthropicContentBlock,
   AnthropicTool,
+  AnthropicToolResultBlock,
 } from './anthropicMessagesWire.js';
 import { restoreAnthropicReplay } from './anthropicReplayLayout.js';
+
+export type AnthropicToolResultObserver = (
+  source: LLMMessage,
+  block: AnthropicToolResultBlock,
+) => void;
 
 /**
  * Framework messages → Anthropic messages.
@@ -24,6 +30,7 @@ import { restoreAnthropicReplay } from './anthropicReplayLayout.js';
 export function toAnthropicMessages(
   messages: readonly LLMMessage[],
   indexMap?: number[],
+  observeToolResult?: AnthropicToolResultObserver,
 ): AnthropicMessageParam[] {
   const result: AnthropicMessageParam[] = [];
   for (const m of messages) {
@@ -104,7 +111,7 @@ export function toAnthropicMessages(
         }
         continue;
       }
-      const block: AnthropicContentBlock = {
+      const block: AnthropicToolResultBlock = {
         type: 'tool_result',
         tool_use_id: m.toolCallId ?? '',
         content: m.content,
@@ -123,6 +130,7 @@ export function toAnthropicMessages(
         indexMap?.push(result.length);
         result.push({ role: 'user', content: [block] });
       }
+      observeToolResult?.(m, block);
       continue;
     }
   }

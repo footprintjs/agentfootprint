@@ -1,5 +1,5 @@
 /** Private transport boundary; not a replay event or a provider capability. */
-import type { LLMCallHooks, LLMChunk, LLMRequest } from './types.js';
+import type { LLMCallHooks, LLMChunk, LLMMessage, LLMRequest, LLMResponse } from './types.js';
 
 // Symbol.for follows the private inner-run/tool-session seams: a CJS wrapper
 // and an ESM caller in one process see the same hook, never a wire field.
@@ -25,10 +25,29 @@ export type RequestAttemptObservation =
       readonly request: LLMRequest;
     };
 
+const CITATION_OFFER = Symbol.for('agentfootprint.requestCitationOffer');
+
+export interface CitationWireBody {
+  readonly source: LLMMessage;
+  readonly body: string;
+  /** One-based position among tool result blocks in the submitted request. */
+  readonly blockNumber: number;
+}
+
+interface PendingCitationOffer {
+  readonly instruction: string;
+  accept(response: LLMResponse): void;
+}
+
+type CitationOfferObserver = (
+  rows: readonly CitationWireBody[],
+) => PendingCitationOffer | undefined;
+
 type ObservedHooks = LLMCallHooks & {
   readonly [REQUEST_OBSERVER]?: (request: LLMRequest) => void;
   readonly [ATTEMPT_OBSERVER]?: (observation: RequestAttemptObservation) => void;
   readonly [ACTIVE_ATTEMPT]?: { readonly id: symbol; readonly refuse: () => void };
+  readonly [CITATION_OFFER]?: CitationOfferObserver;
 };
 
 /** Attach a run-local observer without adding a public/model-facing hook. */
@@ -37,6 +56,27 @@ export function observeRequests(
   observer: (request: LLMRequest) => void,
 ): LLMCallHooks {
   return { ...hooks, [REQUEST_OBSERVER]: observer } as ObservedHooks;
+}
+
+/** Attach the library's request-local offer builder without adding a wire or public hook. */
+export function observeCitationOffers(
+  hooks: LLMCallHooks,
+  observe: CitationOfferObserver,
+): LLMCallHooks {
+  const observed: ObservedHooks = { ...hooks, [CITATION_OFFER]: observe };
+  return observed;
+}
+
+/** Called only by an encoder that can attest to its final tool result blocks. */
+export function prepareCitationOffer(
+  hooks: LLMCallHooks | undefined,
+  rows: readonly CitationWireBody[],
+): PendingCitationOffer | undefined {
+  return (hooks as ObservedHooks | undefined)?.[CITATION_OFFER]?.(rows);
+}
+
+export function observesCitationOffers(hooks: LLMCallHooks | undefined): boolean {
+  return (hooks as ObservedHooks | undefined)?.[CITATION_OFFER] !== undefined;
 }
 
 /** Observe attempt pairing on the same private hook as request preparation. */
@@ -64,8 +104,9 @@ export function requestAttempt(
   const prior = hooks as ObservedHooks | undefined;
   const observer = prior?.[REQUEST_OBSERVER];
   const attempts = prior?.[ATTEMPT_OBSERVER];
+  const offers = prior?.[CITATION_OFFER];
   // Off-mode keeps the original hook object and all its behavior unchanged.
-  if (observer === undefined && attempts === undefined)
+  if (observer === undefined && attempts === undefined && offers === undefined)
     return {
       hooks,
       close() {
@@ -85,6 +126,22 @@ export function requestAttempt(
     ...(observer !== undefined && {
       [REQUEST_OBSERVER]: (next: LLMRequest) => {
         if (active) observer(next);
+      },
+    }),
+    ...(offers !== undefined && {
+      [CITATION_OFFER]: (rows: readonly CitationWireBody[]) => {
+        if (!active) return undefined;
+        const offer = offers(rows);
+        if (offer === undefined) return undefined;
+        let accepted = false;
+        return {
+          instruction: offer.instruction,
+          accept(response: LLMResponse) {
+            if (!active || accepted) return;
+            accepted = true;
+            offer.accept(response);
+          },
+        };
       },
     }),
     ...(attempts !== undefined &&

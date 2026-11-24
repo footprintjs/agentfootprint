@@ -1,7 +1,7 @@
 import type { AgentChartDeps } from '../buildAgentChart.js';
 import { integrityRail } from '../integrityFindings.js';
 import { dynamicTurnInput } from '../dynamicTurnInput.js';
-import { responseStopFields } from '../honesty/responseStop.js';
+import { llmCallResponseFields } from '../llmCallReads.js';
 import { retrievalFindingsOf } from '../honesty/retrievalRequests.js';
 import { failFastRecordOf } from '../../../reliability/failFastRecord.js';
 import { interventionRecordOf } from '../../providerIntervention.js';
@@ -34,7 +34,7 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
         ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
         // Native candidates and prose cutoffs carry stop evidence. Ordinary
         // replies without earlier stop evidence leave the mapper byte-identical.
-        ...responseStopFields(s),
+        ...llmCallResponseFields(s, deps.hasCitations === true),
         // The window this turn actually sent, back to the outer scope — so
         // the next iteration's window stage and the ToolCalls stage extend
         // the SAME past the model was given, not the one before delivery.

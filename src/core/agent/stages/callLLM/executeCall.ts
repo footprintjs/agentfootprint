@@ -54,6 +54,7 @@ export async function executeCall(
     serving,
     llmRequest,
     baseRequest,
+    citations,
   } = prepared;
   // Streaming-first: when the provider implements `stream()` we
   // consume chunk-by-chunk so consumers see tokens as they arrive
@@ -76,7 +77,12 @@ export async function executeCall(
   // once per stage — reused across reliability-loop
   // iterations. Named to avoid shadowing `singleProviderCall`'s own
   // `hooks` parameter, which is the unrelated `{ onFirstChunk }` bag.
-  const providerHooks = resilienceHooks(scope, deps.recordReceipt !== false, deps.onReplayPrepared);
+  const ordinaryProviderHooks = resilienceHooks(
+    scope,
+    deps.recordReceipt !== false,
+    deps.onReplayPrepared,
+  );
+  const providerHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
   const recall =
     deps.recallRequests === undefined
       ? undefined

@@ -1,0 +1,2 @@
+export const MAX_CITATION_PROSE_CHARS = 64 * 1024;
+export const MAX_CITATION_REFERENCES = 256;

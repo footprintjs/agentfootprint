@@ -13,7 +13,10 @@ export interface NegativeCheckpoint {
   readonly negativeClaimState: NegativeRuntimeState;
   readonly resultIdentities?: ClaimVerificationState;
 }
-export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | undefined {
+export function negativeCheckpointOf(
+  container: unknown,
+  sharedIdentities?: ClaimVerificationState,
+): NegativeCheckpoint | undefined {
   const data = ownData(container);
   if (!Object.hasOwn(data, 'negativeClaimState')) return undefined;
   const raw = copyJson(data.negativeClaimState, 2_000_000, false) as NegativeRuntimeState;
@@ -38,9 +41,11 @@ export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | u
       raw.calls.some((call) => call.trustedContext))
   )
     throw new TypeError('Invalid anonymous negative-claims ownership.');
+  if (sharedIdentities !== undefined && Object.hasOwn(data, 'resultIdentities'))
+    throw new TypeError('Checkpoint must share one result identity carrier.');
   const identities =
     data.resultIdentities === undefined
-      ? undefined
+      ? sharedIdentities
       : readVerificationState(data.resultIdentities, 0);
   const seen = new Set<string>();
   for (const call of raw.calls) {

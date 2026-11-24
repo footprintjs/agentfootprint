@@ -5,7 +5,11 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../../../../provider-contract/types.js';
-import { requestAttempt } from '../../../../provider-contract/requestObserver.js';
+import {
+  observeCitationOffers,
+  prepareCitationOffer,
+  requestAttempt,
+} from '../../../../provider-contract/requestObserver.js';
 import { withCircuitBreaker } from '../../../../resilience/withCircuitBreaker.js';
 import { withFallback } from '../../../../resilience/withFallback.js';
 import { withRetry } from '../../../../resilience/withRetry.js';
@@ -127,6 +131,45 @@ describe('recall at the effective request boundary', () => {
       // Consuming text is not a terminal model response.
     }
     await completeObserved(provider, { ...request, systemPrompt: undefined }, hooks, undefined);
+    expect(attempts.summary()).toEqual({
+      accepted: 'absent',
+      acceptedCount: 0,
+      exposure: 'present',
+      committedProviderResponse: true,
+    });
+  });
+
+  it('pairs recall and citation evidence with the same winning leaf', async () => {
+    const attempts = tracker();
+    const accepted: LLMResponse[] = [];
+    const hooks = observeCitationOffers(attempts.hooks({}), () => ({
+      instruction: 'Cite the offered block.',
+      accept(response) {
+        accepted.push(response);
+      },
+    }));
+    let abandonedOffer: ReturnType<typeof prepareCitationOffer>;
+    const legacyStream: LLMProvider = {
+      ...provider,
+      async *stream(_request, leafHooks) {
+        abandonedOffer = prepareCitationOffer(leafHooks, []);
+        yield { tokenIndex: 0, content: 'Draft', done: false };
+      },
+    };
+    for await (const _ of streamObserved(legacyStream, request, hooks, undefined)) {
+      // A partial stream cannot associate its offer with a finished answer.
+    }
+    expect(abandonedOffer?.instruction).toBe('Cite the offered block.');
+    abandonedOffer?.accept({ ...answer, content: 'Abandoned draft' });
+    const completion: LLMProvider = {
+      ...provider,
+      async complete(_request, leafHooks) {
+        prepareCitationOffer(leafHooks, [])?.accept(answer);
+        return answer;
+      },
+    };
+    await completeObserved(completion, { ...request, systemPrompt: undefined }, hooks, undefined);
+    expect(accepted).toEqual([answer]);
     expect(attempts.summary()).toEqual({
       accepted: 'absent',
       acceptedCount: 0,

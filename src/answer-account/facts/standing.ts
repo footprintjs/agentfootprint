@@ -49,6 +49,7 @@ export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'memory-retrieval-excluded',
   'source-not-consulted',
   'step-skipped',
+  'ungrounded-entity',
 ]);
 
 /** The recorded display names, or null if the record cannot supply them in full. */
@@ -185,6 +186,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'source-not-consulted': 'howSure.reason.sourceNotConsulted',
   'column-type-mismatch': 'howSure.reason.columnTypeMismatch',
   'missing-column': 'howSure.reason.missingColumn',
+  'ungrounded-entity': 'howSure.reason.claimUnsettled',
   'unsupported-claim': 'howSure.reason.unsupportedClaim',
   'claim-unsettled': 'howSure.reason.claimUnsettled',
   'claim-exceeds-search': 'howSure.reason.claimExceedsSearch',

@@ -10,8 +10,7 @@ import {
   unsupportedArgumentsOf,
 } from '../../../../integrity/unsupported-argument/check.js';
 import { readExternalGrounds } from './externalGrounds.js';
-import { identifyAcceptedToolCalls } from './acceptedCalls.js';
-import { recordResponseStop } from '../../honesty/responseStop.js';
+import { commitAcceptedResponse } from './commitResponse.js';
 import { fileIntegrityFindings } from '../../integrityFindings.js';
 import { emitCostTick } from '../../../cost.js';
 import {
@@ -49,6 +48,7 @@ export async function acceptResponse(
     startMs,
     messages,
     selection,
+    citations,
   } = prepared;
   const {
     response,
@@ -64,46 +64,15 @@ export async function acceptResponse(
   if (recoveryPiece !== undefined) scope.evidenceRecoveryUsed = true;
   const durationMs = Date.now() - startMs;
   recordResponseTokens(scope, response);
-  const nativeOutput =
-    deps.outputFormat !== undefined &&
-    !localFallback &&
-    (deps.nativeOutputAuto !== true || answeredBy.native);
-  // A provider that states its manifest (wireManifest.ts)
-  // and says no format crossed sent the request unconstrained while it
-  // declared the capability — refused, never delivered as constrained.
-  if (
-    nativeOutput &&
-    response.wireManifest !== undefined &&
-    response.wireManifest.outputFormat === undefined
-  ) {
-    throw new Error(
-      `Agent: native structured output — '${answeredBy.provider}' ` +
-        `declares a native structured-output format, but its wire manifest says the request ` +
-        `it sent carried none. The answer was not constrained, so it is not delivered as if ` +
-        `it were.`,
-    );
-  }
-  if (deps.findings === true)
-    scope.findingsRequest =
-      acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-  scope.llmLatestContent = response.content;
-  if (recall !== undefined)
-    deps.recallRequests?.(scope, iteration, recall.summary(localFallback ? 'local' : 'provider'));
-  deps.onResponseCommitted?.();
-  const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
-  scope.llmLatestToolCalls = acceptedToolCalls;
-  deps.sourceConsultation?.accepted(
-    scope,
-    localFallback ? undefined : acceptedOffer,
-    localFallback ? undefined : response.wireManifest,
-    acceptedToolCalls,
-  );
-  recordResponseStop(
-    scope,
-    localFallback ? undefined : response.stopReason,
-    nativeOutput,
-    deps.outputFormat !== undefined,
-  );
+  const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
+    localFallback,
+    answeredBy,
+    findingsRequest: acceptedFindingsRequest,
+    citationOffer: citations?.accepted(response),
+    sourceOffer: acceptedOffer,
+    iteration,
+    recall: recall?.summary(localFallback ? 'local' : 'provider'),
+  });
   // A response owns its replay evidence, never the previous response's.
   // The presence trap does not record a read on never-replay providers.
   if (response.replay !== undefined || 'llmLatestReplay' in scope) {

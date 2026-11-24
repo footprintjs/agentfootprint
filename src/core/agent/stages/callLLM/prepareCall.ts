@@ -28,6 +28,7 @@ import { collapseJudged } from '../../findings/serve.js';
 import type { FindingsLedger } from '../../findings/types.js';
 import { replayCacheMarkers } from '../../requestTurn/replayPrefix.js';
 import { projectCallHistory } from './requestProjection.js';
+import { prepareCitationProjection } from './citationProjection.js';
 import type { OntologyPiece } from '../../../../ontology/serve.js';
 import type { OntologyRecord } from '../../../../ontology/types.js';
 import type { AgentState } from '../../types.js';
@@ -325,6 +326,16 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     continuing,
   );
   const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+  const citations = prepareCitationProjection(
+    scope,
+    deps.offerCitations === true &&
+      continuing === undefined &&
+      deps.outputSchemaParser === undefined &&
+      deps.outputFormat === undefined,
+    committed,
+    wireMessages,
+    detached.request.messages,
+  );
   const selection =
     deps.servedTools?.selection &&
     selectionAtRequest(deps, iteration, scope.$attempt?.(), baseRequest, withheld !== null);
@@ -491,6 +502,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
   }
 
   return {
+    citations,
     baseRequest,
     peel,
     systemPromptInjections,
