@@ -46,7 +46,7 @@
     "src/core/agent/negativeClaims/capture.ts": 630,
     "src/core/agent/receipt/receipt.ts": 1019,
     "src/core/agent/stages/callLLM.ts": 1115,
-    "src/core/agent/stages/prepareFinal.ts": 741,
+    "src/core/agent/stages/prepareFinal.ts": 731,
     "src/core/agent/stages/reliabilityExecution.ts": 710,
     "src/core/agent/stages/route.ts": 1845,
     "src/core/agent/stages/routeTurn.ts": 621,

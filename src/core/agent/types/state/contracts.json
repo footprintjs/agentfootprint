@@ -128,6 +128,7 @@
       "answerAssessment": ["85365f037d801e1da9a9e30e618420c8e09e2cbcc98508e8ff826182d82ad6cb",true,false],
       "answerStandingLine": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
       "answerStandingNames": ["afca195a5b3612991d667cfe3c3a410fd7b1b59194f28e4587ca86e815a1169f",true,false],
+      "answerStandingLineOmittedByRaiseOn": ["44b845f61c46910592484d0514819a5f1c33403ace6266e3a5d5ef62b5df9d33",true,false],
       "argumentResolutions": ["067584217e02f1e26f768b454ef3921989891370368639d8953b18728baed0f4",true,false],
       "argumentAsk": ["a1f198e8f0443bad3ae208636125e57fb6871e64d4a1ad06e8277b0d2901bb28",true,false],
       "argumentAnswersKept": ["dc7fb3cdea7fe5dcf0908fdfe4a0d21517c55662fcf9b380ed72bbf20e23724d",true,false],
@@ -162,6 +163,7 @@
       "settledToolCallsComplete": ["3b4c223ff55b39025cefdafb25bd0e5131735182688da0b3f11f896a28ac6357",true,false]
     },
     "comments": {
+      "1607e946a48eef6190769f71b8161c6594aa0f57426d7d66f9f0a8dfcce7a5d2": 1,
       "e7588b28ca09258430f018011d7ec3b6e88ff4dc91ec5b671da028bd0a08979c": 1,
       "a545cd7d900e7eb748ee7dae852aa60abe6dbd87b5e2e62109dc9a7072be3919": 1,
       "17d11825d5659977a2ee73f621f22f39cd2a8dbfa56ca030c155301abf764168": 1,
