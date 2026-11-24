@@ -6,6 +6,7 @@ import {
   ASSESSMENT_METADATA,
   CARRIERS,
   POLICIES,
+  RESPONSE_TRACE_FIELDS,
   TRACE_FIELDS,
   type ActionCarrier,
 } from './guardrailSchemas.js';
@@ -116,7 +117,10 @@ class Classification {
   trace(value: unknown): void {
     const traceKeys = this.reads.keys(value);
     if (traceKeys === undefined) return;
-    if (traceKeys.some((key) => key !== 'guardrail')) this.reads.complete = false;
+    if (traceKeys.some((key) => !RESPONSE_TRACE_FIELDS.has(key))) this.reads.complete = false;
+    // Both documented root members are optional. Only the guardrail member is
+    // assessment evidence; a router's presence never authorizes reading its value.
+    if (!traceKeys.includes('guardrail')) return;
     const field = this.reads.field(value, 'guardrail');
     if (!field.valid || !field.present) {
       this.reads.complete = false;

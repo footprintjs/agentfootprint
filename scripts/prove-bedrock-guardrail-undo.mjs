@@ -29,6 +29,7 @@ const guardedStream = 'src/adapters/llm/BedrockProvider/guardedStream.ts';
 const coreTests = 'test/core/provider-intervention.test.ts';
 const directTests = 'test/core-flow/provider-intervention-direct-calls.test.ts';
 const classificationTests = 'test/adapters/unit/BedrockProvider.guardrailClassification.test.ts';
+const routerTests = 'test/adapters/unit/BedrockProvider.promptRouter.test.ts';
 const streamTests = 'test/adapters/unit/BedrockProvider.guardrailStream.test.ts';
 const coreSuite = 'provider intervention at the admitted native response';
 const classificationSuite = (mode) => `Bedrock guardrails classification — ${mode}`;
@@ -67,6 +68,35 @@ const maskFirst = `    if (this.masked && this.reads.complete && code !== 'conte
       return { outcome: 'masked', code, filters: this.descriptors };
     if (this.blocked) return { outcome: 'blocked', code, filters: this.descriptors };`;
 const probes = [
+  {
+    id: 'prompt-router-boundary-undo',
+    purpose:
+      'Treat documented router metadata and optional assessment absence as incomplete again.',
+    source: classification,
+    before: `    if (traceKeys.some((key) => !RESPONSE_TRACE_FIELDS.has(key))) this.reads.complete = false;
+    // Both documented root members are optional. Only the guardrail member is
+    // assessment evidence; a router's presence never authorizes reading its value.
+    if (!traceKeys.includes('guardrail')) return;`,
+    after: `    if (traceKeys.some((key) => key !== 'guardrail')) this.reads.complete = false;`,
+    assertions: [false, true].flatMap((classDoor) =>
+      ['complete', 'stream'].flatMap((mode) =>
+        [false, true].flatMap((withRouter) =>
+          ['ordinary completion', 'usable mask', 'explicit intervention without assessment'].map(
+            (title) => {
+              const fails = withRouter && title !== 'explicit intervention without assessment';
+              return assertion(
+                routerTests,
+                'documented prompt-router trace is separate from guardrail assessment',
+                `${mode}, class=${classDoor}, router=${withRouter}: ${title}`,
+                fails ? 'failed' : 'passed',
+                fails ? "expected 'unknown' to be" : undefined,
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+  },
   {
     id: 'direct-accounting-undo',
     purpose: 'Suppress completed-response notification before direct native refusal.',
@@ -120,7 +150,8 @@ const probes = [
   },
   {
     id: 'final-memory-routing-undo',
-    purpose: 'Retain the admitted terminal carrier and notifications, suppress only its native break.',
+    purpose:
+      'Retain the admitted terminal carrier and notifications, suppress only its native break.',
     source: admission,
     before: "  scope.$break('Provider intervention withheld the response.');",
     after: '  // Undo: keep the terminal carrier but let routing enter the final/memory branch.',
@@ -236,7 +267,8 @@ function inspectProbe(probe, paths, child, originalHash) {
   const errors = [];
   if (child.error) errors.push(`Vitest spawn failed: ${child.error.message}`);
   if (child.signal) errors.push(`Vitest was terminated by ${child.signal}`);
-  if (child.status !== 1) errors.push(`Expected Vitest assertion-failure exit 1, got ${child.status}`);
+  if (child.status !== 1)
+    errors.push(`Expected Vitest assertion-failure exit 1, got ${child.status}`);
   let report;
   let transforms = [];
   try {
@@ -289,10 +321,13 @@ function inspectProbe(probe, paths, child, originalHash) {
       errors.push(`${expected.fullName}: failed outside the required behavior assertion`);
     return { ...expected, observedStatus: actual.status, failureMessages: actual.failureMessages };
   });
-  const executed = results.filter((entry) => entry.status === 'passed' || entry.status === 'failed');
+  const executed = results.filter(
+    (entry) => entry.status === 'passed' || entry.status === 'failed',
+  );
   if (executed.length !== probe.assertions.length)
     errors.push(`Executed ${executed.length} assertions; selected ${probe.assertions.length}`);
-  if (report?.success !== false) errors.push('Report did not record the expected failing undo run.');
+  if (report?.success !== false)
+    errors.push('Report did not record the expected failing undo run.');
   return {
     id: probe.id,
     purpose: probe.purpose,
@@ -315,7 +350,9 @@ function inspectProbe(probe, paths, child, originalHash) {
 function main() {
   const supplied = process.argv[2];
   if (process.argv.length !== 3 || !supplied || !isAbsolute(supplied))
-    throw new Error('Usage: node scripts/prove-bedrock-guardrail-undo.mjs /absolute/evidence/directory');
+    throw new Error(
+      'Usage: node scripts/prove-bedrock-guardrail-undo.mjs /absolute/evidence/directory',
+    );
   mkdirSync(supplied, { recursive: true });
   const output = realpathSync(supplied);
   const protectedPaths = [
@@ -326,6 +363,8 @@ function main() {
     directTests,
     'src/provider-contract/responseAdmission.ts',
     classificationTests,
+    routerTests,
+    'src/adapters/llm/BedrockProvider/guardrailSchemas.ts',
     streamTests,
     'vitest.config.ts',
     'scripts/prove-bedrock-guardrail-undo.mjs',
@@ -341,7 +380,8 @@ function main() {
     if (existsSync(file)) throw new Error(`Refusing to overwrite existing evidence: ${file}`);
   for (const probe of probes) {
     const matches = originals.get(probe.source).toString('utf8').split(probe.before).length - 1;
-    if (matches !== 1) throw new Error(`${probe.id}: expected one raw source match, got ${matches}`);
+    if (matches !== 1)
+      throw new Error(`${probe.id}: expected one raw source match, got ${matches}`);
   }
   const vitest = join(root, 'node_modules/vitest/vitest.mjs');
   if (!existsSync(vitest)) throw new Error(`Local Vitest is missing: ${vitest}`);
@@ -377,19 +417,24 @@ function main() {
   process.once('exit', cleanup);
   try {
     for (const probe of probes) {
-      if (!unchanged()) throw new Error('Protected source/test/config bytes changed; refusing another run.');
+      if (!unchanged())
+        throw new Error('Protected source/test/config bytes changed; refusing another run.');
       const paths = pathsFor(probe.id);
       const config = join(scratch, `${probe.id}.config.mjs`);
       const originalHash = hash(originals.get(probe.source));
       writeFileSync(config, configText(probe, paths, scratch, originalHash), { flag: 'wx' });
       const files = [...new Set(probe.assertions.map((entry) => entry.file))];
-      const child = spawnSync(process.execPath, [vitest, 'run', '--configLoader', 'runner', '--config', config, ...files], {
-        cwd: root,
-        encoding: 'utf8',
-        shell: false,
-        maxBuffer: 8 * 1024 * 1024,
-        env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
-      });
+      const child = spawnSync(
+        process.execPath,
+        [vitest, 'run', '--configLoader', 'runner', '--config', config, ...files],
+        {
+          cwd: root,
+          encoding: 'utf8',
+          shell: false,
+          maxBuffer: 8 * 1024 * 1024,
+          env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+        },
+      );
       writeFileSync(paths.log, `${child.stdout ?? ''}${child.stderr ?? ''}`, { flag: 'wx' });
       const result = inspectProbe(probe, paths, child, originalHash);
       proof.probes.push(result);
@@ -397,7 +442,8 @@ function main() {
         `${probe.id}: ${result.killed ? 'killed' : 'NOT PROVED'}; ` +
           `${result.measured.failed} failed, ${result.measured.passed} surviving controls`,
       );
-      if (!unchanged()) throw new Error('Protected source/test/config bytes changed during the undo run.');
+      if (!unchanged())
+        throw new Error('Protected source/test/config bytes changed during the undo run.');
       if (result.measured.failed + result.measured.passed === 0) break;
     }
   } catch (error) {

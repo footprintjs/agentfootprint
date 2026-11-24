@@ -92,6 +92,8 @@ export const POLICIES: Readonly<Record<string, Readonly<Record<string, string>>>
 };
 
 export const ASSESSMENT_METADATA = new Set(['invocationMetrics', 'appliedGuardrailDetails']);
+/** Converse and ConverseStream root trace siblings; router contents stay private and unread. */
+export const RESPONSE_TRACE_FIELDS = new Set(['guardrail', 'promptRouter']);
 export const TRACE_FIELDS = new Set([
   'inputAssessment',
   'outputAssessments',
