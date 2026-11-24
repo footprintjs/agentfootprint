@@ -749,13 +749,8 @@ describe('LAW 2 — a Lens may omit; absence and refusal need evidence for the e
     expect(absenceClaims(text)).toEqual([]);
   });
 
-  it('the plain catalog with everything hidden says what it CAN say, and nothing more', () => {
-    const text = describe_({ hiddenIds: ['alpha', 'beta', 'gamma'] });
-    expect(text).toContain('No skills are available to you');
-    // "available to YOU" is a statement about this caller's own offer, which
-    // the resolver is authoritative for. It is the one absence sentence the
-    // Lens holds evidence for, so it is the one it may make.
-    expect(text).not.toMatch(/does not exist|no such skill/i);
+  it('withholds the door when there are no visible skills to name', () => {
+    expect(readSkillDescriptor(skills, { hiddenIds: ['alpha', 'beta', 'gamma'] })).toBeUndefined();
   });
 
   it('the GATE’s refusal of a real call is epoch-anchored too, and names what IS reachable — by NAMING the cursor rather than saying "here" (9.86.0: the epoch a tool result belongs to is the call it answered, and "here" moves)', async () => {

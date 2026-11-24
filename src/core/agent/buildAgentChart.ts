@@ -52,7 +52,7 @@ import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 
 import { mountAgentMemoryWrites } from './memoryWrites.js';
 import { mountHostTurn } from './hostEnd/chart.js';
@@ -69,7 +69,7 @@ import {
   finalBranchOutput,
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
-import { buildCacheSubflow } from './buildCacheSubflow.js';
+import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import {
   mountInputsLayer,
   mountResultsLayer,
@@ -598,29 +598,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     // Findings uses stable tool definitions and late request-only DATA, so
     // its changing ledger does not disable prefix cache markers.
     .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        // decideCacheMarkers inputs
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-        }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window AS IT WILL BE SENT (7.21). A `CacheMarker{field:'messages'}`
-        // names a position in the request's message array, so it has to be
-        // computed against that array — post-window, post-delivery — and not
-        // against a count of injections, which is what it used to be and why
-        // the marker pointed at the wrong message.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        // CacheGate inputs (read-only: skillHistory is updated in the main
-        // loop above, so it is NOT mapped back out)
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
+      inputMapper: (parent) => cacheMountInput(parent, deps),
       outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
       arrayMerge: ArrayMergeMode.Replace,
     })

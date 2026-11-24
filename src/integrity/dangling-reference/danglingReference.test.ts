@@ -254,6 +254,10 @@ describe('functional: the evicted ground files ONE finding through the real loop
  * read), the tail marker beside the system one. No step was added, removed
  * or renumbered, so the law this pins still holds.
  *
+ * The cache mount records one compact seed and one read in place of two
+ * full-history reads. Only its marker write shifts to the preceding step.
+ * The dangling-reference composition reads still match exactly.
+ *
  * Occurrence addressing changes only the tool start/end payload summaries.
  * The end summary now abbreviates five keys, including the address.
  *

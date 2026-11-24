@@ -60,7 +60,10 @@ import { flowChart } from 'footprintjs';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { iterationsRemainingOf } from '../lib/iterationBudget.js';
+import { evaluationCatalog } from './evaluationCatalog.js';
+import { routingEntriesOf } from './routingEntries.js';
 import { evaluateInjections } from './evaluator.js';
+import type { InjectionEvaluation } from './types.js';
 import {
   isHiddenSkill,
   projectActiveInjection,
@@ -69,12 +72,7 @@ import {
   type Injection,
   type InjectionContext,
 } from './types.js';
-import {
-  SKILL_GRAPH_METADATA_KEY,
-  type CursorMove,
-  type GuardEvaluation,
-  type SkillRouting,
-} from './skillGraph.js';
+import { type CursorMove, type GuardEvaluation } from './skillGraph.js';
 import { menuOutstanding, type TurnRoute } from './routingPolicy.js';
 import {
   pointerOf,
@@ -308,6 +306,21 @@ interface InjectionEngineArgs {
  * Build the Injection Engine subflow — Gather → Evaluate → Route → Delta.
  */
 export function buildInjectionEngineSubflow(config: InjectionEngineConfig): FlowChart {
+  return buildObservedInjectionEngine(config);
+}
+
+type EvaluateInScope = (
+  scope: object,
+  injections: readonly Injection[],
+  ctx: InjectionContext,
+  hidden: readonly string[] | undefined,
+) => InjectionEvaluation;
+
+/** The native agent can retain private implementation references for this decision. */
+export function buildObservedInjectionEngine(
+  config: InjectionEngineConfig,
+  evaluate?: EvaluateInScope,
+): FlowChart {
   const injections = config.injections;
 
   const resolveHidden = config.hiddenSkillIds;
@@ -334,6 +347,7 @@ export function buildInjectionEngineSubflow(config: InjectionEngineConfig): Flow
         config.reachableSkills,
         config.engagement,
         resolveHidden !== undefined,
+        evaluate,
       ),
       'evaluate',
       'Evaluate every Injection trigger; produce activeInjections + metadata',
@@ -400,6 +414,7 @@ function makeEvaluateStage(
   /** Gather published `hiddenSkillIds` this pass. Read only then, so an agent
    *  without per-role visibility records exactly the reads it always did. */
   readsHidden = false,
+  evaluate?: EvaluateInScope,
 ) {
   return (scope: TypedScope<InjectionEngineState>): void => {
     const args = scope.$getArgs<InjectionEngineArgs>();
@@ -606,7 +621,9 @@ function makeEvaluateStage(
       }
     }
 
-    const evaluation = evaluateInjections(injections, ctx);
+    const evaluation = evaluate
+      ? evaluate(scope, injections, ctx, hidden)
+      : evaluateInjections(injections, ctx);
 
     // The suppression the cursor law performs (8.15.0). Asked ONCE, on the same ctx
     // the triggers gated on, so the reported suppression and the active set are two
@@ -748,16 +765,7 @@ function makeEvaluateStage(
     // observe "what was considered, what won, what was skipped and why".
     typedEmit(scope, 'agentfootprint.context.evaluated', {
       iteration: ctx.iteration,
-      activeCount: evaluation.active.length,
-      skippedCount: evaluation.skipped.length,
-      evaluatedTotal: injections.length,
-      activeIds: evaluation.active.map((i) => i.id),
-      skippedDetails: evaluation.skipped,
-      triggerKindCounts: countTriggerKinds(evaluation.active),
-      // The Skill menu the LLM was offered (same text as the read_skill tool
-      // description) — pair "offered" with "chosen" (activatedInjectionIds) to
-      // debug a missed/wrong read_skill call.
-      skillCatalog: skillCatalogOf(injections),
+      ...evaluationCatalog(injections, evaluation, hidden),
       // Routing PROVENANCE for active skill-graph injections — the decision path
       // / edge that reached each. Undefined when none came from a skillGraph().
       //
@@ -798,33 +806,6 @@ function copyGuardEvaluation(g: GuardEvaluation) {
       passed: c.passed,
     })),
   };
-}
-
-/** Per active skill-graph injection: its routing provenance + unlocked tools.
- *  Returns undefined when no active injection carries skill-graph metadata, so
- *  the emit payload omits `routing` entirely for non-skill-graph runs. */
-function routingEntriesOf(active: readonly Injection[]) {
-  const entries = active.flatMap((inj) => {
-    const routing = (inj.metadata as { [SKILL_GRAPH_METADATA_KEY]?: SkillRouting } | undefined)?.[
-      SKILL_GRAPH_METADATA_KEY
-    ];
-    if (!routing) return [];
-    return [
-      {
-        injectionId: inj.id,
-        flavor: inj.flavor,
-        via: routing.via,
-        ...(routing.path && {
-          path: routing.path.map((s) => ({ label: s.label, branch: s.branch })),
-        }),
-        ...(routing.label && { label: routing.label }),
-        ...(routing.from && { from: routing.from }),
-        ...(routing.triggerKind && { triggerKind: routing.triggerKind }),
-        tools: (inj.inject.tools ?? []).map((t) => t.schema.name),
-      },
-    ];
-  });
-  return entries.length > 0 ? entries : undefined;
 }
 
 // ── Stage 3: Route ───────────────────────────────────────────────────────
@@ -898,23 +879,4 @@ function diffSlot(
     removed: [...priorIds].filter((id) => !currentIds.has(id)),
     kept: [...currentIds].filter((id) => priorIds.has(id)),
   };
-}
-
-/** The Skill catalog the LLM was offered — id + description for every Skill
- *  injection, mirroring buildReadSkillTool's `(no description)` fallback. */
-function skillCatalogOf(
-  injections: readonly Injection[],
-): readonly { id: string; description: string }[] {
-  return injections
-    .filter((i) => i.flavor === 'skill')
-    .map((i) => ({ id: i.id, description: i.description ?? '(no description)' }));
-}
-
-/** Count active injections by trigger kind (observability metric). */
-function countTriggerKinds(active: readonly Injection[]): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const inj of active) {
-    counts[inj.trigger.kind] = (counts[inj.trigger.kind] ?? 0) + 1;
-  }
-  return counts;
 }

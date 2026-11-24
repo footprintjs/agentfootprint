@@ -59,7 +59,7 @@ import {
   EMPTY_ACTIVE_BY_SLOT,
   type ActiveBySlot,
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
-import type { ActiveInjection, Injection } from '../../injection-engine/types.js';
+import type { ActiveInjection } from '../../injection-engine/types.js';
 import {
   memoryInjectionKey,
   memoryRecallOutcomesKey,
@@ -79,7 +79,7 @@ import {
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
-import { buildCacheSubflow } from './buildCacheSubflow.js';
+import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import {
   timeClockArg,
   timeLimitsArg,
@@ -461,23 +461,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // The findings offer re-decorates every tool per call — see
     // buildAgentChart's mount. Closed over at build time.
     .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => ({
-        activeInjections: (parent.activeInjections as readonly Injection[] | undefined) ?? [],
-        iteration: (parent.iteration as number | undefined) ?? 1,
-        maxIterations: (parent.maxIterations as number | undefined) ?? deps.maxIterations,
-        userMessage: (parent.userMessage as string | undefined) ?? '',
-        ...(parent.lastToolResult !== undefined && {
-          lastToolName: (parent.lastToolResult as { toolName: string } | undefined)?.toolName,
-        }),
-        cumulativeInputTokens: (parent.totalInputTokens as number | undefined) ?? 0,
-        systemPromptCachePolicy: deps.systemPromptCachePolicy,
-        cachingDisabled: (parent.cachingDisabled as boolean | undefined) ?? false,
-        // The window as it will be sent — a messages marker's index is a
-        // position in THAT array. See buildAgentChart's mount for the why.
-        history: (parent.history as readonly LLMMessage[] | undefined) ?? [],
-        recentHitRate: parent.recentHitRate as number | undefined,
-        skillHistory: (parent.skillHistory as readonly (string | undefined)[] | undefined) ?? [],
-      }),
+      inputMapper: (parent) => cacheMountInput(parent, deps),
       outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
       arrayMerge: ArrayMergeMode.Replace,
     })

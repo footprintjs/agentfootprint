@@ -38,10 +38,11 @@ import { describe, expect, it } from 'vitest';
 import { Agent, checkInApproved, defineTool, isCheckInPause } from '../../src/index.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { prepareAnthropicReplay } from '../../src/adapters/llm/anthropicThinkingReplay.js';
-import type { CacheStrategy } from '../../src/cache/types.js';
+import type { CacheMarker, CacheStrategy } from '../../src/cache/types.js';
 import { RunCheckpointError, type AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
 import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { recordRun } from '../../src/doors/observe.js';
+import { defineFact } from '../../src/injection-engine.js';
 import { receiptAt, servedAt } from '../../src/time-travel/servedView.js';
 
 /** The models whose table row sets `thinkingPrefixBinding` (anthropicModels.ts). */
@@ -397,6 +398,73 @@ describe('signed tool turns with native context features', () => {
       await agent.shutdown();
     }
   });
+
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    'remaps the cache marker after restoring request-only lines in %s',
+    async (reactMode) => {
+      const bodies: Body[] = [];
+      const candidates: Array<{
+        messages: readonly LLMMessage[];
+        markers: readonly CacheMarker[];
+      }> = [];
+      const fact = 'A cacheable fixture delivery.';
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, [
+          { toolInput: { key: 'k1', _findings: { basis: 'direct' } } },
+          { toolInput: { key: 'k2', _findings: { basis: 'direct' } } },
+          'text',
+        ]) as never,
+      });
+      const cacheStrategy: CacheStrategy = {
+        name: 'observe-fixture',
+        async prepareRequest(request, markers) {
+          candidates.push({ messages: request.messages, markers });
+          return { request, markersApplied: [] };
+        },
+        extractMetrics: () => ({ kind: 'notApplicable', reason: 'fixture' }),
+      };
+      const agent = Agent.create({ provider, model, cacheStrategy, reactMode, maxIterations: 5 })
+        .system('Use the lookup tool to answer.', { cache: 'always' })
+        .tool(lookup)
+        .fact(
+          defineFact({
+            id: 'cache-fixture',
+            data: fact,
+            slot: 'messages',
+            role: 'assistant',
+            activeWhen: ({ iteration }) => iteration >= 3,
+          }),
+        )
+        .inputsLayer()
+        .findings({ answerAsk: 'quote-facts', argumentSources: true })
+        .thinking({ budget: 2048 })
+        .build();
+      const recorder = recordRun(agent, { boundaryDetail: 'full' });
+      try {
+        expect(await agent.run({ message: 'What are k1 and k2?' })).toBe('answer 3');
+        expect(replayedSignatures(bodies[2]!)).toEqual(['sig-1', 'sig-2']);
+        expect(candidates).toHaveLength(3);
+        const cache = recorder.boundary
+          .getBoundaries()
+          .filter((event) => event.type === 'subflow.exit' && event.localSubflowId === 'sf-cache')
+          .at(-1);
+        const payload = cache?.payload as { cacheMarkers?: readonly CacheMarker[] } | undefined;
+        const raw = payload?.cacheMarkers?.find(({ field }) => field === 'messages');
+        const { messages, markers } = candidates[2]!;
+        const wirePosition = messages.findIndex(({ content }) => content === fact);
+        expect(wirePosition).toBeGreaterThan(0);
+        expect(raw).toBeDefined();
+        expect(wirePosition).toBeGreaterThan(raw!.boundaryIndex);
+        expect(markers.find(({ field }) => field === 'messages')).toEqual({
+          ...raw,
+          boundaryIndex: wirePosition,
+        });
+      } finally {
+        recorder.stop();
+        await agent.shutdown();
+      }
+    },
+  );
 
   it('refuses to reconstruct a signed prefix after a host changes request messages', async () => {
     const bodies: Body[] = [];
