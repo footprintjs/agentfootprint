@@ -25,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent, defineTool, isInputPause, type TimeReader } from '../../src/index.js';
 import { convertForTool, periodFactProblem } from '../../src/doors/time.js';
 import { lookbackRange, reachMs } from '../../src/time/range.js';
+import { readControlWindow } from '../../src/time/windowEndpoint.js';
 
 const NOW = '2026-10-09T15:40:00Z';
 const NOW_MS = Date.parse(NOW);
@@ -110,6 +111,34 @@ describe('boundary — the bounds form', () => {
     expect(convertForTool({ range: over }, [BOUNDS], CAP, CTX)).toEqual({
       refused: 'over-max-range',
     });
+  });
+
+  it.each(['tool', 'form'] as const)('enforces an exact confirmed window at the %s cap', (cap) => {
+    const from = '2026-10-09T13:00:00Z';
+    const to = '2026-10-09T13:45:00Z';
+    const form = cap === 'form' ? { ...BOUNDS, maxRange: '45m' as const } : BOUNDS;
+    const facts = cap === 'tool' ? { maxRange: '45m' as const } : undefined;
+    const convert = (cutoff: string) => {
+      const { from: start, to: end, endpoint } = readControlWindow({ from, to: cutoff })!;
+      return convertForTool({ range: { from: start, to: end }, endpoint }, [form], facts, CTX);
+    };
+
+    expect(convert(to)).toEqual({ conversion: { form: 0, values: { from, to } } });
+    expect(convert('2026-10-09T13:45:00.000000001Z')).toEqual({ refused: 'no-form-holds' });
+    expect(convert('2026-10-09T13:45:00.0005Z')).toEqual({ refused: 'no-form-holds' });
+  });
+
+  it('preserves the nanosecond remainder when a long confirmed window reaches a tool cap', () => {
+    const from = '2025-10-10T13:00:00Z';
+    const to = '2026-10-09T13:00:00Z';
+    const cap = { maxRange: '52w' } as const;
+    const convert = (cutoff: string) => {
+      const { from: start, to: end, endpoint } = readControlWindow({ from, to: cutoff })!;
+      return convertForTool({ range: { from: start, to: end }, endpoint }, [BOUNDS], cap, CTX);
+    };
+
+    expect(convert(to)).toEqual({ conversion: { form: 0, values: { from, to } } });
+    expect(convert('2026-10-09T13:00:00.000000001Z')).toEqual({ refused: 'no-form-holds' });
   });
 
   it('the instants of a 24h look-back, spelled as bounds, are judged alike; one ms more is not', () => {

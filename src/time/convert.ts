@@ -248,10 +248,7 @@ export function convertWidened(
       ? lookbackWidened(window, form, ctx)
       : undefined;
     if (done === undefined || done.extra.length === 0) continue;
-    if (widestMs !== undefined) {
-      const reach = formReach(window, done.sent);
-      if (reach === undefined || reach > widestMs) continue;
-    }
+    if (widestMs !== undefined && !fitsCap(window, widestMs, done.sent)) continue;
     return { form: i, ...done };
   }
   return undefined;
@@ -351,20 +348,23 @@ export function convertForTool(
     facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
       ? { partlyBeyondRetention: true as const }
       : {};
-  const read = eligible.some((f) => f.maxRange !== undefined)
+  const toolCap = widestMsOf(facts);
+  const checkEachCap =
+    eligible.some((form) => form.maxRange !== undefined) ||
+    (window.endpoint !== undefined && toolCap !== undefined);
+  const read = checkEachCap
     ? convertWithinFormCaps(window, forms, facts, ctx)
-    : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, widestMsOf(facts));
+    : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, toolCap);
   if (read !== undefined) return { conversion: read, ...partly };
   if (spansDaysForDayOnly(window, eligible, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
 }
 
 /**
- * {@link convertForTool}'s exact-then-wider search when a form declares its
- * own `maxRange`: the same order (the first form that holds the window
- * exactly, then the first that holds it by reading more), each form held to
- * ITS cap ({@link formMaxRange}) — an exact form the window reaches past, or a
- * wider read past it, is skipped, and the next form is asked.
+ * {@link convertForTool}'s exact-then-wider search for confirmed windows
+ * with a tool cap or forms with their own caps. Check exact forms first,
+ * then widened forms. Skip any form whose read exceeds its effective cap
+ * ({@link formMaxRange}).
  */
 function convertWithinFormCaps(
   window: WindowToConvert,
@@ -376,11 +376,10 @@ function convertWithinFormCaps(
     const text = formMaxRange(form, facts);
     return text === undefined ? undefined : durationMs(text, FACT_UNITS);
   };
-  const reach = formReach(window);
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
     const cap = capMs(form);
-    if (cap !== undefined && (reach === undefined || reach > cap)) continue;
+    if (cap !== undefined && !fitsCap(window, cap)) continue;
     const exact = convertExact(window, [form], ctx);
     if (exact !== undefined) return { ...exact, form: i };
   }
@@ -392,17 +391,19 @@ function convertWithinFormCaps(
   return undefined;
 }
 
-function formReach(window: WindowToConvert, sent?: TimeRange): number | undefined {
+function fitsCap(window: WindowToConvert, cap: number, sent?: TimeRange): boolean {
   const range = sent ?? window.range;
   const end = sent?.to ?? window.endpoint?.cutoff ?? range.to;
   const from = instantOf(range.from, 'strict');
   const cutoff = instantOf(end, 'strict');
-  if (from === undefined || cutoff === undefined) return undefined;
+  if (from === undefined || cutoff === undefined) return false;
   if (window.endpoint === undefined) {
     const fractional = sent === undefined ? 0 : (cutoff.nanos - from.nanos) / 1_000_000;
-    return reachMs(from.ms, cutoff.ms) + fractional;
+    return reachMs(from.ms, cutoff.ms) + fractional <= cap;
   }
-  return cutoff.ms - from.ms + (cutoff.nanos - from.nanos) / 1_000_000;
+  // Compare the sub-millisecond remainder separately to keep it at long durations.
+  const wholeMs = cutoff.ms - from.ms;
+  return wholeMs < cap || (wholeMs === cap && cutoff.nanos <= from.nanos);
 }
 
 /**
