@@ -42,15 +42,14 @@ export function assistantReplayFields(
 export function settledModelReply(
   state: Parameters<typeof assistantReplayFields>[0] & Pick<Partial<AgentState>, 'modelReplyRunId'>,
   content: string,
-  memory = false,
+  thinkingBlocks?: LLMMessage['thinkingBlocks'],
 ): LLMMessage {
   const runId = 'modelReplyRunId' in state ? state.modelReplyRunId : undefined;
-  const thinking = memory ? state.thinkingBlocks : undefined;
   return {
     role: 'assistant',
     content,
     ...(runId !== undefined && { replyOrigin: { kind: 'model', runId } }),
-    ...(thinking?.length && { thinkingBlocks: thinking }),
+    ...(thinkingBlocks !== undefined && { thinkingBlocks }),
     ...assistantReplayFields(state),
   };
 }
@@ -69,4 +68,22 @@ export function acceptedResponseFields(state: Record<string, unknown>): Record<s
  * paired with the already admitted assistant entry. */
 export function acceptedTurnMessages(input: string | undefined, reply: LLMMessage): LLMMessage[] {
   return input === undefined ? [reply] : [{ role: 'user', content: input }, reply];
+}
+
+/** Collect the settled model turn in native recording order for memory writers. */
+export function modelTurnMessages(scope: AgentState): LLMMessage[] {
+  // v2.14 — attach thinking blocks to the assistant final message
+  // (if any). For non-Anthropic providers this is informational; for
+  // Anthropic + extended-thinking-with-tool-use, signature round-trip
+  // requires the blocks to persist on the assistant turn even when
+  // it's the FINAL turn (continuation in the next user message).
+  // The turn payload memory writes persist: the user's message
+  // paired with the agent's final answer.
+  // These reads and their order are part of the recorded turn.
+  const thinkingBlocks = scope.thinkingBlocks;
+  const memoryThinking = thinkingBlocks?.length ? thinkingBlocks : undefined;
+  return acceptedTurnMessages(
+    scope.userMessage,
+    settledModelReply(scope, scope.finalContent, memoryThinking),
+  );
 }
