@@ -119,8 +119,35 @@ export function copyJson(
   freeze: boolean,
   maxDepth = 100,
 ): unknown {
+  return walkJson(value, maxBytes, maxDepth, freeze ? 'freeze' : 'copy').value;
+}
+
+/** Selected branches to measure as the bounded JSON walk validates them. */
+export interface JsonSizeBranch {
+  child?(key: string | number, value: unknown): JsonSizeBranch | undefined;
+  measured?(bytes: number): void;
+}
+
+/** Count compact JSON bytes without building a copy or serializing a container. */
+export function measureBoundedJson(
+  value: unknown,
+  maxBytes: number,
+  maxDepth: number,
+  branch: JsonSizeBranch,
+): number {
+  return walkJson(value, maxBytes, maxDepth, 'measure', branch).bytes;
+}
+
+function walkJson(
+  value: unknown,
+  maxBytes: number,
+  maxDepth: number,
+  mode: 'copy' | 'freeze' | 'measure',
+  root?: JsonSizeBranch,
+): { value: unknown; bytes: number } {
   if (!Number.isSafeInteger(maxDepth) || maxDepth < 0 || maxDepth > 256)
     throw new Error('JSON nesting limit.');
+  const measure = mode === 'measure';
   let budget = maxBytes;
   const ancestors = new Set<object>();
   const spend = (bytes: number) => {
@@ -131,7 +158,13 @@ export function copyJson(
     if (item.length > budget) throw new Error('JSON byte limit.');
     spend(jsonBytes(item));
   };
-  const copy = (item: unknown, depth: number): unknown => {
+  const visit = (item: unknown, depth: number, branch?: JsonSizeBranch): unknown => {
+    const before = budget;
+    const output = read(item, depth, branch);
+    branch?.measured?.(before - budget);
+    return output;
+  };
+  const read = (item: unknown, depth: number, branch?: JsonSizeBranch): unknown => {
     if (depth > maxDepth) throw new Error('JSON nesting limit.');
     if (item === null) {
       spend(4);
@@ -162,34 +195,41 @@ export function copyJson(
       if (item.length > budget + 1) throw new Error('JSON byte limit.');
       const keys = Reflect.ownKeys(item);
       if (keys.length !== item.length + 1) throw new Error('Sparse or decorated array.');
-      const result: unknown[] = [];
+      const result: unknown[] | undefined = measure ? undefined : [];
       for (let index = 0; index < item.length; index++) {
         const descriptor = Object.getOwnPropertyDescriptor(item, String(index));
         if (!descriptor?.enumerable || !('value' in descriptor))
           throw new Error('Sparse or accessor array.');
         if (index) spend(1);
-        result.push(copy(descriptor.value, depth + 1));
+        const value: unknown = descriptor.value;
+        const child = visit(value, depth + 1, branch?.child?.(index, value));
+        result?.push(child);
       }
       output = result;
     } else {
       const fields = ownData(item);
-      const result: Record<string, unknown> = {};
+      const result: Record<string, unknown> | undefined = measure ? undefined : {};
       let index = 0;
       for (const key of Object.keys(fields)) {
         if (index++) spend(1);
         string(key);
         spend(1);
-        Object.defineProperty(result, key, {
-          value: copy(fields[key], depth + 1),
-          enumerable: true,
-          writable: true,
-          configurable: true,
-        });
+        const value = fields[key];
+        const child = visit(value, depth + 1, branch?.child?.(key, value));
+        if (result !== undefined) {
+          Object.defineProperty(result, key, {
+            value: child,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+        }
       }
       output = result;
     }
     ancestors.delete(item);
-    return freeze ? Object.freeze(output) : output;
+    return mode === 'freeze' ? Object.freeze(output) : output;
   };
-  return copy(value, 0);
+  const measured = visit(value, 0, root);
+  return { value: measured, bytes: maxBytes - budget };
 }
