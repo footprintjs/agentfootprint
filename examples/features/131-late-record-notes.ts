@@ -1,4 +1,4 @@
-/** Observe late record note submission with a scripted SDK. No network or API key. */
+/** Check late record note eligibility with a scripted SDK. Runs offline. */
 import { Agent, coverage, defineTool } from '../../src/index.js';
 import { openai } from '../../src/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -7,7 +7,7 @@ export const meta: ExampleMeta = {
   id: 'features/131-late-record-notes',
   title: 'Read a late record note receipt',
   group: 'features',
-  description: 'Record an unchecked archive and observe the note at the next SDK handoff.',
+  description: 'Record an unchecked archive and inspect note eligibility for an injected client.',
   defaultInput: 'What is available in the index?',
   providerSlots: [],
   tags: ['features', 'tools', 'observability'],
@@ -47,12 +47,8 @@ function scriptedProvider() {
               return;
             }
             const tail = request.messages.at(-1);
-            if (
-              tail?.role !== 'user' ||
-              typeof tail.content !== 'string' ||
-              !tail.content.includes('The archive is awaiting export.')
-            )
-              throw new Error('The follow-up request should include the recorded archive limit.');
+            if (tail?.role !== 'tool' || tail.tool_call_id !== 'index-1')
+              throw new Error('The injected client should receive the ordinary tool follow-up.');
             yield {
               id: 'index-answer',
               model,
@@ -102,8 +98,8 @@ export async function run(message: string) {
     const answer = await agent.run({ message });
     const state = agent.getLastSnapshot()?.sharedState as SnapshotState | undefined;
     const receipt = state?.lateRecordNoteReceipt?.[0];
-    if (receipt?.accepted?.disposition !== 'submitted')
-      throw new Error('Expected the selected response to have a submitted note.');
+    if (receipt?.attempts.at(-1)?.disposition !== 'unavailable' || receipt.accepted !== undefined)
+      throw new Error('Expected an unavailable note receipt for the injected client.');
     return { answer, receipt };
   } finally {
     await agent.shutdown();

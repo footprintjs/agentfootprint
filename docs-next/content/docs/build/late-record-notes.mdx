@@ -12,19 +12,21 @@ of conversation history.
 
 ## Enable late record notes
 
-The first supported route is native `openai()` using the default OpenAI Chat
-Completions endpoint. The library preserves the request bytes on signing-capable
-routes and bound continuations, and leaves unresolved routes undecorated.
+The first supported route is library-owned `openai()` using the default OpenAI
+Chat Completions endpoint. Injected clients and unresolved routes keep the
+ordinary request. The library preserves the request bytes on signing-capable
+routes and bound continuations.
 
 <CodeFile
   path="examples/features/131-late-record-notes.ts"
   region="late-record-notes"
-  title="Enable late record notes and read the latest receipt"
+  title="Read the receipt for an injected client"
 />
 
 The [runnable example](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/131-late-record-notes.ts)
-uses a scripted client and synthetic data. It needs no API key or network
-access.
+uses an injected, scripted client with synthetic data and runs offline. It checks
+that the follow-up ends with the tool result and that the receipt says
+`unavailable`. The receipt has no accepted note attempt.
 
 ## Read the receipt
 
