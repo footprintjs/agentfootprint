@@ -8,15 +8,17 @@ import { retrievalRequestWriter } from '../../honesty/retrievalRequests.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { ToolRegistrations } from '../../stages/toolResolver.js';
 import type { buildSlots } from '../slots/buildSlots.js';
+import { buildSourceConsultation } from '../../honesty/sourceConsultation.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface RequestEnvironment {
-  readonly registrations: ToolRegistrations;
+  readonly registrations: Required<ToolRegistrations>;
   readonly configuration: AgentConfiguration;
   readonly argumentSources: boolean;
   readonly governsOutput: boolean;
   readonly provider: AgentConfiguration['provider'];
   readonly model: string;
+  readonly resolverForValues: ReturnType<typeof buildSlots>['resolverForValues'];
   readonly temperature: number | undefined;
   readonly maxTokens: number | undefined;
   readonly pricingTable: AgentConfiguration['pricingTable'];
@@ -46,6 +48,16 @@ export function requestFactory(environment: RequestEnvironment) {
         );
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
+        sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({
+          ...(environment.configuration.ontology !== undefined && {
+            ontology: environment.configuration.ontology,
+          }),
+          resolve: environment.resolverForValues(run.value),
+          servedTools: run.value.servedTools,
+          toolClaimants: environment.registrations.toolClaimants,
+        })),
+      }),
       servedTools: run.value.servedTools,
       registrations: environment.registrations,
       ...(environment.configuration.recordReceiptValue !== false &&

@@ -16,7 +16,7 @@ import type {
 } from './types.js';
 
 export type RetainedReasonState = (
-  key: 'coverageDeclared' | 'findingsLedger' | 'settledToolCalls',
+  key: 'coverageDeclared' | 'findingsLedger' | 'settledToolCalls' | 'sourceConsultation',
   value: unknown,
 ) => unknown;
 
@@ -81,6 +81,7 @@ export function assessmentValueOf(
   g: Gathered,
   sourceRead: SourceRead,
   detailRead: DetailRead,
+  unusedTools: readonly string[],
 ): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
   const reasons = REASONS.flatMap((entry) => {
     const witness = g.fired.get(entry.reason);
@@ -90,7 +91,10 @@ export function assessmentValueOf(
       witness.some((w) => w.kind === 'state' && w.path.endsWith('/declaredOn'))
         ? 'answer'
         : entry.source;
-    const detail = detailOf(entry.reason, witness, detailRead);
+    const detail =
+      entry.reason === 'source-not-consulted' && unusedTools.length > 0
+        ? { unusedTools }
+        : detailOf(entry.reason, witness, detailRead);
     return [
       {
         reason: entry.reason,
