@@ -58,6 +58,7 @@ describe('narrowServed', () => {
   it('serves the top-N plus the doors, in the wire’s order', () => {
     expect(decide(ranked('ship', 'charge', 'lookup', 'invoice'), 2)).toEqual({
       served: ['read_skill', 'charge', 'ship', 'skip_step'],
+      omitted: ['lookup', 'invoice'],
       narrowed: true,
     });
   });

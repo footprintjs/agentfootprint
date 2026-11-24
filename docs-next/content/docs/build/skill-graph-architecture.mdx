@@ -494,20 +494,16 @@ from the model's point of view:
 | ------------- | ----------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **reachable** | yes — under `Reachable from here:`                                            | yes                   | it is what the gate will grant from this cursor                                                                                                                                                                                               |
 | **refusable** | yes — under `Not reachable from here (read_skill for these will be refused):` | yes                   | a graph refusal is about **where the cursor is**. The skill exists for this caller; it is simply not reachable from _here_. Naming it lets the model route to it in one step instead of guessing.                                             |
-| **hidden**    | **no — not named at all**                                                     | yes                   | a hidden skill is about **who is asking**. No cursor move makes it available, and naming it would tell a role about a capability it will never be allowed to use — leaking the shape of somebody else's permissions into this model's prompt. |
+| **hidden**    | **no — not named at all**                                                     | no                    | a hidden skill is about **who is asking**. No cursor move makes it available, and naming it would tell a role about a capability it will never be allowed to use — leaking the shape of somebody else's permissions into this model's prompt. |
 
 The two treatments are opposite on purpose, and the reason is that they answer
 different questions. "Not reachable from here" is navigable information. "You may
 never see this" is not information the model should have.
 
-**The enum keeps the full catalog in every case**, including the hidden skills,
-and that is not an oversight. Tool-argument validation runs _before_ the
-skill-graph gate. Narrowing the enum would turn a policy refusal into a generic
-schema error that the model never reads — retiring the gate's teaching refusal,
-the `agentfootprint.skill.rejected` event, `routeRecorder()`'s rejection hops and
-the rejected-cap governor's only input, all four traded for one. The **offer** is
-narrowed in the description instead, which is what the model actually reads to
-choose.
+The served enum contains every role-visible skill. A visible off-route pick can
+still reach the graph's teaching refusal, rejection event, route recorder and
+rejected-cap governor. The role filter applies before the enum is sent or saved.
+When the visible catalog is empty the agent withholds the tool.
 
 | Behaviour                                                                                   | Status                                                                                                               |
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -515,8 +511,8 @@ choose.
 | refusable skills are named rather than hidden                                               | **shipped**                                                                                                          |
 | hidden skills are removed from the description entirely                                     | **opt-in** — requires a `PermissionChecker` that governs the `skill_read` capability; without one, nothing is hidden |
 | the hidden set is resolved **per iteration**, and fails closed if the checker throws        | **shipped**                                                                                                          |
-| the enum is the full catalog either way                                                     | **shipped**                                                                                                          |
-| under `reactMode: 'classic'` the menu is built at turn 1 and cached, so it lists everything | **shipped limitation** — dev mode warns; use the default `'dynamic'`                                                 |
+| the enum lists every role-visible skill                                                     | **shipped**                                                                                                          |
+| under `reactMode: 'classic'` the menu is built at turn 1 and cached, so it lists the visible catalog | **shipped limitation** — dev mode warns; use the default `'dynamic'`                                                 |
 
 ### The fourth state, and the one function that names all four
 

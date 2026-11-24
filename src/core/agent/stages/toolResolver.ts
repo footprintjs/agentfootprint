@@ -59,6 +59,8 @@ export interface ToolResolverDeps {
 /** `resolve(name, pinned?)` — `pinned` is a paused call's recorded party. */
 export type ToolResolver = (toolName: string, pinned?: ToolParty) => ToolResolution;
 
+export type ToolRegistrations = Pick<ToolResolverDeps, 'registryByName' | 'toolClaimants'>;
+
 /** The declaration currently labeling the provider, not its implementation identity. */
 function providerPartyOf(deps: ToolResolverDeps): ToolParty {
   const id = deps.externalToolProvider?.id;
@@ -85,6 +87,17 @@ function toolForParty(
         : undefined;
     return tool === undefined ? undefined : { tool, party: declared };
   }
+  return registeredToolForParty(deps, name, party);
+}
+
+/** Read the bound registration using only the chart's own maps. A provider label
+ * cannot establish which implementation a dynamic provider will dispatch. */
+export function registeredToolForParty(
+  deps: ToolRegistrations,
+  name: string,
+  party: ToolParty,
+): ToolResolution | undefined {
+  if (party.channel === 'provider') return undefined;
   const tool = deps.registryByName.get(name);
   if (tool === undefined) return undefined;
   const claims = deps.toolClaimants?.get(name);
