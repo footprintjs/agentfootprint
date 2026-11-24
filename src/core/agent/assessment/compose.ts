@@ -409,7 +409,7 @@ function reasonClause(
   if (reason === 'result-dropped-from-window' && names?.windowDrops !== undefined)
     return windowDropClause(names.windowDrops);
   if (reason === 'source-not-consulted' && detail !== undefined)
-    return sourceConsultationClause(detail.unusedTools ?? [], detail.unavailableTools);
+    return sourceConsultationClause(detail.unusedTools, detail.unavailableTools);
   if (reason === 'check-unreachable' && (names?.legacyConflictGap || names?.libraryLimitsGap)) {
     const causes: string[] = [];
     if (names.legacyConflictGap)

@@ -70,6 +70,50 @@ describe('recorded source consultation', () => {
     ).toBe('Not sure — the run left a declared source unchecked.');
   });
 
+  it.each([
+    [undefined, 'the run left an offered source unchecked'],
+    ['the monitor', 'the run left declared ground unchecked after it was offered the monitor'],
+  ])('names both independent routes when the offered display name is %s', (name, offered) => {
+    const result = foldState(
+      {
+        sourceConsultation: {
+          ...receipt,
+          offers: [{ group: '0', callable: 1, ...(name && { name }) }],
+          omissions: [
+            {
+              group: '1',
+              callable: 2,
+              iteration: 1,
+              name: 'the archive',
+              selection: {
+                iteration: 1,
+                consumer: { series: 'call-a', attempt: 1 },
+                reason: 'top-N',
+                wireName: 'archive',
+              },
+            },
+          ],
+          groups: [
+            { group: '0', callables: [1] },
+            { group: '1', callables: [2] },
+          ],
+        },
+      },
+      undefined,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (ref, callable, label) =>
+        ref.series === 'call-a' && callable === 2 && label === 'the archive',
+    );
+    expect(result.reasons[0]?.witness).toHaveLength(2);
+    expect(
+      standingLineOf(assessmentDataOf(result), [], false, standingFactsOf(result, new Map())),
+    ).toBe('Not sure — ' + offered + ', and a request left out the archive.');
+  });
+
   it('bounds distinct display names without discarding evidence rows', () => {
     const offers = ['zones', 'storage', 'capacity', 'arrays', 'storage'].map((name, callable) => ({
       group: '0',
@@ -161,12 +205,25 @@ describe('recorded source consultation', () => {
       iteration: 1,
       consumer: { series: 'call-a', attempt: 1 },
       reason: 'ledger',
+      wireName: 'archive',
     };
     const omission = { group: '0', callable: 2, iteration: 1, name: 'archive', selection };
     const state = (row: object) => ({
       sourceConsultation: { ...receipt, offers: [], omissions: [row] },
     });
-    expect(assess(state(omission)).reasons[0]?.detail).toEqual({ unavailableTools: ['archive'] });
+    expect(assess(state(omission)).reasons).toEqual([]);
+    const withReceipt = (row: object) =>
+      foldState(
+        state(row),
+        undefined,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => true,
+      );
+    expect(withReceipt(omission).reasons[0]?.detail).toEqual({ unavailableTools: ['archive'] });
     for (const row of [
       { ...omission, iteration: 2 },
       { ...omission, selection: undefined },
@@ -179,7 +236,7 @@ describe('recorded source consultation', () => {
         },
       },
     ])
-      expect(assess(state(row)).reasons).toEqual([]);
+      expect(withReceipt(row).reasons).toEqual([]);
     expect(assess({ sourceConsultation: { ...receipt, omissions: [omission] } })).toEqual(
       assess({ sourceConsultation: receipt }),
     );

@@ -1,3 +1,4 @@
+import type { OmissionCheck } from './sourceOmission.js';
 import type { TypedScope } from 'footprintjs';
 import { readOwnList } from '../../../lib/boundedJson.js';
 import { type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
@@ -27,6 +28,7 @@ type RecordedGroup = {
 type SelectionWitness = {
   readonly iteration: number;
   readonly consumer: AcceptedToolSelection['consumer'];
+  readonly wireName: string;
   readonly reason: 'top-N' | 'ledger' | 'skill-scope';
 };
 
@@ -289,7 +291,26 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
     scope.sourceConsultation = record;
   }
 
+  // Resolve the accepted occurrence from this invocation's original selection bank.
+  const checksOmission: OmissionCheck = (ref, callable, label) => {
+    const accepted = omissions.get(ref.wireName);
+    const tool = bindings.get(ref.wireName);
+    return (
+      complete &&
+      accepted !== undefined &&
+      tool !== undefined &&
+      !ambiguous.has(ref.wireName) &&
+      indexed.get(tool) === callable &&
+      accepted.iteration === ref.iteration &&
+      accepted.consumer.series === ref.series &&
+      accepted.consumer.attempt === ref.attempt &&
+      accepted.reason === ref.reason &&
+      readDisplayName(Object.getOwnPropertyDescriptor(tool, 'displayName')?.value) === label
+    );
+  };
+
   return {
+    checksOmission,
     capture(
       scope: Scope,
       request: LLMRequest,
@@ -371,6 +392,7 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
             iteration: proof.iteration,
             consumer: proof.consumer,
             reason: row.kind,
+            wireName: row.name,
           });
         recorded = true;
       }

@@ -1,3 +1,4 @@
+import { omissionReference, type OmissionCheck } from '../../honesty/sourceOmission.js';
 import { readOwnList } from '../../../../lib/boundedJson.js';
 import { readCallOccurrenceKey } from '../../../../lib/callOccurrence.js';
 import { MAX_DISPLAY_NAME_CHARS, readDisplayName } from '../../../../lib/displayName.js';
@@ -72,37 +73,12 @@ function uncheckedGroups(
   return groups;
 }
 
-/** A retained omission refers to the accepted call that recorded the selection decision. */
-function hasSelectionWitness(row: object): boolean {
-  const selection = field(row, 'selection');
-  if (!isRecord(selection)) return false;
-  const iteration = field(selection, 'iteration');
-  const consumer = field(selection, 'consumer');
-  const reason = field(selection, 'reason');
-  if (
-    !isCallableId(iteration) ||
-    iteration < 1 ||
-    iteration !== field(row, 'iteration') ||
-    !isRecord(consumer)
-  )
-    return false;
-  const series = field(consumer, 'series');
-  const attempt = field(consumer, 'attempt');
-  return (
-    typeof series === 'string' &&
-    series.length > 0 &&
-    !isPlaceholder(series) &&
-    isCallableId(attempt) &&
-    attempt > 0 &&
-    (reason === 'top-N' || reason === 'ledger' || reason === 'skill-scope')
-  );
-}
-
 /** Read proven offers and omissions for declared sources with no eligible attempt. */
 export function readSourceConsultation(
   state: Readonly<Record<string, unknown>>,
   g: Gathered,
   retain: RetainedReasonState,
+  checkOmission?: OmissionCheck,
 ): AssessmentReasonDetail | undefined {
   // The optional key's absence or withholding leaves this check silent without
   // recording an unavailable input for the rest of the assessment.
@@ -150,7 +126,7 @@ export function readSourceConsultation(
     const names = new Set<string>();
     let fired = false;
     for (const [index, offer] of rows.entries()) {
-      if (!isRecord(offer) || (channel === 'omissions' && !hasSelectionWitness(offer))) continue;
+      if (!isRecord(offer)) continue;
       const group = field(offer, 'group');
       const callable = field(offer, 'callable');
       if (!isGroupId(group) || !isCallableId(callable) || !unchecked.get(group)?.has(callable))
@@ -166,6 +142,14 @@ export function readSourceConsultation(
           readDisplayName(name) !== name)
       )
         continue;
+      if (channel === 'omissions') {
+        const reference = omissionReference(offer);
+        if (
+          !reference ||
+          !checkOmission?.(reference, callable, typeof name === 'string' ? name : undefined)
+        )
+          continue;
+      }
       const callables = witnessed.get(group) ?? new Set<number>();
       if (callables.has(callable)) continue;
       if (
@@ -191,24 +175,26 @@ export function readSourceConsultation(
   );
   if (!offered?.length && unavailable === undefined) return undefined;
   return {
-    ...(offered?.length && { unusedTools: offered }),
+    ...(offered !== undefined && { unusedTools: offered }),
     ...(unavailable !== undefined && { unavailableTools: unavailable }),
   };
 }
 
 /** Only app-declared display names may appear in the standing line. */
 export function sourceConsultationClause(
-  names: readonly string[],
+  names: readonly string[] | undefined,
   unavailable?: readonly string[],
 ): string {
-  const offeredClause = names.length
+  const offeredClause = names?.length
     ? `the run left declared ground unchecked after it was offered ${names.join(', ')}`
     : 'the run left a declared source unchecked';
   if (unavailable !== undefined) {
     const unavailableClause = unavailable.length
       ? `a request left out ${unavailable.join(', ')}`
       : 'a request left out a tool for that source';
-    return names.length
+    if (names?.length === 0)
+      return `the run left an offered source unchecked, and ${unavailableClause}`;
+    return names?.length
       ? `${offeredClause}, and ${unavailableClause}`
       : `the run left declared ground unchecked after ${unavailableClause}`;
   }

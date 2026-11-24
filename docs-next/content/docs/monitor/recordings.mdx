@@ -550,6 +550,10 @@ Use `displayName` on a tool to let the prose warning refer to it in the app's
 words. The reason also travels in the saved assessment as
 `source-not-consulted`. A request without a manifest leaves the offers for that
 request unknown. The check preserves earlier proved offers within the turn.
+On replay, a warning about an omitted tool needs the matching accepted request
+in the commit log. A checkpoint alone cannot establish that omission. If an
+independent source was offered without a display name, the answer still mentions
+the offer alongside the omission.
 
 <CodeFile path="examples/features/130-source-not-consulted.ts" region="source-not-consulted" title="A skipped link monitor appears in the answer warning" />
 
