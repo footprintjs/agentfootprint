@@ -854,7 +854,7 @@ export function buildCallLLMStage(
     if (typeof response.usage.cacheRead === 'number') {
       scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
     }
-    const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
+    const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, serving, {
       localFallback,
       answeredBy,
       findingsRequest: acceptedFindingsRequest,

@@ -14,8 +14,8 @@ const LIMIT_KEYS = Object.keys(DEFAULT_READER_LIMITS) as (keyof typeof DEFAULT_R
 export function storedCauseOptions(
   value: ReadStoredCauseOptions,
 ): Required<Pick<ReadStoredCauseOptions, 'runId' | 'maxBytes' | 'readerLimits'>> &
-  Pick<ReadStoredCauseOptions, 'signal'> {
-  const data = ownData(value, ['runId', 'readerLimits', 'maxBytes', 'signal']);
+  Pick<ReadStoredCauseOptions, 'signal' | 'sourceLinkPolicy'> {
+  const data = ownData(value, ['runId', 'readerLimits', 'maxBytes', 'signal', 'sourceLinkPolicy']);
   if (typeof data.runId !== 'string' || data.runId.length === 0 || data.runId.length > 128)
     throw Error('Invalid stored cause options.');
   const maxBytes = data.maxBytes === undefined ? 1024 * 1024 : data.maxBytes;
@@ -44,11 +44,17 @@ export function storedCauseOptions(
   const signal = data.signal;
   if (signal !== undefined && !(signal instanceof AbortSignal))
     throw Error('Invalid stored cause options.');
+  const sourceLinkPolicy = data.sourceLinkPolicy;
+  if (sourceLinkPolicy !== undefined && typeof sourceLinkPolicy !== 'function')
+    throw Error('Invalid stored cause options.');
   return {
     runId: data.runId,
     maxBytes: maxBytes as number,
     readerLimits: limits,
     ...(signal !== undefined && { signal: signal as AbortSignal }),
+    ...(sourceLinkPolicy !== undefined && {
+      sourceLinkPolicy: sourceLinkPolicy as NonNullable<ReadStoredCauseOptions['sourceLinkPolicy']>,
+    }),
   };
 }
 

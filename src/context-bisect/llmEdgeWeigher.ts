@@ -145,7 +145,11 @@ function cap(text: string, maxChars: number): string {
  * Keys a step commits that are BOOKKEEPING ABOUT the step rather than output
  * FROM it. They are skipped by {@link stepOutputText} — see the note there.
  */
-const NOT_OUTPUT_KEYS: ReadonlySet<string> = new Set([RECEIPT_KEY, 'sourceLinkServedRows']);
+const NOT_OUTPUT_KEYS: ReadonlySet<string> = new Set([
+  RECEIPT_KEY,
+  'sourceLinkServedRows',
+  'sourceLinkConsumer',
+]);
 
 /**
  * Default child text: everything the step committed, `key=value` in trace
@@ -159,8 +163,8 @@ const NOT_OUTPUT_KEYS: ReadonlySet<string> = new Set([RECEIPT_KEY, 'sourceLinkSe
  * less room for the assistant's actual words — measured, that alone reordered
  * the localizer's suspects and demoted a planted fact below a tool. A text
  * corpus scored by an embedder must contain only text somebody wrote.
- * The served rows are likewise positions in the request, so they stay out
- * of the output text while remaining available in the commit log.
+ * Served rows and consumer references describe the request boundary. They
+ * stay out of the output text and remain available in the commit log.
  */
 export function stepOutputText(
   commitLog: readonly CommitBundle[],

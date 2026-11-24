@@ -2,6 +2,17 @@
 
 ## Not covered
 
+- Source links are produced in the flat chart only. A grouped run's record
+  carries no source-link channel.
+- Source links for an argument's declared source wait for cross-scope support
+  because its check, default fill, or kept-answer reuse runs in the inputs sub-flow.
+- An Agent chart mounted directly in an engine host records served rows only.
+  Witnesses require AgentFootprint's own run and its native privacy policy.
+- A row whose checked output write cannot be determined yields no source link or gap.
+- A collected source-link channel is partial when the shared scope replay
+  reaches its allowance. It keeps the bound links and reports
+  `budget-exhausted`, even when the reader could not finish the first link.
+
 - **A host-built record's top-level lists.** The lists ON a row go through
   `rowList`. The record's own keys — `history`, `findingsLedger`,
   `coverageDeclared`, `answerValidation.checks`, `middlewareDecisions` (and the

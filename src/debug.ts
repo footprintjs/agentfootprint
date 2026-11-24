@@ -102,6 +102,7 @@ export {
   traceToolpack,
   traceCauseTools,
   readStoredCauseArtifacts,
+  sourceLinksOf,
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
   type TraceCauseArtifacts,

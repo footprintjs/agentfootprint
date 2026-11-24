@@ -60,6 +60,7 @@
     [15, [
       [["receipt"], "object"],
       [["sourceLinkServedRows"], "array", 1],
+      [["sourceLinkConsumer"], "object"],
       [["llmLatestToolCalls"], "array", 1]
     ]],
     [19, [
