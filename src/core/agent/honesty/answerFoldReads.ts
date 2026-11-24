@@ -2,6 +2,7 @@
 export type AnswerFoldKey =
   | 'history'
   | 'turnNumber'
+  | 'iteration'
   | 'pausedToolCallId'
   | 'findingsLedger'
   | 'coverageDeclared'
@@ -59,6 +60,7 @@ export type AnswerFoldKey =
 export function answerFoldReads(arms: {
   readonly tools: boolean;
   readonly resultLimits?: boolean;
+  readonly retrieval?: boolean;
   readonly evidenceGate: boolean;
   readonly answerValidation: boolean;
   readonly inputs: boolean;
@@ -67,6 +69,7 @@ export function answerFoldReads(arms: {
   return [
     'history',
     'turnNumber',
+    ...(arms.retrieval ? (['iteration'] as const) : []),
     'pausedToolCallId',
     'findingsLedger',
     'stoppedEarly',

@@ -41,3 +41,24 @@ and the truncated digest can be ambiguous.
 - `servedRow.ts` — the value-free ranges of whole retained history entries
   offered at the provider port. The call stage writes at most one row next to
   its receipt. The row's consumer is the native attempt series.
+
+## Tools left out of a call
+
+An accepted request can add `toolSelection` to its receipt. The attempt's
+`consumer` identifies the call. Each `absent` row contains a visible tool name
+and the selection decision that excluded it. A `shadowed` row identifies a visible
+competing implementation by its position in this request’s list, in merge order.
+`name` was offered, `wonBy` identifies the winning channel and `lostBy` the losing
+channel. Two distinct implementations from the same channel can have identical rows.
+When a decision tree withholds its read_skill menu, `skillCatalog` contains the
+visible names left out of that menu, their retained count and the reason
+`tree-routed`. A routed skill may still contribute instructions. A visible
+off-route ID offered in the enum has no catalog omission. The skill rows
+share the same turn budget and accepted-request witness as the tool rows.
+These positions apply to one request. A `bounded` flag means the saved
+list is incomplete. An absent field leaves the tool selection unknown.
+
+The recorder retains up to 1,024 omission rows per user turn. A new question
+starts a fresh allowance. When restoring an interrupted turn on another executor, the
+checkpoint does not prove how many rows remain. The recorder leaves selection
+evidence out of subsequent receipts while that allowance is unknown.

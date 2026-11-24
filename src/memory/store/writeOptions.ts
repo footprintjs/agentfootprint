@@ -273,6 +273,7 @@ export function bindWriteOptions(store: MemoryStore, config: BoundMemoryOptions)
     const scope = boundScope(config, identity, 'this search');
     return scope === undefined ? options : { ...options, namespaceScope: scope };
   };
+  const aware = store as Required<Pick<MemoryStore, 'searchWithOutcome' | 'listWithOutcome'>>;
   const bound: MemoryStore = {
     ...(store.supportsVectorSearch !== undefined && {
       supportsVectorSearch: store.supportsVectorSearch,
@@ -300,12 +301,23 @@ export function bindWriteOptions(store: MemoryStore, config: BoundMemoryOptions)
       own?: MemoryWriteOptions,
     ) => store.putIfVersion(identity, entry, expectedVersion, resolve(identity, own)),
     list: <T>(identity: MemoryIdentity, options?: ListOptions) => store.list<T>(identity, options),
+    ...(store.listWithOutcome !== undefined && {
+      listWithOutcome: <T>(identity: MemoryIdentity, options?: ListOptions) =>
+        aware.listWithOutcome<T>(identity, options),
+    }),
     delete: (identity, id) => store.delete(identity, id),
     seen: (identity, signature) => store.seen(identity, signature),
     recordSignature: (identity, signature) => store.recordSignature(identity, signature),
     feedback: (identity, id, usefulness) => store.feedback(identity, id, usefulness),
     getFeedback: (identity, id) => store.getFeedback(identity, id),
     forget: (identity) => store.forget(identity),
+    ...(store.searchWithOutcome !== undefined && {
+      searchWithOutcome: async <T>(
+        identity: MemoryIdentity,
+        query: readonly number[],
+        options?: SearchOptions,
+      ) => aware.searchWithOutcome<T>(identity, query, readOptions(identity, options)),
+    }),
     // Present exactly when the store's is: `if (store.search)` is how callers
     // feature-detect it, so the bound store must not grow or lose one.
     ...(store.search !== undefined && {

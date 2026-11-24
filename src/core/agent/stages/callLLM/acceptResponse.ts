@@ -3,7 +3,8 @@ import { groundedTextOf } from './groundedText.js';
 import type { TypedScope } from 'footprintjs';
 import { callOccurrenceField } from '../../../../lib/callOccurrence.js';
 import { typedEmit } from '../../../../recorders/core/typedEmit.js';
-import { wireViolationsOf } from '../../../../integrity/invariant-violation/wire.js';
+import { recordWireFindings } from './recordWireFindings.js';
+import { recordToolSelection } from './recordToolSelection.js';
 import {
   declaredEnumValuesOf,
   unsupportedArgumentsOf,
@@ -48,9 +49,16 @@ export async function acceptResponse(
     llmRequest,
     startMs,
     messages,
+    selection,
   } = prepared;
-  const { response, answeredBy, localFallback, acceptedFindingsRequest, acceptedProjection } =
-    executed;
+  const {
+    response,
+    answeredBy,
+    localFallback,
+    acceptedFindingsRequest,
+    acceptedProjection,
+    recall,
+  } = executed;
   // Preserve the pending carrier if the provider fails, so crash recovery
   // retries the same instruction. The prior committed value proves delivery.
   if (recoveryPiece !== undefined) scope.evidenceRecoveryUsed = true;
@@ -79,6 +87,8 @@ export async function acceptResponse(
     scope.findingsRequest =
       acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
   scope.llmLatestContent = response.content;
+  if (recall !== undefined)
+    deps.recallRequests?.(scope, iteration, recall.summary(localFallback ? 'local' : 'provider'));
   deps.onResponseCommitted?.();
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
@@ -129,41 +139,7 @@ export async function acceptResponse(
     durationMs,
   });
 
-  // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
-  // this reads what the ADAPTER says actually crossed — the manifest read
-  // back from the serialized body — against the schemas this very call
-  // assembled. The recorded defect lived exactly in that gap: a clean
-  // frame, four retained schemas on the wire. No manifest stated → the
-  // call is incomparable and nothing is guessed. Same seen-list rail as
-  // the compose backstop, freshest copy first, so one defect files once
-  // per run however many calls re-detect it.
-  // The composed side is llmRequest — the exact object HANDED TO the
-  // adapter, after the cache strategy's transform — so a strategy edit
-  // is never blamed on the adapter.
-  const wireFindings = wireViolationsOf(
-    {
-      names: (llmRequest.tools ?? []).map((t) => t.name),
-      provenance: 'callLLM (assembled request)',
-    },
-    response.wireManifest === undefined
-      ? undefined
-      : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
-    iteration,
-  );
-  // The disposition: a provider stating no manifest leaves this call
-  // UNREACHABLE — the check could not see the wire, which is a different
-  // fact from "the wire was clean", and the ledger keeps them apart.
-  deps.integrityLedger?.current?.note(
-    'invariant-violation',
-    'wire',
-    response.wireManifest === undefined
-      ? 'unreachable'
-      : wireFindings.length > 0
-      ? 'checked-fail'
-      : 'checked-pass',
-    wireFindings.length > 0 ? Date.now() : undefined,
-  );
-  fileIntegrityFindings(scope, wireFindings, iteration, deps.integrityLedger);
+  recordWireFindings(scope, llmRequest, response, answeredBy, iteration, deps);
 
   // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
   // asks what the library put in front of the model; this asks what the
@@ -336,4 +312,7 @@ export async function acceptResponse(
 
   // Attribute the successful response to its actual selected transport/model.
   emitCostTick(scope, deps.pricingTable, deps.costBudget, answeredBy, response.usage);
+  const selected = localFallback ? undefined : selection?.accept(response);
+  if (selected && deps.servedTools && deps.canRecordToolSelection?.())
+    recordToolSelection(scope, selected, deps.servedTools);
 }

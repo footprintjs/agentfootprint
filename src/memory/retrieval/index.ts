@@ -7,6 +7,7 @@
  */
 export type {
   RetrievalEvidence,
+  RetrievalRecording,
   RetrievalRejectReason,
   RetrievalStrategy,
   RetrievalVerdict,
@@ -15,3 +16,8 @@ export type {
 } from './types.js';
 export { topK, type TopKOptions } from './topK.js';
 export { chunkProvenance, chunkText, type ChunkProvenance } from './provenance.js';
+export type {
+  MemoryRecallCandidate,
+  MemoryRecallExclusionReason,
+  MemoryRecallOutcome,
+} from './outcome.js';

@@ -280,6 +280,10 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
 const HOST_ZONE = [
   `${IE}/SkillRegistry.ts`,
   `${IE}/buildInjectionEngineSubflow.ts`,
+  // The native Evaluate stage projects its recorder payload here. Neither
+  // module is part of the standalone skill-graph host contract.
+  `${IE}/evaluationCatalog.ts`,
+  `${IE}/routingEntries.ts`,
   `${IE}/devWarnHost.ts`,
   `${IE}/index.ts`,
   `${IE}/leases.ts`,

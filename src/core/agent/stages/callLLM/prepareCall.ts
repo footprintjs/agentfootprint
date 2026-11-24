@@ -2,6 +2,7 @@ import { projectSourceInstructions } from '../../sourceContract.js';
 import { recordModelContext } from '../../../../recorders/core/recordModelContext.js';
 import type { CallLLMStageDeps } from './types.js';
 import { servedRequestRecorder } from './servedRequest.js';
+import { selectionAtRequest } from './selectionAtRequest.js';
 import type { TypedScope } from 'footprintjs';
 import { iterationsRemainingOf } from '../../../../lib/iterationBudget.js';
 import type { LLMMessage, LLMToolSchema } from '../../../../provider-contract/types.js';
@@ -36,6 +37,7 @@ import type { AgentState } from '../../types.js';
 const EMPTY_TOOL_SCHEMAS: readonly LLMToolSchema[] = Object.freeze([]);
 
 export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMStageDeps) {
+  if (deps.servedTools?.selection?.accepted) delete deps.servedTools.selection.accepted;
   // The answer-text scanner (`findings/peel.ts`), loaded ONCE per call and
   // only under `.findings()` — the optional-family law of docs-next's site
   // budget: an unarmed agent never loads the module. Every armed use below
@@ -323,6 +325,9 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     continuing,
   );
   const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+  const selection =
+    deps.servedTools?.selection &&
+    selectionAtRequest(deps, iteration, scope.$attempt?.(), baseRequest, withheld !== null);
   const serving =
     deps.recordReceipt === false
       ? undefined
@@ -488,6 +493,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
   return {
     peel,
     systemPromptInjections,
+    systemPieces,
     iteration,
     provider,
     model,
@@ -503,6 +509,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     wireMessages,
     replayFrames,
     detached,
+    selection,
     serving,
     llmRequest,
     startMs,

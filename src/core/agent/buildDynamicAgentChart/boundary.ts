@@ -1,8 +1,13 @@
 import type { AgentChartDeps } from '../buildAgentChart.js';
-import { memoryInjectionKey } from '../../../memory/define.types.js';
+import {
+  memoryInjectionKey,
+  memoryRecallOutcomesKey,
+  retrievalEvidenceKey,
+} from '../../../memory/define.types.js';
 import { integrityRail, integrityRailInto } from '../integrityFindings.js';
 import { llmCallReadsInto } from '../llmCallReads.js';
 import { responseStopFields } from '../honesty/responseStop.js';
+import { retrievalFindingsOf } from '../honesty/retrievalRequests.js';
 import { failFastRecordOf } from '../../../reliability/failFastRecord.js';
 import { interventionRecordOf } from '../../providerIntervention.js';
 
@@ -16,6 +21,10 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
       for (const m of deps.memories) {
         const key = memoryInjectionKey(m.id);
         memoryKeys[key] = p[key];
+        const evidence = retrievalEvidenceKey(m.id);
+        if (p[evidence] !== undefined) memoryKeys[evidence] = p[evidence];
+        const outcomes = memoryRecallOutcomesKey(m.id);
+        if (p[outcomes] !== undefined) memoryKeys[outcomes] = p[outcomes];
       }
       return {
         // Read-only working inputs (stages read, never write these).
@@ -136,6 +145,7 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
         ...(p.resolvedInstructions !== undefined && {
           resolvedInstructions: p.resolvedInstructions,
         }),
+        ...(deps.memories.length > 0 && { turnNumber: p.turnNumber }),
         ...memoryKeys,
         // Cross-iteration accumulators under prior* aliases — frozen
         // here, copied to writable working keys by dynamicTurnSeed.
@@ -155,9 +165,10 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
         priorSkillHistory: p.skillHistory,
       };
     },
-    output: (sf: Record<string, unknown>) => {
+    output: (sf: Record<string, unknown>, parent: Record<string, unknown>) => {
       const s = sf as Record<string, unknown>;
       return {
+        ...retrievalFindingsOf(s, parent as Record<string, unknown>),
         // LLM result the outer Route / tool-calls / final read.
         llmLatestContent: s.llmLatestContent,
         llmLatestToolCalls: s.llmLatestToolCalls,

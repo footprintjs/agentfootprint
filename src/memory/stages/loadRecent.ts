@@ -25,6 +25,9 @@ import type { MemoryStore } from '../store/index.js';
 import type { MemoryEntry } from '../entry/index.js';
 import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
+import { identityNamespace } from '../identity/index.js';
+import { recallOutcome, recallTimeout } from '../retrieval/outcome.js';
+import { readMemoryList } from '../store/readOutcome.js';
 
 export interface LoadRecentConfig {
   /** The store to read from. */
@@ -59,15 +62,29 @@ export function loadRecent(config: LoadRecentConfig) {
 
   return async (scope: TypedScope<MemoryState>): Promise<void> => {
     const identity = scope.identity;
-    const entries: readonly MemoryEntry<Message>[] =
-      count === 0
-        ? []
-        : (
-            await config.store.list<Message>(identity, {
-              limit: count,
-              ...(config.tiers && { tiers: config.tiers }),
-            })
-          ).entries;
+    let entries: readonly MemoryEntry<Message>[] = [];
+    if (count !== 0) {
+      const namespace = identityNamespace(identity);
+      const read = await readMemoryList<Message>(
+        config.store,
+        identity,
+        {
+          limit: count,
+          ...(config.tiers && { tiers: config.tiers }),
+        },
+        scope.$getEnv?.()?.signal,
+      );
+      const outcome = read.ok
+        ? recallOutcome(
+            scope.turnNumber,
+            namespace,
+            read.value.entries.map((entry, i) => ({ id: entry.id, order: i + 1, admitted: true })),
+            read.value.cursor === undefined,
+          )
+        : recallTimeout(scope.turnNumber, namespace);
+      scope.recallOutcomes = [...(scope.recallOutcomes ?? []), outcome];
+      if (read.ok) entries = read.value.entries;
+    }
 
     // Store returns most-recently-updated first (see InMemoryStore.list).
     // Chat consumers want oldest-first for natural reading order, so
