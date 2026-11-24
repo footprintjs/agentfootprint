@@ -119,6 +119,22 @@ export function standingLineSaid(
   return !LEFT_UNSAID[when].includes(standing);
 }
 
+/** `raiseOn` narrows eligibility for a not-sure line and leaves its clauses intact. */
+export function standingLineDisposition(
+  when: StandingLineWhen | undefined,
+  assessed: AnswerAssessment,
+  raiseOn?: readonly AssessmentReason[],
+): 'off' | 'omitted-by-raise-on' | 'show' {
+  if (when === undefined || !standingLineSaid(when, assessed.standing)) return 'off';
+  if (
+    raiseOn !== undefined &&
+    assessed.standing === 'not-sure' &&
+    !assessed.reasons.some(({ reason }) => raiseOn.includes(reason))
+  )
+    return 'omitted-by-raise-on';
+  return 'show';
+}
+
 /**
  * The line's first words, one per standing — the owner's words. They are
  * plain words a model can write too, so a reader of the answer text never

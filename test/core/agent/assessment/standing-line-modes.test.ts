@@ -43,12 +43,21 @@ import {
   STANDING_LINE_OPENINGS,
   type StandingLineWhen,
 } from '../../../../src/core/agent/assessment/compose.js';
-import type { AnswerAssessment } from '../../../../src/core/agent/assessment/types.js';
+import type {
+  AnswerAssessment,
+  AssessmentReason,
+} from '../../../../src/core/agent/assessment/types.js';
+import { REDACTION_MARKER_ID } from '../../../../src/redaction/marker.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
 type Standing = AnswerAssessment['standing'];
-type LineOption = boolean | { readonly when: StandingLineWhen };
+type LineOption =
+  | boolean
+  | {
+      readonly when: StandingLineWhen;
+      readonly raiseOn?: readonly AssessmentReason[];
+    };
 
 const MODES: readonly StandingLineWhen[] = ['always', 'unless-consistent', 'not-sure-or-ask'];
 const STANDINGS: readonly Standing[] = ['known', 'consistent', 'not-sure', 'ask', 'not-assessed'];
@@ -103,7 +112,14 @@ const SCENE_NAMES = Object.keys(SCENES) as Scene[];
 function agentFor(
   scene: Scene,
   line: LineOption | undefined,
-  extra: { limits?: boolean; execute?: () => unknown; store?: InMemoryStore } = {},
+  extra: {
+    limits?: boolean;
+    execute?: () => unknown;
+    store?: InMemoryStore;
+    door?: 'builder' | 'options';
+    answer?: string;
+    evidence?: boolean;
+  } = {},
 ): Agent {
   const s = SCENES[scene];
   let b = Agent.create({
@@ -112,12 +128,16 @@ function agentFor(
         ...(s.calls
           ? [{ toolCalls: [{ id: 'c1', name: 'list_ports', args: { switch: 'A' } }] }]
           : []),
-        { content: s.answer },
+        { content: extra.answer ?? s.answer },
       ] as never,
     }),
     model: 'mock',
+    ...(extra.door === 'options' && {
+      answerLayer: line === undefined ? true : { standingLine: line },
+    }),
   }).tool(ports(extra.execute ?? s.execute));
   if (extra.limits === true) b = b.limitsTravelWithTheAnswer();
+  if (extra.evidence === true) b = b.namesAndNumbersFromEvidence({});
   if (extra.store !== undefined) {
     b = b.memory(
       defineMemory({
@@ -128,6 +148,7 @@ function agentFor(
       }),
     );
   }
+  if (extra.door === 'options') return b.build();
   return (line === undefined ? b.answerLayer() : b.answerLayer({ standingLine: line })).build();
 }
 
@@ -248,6 +269,88 @@ describe('BOUNDARY — `true` is "always", byte for byte', () => {
   }
 });
 
+describe('SCENARIO — a reason selection controls the warning only', () => {
+  it.each(['builder', 'options'] as const)(
+    'keeps assessment data and limits through %s',
+    async (door) => {
+      const extra = {
+        door,
+        limits: true,
+        execute: () => coverage([], { notChecked: ['switch B'] }),
+      };
+      const always = await runOnce(agentFor('not-sure', true, extra));
+      const match = await runOnce(
+        agentFor('not-sure', { when: 'always', raiseOn: ['coverage-gap'] }, extra),
+      );
+      const quiet = await runOnce(
+        agentFor('not-sure', { when: 'always', raiseOn: ['missing-column'] }, extra),
+      );
+      const dataOnly = await runOnce(agentFor('not-sure', false, extra));
+      expect(always.assessed[0]).toMatchObject({
+        standing: 'not-sure',
+        reasons: ['coverage-gap', 'declared-absent'],
+      });
+      expect(match.text).toBe(always.text);
+      expect(match.turnEnd).not.toHaveProperty('standingLineOmittedByRaiseOn');
+      expect(quiet.text).toBe(dataOnly.text);
+      expect(quiet.text).toContain('Coverage of this answer');
+      expect(quiet.turnEnd.standingLineOmittedByRaiseOn).toBe(true);
+      expect(quiet.turnEnd.finalContent).toBe(quiet.text);
+      expect(quiet.agent.checkpoint()?.history.at(-1)?.content).toBe(quiet.text);
+      expect(quiet.assessed).toEqual(always.assessed);
+      expect(quiet.turnEnd.answerAssessment).toEqual(always.turnEnd.answerAssessment);
+      expect(assessmentDataOf(assessAnswer(quiet.recording))).toEqual(
+        always.turnEnd.answerAssessment,
+      );
+    },
+  );
+
+  it('a selected check reason keeps the full line even if the caller changes its list', async () => {
+    const extra = {
+      evidence: true,
+      answer: 'Port srv-4417 is down.',
+      execute: () => coverage([{ port: 3 }], { notChecked: ['switch B'] }),
+    };
+    const raiseOn: AssessmentReason[] = ['value-unsupported'];
+    const agent = agentFor('not-sure', { when: 'always', raiseOn }, extra);
+    raiseOn[0] = 'missing-column';
+    const selected = await runOnce(agent);
+    const full = await runOnce(agentFor('not-sure', true, extra));
+    expect(selected.assessed[0]?.reasons).toEqual(
+      expect.arrayContaining(['value-unsupported', 'coverage-gap']),
+    );
+    expect(selected.text).toBe(full.text);
+    expect(selected.text).toContain(STANDING_LINE_OPENINGS['not-sure']);
+    expect(selected.turnEnd).not.toHaveProperty('standingLineOmittedByRaiseOn');
+  });
+
+  it('keeps the model’s warning-shaped tail when the library suppressed its line', async () => {
+    const always = await runOnce(agentFor('not-sure', true));
+    const modelText = always.text;
+    const suppressed = await runOnce(
+      agentFor('not-sure', { when: 'always', raiseOn: [] }, { answer: modelText }),
+    );
+    expect(suppressed.text).toBe(modelText);
+    expect(accountForAnswer(suppressed.recording).answer.value).toBe(modelText);
+    const recordings = ['redacted', 'malformed', 'legacy'] as const;
+    for (const kind of recordings) {
+      const recording = structuredClone(suppressed.recording);
+      const payload = recording.events.find(({ type }) => type === 'agentfootprint.agent.turn_end')!
+        .payload as unknown as Record<string, unknown>;
+      if (kind === 'legacy') delete payload.standingLineOmittedByRaiseOn;
+      else if (kind === 'malformed') payload.standingLineOmittedByRaiseOn = null;
+      else {
+        const snapshot = recording.snapshot as { recorders: { id: string }[] };
+        snapshot.recorders.push({ id: REDACTION_MARKER_ID });
+        payload.standingLineOmittedByRaiseOn = '[REDACTED]';
+      }
+      expect(accountForAnswer(recording).answer.value).toBe(
+        kind === 'legacy' ? SCENES['not-sure'].answer : modelText,
+      );
+    }
+  });
+});
+
 describe('BOUNDARY — the limits block is independent of the mode', () => {
   const declaring = () => coverage([{ port: 'eth1/7', state: 'down' }], { checked: ['switch A'] });
 
@@ -296,6 +399,19 @@ describe('BOUNDARY — both option doors refuse what is not a mode', () => {
       expect(build('always', door)).toThrow(/standingLine must be a boolean or \{ when \}/);
       expect(build(['always'], door)).toThrow(/standingLine must be a boolean or \{ when \}/);
       for (const when of MODES) expect(build({ when }, door)).not.toThrow();
+    });
+
+    it(`${door}: validates each reason in a bounded list`, () => {
+      for (const raiseOn of [
+        null,
+        'coverage-gap',
+        ['unknown'],
+        [undefined],
+        Array(1000).fill('coverage-gap'),
+      ]) {
+        expect(build({ when: 'always', raiseOn }, door)).toThrow(/standingLine\.raiseOn/);
+      }
+      expect(build({ when: 'always', raiseOn: [] }, door)).not.toThrow();
     });
   }
 

@@ -50,6 +50,9 @@ export interface HonestyState {
    * `answerStandingLine`.
    */
   answerStandingNames?: Readonly<Record<string, string>>;
+
+  /** The opt-in reason filter omitted this turn's otherwise eligible standing line. */
+  answerStandingLineOmittedByRaiseOn?: true;
   /**
    * What the inputs layer (honesty layer 2) hands ToolCalls for the batch it
    * resolved — per call, the declared defaults to FILL, or the sentence the
