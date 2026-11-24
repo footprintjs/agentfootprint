@@ -195,6 +195,15 @@ export async function run(): Promise<void> {
         `${view.messages.requestOnly.length > 0 ? `, ${view.messages.requestOnly.length} request-only` : ''})`,
     );
     console.log(`   tools         ${view.tools.names.join(', ') || '(none)'}`);
+    // #region omitted-tools
+    const selection = receipt.toolSelection;
+    if (selection) {
+      for (const { name, reason } of selection.absent) {
+        console.log(`   omitted       ${name} (${reason})`);
+      }
+      if (selection.bounded) console.log('   additional exclusions could not be retained');
+    }
+    // #endregion omitted-tools
     const measurement: RequestMeasurement | undefined = receipt.requestMeasurement;
     if (measurement?.status !== 'measured') {
       throw new Error(`Expected this plain mock request to be measurable: ${measurement?.reason}`);

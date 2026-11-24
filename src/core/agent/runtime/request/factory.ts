@@ -36,6 +36,13 @@ export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
       servedTools: run.value.servedTools,
+      ...(environment.configuration.recordReceiptValue !== false &&
+        run.own && {
+          canRecordToolSelection: () => {
+            const policy = run.value.redaction;
+            return policy?.coverage.state === 'declared-none' && !policy.serving.active();
+          },
+        }),
       onResponseCommitted: () => {
         run.value.modelResponseCommitted = true;
       },

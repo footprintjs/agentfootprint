@@ -36,8 +36,11 @@ call that accepted the response. It retains the implementation privately when
 the prepared catalog survives to the observed attempt and the adapter reports
 that the name was absent. A winner still offered under the same name requires
 separate collision evidence. A local fallback, missing manifest, altered observed tool
-contract, or reused response object supplies no witness. Saved replay and
-answer relevance require their own evidence.
+contract, or reused response object supplies no witness. On a receipt-enabled native turn with no active redaction,
+`recordToolSelection.ts` adds visible names and reasons to that call's receipt.
+It shares one row budget across the turn. Unknown capacity on recovery
+withholds the annotation. Deciding whether a source mattered to the answer
+requires separate evidence of its declared ground and later use.
 
 `liveChunks.ts` emits an attempt's thinking and visible text in provider order.
 It applies the served-event redaction policy. Calls that protect draft output

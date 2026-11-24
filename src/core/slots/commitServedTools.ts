@@ -14,6 +14,8 @@ import {
  * closes uniqueness fallback; a later positive wire still proves its names.
  */
 export interface ServedToolParties {
+  /** Remaining names that may be recorded this turn. Unknown after an unaccounted resume. */
+  remainingToolOmissions?: number;
   /** Saved wire membership is closed until a fresh Compose replaces it. */
   restored?: true;
   truncated?: true;
@@ -52,9 +54,13 @@ interface CollisionOmission {
 
 type SelectionRow = DiscoveryOmissions['rows'][number] | TopNOmission | CollisionOmission;
 
+export type AcceptedToolSelection = Pick<SlotSelection, 'iteration' | 'rows'> & {
+  readonly consumer: AttemptRef;
+};
+
 interface SlotSelection {
   /** Successful model response whose adapter attested the selected name did not reach its wire. */
-  accepted?: Pick<SlotSelection, 'iteration' | 'rows'> & { readonly consumer: AttemptRef };
+  accepted?: AcceptedToolSelection;
   readonly iteration: number;
   readonly rows: readonly SelectionRow[];
   readonly complete: boolean;

@@ -239,6 +239,17 @@ When the two agree, the record is complete: everything the model read is
 derivable from the trace. When they disagree, something reached the model that
 the run never wrote down — a defect in the record, not in the check.
 
+### Which tools did selection leave out?
+
+A receipt can name a visible tool that the top-N picker, a skill scope or a
+ledger decision excluded from that call. The adapter must confirm the tools
+on the accepted request. Later calls have their own receipts. An absent
+`toolSelection` leaves the answer unknown, including on older recordings,
+redacted runs and adapters without a wire manifest. A `bounded` result lists
+only the entries the recorder could retain.
+
+<CodeFile path="examples/observability/24-receipt-at-the-stop.ts" region="omitted-tools" title="Read a call’s recorded tool exclusions" />
+
 ### Measure the initial prepared request
 
 `receiptAt(snapshot, epoch)?.requestMeasurement` reports the JSON size of the

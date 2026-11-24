@@ -43,6 +43,7 @@ import type {
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import { recordToolSelection } from './callLLM/recordToolSelection.js';
 import { recordWireFindings } from './callLLM/recordWireFindings.js';
 import { selectionAtRequest } from './callLLM/selectionAtRequest.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
@@ -865,7 +866,6 @@ export function buildCallLLMStage(
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
-    if (!localFallback) selection?.accept(response);
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
@@ -918,14 +918,7 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    recordWireFindings(
-      scope,
-      llmRequest,
-      response,
-      answeredBy.provider,
-      iteration,
-      deps.integrityLedger,
-    );
+    recordWireFindings(scope, llmRequest, response, answeredBy, iteration, deps);
 
     // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
     // asks what the library put in front of the model; this asks what the
@@ -1098,6 +1091,9 @@ export function buildCallLLMStage(
 
     // Attribute the successful response to its actual selected transport/model.
     emitCostTick(scope, deps.pricingTable, deps.costBudget, answeredBy, response.usage);
+    const selected = localFallback ? undefined : selection?.accept(response);
+    if (selected && deps.servedTools && deps.canRecordToolSelection?.())
+      recordToolSelection(scope, selected, deps.servedTools);
   };
 }
 

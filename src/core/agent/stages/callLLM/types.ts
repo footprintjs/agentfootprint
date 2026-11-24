@@ -17,6 +17,8 @@ import type { FindingsAnswerAsk, FindingsServeMode } from '../../findings/serve.
 
 export interface CallLLMStageDeps {
   readonly servedTools?: import('../../../slots/commitServedTools.js').ServedToolParties;
+  /** Whether this native run can retain newly disclosed catalog names on its receipt. */
+  readonly canRecordToolSelection?: () => boolean;
   /** Mark the accepted model response on this native leg before checks run. */
   readonly onResponseCommitted?: () => void;
   /** Preserve approved replay retirement for recovery before transport. */

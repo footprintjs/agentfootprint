@@ -9,9 +9,9 @@ export function recordWireFindings(
   scope: TypedScope<AgentState>,
   llmRequest: LLMRequest,
   response: LLMResponse,
-  provider: string,
+  answeredBy: { readonly provider: string },
   iteration: number,
-  ledger: CallLLMStageDeps['integrityLedger'],
+  { integrityLedger: ledger }: Pick<CallLLMStageDeps, 'integrityLedger'>,
 ): void {
   // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
   // this reads what the ADAPTER says actually crossed — the manifest read
@@ -31,7 +31,7 @@ export function recordWireFindings(
     },
     response.wireManifest === undefined
       ? undefined
-      : { names: response.wireManifest.toolNames, provenance: provider },
+      : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
     iteration,
   );
   // The disposition: a provider stating no manifest leaves this call

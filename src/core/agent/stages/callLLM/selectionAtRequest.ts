@@ -87,16 +87,19 @@ export function selectionAtRequest(
     },
     accept(response: LLMResponse) {
       if (
-        !consumer.signal.aborted &&
-        owner.selection === selection &&
-        witnessed.get(response) &&
-        confirmsNames(response, names)
+        consumer.signal.aborted ||
+        owner.selection !== selection ||
+        !witnessed.get(response) ||
+        !confirmsNames(response, names)
       )
-        selection.accepted = {
-          consumer: { series: consumer.series, attempt: consumer.attempt },
-          iteration,
-          rows,
-        };
+        return undefined;
+      const accepted = {
+        consumer: { series: consumer.series, attempt: consumer.attempt },
+        iteration,
+        rows,
+      };
+      selection.accepted = accepted;
+      return accepted;
     },
   };
 }

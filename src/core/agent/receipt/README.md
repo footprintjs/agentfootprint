@@ -38,3 +38,10 @@ and the truncated digest can be ambiguous.
 - `servedRow.ts` — the value-free ranges of whole retained history entries
   offered at the provider port. The call stage writes at most one row next to
   its receipt. The row's consumer is the native attempt series.
+
+## Tools left out of a call
+
+An accepted request can add `toolSelection` to its receipt. The attempt's
+`consumer` identifies the call. Each `absent` row contains a visible tool name
+and the selection decision that excluded it. A `bounded` flag means the saved
+list is incomplete. An absent field leaves the tool selection unknown.
