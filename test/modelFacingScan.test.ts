@@ -1077,6 +1077,11 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 14,
       why: 'literal prose and markup fixtures read only by the citation collector tests. No provider receives them',
     },
+    {
+      kind: 'not-model-facing',
+      count: 9,
+      why: 'fenced Markdown inputs passed directly to the pure collector in unit tests, with no provider call',
+    },
   ],
   'src/adapters/llm/anthropicThinkingWire.ts': [
     {
@@ -1474,12 +1479,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // The combined ledger includes the resume sentence and journal links.
         // The checkpoint ledger split moved one host-only refusal to a new file.
         // Prose citations add one request system instruction and fifteen test literals.
+        // Fenced-code regressions add nine collector-only test literals.
         files: 135,
-        total: 231,
+        total: 240,
         registry: 8,
         ephemeral: 29,
         unrepaired: 36,
-        notModelFacing: 158,
+        notModelFacing: 167,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —
