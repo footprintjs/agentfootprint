@@ -1,5 +1,6 @@
 import type { StageSnapshot } from 'footprintjs/advanced';
 import type { StoredCaptureHistory } from 'footprintjs/trace';
+import type { SourceLinkPolicy } from 'foottrace/cause';
 import { copyJson } from '../lib/boundedJson.js';
 import { captureOwn as own } from './causeCapture.js';
 import { projectCauseBasis } from './causeProjection.js';
@@ -71,6 +72,7 @@ export function projectStoredCause(
   value: unknown,
   runId: string,
   maxBytes: number,
+  sourceLinkPolicy?: SourceLinkPolicy,
 ): StoredCauseResult {
   try {
     // Reuse the shared data-only copier. Its detached tree/sidecar/log are retained privately together.
@@ -100,6 +102,7 @@ export function projectStoredCause(
     };
     const projected = projectCauseBasis(basis, nodes, undefined, {
       readKeys,
+      ...(sourceLinkPolicy === undefined ? {} : { sourceLinkPolicy }),
       ...(history.initialState === undefined ? {} : { initialState: history.initialState }),
       ...(sources === undefined ? {} : { sources }),
     });
