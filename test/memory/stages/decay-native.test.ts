@@ -74,6 +74,56 @@ describe('decay in a native FootPrint chart', () => {
     );
   });
 
+  it.each([
+    { mode: 'full', age: 0, admittedCount: 1 },
+    { mode: 'ids-only', age: 0, admittedCount: 1 },
+    { mode: 'full', age: 2_000, admittedCount: 0 },
+    { mode: 'ids-only', age: 2_000, admittedCount: 0 },
+  ] as const)(
+    'keeps duplicate IDs ambiguous with $admittedCount survivors in $mode recording',
+    async ({ mode, age, admittedCount }) => {
+      const store = Object.assign(new InMemoryStore(), {
+        ranksBy: 'server-text' as const,
+        supportsVectorSearch: false as const,
+        searchWithOutcome: vi.fn().mockResolvedValue({
+          ok: true,
+          value: [
+            { entry: entry('same', 3_000), score: 0.9 },
+            { entry: entry('same', age), score: 0.8 },
+          ],
+        }),
+      });
+      const recording = mode === 'ids-only' ? { recording: 'ids-only' as const } : {};
+      const state = await runDecay(
+        loadRelevant({ store, k: 2, minScore: 0.5, queryFrom: () => 'policy', ...recording }),
+      );
+
+      const rejectedCount = 2 - admittedCount;
+      expect(state.selected.map(({ updatedAt }) => updatedAt)).toEqual(admittedCount ? [now] : []);
+      expect(state.retrieved).toMatchObject({
+        ...recording,
+        candidateIdsAmbiguous: true,
+        consideredCount: 2,
+        admittedCount,
+        rejectedCount,
+        candidatesComplete: false,
+      });
+      expect(state.retrieved).not.toHaveProperty('candidates');
+
+      const [outcome] = state.recallOutcomes ?? [];
+      expect(outcome).toMatchObject({
+        kind: 'ok',
+        candidateIdsAmbiguous: true,
+        candidateCount: 2,
+        admittedCount,
+        complete: true,
+        candidatesComplete: false,
+      });
+      expect(outcome?.exclusions).toEqual({ decayed: rejectedCount });
+      expect(outcome).not.toHaveProperty('candidates');
+    },
+  );
+
   it.each(['full', 'ids-only'] as const)(
     'reconciles selection with %s candidate evidence and keeps proved reject reasons',
     async (mode) => {
