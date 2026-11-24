@@ -7,6 +7,7 @@ import { recordModelContext } from '../../recorders/core/recordModelContext.js';
 import { resilienceHooks } from '../../recorders/core/resilienceHooks.js';
 import type { InjectionRecord } from '../../recorders/core/types.js';
 import type { LLMRequest, PricingTable } from '../../provider-contract/types.js';
+import { captureProviderResponse } from '../../provider-contract/responseAdmission.js';
 import { buildReceipt, receiptPieces } from '../agent/receipt/receipt.js';
 import { emitCostTick, type ResolvedCostBudget } from '../cost.js';
 import { buildSystemPromptSlot } from '../slots/buildSystemPromptSlot.js';
@@ -206,14 +207,16 @@ export function buildCallChart(options: CallChartOptions): FlowChart {
     // The run's signal (its deadline included) rides the request and bounds
     // the wait, and an answer that lands after it is refused before
     // `llm_end` or the cost tick could count it (lib/abort.ts · callUnder).
-    const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
-      provider.complete(
-        wired,
-        // Resilience-report channel: a decorated provider's fallback /
-        // retry / recovery becomes an in-run typed event here.
-        resilienceHooks(scope, recordReceipt),
-      ),
-    ).catch((error: unknown) => admitInterventionError(scope, error));
+    const response = captureProviderResponse(
+      await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+        provider.complete(
+          wired,
+          // Resilience-report channel: a decorated provider's fallback /
+          // retry / recovery becomes an in-run typed event here.
+          resilienceHooks(scope, recordReceipt),
+        ),
+      ).catch((error: unknown) => admitInterventionError(scope, error)),
+    );
     if (
       admitProviderIntervention(scope, response, () => {
         typedEmit(scope, 'agentfootprint.stream.llm_end', {

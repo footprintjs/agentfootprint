@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { reviewProbes } from './prove-bedrock-guardrail-undo/reviewProbes.mjs';
 
 const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const admission = 'src/core/providerIntervention.ts';
@@ -31,6 +32,10 @@ const directTests = 'test/core-flow/provider-intervention-direct-calls.test.ts';
 const classificationTests = 'test/adapters/unit/BedrockProvider.guardrailClassification.test.ts';
 const routerTests = 'test/adapters/unit/BedrockProvider.promptRouter.test.ts';
 const streamTests = 'test/adapters/unit/BedrockProvider.guardrailStream.test.ts';
+const sequenceTests = 'test/adapters/unit/BedrockProvider.guardrailSequence.test.ts';
+const llmAccountingTests = 'test/core/provider-intervention-llmcall-accounting.test.ts';
+const hostIdentityTests = 'test/hosting/protocol-provider-identity.test.ts';
+const wrapperTests = 'test/resilience/unit/terminal-response.test.ts';
 const coreSuite = 'provider intervention at the admitted native response';
 const classificationSuite = (mode) => `Bedrock guardrails classification — ${mode}`;
 const streamSuite = 'Bedrock guardrail stream admission boundary';
@@ -68,6 +73,15 @@ const maskFirst = `    if (this.masked && this.reads.complete && code !== 'conte
       return { outcome: 'masked', code, filters: this.descriptors };
     if (this.blocked) return { outcome: 'blocked', code, filters: this.descriptors };`;
 const probes = [
+  ...reviewProbes({
+    assertion,
+    wrapperTests,
+    llmAccountingTests,
+    directTests,
+    hostIdentityTests,
+    guardedStream,
+    sequenceTests,
+  }),
   {
     id: 'prompt-router-boundary-undo',
     purpose:
@@ -366,8 +380,19 @@ function main() {
     routerTests,
     'src/adapters/llm/BedrockProvider/guardrailSchemas.ts',
     streamTests,
+    sequenceTests,
+    llmAccountingTests,
+    hostIdentityTests,
+    wrapperTests,
+    'src/resilience/withFallback.ts',
+    'src/resilience/replayAttempt.ts',
+    'src/resilience/withCircuitBreaker.ts',
+    'src/core/LLMCall/chart.ts',
+    'src/core-flow/Parallel/merge.ts',
+    'src/hosting/protocolRoute.ts',
     'vitest.config.ts',
     'scripts/prove-bedrock-guardrail-undo.mjs',
+    'scripts/prove-bedrock-guardrail-undo/reviewProbes.mjs',
   ];
   const originals = new Map(protectedPaths.map((file) => [file, readFileSync(join(root, file))]));
   const pathsFor = (id) => ({

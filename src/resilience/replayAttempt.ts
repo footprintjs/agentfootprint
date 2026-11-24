@@ -5,6 +5,11 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../provider-contract/types.js';
+import {
+  captureProviderChunk,
+  captureProviderResponse,
+} from '../provider-contract/responseAdmission.js';
+import { isTerminalIntervention } from '../provider-contract/intervention.js';
 import type { ThinkingReplayOmission } from '../thinking/replay.js';
 import { retireReplayHistory } from '../thinking/replayHistory.js';
 
@@ -18,7 +23,9 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
   let current = request;
   const reported = new Map<string, ThinkingReplayOmission>();
 
-  function response(answer: LLMResponse): LLMResponse {
+  function response(rawAnswer: LLMResponse): LLMResponse {
+    const answer = captureProviderResponse(rawAnswer);
+    if (isTerminalIntervention(answer)) return answer;
     if (reported.size === 0 && !answer.replayOmissions?.length) return answer;
     const total = new Map(reported);
     const existing = answer.replayOmissions ?? [];
@@ -33,15 +40,20 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
   }
 
   function chunk(item: LLMChunk): LLMChunk {
-    if (!item.done || item.response === undefined) return item;
-    const answer = response(item.response);
-    return answer === item.response ? item : { ...item, response: answer };
+    const captured = captureProviderChunk(item);
+    if (captured !== item) return captured;
+    if (!item.done) return item;
+    const original = item.response;
+    if (original === undefined) return item;
+    const answer = response(original);
+    return answer === original ? item : { ...item, response: answer };
   }
 
   function result(item: IteratorResult<LLMChunk>): IteratorResult<LLMChunk> {
     if (item.done) return item;
-    const value = chunk(item.value);
-    return value === item.value ? item : { ...item, value };
+    const original = item.value;
+    const value = chunk(original);
+    return value === original ? item : { done: false, value };
   }
 
   return {

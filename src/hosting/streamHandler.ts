@@ -8,7 +8,7 @@ import {
   type AcceptedStreamTurn,
 } from './streamHandler/types.js';
 import { settleClosed, noConversation } from './streamHandler/conversation.js';
-import { failedSettlement } from './streamHandler/settlement.js';
+import { failedSettlement } from './failedSettlement.js';
 import {
   failure,
   refusal,

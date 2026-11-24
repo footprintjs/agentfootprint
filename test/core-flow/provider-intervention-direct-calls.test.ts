@@ -1,18 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { FlowChartExecutor } from 'footprintjs';
 import { LLMCall } from '../../src/core/LLMCall.js';
 import { Parallel } from '../../src/core-flow/Parallel.js';
 import { buildMessageApiChart } from '../../src/core/agent/buildMessageApiChart.js';
 import { buildAgentMessageApiChart } from '../../src/core/agent/buildAgentMessageApiChart.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
+import { agentThinkingTrace } from '../../src/recorders/observability/AgentThinkingTraceRecorder.js';
+import { noPolicyExecutor } from '../helpers/noPolicy.js';
 
-function response(outcome: 'blocked' | 'unknown' | 'masked') {
+function response(outcome: 'blocked' | 'unknown' | 'masked' | 'ordinary') {
   return {
     content: 'Returned [EMAIL] text.',
     toolCalls: [],
     usage: { input: 1, output: 2 },
     stopReason: 'content_filter',
-    intervention: { outcome, code: 'guardrail_intervened', filters: [] },
+    ...(outcome !== 'ordinary' && {
+      intervention: { outcome, code: 'guardrail_intervened', filters: [] },
+    }),
   };
 }
 
@@ -33,11 +36,16 @@ function leaf() {
 
 describe('every direct native model caller admits provider intervention', () => {
   for (const door of ['parallel merge', 'message API', 'agent message API'] as const) {
-    for (const outcome of ['blocked', 'unknown', 'masked'] as const) {
+    for (const outcome of ['blocked', 'unknown', 'masked', 'ordinary'] as const) {
       it(`${door}: ${outcome}`, async () => {
         const complete = vi.fn(async () => response(outcome));
         const provider: LLMProvider = { name: 'guarded-double', complete };
-        const ends: { content: string; usage: { input: number; output: number } }[] = [];
+        const ends: {
+          content: string;
+          contentWithheld?: true;
+          usage: { input: number; output: number };
+        }[] = [];
+        const thinking = agentThinkingTrace();
         let run: () => Promise<unknown>;
         if (door === 'parallel merge') {
           const parallel = Parallel.create()
@@ -45,6 +53,7 @@ describe('every direct native model caller admits provider intervention', () => 
             .branch('right', leaf())
             .mergeWithLLM({ provider, model: 'mock', prompt: 'Synthesize.' })
             .build();
+          parallel.attach(thinking);
           parallel.on('agentfootprint.stream.llm_end', (event) => ends.push(event.payload));
           run = () => parallel.run('hello');
         } else {
@@ -57,7 +66,8 @@ describe('every direct native model caller admits provider intervention', () => 
                   systemPrompt: 'answer',
                   tools: [],
                 });
-          const executor = new FlowChartExecutor(chart);
+          const executor = noPolicyExecutor(chart);
+          executor.attachCombinedRecorder(thinking);
           executor.attachCombinedRecorder({
             id: 'test.completed-intervention-accounting',
             onEmit(event: { name: string; payload: (typeof ends)[number] }) {
@@ -69,7 +79,8 @@ describe('every direct native model caller admits provider intervention', () => 
             return executor.getSnapshot()?.sharedState;
           };
         }
-        if (outcome === 'masked') {
+        const withheld = outcome === 'blocked' || outcome === 'unknown';
+        if (!withheld) {
           const result = await run();
           expect(JSON.stringify(result)).toContain('Returned [EMAIL] text.');
         } else {
@@ -79,16 +90,18 @@ describe('every direct native model caller admits provider intervention', () => 
           });
         }
         expect(complete).toHaveBeenCalledTimes(1);
-        // A bare chart deliberately serves a redacted placeholder. Only a
-        // real Parallel run exposes its safe accounting payload to this tap.
         const ownEnd =
           door === 'parallel merge' ? ends.filter((event) => event.usage.output === 2) : ends;
         expect(ownEnd).toHaveLength(1);
-        if (door === 'parallel merge')
-          expect(ownEnd[0]).toMatchObject({
-            content: outcome === 'masked' ? 'Returned [EMAIL] text.' : '',
-            usage: { input: 1, output: 2 },
-          });
+        expect(ownEnd[0]).toMatchObject({
+          content: withheld ? '' : 'Returned [EMAIL] text.',
+          usage: { input: 1, output: 2 },
+        });
+        expect(ownEnd[0]?.contentWithheld).toBe(withheld ? true : undefined);
+        const answers = thinking
+          .getTrace()
+          .steps.filter((step) => step.kind === 'answer' && step.cost.tokensOut === 2);
+        expect(answers).toHaveLength(withheld ? 0 : 1);
       });
     }
   }

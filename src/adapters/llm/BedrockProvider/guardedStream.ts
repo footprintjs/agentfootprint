@@ -99,16 +99,20 @@ export async function* streamGuardedBedrock(
         const counts = ownData(value, 'usage');
         if (!counts.valid) valid = false;
         if (counts.present && counts.valid) usage = guardrailUsage(counts.value);
-        // Early usage metadata is not the post-stop assessment boundary.
-        if (!stopped) continue;
+        const trace = ownData(value, 'trace');
+        if (!trace.valid) valid = false;
+        // Early usage alone is permitted, but assessment outside the admitted
+        // sequence cannot be discarded and replaced by later usable metadata.
+        if (!stopped) {
+          if (trace.present) valid = false;
+          continue;
+        }
         if (metadataAfterStop) valid = false;
         metadataAfterStop = true;
-        const trace = ownData(value, 'trace');
         const envelope = {
           stopReason,
           ...(trace.present && trace.valid ? { trace: trace.value } : {}),
         };
-        if (!trace.valid) valid = false;
         intervention = classifyGuardrail(envelope, config);
       }
     }

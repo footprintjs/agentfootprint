@@ -106,6 +106,10 @@ import type {
 } from '../provider-contract/types.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { isProviderInterventionError } from '../provider-contract/intervention.js';
+import {
+  captureProviderChunk,
+  captureProviderResponse,
+} from '../provider-contract/responseAdmission.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -332,7 +336,7 @@ export function withCircuitBreaker(
         // Forward `hooks` inward as well as using them here: this decorator
         // rebuilds a fresh provider object, so an inner decorator's reports
         // are silently swallowed unless they're passed through.
-        const res = await inner.complete(req, hooks);
+        const res = captureProviderResponse(await inner.complete(req, hooks));
         recordSuccess(hooks);
         return res;
       } catch (err) {
@@ -358,7 +362,7 @@ export function withCircuitBreaker(
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           for await (const chunk of inner.stream!(req, hooks)) {
             yieldedAnyChunk = true;
-            yield chunk;
+            yield captureProviderChunk(chunk);
           }
           recordSuccess(hooks);
         } catch (err) {

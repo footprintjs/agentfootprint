@@ -53,16 +53,17 @@ export async function mergeWithLLM(
       ),
     ).catch((error: unknown) => admitInterventionError(scope, error)),
   );
-  const notifyCompleted = () =>
+  const notifyCompleted = (contentWithheld?: true) =>
     typedEmit(scope, 'agentfootprint.stream.llm_end', {
       iteration: 1,
       content: response.content,
+      ...(contentWithheld === true && { contentWithheld }),
       toolCallCount: response.toolCalls.length,
       usage: response.usage,
       stopReason: response.stopReason,
       durationMs: Date.now() - startMs,
     });
-  requireUsableProviderResponse(scope, response, notifyCompleted);
+  requireUsableProviderResponse(scope, response, () => notifyCompleted(true));
   notifyCompleted();
   return response.content;
 }

@@ -1,5 +1,5 @@
 /** Capture foreign intervention evidence once before any downstream observer can re-read it. */
-import type { LLMResponse } from './types.js';
+import type { LLMChunk, LLMResponse } from './types.js';
 import { providerInterventionOf } from './intervention.js';
 
 function ownValue(value: unknown, key: string): unknown {
@@ -77,4 +77,19 @@ export function captureProviderResponse(response: LLMResponse): LLMResponse {
     if (value !== undefined) captured[key] = value;
   }
   return Object.freeze(captured) as unknown as LLMResponse;
+}
+
+/** Pin a terminal response before any wrapper decorates its foreign chunk. */
+export function captureProviderChunk(chunk: LLMChunk): LLMChunk {
+  const rawResponse = chunk.response;
+  if (rawResponse === undefined) return chunk;
+  const response = captureProviderResponse(rawResponse);
+  // Ordinary and usable masked chunks keep their existing identity and shape.
+  if (response === rawResponse || response.intervention?.outcome === 'masked') return chunk;
+  return Object.freeze({
+    tokenIndex: nonnegative(ownValue(chunk, 'tokenIndex')) ?? 0,
+    content: '',
+    done: true,
+    response,
+  });
 }
