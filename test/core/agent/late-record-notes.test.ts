@@ -11,7 +11,6 @@ import {
   epochAt,
   isInputPause,
   servedAt,
-  type AgentOptions,
 } from '../../../src/index.js';
 import { LATE_RECORD_NOTE_ATTRIBUTION } from '../../../src/lib/saidByPerson.js';
 import { sha256Hex } from '../../../src/lib/sha256.js';
@@ -19,66 +18,14 @@ import { anthropic, openai } from '../../../src/providers.js';
 import { isPlaceholder } from '../../../src/redaction/marker.js';
 import { readAfterCall } from '../../../src/time-travel/epochs.js';
 
-const model = 'gpt-4o-mini';
-const why = 'The archive said "awaiting export".\nIt is outside the checked tier.';
-
-type WireRequest = Readonly<{
-  stream?: boolean;
-  messages: readonly Readonly<{ role: string; content: string | null }>[];
-}>;
-
-function scriptedSdk(failFollowUp = false, proposedArgs = '{}') {
-  const requests: WireRequest[] = [];
-  const client = {
-    chat: {
-      completions: {
-        create(body: WireRequest) {
-          if (!body.stream || requests.length > 1) throw new Error('Unexpected SDK request');
-          requests.push(body);
-          const toolCall = requests.length === 1;
-          if (!toolCall && failFollowUp) throw new Error('Scripted OpenAI transport failure');
-          return (async function* () {
-            yield {
-              id: toolCall ? 'provider-call' : 'provider-answer',
-              model,
-              choices: [
-                {
-                  index: 0,
-                  delta: toolCall
-                    ? {
-                        tool_calls: [
-                          {
-                            index: 0,
-                            id: 'lookup-1',
-                            function: { name: 'lookup', arguments: proposedArgs },
-                          },
-                        ],
-                      }
-                    : { content: 'The active index is available.' },
-                  finish_reason: toolCall ? 'tool_calls' : 'stop',
-                },
-              ],
-            };
-          })();
-        },
-      },
-    },
-  };
-  return { client, requests };
-}
-
-const lookupTool = (reason: string) =>
-  defineTool({
-    name: 'lookup',
-    displayName: 'Attachment lookup',
-    description: 'Read the attachment index.',
-    inputSchema: { type: 'object', properties: {} },
-    execute: () =>
-      coverage('The active index is available.', {
-        checked: ['active index'],
-        notChecked: [{ what: 'archived attachment', why: reason }],
-      }),
-  });
+import {
+  lateNoteLookupTool as lookupTool,
+  lateNoteModel as model,
+  lateNoteWhy as why,
+  recordedLateNoteRun as recordedRun,
+  scriptedLateNoteSdk as scriptedSdk,
+  type LateNoteSnapshotState as SnapshotState,
+} from '../../helpers/lateRecordNoteSdk.js';
 
 const variants = (['dynamic', 'dynamic-grouped'] as const).flatMap((reactMode) =>
   (['inline', 'deferred'] as const).flatMap((observerDelivery) =>
@@ -89,40 +36,6 @@ const variants = (['dynamic', 'dynamic-grouped'] as const).flatMap((reactMode) =
     })),
   ),
 );
-
-type SnapshotState = {
-  readonly history?: readonly Readonly<{ role: string; content: string }>[];
-  readonly lateRecordNoteReceipt?: readonly unknown[];
-  readonly recordNoteWireProof?: unknown;
-  readonly coverageDeclared?: unknown;
-};
-
-async function recordedRun(
-  options: (typeof variants)[number],
-  lateRecordNotes: boolean,
-  reason = why,
-  redact?: AgentOptions['redact'],
-) {
-  const { client, requests } = scriptedSdk();
-  const agent = Agent.create({
-    ...options,
-    provider: openai({ _client: client }),
-    model,
-    ...(lateRecordNotes && { lateRecordNotes: true }),
-    ...(redact === undefined ? {} : { redact }),
-  })
-    .tool(lookupTool(reason))
-    .build();
-  try {
-    const answer = await agent.run({ message: 'Read the attachment index.' });
-    const snapshot = agent.getLastSnapshot();
-    if (snapshot === undefined) throw new Error('Fixture expected a native snapshot');
-    const state = snapshot.sharedState as SnapshotState;
-    return { requests, answer, snapshot, state };
-  } finally {
-    await agent.shutdown();
-  }
-}
 
 it.each(variants)(
   'witnesses a real $reactMode SDK note with $observerDelivery delivery and $commitValues records',
