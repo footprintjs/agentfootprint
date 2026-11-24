@@ -44,6 +44,7 @@ import {
 import type { TypedScope } from 'footprintjs';
 import { computeDecayFactor } from '../entry/decay.js';
 import type { DecayPolicy } from '../entry/types.js';
+import { chunkText } from '../retrieval/provenance.js';
 import type { MemoryState } from './types.js';
 
 export interface FilterByDecayConfig {
@@ -93,7 +94,8 @@ export function filterByDecay(config: FilterByDecayConfig) {
 
   return async (scope: TypedScope<MemoryState>): Promise<void> => {
     const loaded = scope.loaded ?? [];
-    if (loaded.length === 0) return;
+    const inputCount = loaded.length;
+    if (inputCount === 0) return;
 
     // One clock read for the whole batch: two entries of the same age must
     // score the same, whatever the loop costs.
@@ -114,7 +116,8 @@ export function filterByDecay(config: FilterByDecayConfig) {
       removed.push({ id: entry.id, reason: 'decayed', score, floor: minScore });
       return false;
     });
-    scope.loaded = kept;
+    // The loaded reference follows writes to its scope key. Read the input
+    // evidence before publishing the survivors.
     const outcomes = scope.recallOutcomes;
     const evidence = scope.retrieved;
     const ambiguous = retrievalCandidateIdsAmbiguous(evidence, loaded);
@@ -122,17 +125,29 @@ export function filterByDecay(config: FilterByDecayConfig) {
       scope.recallOutcomes = refineRecallOutcomes(
         outcomes,
         removed,
-        loaded.length,
+        inputCount,
         kept.length,
         ambiguous,
       );
     }
-    if (evidence !== undefined && ambiguous) {
+    if (evidence !== undefined && (removed.length !== 0 || ambiguous)) {
+      const revised = ambiguous ? omitAmbiguousRetrievalCandidates(evidence) : evidence;
+      const decayedIds = new Set(removed.map(({ id }) => id));
+      const candidates = revised.candidates?.map((candidate) =>
+        candidate.admitted && decayedIds.has(candidate.id)
+          ? { ...candidate, admitted: false, reason: 'decayed' as const }
+          : candidate,
+      );
       scope.retrieved = {
-        ...omitAmbiguousRetrievalCandidates(evidence),
+        ...revised,
+        ...(candidates !== undefined && { candidates }),
         admittedCount: kept.length,
         rejectedCount: evidence.consideredCount - kept.length,
+        ...(evidence.maxChars !== undefined && {
+          charsUsed: kept.reduce((total, entry) => total + chunkText(entry.value).length, 0),
+        }),
       };
     }
+    scope.loaded = kept;
   };
 }

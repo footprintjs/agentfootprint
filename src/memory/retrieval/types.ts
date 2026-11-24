@@ -64,8 +64,8 @@ export interface RetrievedCandidate {
   readonly rank: number;
   /** Did this candidate's text reach the prompt? */
   readonly admitted: boolean;
-  /** Present exactly when `admitted` is false. */
-  readonly reason?: RetrievalRejectReason;
+  /** A rejected candidate records its ranking, budget, or decay reason. */
+  readonly reason?: RetrievalRejectReason | 'decayed';
   /** Source document, when the indexed value carried one in its metadata. */
   readonly docUri?: string;
   /** Page number, when the loader knew one (PDFs). */

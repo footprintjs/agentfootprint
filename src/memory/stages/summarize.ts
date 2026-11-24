@@ -406,7 +406,6 @@ export function summarize(config: SummarizeConfig) {
       );
       const next = [...ordered, ...kept];
       if (next.length === loaded.length && next.every((entry, i) => entry === loaded[i])) return;
-      scope.loaded = next;
       const outcomes = scope.recallOutcomes;
       if (outcomes !== undefined) {
         const origins = new Set(loaded);
@@ -414,6 +413,7 @@ export function summarize(config: SummarizeConfig) {
           scope.recallOutcomes = unprovenRecallOutcomes(outcomes);
         }
       }
+      scope.loaded = next;
     };
 
     // ── 2. Is there a fold to make? ──────────────────────────────────
