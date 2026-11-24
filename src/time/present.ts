@@ -24,7 +24,7 @@
  * ```
  *
  * The time is written as finely as either end needs it (minutes, seconds, or
- * milliseconds), with exact spans preserving submillisecond digits. A span
+ * milliseconds). Confirmed cutoffs can request exact submillisecond digits. A span
  * crossing a DST change names the offset at each end; otherwise the offset
  * is named once.
  *
@@ -33,7 +33,7 @@
  * A {@link Presentation} with a `locale` — the armed reader's, the language
  * the person wrote in — is rendered through `Intl.DateTimeFormat` in that
  * locale, at the same precision, the zone named by its short name
- * (`Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT` in `en-US`). When a span needs
+ * (`Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT` in `en-US`). When an exact span needs
  * submillisecond digits, the locale-neutral spelling preserves them in the
  * same zone. The instants behind the label are the record.
  *
@@ -319,6 +319,7 @@ export function presentSpan(
   from: InstantText,
   to: InstantText,
   presentation: Presentation,
+  mode: 'display' | 'exact' = 'display',
 ): string {
   const zone = assertZone(presentation, 'presentSpan');
   const fromInstant = readInstant(from, 'presentSpan');
@@ -326,7 +327,9 @@ export function presentSpan(
   const a = pointOf(fromInstant, zone);
   const b = pointOf(toInstant, zone);
   // Intl only represents milliseconds. Use the exact zoned spelling for a finer cutoff.
-  if (a.nanos !== 0 || b.nanos !== 0) return render(a, b, zone, 'nanosecond');
+  if (mode === 'exact' && (a.nanos !== 0 || b.nanos !== 0)) {
+    return render(a, b, zone, 'nanosecond');
+  }
   const precision = finer(naturalPrecision(a.wall), naturalPrecision(b.wall));
   if (presentation.locale !== undefined && fromInstant.ms <= toInstant.ms) {
     return renderLocale(fromInstant.ms, toInstant.ms, presentation, zone, precision, 'presentSpan');

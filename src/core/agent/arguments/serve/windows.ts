@@ -87,7 +87,7 @@ function presentedWindow(w: ServedWindows['windows'][number]): string {
   const { endpoint } = w;
   try {
     if (endpoint !== undefined) {
-      const range = presentSpan(w.range.from, endpoint.cutoff, { zone: w.zone });
+      const range = presentSpan(w.range.from, endpoint.cutoff, { zone: w.zone }, 'exact');
       return `${range} (end ${endpoint.end === 'exclusive' ? 'excluded' : 'included'})`;
     }
     return presentRange(w.range, { zone: w.zone }, 'minute');

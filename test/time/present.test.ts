@@ -79,10 +79,12 @@ describe('presentInstant / presentSpan — the declared ends, in the zone', () =
 
   it('keeps distinct ends in the same millisecond in the requested zone', () => {
     expect(
-      presentSpan('2026-10-09T15:00:00.100000001Z', '2026-10-09T15:00:00.100000002Z', {
-        ...LA,
-        locale: 'en-US',
-      }),
+      presentSpan(
+        '2026-10-09T15:00:00.100000001Z',
+        '2026-10-09T15:00:00.100000002Z',
+        { ...LA, locale: 'en-US' },
+        'exact',
+      ),
     ).toBe('2026-10-09 08:00:00.100000001–08:00:00.100000002 America/Los_Angeles (UTC-07:00)');
   });
 });
