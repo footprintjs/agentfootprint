@@ -42,8 +42,7 @@ The receipt puts competing implementations in `shadowed`, separately from absent
 contract, or reused response object supplies no witness. On a receipt-enabled native turn with no active redaction,
 `recordToolSelection.ts` adds visible names and reasons to that call's receipt.
 It shares one row budget across the turn. Unknown capacity on recovery
-withholds the annotation. Deciding whether a source mattered to the answer
-requires separate evidence of its declared ground and later use.
+withholds the annotation. A complete annotation also supplies callable identity to the opt-in source check. The original selection supplies the request witness. The declared source group and later attempts determine the final warning.
 
 `liveChunks.ts` emits an attempt's thinking and visible text in provider order.
 It applies the served-event redaction policy. Calls that protect draft output
