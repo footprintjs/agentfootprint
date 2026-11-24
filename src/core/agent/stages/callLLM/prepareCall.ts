@@ -491,6 +491,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
   }
 
   return {
+    baseRequest,
     peel,
     systemPromptInjections,
     systemPieces,

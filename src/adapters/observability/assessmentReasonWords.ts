@@ -42,6 +42,7 @@ const WORDS: { readonly [R in AssessmentReason]: true } = {
   'step-skipped': true,
   'stopped-early': true,
   'unsupported-argument': true,
+  'source-not-consulted': true,
   'unsupported-claim': true,
   'value-contingent': true,
   'value-survived-revision': true,

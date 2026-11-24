@@ -53,6 +53,7 @@ export async function executeCall(
     selection,
     serving,
     llmRequest,
+    baseRequest,
   } = prepared;
   // Streaming-first: when the provider implements `stream()` we
   // consume chunk-by-chunk so consumers see tokens as they arrive
@@ -89,6 +90,8 @@ export async function executeCall(
   let answeredBy = { provider: provider.name, model, native: false };
   let localFallback = false;
   let acceptedFindingsRequest: FindingsRequest | undefined;
+  const choice = deps.sourceConsultation;
+  let acceptedOffer: ReturnType<NonNullable<typeof choice>['capture']> | undefined;
   const preserveReplay =
     deps.hasEvidenceRecovery === true ||
     deps.hasFindingsLedger === true ||
@@ -113,17 +116,23 @@ export async function executeCall(
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
+      let offer = choice?.capture(scope, req, baseRequest);
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
       const selectionAttempt = selection?.attempt();
       const ordinaryHooks = observeCallRequests(
         attempts.hooks,
-        !selectionAttempt && serving === undefined && deps.findings !== true && !preserveReplay
+        !selectionAttempt &&
+          serving === undefined &&
+          deps.findings !== true &&
+          !preserveReplay &&
+          choice === undefined
           ? undefined
           : (request) => {
               selectionAttempt?.observe(request);
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
+              if (choice !== undefined) offer = choice.capture(scope, request, baseRequest, offer);
               if (preserveReplay)
                 stableProjection = sameReplayProjection(wireMessages, request.messages);
             },
@@ -157,6 +166,7 @@ export async function executeCall(
             : attempts.request;
           dispatch = describeProviderDispatch(selectedProvider, completion);
           if (deps.findings === true) candidate = capture(completion);
+          if (choice !== undefined) offer = choice.capture(scope, completion, baseRequest);
           if (preserveReplay)
             stableProjection = sameReplayProjection(wireMessages, completion.messages);
           return completion;
@@ -195,6 +205,7 @@ export async function executeCall(
           : tagThinkingResponse(resp, String(hooks.providerIndex));
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
+      acceptedOffer = offer;
       acceptedProjection = stableProjection;
       const result = attempts.response(answered);
       selectionAttempt?.finish(result);
@@ -308,6 +319,7 @@ export async function executeCall(
     answeredBy,
     localFallback,
     acceptedFindingsRequest,
+    acceptedOffer,
     acceptedProjection,
     recall,
   };

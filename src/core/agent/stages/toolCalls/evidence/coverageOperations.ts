@@ -35,7 +35,7 @@ function recordedSuggestion(facts: CoverageFacts): Pick<DeclaredCoverage, 'tryIn
 
 /** Compose the existing coverage callbacks once for this handler. */
 export function buildToolCoverageOperations(
-  deps: Pick<ToolCallsHandlerDeps, 'resultsLayer' | 'negativeClaimsArmed'>,
+  deps: Pick<ToolCallsHandlerDeps, 'resultsLayer' | 'negativeClaimsArmed' | 'sourceConsultation'>,
   links: ToolCoverageOperationsLinks,
 ): ToolCoverageOperations {
   /**
@@ -112,6 +112,14 @@ export function buildToolCoverageOperations(
       // read by its ONE rule set, so every item here is well-formed; copied.
       const inProgress = facts.inProgress?.map(copyInProgressItem);
       if (facts.kind === 'absence') {
+        if (call.callOccurrenceKey !== undefined && facts.tryInsteadTool !== undefined) {
+          deps.sourceConsultation?.suggestion(
+            scope,
+            facts.tryInsteadTool.tool,
+            call.toolName,
+            call.callOccurrenceKey,
+          );
+        }
         typedEmit(scope, 'agentfootprint.tools.absent', {
           ...base,
           ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
@@ -172,6 +180,14 @@ export function buildToolCoverageOperations(
       ...callOccurrenceField(call.callOccurrenceKey),
     };
     if (facts.kind === 'absence') {
+      if (call.callOccurrenceKey !== undefined && facts.tryInsteadTool !== undefined) {
+        deps.sourceConsultation?.suggestion(
+          scope,
+          facts.tryInsteadTool.tool,
+          call.toolName,
+          call.callOccurrenceKey,
+        );
+      }
       typedEmit(scope, 'agentfootprint.tools.absent', {
         ...base,
         ...(event.lookedFor !== undefined && { lookedFor: event.lookedFor }),

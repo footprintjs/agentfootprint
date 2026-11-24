@@ -374,6 +374,7 @@ export function buildChart(
     toolColumns,
     toolRowsets,
     rowsetDeclaringToolsForValues,
+    resolverForValues,
     revisionWithholdsTools: () => this.revisionWithholdsTools(),
   });
 

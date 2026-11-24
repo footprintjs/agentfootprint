@@ -22,7 +22,6 @@ import {
 import { captureReplayPrefix } from '../../requestTurn/replayPrefix.js';
 import { afterReplayResponse } from '../../requestTurn/state.js';
 import { writeRequestReplay } from '../../requestTurn/native.js';
-import type { ToolChoiceLedger } from '../../toolChoice/types.js';
 import type { AgentState } from '../../types.js';
 import type { PreparedCall } from './prepareCall.js';
 import type { ExecutedCall } from './executeCall.js';
@@ -56,6 +55,7 @@ export async function acceptResponse(
     answeredBy,
     localFallback,
     acceptedFindingsRequest,
+    acceptedOffer,
     acceptedProjection,
     recall,
   } = executed;
@@ -92,6 +92,12 @@ export async function acceptResponse(
   deps.onResponseCommitted?.();
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
+  deps.sourceConsultation?.accepted(
+    scope,
+    localFallback ? undefined : acceptedOffer,
+    localFallback ? undefined : response.wireManifest,
+    acceptedToolCalls,
+  );
   recordResponseStop(
     scope,
     localFallback ? undefined : response.stopReason,
@@ -281,33 +287,16 @@ export async function acceptResponse(
     }
   }
 
-  // THE OUTCOME (9.105.0, `.toolChoice()`). The tools slot filed the pick
-  // before this call; the reply is in; the comparison is made HERE, the
-  // one moment both readings exist, and filed as its own row — the model's
-  // call stays the emission, the pick stays a second reading, and neither
-  // is rewritten. `called` is what the model asked for, in order (a
-  // `'tool-forced'` answer was already taken off the list at the seam);
-  // a miss is a call outside the NARROWED served list. Gated on the arm,
-  // and on a pick having been attempted for this iteration (a call with
-  // nothing to choose among filed no pick and gets no outcome).
   if (deps.toolChoice === true) {
     // `import()` — the optional-family law of docs-next's site budget (the
     // `toolCalls/evidence/judgeLanded.ts · judgeLanded` precedent): an unarmed agent never loads
     // the module; the slot loads the same one under the same gate.
-    const { outcomeRowFor, pickAttemptedFor, pickRowFor, recordToolChoice } = await import(
-      '../../toolChoice/record.js'
+    const { recordToolChoiceOutcome } = await import('../../toolChoice/record.js');
+    recordToolChoiceOutcome(
+      scope as unknown as Parameters<typeof recordToolChoiceOutcome>[0],
+      response,
+      iteration,
     );
-    const rows = scope.toolChoices as ToolChoiceLedger | undefined;
-    if (pickAttemptedFor(rows, iteration)) {
-      recordToolChoice(
-        scope as unknown as Parameters<typeof recordToolChoice>[0],
-        outcomeRowFor(
-          pickRowFor(rows, iteration),
-          response.toolCalls.map((c) => c.name),
-          iteration,
-        ),
-      );
-    }
   }
 
   // Attribute the successful response to its actual selected transport/model.

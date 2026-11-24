@@ -31,6 +31,8 @@ export interface ServedToolParties {
   selection?: SlotSelection;
   pinned?: ReadonlyMap<string, ToolParty | null>;
   current: ReadonlyMap<string, ToolParty | null>;
+  /** The exact visible callable behind this epoch's winning contract, under the choice arm. */
+  currentImplementations?: ReadonlyMap<string, Tool>;
   /**
    * The party each name was LAST served under, across the epochs of one run
    * (cleared on iteration 1). The off-wire fallback reads it: a name that
@@ -148,6 +150,11 @@ export function commitServedTools(servedTools: ServedToolParties, input: SlotCom
       ? winners
       : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
   servedTools.current = wireWinners;
+  if (servedTools.currentImplementations !== undefined) {
+    servedTools.currentImplementations = new Map(
+      [...input.winningTools].filter(([name]) => wireWinners.has(name)),
+    );
+  }
   servedTools.currentProof = undefined;
   servedTools.restored = undefined;
   servedTools.wireReady = true;

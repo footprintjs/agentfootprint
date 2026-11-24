@@ -24,6 +24,7 @@
  * itself and passes nothing.
  */
 
+import type { LLMResponse } from '../../../provider-contract/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type {
   ToolChoiceEntry,
@@ -51,6 +52,30 @@ export function recordToolChoice(
 ): void {
   scope.toolChoices = [...(prior ?? []), row];
   emitRow(scope, row);
+}
+
+/**
+ * The slot records the classifier's pick before the call. The accepted reply
+ * supplies the other reading, in tool call order after forced output is removed.
+ * A miss is a call outside the narrowed list. An iteration with no pick attempt
+ * gets no outcome row.
+ */
+export function recordToolChoiceOutcome(
+  scope: ToolChoiceScope,
+  response: Pick<LLMResponse, 'toolCalls'>,
+  iteration: number,
+): void {
+  const rows = scope.toolChoices;
+  if (pickAttemptedFor(rows, iteration)) {
+    recordToolChoice(
+      scope,
+      outcomeRowFor(
+        pickRowFor(rows, iteration),
+        response.toolCalls.map((call) => call.name),
+        iteration,
+      ),
+    );
+  }
 }
 
 function emitRow(scope: ToolChoiceScope, row: ToolChoiceEntry): void {
