@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { meta, run as runExample } from '../../../../examples/features/130-source-not-consulted.js';
+import { mockClassifier } from '../../../../src/classify/mock.js';
 import { composedInput } from '../../../../src/core/messageFrom.js';
 import type { AgentRunCheckpoint } from '../../../../src/core/runCheckpoint.js';
-import { Agent, LLMCall, absent, defineTool, deny } from '../../../../src/index.js';
+import { Agent, LLMCall, absent, defineTool, deny, receiptAt } from '../../../../src/index.js';
 import { defineSkill } from '../../../../src/injection-engine.js';
 import { PermissionPolicy } from '../../../../src/security/PermissionPolicy.js';
 import { assessAnswer, recordRun } from '../../../../src/observe.js';
@@ -275,6 +276,46 @@ describe('declared sources skipped in a native turn', () => {
       }
     },
   );
+
+  it('separates an uncalled offered tool from one left out of the same request', async () => {
+    const classifier = mockClassifier(() => ({
+      model: 'fixture',
+      latencyMs: 1,
+      usage: { inputTokens: 1, outputTokens: 1 },
+      answers: {
+        tool: {
+          type: 'choice',
+          choice: 'status',
+          confidence: 1,
+          probabilities: { status: 0.7, monitor: 0.3, archive: 0 },
+        },
+      },
+    }));
+    const agent = Agent.create({ provider: scripted(manifest), model: 'mock' })
+      .tools([
+        tool('status', 'array status'),
+        tool('monitor', 'link monitor'),
+        tool('archive', 'link archive'),
+      ])
+      .toolChoice({ classifier, serve: { top: 2 } })
+      .ontology(map())
+      .answerLayer({ sourceNotConsulted: true })
+      .build();
+    const recorder = recordRun(agent);
+    try {
+      await agent.run({ message: 'Give the link observation.' });
+      const saved = JSON.parse(JSON.stringify(recorder.toRecording()));
+      const choices = assessAnswer(saved).reasons.filter((row) => row.reason === reason);
+      expect(choices).toHaveLength(1);
+      expect(choices[0]?.detail?.unusedTools).toEqual(['link monitor']);
+      expect(receiptAt(saved.snapshot, 1)?.toolSelection?.absent).toEqual([
+        { name: 'archive', reason: 'top-N' },
+      ]);
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  });
 
   it.each([
     ['classic', undefined, false],

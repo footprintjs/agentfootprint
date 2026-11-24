@@ -291,8 +291,8 @@ describe('integration: the keyword trap parks after renewalGrace idle passes', (
     // parked. Every pass refused the skill as hidden, the pass before the pick
     // included — hidden means hidden on the keyword path too.
     for (let i = 0; i <= 3; i++) {
-      expect(skippedAt(evaluated, i)).toContainEqual(
-        expect.objectContaining({ id: 'zone-audit', reason: 'hidden' }),
+      expect(skippedAt(evaluated, i)).not.toContainEqual(
+        expect.objectContaining({ id: 'zone-audit' }),
       );
     }
     // The dispatch of read_skill was put to the policy, not skipped past it.

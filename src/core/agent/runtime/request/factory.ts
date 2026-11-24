@@ -6,19 +6,19 @@ import { retainReplayRetirements } from '../../../runCheckpoint.js';
 import { buildCallLLMStage } from '../../stages/callLLM.js';
 import { retrievalRequestWriter } from '../../honesty/retrievalRequests.js';
 import type { AgentConfiguration } from '../configuration/types.js';
+import type { ToolRegistrations } from '../../stages/toolResolver.js';
 import type { buildSlots } from '../slots/buildSlots.js';
-import type { ToolClaim } from '../../buildToolRegistry.js';
 import { buildSourceConsultation } from '../../honesty/sourceConsultation.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface RequestEnvironment {
+  readonly registrations: Required<ToolRegistrations>;
   readonly configuration: AgentConfiguration;
   readonly argumentSources: boolean;
   readonly governsOutput: boolean;
   readonly provider: AgentConfiguration['provider'];
   readonly model: string;
   readonly resolverForValues: ReturnType<typeof buildSlots>['resolverForValues'];
-  readonly toolClaimants: ReadonlyMap<string, readonly ToolClaim[]>;
   readonly temperature: number | undefined;
   readonly maxTokens: number | undefined;
   readonly pricingTable: AgentConfiguration['pricingTable'];
@@ -55,9 +55,18 @@ export function requestFactory(environment: RequestEnvironment) {
           }),
           resolve: environment.resolverForValues(run.value),
           servedTools: run.value.servedTools,
-          toolClaimants: environment.toolClaimants,
+          toolClaimants: environment.registrations.toolClaimants,
         })),
       }),
+      servedTools: run.value.servedTools,
+      registrations: environment.registrations,
+      ...(environment.configuration.recordReceiptValue !== false &&
+        run.own && {
+          canRecordToolSelection: () => {
+            const policy = run.value.redaction;
+            return policy?.coverage.state === 'declared-none' && !policy.serving.active();
+          },
+        }),
       ...(recallRequests !== undefined && { recallRequests }),
       onResponseCommitted: () => {
         run.value.modelResponseCommitted = true;

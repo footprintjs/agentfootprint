@@ -1,17 +1,17 @@
 import type { TypedScope } from 'footprintjs';
 import { wireViolationsOf } from '../../../../integrity/invariant-violation/wire.js';
-import type { LLMRequest, WireToolManifest } from '../../../../provider-contract/types.js';
+import type { LLMRequest, LLMResponse } from '../../../../provider-contract/types.js';
 import { fileIntegrityFindings } from '../../integrityFindings.js';
 import type { AgentState } from '../../types.js';
 import type { CallLLMStageDeps } from './types.js';
 
-export function recordWireCheck(
+export function recordWireFindings(
   scope: TypedScope<AgentState>,
   llmRequest: LLMRequest,
-  manifest: WireToolManifest | undefined,
-  provider: string,
+  response: LLMResponse,
+  answeredBy: { readonly provider: string },
   iteration: number,
-  ledger: CallLLMStageDeps['integrityLedger'],
+  { integrityLedger: ledger }: Pick<CallLLMStageDeps, 'integrityLedger'>,
 ): void {
   // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
   // this reads what the ADAPTER says actually crossed — the manifest read
@@ -29,7 +29,9 @@ export function recordWireCheck(
       names: (llmRequest.tools ?? []).map((t) => t.name),
       provenance: 'callLLM (assembled request)',
     },
-    manifest === undefined ? undefined : { names: manifest.toolNames, provenance: provider },
+    response.wireManifest === undefined
+      ? undefined
+      : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
     iteration,
   );
   // The disposition: a provider stating no manifest leaves this call
@@ -38,7 +40,7 @@ export function recordWireCheck(
   ledger?.current?.note(
     'invariant-violation',
     'wire',
-    manifest === undefined
+    response.wireManifest === undefined
       ? 'unreachable'
       : wireFindings.length > 0
       ? 'checked-fail'

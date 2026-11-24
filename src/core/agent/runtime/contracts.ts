@@ -17,7 +17,7 @@ import type {
 } from 'footprintjs';
 import type { CachePolicy } from '../../../cache/types.js';
 import type { RunnerPauseOutcome } from '../../pause.js';
-import type { LLMToolSchema } from '../../../provider-contract/types.js';
+import type { ReadSkillFor } from '../../slots/composeSkillCatalog.js';
 import type { ArtifactStore } from '../../../artifacts/types.js';
 import type { RunContext } from '../../../bridge/eventMeta.js';
 import type {
@@ -158,17 +158,7 @@ export interface AgentMethods {
   ): void;
   emitToolSessionReport(report: ToolSessionReport, origin: ToolSessionOrigin): void;
   openSkillIds(): readonly string[];
-  readSkillOfferFor():
-    | ((args: {
-        readonly currentSkillId?: string;
-        readonly hiddenSkillIds?: readonly string[];
-        readonly menu?: {
-          readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
-          readonly cursorId?: string;
-          readonly stay?: boolean;
-        };
-      }) => LLMToolSchema | undefined)
-    | undefined;
+  readSkillOfferFor(): ReadSkillFor | undefined;
   governsSkillVisibility(): boolean;
   hiddenSkillIdsNow(): ((scope: object) => Promise<readonly string[]>) | undefined;
   assertDeliverableRoles(): void;

@@ -320,6 +320,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'omittedForAttention',
       'requestMeasurement',
       'replayPreparations',
+      'toolSelection',
     ]),
     why:
       'Nothing on this view has been checked against what went out. Every field below is ' +

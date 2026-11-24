@@ -31,24 +31,25 @@ export function buildCatalog(
   // auto-attached `present` tool when a store is attached, 9.22.0) +
   // skill-supplied tools (with autoActivate scoping); validates
   // name uniqueness; produces the dispatch map.
-  const { registryByName, toolSchemas, toolDeclaringSkills, toolClaimants } = buildToolRegistry(
-    this.configuration.sourceEvidenceConfig === undefined
-      ? environment.registry
-      : [
-          ...environment.registry,
-          ...sourceEvidenceTools().map((tool) => ({ name: tool.schema.name, tool })),
-        ],
-    this.configuration.injections,
-    {
-      hasArtifactStore: environment.artifactStore !== undefined,
-      // The reserved-argument refusal (9.101.0) — only when the ledger is
-      // armed may a registry tool's own `_findings` be refused.
-      ...(this.configuration.findingsOptions !== undefined && { findings: true as const }),
-      // …and, under declared sources (either door), a RULED tool's: the arm
-      // plants `_findings.from` on it and its sentences name that argument.
-      ...(this.configuration.argumentSourcesArmed === true && { argumentSources: true as const }),
-    },
-  );
+  const { registryByName, toolSchemas, toolDeclaringSkills, toolClaimants, scopedSkillTools } =
+    buildToolRegistry(
+      this.configuration.sourceEvidenceConfig === undefined
+        ? environment.registry
+        : [
+            ...environment.registry,
+            ...sourceEvidenceTools().map((tool) => ({ name: tool.schema.name, tool })),
+          ],
+      this.configuration.injections,
+      {
+        hasArtifactStore: environment.artifactStore !== undefined,
+        // The reserved-argument refusal (9.101.0) — only when the ledger is
+        // armed may a registry tool's own `_findings` be refused.
+        ...(this.configuration.findingsOptions !== undefined && { findings: true as const }),
+        // …and, under declared sources (either door), a RULED tool's: the arm
+        // plants `_findings.from` on it and its sentences name that argument.
+        ...(this.configuration.argumentSourcesArmed === true && { argumentSources: true as const }),
+      },
+    );
   if ([...registryByName.values()].some(carriesArgumentView)) declarePrivateFields(this.runner);
   // The declared ontology's tool edges (9.106.0): every name a node's `via`
   // names must be a tool this registry can dispatch — the static registry,
@@ -226,6 +227,7 @@ export function buildCatalog(
     toolSchemas,
     toolDeclaringSkills,
     toolClaimants,
+    scopedSkillTools,
     inputsArmed,
     argumentSources,
     resultsArmed,
