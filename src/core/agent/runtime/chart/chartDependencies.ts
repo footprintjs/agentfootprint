@@ -28,6 +28,7 @@ export interface ChartDependenciesEnvironment {
   readonly maxIterations: number;
   readonly seed: ChartArguments['seed'];
   readonly callLLM: ChartArguments['callLLM'];
+  readonly lateRecordNotes?: ChartArguments['lateRecordNotes'];
   readonly terminalRouteDecider: ChartArguments['routeDecider'];
   readonly toolCallsHandler: ChartArguments['toolCallsHandler'];
   readonly stepPlanFor: StepPlanFor | undefined;
@@ -123,6 +124,9 @@ export function chartDependencies(
     // grammar as the slot's `findings` and callLLM's `hasFindingsLedger`,
     // so the three can never disagree about whether the ledger is armed.
     ...(this.configuration.findingsOptions !== undefined && { hasFindingsLedger: true }),
+    ...(environment.lateRecordNotes !== undefined && {
+      lateRecordNotes: environment.lateRecordNotes,
+    }),
     ...(this.configuration.citationOptions !== undefined && { hasCitations: true as const }),
     // The inputs layer (honesty layer 2): `sf-inputs` between the LLM call
     // and Route, in both builders through one helper; absent → untouched.

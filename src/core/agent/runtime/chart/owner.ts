@@ -8,6 +8,7 @@ import { toolCallsFactory } from '../toolCalls/factory.js';
 import type { TypedScope } from 'footprintjs';
 
 import { type AgentRunValues } from '../../runValues.js';
+import { buildLateRecordNoteMount } from '../../lateNotes/chart.js';
 import { bindRunnerStage, type RunnerScopeValues } from '../../../runnerExecution.js';
 import { type FlowChart } from 'footprintjs';
 
@@ -537,6 +538,12 @@ export function buildChart(
     maxIterations,
     seed,
     callLLM,
+    ...(this.configuration.lateRecordNotes === true && {
+      lateRecordNotes: buildLateRecordNoteMount(
+        (scope) => this.native.runExecution().forScope(scope).value,
+        { registryByName, toolClaimants },
+      ),
+    }),
     terminalRouteDecider,
     toolCallsHandler,
     stepPlanFor,

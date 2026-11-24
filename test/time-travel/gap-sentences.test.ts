@@ -118,6 +118,7 @@ import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-con
 // with. The public barrel carries the deps type and not this builder.
 import { buildMessageApiChart } from '../../src/core/agent/buildMessageApiChart.js';
 import { isPaused, pauseHere } from '../../src/core/pause.js';
+import { recordedLateNoteRun } from '../helpers/lateRecordNoteSdk.js';
 import { replayReceiptFixture } from '../helpers/replayReceiptFixture.js';
 
 /** Several real runs per test, all of them tiny; the budget is stated. */
@@ -295,6 +296,14 @@ const plainGrouped = once(async () => {
   await agent.run({ message: 'go' });
   return { snapshot: agent.getSnapshot()!, wire };
 });
+
+async function lateNoteSnapshot(reactMode: 'dynamic' | 'dynamic-grouped') {
+  const run = await recordedLateNoteRun(
+    { reactMode, observerDelivery: 'inline', commitValues: 'full' },
+    true,
+  );
+  return detach(run.snapshot);
+}
 
 /** A grouped agent whose ONLY tool is the forced answer tool, whose name is a
  *  run constant. A `'tool-forced'` output refuses to coexist with registered
@@ -1557,6 +1566,69 @@ const ACCOUNT: readonly Entry[] = [
             gap.fields.some((f) => f === 'callRuntimeStageId'),
           );
           expect(naming.map(([kind]) => kind)).toEqual([]);
+        },
+      },
+    ],
+  },
+  {
+    site: 'lateRecordNote',
+    sentence: UNGAPPED_FIELDS['lateRecordNote']!,
+    clauses: [
+      {
+        quote:
+          'The disposition and optional attempt pointer come from this call’s own record-note write',
+        claim: 'each call carries the observed disposition and its own exact attempt pointer',
+        fields: ['view:lateRecordNote.disposition', 'view:lateRecordNote.pointer'],
+        assert: async () => {
+          const snapshot = await lateNoteSnapshot('dynamic');
+          const views = servedViews(snapshot);
+          expect(views).toHaveLength(2);
+          expect(views[0]!.callRuntimeStageId).not.toBe(views[1]!.callRuntimeStageId);
+          for (const [callIndex, view] of views.entries()) {
+            expect(view.lateRecordNote).toEqual({
+              disposition: callIndex === 0 ? 'omitted' : 'submitted',
+              pointer: { callRuntimeStageId: view.callRuntimeStageId, ordinal: 1 },
+            });
+          }
+        },
+      },
+      {
+        quote: 'They are independent of the request receipt and inherited state',
+        claim: 'both native chart shapes preserve the disposition after losing those inputs',
+        fields: ['view:lateRecordNote'],
+        assert: async () => {
+          for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
+            const snapshot = await lateNoteSnapshot(mode);
+            const damaged = stripBases(stripKey(snapshot, 'receipt'));
+            const views = servedViews(damaged);
+            expect(views).toHaveLength(2);
+            for (const [callIndex, view] of views.entries()) {
+              expect(view.basis).toBeUndefined();
+              expect(kindsOf(view)).toEqual(
+                expect.arrayContaining(['no-fold-base', 'no-receipt-on-chart']),
+              );
+              expect(view.lateRecordNote).toEqual({
+                disposition: callIndex === 0 ? 'omitted' : 'submitted',
+                pointer: { callRuntimeStageId: view.callRuntimeStageId, ordinal: 1 },
+              });
+            }
+          }
+        },
+      },
+      {
+        quote: 'An absent note disposition leaves its submission unknown',
+        claim: 'missing proof stays absent or unavailable without borrowing a different attempt',
+        fields: ['view:lateRecordNote.disposition'],
+        assert: async () => {
+          const snapshot = await lateNoteSnapshot('dynamic');
+          const withoutWrite = servedAt(stripKey(snapshot, 'lateRecordNoteReceipt'), 2)!;
+          expect(withoutWrite.lateRecordNote).toBeUndefined();
+          const withoutAcceptedProof = rewriteKey(snapshot, 'lateRecordNoteReceipt', [
+            { attempts: [] },
+          ]);
+          expect(servedAt(withoutAcceptedProof, 2)!.lateRecordNote).toEqual({
+            disposition: 'unavailable',
+          });
         },
       },
     ],

@@ -21,6 +21,7 @@ export const PRIVATE_FIELD_ROOTS = Object.freeze([
   'argumentResolutions',
   'pausedCheckInArgs',
   'innerCallPolicyArgs',
+  'recordNoteWireProof',
   ...CITATION_PRIVATE_ROOTS,
 ] as const);
 export type PrivateFieldRoot = (typeof PRIVATE_FIELD_ROOTS)[number];

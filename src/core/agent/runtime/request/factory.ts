@@ -48,6 +48,13 @@ export function requestFactory(environment: RequestEnvironment) {
         );
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(environment.configuration.lateRecordNotes === true && {
+        takeLateRecordNote: (iteration: number) => {
+          const work = run.value.lateRecordWork;
+          delete run.value.lateRecordWork;
+          return work?.iteration === iteration ? work.note : undefined;
+        },
+      }),
       ...(environment.configuration.citationOptions !== undefined && { offerCitations: true }),
       ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
         sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({

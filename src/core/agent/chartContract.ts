@@ -293,6 +293,7 @@ export interface AgentChartDeps {
    * This flag never makes the cache subflow suppress findings cache markers.
    */
   readonly hasFindingsLedger?: boolean;
+  readonly lateRecordNotes?: import('./lateNotes/types.js').LateRecordNoteMount;
   readonly hasCitations?: true;
 
   /**

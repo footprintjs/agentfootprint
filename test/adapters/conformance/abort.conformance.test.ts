@@ -55,6 +55,7 @@ const HELPER_FILES: Readonly<Record<string, string>> = {
     'frozen model facts and synchronous exact-ID lookup; no client, I/O or provider construction',
   'googleGenAI.ts': 'the Google client resolver both Gemini doors share',
   'ollamaErrors.ts': 'bounded wire-error parsing with no provider construction or I/O',
+  'openAIChatMessages/toOpenAIMessages.ts': 'synchronous Chat Completions message projection',
   'retryAfter.ts': 'Retry-After parsing',
   'wireManifest.ts': 'the manifest read back from a serialized body',
 };

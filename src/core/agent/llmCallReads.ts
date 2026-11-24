@@ -50,9 +50,11 @@ export function llmCallReadsInto(p: Readonly<Record<string, unknown>>): Record<s
 export function llmCallResponseFields(
   state: Readonly<Record<string, unknown>>,
   citations: boolean,
+  lateRecordNotes = false,
 ) {
   return {
     ...responseStopFields(state),
     ...(citations && { acceptedCitationOffer: state.acceptedCitationOffer }),
+    ...(lateRecordNotes && { lateRecordNoteReceipt: state.lateRecordNoteReceipt }),
   };
 }

@@ -1,5 +1,13 @@
 /** Private transport boundary; not a replay event or a provider capability. */
-import type { LLMCallHooks, LLMChunk, LLMMessage, LLMRequest, LLMResponse } from './types.js';
+import { scopeLateRecordNote } from './lateRecordNote.js';
+import type {
+  LLMCallHooks,
+  LLMChunk,
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+} from './types.js';
 
 // Symbol.for follows the private inner-run/tool-session seams: a CJS wrapper
 // and an ESM caller in one process see the same hook, never a wire field.
@@ -96,6 +104,7 @@ export function refuseObservedRequest(hooks: LLMCallHooks | undefined): void {
 export function requestAttempt(
   hooks: LLMCallHooks | undefined,
   request: LLMRequest,
+  provider?: LLMProvider,
 ): {
   readonly hooks: LLMCallHooks | undefined;
   readonly observeChunk?: (chunk: LLMChunk) => void;
@@ -105,8 +114,14 @@ export function requestAttempt(
   const observer = prior?.[REQUEST_OBSERVER];
   const attempts = prior?.[ATTEMPT_OBSERVER];
   const offers = prior?.[CITATION_OFFER];
+  const lateNote = scopeLateRecordNote(hooks, provider);
   // Off-mode keeps the original hook object and all its behavior unchanged.
-  if (observer === undefined && attempts === undefined && offers === undefined)
+  if (
+    observer === undefined &&
+    attempts === undefined &&
+    offers === undefined &&
+    lateNote === undefined
+  )
     return {
       hooks,
       close() {
@@ -156,6 +171,15 @@ export function requestAttempt(
           },
         },
       }),
+    ...(id === undefined &&
+      lateNote !== undefined && {
+        [ACTIVE_ATTEMPT]: {
+          id: Symbol(),
+          refuse: () => {
+            if (active) refused = true;
+          },
+        },
+      }),
     ...((hooks?.onResilience !== undefined || attempts !== undefined) && {
       onResilience: (report) => {
         if (!active) return;
@@ -174,7 +198,7 @@ export function requestAttempt(
     },
   };
   return {
-    hooks: scoped,
+    hooks: lateNote === undefined ? scoped : lateNote.bind(scoped),
     ...(attempts !== undefined && {
       observeChunk(chunk: LLMChunk) {
         if (active && chunk.done && chunk.response !== undefined) responded = true;
@@ -183,6 +207,7 @@ export function requestAttempt(
     close(settlement = 'failed') {
       if (!active) return;
       active = false;
+      lateNote?.close(refused);
       if (id !== undefined) {
         attempts?.({
           kind: 'settle',

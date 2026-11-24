@@ -64,6 +64,7 @@ import { WRAP_UP_INSTRUCTION } from '../../src/core/agent/stages/wrapUp.js';
 import { recoveryFeedback } from '../../src/core/agent/stages/callLLM/requestOnly.js';
 import { nudgeTeachingMessage } from '../../src/injection-engine/skillSteps.js';
 import {
+  LATE_RECORD_NOTE_ATTRIBUTION,
   LIBRARY_AUTHORED_PREFIXES,
   NATIVE_RECOVERY_FRAME_PREFIX,
 } from '../../src/lib/saidByPerson.js';
@@ -378,10 +379,25 @@ describe('one rule, two readers', () => {
 // ── Contract: the registry is the whole answer, and it is closed ──────
 
 describe('the registry a reader is handed', () => {
-  it('holds eleven openings, including the request-only native recovery frame', () => {
+  it('protects a person’s literal quotation of the wire-only record note header', () => {
+    const quote: LLMMessage = {
+      role: 'user',
+      content: `${LATE_RECORD_NOTE_ATTRIBUTION}\nDoes this appear in my request history?`,
+    };
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer' },
+      quote,
+    ];
+
+    expect(isSaidByPerson(quote)).toBe(true);
+    expect(saidByPerson(contextOver(history, quote.content))).toEqual([history[0], quote]);
+    expect(currentRequestIndexOf(history, quote.content)).toBe(2);
+  });
+
+  it('includes the history openings and request-only recovery frame', () => {
     const w = windowWithEveryClass();
-    // The registry includes request-only lines such as the library note and staged-refs nudge.
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
+    expect(LIBRARY_AUTHORED_PREFIXES).not.toContain(LATE_RECORD_NOTE_ATTRIBUTION);
     for (const msg of [
       w.compacted,
       w.notice,
@@ -407,9 +423,10 @@ describe('the registry a reader is handed', () => {
   });
 
   it('cannot be extended at runtime — a consumer holds the same array the library reads', () => {
+    const originalOpenings = [...LIBRARY_AUTHORED_PREFIXES];
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
+    expect(LIBRARY_AUTHORED_PREFIXES).toEqual(originalOpenings);
   });
 });
 

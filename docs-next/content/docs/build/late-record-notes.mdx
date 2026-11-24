@@ -1,0 +1,48 @@
+---
+title: Late record notes
+description: Add a short record note to an eligible model request and read its submission disposition.
+---
+
+Set `lateRecordNotes: true` in `Agent.create()` to put a short note at the end
+of an eligible model request. The option is off by default. The note can name
+open coverage points, limits the library recorded, and tool call outcomes.
+It draws on facts already recorded in the current turn. It carries an
+attribution line that identifies it as framework-supplied data and stays out
+of conversation history.
+
+## Enable late record notes
+
+The first supported route is library-owned `openai()` using the default OpenAI
+Chat Completions endpoint. Injected clients and unresolved routes keep the
+ordinary request. The library preserves the request bytes on signing-capable
+routes and bound continuations.
+
+<CodeFile
+  path="examples/features/131-late-record-notes.ts"
+  region="late-record-notes"
+  title="Read the receipt for an injected client"
+/>
+
+The [runnable example](https://github.com/footprintjs/agentfootprint/blob/main/examples/features/131-late-record-notes.ts)
+uses an injected, scripted client with synthetic data and runs offline. It checks
+that the follow-up ends with the tool result and that the receipt says
+`unavailable`. The receipt has no accepted note attempt.
+
+## Read the receipt
+
+Read `lateRecordNoteReceipt` from `agent.getLastSnapshot()?.sharedState`.
+The optional one-element array holds the latest recorded call's receipt.
+`attempts` contains bounded per-call attempt ordinals and their dispositions.
+`accepted`, when present, identifies the attempt that produced the selected
+response.
+
+- `submitted` means the owned encoder handed the exact note to the SDK.
+- `omitted` means the library observed a handoff without the note.
+- `not-dispatched` means the library observed an abort before handoff.
+- `unavailable` means the library lacked sufficient handoff evidence.
+
+Remote receipt, model use and improved answers remain unverified. The receipt
+exposes dispositions and ordinals. Note text and private proof values are
+kept out of the receipt. `servedAt()` exposes the accepted disposition and its
+record pointer for the selected call. A served recording does not reproduce
+the note text.

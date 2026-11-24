@@ -1,4 +1,5 @@
 import type { TypedScope } from 'footprintjs';
+import { trackLateRecordNote } from '../../../../provider-contract/lateRecordNote.js';
 import type { LLMMessage, LLMToolSchema } from '../../../../provider-contract/types.js';
 import { NATIVE_RECOVERY_FRAME_PREFIX } from '../../../../lib/saidByPerson.js';
 import type { ToolsWithheld } from '../../composeRequest.js';
@@ -17,6 +18,7 @@ interface RequestOnlyContext {
   readonly ledger: FindingsLedger | undefined;
   readonly registeredToolSchemas: readonly LLMToolSchema[];
   readonly withheld: ToolsWithheld | null;
+  readonly continuing: boolean;
 }
 
 const INTERNAL_RETRY = `${NATIVE_RECOVERY_FRAME_PREFIX} This is framework guidance, not a message from the person or evidence.]`;
@@ -45,8 +47,16 @@ export function isRecoveryFeedback(message: LLMMessage): boolean {
 export function requestOnlyMessages(
   scope: TypedScope<AgentState>,
   deps: CallLLMStageDeps,
-  { iteration, committed, messages, ledger, registeredToolSchemas, withheld }: RequestOnlyContext,
-): readonly RequestOnlyMessage[] {
+  {
+    iteration,
+    committed,
+    messages,
+    ledger,
+    registeredToolSchemas,
+    withheld,
+    continuing,
+  }: RequestOnlyContext,
+) {
   const requestOnly: RequestOnlyMessage[] = [];
   // THE STAGED-REFS NUDGE (`nudge: true` on the evidence gate). Judged on
   // `registeredToolSchemas` — the tools REALLY served this call, so the
@@ -105,5 +115,10 @@ export function requestOnlyMessages(
     };
     requestOnly.push({ message: line, reason: 'findings-data' });
   }
-  return requestOnly;
+  // The ordinary tail keeps its replay slots. The native leaf alone may append the note.
+  const lateNote =
+    deps.takeLateRecordNote === undefined
+      ? undefined
+      : trackLateRecordNote(deps.takeLateRecordNote(iteration), continuing);
+  return { messages: requestOnly, lateNote };
 }

@@ -434,7 +434,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
  * what that number MEANS, `servedViews()` returns the fold's number outright,
  * and `no-fold-base` names it now.
  *
- * Paths are spelled as they are on the shape that HAS the field — both keys
+ * Paths are spelled as they are on the shape that HAS the field. The keys
  * here are `ServedView` fields. Gap `fields` are spelled as `Receipt` paths —
  * see {@link ServedGap.fields} for the places the two shapes differ.
  *
@@ -453,6 +453,10 @@ export const UNGAPPED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
   // `keyedFold`, so no missing base and no missing run log can touch it. An
   // epoch with no bundle is not located at all, so there is no view to carry it.
   callRuntimeStageId: 'Never absent here, so there is nothing about it for a gap to excuse.',
+  lateRecordNote:
+    'The disposition and optional attempt pointer come from this call’s own record-note ' +
+    'write. They are independent of the request receipt and inherited state. An absent ' +
+    'note disposition leaves its submission unknown.',
   // THE SENTENCE THE RULE IS MODELLED ON. It makes no claim about code at all:
   // it says what the field MEANS inside the account, and nothing outside the
   // sentence can falsify it. Every other entry in this file was reduced to

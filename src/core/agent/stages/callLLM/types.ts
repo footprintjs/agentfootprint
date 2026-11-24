@@ -20,6 +20,7 @@ import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
 import type { AgentState } from '../../types.js';
 
 export interface CallLLMStageDeps {
+  readonly takeLateRecordNote?: (iteration: number) => string | undefined;
   readonly offerCitations?: true;
   readonly sourceConsultation?: SourceConsultation;
   readonly registrations?: import('../toolResolver.js').ToolRegistrations;

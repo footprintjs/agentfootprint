@@ -28,6 +28,7 @@ import type {
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { abortableIterable, abortErrorOf, throwIfAborted, untilAborted } from '../../lib/abort.js';
 import { asContextWindowExceeded } from '../../provider-contract/contextWindow.js';
+import { beginLateRecordNote } from '../../provider-contract/lateRecordNote.js';
 import { retryAfterMsFromError } from './retryAfter.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
@@ -75,6 +76,18 @@ interface AnthropicRequestOptions {
  *  markers are all decided there. */
 interface AnthropicCreateParams extends AnthropicMessagesBody {
   model: string;
+}
+
+/** Observe the note-free signing transport at its actual SDK entry. */
+function sendUnder<T>(
+  messages: AnthropicClient['messages'],
+  send: (params: AnthropicCreateParams, options?: AnthropicRequestOptions) => T,
+  params: AnthropicCreateParams,
+  signal: AbortSignal | undefined,
+  lateNote: ReturnType<typeof beginLateRecordNote>,
+): T {
+  if (typeof send === 'function') lateNote?.handoff(params.messages);
+  return Reflect.apply(send, messages, signal ? [params, { signal }] : [params]);
 }
 
 interface AnthropicStream {
@@ -241,13 +254,13 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       const { params, offer } = buildParams(preparation.request, hooks);
       const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
+      const lateNote = beginLateRecordNote(hooks, provider, 'signing');
       try {
         // The signal rides the SDK's request options, so an abort cancels the
         // HTTP request itself; the race refuses an answer that lands after it.
+        const messages = client.messages;
         const message = await untilAborted(
-          req.signal
-            ? client.messages.create(params, { signal: req.signal })
-            : client.messages.create(params),
+          sendUnder(messages, messages.create, params, req.signal, lateNote),
           req.signal,
         );
         // Manifest read from the FINAL params — after tool mapping and cache
@@ -258,7 +271,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
-        if (offer !== undefined && !req.signal?.aborted) offer.accept(response);
+        if (!req.signal?.aborted) {
+          offer?.accept(response);
+          lateNote?.accept(response);
+        }
         return response;
       } catch (err) {
         throw wrapError(err, req.signal);
@@ -279,11 +295,11 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         thinkingKind = 'unclassified';
       }
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
+      const lateNote = beginLateRecordNote(hooks, provider, 'signing');
       let stream: AnthropicStream;
       try {
-        stream = req.signal
-          ? client.messages.stream(params, { signal: req.signal })
-          : client.messages.stream(params);
+        const messages = client.messages;
+        stream = sendUnder(messages, messages.stream, params, req.signal, lateNote);
       } catch (err) {
         throw wrapError(err, req.signal);
       }
@@ -346,7 +362,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
-        if (offer !== undefined && !req.signal?.aborted) offer.accept(response);
+        if (!req.signal?.aborted) {
+          offer?.accept(response);
+          lateNote?.accept(response);
+        }
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
         throw wrapError(err, req.signal);

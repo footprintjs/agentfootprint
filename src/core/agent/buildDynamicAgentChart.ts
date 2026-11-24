@@ -73,7 +73,7 @@ import {
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
-import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
+import { mountRequestStages } from './mountRequestStages.js';
 import {
   timeClockArg,
   timeLimitsArg,
@@ -469,19 +469,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
-  inner = inner
-    // The findings offer re-decorates every tool per call — see
-    // buildAgentChart's mount. Closed over at build time.
-    .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => cacheMountInput(parent, deps),
-      outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
-      arrayMerge: ArrayMergeMode.Replace,
-    })
-    // CallLLM emits the per-iteration `iteration_start` marker itself (no
-    // dedicated IterationStart stage — emitting is passive observability).
-    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')
-    // Declared milestone (9.90.0): the LLM turn, on the inner log.
-    .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
+  inner = mountRequestStages(inner, deps);
 
   if (deps.thinkingSubflow) {
     inner = inner.addSubFlowChartNext(
@@ -583,7 +571,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
           // Native candidates and prose cutoffs carry stop evidence. Ordinary
           // replies without earlier stop evidence leave the mapper byte-identical.
-          ...llmCallResponseFields(s, deps.hasCitations === true),
+          ...llmCallResponseFields(
+            s,
+            deps.hasCitations === true,
+            deps.lateRecordNotes !== undefined,
+          ),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.

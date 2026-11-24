@@ -109,9 +109,19 @@ export function seedToolSettlements(
   scope.settledToolCallsComplete = recovered?.complete ?? !continuing;
 }
 
+export interface ToolEvidenceSeedOptions {
+  /**
+   * Which honesty layers this run armed (`honesty/armed.ts`) — the one run
+   * constant, written once. Absent → nothing is written.
+   */
+  readonly honestyLayers?: HonestyLayers;
+  readonly lateRecordNotes?: true;
+  readonly findings?: boolean;
+}
+
 export function seedToolEvidence(
   scope: TypedScope<AgentState>,
-  deps: { readonly honestyLayers?: HonestyLayers; readonly findings?: boolean },
+  deps: ToolEvidenceSeedOptions,
   resume?: PendingResumeHistory,
 ): void {
   const continuing = resume !== undefined && !resume.appendsUserTurn;
@@ -121,7 +131,7 @@ export function seedToolEvidence(
   }
   if (recovered?.libraryResultLimitsIncomplete === true) scope.libraryResultLimitsIncomplete = true;
   seedEnteredToolCalls(scope, deps, continuing, recovered?.entries);
-  const armed = deps.honestyLayers?.answer === true;
+  const armed = deps.honestyLayers?.answer === true || deps.lateRecordNotes === true;
   seedToolSettlements(scope, armed, continuing, recovered?.settlements);
 }
 

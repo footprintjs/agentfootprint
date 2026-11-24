@@ -501,6 +501,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   ],
 
   // ── the host, the operator or the developer reads these; no model does ──
+  'src/time-travel/servedView/gaps.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the exported UNGAPPED_FIELDS catalogue explains the late note field to callers; the built-in served-view reader returns gap descriptors from SERVED_GAPS and never emits this catalogue in a model request or tool result',
+    },
+  ],
   'src/adapters/code/local.ts': [
     {
       kind: 'not-model-facing',
@@ -1481,12 +1488,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // An empty role-visible catalog withholds read_skill before composing its
         // description, retiring the registry's former empty-catalog sentence.
         // Prose citations add one request instruction plus focused fixture literals.
-        files: 135,
-        total: 239,
+        // Late record notes add a static field explanation for the caller.
+        files: 136,
+        total: 240,
         registry: 7,
         ephemeral: 29,
         unrepaired: 36,
-        notModelFacing: 167,
+        notModelFacing: 168,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

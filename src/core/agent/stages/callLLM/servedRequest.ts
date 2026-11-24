@@ -159,7 +159,7 @@ export async function completeObserved(
   hooks: LLMCallHooks,
   signal: AbortSignal | undefined,
 ) {
-  const attempt = requestAttempt(hooks, request);
+  const attempt = requestAttempt(hooks, request, provider);
   let settlement: RequestSettlement = 'failed';
   try {
     const response = await untilAborted(provider.complete(request, attempt.hooks), signal);
@@ -177,7 +177,7 @@ export async function* streamObserved(
   signal: AbortSignal | undefined,
 ) {
   if (provider.stream === undefined) return;
-  const attempt = requestAttempt(hooks, request);
+  const attempt = requestAttempt(hooks, request, provider);
   try {
     const stream = abortableIterable(provider.stream(request, attempt.hooks), signal);
     if (attempt.observeChunk === undefined) {

@@ -13,6 +13,10 @@ export interface SourceLinkConsumer {
 }
 
 export interface RecordsState {
+  /** Bounded dispositions and the accepted leaf for the last armed native call. */
+  lateRecordNoteReceipt?: readonly [
+    import('../../../../provider-contract/lateRecordNote.js').LateRecordNoteReceipt,
+  ];
   /** Authorized grounding retained for exact result occurrences in this turn. */
   citationSources?: readonly import('../../citations/capture.js').StoredCitationSource[];
   /** The selected answer owns this singleton offer. Replacing it clears any abandoned offer. */

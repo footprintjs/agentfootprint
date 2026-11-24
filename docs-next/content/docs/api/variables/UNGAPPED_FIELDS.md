@@ -49,7 +49,7 @@ ground that `servedAt(k)` hands `k` back; what a base-less fold changes is
 what that number MEANS, `servedViews()` returns the fold's number outright,
 and `no-fold-base` names it now.
 
-Paths are spelled as they are on the shape that HAS the field — both keys
+Paths are spelled as they are on the shape that HAS the field. The keys
 here are `ServedView` fields. Gap `fields` are spelled as `Receipt` paths —
 see [ServedGap.fields](/docs/api/interfaces/ServedGap#fields) for the places the two shapes differ.
 

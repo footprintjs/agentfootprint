@@ -69,7 +69,7 @@ import {
   finalBranchOutput,
 } from './stages/breakFinal.js';
 import { prepareFinalFor } from './stages/prepareFinal.js';
-import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
+import { mountRequestStages } from './mountRequestStages.js';
 import {
   mountInputsLayer,
   mountResultsLayer,
@@ -606,25 +606,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     );
   }
 
-  builder = builder
-    // sf-cache: decideCacheMarkers → CacheGate → apply/skip, collapsed into
-    // ONE box. Pure provider-agnostic DECISION layer — reads the turn's state,
-    // outputs only the gated cacheMarkers (Replace, not concat, across the
-    // loop). The attached provider's CacheStrategy turns markers into wire
-    // format later. See buildCacheSubflow.ts.
-    // Findings uses stable tool definitions and late request-only DATA, so
-    // its changing ledger does not disable prefix cache markers.
-    .addSubFlowChartNext(SUBFLOW_IDS.CACHE, buildCacheSubflow(), 'Cache', {
-      inputMapper: (parent) => cacheMountInput(parent, deps),
-      outputMapper: (sf) => ({ cacheMarkers: sf.cacheMarkers }),
-      arrayMerge: ArrayMergeMode.Replace,
-    })
-    // CallLLM emits the per-iteration `iteration_start` marker itself (no
-    // dedicated IterationStart stage — emitting is passive observability).
-    .addFunction('CallLLM', deps.callLLM as never, STAGE_IDS.CALL_LLM, 'LLM invocation')
-    // Declared milestone (9.90.0): the LLM turn — `milestone:llm-turn` on the
-    // stage's commit bundle, from the same table `milestoneFor` reads.
-    .tag(...milestoneTagsFor(STAGE_IDS.CALL_LLM));
+  builder = mountRequestStages(builder, deps);
   // v2.14 — conditional NormalizeThinking sub-subflow. Mounted ONLY
   // when a ThinkingHandler resolved (declared by the provider OR
   // explicitly set via .thinkingHandler()). When undefined, the stage
