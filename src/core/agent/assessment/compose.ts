@@ -280,6 +280,9 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   ...LIBRARY_LIMIT_WORDS,
   'result-dropped-from-window':
     'a result from this turn was dropped from the conversation before the answer',
+  'memory-retrieval-timeout': 'a memory search timed out',
+  'memory-retrieval-excluded':
+    'retrieval filters and budgets excluded all returned memory candidates',
   'work-not-finished': 'a tool reported unfinished work',
   'coverage-gap': 'a tool said there is ground it did not check or cannot cover',
   'declared-absent': 'a tool said nothing matched',
@@ -500,7 +503,8 @@ function reasonClauses(
       }
       continue;
     }
-    const details = names?.libraryLimits?.get(reason) ?? [reasonClause(reason, names)];
+    const details = names?.libraryLimits?.get(reason) ??
+      names?.retrievalWarnings?.get(reason) ?? [reasonClause(reason, names)];
     const room = MAX_CLAUSES - counted;
     clauses.push(...details.slice(0, room));
     counted += Math.min(details.length, room);

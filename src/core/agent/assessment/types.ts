@@ -175,6 +175,8 @@ export type AssessmentReason =
   | 'placed-unread'
   | 'times-without-zone'
   | 'result-dropped-from-window'
+  | 'memory-retrieval-timeout'
+  | 'memory-retrieval-excluded'
   | 'work-not-finished'
   | 'period-not-held'
   | 'period-partly-held'

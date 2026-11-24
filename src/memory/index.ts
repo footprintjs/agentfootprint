@@ -34,6 +34,8 @@ export {
   memoryInjectionKey,
   isMemoryInjectionKey,
   retrievalEvidenceKey,
+  memoryRecallOutcomesKey,
+  MEMORY_RECALL_OUTCOMES_KEY_PREFIX,
   isRetrievalEvidenceKey,
   type MemoryType,
   type MemoryStrategyKind,

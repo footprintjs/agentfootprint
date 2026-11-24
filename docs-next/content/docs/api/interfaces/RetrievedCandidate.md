@@ -110,11 +110,11 @@ Defined in: [src/memory/retrieval/types.ts:64](https://github.com/footprintjs/ag
 
 ### reason?
 
-> `readonly` `optional` **reason?**: [`RetrievalRejectReason`](/docs/api/type-aliases/RetrievalRejectReason)
+> `readonly` `optional` **reason?**: [`RetrievalRejectReason`](/docs/api/type-aliases/RetrievalRejectReason) \| `"decayed"`
 
 Defined in: [src/memory/retrieval/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L68)
 
-Present exactly when `admitted` is false.
+A rejected candidate records its ranking, budget, or decay reason.
 
 ***
 

@@ -1,4 +1,8 @@
-import { memoryInjectionKey } from '../../memory/define.types.js';
+import {
+  memoryInjectionKey,
+  memoryRecallOutcomesKey,
+  retrievalEvidenceKey,
+} from '../../memory/define.types.js';
 import type { AgentChartDeps } from './buildAgentChart.js';
 import { integrityRailInto } from './integrityFindings.js';
 import { llmCallReadsInto } from './llmCallReads.js';
@@ -22,6 +26,10 @@ export function dynamicTurnInput(p: Readonly<Record<string, unknown>>, deps: Tur
   for (const m of deps.memories) {
     const key = memoryInjectionKey(m.id);
     memoryKeys[key] = p[key];
+    const evidence = retrievalEvidenceKey(m.id);
+    if (p[evidence] !== undefined) memoryKeys[evidence] = p[evidence];
+    const outcomes = memoryRecallOutcomesKey(m.id);
+    if (p[outcomes] !== undefined) memoryKeys[outcomes] = p[outcomes];
   }
   return {
     // Read-only working inputs (stages read, never write these).
@@ -147,6 +155,7 @@ export function dynamicTurnInput(p: Readonly<Record<string, unknown>>, deps: Tur
     ...(p.resolvedInstructions !== undefined && {
       resolvedInstructions: p.resolvedInstructions,
     }),
+    ...(deps.memories.length > 0 && { turnNumber: p.turnNumber }),
     ...memoryKeys,
     // Cross-iteration accumulators under prior* aliases — frozen
     // here, copied to writable working keys by dynamicTurnSeed.

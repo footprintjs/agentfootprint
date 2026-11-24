@@ -476,6 +476,7 @@ export type NegativeProseFinding = import('../../../integrity/negative-claim/typ
 export type FindingsRow =
   | import('./refusal.js').ReferenceRefusalRow
   | NegativeProseFinding
+  | import('../honesty/retrievalRequests.js').RetrievalRequestRow
   | BasisRow
   | StandingRow
   | ConflictRow

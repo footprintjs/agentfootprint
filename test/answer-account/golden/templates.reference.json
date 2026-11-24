@@ -1819,6 +1819,24 @@
   ],
   "source": "library"
  },
+ "howSure.reason.memoryRetrievalTimeout@1": {
+  "text": "A memory search timed out.",
+  "parts": [
+   {
+    "text": "A memory search timed out."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.memoryRetrievalExcluded@1": {
+  "text": "Retrieval filters and budgets excluded all returned memory candidates.",
+  "parts": [
+   {
+    "text": "Retrieval filters and budgets excluded all returned memory candidates."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.callNotCompleted@1": {
   "text": "2 calls did not complete.",
   "parts": [

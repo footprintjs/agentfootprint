@@ -717,6 +717,8 @@ describe('UNIT — the reason table', () => {
       'times-without-zone',
       'result-withheld',
       'result-dropped-from-window',
+      'memory-retrieval-timeout',
+      'memory-retrieval-excluded',
       'work-not-finished',
       // Honesty layer 3 (the results layer's period verdicts, step 7b).
       'period-not-held',

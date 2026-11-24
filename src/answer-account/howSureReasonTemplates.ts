@@ -44,6 +44,10 @@ export const HOW_SURE_REASON_TEMPLATES = {
     "{{count:n,'call returned nothing and did not say what it searched','calls returned nothing and did not say what they searched'}}.",
   ),
   'howSure.reason.callNotDispatched': t("{{count:n,'call','calls'}} did not run."),
+  'howSure.reason.memoryRetrievalTimeout': t('A memory search timed out.'),
+  'howSure.reason.memoryRetrievalExcluded': t(
+    'Retrieval filters and budgets excluded all returned memory candidates.',
+  ),
   'howSure.reason.callNotCompleted': t("{{count:n,'call','calls'}} did not complete."),
   'howSure.reason.callRefused': t("{{count:n,'call was','calls were'}} refused."),
   'howSure.reason.callFailed': t("{{count:n,'call','calls'}} failed."),

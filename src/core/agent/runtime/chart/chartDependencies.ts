@@ -193,6 +193,7 @@ export function chartDependencies(
       answerLayer: {
         reads: answerFoldReads({
           tools: environment.canCallTools,
+          retrieval: this.configuration.memories.length > 0,
           resultLimits:
             this.configuration.maxToolResultChars !== undefined ||
             this.configuration.artifactStore !== undefined ||
