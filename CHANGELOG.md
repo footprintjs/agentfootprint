@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.2.0] - 2026-11-24
+
+### Added
+
+- Flat Agent recordings can link a value checked in a final answer to the exact served tool result that supported the match. The evidence verdict, refusal, and answer standing retain their existing behavior.
+
+- **Explain when tool selection left out a declared source.** With the source consultation check enabled, a complete request receipt can show that a tool for the question was left out. The answer and its saved assessment disclose the omission. Trying an equivalent source clears the warning. Saved warnings require the matching accepted request, and unnamed offers remain visible alongside omissions.
+
 ## [17.1.0] - 2026-11-24
 
 ### Added
