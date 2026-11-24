@@ -64,7 +64,7 @@ export async function acceptResponse(
   if (recoveryPiece !== undefined) scope.evidenceRecoveryUsed = true;
   const durationMs = Date.now() - startMs;
   recordResponseTokens(scope, response);
-  const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
+  const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, prepared.serving, {
     localFallback,
     answeredBy,
     findingsRequest: acceptedFindingsRequest,

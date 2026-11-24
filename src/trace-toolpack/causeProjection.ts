@@ -1,4 +1,4 @@
-import { createRecordGraph, type RecordScope } from 'foottrace/cause';
+import { createRecordGraph, type RecordScope, type SourceLinkPolicy } from 'foottrace/cause';
 import type { StageSnapshot } from 'footprintjs/advanced';
 import type { ControlDepLookup } from 'foottrace';
 import type { TraceCauseArtifacts } from './causeTypes.js';
@@ -12,6 +12,7 @@ import {
   type SourceCaptureStatus,
 } from './causeCapture.js';
 import { capturedControl } from './causeControl.js';
+import { sourceLinksOf } from './sourceLinks.js';
 
 export interface SnapshotCauseArtifacts extends TraceCauseArtifacts {
   readonly capture: SnapshotCapture;
@@ -25,6 +26,7 @@ export function projectCauseBasis(
   extras?: {
     readonly readKeys?: ReadonlyMap<string, readonly string[]>;
     readonly initialState?: Record<string, unknown>;
+    readonly sourceLinkPolicy?: SourceLinkPolicy;
     readonly sources?: {
       readonly status: SourceCaptureStatus;
       readonly scope: NonNullable<RecordScope['readSources']>;
@@ -85,7 +87,24 @@ export function projectCauseBasis(
     ...(extras?.initialState === undefined ? {} : { initialState: extras.initialState }),
     ...(extras?.sources === undefined ? {} : { readSources: extras.sources.scope }),
   };
-  const graph = createRecordGraph([scope], { maxCommits: 4096 });
+  // The native live base is needed for source-link binding. Preserve the
+  // existing graph input when this scope never collected any source links.
+  const liveBase = Object.getOwnPropertyDescriptor(snapshot as object, 'initialState')?.value;
+  const initialState =
+    scope.initialState ??
+    (liveBase !== null && typeof liveBase === 'object' && !Array.isArray(liveBase)
+      ? (liveBase as Record<string, unknown>)
+      : undefined);
+  const basedScope = { ...scope, ...(initialState === undefined ? {} : { initialState }) };
+  const sourceLinks = sourceLinksOf(basedScope);
+  const graph = createRecordGraph(
+    [sourceLinks === undefined ? scope : { ...basedScope, sourceLinks }],
+    {
+      maxCommits: 4096,
+      ...(sourceLinks !== undefined &&
+        extras?.sourceLinkPolicy !== undefined && { sourceLinkPolicy: extras.sourceLinkPolicy }),
+    },
+  );
   // The public scope reader admits untrusted commits and creates its own official IDs.
   return {
     graph: { ...graph, roots: (context) => graph.openScope(scopeAddress, context) },

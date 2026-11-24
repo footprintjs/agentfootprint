@@ -1,4 +1,5 @@
 import type { ObserverStats, RunView } from 'footprintjs';
+import { keepSnapshotSourceLinkGrant } from '../redaction/sourceLinkPolicy.js';
 import {
   createContextShapeCapture,
   markNativeShapeSource,
@@ -44,14 +45,22 @@ export function createRunnerSnapshotReader() {
         ? { ...native, observerStats: { ...native.observerStats, summarizedEmits } }
         : native;
     markNativeShapeSource(snapshot);
+    const grant =
+      snapshot.logAddress === undefined
+        ? undefined
+        : redaction?.sourceLinkPolicy(snapshot.logAddress);
     const shapes = options?.contextShapes;
-    if (shapes === false) return snapshot;
-    if (shapes === undefined) return (defaults ??= createContextShapeCapture())(snapshot);
+    if (shapes === false) return keepSnapshotSourceLinkGrant(snapshot, grant);
+    if (shapes === undefined)
+      return keepSnapshotSourceLinkGrant(
+        (defaults ??= createContextShapeCapture())(snapshot),
+        grant,
+      );
     let capture = configured.get(shapes);
     if (!capture) {
       capture = createContextShapeCapture(shapes);
       configured.set(shapes, capture);
     }
-    return capture(snapshot);
+    return keepSnapshotSourceLinkGrant(capture(snapshot), grant);
   };
 }

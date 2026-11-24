@@ -19,6 +19,7 @@ import {
   emitServed,
   servingAhead,
   coverageInForce,
+  outsideRunFor,
   policyInForce,
   runKeepsOut,
   setEventSource,
@@ -157,6 +158,29 @@ function scopedRun(policy: RedactionPolicy | undefined) {
 }
 
 describe('runRedaction — the run wiring', () => {
+  it('refuses payload and identity for an unknown outside run while retaining its address', () => {
+    const { serving: outside } = outsideRunFor({ state: 'unknown' }).scopeRun;
+    expect(outside.active()).toBe(true);
+    expect(outside.payload('agentfootprint.stream.tool_start', { content: 'private' })).toBe(
+      SERVED_PLACEHOLDER,
+    );
+    expect(outside.meta(META)).toBe(META);
+    expect(outside.meta({ ...META, principal: 'caller' })).toEqual({
+      ...META,
+      principal: SERVED_PLACEHOLDER,
+    });
+    expect(outside.meta({ ...META, tenant: 'tenant' })).toEqual({
+      ...META,
+      tenant: SERVED_PLACEHOLDER,
+    });
+    const meta = Object.freeze({ ...META, principal: 'caller', tenant: 'tenant' });
+    expect(outside.meta(meta)).toEqual({
+      ...META,
+      principal: SERVED_PLACEHOLDER,
+      tenant: SERVED_PLACEHOLDER,
+    });
+  });
+
   it('a scope no run made is UNKNOWN: its payload is refused, and it hands down the whole vocabulary', () => {
     const emitted: unknown[] = [];
     const bare = { $emit: (_name: string, payload?: unknown) => emitted.push(payload) };
