@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.1.0] - 2026-11-24
+
+### Added
+
+- **Distinguish retrieval timeouts from empty searches.** Memory and RAG accept outcome-aware store reads. The answer warning can explain a recorded timeout or selection limit when the run proves that no recalled content reached a model request. Successful empty searches preserve the ordinary answer. Set `recording: 'ids-only'` for RAG, semantic Top-K or episodic recall to keep identifiers and selection metadata in retrieval evidence while serving the same context to the model.
+
+- **Choose which reasons trigger a standing warning.** Set `standingLine.raiseOn` with the existing `when` mode to show the full "not sure" line when a selected reason fires. All assessment data and limits remain available, and "ask" keeps its existing behavior.
+
+- Tool discovery retains a built-in ledger gate’s original decision for each eligible implementation. Opaque gates conceal inner decisions, and a failed listing clears earlier evidence.
+  An inactive built-in skill scope can retain the visible skill’s registered tool identity at the same discovery boundary.
+  An actual top-N pick retains the eligible tools it excluded, bound to that slot’s winning implementations.
+  Distinct visible implementations that compete for a name retain their winner and loser identities. Tool collision events omit role-hidden skill claims.
+  An omitted visible name is associated with the accepted model response only when the adapter confirms which names it offered.
+  Saved model-call receipts can now show which visible tools a top-N pick, skill scope or ledger decision left out of that particular request. When a registered implementation wins a name, the receipt separately lists each visible competing implementation that lost it, with the winning and losing channels.
+  The receipt also covers a visible tool scoped directly to a skill while that skill awaits activation through `read_skill`.
+  The served read_skill schema and saved catalog now list only role-visible skills. Visible off-route choices still receive the graph’s routing explanation. When a decision tree withholds the catalog, the accepted request can record the visible skill IDs, reason and retained count.
+
+### Changed
+
+- **Keep the cache decision record smaller.** The cache subflow records the conversation length and injected positions it needs for cache markers. The provider still receives the same messages and cache markers.
+
 ## [17.0.0] - 2026-11-23
 
 ### Breaking
