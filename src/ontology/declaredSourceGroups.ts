@@ -49,9 +49,14 @@ function explicitDeclarations(ontology: OntologySpec, question: string): readonl
   const mentions: Mention[] = [];
   for (const declaration of declarations) {
     for (const name of new Set([declaration.id, ...(declaration.aliases ?? [])])) {
-      for (const match of question.matchAll(patternOf(name, 'gi'))) {
+      const pattern = patternOf(name, 'gi');
+      let match = pattern.exec(question);
+      while (match !== null) {
         if (mentions.length === MAX_MENTIONS) return [];
         mentions.push({ declaration, start: match.index, end: match.index + match[0].length });
+        // Resume after the start so a later occurrence of this alias can overlap it.
+        pattern.lastIndex = match.index + 1;
+        match = pattern.exec(question);
       }
     }
   }

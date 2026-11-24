@@ -277,6 +277,54 @@ describe('declared sources skipped in a native turn', () => {
     },
   );
 
+  it.each([
+    ['access control access control access', []],
+    ['access control access and access', ['link archive']],
+  ] as const)(
+    'records a source warning only for a distinct mention in %s',
+    async (message, unusedTools) => {
+      const agent = Agent.create({ provider: scripted(manifest, 'monitor'), model: 'mock' })
+        .tools([tool('monitor', 'link monitor'), tool('archive', 'link archive')])
+        .ontology(
+          defineOntology({
+            id: 'access-decisions',
+            version: '1',
+            nodes: {
+              decision_chain: {
+                meaning: 'A chain of decisions.',
+                aliases: ['access control access'],
+                sources: [{ source: 'chain_records', via: ['monitor'] }],
+              },
+              single_decision: {
+                meaning: 'A single decision.',
+                aliases: ['access'],
+                sources: [{ source: 'decision_records', via: ['archive'] }],
+              },
+            },
+            sources: {
+              chain_records: { meaning: 'Several decisions.' },
+              decision_records: { meaning: 'One decision.' },
+            },
+          }),
+        )
+        .answerLayer({ sourceNotConsulted: true })
+        .build();
+      const recorder = recordRun(agent);
+      try {
+        expect(await agent.run({ message })).toBe(ANSWER);
+        const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
+        const saved = assessAnswer(recording);
+        const choices = saved.reasons.filter((row) => row.reason === reason);
+        expect(await agent.assessment()).toEqual(saved);
+        expect(choices).toHaveLength(unusedTools.length);
+        expect(choices.flatMap((row) => row.detail?.unusedTools ?? [])).toEqual(unusedTools);
+      } finally {
+        recorder.stop();
+        await agent.shutdown();
+      }
+    },
+  );
+
   it('separates an uncalled offered tool from one left out of the same request', async () => {
     const classifier = mockClassifier(() => ({
       model: 'fixture',
