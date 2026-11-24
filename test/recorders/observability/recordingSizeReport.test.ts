@@ -224,6 +224,28 @@ describe('recordingSizeReport', () => {
     expect(() => recordingSizeReport(recording({ ['x'.repeat(1025)]: 0 }))).toThrow(/names table/);
   });
 
+  it('counts each event bucket once against the shared snapshot and event row limit', () => {
+    const maxRows = 16_384;
+    const snapshot = Object.fromEntries(
+      Array.from({ length: maxRows - 2 }, (_, id) => [`field-${id}`, null]),
+    );
+    const start = { type: 'agentfootprint.agent.turn_start' };
+    const events = [start, { type: 'outside-one' }, start, { type: 'outside-two' }];
+    const report = recordingSizeReport(recording(snapshot, events));
+
+    expect(report.snapshot?.fields).toHaveLength(maxRows - 2);
+    expect(report.events.count).toBe(4);
+    expect(report.events.types).toMatchObject([
+      { name: start.type, count: 2 },
+      { name: 'other', count: 2 },
+    ]);
+    expect(() =>
+      recordingSizeReport(
+        recording(snapshot, [...events, { type: 'agentfootprint.agent.turn_end' }]),
+      ),
+    ).toThrow(/names table/);
+  });
+
   it('measures a plain recording over Neo’s 16 MiB viewer cap', () => {
     const body = 'x'.repeat(1024 * 1024);
     const history = Array.from({ length: 17 }, () => body);

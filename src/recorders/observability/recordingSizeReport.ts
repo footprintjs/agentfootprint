@@ -100,7 +100,7 @@ function measureRecording(recording: Recording): RecordingSizeReport {
   let structure: RecordingSizeReport['structure'];
   let reportRows = 0;
 
-  const named = (key: string | number): string => {
+  const countNamedRow = (key: string | number): string => {
     if (typeof key !== 'string' || key.length > MAX_NAME_LENGTH || ++reportRows > MAX_ROWS) {
       throw new RangeError('Recording size report has too many or oversized names.');
     }
@@ -113,8 +113,9 @@ function measureRecording(recording: Recording): RecordingSizeReport {
         const type = ownField(value, 'type');
         const name = typeof type === 'string' && knownEventTypes.has(type) ? type : 'other';
         const group = eventTypes.get(name);
-        if (group === undefined) eventTypes.set(name, { name, bytes, count: 1 });
-        else {
+        if (group === undefined) {
+          eventTypes.set(countNamedRow(name), { name, bytes, count: 1 });
+        } else {
           group.bytes += bytes;
           group.count++;
         }
@@ -126,7 +127,7 @@ function measureRecording(recording: Recording): RecordingSizeReport {
   };
 
   const snapshot = snapshotFields.branch((key, value) => {
-    const name = named(key);
+    const name = countNamedRow(key);
     const breakdown = snapshotBreakdown(name, value);
     return {
       child: breakdown?.child,
@@ -141,7 +142,7 @@ function measureRecording(recording: Recording): RecordingSizeReport {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
     if (name === 'sharedState') {
       return state.branch((key, value) => {
-        const name = named(key);
+        const name = countNamedRow(key);
         return {
           measured: (bytes) => {
             state.rows.push(row(name, value, bytes));
@@ -151,7 +152,7 @@ function measureRecording(recording: Recording): RecordingSizeReport {
     }
     if (name === 'subflowResults') {
       return subflows.branch((key, value) => {
-        const name = named(key);
+        const name = countNamedRow(key);
         return {
           measured: (bytes) => {
             const history = ownField(ownField(value, 'treeContext'), 'history');
