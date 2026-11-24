@@ -24,7 +24,7 @@
 import { describe, it, expect } from 'vitest';
 import { Agent, defineTool, slidingWindow } from '../../../src/index.js';
 import { defineFact } from '../../../src/injection-engine.js';
-import { computeCacheMarkers } from '../../../src/cache/CacheDecisionSubflow.js';
+import { cacheHistoryFor, computeCacheMarkers } from '../../../src/cache/CacheDecisionSubflow.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -187,7 +187,7 @@ describe('cache marker truth — the index names the message it claims', () => {
     const markers = computeCacheMarkers({
       ...baseState,
       activeInjections: [cacheable] as never,
-      history,
+      cacheHistory: cacheHistoryFor(history),
     });
     const messages = markers.find((m) => m.field === 'messages');
     expect(messages).toBeDefined();
@@ -206,7 +206,7 @@ describe('cache marker truth — the index names the message it claims', () => {
     const markers = computeCacheMarkers({
       ...baseState,
       activeInjections: [cacheable, volatile_] as never,
-      history,
+      cacheHistory: cacheHistoryFor(history),
     });
     const messages = markers.find((m) => m.field === 'messages');
     // The volatile one must be OUTSIDE the cached prefix, so the boundary is
@@ -221,7 +221,7 @@ describe('cache marker truth — the index names the message it claims', () => {
     const markers = computeCacheMarkers({
       ...baseState,
       activeInjections: [] as never,
-      history: [{ role: 'user', content: 'hi' }],
+      cacheHistory: cacheHistoryFor([{ role: 'user', content: 'hi' }]),
     });
     expect(markers.find((m) => m.field === 'messages')).toBeUndefined();
   });
@@ -230,7 +230,7 @@ describe('cache marker truth — the index names the message it claims', () => {
     const markers = computeCacheMarkers({
       ...baseState,
       activeInjections: [volatile_] as never,
-      history: windowWith({ id: 'clock', content: 'Now: noon' }),
+      cacheHistory: cacheHistoryFor(windowWith({ id: 'clock', content: 'Now: noon' })),
     });
     expect(markers.find((m) => m.field === 'messages')).toBeUndefined();
   });
@@ -242,7 +242,7 @@ describe('cache marker truth — the index names the message it claims', () => {
     const markers = computeCacheMarkers({
       ...baseState,
       activeInjections: [] as never,
-      history: windowWith({ id: 'tier', content: 'Account tier: gold' }),
+      cacheHistory: cacheHistoryFor(windowWith({ id: 'tier', content: 'Account tier: gold' })),
     });
     expect(markers.find((m) => m.field === 'messages')).toBeUndefined();
   });
@@ -254,7 +254,7 @@ describe('cache marker truth — the index names the message it claims', () => {
     const markers = computeCacheMarkers({
       ...baseState,
       activeInjections: [cacheable] as never,
-      history: windowWith({ id: 'tier', content: 'Account tier: gold' }),
+      cacheHistory: cacheHistoryFor(windowWith({ id: 'tier', content: 'Account tier: gold' })),
     });
     expect(markers.some((m) => m.field === 'messages')).toBe(true);
   });
