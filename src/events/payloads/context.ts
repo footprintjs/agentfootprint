@@ -163,8 +163,8 @@ export interface ContextEvaluatedPayload {
      *  `'parked'` (9.58.0): a member of a map the mount kernel parked —
      *  served without corroboration for the grace window; the map's own
      *  cursor is untouched and evidence re-engages it.
-     *  `'hidden'`: a skill the caller's role may not see (`skill_read`),
-     *  refused whatever tried to activate it. */
+     *  Older recordings can carry `'hidden'` for a skill denied by `skill_read`.
+     *  New events omit that row and its count. */
     readonly reason:
       | 'predicate-threw'
       | 'unknown-trigger-kind'
@@ -176,11 +176,10 @@ export interface ContextEvaluatedPayload {
   /** Count of active injections by trigger kind (always / rule / on-tool-return / llm-activated). */
   readonly triggerKindCounts: Readonly<Record<string, number>>;
   /**
-   * The Skill CATALOG the LLM was offered this turn — each role-visible Skill's
-   * `id` + `description` (the same text that lands in the `read_skill` tool
-   * description). Lets observers pair "what was offered" against "what the LLM
-   * chose" (`read_skill` → `activatedInjectionIds`) when debugging a missed or
-   * wrong activation. Empty when no Skills are visible. Uses this iteration’s visibility decision.
+   * Role-visible skill declarations at Evaluate, in declaration order. Each row
+   * contains the ID and description available to the native catalog composer.
+   * Compose may withhold the read_skill tool, including on a decision tree.
+   * The accepted request's served schema and receipt describe its actual offer.
    */
   readonly skillCatalog: readonly { readonly id: string; readonly description: string }[];
   /**

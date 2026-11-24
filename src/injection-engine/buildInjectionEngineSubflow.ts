@@ -765,10 +765,7 @@ function makeEvaluateStage(
     // observe "what was considered, what won, what was skipped and why".
     typedEmit(scope, 'agentfootprint.context.evaluated', {
       iteration: ctx.iteration,
-      activeCount: evaluation.active.length,
-      ...evaluationCatalog(injections, evaluation.skipped, hidden),
-      activeIds: evaluation.active.map((i) => i.id),
-      triggerKindCounts: countTriggerKinds(evaluation.active),
+      ...evaluationCatalog(injections, evaluation, hidden),
       // Routing PROVENANCE for active skill-graph injections — the decision path
       // / edge that reached each. Undefined when none came from a skillGraph().
       //
@@ -882,13 +879,4 @@ function diffSlot(
     removed: [...priorIds].filter((id) => !currentIds.has(id)),
     kept: [...currentIds].filter((id) => priorIds.has(id)),
   };
-}
-
-/** Count active injections by trigger kind (observability metric). */
-function countTriggerKinds(active: readonly Injection[]): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const inj of active) {
-    counts[inj.trigger.kind] = (counts[inj.trigger.kind] ?? 0) + 1;
-  }
-  return counts;
 }

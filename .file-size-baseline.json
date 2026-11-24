@@ -71,7 +71,7 @@
     "src/hosting/types.ts": 1607,
     "src/hosting/webSocketConversation.ts": 774,
     "src/index.ts": 1370,
-    "src/injection-engine/buildInjectionEngineSubflow.ts": 894,
+    "src/injection-engine/buildInjectionEngineSubflow.ts": 882,
     "src/injection-engine/README.md": 1007,
     "src/injection-engine/skillGraph.ts": 1064,
     "src/injection-engine/skillGraphCheckup.ts": 671,
