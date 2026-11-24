@@ -3,10 +3,10 @@ offered. `list(ctx)` IS a model-facing view, and every gate here is an OMISSION.
 
 ## What it reads / what it writes
 - `staticTools.ts` reads a fixed list.
-- `gatedTools.ts` reads a caller-supplied predicate — and nothing else. It
-  cannot tell an AUTHORITY omission (a permission policy; must be invisible)
-  from an ATTENTION omission (a budget or scope; must be visible), it emits
-  nothing, and it leaves no record of which tools it removed.
+- `gatedTools.ts` runs each predicate once per candidate. During discovery
+  a built-in ledger gate can identify the tool it demoted. An opaque gate
+  conceals the decisions inside it. Calling `list(ctx)` directly still returns
+  only the filtered tools.
 - `../tools/skillScopedTools.ts` (in the tools layer, re-exported here) reads
   `ctx.activeSkillId`, which its own header
   (`skillScopedTools.ts` · "`ctx.activeSkillId` is the last `read_skill`

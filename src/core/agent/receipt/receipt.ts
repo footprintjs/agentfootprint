@@ -108,6 +108,8 @@ import { stableJson } from '../../../lib/stableJson.js';
 import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
 import type { ReceiptDigests, RunDigests } from './receiptDigests.js';
 
+import type { ReceiptAttentionOmission, ReceiptToolSelection } from './omissions.js';
+export type { ReceiptAttentionOmission } from './omissions.js';
 export type { RequestMeasurement, RequestJsonSize } from './requestMeasurement.js';
 
 /** What {@link receiptPieces} needs from one committed injection record — the
@@ -307,16 +309,6 @@ export interface ReceiptParams {
   readonly outputFormat?: { readonly type: string; readonly schemaHash: string };
 }
 
-/** What a budget dropped before the request was composed — the window's
- *  evictions at this iteration's head. */
-export interface ReceiptAttentionOmission {
-  readonly count: number;
-  /** One hash per dropped turn — the turn's own `messages.entries[].hash`, so
-   *  it pairs with the receipt that last served it. See the first law for why
-   *  not the text. */
-  readonly hashes: readonly string[];
-}
-
 /**
  * THE RECEIPT. One per composed request, committed at the call-llm stop.
  *
@@ -332,6 +324,8 @@ export interface ReceiptAttentionOmission {
  * ```
  */
 export interface Receipt {
+  /** Visible tool exclusions and competing claims proved on this accepted request. */
+  readonly toolSelection?: ReceiptToolSelection;
   /**
    * Actual leaf-provider preparation omitted thinking after this port receipt
    * was minted. Original hashes/measurement/cache verdict remain port-level;

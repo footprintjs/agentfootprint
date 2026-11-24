@@ -44,6 +44,7 @@ export function buildSlots(
     | 'integrityDanglingPresent'
     | 'native'
     | 'readSkillOfferFor'
+    | 'governsSkillVisibility'
   >,
   environment: SlotsEnvironment,
 ) {
@@ -192,6 +193,7 @@ export function buildSlots(
   }
   const toolsSubflow = buildToolsSlot({
     tools: environment.toolSchemas,
+    unrestrictedSkills: !this.governsSkillVisibility(),
     ...(toolOwners.size > 0 && { toolOwners }),
     // The kernel's map cards, for the compose-seam integrity backstop.
     ...(this.configuration.mapsPlan !== undefined && {

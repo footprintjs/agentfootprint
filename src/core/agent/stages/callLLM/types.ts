@@ -19,6 +19,10 @@ import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
 import type { AgentState } from '../../types.js';
 
 export interface CallLLMStageDeps {
+  readonly registrations?: import('../toolResolver.js').ToolRegistrations;
+  readonly servedTools?: import('../../../slots/commitServedTools.js').ServedToolParties;
+  /** Whether this native run can retain newly disclosed catalog names on its receipt. */
+  readonly canRecordToolSelection?: () => boolean;
   /** Present only when retrieval request evidence is armed, independent of receipt capture. */
   readonly recallRequests?: (
     scope: TypedScope<AgentState>,

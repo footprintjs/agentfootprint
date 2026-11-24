@@ -59,9 +59,9 @@ export interface ReadSkillOffer {
    * it will never be allowed to use — leaking the shape of somebody else's
    * permissions into this model's prompt.
    *
-   * The ENUM keeps the full catalog either way (see below). Narrowing it would
-   * turn a policy refusal into a generic schema error, and the model would
-   * never read the policy's own message.
+   * The served enum uses the same role filter. A visible skill stays in the
+   * enum even when the cursor cannot reach it, so its routing refusal remains
+   * a decision by the graph. Dispatch still checks the original registration.
    */
   readonly hiddenIds?: readonly string[];
   /**
@@ -90,7 +90,7 @@ export interface ReadSkillOffer {
    * Set only while the turn's menu verdict is outstanding (turn start, before
    * any accepted pick) — the tools slot reads it off the SAME verdict the
    * record carries, so the offer can never drift from `turn_routed.offered`.
-   * The enum stays the full catalog (the 8.5.0 law below — narrowing it would
+   * The enum retains visible off-menu choices (narrowing it to the menu would
    * retire four honesty mechanisms), and {@link ReadSkillOffer.hiddenIds}
    * filters menu rows exactly as it filters every other list: a role-hidden
    * skill is never NAMED, menu or no menu.
@@ -160,7 +160,7 @@ function grantableRows(
   allSkills: readonly Injection[],
   offer: ReadSkillOffer,
 ): readonly Injection[] {
-  return visibleSkills(allSkills, offer).filter(
+  return allSkills.filter(
     (s) =>
       classifySkillTarget({
         ...(offer.cursorId !== undefined && { cursor: offer.cursorId }),
@@ -343,14 +343,9 @@ function describeOffer(
           : `Answering WITHOUT calling read_skill is also allowed.\n\n${cursorLead}`)
       : cursorLead;
   if (offer.grantable === undefined) {
-    // No graph — the plain catalog, filtered. A role with nothing left is told
-    // plainly rather than handed an empty list to interpret.
-    return skills.length === 0
-      ? `Activate a skill for the next iteration. No skills are available to you — ` +
-          `answer without one, or say what you are unable to do.\n\n${tail}`
-      : `${menuLead}Activate a skill for the next iteration. Available skills:\n${skills
-          .map(describeOnce)
-          .join('\n')}\n\n${tail}`;
+    return `${menuLead}Activate a skill for the next iteration. Available skills:\n${skills
+      .map(describeOnce)
+      .join('\n')}\n\n${tail}`;
   }
   // The four target classes, from their ONE owner (9.86.0). `grantable` is the
   // gate's admitted set (hops ∪ open), so what this description needs from the
@@ -468,9 +463,8 @@ export function listSkillsDescriptor(
 // LENS · tool-description · request-ephemeral
 // reads: the withhold decision ← `grantableRows` → classifySkillTarget, the same owner the list asks
 //        the description ← `describeOffer`
-// known gap, deliberate and pinned (test/security/skill-visibility.test.ts): the `enum: skillIds` on the
-// read_skill schema is built from the UNFILTERED catalog, so a role-hidden id is still named on the wire —
-// the argument is in the comment beginning "The FULL catalog, always" beside it.
+// reads: the visible catalog supplies the argument enum and the descriptor’s callable entries.
+// Reachability affects the description independently of role visibility.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Describe the `read_skill` tool — THE cursor door. The LLM picks WHICH skill
@@ -484,7 +478,7 @@ export function listSkillsDescriptor(
  * because only the host sees the tool call.
  *
  * Pass `offer` to scope the DESCRIPTION to what the graph's gate will actually
- * grant from the current cursor (8.5.0); the enum stays the full catalog
+ * grant from the current cursor (8.5.0); the enum keeps every role-visible skill
  * either way. Omit it and the description is byte-identical to the plain
  * catalog it has always been.
  *
@@ -494,7 +488,17 @@ export function readSkillDescriptor(
   skills: readonly Injection[],
   offer?: ReadSkillOffer,
 ): SkillToolDescriptor<{ id: string }, string> | undefined {
-  if (skills.length === 0) return undefined;
+  return resolveReadSkillDescriptor(skills, offer);
+}
+
+/** Native Compose observes the original tree decision before any provider sees the catalog. */
+export function resolveReadSkillDescriptor(
+  skills: readonly Injection[],
+  offer?: ReadSkillOffer,
+  treeWithheld?: (ids: readonly string[]) => void,
+): SkillToolDescriptor<{ id: string }, string> | undefined {
+  const visible = visibleSkills(skills, offer);
+  if (!visible.length) return undefined;
   // ── A TREE WITH NOTHING TO OPEN IS NOT OFFERED (9.86.0) ─────────────
   // Under a `tree()` every routing pick is refused by construction (the tree
   // keeps no cursor for read_skill to move), so with no open skill left after
@@ -502,11 +506,14 @@ export function readSkillDescriptor(
   // is the 8.5.0 defect in its total form: a menu the library knows it will
   // reject, re-read on every iteration. The NAME stays in the dispatch map, so
   // a pick made from a restored transcript still reaches the gate's refusal.
-  if (offer?.treeRouted === true && grantableRows(skills, offer).length === 0) return undefined;
+  if (offer?.treeRouted === true && grantableRows(visible, offer).length === 0) {
+    treeWithheld?.(visible.map((skill) => skill.id));
+    return undefined;
+  }
 
-  const skillIds = skills.map((s) => s.id);
+  const skillIds = visible.map((s) => s.id);
   const line = (s: Injection): string => `  - ${s.id}: ${s.description ?? '(no description)'}`;
-  const skillCatalog = skills.map(line).join('\n');
+  const skillCatalog = visible.map(line).join('\n');
 
   // Index per-skill body + surfaceMode (Block C — runtime per-mode dispatch).
   // For 'tool-only' / 'both' surface modes, the read_skill tool result
@@ -515,7 +522,7 @@ export function readSkillDescriptor(
   // lands via system slot on the next iteration.
   type SkillEntry = { body: string; surfaceMode: string };
   const byId = new Map<string, SkillEntry>();
-  for (const s of skills) {
+  for (const s of visible) {
     const meta = s.metadata as { surfaceMode?: string } | undefined;
     byId.set(s.id, {
       body: s.inject.systemPrompt ?? '',
@@ -531,7 +538,7 @@ export function readSkillDescriptor(
       properties: {
         id: {
           type: 'string',
-          // The FULL catalog, always — deliberately NOT narrowed to the reachable
+          // The visible catalog — deliberately NOT narrowed to the reachable
           // set (8.5.0). `toolArgValidation` defaults to `'enforce'` and runs BEFORE
           // the skill-graph gate, rejecting an off-enum id with a generic schema
           // error and `error = true`, which the gate then skips. Narrowing this
