@@ -83,6 +83,12 @@ identity at this boundary; existing thinking and replay decoration still applies
 Ordinary responses retain identity when no metadata changes, and usable masked
 responses retain their thinking and replay metadata.
 
+Recovery and breaker-success notifications follow capture. If a callback throws
+after a completed blocked or unknown response, the existing typed refusal keeps
+the callback exception as its cause; another provider is never asked. Ordinary
+and masked results keep their existing callback-failure behavior. A guardrail
+limit thrown before a response remains the original typed refusal.
+
 ## Retry reads what the error declares
 `withRetry`'s default predicate (`withRetry.ts` · `defaultShouldRetry`, shared
 with `withCredentialRetry`) skips an `AbortError`, a 4xx other than 429, and an

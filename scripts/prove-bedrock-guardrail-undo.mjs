@@ -22,6 +22,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reviewProbes } from './prove-bedrock-guardrail-undo/reviewProbes.mjs';
+import { callbackProbes } from './prove-bedrock-guardrail-undo/callbackProbes.mjs';
 
 const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const admission = 'src/core/providerIntervention.ts';
@@ -36,6 +37,7 @@ const sequenceTests = 'test/adapters/unit/BedrockProvider.guardrailSequence.test
 const llmAccountingTests = 'test/core/provider-intervention-llmcall-accounting.test.ts';
 const hostIdentityTests = 'test/hosting/protocol-provider-identity.test.ts';
 const wrapperTests = 'test/resilience/unit/terminal-response.test.ts';
+const callbackTests = 'test/resilience/unit/completed-intervention-callbacks.test.ts';
 const coreSuite = 'provider intervention at the admitted native response';
 const classificationSuite = (mode) => `Bedrock guardrails classification — ${mode}`;
 const streamSuite = 'Bedrock guardrail stream admission boundary';
@@ -73,6 +75,7 @@ const maskFirst = `    if (this.masked && this.reads.complete && code !== 'conte
       return { outcome: 'masked', code, filters: this.descriptors };
     if (this.blocked) return { outcome: 'blocked', code, filters: this.descriptors };`;
 const probes = [
+  ...callbackProbes({ assertion, callbackTests }),
   ...reviewProbes({
     assertion,
     wrapperTests,
@@ -384,6 +387,9 @@ function main() {
     llmAccountingTests,
     hostIdentityTests,
     wrapperTests,
+    callbackTests,
+    'test/resilience/unit/replay-attempt.test.ts',
+    'src/resilience/withRetry.ts',
     'src/resilience/withFallback.ts',
     'src/resilience/replayAttempt.ts',
     'src/resilience/withCircuitBreaker.ts',
@@ -393,6 +399,7 @@ function main() {
     'vitest.config.ts',
     'scripts/prove-bedrock-guardrail-undo.mjs',
     'scripts/prove-bedrock-guardrail-undo/reviewProbes.mjs',
+    'scripts/prove-bedrock-guardrail-undo/callbackProbes.mjs',
   ];
   const originals = new Map(protectedPaths.map((file) => [file, readFileSync(join(root, file))]));
   const pathsFor = (id) => ({

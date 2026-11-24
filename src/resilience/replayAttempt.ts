@@ -53,7 +53,7 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
     if (item.done) return item;
     const original = item.value;
     const value = chunk(original);
-    return value === original ? item : { done: false, value };
+    return { done: false, value };
   }
 
   return {

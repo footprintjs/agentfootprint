@@ -52,7 +52,11 @@ import type {
 } from '../provider-contract/types.js';
 import { sleep } from '../lib/sleep.js';
 import { throwIfAborted } from '../lib/abort.js';
-import { isProviderInterventionError } from '../provider-contract/intervention.js';
+import {
+  interventionErrorOf,
+  isProviderInterventionError,
+  providerInterventionOf,
+} from '../provider-contract/intervention.js';
 import { automaticReplayForbidden } from '../provider-contract/replaySafety.js';
 import { statedRetryAfterMs } from './statedWait.js';
 import { replayAttempts } from './replayAttempt.js';
@@ -165,9 +169,11 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
       for (let attempt = 1; ; attempt++) {
         const invocation = requestAttempt(attempts.hooks, attempts.request);
         try {
-          const res = await provider.complete(attempts.request, invocation.hooks);
-          reportRecovered(hooks, attempt, startedMs);
-          return attempts.response(res);
+          const res = attempts.response(
+            await provider.complete(attempts.request, invocation.hooks),
+          );
+          reportRecovered(hooks, attempt, startedMs, res);
+          return res;
         } catch (err) {
           invocation.close();
           await backOffOrThrow(err, attempt, req, hooks);
@@ -255,7 +261,15 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
           // not at the terminal chunk — because this is where retrying ends
           // (a consumer that stops reading at `done: true` would otherwise
           // never see it), and so `recovered` lands before the first token.
-          reportRecovered(hooks, attempt, startedMs);
+          let response: LLMResponse | undefined;
+          if (attempt > 1 && !first.done) {
+            try {
+              response = Object.getOwnPropertyDescriptor(first.value, 'response')?.value;
+            } catch {
+              // Optional terminal evidence must not change an ordinary stream's behavior.
+            }
+          }
+          reportRecovered(hooks, attempt, startedMs, response);
           return { iterator, first, close: invocation.close };
         } catch (err) {
           invocation.close();
@@ -301,13 +315,22 @@ function reportRecovered(
   hooks: LLMCallHooks | undefined,
   attempt: number,
   startedMs: number,
+  response?: LLMResponse,
 ): void {
   if (attempt === 1) return;
-  hooks?.onResilience?.({
-    kind: 'recovered',
-    attempt,
-    totalDurationMs: Date.now() - startedMs,
-  });
+  const intervention = response === undefined ? undefined : providerInterventionOf(response);
+  try {
+    hooks?.onResilience?.({
+      kind: 'recovered',
+      attempt,
+      totalDurationMs: Date.now() - startedMs,
+    });
+  } catch (cause) {
+    // A completed refusal survives a later observer fault, as in native accounting.
+    if (intervention !== undefined && intervention.outcome !== 'masked')
+      throw interventionErrorOf(intervention, cause);
+    throw cause;
+  }
 }
 
 /**
