@@ -300,6 +300,32 @@ it.each([
   });
 });
 
+it('keeps a supported prose citation after list-item inline code', async () => {
+  const ticks = '\x60\x60\x60';
+  const { provider } = fixture(
+    undefined,
+    (marker) => '- ' + ticks + 'example' + ticks + '\n\n  North recorded 12 mm ' + marker + '.',
+  );
+  const agent = Agent.create({
+    provider,
+    model: 'claude-sonnet-4-6',
+    citations: measurementCitations,
+  })
+    .tool(tool)
+    .build();
+  const recording = recordRun(agent);
+  try {
+    await agent.run({ message: 'Read the amount.' });
+    expect(recording.toRecording().snapshot?.sharedState?.answerCitations).toEqual({
+      complete: true,
+      findings: [{ kind: 'citation', outcome: 'supported', slot: 1, start: 19, end: 39 }],
+    });
+  } finally {
+    recording.stop();
+    await agent.shutdown();
+  }
+});
+
 it.each([
   { punctuation: '.', adjacentProse: false },
   { punctuation: ';', adjacentProse: false },

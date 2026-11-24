@@ -11,6 +11,13 @@ const BLANK = /^ *$/u;
 const NON_PARAGRAPH =
   /^ {0,3}(?:#{1,6}(?: |$)|(?:\* *){3,}$|(?:- *){3,}$|(?:_ *){3,}$|[=-]+ *$|<)/u;
 
+/** Backticks in a backtick opener's info string would turn inline code into a block. */
+function openingFence(body: string): string | undefined {
+  const match = FENCE.exec(body);
+  if (match === null || (match[1][0] === '\x60' && match[2].includes('\x60'))) return undefined;
+  return match[1];
+}
+
 function beginsParagraph(body: string): boolean {
   return !BLANK.test(body) && !body.startsWith('    ') && !NON_PARAGRAPH.test(body);
 }
@@ -69,7 +76,7 @@ export function blockLines(): (line: string) => BlockLine {
       paragraph &&
       depth < containers.length &&
       beginsParagraph(body) &&
-      !FENCE.test(body) &&
+      openingFence(body) === undefined &&
       !QUOTE.test(body) &&
       !LIST.test(body)
     )
@@ -88,10 +95,9 @@ export function blockLines(): (line: string) => BlockLine {
       containers.push(item[1].length + item[2].length + (item[3]?.length ?? 1));
       body = body.slice(item[0].length);
     }
-    const open = FENCE.exec(body);
-    paragraph = open === null && beginsParagraph(body);
-    if (open === null) return { kind: 'prose', body };
-    fence = open[1];
+    fence = openingFence(body);
+    paragraph = fence === undefined && beginsParagraph(body);
+    if (fence === undefined) return { kind: 'prose', body };
     return { kind: 'fence' };
   };
 }
