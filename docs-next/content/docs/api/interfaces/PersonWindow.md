@@ -38,6 +38,16 @@ Defined in: [src/time/range.ts:60](https://github.com/footprintjs/agentfootprint
 
 ***
 
+### frozenLookback?
+
+> `readonly` `optional` **frozenLookback?**: `true`
+
+Defined in: [src/time/rows/types.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L150)
+
+This call admitted an absolute encoding of this look-back.
+
+***
+
 ### mention?
 
 > `readonly` `optional` **mention?**: `number`

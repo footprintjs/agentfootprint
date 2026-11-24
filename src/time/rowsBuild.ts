@@ -161,12 +161,15 @@ export function timeReadingRows(input: {
   });
 }
 
-const personOf = (w: TurnWindow): PersonWindow => ({
+const personOf = (w: TurnWindow, admitted = false): PersonWindow => ({
   from: w.range.from,
   to: w.range.to,
   source: w.source,
   ...(w.mention !== undefined && { mention: w.mention }),
   ...(w.endpoint !== undefined && { endpoint: w.endpoint }),
+  ...(admitted &&
+    w.lookback !== undefined &&
+    w.endpoint !== undefined && { frozenLookback: true as const }),
 });
 
 /** The `call-window` row for one call's decision (`bind.ts` · `callWindowOf`). */
@@ -195,7 +198,7 @@ export function callWindowRow(
         ...base,
         form: c.form,
         asked: { from: decision.window.range.from, to: decision.window.range.to },
-        person: personOf(decision.window),
+        person: personOf(decision.window, true),
         ...(c.rounded === true && { rounded: true as const }),
         ...(widened !== undefined && { sent: widened.sent }),
         ...(widened !== undefined &&
@@ -210,7 +213,7 @@ export function callWindowRow(
         ...base,
         form: decision.form,
         asked: decision.asked,
-        person: personOf(decision.window),
+        person: personOf(decision.window, true),
         by: decision.by,
         ...partly,
       };

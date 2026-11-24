@@ -377,7 +377,7 @@ const WHYS = ['no-window', 'several-mentions', 'open-reading', 'no-exact-form'];
 
 function isPersonWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const { source, mention, ...range } = value as Record<string, unknown>;
+  const { source, mention, frozenLookback, ...range } = value as Record<string, unknown>;
   return (
     (source === 'said' ||
       source === 'derived-from-reading' ||
@@ -385,6 +385,7 @@ function isPersonWindow(value: unknown): boolean {
       source === 'control') &&
     (mention === undefined || isCount(mention)) &&
     (source === 'control') === (mention === undefined) &&
+    (frozenLookback === undefined || (frozenLookback === true && range.endpoint !== undefined)) &&
     isRecordedWindow(range)
   );
 }

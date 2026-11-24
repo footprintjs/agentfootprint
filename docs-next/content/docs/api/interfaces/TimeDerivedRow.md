@@ -4,7 +4,7 @@ title: TimeDerivedRow
 
 # Interface: TimeDerivedRow
 
-Defined in: [src/time/rows/types.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L212)
+Defined in: [src/time/rows/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L214)
 
 The answer's values the library itself spelled from a time reading of this
 turn (§ 9.5, step T7) — an implied year, an offset, the end-of-grain
@@ -18,7 +18,7 @@ gate never calls these invented.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L215)
+Defined in: [src/time/rows/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L217)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/time/rows/types.ts:215](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"time-derived"`
 
-Defined in: [src/time/rows/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L213)
+Defined in: [src/time/rows/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L215)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/time/rows/types.ts:213](https://github.com/footprintjs/agentfoo
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L214)
+Defined in: [src/time/rows/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L216)
 
 ***
 
@@ -42,6 +42,6 @@ Defined in: [src/time/rows/types.ts:214](https://github.com/footprintjs/agentfoo
 
 > `readonly` **values**: readonly `string`[]
 
-Defined in: [src/time/rows/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L217)
+Defined in: [src/time/rows/types.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L219)
 
 The values as the gate reports them — normalized, clipped, at most `MAX_DERIVED_VALUES`.

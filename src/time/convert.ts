@@ -49,6 +49,7 @@
  * |-------|------|------|-------|
  * | a range inside one calendar day (in the form's zone) | `day` | that day | the whole day — the rest of it is `extra` |
  * | a range ending before now (past the tool's step) | `lookback` | the covering look-back from now, in the form's units | `[now − L, now]` — the gap after the range (and any rounding before it) is `extra` |
+ * | a confirmed interval rounded by an `epoch-s` bound | an absolute form | outward whole-second bound values | `sent` and the precise `extra` on each end |
  *
  * A form whose read would be wider than the tool's `maxRange` is skipped.
  * The refusals are tests the binding asks: a range across days when every
@@ -65,6 +66,8 @@
  * precision is how it was written: minutes (`to + 1 min`), seconds, or a
  * fraction (`+ 1 ms`). An epoch bound's precision is its unit; a date's is
  * the calendar day in the zone.
+ * A confirmed endpoint reads an inclusive ISO bound as a point, including
+ * in a form whose other bound uses a different encoding.
  *
  * @example
  * ```ts
@@ -143,12 +146,12 @@ export type {
   ZoneArgument,
 } from './periodForm.js';
 
-import { epochOrText, formZone, readBound, readZone } from './convert/bounds.js';
+import { epochOrText, formZone, readPeriodBounds, readZone } from './convert/bounds.js';
 import { dateAt, midnightOf, nextDay, spellDate } from './convert/calendar.js';
 import { convertOne, supportsFrozenLookback } from './convert/exact.js';
-import { readControlWindow, type WindowEndpoint } from './windowEndpoint.js';
-import { absoluteOf, msOf, spanRange, type Ms } from './convert/instants.js';
-import { dayWidened, extraOf, lookbackWidened } from './convert/widen.js';
+import type { WindowEndpoint } from './windowEndpoint.js';
+import { absoluteOf, msOf, spanRange } from './convert/instants.js';
+import { dayWidened, extraOfPrecise, lookbackWidened } from './convert/widen.js';
 
 export { supportsFrozenLookback };
 
@@ -198,7 +201,8 @@ export function convertExact(
     const form = forms[i] as PeriodForm;
     if (window.freezeLookback === true && !supportsFrozenLookback(form)) continue;
     const done = convertOne(window, form, ctx);
-    if (done !== undefined && (window.freezeLookback !== true || !done.rounded)) {
+    const exactBounds = window.endpoint !== undefined && form.kind !== 'lookback';
+    if (done !== undefined && (!done.rounded || (!exactBounds && window.freezeLookback !== true))) {
       return { form: i, values: done.values, ...(done.rounded && { rounded: true as const }) };
     }
   }
@@ -233,48 +237,50 @@ export function convertWidened(
 ): WidenedConversion | undefined {
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
-    const done =
-      window.freezeLookback === true
-        ? frozenWidened(window, form, ctx)
-        : form.kind === 'day'
-        ? dayWidened(window, form, ctx)
-        : form.kind === 'lookback'
-        ? lookbackWidened(window, form, ctx)
-        : undefined;
+    const absolute =
+      window.freezeLookback === true ||
+      (window.endpoint !== undefined && form.kind !== 'day' && form.kind !== 'lookback');
+    const done = absolute
+      ? roundedAbsolute(window, form, ctx)
+      : form.kind === 'day'
+      ? dayWidened(window, form, ctx)
+      : form.kind === 'lookback'
+      ? lookbackWidened(window, form, ctx)
+      : undefined;
     if (done === undefined || done.extra.length === 0) continue;
-    const sentFrom = msOf(done.sent.from) as Ms;
-    const sentTo = msOf(done.sent.to) as Ms;
     // The read's reach, judged as `periodFactProblem` judges a window (`range.ts` · `reachMs`):
     // a look-back `[now − L, now]` reaches `L`, so one exactly `maxRange` long is read at once.
-    if (widestMs !== undefined && reachMs(sentFrom.ms, sentTo.ms) > widestMs) continue;
+    if (widestMs !== undefined) {
+      const from = instantOf(done.sent.from, 'strict');
+      const to = instantOf(done.sent.to, 'strict');
+      if (
+        from === undefined ||
+        to === undefined ||
+        reachMs(from.ms, to.ms) + (to.nanos - from.nanos) / 1_000_000 > widestMs
+      )
+        continue;
+    }
     return { form: i, ...done };
   }
   return undefined;
 }
 
 /** An absolute form can widen only to the bounds its actual arguments read back. */
-function frozenWidened(
+function roundedAbsolute(
   window: WindowToConvert,
   form: PeriodForm,
   ctx: ConvertContext,
 ): Omit<WidenedConversion, 'form'> | undefined {
-  if (!supportsFrozenLookback(form)) return undefined;
+  if (window.freezeLookback === true && !supportsFrozenLookback(form)) return undefined;
   const converted = convertOne(window, form, ctx);
   if (converted?.rounded !== true) return undefined;
-  const asked = absoluteOf(window, ctx.now);
-  const sent = readBack(converted.values, form, ctx);
-  if (asked === undefined || sent === undefined) return undefined;
-  const from = msOf(sent.from);
-  const to = msOf(sent.to);
-  if (from === undefined || to === undefined || from.ms > asked[0].ms || to.ms < asked[1].ms) {
-    return undefined;
-  }
-  return {
-    values: converted.values,
-    rounded: true,
-    sent,
-    extra: extraOf(from.ms, to.ms, asked[0].ms, asked[1].ms),
-  };
+  const sent = readBack(converted.values, form, {
+    ...ctx,
+    ...(window.endpoint !== undefined && { precise: true as const }),
+  });
+  if (sent === undefined) return undefined;
+  const extra = extraOfPrecise(sent, window.range);
+  return extra === undefined ? undefined : { values: converted.values, rounded: true, sent, extra };
 }
 
 /**
@@ -518,13 +524,13 @@ export function readBack(
     fromAs = toAs = form.as;
     edge = form.edge;
   }
-  if (ctx.precise === true && fromAs === 'iso' && toAs === 'iso') {
-    const window = readControlWindow({ from: fromValue, to: toValue, end: edge });
-    return window === undefined ? undefined : { from: window.from, to: window.to };
-  }
-  const from = readBound(fromValue, 'from', fromAs, 'inclusive', zone);
-  const to = readBound(toValue, 'to', toAs, edge, zone);
-  return from === undefined || to === undefined ? undefined : spanRange(from, to);
+  return readPeriodBounds(
+    { value: fromValue, as: fromAs },
+    { value: toValue, as: toAs },
+    edge,
+    zone,
+    ctx.precise,
+  );
 }
 
 /**

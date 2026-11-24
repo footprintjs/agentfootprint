@@ -146,6 +146,8 @@ export interface PersonWindow extends RecordedWindow {
   readonly source: WindowSource;
   /** The `time-reading` row's mention index — absent on a `control` window. */
   readonly mention?: number;
+  /** This call admitted an absolute encoding of this look-back. */
+  readonly frozenLookback?: true;
 }
 
 /**
