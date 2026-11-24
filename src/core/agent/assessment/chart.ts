@@ -33,9 +33,9 @@ export function foldState(
   readResultEvidence(gathered, declarations, enteredArguments, retainedHistory);
   readAnswerRows(state, g);
   const integrity = readIntegrityFindings(state, g);
-  const unusedTools =
+  const consultation =
     g.fired.has('asked') || g.fired.has('argument-asked')
-      ? []
+      ? undefined
       : readSourceConsultation(recorded, g, retain);
-  return composeWarning(gathered, integrity, declarationAddresses, retain, unusedTools);
+  return composeWarning(gathered, integrity, declarationAddresses, retain, consultation);
 }

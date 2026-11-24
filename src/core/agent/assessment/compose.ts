@@ -73,8 +73,9 @@ export {
  * 9: independent check causes are shown together, and replay keeps older attribution.
  * 10: current-turn window removals.
  * 11: witnessed offers for declared sources that were left unchecked.
+ * 12: an accepted request left out a declared source holder.
  */
-export const STANDING_LINE_VERSION = 11;
+export const STANDING_LINE_VERSION = 12;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -422,8 +423,8 @@ function reasonClause(
   const detail = names?.details?.get(reason);
   if (reason === 'result-dropped-from-window' && names?.windowDrops !== undefined)
     return windowDropClause(names.windowDrops);
-  if (reason === 'source-not-consulted' && detail?.unusedTools !== undefined)
-    return sourceConsultationClause(detail.unusedTools);
+  if (reason === 'source-not-consulted' && detail !== undefined)
+    return sourceConsultationClause(detail.unusedTools ?? [], detail.unavailableTools);
   if (reason === 'check-unreachable' && (names?.legacyConflictGap || names?.libraryLimitsGap)) {
     const causes: string[] = [];
     if (names.legacyConflictGap)

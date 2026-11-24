@@ -9,6 +9,7 @@ import { declaredSourceGroups } from '../../../ontology/declaredSourceGroups.js'
 import type { OntologySpec } from '../../../ontology/types.js';
 import type { LLMRequest, WireToolManifest } from '../../../provider-contract/types.js';
 import type { Tool } from '../../../tools/tools.js';
+import type { AcceptedToolSelection } from '../../slots/commitServedTools.js';
 import type { ServedToolParties } from '../../slots/buildToolsSlot.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
 import type { ToolResolver } from '../stages/toolResolver.js';
@@ -23,14 +24,25 @@ type RecordedGroup = {
   readonly origins?: readonly CallOccurrenceKey[];
 };
 
+type SelectionWitness = {
+  readonly iteration: number;
+  readonly consumer: AcceptedToolSelection['consumer'];
+  readonly reason: 'top-N' | 'ledger' | 'skill-scope';
+};
+
+type SourceRoute = {
+  readonly group: string;
+  readonly callable: number;
+  readonly iteration: number;
+  readonly name?: string;
+  readonly selection?: SelectionWitness;
+};
+
 export interface SourceConsultationRecord {
   readonly complete: boolean;
-  readonly offers: readonly {
-    readonly group: string;
-    readonly callable: number;
-    readonly iteration: number;
-    readonly name?: string;
-  }[];
+  readonly offers: readonly SourceRoute[];
+  /** Only admitted, role-visible selection decisions on accepted requests. */
+  readonly omissions?: readonly SourceRoute[];
   readonly attempted: readonly number[];
   readonly groups: readonly RecordedGroup[];
 }
@@ -96,6 +108,8 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
   const bindings = new Map<string, Tool>();
   const ambiguous = new Set<string>();
   const offers = new Map<string, number>();
+  const omissions = new Map<string, SelectionWitness>();
+  let declaredRoutes: ReadonlySet<string> | undefined;
   const attempted = new Set<number>();
   const suggestions = new Map<string, CallOccurrenceKey[]>();
   let grounds: readonly Group[] | undefined;
@@ -184,7 +198,8 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
 
   function commit(scope: Scope): void {
     const groups: RecordedGroup[] = [];
-    const visibleOffers: SourceConsultationRecord['offers'][number][] = [];
+    const visibleOffers: SourceRoute[] = [];
+    const visibleOmissions: SourceRoute[] = [];
     const hidden = hiddenSkills(scope);
     let holders = 0;
     let origins = 0;
@@ -209,13 +224,31 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
         const iteration = eligible.has(candidate.wireName)
           ? offers.get(candidate.wireName)
           : undefined;
-        return iteration === undefined ? [] : [{ ...candidate, iteration }];
+        return iteration === undefined ? [] : [{ ...candidate, iteration, selection: undefined }];
       });
-      if (offered.length === 0) continue;
+      // Prefer the witnessed offer when a declared holder reached any accepted request.
+      // A tree catalog ID or a shadowed name alone cannot identify an unavailable callable.
+      const omitted =
+        offered.length || entry.origins !== undefined
+          ? []
+          : candidates.flatMap((candidate) => {
+              const selection = eligible.has(candidate.wireName)
+                ? omissions.get(candidate.wireName)
+                : undefined;
+              return selection === undefined
+                ? []
+                : [{ ...candidate, iteration: selection.iteration, selection }];
+            });
+      const witnessed = offered.length ? offered : omitted;
+      if (!witnessed.length) continue;
       const callables = [...new Set(candidates.map((candidate) => candidate.callable))];
       holders += callables.length;
       origins += entry.origins?.length ?? 0;
-      if (holders > LIMIT || origins > LIMIT || visibleOffers.length + offered.length > LIMIT) {
+      if (
+        holders > LIMIT ||
+        origins > LIMIT ||
+        visibleOffers.length + visibleOmissions.length + witnessed.length > LIMIT
+      ) {
         complete = false;
         break;
       }
@@ -225,18 +258,30 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
         callables,
         ...(entry.origins !== undefined && { origins: entry.origins }),
       });
-      for (const candidate of offered) {
-        const name = readDisplayName(candidate.tool.displayName);
-        visibleOffers.push({
+      const target = offered.length ? visibleOffers : visibleOmissions;
+      for (const candidate of witnessed) {
+        const label =
+          candidate.selection === undefined
+            ? candidate.tool.displayName
+            : Object.getOwnPropertyDescriptor(candidate.tool, 'displayName')?.value;
+        const name = readDisplayName(label);
+        target.push({
           group,
           callable: candidate.callable,
           iteration: candidate.iteration,
+          ...(candidate.selection !== undefined && { selection: candidate.selection }),
           ...(name !== undefined && { name }),
         });
       }
     }
     const record: SourceConsultationRecord = complete
-      ? { complete, offers: visibleOffers, attempted: [...attempted], groups }
+      ? {
+          complete,
+          offers: visibleOffers,
+          ...(visibleOmissions.length > 0 && { omissions: visibleOmissions }),
+          attempted: [...attempted],
+          groups,
+        }
       : { complete, offers: [], attempted: [], groups: [] };
     const serialized = JSON.stringify(record);
     if (serialized === previous) return;
@@ -310,6 +355,26 @@ export function buildSourceConsultation(deps: ConsultationDeps) {
         if (callable !== undefined) attempted.add(callable);
       }
       commit(scope);
+    },
+
+    omitted(scope: Scope, proof: AcceptedToolSelection): void {
+      if (!complete || !grounds?.length) return;
+      declaredRoutes ??= new Set(grounds.flatMap((group) => group.tools));
+      const hidden = hiddenSkills(scope);
+      let recorded = false;
+      for (const row of proof.rows) {
+        if (row.kind === 'tree-routed' || row.kind === 'collision' || !declaredRoutes.has(row.name))
+          continue;
+        if (!visible(row.tool, row.name, hidden)) continue;
+        if (admit({ wireName: row.name, tool: row.tool }) !== undefined && !omissions.has(row.name))
+          omissions.set(row.name, {
+            iteration: proof.iteration,
+            consumer: proof.consumer,
+            reason: row.kind,
+          });
+        recorded = true;
+      }
+      if (recorded) commit(scope);
     },
 
     innerAttempt(scope: Scope, wireName: string, tool: Tool): void {

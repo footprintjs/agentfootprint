@@ -156,6 +156,35 @@ describe('recorded source consultation', () => {
     expect(reads).toBe(0);
   });
 
+  it('requires an intact omission witness and never displaces a proved offer', () => {
+    const selection = {
+      iteration: 1,
+      consumer: { series: 'call-a', attempt: 1 },
+      reason: 'ledger',
+    };
+    const omission = { group: '0', callable: 2, iteration: 1, name: 'archive', selection };
+    const state = (row: object) => ({
+      sourceConsultation: { ...receipt, offers: [], omissions: [row] },
+    });
+    expect(assess(state(omission)).reasons[0]?.detail).toEqual({ unavailableTools: ['archive'] });
+    for (const row of [
+      { ...omission, iteration: 2 },
+      { ...omission, selection: undefined },
+      { ...omission, selection: { ...selection, reason: 'collision' } },
+      { ...omission, selection: { ...selection, consumer: { series: 'call-a', attempt: 0 } } },
+      {
+        ...omission,
+        get selection() {
+          throw Error('must not invoke');
+        },
+      },
+    ])
+      expect(assess(state(row)).reasons).toEqual([]);
+    expect(assess({ sourceConsultation: { ...receipt, omissions: [omission] } })).toEqual(
+      assess({ sourceConsultation: receipt }),
+    );
+  });
+
   it('keeps an unfinished paused turn from claiming a source was skipped', () => {
     const paused = assess({ sourceConsultation: receipt, pausedToolCallId: 'waiting' });
     expect(paused.standing).toBe('ask');
