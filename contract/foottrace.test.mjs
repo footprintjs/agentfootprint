@@ -201,6 +201,12 @@ function contracts(ft, cause, paths) {
       assert.equal(ft.isCommitBundle(log[0]), true);
       assert.equal(ft.isCommitBundle({ ...log[0], trace: [{}] }), false);
     },
+    'foottrace:isExecutionKey': () => {
+      assert.equal(ft.isExecutionKey('sf-llm-call#0'), true);
+      assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools#12'), true);
+      assert.equal(ft.isExecutionKey('sf-llm-call'), false);
+      assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools'), false);
+    },
     'foottrace/paths:pathSegments': () => {
       assert.deepEqual(paths.pathSegments('literal.dot\u001fitems'), ['literal.dot', 'items']);
     },
