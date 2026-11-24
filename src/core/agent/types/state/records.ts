@@ -1,6 +1,16 @@
+import type { SourceLinkRow } from 'foottrace/cause';
 import type { FindingsLedger } from '../../findings/types.js';
 import type { DeclaredCoverage } from '../../../../semantics/coverage/index.js';
 import type { ClaimLedgerRow } from '../../../../integrity/unsupported-claim/check.js';
+
+export interface SourceLinkConsumer {
+  readonly runId: string;
+  readonly consumer: string;
+  readonly historyPositions: readonly { readonly occurrence: string; readonly element: number }[];
+  /** The consumer's native policy protects the served history key. */
+  readonly historyProtected?: true;
+  readonly bounded?: true;
+}
 
 export interface RecordsState {
   /** Bounded dispositions and the accepted leaf for the last armed native call. */
@@ -15,6 +25,12 @@ export interface RecordsState {
   answerCitations?: import('../../citations/accepted.js').AnswerCitationRecord;
   /** Whole retained history entries sent by a model-call stage in this scope. */
   sourceLinkServedRows?: readonly import('../../receipt/servedRow.js').ServedRow[];
+  /** The exact served consumer for this scope's latest accepted model response. */
+  sourceLinkConsumer?: SourceLinkConsumer;
+  /** Source-link witnesses appended by the native stage that made each check. */
+  sourceLinkRows?: readonly SourceLinkRow[];
+  /** A native check had more witnesses than the record could keep. */
+  sourceLinkRowsBounded?: true;
 
   /**
    * Every coverage statement the run's tools declared, in the order they

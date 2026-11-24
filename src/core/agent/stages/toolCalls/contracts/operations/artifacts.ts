@@ -14,6 +14,7 @@ export interface ToolArtifactsOperations {
     wants: NonNullable<Tool['wants']>,
     args: ToolArgs,
     inputSchema: Readonly<Record<string, unknown>> | undefined,
+    recordRedeemedRef?: (argName: string, ref: string) => void,
   ) => Promise<
     | {
         readonly ok: true;

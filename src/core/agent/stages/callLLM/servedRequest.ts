@@ -1,5 +1,6 @@
 import type { TypedScope } from 'footprintjs';
 import { abortableIterable, untilAborted } from '../../../../lib/abort.js';
+import { readCallOccurrenceKey } from '../../../../lib/callOccurrence.js';
 import { matchesPreparedData } from '../../../../lib/matchesPreparedData.js';
 import type {
   LLMCallHooks,
@@ -13,9 +14,13 @@ import {
   requestAttempt,
   type RequestSettlement,
 } from '../../../../provider-contract/requestObserver.js';
+import { sourceLinkPathGrant } from '../../../../redaction/runRedaction.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
+import type { SourceLinkConsumer } from '../../types/state/records.js';
 import type { liveChunkEmitter } from './liveChunks.js';
+
+const historyPositionLimit = 256;
 
 /** Record only entries that kept their retained bodies through the known,
  * position-preserving history projection. Request-only messages follow it. */
@@ -28,7 +33,18 @@ export function servedRequestRecorder(
 ) {
   const consumer = scope.$attempt?.().series;
   if (!consumer) return undefined;
+  const positions = new Map<string, number | undefined>();
+  const historyGrant = sourceLinkPathGrant(scope, ['history']);
+  let bounded = false;
   const whole = Array.from(history, (entry, index) => {
+    const occurrence =
+      historyGrant === true && entry.role === 'tool' ? readCallOccurrenceKey(entry) : undefined;
+    if (typeof occurrence === 'string') {
+      // A repeated occurrence cannot identify either index, even past the cap.
+      if (positions.has(occurrence)) positions.set(occurrence, undefined);
+      else if (positions.size < historyPositionLimit) positions.set(occurrence, index);
+      else bounded = true;
+    }
     const message = projected[index];
     return message?.role === entry.role && message.content === entry.content;
   });
@@ -52,6 +68,19 @@ export function servedRequestRecorder(
 
   return {
     discard,
+    consumerFor(runId: string | undefined): SourceLinkConsumer | undefined {
+      if (!runId || first === undefined) return undefined;
+      const historyPositions = [...positions].flatMap(([occurrence, element]) =>
+        element === undefined ? [] : [{ occurrence, element }],
+      );
+      return {
+        runId,
+        consumer,
+        historyPositions,
+        ...(historyGrant === false && { historyProtected: true as const }),
+        ...(bounded && { bounded: true as const }),
+      };
+    },
     beforeRequest(request: LLMRequest): void {
       if (discarded) return;
       const signature = requestHead(request);

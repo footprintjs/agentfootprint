@@ -810,7 +810,7 @@ export function buildCallLLMStage(
     }
     let acceptedToolCalls: ReturnType<typeof commitAcceptedResponse> | undefined;
     try {
-      acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
+      acceptedToolCalls = commitAcceptedResponse(scope, deps, response, serving, {
         localFallback,
         answeredBy,
         findingsRequest: acceptedFindingsRequest,
