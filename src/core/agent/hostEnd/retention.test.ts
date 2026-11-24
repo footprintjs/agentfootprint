@@ -5,7 +5,12 @@ import { mock } from '../../../llm-providers.js';
 it.each(['full', 'delta'] as const)(
   'evicts one of two identical answers without transferring its origin (%s)',
   async (commitValues) => {
-    const options = { model: 'mock', commitValues, provider: mock({ reply: 'same' }) };
+    const options = {
+      hostEndedTurns: true,
+      model: 'mock',
+      commitValues,
+      provider: mock({ reply: 'same' }),
+    };
     const first = Agent.create(options).build();
     // Keeping a host assistant at the front requires a shorter user-role drop notice.
     await first.run('Earlier conversation context. '.repeat(30));
@@ -48,7 +53,12 @@ it.each(['full', 'delta'] as const)(
       stopReason: 'end_turn',
     }));
     const fresh = () =>
-      Agent.create({ model: 'mock', commitValues, provider: mock({ respond }) })
+      Agent.create({
+        hostEndedTurns: true,
+        model: 'mock',
+        commitValues,
+        provider: mock({ respond }),
+      })
         .reliability({
           postDecide: [{ when: (s) => s.error !== undefined, then: 'fallback', kind: 'local' }],
           fallback,

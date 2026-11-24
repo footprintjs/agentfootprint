@@ -22,6 +22,10 @@ export function endTurn(
   decision: HostDecision,
   input: HostTurnInput = {},
 ): Promise<string> {
+  if (!this.configuration.hostEndedTurns)
+    return Promise.reject(
+      new TypeError('Agent.endTurn requires hostEndedTurns: true at construction'),
+    );
   return this.native.runExecution().withRun(async (run) => {
     const { reply, reason } = decision;
     if (typeof reply !== 'string' || reason !== 'host-cap')

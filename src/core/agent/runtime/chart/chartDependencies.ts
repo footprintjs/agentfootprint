@@ -67,9 +67,11 @@ export function chartDependencies(
     }),
     systemPromptCachePolicy: environment.systemPromptCachePolicy,
     maxIterations: environment.maxIterations,
-    chooseHostTurn: (
-      scope: import('footprintjs').TypedScope<import('../../types.js').AgentState>,
-    ) => chooseHostTurn(scope, this.native.runExecution().forScope(scope), this.configuration),
+    ...(this.configuration.hostEndedTurns && {
+      chooseHostTurn: (
+        scope: import('footprintjs').TypedScope<import('../../types.js').AgentState>,
+      ) => chooseHostTurn(scope, this.native.runExecution().forScope(scope), this.configuration),
+    }),
     seed: environment.seed,
     callLLM: environment.callLLM,
     routeDecider: environment.terminalRouteDecider,

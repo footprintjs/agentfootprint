@@ -425,7 +425,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     return getAgentRuntime(this).run(input, options);
   }
-  /** End a native turn with a host-supplied reply after output policy admits it. */
+  /** End a native turn with an admitted host reply. Requires the hostEndedTurns construction option. */
   endTurn(decision: HostDecision, input?: HostTurnInput): Promise<string> {
     return getAgentRuntime(this).endTurn(decision, input);
   }

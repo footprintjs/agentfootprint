@@ -57,7 +57,8 @@ export function requestFactory(environment: RequestEnvironment) {
         }),
       ...(recallRequests !== undefined && { recallRequests }),
       onResponseCommitted: (scope, localFallback) => {
-        scope.modelReplyRunId = localFallback ? undefined : run.context.runId;
+        if (environment.configuration.hostEndedTurns)
+          scope.modelReplyRunId = localFallback ? undefined : run.context.runId;
         run.value.modelResponseCommitted = true;
       },
       onReplayPrepared: (preparation) => {

@@ -706,7 +706,7 @@ minimal meta. Library events remain reserved under `agentfootprint.*`.
 
 Defined in: [src/core/Agent.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L429)
 
-End a native turn with a host-supplied reply after output policy admits it.
+End a native turn with an admitted host reply. Requires the hostEndedTurns construction option.
 
 #### Parameters
 

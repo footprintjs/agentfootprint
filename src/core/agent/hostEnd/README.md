@@ -1,5 +1,10 @@
 **Walker** — admits and records a host-ended turn through the native flowchart.
 
+Set `hostEndedTurns: true` in `Agent.create` before the first turn to enable
+`agent.endTurn` and record the origin of settled replies. By default, ordinary
+turns keep their existing chart addresses and checkpoint format. Calling
+`endTurn` while disabled rejects before opening a run.
+
 The host supplies a reply at the start of a native turn. The run holds the
 candidate privately while output policy decides what may be delivered. Its
 reason is a finite code on the recording. The accepted assistant message carries

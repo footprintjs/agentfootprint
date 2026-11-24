@@ -8,6 +8,7 @@ it.each(['full', 'delta'] as const)(
     const requests: string[] = [];
     const fresh = () =>
       Agent.create({
+        hostEndedTurns: true,
         model: 'mock',
         commitValues,
         provider: mock({
@@ -85,6 +86,7 @@ it.each(['classic', 'dynamic', 'dynamic-grouped'] as const)(
   'retains the accepted model run identity at the %s checkpoint',
   async (mode) => {
     const agent = Agent.create({
+      hostEndedTurns: true,
       provider: mock({ reply: 'same' }),
       model: 'mock',
       reactMode: mode,
@@ -103,6 +105,7 @@ it('withholds denied text from delivery, stream, snapshots and saved history', a
   let calls = 0;
   const tokens: string[] = [];
   const agent = Agent.create({
+    hostEndedTurns: true,
     model: 'mock',
     provider: mock({
       respond() {
@@ -128,6 +131,7 @@ it('withholds denied text from delivery, stream, snapshots and saved history', a
 it('rejects invalid schema without repair or running the provider', async () => {
   let calls = 0;
   const agent = Agent.create({
+    hostEndedTurns: true,
     model: 'mock',
     provider: mock({
       respond() {
@@ -157,6 +161,7 @@ it('rejects invalid schema without repair or running the provider', async () => 
 it('refuses a mandatory judge before either a judge or model runs', async () => {
   let calls = 0;
   const agent = Agent.create({
+    hostEndedTurns: true,
     model: 'mock',
     provider: mock({
       respond() {
@@ -189,7 +194,11 @@ it('refuses a mandatory judge before either a judge or model runs', async () => 
 
 it('requires real input for a wrapper and calls it once when there is input', async () => {
   const inputs: unknown[] = [];
-  const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'unexpected' }) })
+  const agent = Agent.create({
+    hostEndedTurns: true,
+    model: 'mock',
+    provider: mock({ reply: 'unexpected' }),
+  })
     .aroundTurn({
       name: 'wrapper',
       around(turn, proceed) {
@@ -213,7 +222,11 @@ it('requires real input for a wrapper and calls it once when there is input', as
 it('cancels during output admission without delivering the candidate', async () => {
   const control = new AbortController();
   const tokens: string[] = [];
-  const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'unexpected' }) })
+  const agent = Agent.create({
+    hostEndedTurns: true,
+    model: 'mock',
+    provider: mock({ reply: 'unexpected' }),
+  })
     .messageMiddleware({
       name: 'cancel',
       onMessage() {

@@ -44,6 +44,7 @@ import type { ResolvedSourceEvidenceOptions } from '../../../../tools/sourceEvid
 
 /** Static run-policy and service declarations, resolved once at construction. */
 export interface AgentConfiguration extends ModelConfiguration {
+  readonly hostEndedTurns: boolean;
   readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
   /** Side channel for the conversation's inherited skill cursor (SG-C) —
    *  stashed by `applyContinuation`, consumed-and-cleared by seed. */

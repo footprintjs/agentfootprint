@@ -13,7 +13,11 @@ import { defineMemory, InMemoryStore } from '../../../memory/index.js';
 import { conversationRedaction } from '../../../doors/security.js';
 
 it('uses only the admitted inbound message as native input', async () => {
-  const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'unexpected' }) }).build();
+  const agent = Agent.create({
+    hostEndedTurns: true,
+    model: 'mock',
+    provider: mock({ reply: 'unexpected' }),
+  }).build();
   const options = { input: { message: 'substitute input' } };
   for (const inbound of [{}, { message: 'real input' }]) {
     await expect(
@@ -25,6 +29,7 @@ it('uses only the admitted inbound message as native input', async () => {
 
 it('applies conversation redaction to the native host recording', async () => {
   const agent = Agent.create({
+    hostEndedTurns: true,
     model: 'mock',
     provider: mock({ reply: 'unexpected' }),
     redact: conversationRedaction(),
@@ -42,7 +47,11 @@ it.each(['deny', 'throw'] as const)(
   async (failure) => {
     const identity = { conversationId: 'host-admission' };
     const store = new InMemoryStore();
-    const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'earlier answer' }) })
+    const agent = Agent.create({
+      hostEndedTurns: true,
+      model: 'mock',
+      provider: mock({ reply: 'earlier answer' }),
+    })
       .memory(
         defineMemory({
           id: 'history',
@@ -86,7 +95,11 @@ it.each(['deny', 'throw'] as const)(
 it('hands the run cancellation signal to host output middleware', async () => {
   const controller = new AbortController();
   let observed: AbortSignal | undefined;
-  const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'unexpected' }) })
+  const agent = Agent.create({
+    hostEndedTurns: true,
+    model: 'mock',
+    provider: mock({ reply: 'unexpected' }),
+  })
     .messageMiddleware({
       name: 'admission',
       onMessage({ signal }) {
@@ -109,7 +122,11 @@ it('hands the run cancellation signal to host output middleware', async () => {
 it('persists the identical admitted row in the checkpoint and the conversation store', async () => {
   const store = new InMemoryStore();
   const identity = { conversationId: 'durable-host-turn' };
-  const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'unexpected' }) })
+  const agent = Agent.create({
+    hostEndedTurns: true,
+    model: 'mock',
+    provider: mock({ reply: 'unexpected' }),
+  })
     .memory(
       defineMemory({
         id: 'history',
@@ -136,7 +153,11 @@ it('persists the identical admitted row in the checkpoint and the conversation s
 });
 
 it('preserves the active model turn and admits a host notice after its lease releases', async () => {
-  const agent = Agent.create({ model: 'mock', provider: mock({ reply: 'model reply' }) }).build();
+  const agent = Agent.create({
+    hostEndedTurns: true,
+    model: 'mock',
+    provider: mock({ reply: 'model reply' }),
+  }).build();
   const first = agent.run('first');
   await expect(agent.endTurn({ reply: 'overlap', reason: 'host-cap' })).rejects.toThrow(
     RunInFlightError,
@@ -152,6 +173,7 @@ it('preserves the active model turn and admits a host notice after its lease rel
 it('preserves a pending consent request until its own decision arrives', async () => {
   const execute = vi.fn(() => 'approved');
   const agent = Agent.create({
+    hostEndedTurns: true,
     model: 'mock',
     provider: mock({
       replies: [

@@ -59,7 +59,7 @@ export function settledModelReply(
  * binding into a new provider proof. Present undefined clears it. */
 export function acceptedResponseFields(state: Record<string, unknown>): Record<string, unknown> {
   return {
-    modelReplyRunId: state.modelReplyRunId,
+    ...(Object.hasOwn(state, 'modelReplyRunId') && { modelReplyRunId: state.modelReplyRunId }),
     ...(Object.hasOwn(state, 'llmLatestReplay') && { llmLatestReplay: state.llmLatestReplay }),
     ...(Object.hasOwn(state, 'requestReplay') && { requestReplay: state.requestReplay }),
   };
