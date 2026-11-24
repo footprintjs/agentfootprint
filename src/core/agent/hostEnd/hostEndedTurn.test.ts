@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Agent, allow } from '../../../index.js';
+import { Agent, allow, receiptAt } from '../../../index.js';
 import { mock } from '../../../llm-providers.js';
 
 it.each(['full', 'delta'] as const)(
@@ -33,11 +33,14 @@ it.each(['full', 'delta'] as const)(
     const a = fresh();
     expect(await a.run('first')).toBe('identical');
     const first = JSON.parse(JSON.stringify(a.checkpoint()));
+    const firstRecording = JSON.parse(JSON.stringify(a.getSnapshot()));
+    expect(firstRecording.sharedState).toMatchObject({ totalInputTokens: 1, totalOutputTokens: 1 });
     const b = fresh();
     expect(await b.endTurn({ reply: 'notice', reason: 'host-cap' }, { continueFrom: first })).toBe(
       'identical',
     );
     expect(requests).toHaveLength(1);
+    expect(receiptAt(JSON.parse(JSON.stringify(b.getSnapshot())), 1)).toBeUndefined();
     const second = JSON.parse(JSON.stringify(b.checkpoint()));
     expect(second.history.some((row: { content: string }) => row.content === 'notice')).toBe(false);
     expect(b.getLastSnapshot()?.sharedState).toMatchObject({
@@ -51,6 +54,10 @@ it.each(['full', 'delta'] as const)(
     expect(requests).toHaveLength(2);
     expect(requests[1]).not.toContain('replyOrigin');
     const last = JSON.parse(JSON.stringify(c.checkpoint()));
+    const lastRecording = JSON.parse(JSON.stringify(c.getSnapshot()));
+    expect(lastRecording.sharedState).toMatchObject({ totalInputTokens: 1, totalOutputTokens: 1 });
+    expect(receiptAt(firstRecording, 1)?.basis.runId).toBe(first.runId);
+    expect(receiptAt(lastRecording, 1)?.basis.runId).toBe(last.runId);
     expect(new Set([first.runId, second.runId, last.runId]).size).toBe(3);
     expect(last.history).toEqual([
       { role: 'user', content: 'first' },

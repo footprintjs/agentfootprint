@@ -67,6 +67,7 @@ export interface AgentMethods {
     input: AgentInput | string,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome>;
+  endTurn: typeof import('../hostEnd/entry.js').endTurn;
   runOwned(
     invocation: RunnerInvocation<AgentRunValues>,
     input: AgentInput | string,

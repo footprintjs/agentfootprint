@@ -1,4 +1,4 @@
-import { endTurn, type HostDecision, type HostTurnInput } from './agent/hostEnd/entry.js';
+import type { HostDecision, HostTurnInput } from './agent/hostEnd/entry.js';
 import { getAgentRuntime, initializeAgentRuntime } from './agent/runtime/native/host.js';
 import { RunnerBase } from './RunnerBase.js';
 import type { RunnerSnapshotOptions } from './runnerSnapshot.js';
@@ -74,7 +74,22 @@ export type { SkillGraphOptions } from './agent/AgentBuilder.js';
 export type { ProviderChoice, EscalationPolicy } from './agent/skillBrains.js';
 import type { ThinkingHandler } from '../thinking/types.js';
 export { AgentBuilder };
-export type * from './agent/publicRunTypes.js';
+// Re-export public Agent types so the 28+ existing import sites
+// (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
+// working while implementation gradually moves into `./agent/*`.
+// Public types canonically live in `./agent/types.ts` (v2.11.1).
+export type {
+  AgentArtifactsOptions,
+  AgentInput,
+  AgentOptions,
+  AgentOutput,
+  AgentRecordingsOptions,
+  ObserverDeliveryOptions,
+  RunConfig,
+  RunConfigContext,
+  RunConfigFn,
+  WriteProvenanceMode,
+} from './agent/types.js';
 export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   declare readonly name: string;
   declare readonly id: string;
@@ -412,7 +427,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   }
   /** End a native turn with a host-supplied reply after output policy admits it. */
   endTurn(decision: HostDecision, input?: HostTurnInput): Promise<string> {
-    return endTurn(getAgentRuntime(this), decision, input);
+    return getAgentRuntime(this).endTurn(decision, input);
   }
   /**
    * Continue this agent's own last completed conversation.

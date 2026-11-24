@@ -3,6 +3,7 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
 import { applyOutputSchema } from '../../../answer-validation/outputSchema.js';
 import { typedEmit, emitTurnEnd } from '../../../recorders/core/typedEmit.js';
+import { acceptedTurnMessages } from '../assistantReplay.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import type { AgentState } from '../types.js';
 import type { AgentConfiguration } from '../runtime/configuration/types.js';
@@ -18,7 +19,8 @@ export async function settleHostReply(
 ): Promise<void> {
   const decision = run.value.hostTurn;
   if (!decision) throw new Error('A host decision is required');
-  scope.$getEnv()?.signal?.throwIfAborted();
+  const signal = scope.$getEnv()?.signal;
+  signal?.throwIfAborted();
   if (
     config.answerValidationConfig ||
     config.evidenceGate ||
@@ -38,6 +40,7 @@ export async function settleHostReply(
     iteration: 0,
     history: (scope.$getValue('history') as readonly LLMMessage[] | undefined) ?? [],
     identity: run.value.identity ?? scope.runIdentity,
+    signal,
   });
   // Record the middleware's decision without publishing a withheld candidate
   // or any intermediate rewrite through its before/after fields.
@@ -56,7 +59,9 @@ export async function settleHostReply(
   if (verdict.kind === 'deny') {
     scope.messageDeniedPhase = 'output';
     scope.messageDeniedBy = verdict.middleware;
-    scope.messageDeniedReason = verdict.reason;
+    // A denial or a thrown callback may quote the candidate verbatim.
+    // Retain the responsible middleware and outcome in the native record.
+    scope.messageDeniedReason = 'Output policy withheld the host reply';
     scope.$break('Output policy withheld the host reply');
     return;
   }
@@ -67,16 +72,17 @@ export async function settleHostReply(
       throw new Error('The host reply did not satisfy the output schema');
     }
   }
-  scope.$getEnv()?.signal?.throwIfAborted();
+  signal?.throwIfAborted();
   const reply: LLMMessage = {
     role: 'assistant',
     content: verdict.content,
     replyOrigin: { kind: 'host', runId: run.context.runId },
   };
   scope.finalContent = reply.content;
-  scope.newMessages = decision.hasInput
-    ? [{ role: 'user', content: scope.userMessage }, reply]
-    : [reply];
+  scope.newMessages = acceptedTurnMessages(
+    decision.hasInput ? scope.userMessage : undefined,
+    reply,
+  );
   run.value.hostSettlement = reply;
 }
 

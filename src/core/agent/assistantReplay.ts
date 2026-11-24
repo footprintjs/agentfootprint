@@ -64,3 +64,9 @@ export function acceptedResponseFields(state: Record<string, unknown>): Record<s
     ...(Object.hasOwn(state, 'requestReplay') && { requestReplay: state.requestReplay }),
   };
 }
+
+/** The episodic writer receives the actual inbound message, when there was one,
+ * paired with the already admitted assistant entry. */
+export function acceptedTurnMessages(input: string | undefined, reply: LLMMessage): LLMMessage[] {
+  return input === undefined ? [reply] : [{ role: 'user', content: input }, reply];
+}

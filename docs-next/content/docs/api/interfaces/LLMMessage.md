@@ -8,7 +8,7 @@ Defined in: [src/provider-contract/types.ts:25](https://github.com/footprintjs/a
 
 ## Extends
 
-- `ToolResultRecord`
+- `MessageRecord`
 
 ## Properties
 
@@ -244,6 +244,30 @@ Replay layout and local consistency evidence (including known loss); JSON/checkp
 
 ***
 
+### replyOrigin?
+
+> `readonly` `optional` **replyOrigin?**: `object`
+
+Defined in: [src/provider-contract/toolResultRecord.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L51)
+
+Who supplied the accepted reply, including after an output-policy rewrite.
+A mark from a checkpoint is its writer's declaration. Only the run's own
+request and usage receipts can establish a provider call or its cost.
+
+#### kind
+
+> `readonly` **kind**: `"host"` \| `"model"`
+
+#### runId
+
+> `readonly` **runId**: `string`
+
+#### Inherited from
+
+`MessageRecord.replyOrigin`
+
+***
+
 ### reportedStatus?
 
 > `readonly` `optional` **reportedStatus?**: `ReportedToolStatus`
@@ -380,7 +404,7 @@ The engine category of a thrown tool failure, without the error text.
 
 #### Inherited from
 
-`ToolResultRecord.toolFailureCategory`
+`MessageRecord.toolFailureCategory`
 
 ***
 
@@ -404,7 +428,7 @@ Printed output counts from an admitted native return. Kept off the provider wire
 
 #### Inherited from
 
-`ToolResultRecord.toolOutputCounts`
+`MessageRecord.toolOutputCounts`
 
 ***
 
@@ -418,7 +442,7 @@ A host's after-tool rule withheld or replaced this result. Kept off the provider
 
 #### Inherited from
 
-`ToolResultRecord.toolResultDisposition`
+`MessageRecord.toolResultDisposition`
 
 ***
 
@@ -434,7 +458,7 @@ separately by `toolResultDisposition`. Artifact tickets carry the result.
 
 #### Inherited from
 
-`ToolResultRecord.toolResultExecution`
+`MessageRecord.toolResultExecution`
 
 ***
 
@@ -456,4 +480,4 @@ JSON/checkpoint safe; stripFrameworkFields removes it before transport.
 
 #### Inherited from
 
-`ToolResultRecord.toolResultOrigin`
+`MessageRecord.toolResultOrigin`

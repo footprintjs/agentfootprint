@@ -40,7 +40,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../../time/rows.js';
 import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
-import { settledModelReply } from '../assistantReplay.js';
+import { acceptedTurnMessages, settledModelReply } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
 import {
   scriptsBlock,
@@ -131,10 +131,10 @@ const captureTurnPayload = (
   // it's the FINAL turn (continuation in the next user message).
   // The turn payload memory writes persist: the user's message
   // paired with the agent's final answer.
-  scope.newMessages = [
-    { role: 'user', content: scope.userMessage },
+  scope.newMessages = acceptedTurnMessages(
+    scope.userMessage,
     settledModelReply(scope, scope.finalContent, true),
-  ];
+  );
 
   if (commitValidated) {
     scope.answerValidationCommitted = true;

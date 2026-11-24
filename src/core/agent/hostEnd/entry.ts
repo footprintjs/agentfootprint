@@ -9,30 +9,37 @@ export interface HostDecision {
 
 export type HostTurnInput = Omit<AgentInput, 'message'> & {
   readonly message?: string;
-  readonly options?: AgentRunOptions;
+  readonly options?: Omit<AgentRunOptions, 'input'>;
 };
 
 /** Admit the candidate to the existing exclusive run lease. Only a real input
  * can enter a wrapper that transforms user messages. */
 export function endTurn(
-  ctx: AgentContext,
+  this: Pick<
+    AgentContext,
+    'native' | 'configuration' | 'assertNoPendingQuestion' | 'runLeg' | 'runOwned'
+  >,
   decision: HostDecision,
   input: HostTurnInput = {},
 ): Promise<string> {
-  return ctx.native.runExecution().withRun(async (run) => {
+  return this.native.runExecution().withRun(async (run) => {
     const { reply, reason } = decision;
     if (typeof reply !== 'string' || reason !== 'host-cap')
       throw new TypeError('Invalid host turn decision');
     const { message, options, ...rest } = input;
-    if (message === undefined && ctx.configuration.aroundTurnPort !== undefined)
+    if (options && 'input' in options)
+      throw new TypeError(
+        'Pass the inbound message to endTurn directly. Run options cannot supply input.',
+      );
+    if (message === undefined && this.configuration.aroundTurnPort !== undefined)
       throw new TypeError('A host turn with aroundTurn requires an inbound message');
-    ctx.assertNoPendingQuestion('Agent.endTurn', run.previous?.value);
+    this.assertNoPendingQuestion('Agent.endTurn', run.previous?.value);
     run.value.hostTurn = { reply, reason, hasInput: message !== undefined };
     try {
       const result =
         message === undefined
-          ? await ctx.runLeg(run, { ...rest, message: '' }, options)
-          : await ctx.runOwned(run, { ...rest, message }, options);
+          ? await this.runLeg(run, { ...rest, message: '' }, options)
+          : await this.runOwned(run, { ...rest, message }, options);
       if (typeof result !== 'string') throw new Error('A host-ended turn cannot settle a pause');
       return result;
     } finally {

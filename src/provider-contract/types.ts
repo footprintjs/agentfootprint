@@ -13,7 +13,7 @@ import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../event
 import type { ReportedToolStatus } from '../semantics/toolOutcome.js';
 import type { ThinkingBlock, ThinkingDeltaKind } from '../thinking/types.js';
 import type { ToolCallEntry } from './innerCalls.js';
-import type { MessageRecord } from './replyOrigin.js';
+import type { MessageRecord } from './toolResultRecord.js';
 import type { WireRole } from './wireRole.js';
 export type { ToolCallEntry } from './innerCalls.js';
 export type { TypedAnswerMark } from './typedAnswerMark.js';
