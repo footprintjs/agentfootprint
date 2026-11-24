@@ -96,6 +96,25 @@ A partial channel keeps the links it could bind and reports
 `budget-exhausted`.
 Treat an absent channel, including in older recordings, as uncollected evidence.
 
+## Measure a saved run
+
+Use `recordingSizeReport` on the parsed recording to see which snapshot fields,
+event types and subflow entries use the most space. The count uses compact
+UTF-8 JSON. Each section's `framingBytes` accounts for its keys and punctuation.
+The shared state and subflow tables break down fields already counted in the snapshot.
+A latest-path alias and its matching mount each contribute bytes when both are stored.
+`RecordingSizeReport` contains the totals. `RecordingSizeFields` groups a snapshot
+or shared-state table of `RecordingSizeRow` entries. A `RecordingSizeMount` also
+identifies the entry as a mount or path alias and gives its recorded commit count.
+
+<CodeFile path="examples/features/94-packed-recording.ts" region="size" title="Measure a recording after unpacking" />
+
+Measure the plain served recording. For a packed file, unpack under an explicit
+byte limit first. The report refuses more than 64 MiB of plain JSON, nesting past
+256 levels, more than 16,384 named rows, or a name longer than 1,024 UTF-16 code
+units. It returns structural names, counts and sizes. Review application-defined
+keys and mount IDs before sharing a report.
+
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its
