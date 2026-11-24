@@ -55,6 +55,7 @@ export interface AgentRunOptions extends RunOptions {
    * runId. Omitted, the conversation's own stored `identity` is used; given,
    * it wins. On `run()` this is a second spelling of `run({ identity })` and
    * the one on the input wins, since that is where the caller looked first.
+   * Retrying a failed request with private citation receipts requires the stored identity.
    */
   identity?: MemoryIdentity;
   /**

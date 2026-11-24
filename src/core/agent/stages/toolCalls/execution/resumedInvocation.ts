@@ -56,6 +56,7 @@ export function buildResumedInvocation(
     | 'time'
     | 'negativeClaimsArmed'
     | 'sourceEvidenceConfig'
+    | 'citationOptions'
     | 'columnCheckMode'
     | 'resultRowsetsFor'
     | 'integrityLedger'
@@ -289,7 +290,11 @@ export function buildResumedInvocation(
               context: executionContext,
             })
           : undefined;
-      seen?.resultFinalizer?.entered(executionContext);
+      seen?.resultFinalizer?.entered(
+        executionContext,
+        args,
+        negativeDispatch?.resultId ?? searchDispatch?.resultId,
+      );
       executed = true;
       if (seen !== undefined) {
         // Read now, before any tool code runs: what the call proposed and
@@ -309,6 +314,7 @@ export function buildResumedInvocation(
         toolInvoked = true;
         result = await tool.execute(args, executionContext);
         returned = true;
+        seen?.resultFinalizer?.captureReturned?.(result);
       } finally {
         await binding.close(env.signal);
         if (seen !== undefined) seen.toolResultExecution = returned ? 'returned' : 'threw';

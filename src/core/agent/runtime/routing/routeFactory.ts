@@ -2,6 +2,7 @@ import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { buildRouteDeciderStage } from '../../stages/route.js';
 import { withNegativeProse } from '../../negativeClaims/observe.js';
+import { withCitationAssessment } from '../../citations/observe.js';
 import { withAnswerValidation } from '../../stages/answerValidation.js';
 import { withAnswerCoverage } from '../../stages/answerCoverage.js';
 import { buildToolResolver } from '../../stages/toolResolver.js';
@@ -118,6 +119,13 @@ export function routeFactory(
       : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls/index.ts (v2.11.2).
-    return terminalRouteDecider;
+    return this.configuration.citationOptions !== undefined &&
+      this.configuration.outputSchemaParser === undefined
+      ? withCitationAssessment(
+          terminalRouteDecider,
+          this.configuration.citationOptions,
+          () => run.value.consentOutstanding.size > 0,
+        )
+      : terminalRouteDecider;
   };
 }

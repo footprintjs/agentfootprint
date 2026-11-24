@@ -198,6 +198,7 @@ export type AssessmentReason =
   | 'unsupported-argument'
   | 'column-type-mismatch'
   | 'missing-column'
+  | 'ungrounded-entity'
   | 'unsupported-claim'
   | 'claim-unsettled'
   | 'claim-exceeds-search'
@@ -267,6 +268,8 @@ export interface AssessmentReasonDetail {
   /** The one engine category represented by the classified failures for this reason. */
   readonly category?: import('footprintjs').AttemptCategory;
   readonly toolSays?: AssessmentToolWords;
+  /** The requested column missing from the complete visible schema of its citation. */
+  readonly ungroundedEntity?: { readonly name: string; readonly nearestName?: string };
   /** App-declared display names of visible tools offered for an unchecked source. */
   readonly unusedTools?: readonly string[];
   /** A kept count with its unit, or a missing count out of a known whole. */
@@ -368,6 +371,8 @@ export interface AnswerAssessment {
     /** The rows behind `ran`. */
     readonly witness: readonly AssessmentPointer[];
   }[];
+  /** Public, span-level citation findings. A supported span cannot establish overall standing. */
+  readonly citations?: import('../citations/accepted.js').AnswerCitationRecord;
   /**
    * Where the turn this fold read begins: `person` — after the last message a
    * person said (`lib/saidByPerson.ts` · `isSaidByPerson`), the one owner of

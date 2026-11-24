@@ -4,6 +4,16 @@ import { copyJson, jsonBytes, ownData, readOwnList } from '../lib/boundedJson.js
 /** Raw checkpoint carrier; its native record anchor is always private. */
 export const PRIVATE_FIELDS_KEY = 'privateRecordFields';
 
+/** These closed working fields never supply a public event value. */
+export const CITATION_PRIVATE_ROOTS = Object.freeze([
+  'resultIdentities',
+  'citationSources',
+  'acceptedCitationOffer',
+] as const);
+export const CITATION_PRIVATE_FIELDS = Object.freeze(
+  CITATION_PRIVATE_ROOTS.map((root) => Object.freeze({ root, path: '' })),
+);
+
 /** Library working carriers only; never caller-selected keys or event policy. */
 export const PRIVATE_FIELD_ROOTS = Object.freeze([
   'argumentAsk',
@@ -11,6 +21,7 @@ export const PRIVATE_FIELD_ROOTS = Object.freeze([
   'argumentResolutions',
   'pausedCheckInArgs',
   'innerCallPolicyArgs',
+  ...CITATION_PRIVATE_ROOTS,
 ] as const);
 export type PrivateFieldRoot = (typeof PRIVATE_FIELD_ROOTS)[number];
 

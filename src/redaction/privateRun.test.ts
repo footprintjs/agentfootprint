@@ -7,6 +7,7 @@ import { DECLARED_NONE } from './coverage.js';
 import { carriedRunPolicy } from './conversation.js';
 import {
   addPrivateRecordFields,
+  CITATION_PRIVATE_FIELDS,
   PRIVATE_FIELDS_KEY,
   type PrivateRecordFields,
 } from './privateFields.js';
@@ -390,4 +391,23 @@ it('a copied carrier cannot arm a missing native policy or a non-native/outside 
   adoptScopeOutsideRun(outside, outsideRunFor({ state: 'covered', policy: { keys: ['secret'] } }));
   expect(canStorePrivateFields(outside)).toBe(false);
   unavailable(() => markPrivateFields(outside, selection));
+});
+
+it('keeps citation working carriers private without rewriting unrelated event data', () => {
+  const run = opened(undefined, empty());
+  const rule = new RedactionRule(run.recordPolicy);
+  const { scope } = bind(run, rule);
+  markPrivateFields(scope, CITATION_PRIVATE_FIELDS);
+  expect(
+    run.serving.payload('app.event', {
+      content: 'Public words',
+      citationSources: [{ bodyDigest: 'working-locator' }],
+    }),
+  ).toEqual({ content: 'Public words', citationSources: '[REDACTED]' });
+  expect(run.serving.meta(meta)).toBe(meta);
+
+  rule.mark('otherPrivateState');
+  expect(run.serving.payload('app.event', { content: 'Public words' })).toEqual({
+    content: '[REDACTED]',
+  });
 });

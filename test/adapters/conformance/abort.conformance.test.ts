@@ -39,6 +39,7 @@ const NOT_ADAPTERS: Readonly<Record<string, string>> = {
  */
 const HELPER_FILES: Readonly<Record<string, string>> = {
   'anthropicCacheWire.ts': 'cache-marker wire for the Anthropic body',
+  'anthropicCitationOffer.ts': 'synchronous citation label projection into the Anthropic body',
   'anthropicMessageProjection.ts': 'messages-to-wire projection',
   'anthropicMessagesWire.ts': 'the shared Anthropic body and SSE assembly',
   'anthropicModels.ts': 'the Claude model-facts table',
@@ -46,6 +47,7 @@ const HELPER_FILES: Readonly<Record<string, string>> = {
   'anthropicThinkingReplay.ts': 'thinking-replay preparation',
   'anthropicThinkingWire.ts': 'thinking request shapes per model',
   'anthropicToolArguments.ts': 'streamed tool-argument checks',
+  'anthropicToolResultLocations.ts': 'synchronous indexing of projected tool-result blocks',
   'azureUrl.ts': 'Azure URL composition',
   'bedrockCacheWire.ts':
     'synchronous cache-marker projection, usage reading and capability lookup; no client, I/O or provider construction',
