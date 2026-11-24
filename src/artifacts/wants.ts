@@ -267,6 +267,7 @@ export async function resolveToolWants(
   wants: ToolWants,
   args: Readonly<Record<string, unknown>>,
   inputSchema?: Readonly<Record<string, unknown>>,
+  recordRedeemedRef?: (argName: string, ref: string) => void,
 ): Promise<WantsResolution> {
   const refusals: WantsRefusal[] = [];
   const wanted: Record<string, ArtifactMeta> = {};
@@ -361,6 +362,7 @@ export async function resolveToolWants(
     nextArgs[argName] = record.data;
     wanted[argName] = record.meta;
     resolvedList.push({ argName, meta: record.meta });
+    recordRedeemedRef?.(argName, spoken);
   }
 
   if (refusals.length > 0) {

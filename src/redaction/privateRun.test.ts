@@ -14,6 +14,7 @@ import {
 import { eventServing, SERVED_PLACEHOLDER } from './served.js';
 import {
   adoptScopeOutsideRun,
+  canRecordSourceLinkPath,
   canStorePrivateFields,
   createRunRedaction,
   coverageInForce,
@@ -62,6 +63,19 @@ function bind(run: RunRedaction, rule?: RedactionRule) {
 const unavailable = (f: () => void) => {
   expect(f).toThrowError('Private record fields require an armed native redaction rule.');
 };
+
+it('allows exact record paths only under the native scope policy', () => {
+  const policy = { fields: { history: ['0.content', '1'] }, keys: ['answer'] };
+  const run = opened(policy);
+  const { scope } = bind(run, new RedactionRule(policy));
+  expect(canRecordSourceLinkPath(scope, ['history'])).toBe(false);
+  expect(canRecordSourceLinkPath(scope, ['history', '0', 'toolName'])).toBe(true);
+  expect(canRecordSourceLinkPath(scope, ['history', '0', 'content'])).toBe(false);
+  expect(canRecordSourceLinkPath(scope, ['history', '1', 'toolName'])).toBe(false);
+  expect(canRecordSourceLinkPath(scope, ['answer'])).toBe(false);
+  expect(canRecordSourceLinkPath(scope, ['sourceLinkRows'])).toBe(true);
+  expect(canRecordSourceLinkPath({}, ['sourceLinkRows'])).toBe(false);
+});
 
 it('ordinary no-policy runs keep the identity path with no marker, anchor or new policy', () => {
   const run = opened();
