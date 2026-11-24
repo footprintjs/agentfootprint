@@ -19,6 +19,7 @@ import { sourceLinksOf } from '../../../../src/trace-toolpack/sourceLinks.js';
 
 const answer = 'The storage pool has 4200 GB.';
 const unsupportedAnswer = `${answer}\n\n---\n\nNot sure — names or numbers in the answer appear in no tool result.`;
+const evictedAnswer = `${answer}\n\n---\n\nNot sure — 3 results from this turn were dropped from the conversation before the answer; names or numbers in the answer appear in no tool result.`;
 
 const capacity = (result: string) =>
   defineTool({
@@ -370,7 +371,7 @@ it.each(['whole', 'evicted', 'collapsed'] as const)(
     try {
       expect(
         await agent.run(`What is the capacity? ${'Start the sampling exercise. '.repeat(18)}`),
-      ).toBe(transport === 'evicted' ? unsupportedAnswer : answer);
+      ).toBe(transport === 'evicted' ? evictedAnswer : answer);
       expect(requests[1]?.some(({ content }) => content === result)).toBe(true);
       const finalInput = requests.at(-1)?.find(({ toolCallId }) => toolCallId === 'capacity');
       if (transport === 'evicted') expect(finalInput).toBeUndefined();
