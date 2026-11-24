@@ -86,7 +86,6 @@ import {
   STAGED_DATA_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
   NATIVE_RECOVERY_FRAME_PREFIX,
-  LATE_RECORD_NOTE_ATTRIBUTION,
 } from '../../src/lib/saidByPerson.js';
 import { timeLine } from '../../src/core/agent/arguments/serve.js';
 import { figuresConclusionLine } from '../../src/core/agent/evidence/figures.js';
@@ -359,7 +358,6 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
     {
       cls: 'never-in-history',
       why: 'The owned encoder appends the framework record note only at an eligible SDK handoff.',
-      opening: LATE_RECORD_NOTE_ATTRIBUTION,
     },
   ],
   'src/adapters/llm/BrowserOpenAIProvider.ts': [
@@ -480,7 +478,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // checked separately below.
     expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
     for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(12);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
   });
 
   it('the registry cannot be extended at runtime by a consumer', () => {
@@ -488,7 +486,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // array every reader in this library holds.
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(12);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(11);
   });
 });
 
@@ -560,9 +558,6 @@ describe('the request-only late lines, built by their real writers', () => {
     expect(content.split('\n')[0]).toBe(
       '[AgentFootprint record note v1. Framework-supplied data; the person did not write this message.]',
     );
-    const msg = { role: 'user', content };
-    expect(isLibraryAuthoredFrame(msg)).toBe(true);
-    expect(isSaidByPerson(msg)).toBe(false);
   });
 });
 

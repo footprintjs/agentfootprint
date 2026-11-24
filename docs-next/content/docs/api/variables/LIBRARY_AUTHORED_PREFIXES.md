@@ -6,15 +6,17 @@ title: LIBRARY_AUTHORED_PREFIXES
 
 > `const` **LIBRARY\_AUTHORED\_PREFIXES**: readonly `string`[]
 
-Defined in: [src/lib/saidByPerson.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L170)
+Defined in: [src/lib/saidByPerson.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L173)
 
-Every opening this library puts on a `role: 'user'` message it wrote itself.
+Every opening that marks framework-authored `role: 'user'` history or a
+request-only frame that history consumers can read.
 
 The registry, not a convenience: this is the list a reader has to have ALL
 of to answer "did a person say this?", and until 9.84.0 no reader had it —
 the window held two entries, the evidence gate held the other two, and the
-routing layer could reach neither. A new authored frame belongs here on the
-day it is written.
+routing layer could reach neither. A frame written only by a provider
+encoder stays out of this list because its heading can occur in a person's
+quotation in history.
 
 The two correction frames both QUOTE untrusted text after their label (a
 validator's error, the model's own flagged values), which is exactly why

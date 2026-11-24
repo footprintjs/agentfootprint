@@ -3,6 +3,7 @@ import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import type { AnthropicMessage } from '../../../src/adapters/llm/anthropicMessagesWire.js';
 import { openai } from '../../../src/adapters/llm/OpenAIProvider.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
+import { ownedLateNoteOpenAI } from '../../helpers/lateRecordNoteSdk.js';
 
 const begin = vi.hoisted(() => vi.fn());
 vi.mock('../../../src/provider-contract/lateRecordNote.js', () => ({ beginLateRecordNote: begin }));
@@ -57,7 +58,7 @@ it.each(['complete', 'stream'] as const)(
   'attests the exact final OpenAI %s body and response',
   async (mode) => {
     const { create, client } = openAIScript();
-    const provider = openai({ _client: client });
+    const provider = ownedLateNoteOpenAI(client);
     const proof = {
       note: frame,
       handoff: vi.fn((_rows: WireBody['messages'], _ownedBlock: object) => {
@@ -82,8 +83,11 @@ it.each(['factory option', 'resolved client'] as const)(
   'leaves a custom OpenAI route undecorated from its %s',
   async (route) => {
     const baseURL = 'https://example.invalid/v1';
-    const { create, client } = openAIScript(route === 'resolved client' ? baseURL : undefined);
-    const provider = openai({ _client: client, ...(route === 'factory option' && { baseURL }) });
+    const { create, client } = openAIScript();
+    const provider = ownedLateNoteOpenAI(
+      client,
+      route === 'factory option' ? { configured: baseURL } : { resolved: baseURL },
+    );
     const proof = { note: frame, handoff: vi.fn(), accept: vi.fn() };
     begin.mockReturnValue(proof);
     await provider.complete(request, {});
@@ -92,6 +96,22 @@ it.each(['factory option', 'resolved client'] as const)(
     expect(proof.accept).not.toHaveBeenCalled();
   },
 );
+
+it.each([
+  ['without a route', undefined],
+  ['with the default URL as data', 'https://api.openai.com/v1'],
+] as const)('keeps an injected OpenAI client %s undecorated', async (_label, baseURL) => {
+  const { create, client } = openAIScript(baseURL);
+  const proof = { note: frame, handoff: vi.fn(), accept: vi.fn() };
+  begin.mockReturnValue(proof);
+
+  await openai({ _client: client }).complete(request, {});
+
+  expect(create.mock.calls[0]?.[0].messages).toEqual(request.messages);
+  expect(begin).not.toHaveBeenCalled();
+  expect(proof.handoff).not.toHaveBeenCalled();
+  expect(proof.accept).not.toHaveBeenCalled();
+});
 
 it.each(['complete', 'stream'] as const)(
   'attests a note-free Anthropic %s even when the first response can sign',

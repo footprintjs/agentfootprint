@@ -1,5 +1,27 @@
+import { vi } from 'vitest';
+import { openai, type OpenAIProviderOptions } from '../../src/adapters/llm/OpenAIProvider.js';
 import { Agent, coverage, defineTool, type AgentOptions } from '../../src/index.js';
-import { openai } from '../../src/providers.js';
+import * as sdkLoader from '../../src/lib/lazyRequire.js';
+
+/** Replace only the module loaded by the SDK constructor path. */
+export function ownedLateNoteOpenAI(
+  client: NonNullable<OpenAIProviderOptions['_client']>,
+  route: { readonly configured?: string; readonly resolved?: string } = {},
+) {
+  class ScriptedOpenAI {
+    readonly baseURL = route.resolved ?? 'https://api.openai.com/v1';
+    readonly chat = client.chat;
+  }
+  const load = vi.spyOn(sdkLoader, 'lazyRequire').mockImplementation((specifier) => {
+    if (specifier !== 'openai') throw new Error('Unexpected SDK dependency');
+    return { default: ScriptedOpenAI };
+  });
+  try {
+    return openai({ apiKey: 'fixture-key', baseURL: route.configured });
+  } finally {
+    load.mockRestore();
+  }
+}
 
 /** A local SDK fixture with a tool call and a final streaming response. */
 export const lateNoteModel = 'gpt-4o-mini';
@@ -76,11 +98,12 @@ export async function recordedLateNoteRun(
   lateRecordNotes: boolean,
   reason = lateNoteWhy,
   redact?: AgentOptions['redact'],
+  message = 'Read the attachment index.',
 ) {
   const { client, requests } = scriptedLateNoteSdk();
   const agent = Agent.create({
     ...options,
-    provider: openai({ _client: client }),
+    provider: ownedLateNoteOpenAI(client),
     model: lateNoteModel,
     ...(lateRecordNotes && { lateRecordNotes: true }),
     ...(redact === undefined ? {} : { redact }),
@@ -88,7 +111,7 @@ export async function recordedLateNoteRun(
     .tool(lateNoteLookupTool(reason))
     .build();
   try {
-    const answer = await agent.run({ message: 'Read the attachment index.' });
+    const answer = await agent.run({ message });
     const snapshot = agent.getLastSnapshot();
     if (snapshot === undefined) throw new Error('Fixture expected a native snapshot');
     const state = snapshot.sharedState as LateNoteSnapshotState;

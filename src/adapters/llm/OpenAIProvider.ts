@@ -311,8 +311,8 @@ const OPENAI_PROMPT_CACHING: PromptCaching = Object.freeze({
  *     .build();
  */
 export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
-  const connect = createClientResolver(options);
-  const scriptedClient = options._client;
+  const injected = options._client;
+  const connect = createClientResolver(options, injected);
   const defaultModel = options.defaultModel ?? 'gpt-4o-mini';
   const defaultMaxTokens = options.defaultMaxTokens;
   // A custom baseURL means an OpenAI-COMPATIBLE endpoint (Ollama/vLLM/Together/Groq),
@@ -334,15 +334,15 @@ export function openai(options: OpenAIProviderOptions = {}): LLMProvider {
 
   const nativeChatRoute = options.baseURL === undefined && !legacyEndpoint;
   function observeSdkHandoff(client: OpenAIClient, hooks: LLMCallHooks | undefined) {
-    const proof = nativeChatRoute ? beginLateRecordNote(hooks, provider, 'plain') : undefined;
-    if (proof === undefined) return undefined;
-    // The resolved SDK may honor an ambient endpoint even when this factory
-    // was given no baseURL. Admit the default wire and the injected test SDK.
-    const baseURL = Object.getOwnPropertyDescriptor(client, 'baseURL');
-    return baseURL?.value === 'https://api.openai.com/v1' ||
-      (client === scriptedClient && baseURL === undefined && !('baseURL' in client))
-      ? proof
-      : undefined;
+    // Require our SDK constructor path as well as its resolved default URL.
+    // The SDK can honor an ambient endpoint when no baseURL was configured.
+    // An injected object does not establish the transport we hand off to.
+    if (injected !== undefined || !nativeChatRoute) return undefined;
+    const baseURL = Object.getOwnPropertyDescriptor(client, 'baseURL')?.value;
+    if (baseURL !== 'https://api.openai.com/v1') {
+      return undefined;
+    }
+    return beginLateRecordNote(hooks, provider, 'plain');
   }
 
   const provider: LLMProvider = {
@@ -872,10 +872,10 @@ export async function entraBearerToken(
  */
 function createClientResolver(
   options: OpenAIProviderOptions,
+  injected: OpenAIClient | undefined,
 ): () => OpenAIClient | Promise<OpenAIClient> {
   const source = options.apiKey;
-  if (options._client) {
-    const injected = options._client;
+  if (injected) {
     // A double stands in for the SDK client, not for the credential: a
     // callback is still called per request, so the rotation is observable in a
     // test that never opens a socket.
@@ -917,7 +917,7 @@ async function requireKey(source: () => string | Promise<string>): Promise<strin
 }
 
 function resolveClient(options: OpenAIProviderOptions): OpenAIClient {
-  if (options._client) return options._client;
+  // This constructor path only runs when the factory owns the SDK client.
   let OpenAI: new (opts: { apiKey?: string; baseURL?: string }) => OpenAIClient;
   try {
     const mod = lazyRequire<{ default?: unknown; OpenAI?: unknown } | unknown>('openai') as {

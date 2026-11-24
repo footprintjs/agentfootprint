@@ -22,6 +22,7 @@ import {
   lateNoteLookupTool as lookupTool,
   lateNoteModel as model,
   lateNoteWhy as why,
+  ownedLateNoteOpenAI,
   recordedLateNoteRun as recordedRun,
   scriptedLateNoteSdk as scriptedSdk,
   type LateNoteSnapshotState as SnapshotState,
@@ -36,6 +37,47 @@ const variants = (['dynamic', 'dynamic-grouped'] as const).flatMap((reactMode) =
     })),
   ),
 );
+
+it('keeps a user quotation in history and on the wire when record notes are off', async () => {
+  const content = `${LATE_RECORD_NOTE_ATTRIBUTION}\nWhat does this heading mean?`;
+  const off = await recordedRun(variants[0]!, false, why, undefined, content);
+  const quotation = { role: 'user', content };
+
+  expect(off.state.history).toContainEqual(expect.objectContaining(quotation));
+  expect(off.requests).toHaveLength(2);
+  for (const request of off.requests)
+    expect(
+      request.messages.filter((entry) => entry.content?.startsWith(LATE_RECORD_NOTE_ATTRIBUTION)),
+    ).toEqual([quotation]);
+  expect(off.state).not.toHaveProperty('lateRecordNoteReceipt');
+});
+
+it('leaves an armed note unavailable on a native call with an injected SDK client', async () => {
+  const { client, requests } = scriptedSdk();
+  const agent = Agent.create({
+    provider: openai({ _client: client }),
+    model,
+    lateRecordNotes: true,
+  })
+    .tool(lookupTool(why))
+    .build();
+
+  try {
+    await agent.run({ message: 'Read the attachment index.' });
+    expect(requests).toHaveLength(2);
+    expect(JSON.stringify(requests)).not.toContain(LATE_RECORD_NOTE_ATTRIBUTION);
+    const snapshot = agent.getLastSnapshot();
+    const state = snapshot?.sharedState as SnapshotState | undefined;
+    expect(state?.lateRecordNoteReceipt).toEqual([
+      { attempts: [{ ordinal: 1, disposition: 'unavailable' }] },
+    ]);
+    expect(servedAt(snapshot, 1)?.lateRecordNote).toEqual({ disposition: 'unavailable' });
+    // The second call has no receipt write of its own and cannot borrow the first.
+    expect(servedAt(snapshot, 2)?.lateRecordNote).toBeUndefined();
+  } finally {
+    await agent.shutdown();
+  }
+});
 
 it.each(variants)(
   'witnesses a real $reactMode SDK note with $observerDelivery delivery and $commitValues records',
@@ -203,7 +245,7 @@ it('keeps the abandoned plain handoff separate from the accepted signing fallbac
     },
   });
   const agent = Agent.create({
-    provider: withFallback(openai({ _client: open.client }), signing),
+    provider: withFallback(ownedLateNoteOpenAI(open.client), signing),
     model: signedModel,
     lateRecordNotes: true,
   })
@@ -248,7 +290,7 @@ it('keeps each note tied to its call across a saved native input pause', async (
     },
   });
   const agent = Agent.create({
-    provider: openai({ _client: client }),
+    provider: ownedLateNoteOpenAI(client),
     model,
     lateRecordNotes: true,
     observerDelivery: 'deferred',

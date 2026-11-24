@@ -379,9 +379,25 @@ describe('one rule, two readers', () => {
 // ── Contract: the registry is the whole answer, and it is closed ──────
 
 describe('the registry a reader is handed', () => {
-  it('includes the history openings and the request-only recovery and record note frames', () => {
+  it('protects a person’s literal quotation of the wire-only record note header', () => {
+    const quote: LLMMessage = {
+      role: 'user',
+      content: `${LATE_RECORD_NOTE_ATTRIBUTION}\nDoes this appear in my request history?`,
+    };
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer' },
+      quote,
+    ];
+
+    expect(isSaidByPerson(quote)).toBe(true);
+    expect(saidByPerson(contextOver(history, quote.content))).toEqual([history[0], quote]);
+    expect(currentRequestIndexOf(history, quote.content)).toBe(2);
+  });
+
+  it('includes the history openings and request-only recovery frame', () => {
     const w = windowWithEveryClass();
-    expect(LIBRARY_AUTHORED_PREFIXES).toContain(LATE_RECORD_NOTE_ATTRIBUTION);
+    expect(LIBRARY_AUTHORED_PREFIXES).not.toContain(LATE_RECORD_NOTE_ATTRIBUTION);
     for (const msg of [
       w.compacted,
       w.notice,
