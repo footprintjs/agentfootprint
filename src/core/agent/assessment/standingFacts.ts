@@ -1,4 +1,5 @@
 import { libraryLimitClauses } from './results/library-did/stage.js';
+import { retrievalWarningClauses } from './results/retrieval/stage.js';
 import {
   evictedCallOutcomes,
   settledSiblingWitness,
@@ -23,6 +24,7 @@ export interface StandingNames {
   readonly displayNames: ReadonlyMap<string, string>;
   readonly details?: ReadonlyMap<AssessmentReason, AssessmentReasonDetail>;
   readonly libraryLimits?: ReadonlyMap<AssessmentReason, readonly string[]>;
+  readonly retrievalWarnings?: ReadonlyMap<AssessmentReason, readonly string[]>;
   readonly skippedSteps?: number;
   readonly windowDrops?: number;
   readonly batchRefused?: true;
@@ -93,6 +95,7 @@ export function standingFactsOf(
   retainedSettlements?: () => unknown,
 ): StandingNames {
   const libraryLimits = libraryLimitClauses(assessment, displayNames, state);
+  const retrievalWarnings = retrievalWarningClauses(assessment, state);
   const skippedSteps = assessment.reasons.find((r) => r.reason === 'step-skipped')?.witness.length;
   const windowDrops = assessment.reasons.find((r) => r.reason === 'result-dropped-from-window')
     ?.witness.length;
@@ -109,6 +112,7 @@ export function standingFactsOf(
   const gaps = unreachable === undefined ? undefined : unreachableWitnessGroups(unreachable);
   return {
     ...(libraryLimits !== undefined && { libraryLimits }),
+    ...(retrievalWarnings !== undefined && { retrievalWarnings }),
     sources: sourcesByReason(assessment),
     displayNames,
     details: new Map(

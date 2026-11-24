@@ -11,7 +11,9 @@
  * Both summarizer shapes are exercised: the 2.x callback (the caller makes the
  * call) and the 9.14.0 provider + `model` (the library makes it).
  */
+import { FlowChartExecutor, flowChart } from 'footprintjs';
 import { describe, expect, it, vi } from 'vitest';
+import { recallOutcome } from '../../../src/memory/retrieval/outcome.js';
 import {
   isSummaryEntry,
   summarize,
@@ -144,6 +146,38 @@ describe('summarize — unit', () => {
     expect(scope.loaded[1].id).toBe('e7');
     expect(scope.loaded[2].id).toBe('e8');
     expect(scope.loaded[3].id).toBe('e9');
+  });
+
+  it('invalidates candidate attribution when a native stage replaces the loaded entries', async () => {
+    const loaded = conversation(8);
+    const outcome = recallOutcome(
+      1,
+      'memory',
+      loaded.map(({ id }, index) => ({ id, order: index + 1, admitted: true })),
+      true,
+    );
+    const chart = flowChart<MemoryState>(
+      'Seed',
+      (scope) => {
+        scope.identity = ID;
+        scope.loaded = loaded;
+        scope.recallOutcomes = [outcome];
+      },
+      'seed',
+    )
+      .addFunction(
+        'Summarize',
+        summarize({ llm: mockLLM(), triggerMinEntries: 5, preserveRecent: 2 }),
+        'summarize',
+      )
+      .build();
+    const executor = new FlowChartExecutor(chart);
+    await executor.run();
+
+    const state = executor.getSnapshot()?.sharedState as MemoryState;
+    expect(state.loaded.map(({ id }) => id)).toEqual(['msg-summary-0-5', 'e6', 'e7']);
+    expect(state.recallOutcomes?.[0]).toMatchObject({ candidateCount: 8, complete: false });
+    expect(state.recallOutcomes?.[0]).not.toHaveProperty('admittedCount');
   });
 
   it('the summary id names the turn range it covers, and is deterministic', async () => {

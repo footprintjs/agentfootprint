@@ -6,10 +6,16 @@ import type {
   LLMMessage,
   LLMProvider,
   LLMRequest,
+  LLMResponse,
 } from '../../../../provider-contract/types.js';
-import { observeRequests, requestAttempt } from '../../../../provider-contract/requestObserver.js';
+import {
+  observeRequests,
+  requestAttempt,
+  type RequestSettlement,
+} from '../../../../provider-contract/requestObserver.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
+import type { liveChunkEmitter } from './liveChunks.js';
 
 /** Record only entries that kept their retained bodies through the known,
  * position-preserving history projection. Request-only messages follow it. */
@@ -125,10 +131,13 @@ export async function completeObserved(
   signal: AbortSignal | undefined,
 ) {
   const attempt = requestAttempt(hooks, request);
+  let settlement: RequestSettlement = 'failed';
   try {
-    return await untilAborted(provider.complete(request, attempt.hooks), signal);
+    const response = await untilAborted(provider.complete(request, attempt.hooks), signal);
+    settlement = 'response';
+    return response;
   } finally {
-    attempt.close();
+    attempt.close(settlement);
   }
 }
 
@@ -141,8 +150,42 @@ export async function* streamObserved(
   if (provider.stream === undefined) return;
   const attempt = requestAttempt(hooks, request);
   try {
-    yield* abortableIterable(provider.stream(request, attempt.hooks), signal);
+    const stream = abortableIterable(provider.stream(request, attempt.hooks), signal);
+    if (attempt.observeChunk === undefined) {
+      yield* stream;
+    } else {
+      for await (const chunk of stream) {
+        attempt.observeChunk(chunk);
+        yield chunk;
+      }
+    }
   } finally {
-    attempt.close();
+    attempt.close('no-response');
   }
+}
+
+/** Get the authoritative response, keeping stream and completion as separate attempts. */
+export async function callObserved(
+  provider: LLMProvider,
+  request: LLMRequest,
+  hooks: LLMCallHooks,
+  signal: AbortSignal | undefined,
+  liveChunks: ReturnType<typeof liveChunkEmitter>,
+  completion: () => LLMRequest,
+): Promise<LLMResponse> {
+  let response: LLMResponse | undefined;
+  if (provider.stream) {
+    for await (const chunk of streamObserved(provider, request, hooks, signal)) {
+      if (chunk.done) {
+        response = chunk.response;
+        break;
+      }
+      liveChunks.push(chunk);
+    }
+  }
+  liveChunks.finish();
+  // Older streams may end without a response. Re-read the prepared request
+  // after streaming, and let each attempt report its own resilience events.
+  // Raw failures still propagate to the reliability loop.
+  return response || completeObserved(provider, completion(), hooks, signal);
 }

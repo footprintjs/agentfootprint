@@ -432,5 +432,6 @@ _Run `npm run examples:readme` after adding/editing examples._
 | # | File | Title | Description |
 |---|---|---|---|
 | 01 | [`01-folder-to-agent.ts`](rag/01-folder-to-agent.ts) | A folder of documents becomes an answering agent | indexFolder over three real documents (two Markdown, one 2-page PDF), run three times to show incremental re-indexing, then an agent answers with the passage, the document, the page and the score. |
+| 02 | [`02-retrieval-outcomes.ts`](rag/02-retrieval-outcomes.ts) | Tell an empty search from a retrieval timeout | A mock run compares successful empty recall, a typed timeout, and IDs-only evidence. |
 
 <!-- AUTO-GENERATED:examples:end -->
