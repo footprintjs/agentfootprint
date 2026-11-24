@@ -510,6 +510,23 @@ the saved rows even if the caller edits the original array while the write is pe
 
 <CodeFile path="examples/features/123-answer-standing-default.ts" region="recorded-result-cut" title="A result cut before the model saw the final event" />
 
+
+### Disclose a skipped declared source
+
+Opt in with `.answerLayer({ sourceNotConsulted: true })`. The check follows direct
+sources in the ontology when the person's question names a declared term or
+source. It also reads a typed `tryInsteadTool` suggestion from a tool's served
+absence. An adapter's recorded wire manifest must show that the relevant tool
+was offered on an accepted request. An attempt through another eligible holder
+of the same source fulfills that check.
+
+Use `displayName` on a tool to let the prose warning refer to it in the app's
+words. The reason also travels in the saved assessment as
+`source-not-consulted`. A request without a manifest leaves the offers for that
+request unknown. The check preserves earlier proved offers within the turn.
+
+<CodeFile path="examples/features/130-source-not-consulted.ts" region="source-not-consulted" title="A skipped link monitor appears in the answer warning" />
+
 The answer layer serves the standing in these places:
 
 - `turn_end.answerAssessment` and one `agentfootprint.answer.assessed` event carry

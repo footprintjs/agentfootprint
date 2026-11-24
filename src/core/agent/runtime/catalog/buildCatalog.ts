@@ -208,6 +208,7 @@ export function buildCatalog(
       }),
       results: resultsArmed,
       answer: answerArmed,
+      sourceNotConsulted: this.configuration.answerLayerOption?.sourceNotConsulted === true,
     });
     environment.ledgerRestoreArmed = true;
   }

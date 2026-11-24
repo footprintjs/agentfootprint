@@ -6,6 +6,8 @@ import { retainReplayRetirements } from '../../../runCheckpoint.js';
 import { buildCallLLMStage } from '../../stages/callLLM.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { buildSlots } from '../slots/buildSlots.js';
+import type { ToolClaim } from '../../buildToolRegistry.js';
+import { buildSourceConsultation } from '../../honesty/sourceConsultation.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface RequestEnvironment {
@@ -14,6 +16,8 @@ export interface RequestEnvironment {
   readonly governsOutput: boolean;
   readonly provider: AgentConfiguration['provider'];
   readonly model: string;
+  readonly resolverForValues: ReturnType<typeof buildSlots>['resolverForValues'];
+  readonly toolClaimants: ReadonlyMap<string, readonly ToolClaim[]>;
   readonly temperature: number | undefined;
   readonly maxTokens: number | undefined;
   readonly pricingTable: AgentConfiguration['pricingTable'];
@@ -35,6 +39,16 @@ export interface RequestEnvironment {
 export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
+        sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({
+          ...(environment.configuration.ontology !== undefined && {
+            ontology: environment.configuration.ontology,
+          }),
+          resolve: environment.resolverForValues(run.value),
+          servedTools: run.value.servedTools,
+          toolClaimants: environment.toolClaimants,
+        })),
+      }),
       onResponseCommitted: () => {
         run.value.modelResponseCommitted = true;
       },

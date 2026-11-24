@@ -8,6 +8,7 @@ import type {
 import type { CacheStrategy } from '../../../../cache/types.js';
 import type { ExternalGround } from '../../../../integrity/unsupported-argument/check.js';
 import type { ReceiptDigests } from '../../receipt/receiptDigests.js';
+import type { SourceConsultation } from '../../honesty/sourceConsultation.js';
 import type { EvictedTurnsHandle } from '../../window/evictedTurns.js';
 import type { ResolvedCostBudget } from '../../../cost.js';
 import type { ReliabilityConfig } from '../../../../reliability/types.js';
@@ -16,6 +17,7 @@ import type { OutputSchemaParser } from '../../../../answer-validation/outputSch
 import type { FindingsAnswerAsk, FindingsServeMode } from '../../findings/serve.js';
 
 export interface CallLLMStageDeps {
+  readonly sourceConsultation?: SourceConsultation;
   /** Mark the accepted model response on this native leg before checks run. */
   readonly onResponseCommitted?: () => void;
   /** Preserve approved replay retirement for recovery before transport. */

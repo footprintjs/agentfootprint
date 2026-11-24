@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../../../Agent.js';
+import { composedInput } from '../../../messageFrom.js';
 import type { AgentOptions } from '../../types.js';
 import { mock } from '../../../../adapters/llm/MockProvider.js';
 
@@ -62,6 +63,25 @@ describe('resolved Agent construction', () => {
         Agent.create({ ...options(), liveThinkingWithHeldDrafts: input as never }).build(),
       ).toThrow(/liveThinkingWithHeldDrafts must be 'provider-summary'/);
     }
+  });
+
+  it('requests composed-message provenance only when skip-source warnings are armed', () => {
+    const input = { message: 'Another runner wrote this.' };
+    const build = () => Agent.create(options());
+    const viaBuilder = build().answerLayer({ sourceNotConsulted: true }).build();
+    const viaOptions = Agent.create({
+      ...options(),
+      answerLayer: { sourceNotConsulted: true, standingLine: { when: 'not-sure-or-ask' } },
+    }).build();
+    for (const agent of [viaBuilder, viaOptions]) {
+      expect(composedInput(agent, input)).toEqual({ ...input, messageFrom: 'composed' });
+    }
+    const unarmed = build().answerLayer({ sourceNotConsulted: false }).build();
+    expect(composedInput(unarmed, input)).toBe(input);
+    expect(composedInput(build().build(), input)).toBe(input);
+    expect(() =>
+      Agent.create({ ...options(), answerLayer: { sourceNotConsulted: 'yes' } as never }).build(),
+    ).toThrow(/sourceNotConsulted must be a boolean/);
   });
 
   it('uses the original runner identity in native run metadata', async () => {

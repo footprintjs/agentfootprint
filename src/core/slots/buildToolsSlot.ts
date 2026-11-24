@@ -36,6 +36,7 @@ import type { Tool } from '../../tools/tools.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
+import { commitToolOffer, type ServedToolParties } from './commitToolOffer.js';
 import { discoverTools } from './discoverTools.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
@@ -71,29 +72,7 @@ export interface ToolsSlotRuntime {
 
 export type { ToolParty } from '../../tools/toolParty.js';
 
-/**
- * Private party metadata for the same wire Compose serves. Truncated history
- * closes uniqueness fallback; a later positive wire still proves its names.
- */
-export interface ServedToolParties {
-  /** Saved wire membership is closed until a fresh Compose replaces it. */
-  restored?: true;
-  truncated?: true;
-  argumentAskPending?: boolean;
-  currentProof?: ReadonlyMap<string, ToolParty>;
-  lastProof?: ReadonlyMap<string, ToolParty>;
-  /** Positive wire acquisition, including an actually empty offer. */
-  wireReady?: true;
-  pinned?: ReadonlyMap<string, ToolParty | null>;
-  current: ReadonlyMap<string, ToolParty | null>;
-  /**
-   * The party each name was LAST served under, across the epochs of one run
-   * (cleared on iteration 1). The off-wire fallback reads it: a name that
-   * left the wire may still be answered by the party the model last read it
-   * under — never by a party the model was never shown under that name.
-   */
-  readonly lastServed: Map<string, ToolParty>;
-}
+export type { ServedToolParties } from './commitToolOffer.js';
 
 /** One schema put forward for the wire, by whom — and WHICH implementation. */
 interface WireCandidate {
@@ -910,26 +889,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         withSourcesArgument,
       );
       if (servedTools !== undefined) {
-        // Dispatch follows the OFFER: a name narrowed off this epoch's wire
-        // was not served, so it is not on `current` and takes the off-wire
-        // path (`toolResolver.ts · buildToolResolver`) — answered by the party the
-        // model last read it under, and recorded as `tools.answered_off_wire`.
-        const wireWinners =
-          narrowedTo === undefined
-            ? winners
-            : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
-        servedTools.current = wireWinners;
-        servedTools.currentProof = undefined;
-        servedTools.restored = undefined;
-        servedTools.wireReady = true;
-        // The run's memory of who served what (read by the off-wire fallback).
-        // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
-        // of a previous run on this same built chart is dropped here.
-        if (iteration === 1) {
-          servedTools.lastServed.clear();
-          servedTools.lastProof = undefined;
-        }
-        for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
+        commitToolOffer(servedTools, winners, winningTools, narrowedTo, iteration);
       }
       // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
       // Every list the merge reads is park-filtered (see the provider loop above).

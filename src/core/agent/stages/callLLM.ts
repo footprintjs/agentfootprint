@@ -43,7 +43,7 @@ import type {
 import type { CacheMarker } from '../../../cache/types.js';
 import { cacheStrategyFor } from '../../../cache/cacheStrategyFor.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
-import { wireViolationsOf } from '../../../integrity/invariant-violation/wire.js';
+import { recordWireCheck } from './callLLM/wireCheck.js';
 import { danglingReferencesOf } from '../../../integrity/dangling-reference/check.js';
 import {
   declaredEnumValuesOf,
@@ -602,6 +602,8 @@ export function buildCallLLMStage(
     let answeredBy = { provider: provider.name, model, native: false };
     let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
+    const choice = deps.sourceConsultation;
+    let acceptedOffer: ReturnType<NonNullable<typeof choice>['capture']> | undefined;
     const preserveReplay =
       deps.hasEvidenceRecovery === true ||
       deps.hasFindingsLedger === true ||
@@ -625,15 +627,17 @@ export function buildCallLLMStage(
       const attempts = replayAttempts(req, hooks.providerHooks ?? providerHooks);
       let dispatch = describeProviderDispatch(selectedProvider, req);
       let candidate = deps.findings === true ? capture(req) : undefined;
+      let offer = choice?.capture(scope, req, baseRequest);
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
       if (selectedProvider !== provider) serving?.discard();
       const attemptHooks = observeCallRequests(
         attempts.hooks,
-        serving === undefined && deps.findings !== true && !preserveReplay
+        serving === undefined && deps.findings !== true && !preserveReplay && choice === undefined
           ? undefined
           : (request) => {
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
+              if (choice !== undefined) offer = choice.capture(scope, request, baseRequest, offer);
               if (preserveReplay)
                 stableProjection = sameReplayProjection(wireMessages, request.messages);
             },
@@ -685,6 +689,7 @@ export function buildCallLLMStage(
           : attempts.request;
         dispatch = describeProviderDispatch(selectedProvider, completion);
         if (deps.findings === true) candidate = capture(completion);
+        if (choice !== undefined) offer = choice.capture(scope, completion, baseRequest);
         if (preserveReplay)
           stableProjection = sameReplayProjection(wireMessages, completion.messages);
         resp = await completeObserved(selectedProvider, completion, attemptHooks, runSignal);
@@ -717,6 +722,7 @@ export function buildCallLLMStage(
           : tagThinkingResponse(resp, String(hooks.providerIndex));
       answeredBy = dispatch;
       acceptedFindingsRequest = candidate;
+      acceptedOffer = offer;
       acceptedProjection = stableProjection;
       return attempts.response(answered);
     };
@@ -853,6 +859,12 @@ export function buildCallLLMStage(
     deps.onResponseCommitted?.();
     const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
     scope.llmLatestToolCalls = acceptedToolCalls;
+    choice?.accepted(
+      scope,
+      localFallback ? undefined : acceptedOffer,
+      localFallback ? undefined : response.wireManifest,
+      acceptedToolCalls,
+    );
     recordResponseStop(
       scope,
       localFallback ? undefined : response.stopReason,
@@ -902,41 +914,14 @@ export function buildCallLLMStage(
       durationMs,
     });
 
-    // THE WIRE SEAM (9.60.0). The compose backstop reads the merged frame;
-    // this reads what the ADAPTER says actually crossed — the manifest read
-    // back from the serialized body — against the schemas this very call
-    // assembled. The recorded defect lived exactly in that gap: a clean
-    // frame, four retained schemas on the wire. No manifest stated → the
-    // call is incomparable and nothing is guessed. Same seen-list rail as
-    // the compose backstop, freshest copy first, so one defect files once
-    // per run however many calls re-detect it.
-    // The composed side is llmRequest — the exact object HANDED TO the
-    // adapter, after the cache strategy's transform — so a strategy edit
-    // is never blamed on the adapter.
-    const wireFindings = wireViolationsOf(
-      {
-        names: (llmRequest.tools ?? []).map((t) => t.name),
-        provenance: 'callLLM (assembled request)',
-      },
-      response.wireManifest === undefined
-        ? undefined
-        : { names: response.wireManifest.toolNames, provenance: answeredBy.provider },
+    recordWireCheck(
+      scope,
+      llmRequest,
+      response.wireManifest,
+      answeredBy.provider,
       iteration,
+      deps.integrityLedger,
     );
-    // The disposition: a provider stating no manifest leaves this call
-    // UNREACHABLE — the check could not see the wire, which is a different
-    // fact from "the wire was clean", and the ledger keeps them apart.
-    deps.integrityLedger?.current?.note(
-      'invariant-violation',
-      'wire',
-      response.wireManifest === undefined
-        ? 'unreachable'
-        : wireFindings.length > 0
-        ? 'checked-fail'
-        : 'checked-pass',
-      wireFindings.length > 0 ? Date.now() : undefined,
-    );
-    fileIntegrityFindings(scope, wireFindings, iteration, deps.integrityLedger);
 
     // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
     // asks what the library put in front of the model; this asks what the

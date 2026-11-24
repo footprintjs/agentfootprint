@@ -1,9 +1,16 @@
 import type { StandingLineWhen } from './compose.js';
 
-export type AnswerLayerArm = { readonly standingLine?: StandingLineWhen };
+export type AnswerLayerArm = {
+  readonly standingLine?: StandingLineWhen;
+  readonly sourceNotConsulted?: true;
+};
 export type AnswerLayerOptions =
   | boolean
-  | { readonly standingLine?: boolean | { readonly when: StandingLineWhen } };
+  | {
+      readonly standingLine?: boolean | { readonly when: StandingLineWhen };
+      /** Report a declared source the model was offered and did not attempt. Default off. */
+      readonly sourceNotConsulted?: boolean;
+    };
 
 /**
  * The line's modes, as the option doors check them — keyed by the type the
@@ -22,24 +29,31 @@ const STANDING_LINE_MODES: { readonly [W in StandingLineWhen]: true } = Object.f
  * its doors — `.answerLayer(options)` and `AgentOptions.answerLayer` — so a
  * value one door refuses, the other refuses too: an unknown key, a
  * `standingLine` that is neither a boolean nor `{ when }`, or a `when` outside
- * the three modes, is refused by name. Returns the arm normalised — the line's
- * mode (`true` → `'always'`), or `{}` for no line.
+ * the three modes, is refused by name. The choice check is armed only by
+ * `sourceNotConsulted: true`.
  */
 export function answerLayerArm(
   options: Readonly<Record<string, unknown>>,
   door: string,
 ): AnswerLayerArm {
-  const unknown = Object.keys(options).filter((k) => k !== 'standingLine');
+  const unknown = Object.keys(options).filter(
+    (k) => k !== 'standingLine' && k !== 'sourceNotConsulted',
+  );
   if (unknown.length > 0) {
     throw new Error(
       `${door}: unknown option(s) ${unknown.map((k) => `'${k}'`).join(', ')}. ` +
-        "The one option is standingLine (boolean, or { when: 'always' | 'unless-consistent' | " +
-        "'not-sure-or-ask' }).",
+        'Expected sourceNotConsulted (boolean) or standingLine (boolean, or ' +
+        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask' }).",
     );
   }
+  const choice = options.sourceNotConsulted;
+  if (choice !== undefined && typeof choice !== 'boolean') {
+    throw new Error(`${door}: sourceNotConsulted must be a boolean.`);
+  }
+  const choiceArm = choice === true ? { sourceNotConsulted: true as const } : {};
   const line = options.standingLine;
-  if (line === undefined || line === false) return {};
-  if (line === true) return { standingLine: 'always' };
+  if (line === undefined || line === false) return choiceArm;
+  if (line === true) return { ...choiceArm, standingLine: 'always' };
   const modes = Object.keys(STANDING_LINE_MODES)
     .map((w) => `'${w}'`)
     .join(', ');
@@ -66,7 +80,7 @@ export function answerLayerArm(
       }).`,
     );
   }
-  return { standingLine: when as StandingLineWhen };
+  return { ...choiceArm, standingLine: when as StandingLineWhen };
 }
 
 /**
@@ -81,7 +95,8 @@ export function answerLayerFromOptions(value: unknown): AnswerLayerArm | false |
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(
       'AgentOptions.answerLayer must be a boolean or an object — ' +
-        "{ standingLine?: boolean | { when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } }.",
+        '{ sourceNotConsulted?: boolean, standingLine?: boolean | ' +
+        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } }.",
     );
   }
   return answerLayerArm(value as Readonly<Record<string, unknown>>, 'AgentOptions.answerLayer');

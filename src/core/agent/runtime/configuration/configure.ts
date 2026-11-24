@@ -249,12 +249,14 @@ export function configureAgent(
   else if (typeof answerLayer === 'object' && answerLayer !== null) {
     // The builder judged the option (`assessment/answerLayerOptions.ts` · `answerLayerArm`); `true` is 'always'.
     const line = answerLayer.standingLine;
-    config.answerLayerOption =
-      line === true
+    const sourceNotConsulted = answerLayer.sourceNotConsulted === true;
+    config.answerLayerOption = {
+      ...(sourceNotConsulted && { sourceNotConsulted: true }),
+      ...(line === true
         ? { standingLine: 'always' }
-        : typeof line === 'object' && line !== null
-        ? { standingLine: line.when }
-        : {};
+        : typeof line === 'object' && line !== null && { standingLine: line.when }),
+    };
+    if (sourceNotConsulted) readsMessageFrom(runner);
   }
   // The time layer's door (`.time()` / `AgentOptions.time`): `true` or the
   // options, read once; a malformed zone is refused here, at build.

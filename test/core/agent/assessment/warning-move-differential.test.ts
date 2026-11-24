@@ -23,7 +23,7 @@ const legacy = JSON.parse(
 
 // SHA-256 of the JSON emitted by main at 06950d07 before the move.
 // The recorded coverage case includes the Answer Account template version.
-// That pin is from baa44ef50, where #468 raised it from 24 to 25.
+// This pin includes template set 26, which added the source consultation reason.
 const before: Readonly<Record<string, string>> = {
   'clean, two calls': '94812b2e229fec380a2615ddc09f172c3a6364e1d9680e187cdc94196a0fd9b1',
   'clean, the same id twice': '18bfe1296e6eddf95a2079fd85b098d8e26c75705316edaa08ea4abf5433cd96',
@@ -37,7 +37,7 @@ const before: Readonly<Record<string, string>> = {
   'the call is refused': '6df690ac9fd558cd155ce0f2c961b730fce78540cce90f437c11835471cc0a20',
   'the result is kept out, ground not covered':
     '5e699729cbb28a31cb9655a243d26dee03955dfae3f4d27e29b3739c3ce4d118',
-  'recorded coverage': '78418f13862e782cee999e53909979f91b75bdadce2c9c26ae39b01c41497441',
+  'recorded coverage': 'e94054d4266e36582f24c6f4083589ceee1660f080dab1a57ebe522574d8bb52',
   'waiting on a person': 'b7b3717025a682a8433b2d1d492ad835229a6bb78a0e36ff6cad8819841a02e1',
   'resumed answer': '62c3c38ed3ed30a9264c56728a0abeba36688581af27e87c02126118b926242c',
 };

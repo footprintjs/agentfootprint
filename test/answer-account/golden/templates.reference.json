@@ -1855,6 +1855,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.sourceNotConsulted@1": {
+  "text": "A declared source was left unchecked.",
+  "parts": [
+   {
+    "text": "A declared source was left unchecked."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.libraryLimitsIncomplete@1": {
   "text": "The record could not keep every limit on this turn's tool results.",
   "parts": [
