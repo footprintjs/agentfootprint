@@ -1,7 +1,7 @@
 import type { AttemptContext } from 'footprintjs';
 import { matchesPreparedData } from '../../../../lib/matchesPreparedData.js';
 import type { LLMRequest, LLMResponse } from '../../../../provider-contract/types.js';
-import type { ServedToolParties } from '../../../slots/commitServedTools.js';
+import type { AcceptedToolSelection, ServedToolParties } from '../../../slots/commitServedTools.js';
 
 function sameUnforcedCatalog(expected: LLMRequest['tools'], request: LLMRequest): boolean {
   try {
@@ -85,7 +85,7 @@ export function selectionAtRequest(
         },
       };
     },
-    accept(response: LLMResponse) {
+    accept(response: LLMResponse): AcceptedToolSelection | undefined {
       if (
         consumer.signal.aborted ||
         owner.selection !== selection ||
