@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.1.0] - 2026-11-24
+
+### Added
+
+- **Check citations in ordinary prose answers.** Opt in with `Agent.create({ citations })` to link an answer to authorized tool results submitted by the plain Anthropic SDK adapter. Authored rules can verify a scoped claim, report a disagreement between two same-scope tools, or flag a requested column missing from the cited result's complete visible schema. Read the citation findings from the answer assessment.
+
+- **See what makes a saved run large.** Import `recordingSizeReport` from `agentfootprint/observe` to measure a plain recording’s snapshot fields, event types, chart and stored subflow entries in compact UTF-8 JSON bytes. The report contains structural names and counts alongside sizes.
+
+- **Distinguish retrieval timeouts from empty searches.** Memory and RAG accept outcome-aware store reads. The answer warning can explain a recorded timeout or selection limit when the run proves that no recalled content reached a model request. Successful empty searches preserve the ordinary answer. Set `recording: 'ids-only'` for RAG, semantic Top-K or episodic recall to keep identifiers and selection metadata in retrieval evidence while serving the same context to the model.
+
+- Flat Agent recordings can carry a source link for a successful artifact redemption. The reader uses the redemption's recorded positions to show the earlier tool result when the host grants the exact output, witness, and input.
+  When the source-link reader reaches its work allowance, it retains the bound links and marks the channel partial.
+
+- Recordings made with receipts enabled can now include `sourceLinkServedRows`. The key holds the current turn’s rows, which contain only the positions of complete history entries offered in each request.
+
+- **Show when the model skipped a declared source.** The opt-in answer check uses recorded tool offers and attempts to disclose an unchecked source. It recognizes direct ontology sources and typed alternatives from a served absence. Saved recordings carry the same assessment reason as the live answer.
+
+- **Choose which reasons trigger a standing warning.** Set `standingLine.raiseOn` with the existing `when` mode to show the full "not sure" line when a selected reason fires. All assessment data and limits remain available, and "ask" keeps its existing behavior.
+
+- Tool discovery retains a built-in ledger gate’s original decision for each eligible implementation. Opaque gates conceal inner decisions, and a failed listing clears earlier evidence.
+  An inactive built-in skill scope can retain the visible skill’s registered tool identity at the same discovery boundary.
+  An actual top-N pick retains the eligible tools it excluded, bound to that slot’s winning implementations.
+  Distinct visible implementations that compete for a name retain their winner and loser identities. Tool collision events omit role-hidden skill claims.
+  An omitted visible name is associated with the accepted model response only when the adapter confirms which names it offered.
+  Saved model-call receipts can now show which visible tools a top-N pick, skill scope or ledger decision left out of that particular request. When a registered implementation wins a name, the receipt separately lists each visible competing implementation that lost it, with the winning and losing channels.
+  The receipt also covers a visible tool scoped directly to a skill while that skill awaits activation through `read_skill`.
+  The served read_skill schema and saved catalog now list only role-visible skills. Visible off-route choices still receive the graph’s routing explanation. When a decision tree withholds the catalog, the accepted request can record the visible skill IDs, reason and retained count.
+
+### Changed
+
+- **Keep the cache decision record smaller.** The cache subflow records the conversation length and injected positions it needs for cache markers. The provider still receives the same messages and cache markers.
+
 ## [17.0.0] - 2026-11-23
 
 ### Breaking
