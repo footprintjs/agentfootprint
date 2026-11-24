@@ -249,7 +249,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'calls',
     reads:
-      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assessment/conflicts.ts · conflictOfThisTurn)',
+      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assessment/conflicts.ts · conflictOfThisTurn). answerCitations.conflicts: two comparable submitted results disagree',
   },
   {
     reason: 'column-type-mismatch',
@@ -330,12 +330,19 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'findingsLedger: a negative-claim or negative-claim-note row of this turn; model prose never establishes a negative claim',
   },
   {
+    reason: 'ungrounded-entity',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads: 'answerCitations.findings: a requested column missing from the complete cited schema',
+  },
+  {
     reason: 'unsupported-claim',
     layer: 4,
     class: 'not-sure',
     source: 'answer',
     reads:
-      "findingsLedger: an integrity-finding row of this turn — a .claims() field disagrees with the fact the run's tools settled, or declines to state it (the row's advisory)",
+      "findingsLedger: an integrity-finding row of this turn — a .claims() field disagrees with the fact the run's tools settled, or declines to state it (the row's advisory). answerCitations.findings: a scoped claim contradicts the result it cites",
   },
   {
     reason: 'claim-unsettled',

@@ -149,6 +149,31 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   },
   'column-type-mismatch': integrity('column-type-mismatch'),
   'missing-column': integrity('missing-column'),
+  'ungrounded-entity': {
+    state: {
+      answerCitations: {
+        complete: true,
+        findings: [
+          {
+            kind: 'citation',
+            start: 0,
+            end: 4,
+            slot: 1,
+            outcome: 'unverified',
+            reason: 'scope-unresolved',
+          },
+          {
+            kind: 'column',
+            start: 0,
+            end: 4,
+            slot: 1,
+            reason: 'ungrounded-entity',
+            name: 'discount',
+          },
+        ],
+      },
+    },
+  },
   'value-unsupported': { state: { unsupportedValues: { candidates: [{ value: '3322' }] } } },
   'value-survived-revision': {
     state: { unsupportedValues: { candidates: [{ value: '3322' }], revised: true } },

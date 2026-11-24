@@ -63,7 +63,7 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
-import { llmCallReadsInto } from './llmCallReads.js';
+import { llmCallReadsInto, llmCallResponseFields } from './llmCallReads.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import {
   breakFinalStage,
@@ -86,7 +86,6 @@ import {
   RESULTS_LOOP_TARGET,
   startFinalBranch,
 } from './honesty/mounts.js';
-import { responseStopFields } from './honesty/responseStop.js';
 import type { AgentState } from './types.js';
 import { dynamicTurnSeed } from './dynamicTurnSeed.js';
 import { memberRunArg } from '../memberRun.js';
@@ -757,7 +756,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
           // Native candidates and prose cutoffs carry stop evidence. Ordinary
           // replies without earlier stop evidence leave the mapper byte-identical.
-          ...responseStopFields(s),
+          ...llmCallResponseFields(s, deps.hasCitations === true),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.

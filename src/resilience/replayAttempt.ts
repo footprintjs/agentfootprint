@@ -1,4 +1,5 @@
 /** Carry only a leaf-approved replay retirement across one call's attempts. */
+import { carryCitationResponse } from '../provider-contract/citationResponse.js';
 import type {
   LLMCallHooks,
   LLMChunk,
@@ -29,7 +30,7 @@ export function replayAttempts(request: LLMRequest, hooks?: LLMCallHooks) {
       omissions.every((item, index) => omissionKey(item) === omissionKey(existing[index]))
     )
       return answer;
-    return { ...answer, replayOmissions: omissions };
+    return carryCitationResponse(answer, { ...answer, replayOmissions: omissions });
   }
 
   function chunk(item: LLMChunk): LLMChunk {

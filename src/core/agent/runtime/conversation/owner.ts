@@ -16,7 +16,12 @@ import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { MemoryIdentity } from '../../../../memory/identity/types.js';
 import { assertContinuable, type AgentRunCheckpoint } from '../../../runCheckpoint.js';
 import { checkpointReplayHistory } from '../../../checkpointHistory.js';
-import { requireVerificationOnResume } from '../../findings/verificationCheckpoint.js';
+import {
+  checkpointNegatives,
+  clearCitationEvidence,
+  citationCheckpointFromState,
+  citationCheckpointOnResume,
+} from '../../citations/checkpoint.js';
 import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
 import { type ClockDraft, type ReadRunTime } from '../../../../time/clock.js';
@@ -115,6 +120,10 @@ export function checkpointFor(
     'sourceDeclarationCorrectionSpent',
   );
   const findingsLedger = findingsLedgerOf(state);
+  const citations =
+    this.configuration.citationOptions === undefined
+      ? undefined
+      : citationCheckpointFromState(state);
   const turnNumber = this.turnNumberOf(state);
   const stored = structuredClone(
     checkpointReplayHistory(history, selected!.value.checkpointTracker),
@@ -150,9 +159,10 @@ export function checkpointFor(
     ...(turnNumber !== undefined && { turnNumber }),
     // The tickets the library placed whose messages the history still holds.
     ...(placedTickets !== undefined && { placedTickets }),
+    ...citations,
     ...(this.configuration.negativeClaimsConfig === undefined || state === undefined
       ? {}
-      : negativeCheckpointOf(state)),
+      : checkpointNegatives(state, citations?.citationSources)),
     ...(this.configuration.sourceEvidenceConfig === undefined
       ? {}
       : { sourceEvidence: sourceEvidenceOf(state) }),
@@ -296,7 +306,11 @@ export function applyContinuation(
   appendsUserTurn: boolean,
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
-  requireVerificationOnResume(cp, false);
+  const citations = citationCheckpointOnResume(
+    cp,
+    this.configuration.citationOptions !== undefined,
+  );
+  const negatives = negativeCheckpointOf(cp, citations?.claimVerification);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(cp);
   if (
     !appendsUserTurn &&
@@ -313,10 +327,7 @@ export function applyContinuation(
       'Continuation requires the source evidence setting used by the recording agent.',
     );
   values.pendingResumeSourceEvidence = sourceEvidence;
-  if (
-    this.configuration.negativeClaimsConfig === undefined &&
-    negativeCheckpointOf(cp) !== undefined
-  )
+  if (this.configuration.negativeClaimsConfig === undefined && negatives !== undefined)
     throw new TypeError(
       'Continuation requires the negative-claims setting used by the recording agent.',
     );
@@ -339,12 +350,14 @@ export function applyContinuation(
     ...(!appendsUserTurn &&
       cp.toolTurnEvidence !== undefined && { toolTurnEvidence: cp.toolTurnEvidence }),
     ...(!appendsUserTurn && cp.requestReplay !== undefined && { requestReplay: cp.requestReplay }),
+    ...(!appendsUserTurn && citations !== undefined && { citations }),
     // The tickets the library placed in earlier turns (`placedTickets.ts`):
     // still the library's, so the staged-refs nudge still names them.
     ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),
-    ...(this.configuration.negativeClaimsConfig === undefined
-      ? {}
-      : { negatives: negativeCheckpointOf(cp) }),
+    ...(negatives !== undefined && {
+      negatives:
+        appendsUserTurn && citations !== undefined ? clearCitationEvidence(negatives) : negatives,
+    }),
   };
   // The folded spans beside it. A conversation stored before 8.2 has none,
   // and `undefined` is the right answer there — it means "this conversation

@@ -185,6 +185,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceConfig: environment.configuration.sourceEvidenceConfig,
       }),
+      ...(environment.configuration.citationOptions !== undefined && {
+        citationOptions: environment.configuration.citationOptions,
+      }),
       // The placement threshold (9.22.0) — only ever set beside a store (the
       // option's own shape enforces it). Absent → results are never measured
       // against it and never placed.

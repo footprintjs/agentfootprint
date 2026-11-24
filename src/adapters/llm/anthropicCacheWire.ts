@@ -66,7 +66,7 @@ export const ANTHROPIC_PROMPT_CACHING: PromptCaching = Object.freeze({
 export type MessageIndexMap = readonly number[];
 
 /** The one wire shape Anthropic accepts for a cache boundary. */
-type AnthropicCacheControl = { type: 'ephemeral'; ttl?: '1h' };
+export type AnthropicCacheControl = { type: 'ephemeral'; ttl?: '1h' };
 
 /**
  * The slice of an Anthropic request body that markers touch. Structural on

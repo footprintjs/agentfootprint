@@ -38,6 +38,7 @@
  */
 
 import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import { inertCode } from '../scripts/inert.js';
 import { assumedClauses, type StandingAssumedValue } from './assumedValues.js';
 import { declaredStandingClause } from './declaredStandingWords.js';
 import {
@@ -70,9 +71,9 @@ export {
  * of calls that did not complete. 6: an admitted unfinished status and a step skipped on advance.
  * 7: dispatch proof gaps. 8: older conflicts with unplaced readings.
  * 9: independent check causes are shown together, and replay keeps older attribution.
- * 10: current-turn window removals.
+ * 10: current-turn window removals. 11: the missing column on a cited source.
  */
-export const STANDING_LINE_VERSION = 10;
+export const STANDING_LINE_VERSION = 11;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -288,6 +289,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'unsupported-argument': 'a value a call ran with appears nowhere the run served the model',
   'column-type-mismatch': "a tool's rows hold a different type than the tool declares",
   'missing-column': 'a column a tool declares is in none of its rows',
+  'ungrounded-entity': 'the cited result did not include the requested column',
   'unsupported-claim': "a field of the answer does not agree with a fact the run's tools settled",
   'claim-unsettled': 'a claim in the answer could not be compared with what the tools settled',
   'claim-exceeds-search': 'a negative claim exceeds the recorded search',
@@ -395,6 +397,18 @@ function reasonClause(
   reason: Exclude<AssessmentReason, 'argument-assumed'>,
   names: StandingNames | undefined,
 ): string {
+  if (reason === 'ungrounded-entity') {
+    const entity = names?.details?.get(reason)?.ungroundedEntity;
+    if (entity !== undefined) {
+      const nearest =
+        entity.nearestName === undefined
+          ? ''
+          : ` (closest visible name: ${inertCode(entity.nearestName)})`;
+      return `${REASON_WORDS[reason]} ${inertCode(entity.name)}${nearest}`;
+    }
+  }
+  if (reason === 'sources-conflict' && names?.submittedSourcesConflict)
+    return 'two results sent to the model disagree';
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
   if (reason === 'result-dropped-from-window' && names?.windowDrops !== undefined)

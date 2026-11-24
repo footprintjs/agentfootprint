@@ -54,6 +54,7 @@ export function composeWarning(
     ...(assessment === 'known' && g.support !== undefined && { support: g.support }),
     checked: g.checked,
     turnFrom: from,
+    ...(g.citations !== undefined && { citations: g.citations }),
     ...(integrity.notes.length > 0 && { notes: integrity.notes }),
   };
 }

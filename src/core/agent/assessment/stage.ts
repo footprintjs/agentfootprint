@@ -52,6 +52,7 @@ import { retainedStateValue } from '../../../redaction/runRedaction.js';
 import { isLibraryLimit } from './results/library-did/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
+import { citationRecordForWarning } from './answer/citations/record.js';
 import type { AnswerAssessment } from './types.js';
 import {
   assessmentDataOf,
@@ -139,6 +140,13 @@ export async function assessAnswerStage(
     !validatedAnswerMayDeliver(record.answerValidation as AgentState['answerValidation'])
   ) {
     return;
+  }
+  const citations = record.answerCitations;
+  if (citations !== undefined) {
+    record.answerCitations = citationRecordForWarning(
+      citations,
+      retainedStateValue(scope, 'answerCitations', citations),
+    );
   }
   const assessed = assessLive(
     { sharedState: record },

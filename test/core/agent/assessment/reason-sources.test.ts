@@ -205,6 +205,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'derived-from-reading',
         'negative-prose-unverified',
         'script-unmatched',
+        'ungrounded-entity',
         'unsupported-claim',
         'value-survived-revision',
         'value-unsupported',

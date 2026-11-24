@@ -35,6 +35,7 @@ export interface RequestEnvironment {
 export function requestFactory(environment: RequestEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(environment.configuration.citationOptions !== undefined && { offerCitations: true }),
       onResponseCommitted: () => {
         run.value.modelResponseCommitted = true;
       },

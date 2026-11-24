@@ -293,6 +293,7 @@ export interface AgentChartDeps {
    * This flag never makes the cache subflow suppress findings cache markers.
    */
   readonly hasFindingsLedger?: boolean;
+  readonly hasCitations?: true;
 
   /**
    * The inputs layer is armed (honesty layer 2) — present ONLY when a tool
