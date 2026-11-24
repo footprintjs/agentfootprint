@@ -44,6 +44,7 @@
 import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import type { MemoryFlavor } from '../../memory/define.types.js';
 import type { RetrievalEvidence } from '../../memory/retrieval/index.js';
+import { hasRepeatedCandidateIds } from '../../memory/retrieval/outcome.js';
 import type { ContextRole, ContextSource } from '../../events/types.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
 
@@ -138,8 +139,19 @@ function chunkInjections(
   systemContent: string,
 ): ActiveInjection[] | undefined {
   const evidence = parent[retrievalEvidenceKey(id)] as RetrievalEvidence | undefined;
-  const candidates = evidence?.candidates;
-  if (!candidates || candidates.length === 0) return undefined;
+  if (evidence === undefined) return undefined;
+  const { candidates } = evidence;
+  // A legacy record can rejoin the exact bytes even when two occurrences
+  // share an ID. The rejoin proves text, but it cannot establish which row
+  // supplied the score or provenance. Use the whole recall in that case.
+  if (
+    evidence.candidateIdsAmbiguous === true ||
+    !Array.isArray(candidates) ||
+    candidates.length === 0 ||
+    candidates.some((candidate) => typeof candidate?.id !== 'string') ||
+    hasRepeatedCandidateIds(candidates)
+  )
+    return undefined;
   if (evidence.recording === 'ids-only')
     return rangeInjections(evidence, id, flavor, systemContent);
 
@@ -167,7 +179,7 @@ function chunkInjections(
     retrieval: {
       score: c.score,
       rank: c.rank,
-      ...(evidence?.threshold !== undefined && { threshold: evidence.threshold }),
+      ...(evidence.threshold !== undefined && { threshold: evidence.threshold }),
     },
     inject: { systemPrompt: c.promptFragment ?? '' },
   }));
@@ -183,6 +195,7 @@ function rangeInjections(
   const ranges = evidence.promptRanges;
   if (!Array.isArray(ranges) || ranges.length === 0) return undefined;
   const injections: ActiveInjection[] = [];
+  const ids = new Set<string>();
   let cursor = 0;
   for (const [index, range] of ranges.entries()) {
     if (
@@ -191,10 +204,12 @@ function rangeInjections(
       !Number.isSafeInteger(range.end) ||
       range.end < cursor ||
       range.end > systemContent.length ||
-      typeof range.id !== 'string'
+      typeof range.id !== 'string' ||
+      ids.has(range.id)
     ) {
       return undefined;
     }
+    ids.add(range.id);
     const fragment = systemContent.slice(range.start, range.end);
     const { score, rank } = range;
     const retrieval =

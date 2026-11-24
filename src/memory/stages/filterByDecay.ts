@@ -35,7 +35,12 @@
  * would produce `NaN`, and `NaN >= minScore` is false, which would silently
  * drop every entry from such a store.
  */
-import { refineRecallOutcomes, type RecallExclusion } from '../retrieval/outcome.js';
+import {
+  omitAmbiguousRetrievalCandidates,
+  refineRecallOutcomes,
+  retrievalCandidateIdsAmbiguous,
+  type RecallExclusion,
+} from '../retrieval/outcome.js';
 import type { TypedScope } from 'footprintjs';
 import { computeDecayFactor } from '../entry/decay.js';
 import type { DecayPolicy } from '../entry/types.js';
@@ -94,7 +99,7 @@ export function filterByDecay(config: FilterByDecayConfig) {
     // score the same, whatever the loop costs.
     const now = clock();
 
-    const removed = new Map<string, RecallExclusion>();
+    const removed: RecallExclusion[] = [];
     const kept = loaded.filter((entry) => {
       if (!Number.isFinite(entry.lastAccessedAt)) return true;
       // `accessCount` is normalised for the same reason `lastAccessedAt` is
@@ -106,13 +111,28 @@ export function filterByDecay(config: FilterByDecayConfig) {
       };
       const score = computeDecayFactor(scored, now, policy);
       if (score >= minScore) return true;
-      removed.set(entry.id, { reason: 'decayed', score, floor: minScore });
+      removed.push({ id: entry.id, reason: 'decayed', score, floor: minScore });
       return false;
     });
     scope.loaded = kept;
     const outcomes = scope.recallOutcomes;
-    if (outcomes !== undefined && removed.size !== 0) {
-      scope.recallOutcomes = refineRecallOutcomes(outcomes, removed, loaded.length, kept.length);
+    const evidence = scope.retrieved;
+    const ambiguous = retrievalCandidateIdsAmbiguous(evidence, loaded);
+    if (outcomes !== undefined && (removed.length !== 0 || ambiguous)) {
+      scope.recallOutcomes = refineRecallOutcomes(
+        outcomes,
+        removed,
+        loaded.length,
+        kept.length,
+        ambiguous,
+      );
+    }
+    if (evidence !== undefined && ambiguous) {
+      scope.retrieved = {
+        ...omitAmbiguousRetrievalCandidates(evidence),
+        admittedCount: kept.length,
+        rejectedCount: evidence.consideredCount - kept.length,
+      };
     }
   };
 }

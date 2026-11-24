@@ -1,5 +1,5 @@
 /** Bounded evidence about a store read and the stages deciding what to recall. */
-import type { RetrievalRejectReason } from './types.js';
+import type { RetrievalEvidence, RetrievalRejectReason } from './types.js';
 
 export type MemoryRecallExclusionReason = RetrievalRejectReason | 'decayed';
 
@@ -26,10 +26,53 @@ export interface MemoryRecallOutcome {
   readonly complete: boolean;
   /** The diagnostic sample covers the full store pool. */
   readonly candidatesComplete?: boolean;
+  readonly candidateIdsAmbiguous?: true;
   readonly candidates?: readonly MemoryRecallCandidate[];
 }
 
 const CANDIDATE_LIMIT = 128;
+
+export const AMBIGUOUS_CANDIDATE_IDS_REASON =
+  'candidate IDs were repeated; individual occurrences cannot be attributed';
+
+export function hasRepeatedCandidateIds(candidates: readonly { readonly id: string }[]): boolean {
+  const seen = new Set<string>();
+  for (const { id } of candidates) {
+    if (seen.has(id)) return true;
+    seen.add(id);
+  }
+  return false;
+}
+
+export function omitAmbiguousRetrievalCandidates(evidence: RetrievalEvidence): RetrievalEvidence {
+  const safe = {
+    ...evidence,
+    candidateIdsAmbiguous: true as const,
+    candidatesComplete: false,
+    candidatesOmittedReason: AMBIGUOUS_CANDIDATE_IDS_REASON,
+  };
+  delete safe.candidates;
+  delete safe.promptRanges;
+  return safe;
+}
+
+export function retrievalCandidateIdsAmbiguous(
+  evidence: RetrievalEvidence | undefined,
+  loaded: readonly { readonly id: string }[],
+): boolean {
+  return (
+    evidence?.candidateIdsAmbiguous === true ||
+    hasRepeatedCandidateIds(loaded) ||
+    hasRepeatedCandidateIds(evidence?.candidates ?? [])
+  );
+}
+
+function omitAmbiguousRecallCandidates(outcome: MemoryRecallOutcome): MemoryRecallOutcome {
+  if (outcome.kind === 'timeout') return outcome;
+  const safe = { ...outcome, candidateIdsAmbiguous: true as const, candidatesComplete: false };
+  delete safe.candidates;
+  return safe;
+}
 
 export function recallOutcome(
   turnNumber: number,
@@ -53,8 +96,12 @@ export function recallOutcome(
     admittedCount,
     exclusions,
     complete: candidates.every((candidate) => candidate.admitted || candidate.reason !== undefined),
-    candidatesComplete: complete && candidates.length <= CANDIDATE_LIMIT,
-    candidates: candidates.slice(0, CANDIDATE_LIMIT),
+    ...(hasRepeatedCandidateIds(candidates)
+      ? { candidateIdsAmbiguous: true as const, candidatesComplete: false }
+      : {
+          candidatesComplete: complete && candidates.length <= CANDIDATE_LIMIT,
+          candidates: candidates.slice(0, CANDIDATE_LIMIT),
+        }),
   };
 }
 
@@ -70,51 +117,48 @@ export function recallTimeout(turnNumber: number, namespace: string): MemoryReca
 }
 
 export interface RecallExclusion {
+  readonly id: string;
   readonly reason: MemoryRecallExclusionReason;
   readonly score?: number;
   readonly floor?: number;
 }
 
-/** Update sample rows and counts independently, from the stage's actual decisions. */
-function excludeRecall(
-  outcome: MemoryRecallOutcome,
-  removed: ReadonlyMap<string, RecallExclusion>,
-  counts: Readonly<Partial<Record<MemoryRecallExclusionReason, number>>>,
-  admittedCount: number,
-): MemoryRecallOutcome {
-  if (outcome.kind === 'timeout') return outcome;
-  const exclusions = { ...outcome.exclusions };
-  for (const reason of Object.keys(counts) as MemoryRecallExclusionReason[]) {
-    exclusions[reason] = (exclusions[reason] ?? 0) + (counts[reason] ?? 0);
-  }
-  const candidates = outcome.candidates?.map((candidate) => {
-    if (!candidate.admitted) return candidate;
-    const decision = removed.get(candidate.id);
-    return decision === undefined ? candidate : { ...candidate, ...decision, admitted: false };
-  });
-  return {
-    ...outcome,
-    admittedCount,
-    exclusions,
-    ...(candidates !== undefined && { candidates }),
-  };
-}
-
-/** Shared/custom pipelines without a single attributable input leave the count unknown. */
+/** Update the counts from every exclusion before matching the diagnostic sample. */
 export function refineRecallOutcomes(
   outcomes: readonly MemoryRecallOutcome[],
-  removed: ReadonlyMap<string, RecallExclusion>,
+  removed: readonly RecallExclusion[],
   before: number,
   after: number,
+  candidateIdsAmbiguous: boolean,
 ): readonly MemoryRecallOutcome[] {
   const successful = outcomes.filter((outcome) => outcome.kind === 'ok');
   const origin = successful.length === 1 ? successful[0] : undefined;
-  if (origin === undefined || origin.admittedCount !== before)
-    return unprovenRecallOutcomes(outcomes);
-  const counts: Partial<Record<MemoryRecallExclusionReason, number>> = {};
-  for (const { reason } of removed.values()) counts[reason] = (counts[reason] ?? 0) + 1;
+  if (origin === undefined || origin.admittedCount !== before) {
+    const uncertain = unprovenRecallOutcomes(outcomes);
+    return candidateIdsAmbiguous ? uncertain.map(omitAmbiguousRecallCandidates) : uncertain;
+  }
+
+  const exclusions = { ...origin.exclusions };
+  for (const { reason } of removed) exclusions[reason] = (exclusions[reason] ?? 0) + 1;
+  const refined = { ...origin, admittedCount: after, exclusions };
+  const ambiguous =
+    candidateIdsAmbiguous ||
+    origin.candidateIdsAmbiguous === true ||
+    hasRepeatedCandidateIds(origin.candidates ?? []);
+  if (ambiguous) {
+    return outcomes.map((outcome) =>
+      outcome === origin ? omitAmbiguousRecallCandidates(refined) : outcome,
+    );
+  }
+  const byId = new Map(removed.map((decision) => [decision.id, decision]));
+  const candidates = origin.candidates?.map((candidate) => {
+    const decision = byId.get(candidate.id);
+    return !candidate.admitted || decision === undefined
+      ? candidate
+      : { ...candidate, ...decision, admitted: false };
+  });
   return outcomes.map((outcome) =>
-    outcome === origin ? excludeRecall(outcome, removed, counts, after) : outcome,
+    outcome === origin ? { ...refined, ...(candidates !== undefined && { candidates }) } : outcome,
   );
 }
 

@@ -49,7 +49,12 @@ import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
 import { approximateTokenCounter, countMessageTokens, type TokenCounter } from './tokenize.js';
 import { chunkText } from '../retrieval/provenance.js';
-import { refineRecallOutcomes, type RecallExclusion } from '../retrieval/outcome.js';
+import {
+  omitAmbiguousRetrievalCandidates,
+  refineRecallOutcomes,
+  retrievalCandidateIdsAmbiguous,
+  type RecallExclusion,
+} from '../retrieval/outcome.js';
 
 /**
  * Reusable shape for a **composable pipeline segment** — a function that
@@ -147,10 +152,8 @@ function buildPickDecider(config: PickByBudgetConfig) {
 const skipStage = (scope: TypedScope<MemoryState>): void => {
   scope.selected = [];
   const loaded = scope.loaded ?? [];
-  const removed = new Map<string, RecallExclusion>(
-    loaded.map((entry) => [entry.id, { reason: 'over-budget' }]),
-  );
-  reviseAdmitted(scope, removed, loaded.length, 0, 0);
+  const removed = loaded.map(({ id }): RecallExclusion => ({ id, reason: 'over-budget' }));
+  reviseAdmitted(scope, loaded, removed, 0, 0);
 };
 
 /**
@@ -166,20 +169,23 @@ const skipStage = (scope: TypedScope<MemoryState>): void => {
  */
 function reviseAdmitted(
   scope: TypedScope<MemoryState>,
-  removed: ReadonlyMap<string, RecallExclusion>,
-  before: number,
+  loaded: readonly MemoryEntry<Message>[],
+  removed: readonly RecallExclusion[],
   after: number,
   charsKept: number,
 ): void {
   const outcomes = scope.recallOutcomes;
-  if (outcomes !== undefined && removed.size !== 0) {
-    scope.recallOutcomes = refineRecallOutcomes(outcomes, removed, before, after);
+  const prior = scope.retrieved;
+  const ambiguous = retrievalCandidateIdsAmbiguous(prior, loaded);
+  if (outcomes !== undefined && (removed.length !== 0 || ambiguous)) {
+    scope.recallOutcomes = refineRecallOutcomes(outcomes, removed, loaded.length, after, ambiguous);
   }
 
-  const evidence = scope.retrieved;
-  if (!evidence) return;
+  if (!prior) return;
+  const evidence = ambiguous ? omitAmbiguousRetrievalCandidates(prior) : prior;
+  const byId = evidence.candidates && new Map(removed.map((decision) => [decision.id, decision]));
   const candidates = evidence.candidates?.map((candidate) => {
-    const decision = removed.get(candidate.id);
+    const decision = byId?.get(candidate.id);
     if (!candidate.admitted || decision === undefined || decision.reason === 'decayed')
       return candidate;
     return { ...candidate, admitted: false, reason: decision.reason };
@@ -213,7 +219,7 @@ function buildPickStage(config: PickByBudgetConfig) {
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
     const picked: MemoryEntry<Message>[] = [];
-    const removed = new Map<string, RecallExclusion>();
+    const removed: RecallExclusion[] = [];
     let used = 0;
 
     for (const entry of byNewest) {
@@ -226,13 +232,13 @@ function buildPickStage(config: PickByBudgetConfig) {
         // remaining entries can be NAMED as cap-rejected — and it cannot
         // change what is picked, because once the cap is reached the
         // condition stays true for every later iteration.
-        removed.set(entry.id, { reason: 'over-max-entries' });
+        removed.push({ id: entry.id, reason: 'over-max-entries' });
         continue;
       }
 
       const cost = countMessageTokens(entry.value, countTokens);
       if (used + cost > budget) {
-        removed.set(entry.id, { reason: 'over-budget' });
+        removed.push({ id: entry.id, reason: 'over-budget' });
         continue;
       }
       picked.push(entry);
@@ -245,7 +251,7 @@ function buildPickStage(config: PickByBudgetConfig) {
     // Measured through the SAME accessor the retriever spent its character
     // budget with, so the two numbers are the same kind of number.
     const charsKept = picked.reduce((total, entry) => total + chunkText(entry.value).length, 0);
-    reviseAdmitted(scope, removed, loaded.length, picked.length, charsKept);
+    reviseAdmitted(scope, loaded, removed, picked.length, charsKept);
   };
 }
 

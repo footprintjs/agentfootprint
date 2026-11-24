@@ -66,7 +66,12 @@ import { resolveRankingMode } from '../store/capability.js';
 import { fnv1a } from '../../lib/fnv1a.js';
 import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
 import { topK } from '../retrieval/topK.js';
-import { recallOutcome, recallTimeout, type MemoryRecallCandidate } from '../retrieval/outcome.js';
+import {
+  omitAmbiguousRetrievalCandidates,
+  recallOutcome,
+  recallTimeout,
+  type MemoryRecallCandidate,
+} from '../retrieval/outcome.js';
 import type {
   RetrievalEvidence,
   RetrievalRecording,
@@ -365,18 +370,16 @@ export function loadRelevant(config: LoadRelevantConfig) {
         });
       }
     });
-    scope.recallOutcomes = [
-      ...(scope.recallOutcomes ?? []),
-      recallOutcome(
-        scope.turnNumber,
-        namespace,
-        recallCandidates,
-        results.length < poolSize,
-        scoresUsable ? strategy.threshold : undefined,
-      ),
-    ];
+    const outcome = recallOutcome(
+      scope.turnNumber,
+      namespace,
+      recallCandidates,
+      results.length < poolSize,
+      scoresUsable ? strategy.threshold : undefined,
+    );
+    scope.recallOutcomes = [...(scope.recallOutcomes ?? []), outcome];
 
-    const evidence: RetrievalEvidence = {
+    const initialEvidence: RetrievalEvidence = {
       ...baseEvidence,
       ...(queryVec.length > 0 && { dimensions: queryVec.length }),
       ...(maxChars !== undefined && { maxChars, charsUsed }),
@@ -396,6 +399,10 @@ export function loadRelevant(config: LoadRelevantConfig) {
       corpusEmpty: results.length === 0,
     };
 
+    const evidence =
+      outcome.candidateIdsAmbiguous === true
+        ? omitAmbiguousRetrievalCandidates(initialEvidence)
+        : initialEvidence;
     scope.loaded = admitted.map((r) => r.entry) as MemoryState['loaded'];
     scope.retrieved = evidence;
 

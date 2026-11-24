@@ -8,9 +8,11 @@
  * decider stages — the plain-function shim is gone). A `runPick`
  * helper keeps each test terse.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { flowChart, FlowChartExecutor } from 'footprintjs';
 import type { Recorder } from 'footprintjs';
+import { loadRelevant } from '../../../src/memory/embedding/loadRelevant.js';
+import { InMemoryStore } from '../../../src/memory/store/InMemoryStore.js';
 import { pickByBudget } from '../../../src/memory/stages/pickByBudget';
 import { recallOutcome } from '../../../src/memory/retrieval/outcome.js';
 import type { MemoryState } from '../../../src/memory/stages/types';
@@ -73,6 +75,7 @@ async function runPick(
       scope.formatted = seed.formatted;
       scope.newMessages = seed.newMessages;
       if (seed.recallOutcomes !== undefined) scope.recallOutcomes = seed.recallOutcomes;
+      if (seed.retrieved !== undefined) scope.retrieved = seed.retrieved;
     },
     'seed',
   );
@@ -414,4 +417,162 @@ it('retains exact scoreless budget counts when the recorded candidate sample is 
   expect(state.recallOutcomes?.[0]?.candidates?.every((row) => row.reason === 'over-budget')).toBe(
     true,
   );
+});
+
+it('keeps the newer occurrence and omits ambiguous legacy and new candidate rows', async () => {
+  const loaded = [
+    makeEntry('repeated', msg('user', 'chunk 0'), 2),
+    makeEntry('repeated', msg('user', 'chunk 1'), 1),
+  ];
+  const read = recallOutcome(
+    1,
+    'test',
+    loaded.map(({ id }, i) => ({
+      id,
+      order: i + 1,
+      admitted: true,
+    })),
+    true,
+  );
+  const { selected, state } = await runPick(
+    { maxEntries: 1 },
+    {
+      loaded,
+      recallOutcomes: [read],
+      retrieved: {
+        strategy: 'top-k',
+        queryHash: 'query',
+        k: 2,
+        selectionOrder: 'recency',
+        consideredCount: 2,
+        admittedCount: 2,
+        rejectedCount: 0,
+        candidatesComplete: true,
+        corpusEmpty: false,
+        candidates: loaded.map(({ id }, i) => ({
+          id,
+          rank: i + 1,
+          score: 1 - i * 0.1,
+          admitted: true,
+        })),
+      },
+    },
+  );
+  expect(selected.map(({ value }) => value.content)).toEqual(['chunk 0']);
+  expect(state.recallOutcomes?.[0]).toMatchObject({
+    complete: true,
+    candidateCount: 2,
+    admittedCount: 1,
+    candidatesComplete: false,
+    exclusions: { 'over-max-entries': 1 },
+  });
+  expect(state.recallOutcomes?.[0]?.candidates).toBeUndefined();
+  expect(state.retrieved).toMatchObject({
+    candidateIdsAmbiguous: true,
+    consideredCount: 2,
+    admittedCount: 1,
+    rejectedCount: 1,
+    candidatesComplete: false,
+    candidatesOmittedReason: expect.stringMatching(/repeated/i),
+  });
+  expect(state.retrieved?.candidates).toBeUndefined();
+});
+
+it('counts repeated scoreless exclusions outside the bounded sample', async () => {
+  const loaded = Array.from({ length: 149 }, (_, i) =>
+    makeEntry(i === 148 ? 'item-0' : `item-${i}`, msg('user', 'same budget'), i),
+  );
+  const read = recallOutcome(
+    1,
+    'test',
+    loaded.map(({ id }, i) => ({
+      id,
+      order: i + 1,
+      admitted: true,
+    })),
+    true,
+  );
+  const { state } = await runPick(
+    {},
+    { loaded, recallOutcomes: [read], contextTokensRemaining: 0 },
+  );
+  expect(state.recallOutcomes?.[0]).toMatchObject({
+    complete: true,
+    candidateCount: 149,
+    admittedCount: 0,
+    candidatesComplete: false,
+    exclusions: { 'over-budget': 149 },
+  });
+  expect(state.recallOutcomes?.[0]?.candidates).toBeUndefined();
+});
+
+it('keeps distinct token and entry-cap reasons for different occurrences of the same ID', async () => {
+  const loaded = [
+    makeEntry('repeated', msg('user', 'expensive'), 3),
+    makeEntry('unique', msg('user', 'selected'), 2),
+    makeEntry('repeated', msg('user', 'cheap'), 1),
+  ];
+  const read = recallOutcome(
+    1,
+    'test',
+    loaded.map(({ id }, i) => ({
+      id,
+      order: i + 1,
+      admitted: true,
+    })),
+    true,
+  );
+  const { state, selected } = await runPick(
+    {
+      maxEntries: 1,
+      reserveTokens: 0,
+      minimumTokens: 0,
+      countTokens: (text) => (text === 'expensive' ? 100 : 1),
+    },
+    { loaded, recallOutcomes: [read], contextTokensRemaining: 2 },
+  );
+  expect(selected.map(({ id }) => id)).toEqual(['unique']);
+  expect(state.recallOutcomes?.[0]).toMatchObject({
+    complete: true,
+    candidateCount: 3,
+    admittedCount: 1,
+    candidatesComplete: false,
+    exclusions: { 'over-budget': 1, 'over-max-entries': 1 },
+  });
+  expect(state.recallOutcomes?.[0]?.candidates).toBeUndefined();
+});
+
+it('detects repeated store IDs even when ranking already rejected an occurrence', async () => {
+  const good = makeEntry('repeated', msg('user', 'known'), 2);
+  const bad = makeEntry('repeated', msg('user', 'below floor'), 1);
+  const store = Object.assign(new InMemoryStore(), {
+    ranksBy: 'server-text' as const,
+    supportsVectorSearch: false as const,
+    searchWithOutcome: vi.fn().mockResolvedValue({
+      ok: true,
+      value: [
+        { entry: good, score: 0.9 },
+        { entry: bad, score: 0.1 },
+      ],
+    }),
+  });
+  const scope = makeScope();
+  await loadRelevant({ store, queryFrom: () => 'query', minScore: 0.5 })(scope as never);
+  expect(scope.loaded).toEqual([good]);
+  expect(scope.retrieved).toMatchObject({
+    candidateIdsAmbiguous: true,
+    consideredCount: 2,
+    admittedCount: 1,
+    rejectedCount: 1,
+    candidatesComplete: false,
+  });
+  expect(scope.retrieved?.candidates).toBeUndefined();
+  expect(scope.recallOutcomes?.[0]).toMatchObject({
+    complete: true,
+    candidateCount: 2,
+    admittedCount: 1,
+    candidatesComplete: false,
+    exclusions: { 'below-threshold': 1 },
+  });
+  expect(scope.recallOutcomes?.[0]?.candidates).toBeUndefined();
 });

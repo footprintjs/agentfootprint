@@ -279,6 +279,8 @@ agent.on('agentfootprint.memory.retrieved', (e) => {
 
 Two orderings are recorded and they are not the same thing: `rank` is how the chunk scored, `promptPosition` is where the budget picker put it in the message. Under the default recency ordering the best-scoring chunk can land last.
 
+If the store repeats an ID, the recording keeps the aggregate selection and exclusion counts. The formatted recall is attributed as one block because the run cannot link individual chunks to unique candidate IDs.
+
 ### Distinguish empty recall from a timeout
 
 A successful search can return zero matches. The answer proceeds as usual. An outcome-aware store can report a timeout, and the agent can continue without that store's passages. When the run proves no recalled content reached any relevant model request, the answer assessment can add `memory-retrieval-timeout` or `memory-retrieval-excluded` to explain the result. A request that included recall, even on an earlier attempt, suppresses that zero-inclusion warning. Legacy recordings and requests with incomplete evidence leave inclusion unknown.

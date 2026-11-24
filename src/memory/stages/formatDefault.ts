@@ -50,6 +50,10 @@ import type { TypedScope } from 'footprintjs';
 import type { MemoryEntry } from '../entry/index.js';
 import type { LLMMessage as Message } from '../../provider-contract/types.js';
 import type { MemoryState } from './types.js';
+import {
+  omitAmbiguousRetrievalCandidates,
+  retrievalCandidateIdsAmbiguous,
+} from '../retrieval/outcome.js';
 import { chunkProvenance, chunkText } from '../retrieval/provenance.js';
 import type {
   RetrievalChunkRange,
@@ -181,6 +185,15 @@ function summarize(text: string, n = 80): string {
   return text.length <= n ? text : text.slice(0, n - 1) + '…';
 }
 
+function withoutPlacement(candidate: RetrievedCandidate): RetrievedCandidate {
+  if (candidate.promptFragment === undefined && candidate.promptPosition === undefined)
+    return candidate;
+  const unplaced = { ...candidate };
+  delete unplaced.promptFragment;
+  delete unplaced.promptPosition;
+  return unplaced;
+}
+
 // LENS · system-text · request-ephemeral
 // reads: selected ← pickByBudget; retrieved ← the retrieval fold, each chunk keeping its promptFragment
 // it writes scope.formatted: this file, not its neighbours, owns the message role and the wording.
@@ -203,9 +216,12 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
 
     const evidence = scope.retrieved;
     const idsOnly = (config.recording ?? evidence?.recording) === 'ids-only';
-    const byId = new Map<string, RetrievedCandidate>(
-      (evidence?.candidates ?? []).map((c) => [c.id, c]),
-    );
+    const candidates = evidence?.candidates ?? [];
+    const ambiguous = retrievalCandidateIdsAmbiguous(evidence, selected);
+    const byId = new Map<string, RetrievedCandidate>();
+    if (!ambiguous) {
+      for (const candidate of candidates) if (candidate.admitted) byId.set(candidate.id, candidate);
+    }
 
     const blocks = selected.map((entry) => {
       const candidate = byId.get(entry.id);
@@ -232,7 +248,14 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
     // order while the prompt is assembled in the PICKER's order: without
     // it, rejoining the fragments reproduces the right bytes in the wrong
     // sequence, which is a prompt the model never saw.
-    if (evidence && idsOnly) {
+    if (evidence && ambiguous) {
+      // Keep the formatted block. An ID alone cannot attach a retained body
+      // to the score or other coordinates of one of its occurrences.
+      scope.retrieved = {
+        ...omitAmbiguousRetrievalCandidates(evidence),
+        ...(idsOnly && { recording: 'ids-only' as const }),
+      };
+    } else if (evidence && idsOnly) {
       let offset = 0;
       const promptRanges = selected.map((entry, i): RetrievalChunkRange => {
         const length =
@@ -257,8 +280,9 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
         promptRanges,
         ...(evidence.candidates !== undefined && {
           candidates: evidence.candidates.map((candidate) => {
-            const promptPosition = positions.get(candidate.id);
-            return promptPosition === undefined ? candidate : { ...candidate, promptPosition };
+            const unplaced = withoutPlacement(candidate);
+            const promptPosition = candidate.admitted ? positions.get(candidate.id) : undefined;
+            return promptPosition === undefined ? unplaced : { ...unplaced, promptPosition };
           }),
         }),
       };
@@ -274,9 +298,9 @@ export function formatDefault(config: FormatDefaultConfig = {}) {
         ...evidence,
         ...(evidence.candidates && {
           candidates: evidence.candidates.map((c) => {
-            const slot = placed.get(c.id);
+            const slot = c.admitted ? placed.get(c.id) : undefined;
             return slot === undefined
-              ? c
+              ? withoutPlacement(c)
               : { ...c, promptFragment: slot.fragment, promptPosition: slot.position };
           }),
         }),

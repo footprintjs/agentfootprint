@@ -4,7 +4,7 @@ title: RetrievalStrategy
 
 # Interface: RetrievalStrategy
 
-Defined in: [src/memory/retrieval/types.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L223)
+Defined in: [src/memory/retrieval/types.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L225)
 
 The retrieval seam: given the candidates a store returned, decide
 which of them the prompt may have — and say why about each one.
@@ -28,7 +28,7 @@ to configure.
 
 > `readonly` **k**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L227)
+Defined in: [src/memory/retrieval/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L229)
 
 How many candidates this strategy is willing to admit.
 
@@ -38,7 +38,7 @@ How many candidates this strategy is willing to admit.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L225)
+Defined in: [src/memory/retrieval/types.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L227)
 
 Stable name — appears in the recording and in refusal messages.
 
@@ -48,7 +48,7 @@ Stable name — appears in the recording and in refusal messages.
 
 > `readonly` **rejectWindow**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:234](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L234)
+Defined in: [src/memory/retrieval/types.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L236)
 
 How many EXTRA candidates to pull past `k` purely so that rejected
 ones can be shown. Never affects which candidates are admitted.
@@ -59,7 +59,7 @@ ones can be shown. Never affects which candidates are admitted.
 
 > `readonly` `optional` **threshold?**: `number`
 
-Defined in: [src/memory/retrieval/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L229)
+Defined in: [src/memory/retrieval/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L231)
 
 The quality floor, when the strategy has one.
 
@@ -69,7 +69,7 @@ The quality floor, when the strategy has one.
 
 > **select**(`pool`): readonly `RetrievalVerdict`[]
 
-Defined in: [src/memory/retrieval/types.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L239)
+Defined in: [src/memory/retrieval/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L241)
 
 Rule on a score-descending pool. Return one verdict per input, in
 the same order. Implementations must not reorder.

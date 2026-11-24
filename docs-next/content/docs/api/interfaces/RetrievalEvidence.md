@@ -23,6 +23,16 @@ How many reached the prompt.
 
 ***
 
+### candidateIdsAmbiguous?
+
+> `readonly` `optional` **candidateIdsAmbiguous?**: `true`
+
+Defined in: [src/memory/retrieval/types.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L198)
+
+Repeated store IDs prevent per-candidate attribution.
+
+***
+
 ### candidates?
 
 > `readonly` `optional` **candidates?**: readonly [`RetrievedCandidate`](/docs/api/interfaces/RetrievedCandidate)[]
@@ -93,7 +103,7 @@ How many candidates came back from the store.
 
 > `readonly` **corpusEmpty**: `boolean`
 
-Defined in: [src/memory/retrieval/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L201)
+Defined in: [src/memory/retrieval/types.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L203)
 
 The completed scoped search returned no entries. A legacy field name:
 this does not establish whether the underlying corpus contains data.
@@ -156,7 +166,7 @@ The retriever's id (`defineRAG({ id })`). Stamped by the read mount.
 
 > `readonly` `optional` **namespace?**: `string`
 
-Defined in: [src/memory/retrieval/types.ts:203](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L203)
+Defined in: [src/memory/retrieval/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/memory/retrieval/types.ts#L205)
 
 The namespace that was searched, as a plain string, for the diagnosis above.
 

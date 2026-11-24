@@ -194,6 +194,8 @@ export interface RetrievalEvidence {
   readonly candidatesComplete: boolean;
   /** Present exactly when `candidates` is undefined. */
   readonly candidatesOmittedReason?: string;
+  /** Repeated store IDs prevent per-candidate attribution. */
+  readonly candidateIdsAmbiguous?: true;
   /**
    * The completed scoped search returned no entries. A legacy field name:
    * this does not establish whether the underlying corpus contains data.
