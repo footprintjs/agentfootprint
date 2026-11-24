@@ -5,6 +5,7 @@ import type { ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import {
   MAX_SELECTION_ROWS,
+  combineOmissions,
   visibleToolClaim,
   type DiscoveryOmissions,
 } from './providerOmissions.js';
@@ -14,6 +15,8 @@ import {
  * closes uniqueness fallback; a later positive wire still proves its names.
  */
 export interface ServedToolParties {
+  /** Private successful Evaluate result for this invocation and epoch. */
+  inactiveSkills?: { readonly iteration: number; readonly value: DiscoveryOmissions };
   /** Remaining names that may be recorded this turn. Unknown after an unaccounted resume. */
   remainingToolOmissions?: number;
   /** Saved wire membership is closed until a fresh Compose replaces it. */
@@ -141,7 +144,13 @@ export function commitServedTools(servedTools: ServedToolParties, input: SlotCom
     servedTools.lastProof = undefined;
   }
   for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
-  const selection = slotSelection(input);
+  const native = servedTools.inactiveSkills;
+  delete servedTools.inactiveSkills;
+  const selection = slotSelection(
+    native?.iteration === iteration
+      ? { ...input, discovered: combineOmissions(input.discovered, native.value) }
+      : input,
+  );
   if (selection) servedTools.selection = selection;
   else delete servedTools.selection;
 }
