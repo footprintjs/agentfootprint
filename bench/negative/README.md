@@ -1,5 +1,9 @@
 # The negative-claim bench — the free replay
 
+The separate [full runtime benchmark](full/README.md) is PR 6. It keeps this
+historical replay frozen and uses a fresh private bank for paid generation,
+runtime correction/delivery, blind ratings and owner adjudication.
+
 Does the negative-claim grammar (`src/integrity/negative-claim/`) find the flat "there are none"
 and "that is the full list" sentences a person would flag, and what would withholding them cost?
 This folder answers it for free, by replaying the grammar and the record-backed prose check over
