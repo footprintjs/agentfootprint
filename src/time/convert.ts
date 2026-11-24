@@ -145,9 +145,12 @@ export type {
 
 import { epochOrText, formZone, readBound, readZone } from './convert/bounds.js';
 import { dateAt, midnightOf, nextDay, spellDate } from './convert/calendar.js';
-import { convertOne } from './convert/exact.js';
+import { convertOne, supportsFrozenLookback } from './convert/exact.js';
+import { readControlWindow, type WindowEndpoint } from './windowEndpoint.js';
 import { absoluteOf, msOf, spanRange, type Ms } from './convert/instants.js';
-import { dayWidened, lookbackWidened } from './convert/widen.js';
+import { dayWidened, extraOf, lookbackWidened } from './convert/widen.js';
+
+export { supportsFrozenLookback };
 
 // ─── Converting a range into a form ──────────────────────────────────────
 
@@ -168,6 +171,9 @@ export interface WindowToConvert {
   readonly range: TimeRange;
   /** The look-back length the window was said as (`smhdw`), ending at the clock's `now`. */
   readonly lookback?: DurationText;
+  /** The admitted clock already bound this look-back to `range`; dispatch absolute bounds only. */
+  readonly freezeLookback?: true;
+  readonly endpoint?: WindowEndpoint;
 }
 
 /** One exact conversion: the form used (its index), the argument values, and whether it rounded outward. */
@@ -189,8 +195,10 @@ export function convertExact(
   ctx: ConvertContext,
 ): Conversion | undefined {
   for (let i = 0; i < forms.length; i++) {
-    const done = convertOne(window, forms[i] as PeriodForm, ctx);
-    if (done !== undefined) {
+    const form = forms[i] as PeriodForm;
+    if (window.freezeLookback === true && !supportsFrozenLookback(form)) continue;
+    const done = convertOne(window, form, ctx);
+    if (done !== undefined && (window.freezeLookback !== true || !done.rounded)) {
       return { form: i, values: done.values, ...(done.rounded && { rounded: true as const }) };
     }
   }
@@ -226,7 +234,9 @@ export function convertWidened(
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
     const done =
-      form.kind === 'day'
+      window.freezeLookback === true
+        ? frozenWidened(window, form, ctx)
+        : form.kind === 'day'
         ? dayWidened(window, form, ctx)
         : form.kind === 'lookback'
         ? lookbackWidened(window, form, ctx)
@@ -240,6 +250,31 @@ export function convertWidened(
     return { form: i, ...done };
   }
   return undefined;
+}
+
+/** An absolute form can widen only to the bounds its actual arguments read back. */
+function frozenWidened(
+  window: WindowToConvert,
+  form: PeriodForm,
+  ctx: ConvertContext,
+): Omit<WidenedConversion, 'form'> | undefined {
+  if (!supportsFrozenLookback(form)) return undefined;
+  const converted = convertOne(window, form, ctx);
+  if (converted?.rounded !== true) return undefined;
+  const asked = absoluteOf(window, ctx.now);
+  const sent = readBack(converted.values, form, ctx);
+  if (asked === undefined || sent === undefined) return undefined;
+  const from = msOf(sent.from);
+  const to = msOf(sent.to);
+  if (from === undefined || to === undefined || from.ms > asked[0].ms || to.ms < asked[1].ms) {
+    return undefined;
+  }
+  return {
+    values: converted.values,
+    rounded: true,
+    sent,
+    extra: extraOf(from.ms, to.ms, asked[0].ms, asked[1].ms),
+  };
 }
 
 /**
@@ -303,10 +338,14 @@ export function convertForTool(
   facts: PeriodFacts | undefined,
   ctx: ConvertContext,
 ): ToolConversion {
+  const eligible = window.freezeLookback === true ? forms.filter(supportsFrozenLookback) : forms;
+  if (window.freezeLookback === true && eligible.length === 0) {
+    return { refused: 'no-form-holds' };
+  }
   // The tool's facts before a form is chosen: `maxRange` is the widest any form reads, so a window
   // is over it only when NO form can read it (`periodForm.ts` · `toolFacts`; the period's own
   // facts when no form declares its own `maxRange`).
-  const judged = facts === undefined ? undefined : toolFacts(forms, facts);
+  const judged = facts === undefined ? undefined : toolFacts(eligible, facts);
   const problem =
     judged === undefined ? undefined : periodFactProblem(window.range, judged, ctx.now);
   if (problem !== undefined) return { refused: problem };
@@ -314,11 +353,11 @@ export function convertForTool(
     facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
       ? { partlyBeyondRetention: true as const }
       : {};
-  const read = forms.some((f) => f.maxRange !== undefined)
+  const read = eligible.some((f) => f.maxRange !== undefined)
     ? convertWithinFormCaps(window, forms, facts, ctx)
     : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, widestMsOf(facts));
   if (read !== undefined) return { conversion: read, ...partly };
-  if (spansDaysForDayOnly(window, forms, ctx)) return { refused: 'multi-day' };
+  if (spansDaysForDayOnly(window, eligible, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
 }
 
@@ -339,9 +378,7 @@ function convertWithinFormCaps(
     const text = formMaxRange(form, facts);
     return text === undefined ? undefined : durationMs(text, FACT_UNITS);
   };
-  const from = msOf(window.range.from);
-  const to = msOf(window.range.to);
-  const reach = from === undefined || to === undefined ? undefined : reachMs(from.ms, to.ms);
+  const reach = formReach(window);
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
     const cap = capMs(form);
@@ -355,6 +392,18 @@ function convertWithinFormCaps(
     if (widened !== undefined) return { ...widened, form: i };
   }
   return undefined;
+}
+
+function formReach(window: WindowToConvert): number | undefined {
+  if (window.endpoint === undefined) {
+    const from = msOf(window.range.from);
+    const to = msOf(window.range.to);
+    return from === undefined || to === undefined ? undefined : reachMs(from.ms, to.ms);
+  }
+  const from = instantOf(window.range.from, 'strict');
+  const cutoff = instantOf(window.endpoint.cutoff, 'strict');
+  if (from === undefined || cutoff === undefined) return undefined;
+  return cutoff.ms - from.ms + (cutoff.nanos - from.nanos) / 1_000_000;
 }
 
 /**
@@ -420,7 +469,7 @@ export function readBackLacksZone(
 export function readBack(
   args: Readonly<Record<string, unknown>>,
   form: PeriodForm,
-  ctx: { readonly now: InstantText; readonly appZone?: ZoneName },
+  ctx: { readonly now: InstantText; readonly appZone?: ZoneName; readonly precise?: true },
 ): TimeRange | undefined {
   if (form.kind === 'lookback') {
     const value = args[form.argument];
@@ -468,6 +517,10 @@ export function readBack(
     toValue = object[form.keys.to];
     fromAs = toAs = form.as;
     edge = form.edge;
+  }
+  if (ctx.precise === true && fromAs === 'iso' && toAs === 'iso') {
+    const window = readControlWindow({ from: fromValue, to: toValue, end: edge });
+    return window === undefined ? undefined : { from: window.from, to: window.to };
   }
   const from = readBound(fromValue, 'from', fromAs, 'inclusive', zone);
   const to = readBound(toValue, 'to', toAs, edge, zone);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { convertForTool, readBack, type PeriodForm } from '../convert.js';
+import { convertExact, convertForTool, readBack, type PeriodForm } from '../convert.js';
 
 describe('public period conversion composition', () => {
   it('rounds negative epoch seconds outward without changing frozen declarations or input', () => {
@@ -82,5 +82,104 @@ describe('public period conversion composition', () => {
     });
     if ('refused' in done) throw new Error(done.refused);
     expect(readBack(done.conversion.values, forms[1]!, ctx)).toEqual(range);
+  });
+});
+
+describe('frozen look-back conversion', () => {
+  const relative = { kind: 'lookback', argument: 'duration', signed: false } as const;
+  const absolute = {
+    kind: 'bounds',
+    from: { argument: 'start', as: 'iso' },
+    to: { argument: 'end', as: 'iso', edge: 'exclusive' },
+  } as const;
+  const wall = { ...absolute, to: { ...absolute.to, as: 'wall' } } as const;
+  const coarse = {
+    kind: 'object',
+    argument: 'range',
+    keys: { from: 'start', to: 'end' },
+    as: 'epoch-s',
+    edge: 'exclusive',
+  } as const;
+  const range = { from: '2026-11-13T10:00:00-08:00', to: '2026-11-13T12:00:00-08:00' };
+  const window = { range, lookback: '2h', freezeLookback: true } as const;
+  const ctx = {
+    now: '2026-11-13T21:00:00Z',
+    zone: 'America/Los_Angeles',
+    granularityMs: 1,
+  } as const;
+  const values = { start: '2026-11-13T18:00:00Z', end: '2026-11-13T20:00:00Z' };
+
+  it('sends the stored UTC bounds in either declared order and retains the original index', () => {
+    expect(convertForTool(window, [relative, absolute], undefined, ctx)).toEqual({
+      conversion: { form: 1, values },
+    });
+    expect(convertForTool(window, [absolute, relative], undefined, ctx)).toEqual({
+      conversion: { form: 0, values },
+    });
+    expect(convertExact(window, [relative, absolute], ctx)).toEqual({ form: 1, values });
+  });
+
+  it('refuses relative-only, calendar, and mixed wall/absolute forms without changing legacy dispatch', () => {
+    expect(convertForTool(window, [relative], undefined, ctx)).toEqual({
+      refused: 'no-form-holds',
+    });
+    expect(
+      convertForTool(window, [relative, wall, { kind: 'day', argument: 'date' }], undefined, ctx),
+    ).toEqual({ refused: 'no-form-holds' });
+    expect(convertForTool({ range, lookback: '2h' }, [relative, absolute], undefined, ctx)).toEqual(
+      {
+        conversion: { form: 0, values: { duration: '2h' } },
+      },
+    );
+  });
+
+  it('skips a capped absolute form and never falls back to an uncapped duration', () => {
+    const short = { ...absolute, maxRange: '1h' } as const;
+    expect(convertForTool(window, [relative, short, absolute], undefined, ctx)).toEqual({
+      conversion: { form: 2, values },
+    });
+    expect(convertForTool(window, [relative, short], undefined, ctx)).toEqual({
+      refused: 'no-form-holds',
+    });
+  });
+
+  it('prefers an exact form and records actual widening if only an epoch-second form can hold it', () => {
+    const ragged = {
+      ...window,
+      range: { from: '2026-11-13T10:00:00.250-08:00', to: '2026-11-13T12:00:00.750-08:00' },
+    };
+    expect(convertForTool(ragged, [coarse, absolute], undefined, ctx)).toEqual({
+      conversion: {
+        form: 1,
+        values: { start: '2026-11-13T18:00:00.25Z', end: '2026-11-13T20:00:00.75Z' },
+      },
+    });
+    expect(convertForTool(ragged, [relative, coarse], undefined, ctx)).toEqual({
+      conversion: {
+        form: 1,
+        values: {
+          range: { start: Date.parse(values.start) / 1000, end: Date.parse(values.end) / 1000 + 1 },
+        },
+        rounded: true,
+        sent: { from: values.start, to: '2026-11-13T20:00:01Z' },
+        extra: [
+          { from: values.start, to: '2026-11-13T18:00:00.25Z' },
+          { from: '2026-11-13T20:00:00.75Z', to: '2026-11-13T20:00:01Z' },
+        ],
+      },
+    });
+    expect(convertForTool(ragged, [relative, coarse], { maxRange: '2h' }, ctx)).toEqual({
+      refused: 'over-max-range',
+    });
+  });
+
+  it('refuses when the requested interval fits the cap but the inferred wider bounds do not', () => {
+    const ragged = {
+      ...window,
+      range: { from: '2026-11-13T18:00:00.75Z', to: '2026-11-13T20:00:00.25Z' },
+    };
+    expect(convertForTool(ragged, [relative, coarse], { maxRange: '2h' }, ctx)).toEqual({
+      refused: 'no-form-holds',
+    });
   });
 });

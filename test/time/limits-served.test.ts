@@ -150,13 +150,13 @@ afterEach(() => {
  * packet "gaps" (G9) — before any limit: the first request names it, the later ones too.
  */
 const CONTROL_30D =
-  "The window the person set in the app's time control is 2026-09-09 08:40 – 2026-10-09 08:39 " +
-  'America/Los_Angeles (UTC-07:00) — client_activity start_time 1788968400000, end_time ' +
+  "The window the person set in the app's time control is 2026-09-09 08:40 – 2026-10-09 08:40 " +
+  'America/Los_Angeles (UTC-07:00) (end excluded) — client_activity start_time 1788968400000, end_time ' +
   '1791560400000. A call may pass these values as written; an answer built on them states that ' +
   'window.';
 const CONTROL_7D =
-  "The window the person set in the app's time control is 2026-10-02 08:40 – 2026-10-09 08:39 " +
-  'America/Los_Angeles (UTC-07:00) — client_activity start_time 1790955600000, end_time ' +
+  "The window the person set in the app's time control is 2026-10-02 08:40 – 2026-10-09 08:40 " +
+  'America/Los_Angeles (UTC-07:00) (end excluded) — client_activity start_time 1790955600000, end_time ' +
   '1791560400000. A call may pass these values as written; an answer built on them states that ' +
   'window.';
 
@@ -179,7 +179,7 @@ describe('the time limits line — served late, after the read', () => {
       ),
     );
     expect(line).toMatch(
-      /; read: 2026-10-02 08:40:00 – 2026-10-09 08:39:59 America\/Los_Angeles \(UTC-07:00\)\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/,
+      /; read: 2026-10-02 08:40:00 – 2026-10-09 08:39:59 America\/Los_Angeles \(UTC-07:00\) \(the tool reported different bounds\)\. So the answer to the person states the time each result read and claims nothing about time no result read\.$/,
     );
   });
 

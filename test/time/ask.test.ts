@@ -231,9 +231,9 @@ describe('timeAskOf — unit', () => {
       format: 'time-range',
     });
     expect(ask?.field.enum).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00', // MDY
-      '2026-09-10T08:00:00-07:00/2026-09-10T08:41:00-07:00', // DMY
-      '2010-09-26T08:00:00-07:00/2010-09-26T08:41:00-07:00', // YMD
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00', // MDY
+      '2026-09-10T08:00:00-07:00/2026-09-10T08:40:00-07:00', // DMY
+      '2010-09-26T08:00:00-07:00/2010-09-26T08:40:00-07:00', // YMD
     ]);
     const q = '“10/09/26 8 AM to 8:40 AM”';
     expect(ask?.field.labels?.map(plain)).toEqual([
@@ -261,7 +261,7 @@ describe('timeAskOf — unit', () => {
       defaultTimeAskMessages,
     );
     expect(narrowed?.question).toBe('Is this the time you meant by “10/09/26 8 AM to 8:40 AM”?');
-    expect(narrowed?.field.enum).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00']);
+    expect(narrowed?.field.enum).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00']);
     const day = timeAskOf(
       rowFor('on 2026-10-09', '2026-10-09', {
         date: { kind: 'fixed', year: 2026, month: 10, day: 9 },

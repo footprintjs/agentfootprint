@@ -44,6 +44,7 @@ import { isZoneName, type ZoneName } from './zone.js';
 import { isTimeParts, type TimeParts } from './reader.js';
 import { TIME_REFUSALS, type TimeRefusal } from './periodForm.js';
 import { candidateIsWellFormed, choiceIsWellFormed } from './resolveRecord.js';
+import { isRecordedWindow, type WindowEndpoint } from './windowEndpoint.js';
 import type {
   CallRow,
   CallWindowRow,
@@ -133,6 +134,7 @@ export function timeAnswerRow(
     readonly range: TimeRange;
     readonly zone: ZoneName;
     readonly how: 'confirmed' | 'edited';
+    readonly endpoint?: WindowEndpoint;
     readonly corrected?: TimeAnswerRow['corrected'];
   },
   at: { readonly turn: number; readonly iteration: number },
@@ -146,6 +148,7 @@ export function timeAnswerRow(
     to: answer.range.to,
     zone: answer.zone,
     how: answer.how,
+    ...(answer.endpoint !== undefined && { endpoint: { ...answer.endpoint } }),
     ...(answer.corrected !== undefined && { corrected: { ...answer.corrected } }),
   };
 }
@@ -306,7 +309,7 @@ function isKept(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const k = value as Record<string, unknown>;
   return (
-    isInstant(k.now) && isZoneName(k.zone) && (k.window === undefined || isTimeRange(k.window))
+    isInstant(k.now) && isZoneName(k.zone) && (k.window === undefined || isRecordedWindow(k.window))
   );
 }
 
@@ -319,14 +322,14 @@ function isPassed(value: unknown): boolean {
     keys.every((k) => k === 'now' || k === 'zone' || k === 'window') &&
     (p.now === undefined || isInstant(p.now)) &&
     (p.zone === undefined || isZoneName(p.zone)) &&
-    (p.window === undefined || isTimeRange(p.window))
+    (p.window === undefined || isRecordedWindow(p.window))
   );
 }
 
 function isControlWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const { source, ...range } = value as Record<string, unknown>;
-  return source === 'control' && isTimeRange(range);
+  return source === 'control' && isRecordedWindow(range);
 }
 
 const nonEmpty = (value: unknown): boolean => typeof value === 'string' && value.length > 0;
@@ -382,7 +385,7 @@ function isPersonWindow(value: unknown): boolean {
       source === 'control') &&
     (mention === undefined || isCount(mention)) &&
     (source === 'control') === (mention === undefined) &&
-    isTimeRange(range)
+    isRecordedWindow(range)
   );
 }
 
@@ -505,7 +508,7 @@ function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
     isCount(mention) &&
     isZoneName(zone) &&
     (how === 'confirmed' || how === 'edited') &&
-    isTimeRange(range) &&
+    isRecordedWindow(range) &&
     (corrected === undefined || isCorrectedMeaning(corrected, range))
   );
 }

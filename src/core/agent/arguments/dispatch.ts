@@ -74,6 +74,7 @@ export function withFills(args: ToolArgs, resolution: ArgumentResolution | undef
   const fills = resolution?.fills;
   if (fills === undefined || fills.length === 0) return args;
   const filled: Record<string, unknown> = { ...args };
+  for (const argument of resolution?.removePeriodArguments ?? []) delete filled[argument];
   for (const fill of fills) filled[fill.argument] = fill.value;
   return filled;
 }

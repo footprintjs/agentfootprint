@@ -77,4 +77,4 @@ function lookbackWidened(
   };
 }
 
-export { dayWidened, lookbackWidened };
+export { dayWidened, extraOf, lookbackWidened };

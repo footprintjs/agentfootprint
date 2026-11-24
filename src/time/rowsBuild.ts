@@ -20,9 +20,9 @@
  * ```
  */
 
-import type { TimeRange } from './range.js';
 import { clockChange, type ReadRunTime, type TimeClock } from './clock.js';
 import type { CheckedMention } from './reader.js';
+import type { RecordedWindow } from './windowEndpoint.js';
 import type { CallWindow, TurnWindow } from './bind.js';
 import { chooseReading, resolveMention, type TimePolicy } from './resolve.js';
 import type {
@@ -42,7 +42,7 @@ import type {
 export function clockRow(
   clock: TimeClock,
   at: { readonly turn: number; readonly iteration: number },
-  window?: TimeRange,
+  window?: RecordedWindow,
 ): ClockRow {
   return {
     kind: 'clock',
@@ -53,7 +53,7 @@ export function clockRow(
     zone: clock.zone,
     zoneSource: clock.zoneSource,
     ...(window !== undefined && {
-      window: { from: window.from, to: window.to, source: 'control' as const },
+      window: { ...window, source: 'control' as const },
     }),
   };
 }
@@ -89,10 +89,17 @@ export function clockOnResumeRow(
   kept: ClockRow,
   at: { readonly turn: number; readonly iteration: number },
 ): ClockOnResumeRow | undefined {
+  const { window } = kept;
   const change = clockChange(passed, {
     now: kept.now,
     zone: kept.zone,
-    ...(kept.window !== undefined && { window: { from: kept.window.from, to: kept.window.to } }),
+    ...(window !== undefined && {
+      window: {
+        from: window.from,
+        to: window.to,
+        ...(window.endpoint !== undefined && { endpoint: window.endpoint }),
+      },
+    }),
   });
   if (change === undefined) return undefined;
   return {
@@ -159,6 +166,7 @@ const personOf = (w: TurnWindow): PersonWindow => ({
   to: w.range.to,
   source: w.source,
   ...(w.mention !== undefined && { mention: w.mention }),
+  ...(w.endpoint !== undefined && { endpoint: w.endpoint }),
 });
 
 /** The `call-window` row for one call's decision (`bind.ts` · `callWindowOf`). */

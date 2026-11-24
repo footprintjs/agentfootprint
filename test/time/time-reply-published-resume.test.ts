@@ -233,14 +233,16 @@ describe('actual published 14.1.1 time request -> current native resume', () => 
     expect(resumed.completed).toBe(1);
     expect(resumed.seen).toEqual([ORIGINAL_EFFECT]);
     expect(resumed.requests).toHaveLength(1); // Only the scripted final answer after the tool.
-    expect(resumed.findings.filter((row) => row.kind === 'time-answer')).toEqual([
-      expect.objectContaining({ zone: 'UTC', how: 'confirmed' }),
+    const answers = resumed.findings.filter((row) => row.kind === 'time-answer');
+    expect(answers).toEqual([
+      expect.objectContaining({ zone: 'UTC', how: 'confirmed', to: '2026-11-06T18:01:00.001Z' }),
     ]);
+    expect(answers[0]).not.toHaveProperty('endpoint');
     expect(resumed.findings.filter((row) => row.kind === 'time-reply')).toEqual([]);
     expect(hash(readFileSync(PAUSE))).toBe(PAUSE_SHA);
   });
 
-  it('keeps the fresh range field byte-for-byte apart from required, adding only the optional sibling', () => {
+  it('offers the exact end on a fresh range field with an optional correction sibling', () => {
     const current = run('fresh');
     expect(current.before).toEqual({ toolEffects: 0, providerRequests: 0 });
     expect(current.completed).toBe(0);
@@ -248,7 +250,12 @@ describe('actual published 14.1.1 time request -> current native resume', () => 
     expect(current.requests).toHaveLength(1);
     const fields = current.awaitingInput?.fields;
     expect(fields).toHaveLength(2);
-    expect(fields?.[0]).toEqual({ ...manifest.rangeField, required: false });
+    expect(fields?.[0]).toEqual({
+      ...manifest.rangeField,
+      required: false,
+      enum: ['2026-11-06T16:01:00Z/2026-11-06T18:01:00Z'],
+      labels: [expect.stringContaining('6:01')],
+    });
     expect(fields?.[1]).toEqual({
       id: `${manifest.rangeField.id}-correction`,
       type: 'string',

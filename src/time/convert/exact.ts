@@ -1,10 +1,37 @@
 import type { ConvertContext, WindowToConvert } from '../convert.js';
-import { needsZone, type PeriodForm } from '../periodForm.js';
+import { needsZone, type BoundAs, type PeriodForm } from '../periodForm.js';
 import { wallAt, type ZoneName } from '../zone.js';
 import { formZone, writeBound } from './bounds.js';
 import { midnightOf, nextDay, spellDate } from './calendar.js';
 import { absoluteOf } from './instants.js';
 import { lookbackInto } from './lookback.js';
+import { adjacentInstant } from '../windowEndpoint.js';
+import { instantOf, spellInstant, type InstantText } from '../instant.js';
+
+const isAbsoluteBound = (as: BoundAs): boolean =>
+  as === 'iso' || as === 'epoch-ms' || as === 'epoch-s';
+
+function writeIso(value: InstantText | undefined, utc: boolean) {
+  if (value === undefined) return undefined;
+  const at = instantOf(value, 'strict');
+  if (at === undefined) return undefined;
+  const text = utc ? spellInstant(at, 0) : value;
+  return text === undefined ? undefined : { value: text, rounded: false };
+}
+
+/** A form that can carry both absolute bounds of a frozen look-back. */
+function supportsFrozenLookback(form: PeriodForm): boolean {
+  switch (form.kind) {
+    case 'bounds':
+      return isAbsoluteBound(form.from.as) && isAbsoluteBound(form.to.as);
+    case 'joined':
+    case 'object':
+      return isAbsoluteBound(form.as);
+    case 'day':
+    case 'lookback':
+      return false;
+  }
+}
 
 /** One form's exact values for a window, or `undefined` when the form does not hold it exactly. */
 function convertOne(
@@ -23,9 +50,9 @@ function convertOne(
   const zoneValue: Record<string, unknown> =
     'zone' in form && form.zone !== undefined ? { [form.zone.argument]: ctx.zone } : {};
   const span = absoluteOf(window, ctx.now);
-  if (span === undefined) return undefined;
-  const [from, to] = span;
   if (form.kind === 'day') {
+    if (span === undefined) return undefined;
+    const [from, to] = span;
     const z = zone as ZoneName;
     const wall = wallAt(z, from.ms);
     const date = { year: wall.year, month: wall.month, day: wall.day };
@@ -41,8 +68,19 @@ function convertOne(
       : form.kind === 'bounds'
       ? form.to.edge
       : form.edge;
-  const a = writeBound(from, 'from', fromAs, 'inclusive', zone);
-  const b = writeBound(to, 'to', toAs, edge, zone);
+  const exactIso = window.endpoint !== undefined && fromAs === 'iso' && toAs === 'iso';
+  let a: ReturnType<typeof writeBound>;
+  let b: ReturnType<typeof writeBound>;
+  if (exactIso) {
+    const utc = window.freezeLookback === true;
+    const cutoff = edge === 'exclusive' ? window.range.to : adjacentInstant(window.range.to, -1);
+    a = writeIso(window.range.from, utc);
+    b = writeIso(cutoff, utc);
+  } else {
+    if (span === undefined) return undefined;
+    a = writeBound(span[0], 'from', fromAs, 'inclusive', zone);
+    b = writeBound(span[1], 'to', toAs, edge, zone);
+  }
   if (a === undefined || b === undefined) return undefined;
   const rounded = a.rounded || b.rounded;
   switch (form.kind) {
@@ -67,4 +105,4 @@ function convertOne(
   }
 }
 
-export { convertOne };
+export { convertOne, supportsFrozenLookback };

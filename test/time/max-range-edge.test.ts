@@ -191,13 +191,35 @@ const last24h: TimeReader = {
       : { mentions: [] },
 };
 
-function agentWith(args: object, seen: Record<string, unknown>[]) {
+function agentWith(args: object, seen: Record<string, unknown>[], acceptsBounds = false) {
+  const period = acceptsBounds
+    ? {
+        maxRange: '24h' as const,
+        forms: [
+          { kind: 'lookback', argument: 'window', signed: false },
+          {
+            kind: 'bounds',
+            from: { argument: 'from', as: 'iso' },
+            to: { argument: 'to', as: 'iso', edge: 'exclusive' },
+          },
+        ] as const,
+      }
+    : ({ argument: 'window', spelling: 'lookback', maxRange: '24h' } as never);
   const tool = defineTool({
     name: 'search_logs',
     description: 'Error lines over a look-back window.',
-    inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
-    askOrAssume: { window: { assume: '1h' } },
-    period: { argument: 'window', spelling: 'lookback', maxRange: '24h' } as never,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        window: { type: 'string' },
+        ...(acceptsBounds && { from: { type: 'string' }, to: { type: 'string' } }),
+      },
+    },
+    askOrAssume: {
+      window: { assume: '1h' },
+      ...(acceptsBounds && { from: { ask: 'From when?' }, to: { ask: 'Until when?' } }),
+    },
+    period,
     execute: (a) => {
       seen.push({ ...a });
       return 'no errors';
@@ -240,9 +262,9 @@ describe('integration — a .time() agent, a look-back tool declaring maxRange 2
     expect(callWindow(over)).toMatchObject({ how: 'refused', refused: 'over-max-range' });
   });
 
-  it("the person's 'last 24 hours' is asked, then read — never refused", async () => {
+  it("the person's frozen 'last 24 hours' is asked, then read at the exact absolute form limit", async () => {
     const seen: Record<string, unknown>[] = [];
-    const agent = agentWith({}, seen);
+    const agent = agentWith({}, seen, true);
     const first = await agent.run({
       message: 'any errors in the last 24 hours?',
       time: { now: NOW },
@@ -257,7 +279,7 @@ describe('integration — a .time() agent, a look-back tool declaring maxRange 2
       p.checkpoint as never,
       { requestId: p.awaitingInput.requestId, values: { [field.id]: field.enum![0] } } as never,
     );
-    expect(seen).toEqual([{ window: '1d' }]);
-    expect(callWindow(agent)).toMatchObject({ how: 'filled', form: 0 });
+    expect(seen).toEqual([{ from: '2026-10-08T15:40:00Z', to: NOW }]);
+    expect(callWindow(agent)).toMatchObject({ how: 'filled', form: 1 });
   });
 });

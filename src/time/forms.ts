@@ -46,6 +46,7 @@
 import { clockSpellings, pad2, Spellings, timeFormsOfText, type TimeForms } from './textForms.js';
 import { turnWindowsOf, type TurnWindow } from './windows.js';
 import { instantOf, spellInstant } from './instant.js';
+import { sameRange } from './range.js';
 import {
   resolveMention,
   widenedGrain,
@@ -259,8 +260,6 @@ function writtenReadingOf(
   if (row.reader.kind !== 'rule' || row.parses === undefined || row.parses.length === 0) {
     return undefined;
   }
-  const from = instantMs(window.range.from);
-  const to = instantMs(window.range.to);
   try {
     const parses = withZoneAnswered(row.parses, window.zone);
     // Under an unknown clock zone (G15) the words were read in the zone the person answered —
@@ -268,11 +267,38 @@ function writtenReadingOf(
     const read: ResolveClock =
       clock.zoneSource === 'unknown' ? { now: clock.now, zone: window.zone } : clock;
     const { candidates } = resolveMention(parses, read, row.reader, false);
-    return candidates.find((c) => instantMs(c.range.from) === from && instantMs(c.range.to) === to);
+    const exact = candidates.find((c) => sameRange(c.range, window.range));
+    if (exact !== undefined || window.endpoint !== undefined) return exact;
+    return historicalReading(candidates, window);
   } catch {
     // A record the resolver cannot read names no parts: nothing is the person's.
     return undefined;
   }
+}
+
+/** Match only the old widening that the saved row actually records. */
+function historicalReading(
+  candidates: readonly TimeCandidate[],
+  window: TurnWindow,
+): TimeCandidate | undefined {
+  const from = instantMs(window.range.from);
+  const to = instantMs(window.range.to);
+  for (const candidate of candidates) {
+    if (to === undefined || instantMs(candidate.range.from) !== from) continue;
+    const cutoff = instantMs(candidate.range.to);
+    const precision = candidate.endpoint?.precision;
+    if (cutoff === undefined) continue;
+    if (candidate.window.kind === 'lookback' && cutoff + 1 === to) return candidate;
+    const step = precision === 'minute' ? 60_000 : precision === 'second' ? 1_000 : undefined;
+    if (step !== undefined && cutoff + step === to) {
+      return {
+        ...candidate,
+        grain: precision as 'minute' | 'second',
+        notes: [...candidate.notes, { kind: 'end-of-grain' }],
+      };
+    }
+  }
+  return undefined;
 }
 
 // ─── One recorded window ───────────────────────────────────────────────────
