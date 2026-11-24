@@ -154,7 +154,12 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
                 : {
                     ...(answerLayer.sourceNotConsulted === true && { sourceNotConsulted: true }),
                     ...(answerLayer.standingLine !== undefined && {
-                      standingLine: { when: answerLayer.standingLine },
+                      standingLine: {
+                        when: answerLayer.standingLine,
+                        ...(answerLayer.standingLineRaiseOn !== undefined && {
+                          raiseOn: answerLayer.standingLineRaiseOn,
+                        }),
+                      },
                     }),
                   },
           }),

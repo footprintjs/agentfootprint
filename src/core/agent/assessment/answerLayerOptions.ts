@@ -1,13 +1,23 @@
 import type { StandingLineWhen } from './compose.js';
+import { REASONS } from './reasons.js';
+import type { AssessmentReason } from './types.js';
 
-export type AnswerLayerArm = {
+export interface AnswerLayerArm {
+  /** `standingLine: true` resolves to `'always'`. Absent leaves the line off. */
   readonly standingLine?: StandingLineWhen;
+  readonly standingLineRaiseOn?: readonly AssessmentReason[];
   readonly sourceNotConsulted?: true;
-};
+}
 export type AnswerLayerOptions =
   | boolean
   | {
-      readonly standingLine?: boolean | { readonly when: StandingLineWhen };
+      readonly standingLine?:
+        | boolean
+        | {
+            readonly when: StandingLineWhen;
+            /** Which recorded reasons can trigger a not-sure line. A match shows the full line. */
+            readonly raiseOn?: readonly AssessmentReason[];
+          };
       /** Report a declared source the model was offered and did not attempt. Default off. */
       readonly sourceNotConsulted?: boolean;
     };
@@ -24,13 +34,37 @@ const STANDING_LINE_MODES: { readonly [W in StandingLineWhen]: true } = Object.f
   'not-sure-or-ask': true,
 });
 
+const REASON_IDS: ReadonlySet<string> = new Set(REASONS.map(({ reason }) => reason));
+
+function raiseOnReasons(value: unknown, door: string): readonly AssessmentReason[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${door}: standingLine.raiseOn must be an array of known assessment reasons.`);
+  }
+  const length = value.length;
+  if (!Number.isSafeInteger(length) || length < 0 || length > REASON_IDS.size) {
+    throw new Error(`${door}: standingLine.raiseOn exceeds the bounds of the reason table.`);
+  }
+  const reasons: AssessmentReason[] = [];
+  for (let index = 0; index < length; index++) {
+    const reason: unknown = value[index];
+    if (typeof reason !== 'string' || !REASON_IDS.has(reason)) {
+      throw new Error(
+        `${door}: standingLine.raiseOn[${index}] must name a known assessment reason.`,
+      );
+    }
+    reasons.push(reason as AssessmentReason);
+  }
+  return Object.freeze(reasons);
+}
+
 /**
  * THE ANSWER LAYER'S ARM (honesty layer 4), checked by ONE rule for both of
  * its doors — `.answerLayer(options)` and `AgentOptions.answerLayer` — so a
  * value one door refuses, the other refuses too: an unknown key, a
- * `standingLine` that is neither a boolean nor `{ when }`, or a `when` outside
- * the three modes, is refused by name. The choice check is armed only by
- * `sourceNotConsulted: true`.
+ * `standingLine` that is neither a boolean nor `{ when, raiseOn? }`, or a
+ * `when` outside the three modes, is refused by name. `standingLine: true`
+ * resolves to `'always'`. Only `sourceNotConsulted: true` enables the choice
+ * check, independently of the line's mode or reason filter.
  */
 export function answerLayerArm(
   options: Readonly<Record<string, unknown>>,
@@ -43,7 +77,7 @@ export function answerLayerArm(
     throw new Error(
       `${door}: unknown option(s) ${unknown.map((k) => `'${k}'`).join(', ')}. ` +
         'Expected sourceNotConsulted (boolean) or standingLine (boolean, or ' +
-        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask' }).",
+        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask', raiseOn?: AssessmentReason[] }).",
     );
   }
   const choice = options.sourceNotConsulted;
@@ -62,11 +96,11 @@ export function answerLayerArm(
       `${door}: standingLine must be a boolean or { when } — when is one of ${modes}.`,
     );
   }
-  const extra = Object.keys(line).filter((k) => k !== 'when');
+  const extra = Object.keys(line).filter((k) => k !== 'when' && k !== 'raiseOn');
   if (extra.length > 0) {
     throw new Error(
       `${door}: standingLine has unknown option(s) ${extra.map((k) => `'${k}'`).join(', ')}. ` +
-        `The one option is when: ${modes}.`,
+        `The options are when: ${modes} and optional raiseOn.`,
     );
   }
   const when = (line as { readonly when?: unknown }).when;
@@ -80,7 +114,12 @@ export function answerLayerArm(
       }).`,
     );
   }
-  return { ...choiceArm, standingLine: when as StandingLineWhen };
+  const raiseOn = (line as { readonly raiseOn?: unknown }).raiseOn;
+  return {
+    ...choiceArm,
+    standingLine: when as StandingLineWhen,
+    ...(raiseOn !== undefined && { standingLineRaiseOn: raiseOnReasons(raiseOn, door) }),
+  };
 }
 
 /**
@@ -96,7 +135,7 @@ export function answerLayerFromOptions(value: unknown): AnswerLayerArm | false |
     throw new Error(
       'AgentOptions.answerLayer must be a boolean or an object — ' +
         '{ sourceNotConsulted?: boolean, standingLine?: boolean | ' +
-        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } }.",
+        "{ when: 'always' | 'unless-consistent' | 'not-sure-or-ask', raiseOn?: AssessmentReason[] } }.",
     );
   }
   return answerLayerArm(value as Readonly<Record<string, unknown>>, 'AgentOptions.answerLayer');

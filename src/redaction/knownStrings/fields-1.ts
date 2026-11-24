@@ -257,6 +257,7 @@ export const fields1 = {
   staleSince: true,
   standing: true,
   standingLineNames: true,
+  standingLineOmittedByRaiseOn: true,
   standings: true,
   start: true,
   startsWith: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   tenantChanged: true,
   terminatedBy: true,
   text: true,
-  thinking: true,
 } as const;

@@ -3,6 +3,7 @@ import { Agent } from '../../../Agent.js';
 import { composedInput } from '../../../messageFrom.js';
 import type { AgentOptions } from '../../types.js';
 import { mock } from '../../../../adapters/llm/MockProvider.js';
+import { getAgentRuntime } from '../native/host.js';
 
 const voice = { appName: 'declared actor', commentaryTemplates: {}, thinkingTemplates: {} };
 const options = (): AgentOptions => ({ provider: mock({ reply: 'ok' }), model: 'mock' });
@@ -82,6 +83,22 @@ describe('resolved Agent construction', () => {
     expect(() =>
       Agent.create({ ...options(), answerLayer: { sourceNotConsulted: 'yes' } as never }).build(),
     ).toThrow(/sourceNotConsulted must be a boolean/);
+  });
+
+  it('keeps skip-source warnings and selective standing together in the native configuration', () => {
+    const answerLayer = {
+      sourceNotConsulted: true,
+      standingLine: { when: 'not-sure-or-ask', raiseOn: ['source-not-consulted'] },
+    } as const;
+    const viaBuilder = Agent.create(options()).answerLayer(answerLayer).build();
+    const viaOptions = Agent.create({ ...options(), answerLayer }).build();
+    for (const agent of [viaBuilder, viaOptions]) {
+      expect(getAgentRuntime(agent).configuration.answerLayerOption).toEqual({
+        sourceNotConsulted: true,
+        standingLine: 'not-sure-or-ask',
+        standingLineRaiseOn: ['source-not-consulted'],
+      });
+    }
   });
 
   it('uses the original runner identity in native run metadata', async () => {

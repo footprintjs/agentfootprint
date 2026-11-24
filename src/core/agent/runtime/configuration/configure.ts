@@ -254,7 +254,11 @@ export function configureAgent(
       ...(sourceNotConsulted && { sourceNotConsulted: true }),
       ...(line === true
         ? { standingLine: 'always' }
-        : typeof line === 'object' && line !== null && { standingLine: line.when }),
+        : typeof line === 'object' &&
+          line !== null && {
+            standingLine: line.when,
+            ...(line.raiseOn !== undefined && { standingLineRaiseOn: line.raiseOn }),
+          }),
     };
     if (sourceNotConsulted) readsMessageFrom(runner);
   }

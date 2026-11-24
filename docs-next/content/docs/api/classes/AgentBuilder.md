@@ -153,25 +153,7 @@ assessed".
 
 ##### options?
 
-`false` \| \{ `sourceNotConsulted?`: `boolean`; `standingLine?`: `boolean` \| \{ `when`: `StandingLineWhen`; \}; \}
-
-`false`
-
-***
-
-###### Type Literal
-
-\{ `sourceNotConsulted?`: `boolean`; `standingLine?`: `boolean` \| \{ `when`: `StandingLineWhen`; \}; \}
-
-###### sourceNotConsulted?
-
-`boolean`
-
-Report a declared source the model was offered and did not attempt. Default off.
-
-###### standingLine?
-
-`boolean` \| \{ `when`: `StandingLineWhen`; \}
+`false` \| \{ `standingLine?`: `boolean` \| \{ `raiseOn?`: readonly `AssessmentReason`[]; `when`: `StandingLineWhen`; \}; \}
 
 #### Returns
 

@@ -113,6 +113,7 @@ async function exercise({
   wire = undefined,
   call = 'status',
   sourceNotConsulted = true,
+  raiseOn = undefined,
   linked = true,
   suggests = false,
   hidden = false,
@@ -125,6 +126,7 @@ async function exercise({
   wire?: readonly string[];
   call?: string;
   sourceNotConsulted?: boolean;
+  raiseOn?: readonly (typeof reason)[];
   linked?: boolean;
   suggests?: boolean;
   hidden?: boolean;
@@ -167,7 +169,10 @@ async function exercise({
         return 'Known result.';
       }),
     )
-    .answerLayer({ sourceNotConsulted, standingLine: { when: 'not-sure-or-ask' } });
+    .answerLayer({
+      sourceNotConsulted,
+      standingLine: { when: 'not-sure-or-ask', ...(raiseOn !== undefined && { raiseOn }) },
+    });
   if (linked) agentBuilder.ontology(map(hidden));
   if (hidden) {
     agentBuilder.skill(
@@ -198,13 +203,18 @@ async function exercise({
         ? 'Give the link observation.'
         : 'Is the switch reachable?',
     });
-    const recorded = JSON.parse(JSON.stringify(recorder.toRecording()));
+    const recording = recorder.toRecording();
+    const turnEnd = recording.events.find(
+      (event) => event.type === 'agentfootprint.agent.turn_end',
+    );
+    const recorded = JSON.parse(JSON.stringify(recording));
     const saved = assessAnswer(recorded);
     expect(await agent.assessment()).toEqual(saved);
     return {
       answer,
       choice: saved.reasons.filter((row) => row.reason === reason),
       sourceConsultation: recorded.snapshot.sharedState.sourceConsultation,
+      standingLineOmittedByRaiseOn: turnEnd?.payload.standingLineOmittedByRaiseOn,
     };
   } finally {
     recorder.stop();
@@ -248,6 +258,20 @@ describe('declared sources skipped in a native turn', () => {
       expect(result.choice).toEqual([]);
     },
   );
+
+  it('keeps skipped-source evidence when a reason filter hides its warning', async () => {
+    const baseline = await exercise({ wire: manifest });
+    const selected = await exercise({ wire: manifest, raiseOn: [reason] });
+    const suppressed = await exercise({ wire: manifest, raiseOn: [] });
+
+    expect(baseline.answer).toContain('link monitor');
+    expect(selected).toEqual(baseline);
+    expect(suppressed).toEqual({
+      ...baseline,
+      answer: ANSWER,
+      standingLineOmittedByRaiseOn: true,
+    });
+  });
 
   it('keeps the unarmed output and the state key unchanged', async () => {
     const result = await exercise({ wire: manifest, sourceNotConsulted: false });
