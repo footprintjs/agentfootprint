@@ -1,6 +1,7 @@
 /** Capture foreign intervention evidence once before any downstream observer can re-read it. */
 import type { LLMChunk, LLMResponse } from './types.js';
 import { providerInterventionOf } from './intervention.js';
+import { carryCitationResponse } from './citationResponse.js';
 
 function ownValue(value: unknown, key: string): unknown {
   if (value === null || typeof value !== 'object') return undefined;
@@ -76,7 +77,8 @@ export function captureProviderResponse(response: LLMResponse): LLMResponse {
     const value = ownValue(response, key);
     if (value !== undefined) captured[key] = value;
   }
-  return Object.freeze(captured) as unknown as LLMResponse;
+  const owned = Object.freeze(captured) as unknown as LLMResponse;
+  return carryCitationResponse(response, owned);
 }
 
 /** Pin a terminal response before any wrapper decorates its foreign chunk. */

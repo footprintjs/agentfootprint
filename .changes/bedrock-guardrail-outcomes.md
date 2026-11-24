@@ -7,3 +7,5 @@ type: added
 An assessment outside the admitted streaming sequence cannot be discarded to authorize later output. Resilience wrappers and direct native accounting capture completed interventions before unrelated response decoration, pricing or recording; withheld completions retain their marker. Hosted protocol failures preserve the distinction between actual typed provider refusals and application errors that merely carry the same code.
 
 A recovery or circuit-transition callback that throws after a completed blocked or unknown response preserves that terminal disposition, with the original callback fault as its cause. The callback cannot turn the completed refusal into another retry or fallback request.
+
+Usable masked responses preserve the accepting request’s citation proof through owned response copies when answer bytes are unchanged. Terminal blocked or unknown outcomes still stop before citation acceptance.
