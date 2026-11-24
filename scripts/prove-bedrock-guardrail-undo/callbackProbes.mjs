@@ -128,7 +128,7 @@ export function callbackProbes({ assertion, callbackTests }) {
           file: callbackTests,
           fullName: 'ordinary recovered stream ignores an unavailable response descriptor',
           status: 'failed',
-          failurePattern: 'called once',
+          failurePattern: 'optional descriptor unavailable to be undefined',
         },
         assertion(
           callbackTests,
