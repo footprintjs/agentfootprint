@@ -237,6 +237,8 @@ export interface AgentContext extends AgentMethods {
   readonly configuration: AgentConfiguration;
   readonly ownTurnMethods: Readonly<Record<'run' | 'resume', unknown>>;
   inputsLayerArmed: boolean;
+  /** The existing dispatch catalog when its tool names are known before the run. */
+  comparisonCatalog?: { has(name: string): boolean };
   resultsLayerArmed: boolean;
   ontologyTools?: Readonly<Record<string, readonly string[]>>;
   integrityDanglingPresent: boolean;

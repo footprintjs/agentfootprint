@@ -22,7 +22,12 @@ export interface CatalogEnvironment {
 export function buildCatalog(
   this: Pick<
     AgentContext,
-    'configuration' | 'inputsLayerArmed' | 'ontologyTools' | 'resultsLayerArmed' | 'runner'
+    | 'comparisonCatalog'
+    | 'configuration'
+    | 'inputsLayerArmed'
+    | 'ontologyTools'
+    | 'resultsLayerArmed'
+    | 'runner'
   >,
   environment: CatalogEnvironment,
 ) {
@@ -50,6 +55,12 @@ export function buildCatalog(
         ...(this.configuration.argumentSourcesArmed === true && { argumentSources: true as const }),
       },
     );
+  if (
+    this.configuration.timeOptions !== undefined &&
+    this.configuration.externalToolProvider === undefined
+  ) {
+    this.comparisonCatalog = registryByName;
+  }
   if ([...registryByName.values()].some(carriesArgumentView)) declarePrivateFields(this.runner);
   // The declared ontology's tool edges (9.106.0): every name a node's `via`
   // names must be a tool this registry can dispatch — the static registry,

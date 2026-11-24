@@ -45,6 +45,7 @@ import type { AgentOutput } from '../../types.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
 import { requestOf } from '../../../requestOfRun.js';
 import { withoutTime } from '../../run/withoutTime.js';
+import { assertComparisonResume } from '../../run/clocks.js';
 import { resumeRedactionOf } from '../../run/resumeRedaction.js';
 import type { AgentContext } from '../contracts.js';
 import {
@@ -112,6 +113,7 @@ export async function resumeLeg(
   const citationsEnabled = this.configuration.citationOptions !== undefined;
   checkpoint = resumeCitationCheckpoint(checkpoint, citationsEnabled);
   const state = resumeStateOf(checkpoint);
+  assertComparisonResume(state, this.configuration.timeOptions);
   const sourceDeclarationCorrection = sourceDeclarationCorrectionOf(
     checkpoint.sharedState,
     'sourceDeclarationCorrectionSpent',

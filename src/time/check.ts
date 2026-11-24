@@ -118,6 +118,8 @@ export interface PeriodTimeCheck {
 
 /** What one call's check reads — every field off a row or a declaration. */
 export interface PeriodCheckInput {
+  /** Compare only the declaration to the fixed, exact comparison interval. */
+  readonly comparison?: true;
   /** The call's `call-window` row — absent when the tool declares no forms. */
   readonly window?: Pick<
     CallWindowRow,
@@ -299,6 +301,7 @@ function readOf(input: PeriodCheckInput, exactEnd?: InstantText): ReadOf | undef
     }
   }
   const window = input.window;
+  if (input.comparison === true) return undefined;
   if (window === undefined || window.how === 'refused') return undefined;
   if (window.sent !== undefined && window.trimmedByTool !== true) {
     return { read: [window.sent], source: 'sent' };
@@ -330,7 +333,7 @@ function differsOf(input: PeriodCheckInput): PeriodDiffers | undefined {
   const reference = referenceOf(input.window);
   if (reference === undefined) return undefined;
   const endpoint = input.window?.person?.endpoint;
-  const exact = endpoint !== undefined;
+  const exact = endpoint !== undefined || input.comparison === true;
   const found = readOf(input, exact ? reference.asked.to : undefined);
   if (found === undefined) return undefined;
   // Within the step the look-back IS the asked range (§ 7.4) — then judged like one.
@@ -380,7 +383,10 @@ function retentionOf(input: PeriodCheckInput): 'beyond' | 'partly' | undefined {
  */
 export function periodTimeCheck(input: PeriodCheckInput): PeriodTimeCheck | undefined {
   const differs = differsOf(input);
-  const shifted = input.drift?.outcome === 'shifted' ? { byMs: input.drift.byMs } : undefined;
+  const shifted =
+    input.comparison !== true && input.drift?.outcome === 'shifted'
+      ? { byMs: input.drift.byMs }
+      : undefined;
   const retention = retentionOf(input);
   if (differs === undefined && shifted === undefined && retention === undefined) return undefined;
   return {

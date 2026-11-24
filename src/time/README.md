@@ -8,6 +8,19 @@ duration or a zone, or splits or joins a range.
 The one grammar prevents result, argument and dataset time readers from drifting. The
 design is [docs/design/time/](../../docs/design/time/README.md). See [clock dispatch cost](clock-cost.md).
 
+## One window for a comparison
+
+A host that selects two or more named sources for one interval can pass their tool names
+in `time.comparison.tools`. With `.time()` enabled, supply a confirmed `time.window`
+or let the agent ask the person for one. The same confirmed interval applies to those
+sources throughout the turn, including after resume.
+
+The agent uses the tools' declared period forms to supply exact arguments and keeps
+each correction on the call's record. Before invoking a source, it checks that the final
+arguments still carry just that interval. If a declared form cannot hold the interval,
+the agent asks whether to continue without the source. Returned coverage comes from each
+source's admitted period declaration. Calls outside the selection keep their ordinary behavior.
+
 It is a leaf: it imports nothing outside itself, and `readers/` imports only the port (pinned by
 `test/time/byte-identity-rows.test.ts` and `english-reader.test.ts`).
 

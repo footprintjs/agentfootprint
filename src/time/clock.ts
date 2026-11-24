@@ -2,7 +2,7 @@
  * time/clock — the run clock: a declared, recorded input, never a hidden read.
  *
  * Pattern: normalize-or-refuse at a boundary (`core/runInput.ts`'s shape): the
- *          app's `.time({ zone })` and the run's `time: { now, zone, window }`
+ *          app's `.time({ zone })` and the run's `time: { now, zone, window, comparison }`
  *          are read here into one {@link TimeClock}, or refused by name.
  * Role:    L0 leaf (the time layer's one owner). Imports `instant.ts`,
  *          `zone.ts`, `range.ts`, `reader.ts` (the reader's check) and
@@ -51,6 +51,7 @@ import { isZoneName, type ZoneName } from './zone.js';
 import { readerIssue, type TimeReader } from './reader.js';
 import { readPolicy, type TimePolicy } from './resolveRecord.js';
 import { readTimeAskMessages, type TimeAskMessages } from './ask.js';
+import { comparisonIntentOf, type ComparisonIntent } from './comparisonIntent.js';
 
 // ─── The shapes ─────────────────────────────────────────────────────────
 
@@ -72,6 +73,8 @@ export interface TimeClock {
    * (`'answered'`), else `'unknown'` (G15).
    */
   readonly zoneSource: 'run' | 'builder' | 'answered' | 'unknown';
+  /** The host's closed set of sources for a single confirmed comparison interval. */
+  readonly comparison?: ComparisonIntent;
 }
 
 /**
@@ -106,6 +109,12 @@ export interface RunTime {
    * Optional `precision` keeps the displayed precision even when the ISO spelling is padded.
    */
   readonly window?: ControlWindowInput;
+  /**
+   * Require the named tools to use the same confirmed interval for this turn.
+   * Pass 2 to 256 distinct admitted tool names. Supply the interval with
+   * `window` or confirm it through the time ask.
+   */
+  readonly comparison?: ComparisonIntent;
 }
 
 /** The builder's `.time(options)` — the fallback zone, the reader and its policy (time design § 11). */
@@ -146,6 +155,7 @@ export interface ReadRunTime {
   readonly now?: InstantText;
   readonly zone?: ZoneName;
   readonly window?: RecordedWindow;
+  readonly comparison?: ComparisonIntent;
 }
 
 /** {@link TimeOptions} as read — the policy's defaults filled in when a reader is armed. */
@@ -164,6 +174,7 @@ export interface ClockDraft {
   /** `'unknown'`: neither the run nor the builder named a zone — `zone` is the UTC spelling. */
   readonly zoneSource: 'run' | 'builder' | 'unknown';
   readonly window?: RecordedWindow;
+  readonly comparison?: ComparisonIntent;
 }
 
 /** A read answer: the value, or a problem named in words. */
@@ -171,7 +182,8 @@ export type Read<T> = { readonly value: T } | { readonly problem: string };
 
 // ─── Reading the two inputs ──────────────────────────────────────────────
 
-const RUN_KEYS: readonly string[] = ['now', 'zone', 'window'];
+const RUN_KEYS: readonly string[] = ['now', 'zone', 'window', 'comparison'];
+const RUN_SHAPE = '{ now?, zone?, window?, comparison? }';
 const OPTION_KEYS: readonly string[] = ['zone', 'reader', 'policy', 'messages'];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -220,16 +232,15 @@ function readNow(value: unknown): Read<InstantText> {
  * The run's `time` input, checked. `undefined` reads as "nothing passed".
  * Refused, by name: a non-object, an unknown key, a zone that is not an IANA
  * name, a `now` that is not an instant with a zone, a `window` that is not two
- * strict instants with `from` before `to`.
+ * strict instants with `from` before `to`, or a malformed comparison scope.
  */
 export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
   if (value === undefined) return { value: undefined };
-  if (!isPlainObject(value))
-    return { problem: 'time must be an object — { now?, zone?, window? }' };
+  if (!isPlainObject(value)) return { problem: `time must be an object — ${RUN_SHAPE}` };
   const extra = unknownKeys(value, RUN_KEYS);
   if (extra.length > 0) {
     return {
-      problem: `time takes { now?, zone?, window? } only — unknown key ${extra
+      problem: `time takes ${RUN_SHAPE} only — unknown key ${extra
         .map((k) => `'${k}'`)
         .join(', ')}`,
     };
@@ -253,11 +264,21 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
         'time.window needs ISO 8601 from and to with offsets, a valid end policy and matching precision',
     };
   }
+  const property = Object.getOwnPropertyDescriptor(value, 'comparison');
+  const rawComparison = property?.value as unknown;
+  const comparison = comparisonIntentOf(rawComparison);
+  if (
+    property !== undefined &&
+    (!Object.hasOwn(property, 'value') || (rawComparison !== undefined && comparison === undefined))
+  ) {
+    return { problem: 'time.comparison needs { tools } with 2 to 256 distinct tool names' };
+  }
   return {
     value: {
       ...(now !== undefined && { now }),
       ...(zone !== undefined && { zone }),
       ...(window !== undefined && { window }),
+      ...(comparison !== undefined && { comparison }),
     },
   };
 }
@@ -331,6 +352,7 @@ export function draftClock(run: ReadRunTime | undefined, options: ReadTimeOption
     zone: zone ?? UNKNOWN_ZONE_SPELLING,
     zoneSource: run?.zone !== undefined ? 'run' : zone !== undefined ? 'builder' : 'unknown',
     ...(run?.window !== undefined && { window: run.window }),
+    ...(run?.comparison !== undefined && { comparison: run.comparison }),
   };
 }
 
@@ -355,6 +377,7 @@ export function completeClock(
     nowSource: draft.now !== undefined ? 'app' : 'default',
     zone: answered ?? draft.zone,
     zoneSource: answered !== undefined ? 'answered' : draft.zoneSource,
+    ...(draft.comparison !== undefined && { comparison: draft.comparison }),
   };
 }
 
@@ -365,6 +388,7 @@ export interface ClockChange {
     readonly now: InstantText;
     readonly zone: ZoneName;
     readonly window?: RecordedWindow;
+    readonly comparison?: ComparisonIntent;
   };
 }
 
@@ -382,7 +406,7 @@ export interface ClockChange {
  */
 export function clockChange(
   passed: ReadRunTime,
-  kept: { readonly now: InstantText; readonly zone: ZoneName; readonly window?: RecordedWindow },
+  kept: ClockChange['kept'],
 ): ClockChange | undefined {
   const nowDiffers = passed.now !== undefined && passed.now !== kept.now;
   const zoneDiffers = passed.zone !== undefined && passed.zone !== kept.zone;
@@ -395,13 +419,20 @@ export function clockChange(
         (passed.window.endpoint?.cutoff !== kept.window.endpoint.cutoff ||
           passed.window.endpoint?.end !== kept.window.endpoint.end ||
           passed.window.endpoint?.precision !== kept.window.endpoint.precision)));
-  if (!nowDiffers && !zoneDiffers && !windowDiffers) return undefined;
+  const comparisonDiffers =
+    passed.comparison !== undefined &&
+    (kept.comparison === undefined ||
+      passed.comparison.tools.length !== kept.comparison.tools.length ||
+      new Set([...passed.comparison.tools, ...kept.comparison.tools]).size !==
+        kept.comparison.tools.length);
+  if (!nowDiffers && !zoneDiffers && !windowDiffers && !comparisonDiffers) return undefined;
   return {
     passed,
     kept: {
       now: kept.now,
       zone: kept.zone,
       ...(kept.window !== undefined && { window: kept.window }),
+      ...(kept.comparison !== undefined && { comparison: kept.comparison }),
     },
   };
 }

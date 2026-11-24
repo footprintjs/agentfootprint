@@ -99,6 +99,8 @@ export interface TimeInputs {
   readonly readings: readonly TimeReadingRow[];
   /** Absent on a checkpoint an earlier version paused: no answer was filed then. */
   readonly answers?: readonly TimeAnswerRow[];
+  readonly comparisonAnswers?: readonly TimeAnswerRow[];
+  readonly comparisonBoundWindow?: import('../../../time/windows.js').TurnWindow;
 }
 
 /** The subflow's own state — inputs frozen by the mount, then one key per stage. */
@@ -236,12 +238,22 @@ function timeArmOf(
       clock: inputs.clock,
       readings: [...inputs.readings],
       answers: [...(inputs.answers ?? [])],
+      comparisonAnswers: inputs.comparisonAnswers,
+      comparisonBoundWindow: inputs.comparisonBoundWindow,
     }),
   ) as TimeInputs;
   return {
     turn: turnWindowsOf(plain.readings, plain.clock, plain.answers),
     now: plain.clock.now,
     zone: plain.clock.zone,
+    ...(plain.comparisonAnswers !== undefined && {
+      comparison: {
+        clock: plain.clock,
+        currentTurn: plain.clock.turn,
+        answers: plain.comparisonAnswers,
+        boundWindow: plain.comparisonBoundWindow,
+      },
+    }),
     ...(deps.time.appZone !== undefined && { appZone: deps.time.appZone }),
   };
 }

@@ -23,6 +23,7 @@ import {
   citationCheckpointOnResume,
 } from '../../citations/checkpoint.js';
 import { PendingQuestionError } from '../../../conversation.js';
+import { InvalidRunInputError } from '../../../runInput.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
 import { type ClockDraft, type ReadRunTime } from '../../../../time/clock.js';
 import type { AgentOutput, AgentState } from '../../types.js';
@@ -37,6 +38,7 @@ import {
   clockForSeed,
   readAgentTime,
   agentTimeAnswerContext,
+  assertComparisonResume,
 } from '../../run/clocks.js';
 import type { AgentContext } from '../contracts.js';
 
@@ -54,11 +56,28 @@ export function identityFor(
 }
 
 export function clockDraftFor(
-  this: Pick<AgentContext, 'configuration'>,
+  this: Pick<AgentContext, 'comparisonCatalog' | 'configuration' | 'inputsLayerArmed'>,
   time: unknown,
   runner: string,
 ): ClockDraft | undefined {
-  return draftAgentClock(time, runner, this.configuration.timeOptions);
+  const draft = draftAgentClock(time, runner, this.configuration.timeOptions);
+  const comparison = draft?.comparison;
+  if (comparison === undefined) return draft;
+  if (!this.inputsLayerArmed) {
+    throw new InvalidRunInputError({
+      runner,
+      received: 'time.comparison',
+      hint: 'time.comparison needs the inputs layer — register a tool with period rules or arm .inputsLayer()',
+    });
+  }
+  if (comparison.tools.some((name) => this.comparisonCatalog?.has(name) === false)) {
+    throw new InvalidRunInputError({
+      runner,
+      received: 'time.comparison',
+      hint: 'time.comparison.tools must name tools registered on this agent',
+    });
+  }
+  return draft;
 }
 
 export function seedClockDraft(
@@ -306,6 +325,7 @@ export function applyContinuation(
   appendsUserTurn: boolean,
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
+  if (!appendsUserTurn) assertComparisonResume(cp, this.configuration.timeOptions);
   const citations = citationCheckpointOnResume(
     cp,
     this.configuration.citationOptions !== undefined,

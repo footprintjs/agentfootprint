@@ -102,6 +102,7 @@ export interface PlannedPeriod {
   readonly argument?: string;
   /** Under `.time()` (step T8): what the time layer's result checks read besides the declared periods. */
   readonly time?: Omit<PeriodCheckInput, 'declared'>;
+  readonly comparison?: 'native' | 'unproved';
 }
 
 /** A judged call — the verdict and, under `.time()`, the time layer's checks that hold. */
@@ -114,6 +115,7 @@ export interface CheckedPeriod {
   readonly time?: PeriodTimeCheck;
   /** Under `.time()`: the source's held span, when it holds none or only part of the asked time. */
   readonly held?: HeldSpan;
+  readonly comparison?: true;
 }
 
 /**
@@ -126,6 +128,7 @@ export interface CallTime {
   readonly toolCallId: string;
   readonly window?: PeriodCheckInput['window'];
   readonly drift?: PeriodCheckInput['drift'];
+  readonly comparison?: PlannedPeriod['comparison'];
 }
 
 /** A tool's declared period facts, by tool name — the inputs layer's declaration, read (step T8). */
@@ -205,10 +208,13 @@ export function planPeriods(
     const address = batchCallAddress(call);
     if (address === null || done.has(address)) continue;
     done.add(address);
-    const declared = periods.filter((p) => batchCallAddress(p) === address).map((p) => p.period);
-    const argument = periodArgumentOf(call.toolName);
-    if (declared.length === 0 && argument === undefined) continue;
     const rows = time?.times.find((t) => batchCallAddress(t) === address);
+    const declared =
+      rows?.comparison === 'unproved'
+        ? []
+        : periods.filter((p) => batchCallAddress(p) === address).map((p) => p.period);
+    const argument = periodArgumentOf(call.toolName);
+    if (declared.length === 0 && argument === undefined && rows?.comparison === undefined) continue;
     const facts = rows === undefined ? undefined : time?.periodFactsOf?.(call.toolName);
     const forms = rows === undefined ? undefined : time?.periodFormsOf?.(call.toolName);
     plan.push({
@@ -216,11 +222,13 @@ export function planPeriods(
       ...callOccurrenceField(call.callOccurrenceKey),
       toolName: call.toolName,
       declared,
+      ...(rows?.comparison !== undefined && { comparison: rows.comparison }),
       ...(argument !== undefined && { argument }),
       ...(rows !== undefined &&
         time !== undefined && {
           time: {
             now: time.now,
+            ...(rows.comparison !== undefined && { comparison: true as const }),
             ...(rows.window !== undefined && { window: rows.window }),
             ...(rows.drift !== undefined && { drift: rows.drift }),
             ...(facts !== undefined && { facts }),
@@ -271,11 +279,13 @@ export function checkPeriods(plan: readonly PlannedPeriod[]): CheckedPeriod[] {
     // Under `.time()` (step T8): the time layer's result checks — `undefined`
     // when none holds, so the row gains nothing.
     const time =
-      p.time === undefined
+      p.time === undefined || p.comparison === 'unproved'
         ? undefined
         : periodTimeCheck({ ...p.time, declared: p.declared.map((d) => d.queried) });
     const verdict: PeriodRow['verdict'] =
-      p.declared.length === 0
+      p.comparison === 'unproved'
+        ? 'unknown'
+        : p.declared.length === 0
         ? 'undeclared'
         : // Non-empty, so `leastHeld` answers.
           (leastHeld(p.declared.map(periodVerdict)) as PeriodRow['verdict']);
@@ -287,6 +297,7 @@ export function checkPeriods(plan: readonly PlannedPeriod[]): CheckedPeriod[] {
       ...callOccurrenceField(p.callOccurrenceKey),
       toolName: p.toolName,
       verdict,
+      ...(p.comparison !== undefined && { comparison: true as const }),
       ...(p.argument !== undefined && { argument: p.argument }),
       ...(time !== undefined && { time }),
       ...(held !== undefined && { held }),
@@ -307,6 +318,7 @@ export function periodRowsOf(
     toolName: c.toolName,
     iteration: stamp.iteration,
     verdict: c.verdict,
+    ...(c.comparison === true && { comparison: true as const }),
     ...(c.argument !== undefined && { argument: c.argument }),
     ...c.time,
     ...(c.held !== undefined && { held: c.held }),

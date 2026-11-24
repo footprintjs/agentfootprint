@@ -29,7 +29,7 @@ Readers that switch over every row kind must skip one they do not know.
 
 > `readonly` `optional` **argument?**: `string`
 
-Defined in: [src/semantics/coverage/periodRow.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L48)
+Defined in: [src/semantics/coverage/periodRow.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L50)
 
 The argument the tool's `ToolPeriod` names — present only when it declares one.
 
@@ -39,7 +39,7 @@ The argument the tool's `ToolPeriod` names — present only when it declares one
 
 > `readonly` `optional` **beyondRetention?**: `true`
 
-Defined in: [src/semantics/coverage/periodRow.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L57)
+Defined in: [src/semantics/coverage/periodRow.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L59)
 
 `period-beyond-retention` — refused as, or read as, wholly older than the tool's source keeps.
 
@@ -53,11 +53,21 @@ Defined in: [src/semantics/coverage/periodRow.ts:36](https://github.com/footprin
 
 ***
 
+### comparison?
+
+> `readonly` `optional` **comparison?**: `true`
+
+Defined in: [src/semantics/coverage/periodRow.ts:40](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L40)
+
+This occurrence used the confirmed comparison interval.
+
+***
+
 ### differs?
 
 > `readonly` `optional` **differs?**: `PeriodDiffers`
 
-Defined in: [src/semantics/coverage/periodRow.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L53)
+Defined in: [src/semantics/coverage/periodRow.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L55)
 
 `period-differs-from-asked { missing, extra }` — the read differs from the asked range (or, for a window the model chose, from the person's).
 
@@ -67,7 +77,7 @@ Defined in: [src/semantics/coverage/periodRow.ts:53](https://github.com/footprin
 
 > `readonly` `optional` **held?**: `object`
 
-Defined in: [src/semantics/coverage/periodRow.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L70)
+Defined in: [src/semantics/coverage/periodRow.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L72)
 
 The time the source holds, when it holds none or only part of what the
 call asked about (`verdict` `not-held` / `partly-held`) — the `queried` and
@@ -108,7 +118,7 @@ UTC instants itself.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/semantics/coverage/periodRow.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L45)
+Defined in: [src/semantics/coverage/periodRow.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L47)
 
 The iteration of the batch the call ran in.
 
@@ -118,7 +128,7 @@ The iteration of the batch the call ran in.
 
 > `readonly` **kind**: `"period"`
 
-Defined in: [src/semantics/coverage/periodRow.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L39)
+Defined in: [src/semantics/coverage/periodRow.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L41)
 
 ***
 
@@ -136,7 +146,7 @@ Legacy draft proof that a native result was served, before the settlement ledger
 
 > `readonly` `optional` **partlyBeyondRetention?**: `true`
 
-Defined in: [src/semantics/coverage/periodRow.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L59)
+Defined in: [src/semantics/coverage/periodRow.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L61)
 
 `partly-beyond-retention` — the read crosses the edge of what the source keeps; `verdict` decides.
 
@@ -146,7 +156,7 @@ Defined in: [src/semantics/coverage/periodRow.ts:59](https://github.com/footprin
 
 > `readonly` `optional` **shifted?**: `object`
 
-Defined in: [src/semantics/coverage/periodRow.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L55)
+Defined in: [src/semantics/coverage/periodRow.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L57)
 
 `period-shifted` — the call's look-back ran as sent, `byMs` after the turn's `now`.
 
@@ -160,7 +170,7 @@ Defined in: [src/semantics/coverage/periodRow.ts:55](https://github.com/footprin
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/semantics/coverage/periodRow.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L42)
+Defined in: [src/semantics/coverage/periodRow.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L44)
 
 ***
 
@@ -168,7 +178,7 @@ Defined in: [src/semantics/coverage/periodRow.ts:42](https://github.com/footprin
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/semantics/coverage/periodRow.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L43)
+Defined in: [src/semantics/coverage/periodRow.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L45)
 
 ***
 
@@ -176,7 +186,7 @@ Defined in: [src/semantics/coverage/periodRow.ts:43](https://github.com/footprin
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/semantics/coverage/periodRow.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L41)
+Defined in: [src/semantics/coverage/periodRow.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L43)
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.
 
@@ -186,4 +196,4 @@ Defined in: [src/semantics/coverage/periodRow.ts:41](https://github.com/footprin
 
 > `readonly` **verdict**: `"unknown"` \| `"covered"` \| `"partly-held"` \| `"not-held"` \| `"undeclared"`
 
-Defined in: [src/semantics/coverage/periodRow.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L46)
+Defined in: [src/semantics/coverage/periodRow.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/periodRow.ts#L48)

@@ -61,7 +61,7 @@ import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { readerWindowsOf } from '../../time/windows.js';
 import { clockOf } from '../../time/rows.js';
-import { timeLimitFactsOf, type TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
+import { timeLimitsArg } from './honesty/timeLimitsInput.js';
 import {
   breakFinalStage,
   breakFinalWithValidationStage,
@@ -111,17 +111,6 @@ export function timeClockArg(ledger: unknown): {
       ...(clock.zoneSource === 'unknown' && { zoneUnknown: true as const }),
     },
   };
-}
-
-/**
- * The Tools mount's `timeLimits` arg — the turn's result-check FACTS for the
- * model (unrendered: the slot's served line renders them, under the arm), or
- * no key.
- */
-export function timeLimitsArg(ledger: unknown): { timeLimits?: TimeLimitFacts } {
-  const rows = ledger as readonly unknown[] | undefined;
-  const facts = timeLimitFactsOf(rows, clockOf(rows)?.turn, 'model');
-  return facts === undefined ? {} : { timeLimits: facts };
 }
 
 export function buildAgentChart(deps: AgentChartDeps): FlowChart {
@@ -524,7 +513,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         }),
         // The turn's result-check lines (step T8), under `.time()` only and
         // value-conditional. See `AgentChartDeps.timeLimits`.
-        ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
+        ...(deps.timeLimits === true && timeLimitsArg(parent)),
         // Tool choice by classifier (9.105.0), under the arm only: the
         // message the classifier reads, the rows so far (aliased — a mount
         // input is frozen inside; the slot writes `toolChoices` fresh) and

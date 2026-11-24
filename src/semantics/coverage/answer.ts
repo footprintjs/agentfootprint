@@ -235,6 +235,8 @@ export interface TimeLimitLines {
    * never reads it — its `Period:` line already prints both spans.
    */
   readonly held?: readonly string[];
+  /** Comparison coverage the returned evidence could not establish. */
+  readonly coverageUnknown?: readonly string[];
 }
 
 /**
@@ -492,7 +494,8 @@ function coverageBlock(
   time?: TimeLimitLines,
   displayNameOf?: (toolName: string) => string | undefined,
 ): string {
-  const timeLines = (time?.period.length ?? 0) + (time?.clocks.length ?? 0);
+  const timeLines =
+    (time?.period.length ?? 0) + (time?.coverageUnknown?.length ?? 0) + (time?.clocks.length ?? 0);
   if (declared.length === 0 && timeLines === 0) return '';
   const folded = foldSections(declared);
   // A call is named by the app's words only; with none declared, by its registered name, as always.
@@ -521,6 +524,7 @@ function coverageBlock(
   const periodLines = [
     ...periods.map((p) => periodLine(callName(p.toolName), p, presentation)),
     ...(time?.period ?? []),
+    ...(time?.coverageUnknown ?? []),
   ];
   if (periodLines.length > 0) sections.push(renderLines(PERIOD_SECTION_LABEL, periodLines));
   if (time !== undefined && time.clocks.length > 0) {

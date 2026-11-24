@@ -40,6 +40,7 @@
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
+import { askComparisonBeforeDispatch } from './comparisonAsk.js';
 import type { ArgumentAskDeps } from './argumentAskDeps.js';
 export type { ArgumentAskDeps } from './argumentAskDeps.js';
 import { readToolOwner } from '../../../tools/toolResourceOwner.js';
@@ -289,6 +290,8 @@ export function askBeforeDispatch(
     (call) => !deps.excludedCallAddresses?.includes(addressOf(call)),
   );
   const entries = new Map(resolutions);
+  const comparison = askComparisonBeforeDispatch(scope, entries, calls, deps);
+  if (comparison !== undefined) return comparison;
   const notifyRefusals = (current: ReadonlyMap<BatchAddress, ArgumentResolution>) => {
     if (deps.refusedCalls !== undefined)
       deps.refusedCalls(

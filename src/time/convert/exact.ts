@@ -3,7 +3,7 @@ import { needsZone, type BoundAs, type PeriodForm } from '../periodForm.js';
 import { wallAt, type ZoneName } from '../zone.js';
 import { formZone, writeBound } from './bounds.js';
 import { midnightOf, nextDay, spellDate } from './calendar.js';
-import { absoluteOf } from './instants.js';
+import { absoluteOf, msOf } from './instants.js';
 import { lookbackInto } from './lookback.js';
 import { adjacentInstant } from '../windowEndpoint.js';
 import { instantOf, spellInstant, type InstantText } from '../instant.js';
@@ -38,6 +38,7 @@ function convertOne(
   window: WindowToConvert,
   form: PeriodForm,
   ctx: ConvertContext,
+  preciseMixedIso?: true,
 ): { readonly values: Record<string, unknown>; readonly rounded: boolean } | undefined {
   if (form.kind === 'lookback') {
     const sent = lookbackInto(window, form, ctx);
@@ -68,19 +69,25 @@ function convertOne(
       : form.kind === 'bounds'
       ? form.to.edge
       : form.edge;
-  const exactIso = window.endpoint !== undefined && fromAs === 'iso' && toAs === 'iso';
-  let a: ReturnType<typeof writeBound>;
-  let b: ReturnType<typeof writeBound>;
-  if (exactIso) {
-    const utc = window.freezeLookback === true;
-    const cutoff = edge === 'exclusive' ? window.range.to : adjacentInstant(window.range.to, -1);
-    a = writeIso(window.range.from, utc);
-    b = writeIso(cutoff, utc);
-  } else {
-    if (span === undefined) return undefined;
-    a = writeBound(span[0], 'from', fromAs, 'inclusive', zone);
-    b = writeBound(span[1], 'to', toAs, edge, zone);
-  }
+  const exactIso =
+    window.endpoint !== undefined &&
+    (preciseMixedIso === true || (fromAs === 'iso' && toAs === 'iso'));
+  const utc = window.freezeLookback === true;
+  // An exact mixed form can pair a fractional ISO endpoint with a grid-aligned bound.
+  const from = span?.[0] ?? (exactIso && toAs === 'iso' ? msOf(window.range.from) : undefined);
+  const to = span?.[1] ?? (exactIso && fromAs === 'iso' ? msOf(window.range.to) : undefined);
+  const a =
+    exactIso && fromAs === 'iso'
+      ? writeIso(window.range.from, utc)
+      : from === undefined
+      ? undefined
+      : writeBound(from, 'from', fromAs, 'inclusive', zone);
+  const b =
+    exactIso && toAs === 'iso'
+      ? writeIso(edge === 'exclusive' ? window.range.to : adjacentInstant(window.range.to, -1), utc)
+      : to === undefined
+      ? undefined
+      : writeBound(to, 'to', toAs, edge, zone);
   if (a === undefined || b === undefined) return undefined;
   const rounded = a.rounded || b.rounded;
   switch (form.kind) {

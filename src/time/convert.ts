@@ -394,7 +394,8 @@ function convertWithinFormCaps(
   return undefined;
 }
 
-function formReach(window: WindowToConvert): number | undefined {
+/** Reach against a declared maximum, retaining an exact endpoint when present. */
+export function formReach(window: WindowToConvert): number | undefined {
   if (window.endpoint === undefined) {
     const from = msOf(window.range.from);
     const to = msOf(window.range.to);

@@ -14,6 +14,20 @@ The turn's clock stamp — one per turn (time design § 4).
 
 ## Properties
 
+### comparison?
+
+> `readonly` `optional` **comparison?**: `ComparisonIntent`
+
+Defined in: [src/time/clock.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L77)
+
+The host's closed set of sources for a single confirmed comparison interval.
+
+#### Inherited from
+
+[`TimeClock`](/docs/api/interfaces/TimeClock).[`comparison`](/docs/api/interfaces/TimeClock#comparison)
+
+***
+
 ### iteration
 
 > `readonly` **iteration**: `number`
@@ -36,7 +50,7 @@ Defined in: [src/time/rows/types.ts:20](https://github.com/footprintjs/agentfoot
 
 > `readonly` **now**: `string`
 
-Defined in: [src/time/clock.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L60)
+Defined in: [src/time/clock.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L61)
 
 The anchor for this turn — the app's `now`, else the turn's start.
 
@@ -50,7 +64,7 @@ The anchor for this turn — the app's `now`, else the turn's start.
 
 > `readonly` **nowSource**: `"default"` \| `"app"`
 
-Defined in: [src/time/clock.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L62)
+Defined in: [src/time/clock.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L63)
 
 The app passed `now`, or the library took the turn's start.
 
@@ -84,7 +98,7 @@ The run's `time.window`, when it passed one.
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/time/clock.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L68)
+Defined in: [src/time/clock.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L69)
 
 The person's zone for this run — an IANA name. Under `zoneSource:
 'unknown'` it is `'UTC'`: the zone instants are SPELLED in, never the
@@ -100,7 +114,7 @@ person's.
 
 > `readonly` **zoneSource**: `"unknown"` \| `"run"` \| `"answered"` \| `"builder"`
 
-Defined in: [src/time/clock.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L74)
+Defined in: [src/time/clock.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L75)
 
 The run's `time.zone`, else the `.time({ zone })` fallback; with neither,
 the zone the person answered in an earlier turn of this conversation

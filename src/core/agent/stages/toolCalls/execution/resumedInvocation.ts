@@ -162,9 +162,10 @@ export function buildResumedInvocation(
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
+      const timeLayer = deps.time === undefined ? undefined : await import('../../timeLayer.js');
       const dispatched =
         deps.time !== undefined
-          ? (await import('../../timeLayer.js')).timeAtDispatch(
+          ? timeLayer?.timeAtDispatch(
               scope,
               { toolCallId, toolName, ...occurrence },
               iteration,
@@ -275,6 +276,17 @@ export function buildResumedInvocation(
       }
       // `Tool.search`: reserved, with the dispatch instant, just before the
       // call runs — as in the batch loop.
+      const comparisonProblem = timeLayer?.comparisonDispatchProblem(
+        scope,
+        { toolCallId, toolName, ...occurrence },
+        tool,
+        args,
+        deps.time?.appZone,
+      );
+      if (comparisonProblem !== undefined) {
+        await links.endCall(scope).catch(() => undefined);
+        return { result: comparisonProblem, error: true };
+      }
       const searchDispatch = links.searchFunnel.dispatch(scope, tool, callTime);
       negativeDispatch =
         deps.negativeClaimsArmed === true

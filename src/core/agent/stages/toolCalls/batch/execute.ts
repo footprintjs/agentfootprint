@@ -137,7 +137,7 @@ export function buildToolBatchExecution(
     if (
       inputs !== undefined &&
       resolutions !== undefined &&
-      ([...resolutions.values()].some((r) => r.ask !== undefined) ||
+      ([...resolutions.values()].some((r) => r.ask !== undefined || r.comparisonAsk !== undefined) ||
         deps.time?.reader !== undefined)
     ) {
       // Loaded on first use — the optional-family law: a plain agent's

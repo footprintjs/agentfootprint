@@ -7,7 +7,7 @@
  * Pattern: Walker over the committed ledger; pure, no rendering.
  * Role:    the record half of `timeLimits.ts`, split out BY FILE for the one
  *          synchronous door that needs it — the Tools mount's `inputMapper`
- *          (`agent/buildAgentChart.ts` · `timeLimitsArg`), which runs before
+ *          (`agent/honesty/timeLimitsInput.ts`), which runs before
  *          any `import()` can: it hands these facts across, and the slot's
  *          served line renders them (`arguments/serve/clock.ts` · `timeLimitsLine`,
  *          loaded under the arm). The renderer (`time/present.ts`) never
@@ -46,6 +46,8 @@ export interface TimeLimitFacts {
   readonly zone: ZoneName;
   /** The turn's `period` rows that carry a check line, in the order filed. */
   readonly period: readonly PeriodRow[];
+  /** One generic line suffices when a native comparison result could not be established. */
+  readonly unprovedComparison?: true;
   readonly retentionRefusals?: readonly string[];
   /** The wall-clock sources, one per tool and zone (`checkRecord.ts` · `distinctSources`). */
   readonly sources: readonly SourceClock[];
@@ -69,6 +71,7 @@ export function carriesCheckLine(row: PeriodRow, audience: TimeLimitsAudience = 
     row.differs !== undefined ||
     row.shifted !== undefined ||
     row.beyondRetention === true ||
+    (row.comparison === true && (row.verdict === 'unknown' || row.verdict === 'undeclared')) ||
     (audience === 'model' && row.held !== undefined)
   );
 }
@@ -83,25 +86,41 @@ export function timeLimitFactsOf(
   ledger: readonly unknown[] | undefined,
   turn: number | undefined,
   audience: TimeLimitsAudience = 'person',
+  nativeComparison?: (row: object) => boolean,
 ): TimeLimitFacts | undefined {
   const zone = presentationZoneOf(ledger);
   if (zone === undefined || ledger === undefined) return undefined;
   const zoneUnknown = clockOf(ledger)?.zoneSource === 'unknown';
   const retentionRefusals = retentionRefusalsOf(ledger, turn).map(({ toolName }) => toolName);
   const period: PeriodRow[] = [];
+  let unprovedComparison = false;
   for (const row of ledger) {
-    const r = row as { readonly kind?: unknown; readonly turn?: unknown } | null;
-    if (r === null || typeof r !== 'object' || r.kind !== 'period') continue;
+    const r = row as {
+      readonly kind?: unknown;
+      readonly turn?: unknown;
+      readonly comparison?: unknown;
+    } | null;
+    if (r === null || typeof r !== 'object') continue;
     if (turn !== undefined && r.turn !== turn) continue;
-    if (carriesCheckLine(row as PeriodRow, audience)) period.push(row as PeriodRow);
+    if (r.kind === 'call-window' && r.comparison !== undefined && nativeComparison?.(r) !== true)
+      unprovedComparison = true;
+    if (r.kind !== 'period') continue;
+    const entry = row as PeriodRow;
+    if (entry.comparison === true && nativeComparison?.(entry) !== true) {
+      unprovedComparison = true;
+      continue;
+    }
+    if (carriesCheckLine(entry, audience)) period.push(entry);
   }
   const sources = distinctSources(sourceClocksOf(ledger, turn));
   const differ = clocksDiffer(sources);
   const clocks = audience === 'person' ? sources.length > 0 : differ !== undefined;
-  if (period.length === 0 && retentionRefusals.length === 0 && !clocks) return undefined;
+  if (period.length === 0 && !unprovedComparison && retentionRefusals.length === 0 && !clocks)
+    return undefined;
   return {
     zone,
     period,
+    ...(unprovedComparison && { unprovedComparison: true as const }),
     ...(retentionRefusals.length > 0 && { retentionRefusals }),
     sources,
     ...(differ !== undefined && { differ }),

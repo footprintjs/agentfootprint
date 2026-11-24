@@ -3,7 +3,11 @@ import {
   readCallOccurrenceKey,
   storedCallOccurrenceField,
 } from '../../../lib/callOccurrence.js';
-import { copyPeriod, type DeclaredPeriod } from '../../../semantics/coverage/period.js';
+import {
+  copyPeriod,
+  periodProblem,
+  type DeclaredPeriod,
+} from '../../../semantics/coverage/period.js';
 import { toolRanOf } from '../../../semantics/toolRan.js';
 import {
   callRowOfCall,
@@ -12,6 +16,7 @@ import {
   type CallWindowRow,
 } from '../../../time/rows.js';
 import type { CallPeriod, CallTime, RanCall, ResultsLayerState } from '../results/subflow.js';
+import { returnedNativeOf } from './comparisonPeriods.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,6 +70,12 @@ export function resultsLayerInput(parent: Record<string, unknown>): ResultsLayer
     });
   }
   if (calls.length === 0) return { calls };
+  const time = timeOfBatch(parent, calls);
+  const comparisons = new Map(
+    (time.times ?? [])
+      .filter((time) => time.comparison !== undefined)
+      .map((time) => [readCallOccurrenceKey(time), time.comparison] as const),
+  );
   const legacyIds = new Set<string>();
   const idsByOccurrence = new Map<string, string>();
   for (const call of calls) {
@@ -78,6 +89,12 @@ export function resultsLayerInput(parent: Record<string, unknown>): ResultsLayer
     if (typeof row.toolCallId !== 'string') continue;
     const key = readCallOccurrenceKey(row);
     if (key === null) continue;
+    const comparison = comparisons.get(key);
+    if (
+      comparison === 'unproved' ||
+      (comparison === 'native' && periodProblem(row.period, 'camel') !== undefined)
+    )
+      continue;
     const matches =
       key === undefined
         ? legacyIds.has(row.toolCallId)
@@ -89,7 +106,6 @@ export function resultsLayerInput(parent: Record<string, unknown>): ResultsLayer
       ...storedCallOccurrenceField(row),
     });
   }
-  const time = timeOfBatch(parent, calls);
   return {
     calls,
     batchIteration,
@@ -119,6 +135,7 @@ export function timeOfBatch(
   const turn = parent.turnNumber as number;
   if (clock === undefined || clock.turn !== turn) return {};
   const times: CallTime[] = [];
+  let native: ReturnType<typeof returnedNativeOf> | undefined;
   for (const call of calls) {
     const key = readCallOccurrenceKey(call);
     const matches = (row: object) => key !== null && readCallOccurrenceKey(row) === key;
@@ -128,11 +145,20 @@ export function timeOfBatch(
       times.push({ toolCallId: call.toolCallId, ...callOccurrenceField(call.callOccurrenceKey) });
       continue;
     }
+    const comparison =
+      typeof key === 'string' && window?.comparison !== undefined
+        ? (native ??= returnedNativeOf(parent.settledToolCalls, parent.settledToolCallsComplete))(
+            call,
+          )
+          ? 'native'
+          : 'unproved'
+        : undefined;
     times.push({
       toolCallId: call.toolCallId,
       ...callOccurrenceField(call.callOccurrenceKey),
       ...(window !== undefined && { window: windowForCheck(window) }),
       ...(drift !== undefined && { drift }),
+      ...(comparison !== undefined && { comparison }),
     });
   }
   return { times, now: clock.now };

@@ -4,7 +4,7 @@ title: SourceClockRow
 
 # Interface: SourceClockRow
 
-Defined in: [src/time/rows/types.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L226)
+Defined in: [src/time/rows/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L230)
 
 A wall-clock source (§ 9.6, step T8): the call minted a dataset whose
 declared time axis (`axis.ts` · `DatasetTimeAxis`, its `zone`) says its rows are
@@ -33,7 +33,7 @@ Defined in: [src/time/rows/types.ts:44](https://github.com/footprintjs/agentfoot
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L229)
+Defined in: [src/time/rows/types.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L233)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [src/time/rows/types.ts:229](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"source-clock"`
 
-Defined in: [src/time/rows/types.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L227)
+Defined in: [src/time/rows/types.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L231)
 
 ***
 
@@ -73,7 +73,7 @@ Defined in: [src/time/rows/types.ts:43](https://github.com/footprintjs/agentfoot
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:228](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L228)
+Defined in: [src/time/rows/types.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L232)
 
 ***
 
@@ -81,4 +81,4 @@ Defined in: [src/time/rows/types.ts:228](https://github.com/footprintjs/agentfoo
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/time/rows/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L230)
+Defined in: [src/time/rows/types.ts:234](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L234)

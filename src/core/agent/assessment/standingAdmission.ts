@@ -136,6 +136,7 @@ export function standingAdmission(
 
   const nativeResult = (row: Row, address?: number): boolean => {
     if (settlements !== undefined) return returned(address, true, readCallOccurrenceKey(row));
+    if (row.kind === 'period' && row.comparison === true) return false;
     if (address !== undefined) return returned(address, true);
     if (row.kind !== 'period' || row.nativePeriodServed !== true) return false;
     const key = readCallOccurrenceKey(row);

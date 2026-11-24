@@ -74,12 +74,8 @@ import {
 import { prepareFinalFor } from './stages/prepareFinal.js';
 import { failFastRecordOf } from '../../reliability/failFastRecord.js';
 import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
-import {
-  timeClockArg,
-  timeLimitsArg,
-  timeWindowsArg,
-  type AgentChartDeps,
-} from './buildAgentChart.js';
+import { timeClockArg, timeWindowsArg, type AgentChartDeps } from './buildAgentChart.js';
+import { timeLimitsArg } from './honesty/timeLimitsInput.js';
 import {
   mountInputsLayer,
   mountResultsLayer,
@@ -399,7 +395,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           hiddenSkillIds: parent.hiddenSkillIds as readonly string[],
         }),
         // The turn's result-check lines (step T8). See `AgentChartDeps.timeLimits`.
-        ...(deps.timeLimits === true && timeLimitsArg(parent.findingsLedger)),
+        ...(deps.timeLimits === true && timeLimitsArg(parent)),
         // Tool choice by classifier (9.105.0) — the flat chart's three args,
         // read INSIDE sf-llm-call: `userMessage` and `wrapUpAsked` are the
         // boundary's own inputs, `toolChoices` is `dynamicTurnSeed`'s copy

@@ -28,6 +28,10 @@ Defined in: [src/time/rows/types.ts:38](https://github.com/footprintjs/agentfoot
 
 The frozen clock's values the passed ones would have replaced.
 
+#### comparison?
+
+> `readonly` `optional` **comparison?**: `ComparisonIntent`
+
 #### now
 
 > `readonly` **now**: `string`

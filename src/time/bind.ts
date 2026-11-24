@@ -123,61 +123,65 @@ export interface BindContext {
 /** The decision for one call — see {@link callWindowOf}. */
 export type CallWindow =
   /** The model left every period argument out and the turn's one window went into `form` exactly. */
-  | {
-      readonly how: 'filled';
-      readonly window: TurnWindow;
-      /** Exact, or — when no form holds the window exactly — WIDENED (it carries `sent` and `extra`). */
-      readonly conversion: Conversion | WidenedConversion;
-      /** Remove another form's supplied arguments when freezing an equivalent duration. */
-      readonly replacedForm?: true;
-      /** Widened, and the tool declares `filtersToAsked`: it trims its rows to the asked window. */
-      readonly trimmedByTool?: true;
-      readonly partlyBeyondRetention?: true;
-    }
-  /** The sent window IS one of the turn's windows — named by the model's quote (`quote`) or equal in value (`value`). */
-  | {
-      readonly how: 'bound';
-      readonly form: number;
-      readonly asked: TimeRange;
-      readonly window: TurnWindow;
-      readonly by: 'quote' | 'value';
-      readonly partlyBeyondRetention?: true;
-    }
-  /** The sent window differs from the person's: it runs as sent (§ 7.3, the v1 law). `person` when one window is the person's. */
-  | {
-      readonly how: 'model-chosen';
-      readonly form: number;
-      readonly asked: TimeRange;
-      readonly person?: TurnWindow;
-      readonly partlyBeyondRetention?: true;
-    }
-  /** The sent window, and no window of the person's to compare it with. */
-  | {
-      readonly how: 'model';
-      readonly form: number;
-      readonly asked: TimeRange;
-      readonly partlyBeyondRetention?: true;
-    }
-  /**
-   * Refused before dispatch (step T5b): the window breaks one of the tool's
-   * facts, spans days for a tool that reads one, or a sent wall time is one
-   * the zone skips (`argument` names it). `asked` and `person` when known.
-   */
-  | {
-      readonly how: 'refused';
-      readonly refused: TimeRefusal;
-      readonly form?: number;
-      readonly asked?: TimeRange;
-      readonly person?: TurnWindow;
-      readonly argument?: string;
-    }
-  /** A period argument was sent, and no form reads the call's arguments back as a range. */
-  | { readonly how: 'unread' }
-  /** The model left the period out and nothing was filled — why. */
-  | {
-      readonly how: 'not-filled';
-      readonly why: 'no-window' | 'several-mentions' | 'open-reading';
-    };
+  (| {
+        readonly how: 'filled';
+        readonly window: TurnWindow;
+        /** Exact, or — when no form holds the window exactly — WIDENED (it carries `sent` and `extra`). */
+        readonly conversion: Conversion | WidenedConversion;
+        /** Remove another form's supplied arguments when freezing an equivalent duration. */
+        readonly replacedForm?: true;
+        /** Widened, and the tool declares `filtersToAsked`: it trims its rows to the asked window. */
+        readonly trimmedByTool?: true;
+        readonly partlyBeyondRetention?: true;
+      }
+    /** The sent window IS one of the turn's windows — named by the model's quote (`quote`) or equal in value (`value`). */
+    | {
+        readonly how: 'bound';
+        readonly form: number;
+        readonly asked: TimeRange;
+        readonly window: TurnWindow;
+        readonly by: 'quote' | 'value';
+        readonly partlyBeyondRetention?: true;
+      }
+    /** The sent window differs from the person's: it runs as sent (§ 7.3, the v1 law). `person` when one window is the person's. */
+    | {
+        readonly how: 'model-chosen';
+        readonly form: number;
+        readonly asked: TimeRange;
+        readonly person?: TurnWindow;
+        readonly partlyBeyondRetention?: true;
+      }
+    /** The sent window, and no window of the person's to compare it with. */
+    | {
+        readonly how: 'model';
+        readonly form: number;
+        readonly asked: TimeRange;
+        readonly partlyBeyondRetention?: true;
+      }
+    /**
+     * Refused before dispatch (step T5b): the window breaks one of the tool's
+     * facts, spans days for a tool that reads one, or a sent wall time is one
+     * the zone skips (`argument` names it). `asked` and `person` when known.
+     */
+    | {
+        readonly how: 'refused';
+        readonly refused: TimeRefusal;
+        readonly form?: number;
+        readonly asked?: TimeRange;
+        readonly person?: TurnWindow;
+        readonly argument?: string;
+      }
+    /** A period argument was sent, and no form reads the call's arguments back as a range. */
+    | { readonly how: 'unread' }
+    /** The model left the period out and nothing was filled — why. */
+    | {
+        readonly how: 'not-filled';
+        readonly why: 'no-window' | 'several-mentions' | 'open-reading';
+      }
+  ) & {
+    readonly comparison?: { readonly original?: TimeRange; readonly corrected?: true };
+    readonly comparisonAsk?: 'confirm' | 'omit';
+  };
 
 /** The chosen form whose alternatives should be ignored for this decision. */
 export function selectedFormOf(decision: CallWindow | undefined): number | undefined {

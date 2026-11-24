@@ -142,9 +142,10 @@ export async function invokeInitialTool(
     // The time layer's dispatch moment — just before the tool runs.
     // A look-back the clock drifted past is redrawn here (§ 7.4) — `callArgs`
     // carries what the tool ran with, so the note and the results layer read it.
+    const timeLayer = deps.time === undefined ? undefined : await import('../../timeLayer.js');
     const dispatched =
       deps.time !== undefined
-        ? (await import('../../timeLayer.js')).timeAtDispatch(
+        ? timeLayer?.timeAtDispatch(
             scope,
             declarationCall,
             frame.iteration,
@@ -223,6 +224,14 @@ export async function invokeInitialTool(
     // `Tool.search`: the result identity is reserved and the dispatch
     // instant taken just BEFORE the call runs (the row's address,
     // never the provider's call id; a relative window's clock).
+    const comparisonProblem = timeLayer?.comparisonDispatchProblem(
+      scope,
+      declarationCall,
+      frame.tool,
+      frame.callArguments.callArgs,
+      deps.time?.appZone,
+    );
+    if (comparisonProblem !== undefined) throw new Error(comparisonProblem);
     const searchDispatch = frame.searchFunnel.dispatch(scope, frame.tool, callTime);
     frame.execution.negativeDispatch =
       deps.negativeClaimsArmed === true

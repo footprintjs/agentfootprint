@@ -73,6 +73,13 @@ export function timeLimitsSentence(lines: TimeLimitLines | undefined): string | 
         `time it does not hold.`,
     );
   }
+  if (lines.coverageUnknown !== undefined && lines.coverageUnknown.length > 0) {
+    parts.push(
+      `${lines.coverageUnknown.join(
+        '; ',
+      )}. The answer makes no claim about unestablished coverage.`,
+    );
+  }
   if (lines.clocks.length > 0) {
     parts.push(`Clocks: ${lines.clocks.join('; ')}.`);
   }

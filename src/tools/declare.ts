@@ -67,6 +67,7 @@ import {
   type PeriodForm,
   type PeriodSpelling,
 } from '../time/periodForm.js';
+import { MAX_PERIOD_FORMS } from '../time/periodSurface.js';
 import { isDuration, LOOKBACK_UNITS, type DurationText } from '../time/duration.js';
 import { splitRange } from '../time/range.js';
 import { canonicalForm, tokenize } from '../lib/normalize.js';
@@ -100,6 +101,7 @@ export type AskOrAssume = Readonly<Record<string, ArgumentRule>>;
 
 export type { PeriodSpelling, PeriodForm, PeriodFacts } from '../time/periodForm.js';
 export { PERIOD_SPELLINGS };
+export { MAX_PERIOD_FORMS, untakenBesides } from '../time/periodSurface.js';
 
 /**
  * Which arguments set the period a tool's answer covers, how their values are
@@ -536,9 +538,6 @@ function declaredValues(rule: PlainObject): unknown[] {
 const SUGAR_KEYS = ['argument', 'spelling', 'accepts', 'zoneArgument'];
 const FACT_KEYS = ['direction', 'retention', 'maxRange', 'granularity', 'filtersToAsked'];
 const PERIOD_KEYS = [...SUGAR_KEYS, 'forms', 'wallZone', ...FACT_KEYS];
-/** Forms per period — a tool spells its period in a handful of shapes, never dozens. */
-export const MAX_PERIOD_FORMS = 8;
-
 const has = (o: PlainObject, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(o, key) && o[key] !== undefined;
 
@@ -984,19 +983,6 @@ export function sentFormOf(
   if (whole >= 0) return whole;
   const part = forms.findIndex((form) => given(form).some(Boolean));
   return part >= 0 ? part : undefined;
-}
-
-/**
- * The arguments of every form but `forms[taken]` that it does not also name — an
- * alternative the call did not take. Empty for a single form: one form is one window.
- */
-export function untakenBesides(forms: readonly PeriodForm[], taken: number): ReadonlySet<string> {
-  const chosen = forms[taken];
-  if (chosen === undefined) return new Set();
-  const mine = new Set(formArguments(chosen).map((a) => a.argument));
-  return new Set(
-    forms.flatMap((form) => formArguments(form).map((a) => a.argument)).filter((a) => !mine.has(a)),
-  );
 }
 
 /**

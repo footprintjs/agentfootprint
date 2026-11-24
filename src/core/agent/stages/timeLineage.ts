@@ -27,6 +27,7 @@ import type { PeriodRow } from '../../../semantics/coverage/period.js';
 import { HIDDEN_VALUE } from '../arguments/rows.js';
 import type { FindingsLedger } from '../findings/types.js';
 import { isWindowFillRow, type TimeLineage } from './route.js';
+import { comparisonPeriodAdmission } from '../honesty/comparisonPeriods.js';
 
 // FOLD · the one owner of this turn's time spellings by lineage, as the evidence gate reads them
 // consumers read this and never re-derive it: judgeEvidence (the exempt corpus's `timeSaid`, checkAnswer's `derived`)
@@ -63,8 +64,13 @@ export const timeLineageOf: TimeLineage = (scope) => {
   // (`coverage/timeLimits.ts` · `heldLine`) — the library converted the tool's instants (take 3).
   const zone = presentationZoneOf(ledger);
   if (zone !== undefined) {
+    const native = comparisonPeriodAdmission(() => [
+      scope.settledToolCalls,
+      scope.settledToolCallsComplete,
+    ]);
     for (const row of ledger) {
       if (row.kind !== 'period' || row.turn !== turn) continue;
+      if ((row as PeriodRow).comparison === true && !native(row)) continue;
       const held = (row as PeriodRow).held?.held;
       if (held !== undefined) derived.push(...timeFormsOf({ held: { ...held, zone } }).derived);
     }

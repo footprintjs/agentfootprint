@@ -120,7 +120,7 @@ export interface TimeAnswerRow extends RecordedWindow {
   readonly kind: 'time-answer';
   readonly turn: number;
   readonly iteration: number;
-  /** The `time-reading` row's mention the answer settles. */
+  /** The time-reading mention, or the form's index for an explicit comparison answer. */
   readonly mention: number;
   /** The zone the window was answered in — the reading's, or the turn's clock for free entry. */
   readonly zone: ZoneName;
@@ -132,6 +132,8 @@ export interface TimeAnswerRow extends RecordedWindow {
   readonly how: 'confirmed' | 'edited';
   /** Canonical corrected meaning; absent preserves the original reading. Never raw words. */
   readonly corrected?: { readonly lookback?: DurationText };
+  /** The host-authorized comparison's shared range, separate from an ordinary mention answer. */
+  readonly comparison?: true;
 }
 
 /** One request-bound correction decision, without the raw reply. */
@@ -187,6 +189,8 @@ export interface CallWindowRow extends TimeCallIdentity {
   readonly asked?: TimeRange;
   readonly person?: PersonWindow;
   readonly by?: 'quote' | 'value';
+  /** An exact window selected by a comparison, with a readable original when it was changed. */
+  readonly comparison?: { readonly original?: TimeRange; readonly corrected?: true };
   readonly rounded?: true;
   readonly why?: 'no-window' | 'several-mentions' | 'open-reading' | 'no-exact-form';
   /** A widened fill: the range the tool reads with the sent values. */

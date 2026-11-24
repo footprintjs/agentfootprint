@@ -121,7 +121,7 @@ export function seedToolEvidence(
   }
   if (recovered?.libraryResultLimitsIncomplete === true) scope.libraryResultLimitsIncomplete = true;
   seedEnteredToolCalls(scope, deps, continuing, recovered?.entries);
-  const armed = deps.honestyLayers?.answer === true;
+  const armed = deps.honestyLayers?.answer === true || recovered?.settlements !== undefined;
   seedToolSettlements(scope, armed, continuing, recovered?.settlements);
 }
 

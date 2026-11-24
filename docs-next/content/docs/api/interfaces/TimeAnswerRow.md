@@ -19,6 +19,16 @@ answer binds (`arguments/ask.ts` · `bindAnswer`); read back by
 
 ## Properties
 
+### comparison?
+
+> `readonly` `optional` **comparison?**: `true`
+
+Defined in: [src/time/rows/types.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L136)
+
+The host-authorized comparison's shared range, separate from an ordinary mention answer.
+
+***
+
 ### corrected?
 
 > `readonly` `optional` **corrected?**: `object`
@@ -91,7 +101,7 @@ Defined in: [src/time/rows/types.ts:120](https://github.com/footprintjs/agentfoo
 
 Defined in: [src/time/rows/types.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L124)
 
-The `time-reading` row's mention the answer settles.
+The time-reading mention, or the form's index for an explicit comparison answer.
 
 ***
 

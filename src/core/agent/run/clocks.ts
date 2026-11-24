@@ -77,6 +77,18 @@ export function readAgentTime(
   return read.value;
 }
 
+/** A same-turn restore must keep the time layer that admitted its comparison. */
+export function assertComparisonResume(
+  state: { readonly findingsLedger?: unknown; readonly turnNumber?: unknown },
+  timeOptions: ReadTimeOptions | undefined,
+): void {
+  if (timeOptions !== undefined || !Array.isArray(state.findingsLedger)) return;
+  const clock = clockOf(state.findingsLedger);
+  if (clock?.comparison !== undefined && clock.turn === state.turnNumber) {
+    throw new TypeError('Resume requires .time() for the active comparison.');
+  }
+}
+
 /**
  * What the resume door checks a time field's answer with (the time design
  * § 6.2, step T4): the paused turn's clock zone — the kept `clock` row, so

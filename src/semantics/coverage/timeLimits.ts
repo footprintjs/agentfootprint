@@ -25,6 +25,8 @@
 import { clockLines, periodCheckLine, type PeriodRow } from './period.js';
 import { beyondRetentionLine } from '../../time/retentionRefusals.js';
 import { bindPresentation, type BoundPresentation } from '../../time/present.js';
+import { instantOf } from '../../time/instant.js';
+import type { TimeRange } from '../../time/range.js';
 import type { TimeLimitLines } from './answer.js';
 import {
   timeLimitFactsOf,
@@ -33,6 +35,26 @@ import {
 } from './timeLimitFacts.js';
 
 export type { TimeLimitLines };
+
+function comparisonQueryLine(row: PeriodRow, presentation: BoundPresentation): string | undefined {
+  const d = row.differs;
+  const retention = row.beyondRetention === true ? beyondRetentionLine(row.toolName) : undefined;
+  if (d?.source !== 'declared') return retention;
+  const format = (range: TimeRange) => {
+    const from = instantOf(range.from, 'lenient');
+    const to = instantOf(range.to, 'lenient');
+    const precise = (from?.nanos ?? 0) > 0 || (to?.nanos ?? 0) > 0;
+    // The zone presentation stops at milliseconds. Keep exact ISO bounds when finer.
+    const displayed = precise ? `${range.from} to ${range.to}` : presentation.range(range);
+    return `${displayed} (end excluded)`;
+  };
+  const changes = [
+    ...(d.missing.length > 0 ? [`missed ${d.missing.map(format).join('; ')}`] : []),
+    ...(d.extra.length > 0 ? [`included extra time ${d.extra.map(format).join('; ')}`] : []),
+  ];
+  const query = `${row.toolName}'s reported query ${changes.join(' and ')}`;
+  return retention === undefined ? query : `${query}. ${retention}`;
+}
 
 // LENS · late-line · request-ephemeral (and the person's limits block)
 // reads: nothing — a fixed clause, added when the turn's clock zone is unknown (G15)
@@ -92,8 +114,9 @@ export function timeLimitLinesOf(
   ledger: readonly unknown[] | undefined,
   turn: number | undefined,
   audience: TimeLimitsAudience = 'person',
+  nativeComparison?: (row: object) => boolean,
 ): TimeLimitLines | undefined {
-  return renderTimeLimits(timeLimitFactsOf(ledger, turn, audience), audience);
+  return renderTimeLimits(timeLimitFactsOf(ledger, turn, audience, nativeComparison), audience);
 }
 
 /**
@@ -109,12 +132,27 @@ export function renderTimeLimits(
   const presentation = bindPresentation({ zone: facts.zone });
   const period: string[] = [];
   const held: string[] = [];
+  const coverageUnknown = facts.unprovedComparison
+    ? ['Comparison coverage could not be established']
+    : [];
   for (const row of facts.period) {
-    const line = periodCheckLine(row, presentation, audience);
+    const line =
+      row.comparison === true
+        ? comparisonQueryLine(row, presentation)
+        : periodCheckLine(row, presentation, audience);
     if (line !== undefined) period.push(line);
     // The source's held span, for the model (the person's `Period:` line already prints it).
     const holds = audience === 'model' ? heldLine(row, presentation) : undefined;
     if (holds !== undefined) held.push(holds);
+    if (row.comparison === true) {
+      if (row.verdict === 'unknown') {
+        coverageUnknown.push(
+          `${row.toolName} reported that the period held by its source is unknown`,
+        );
+      } else if (row.verdict === 'undeclared') {
+        coverageUnknown.push(`${row.toolName} did not declare the period its result covers`);
+      }
+    }
   }
   for (const toolName of facts.retentionRefusals ?? []) period.push(beyondRetentionLine(toolName));
   // The person reads every wall-clock source; the model only the label that two differ — one
@@ -128,6 +166,11 @@ export function renderTimeLimits(
     // The ranges above are spelled in UTC only because the person's zone is unknown (G15).
     ...(facts.zoneUnknown === true && period.length + held.length > 0 ? [UNKNOWN_ZONE_LINE] : []),
   ];
-  if (period.length + clocks.length + held.length === 0) return undefined;
-  return { period, clocks, ...(held.length > 0 && { held }) };
+  if (period.length + clocks.length + held.length + coverageUnknown.length === 0) return undefined;
+  return {
+    period,
+    clocks,
+    ...(held.length > 0 && { held }),
+    ...(coverageUnknown.length > 0 && { coverageUnknown }),
+  };
 }

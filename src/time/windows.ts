@@ -177,7 +177,7 @@ export function turnWindowsOf(
   const windows: TurnWindow[] = [];
   const open: TimeRange[][] = [];
   let mentions = 0;
-  const answered = new Map(answers.map((a) => [a.mention, a]));
+  const answered = new Map(answers.filter((a) => a.comparison !== true).map((a) => [a.mention, a]));
   for (const row of readings) {
     if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) continue;
     mentions++;
@@ -233,7 +233,7 @@ export function turnWindowsOf(
   return { windows, mentions, ...(open.length > 0 && { open }) };
 }
 
-function controlWindowOf(clock: ClockRow | undefined): TurnWindow | undefined {
+export function controlWindowOf(clock: ClockRow | undefined): TurnWindow | undefined {
   if (clock?.window === undefined) return undefined;
   const { from, to, endpoint } = clock.window;
   return {

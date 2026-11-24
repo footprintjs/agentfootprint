@@ -59,23 +59,9 @@
  */
 
 import type { InputValue } from '../../../tools/inputRequest.js';
-import {
-  callWindowOf,
-  selectedFormOf,
-  type CallWindow,
-  type TurnWindows,
-  type WindowSource,
-} from '../../../time/bind.js';
-import {
-  formArguments,
-  formFacts,
-  granularityMsOf,
-  toolFacts,
-  type PeriodFacts,
-} from '../../../time/convert.js';
-import type { InstantText } from '../../../time/instant.js';
+import { selectedFormOf, type CallWindow, type WindowSource } from '../../../time/bind.js';
+import { formArguments, formFacts, toolFacts, type PeriodFacts } from '../../../time/convert.js';
 import { callOccurrenceField, type CallOccurrenceKey } from '../../../lib/callOccurrence.js';
-import type { ZoneName } from '../../../time/zone.js';
 import { composeResolutionRows } from './resolutionRows.js';
 import { batchAddress, type BatchAddress } from './batchAddress.js';
 import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
@@ -84,7 +70,6 @@ import {
   isMissing,
   isRefused,
   owedFormOf,
-  periodArgumentsOf,
   periodFactsOf,
   periodFormsOf,
   rulesOf,
@@ -98,9 +83,11 @@ import {
 import { keptAnswerFor, type KeptAnswer } from './kept.js';
 import type { ArgumentRow } from './rows.js';
 import { timeRefusal, unreadableRulesRefusal } from './serve.js';
-import { freeNamed, periodQuotesOf, type CallSources, type DeclaredSource } from './sources.js';
+import { freeNamed, type CallSources, type DeclaredSource } from './sources.js';
 
 export { callWindowRowsOf } from './resolutionRows.js';
+export { timeDecisionsOf, type TimeArm } from './timeDecisions.js';
+import { timeDecisionsOf, type TimeArm } from './timeDecisions.js';
 
 /** One call of the batch, as the model emitted it (its raw arguments). */
 export interface BatchCall {
@@ -183,24 +170,6 @@ export interface CheckedArgument {
 }
 
 /**
- * Under `.time()` (the time layer, step T5a): the turn's windows and clock, as
- * the record holds them — the `time-reading` rows and the `clock` row of this
- * turn, read by `time/bind.ts` · `turnWindowsOf`. A tool whose period
- * declares forms is then filled from the turn's one window, bound to the
- * person's window, or recorded as the model's (`callWindowOf`). Absent → the
- * arm is off and every call is resolved exactly as before.
- */
-export interface TimeArm {
-  readonly turn: TurnWindows;
-  /** The turn's frozen clock. */
-  readonly now: InstantText;
-  /** The clock's zone. */
-  readonly zone: ZoneName;
-  /** The app's `.time({ zone })` — a form declaring `wallZone: 'app'` reads in it. */
-  readonly appZone?: ZoneName;
-}
-
-/**
  * The declared sources, as the layer's stages are handed them: each call's
  * `from` entries (`sources.ts` · `CallSources`, by batch address — a call with no
  * entry declares nothing: its tool owns the reserved argument) and, for the
@@ -270,6 +239,7 @@ export interface ArgumentResolution {
   readonly iteration: number;
   readonly fills?: readonly ArgumentFill[];
   readonly removePeriodArguments?: readonly string[];
+  readonly comparisonAsk?: CallWindow['comparisonAsk'];
   readonly refused?: string;
   /**
    * The `ask`-ruled arguments to ask the person for, in the rule's declared
@@ -471,54 +441,6 @@ function quotesMayShow(sources: SourcesArm | undefined): boolean {
   return sources?.corpus !== undefined && sources.argumentViews !== true;
 }
 
-/**
- * Under `.time()`: per planned call whose tool's period declares forms, which
- * window the call carries (`time/bind.ts` · `callWindowOf`) — a pure
- * function of the call, the tool's forms and facts, the turn's windows and the
- * model's declared quotes. Empty when the arm is off. Every stage asks it
- * afresh (the same inputs, the same answer), so no decision is staged twice.
- */
-export function timeDecisionsOf(
-  plan: readonly PlannedCall[],
-  calls: readonly BatchCall[],
-  toolOf: ToolOf,
-  time: TimeArm | undefined,
-  sources?: SourcesArm,
-): ReadonlyMap<BatchAddress, CallWindow> {
-  const decisions = new Map<BatchAddress, CallWindow>();
-  if (time === undefined) return decisions;
-  const byAddress = callsByAddress(calls);
-  for (const planned of plan) {
-    if (planned.refused !== undefined) continue;
-    const address = batchAddress(planned.toolCallId, planned.callOccurrenceKey);
-    const call = byAddress.get(address);
-    const rules = readableRules(toolOf, planned.toolName);
-    const forms = periodFormsOf(rules?.period);
-    if (call === undefined || rules === undefined || forms.length === 0) continue;
-    const quotes = periodQuotesOf(sources?.declared.get(address), periodArgumentsOf(rules.period));
-    decisions.set(
-      address,
-      callWindowOf(
-        {
-          args: call.args,
-          forms,
-          isMissing: (argument) => isMissing(call.args, argument),
-          ...(quotes !== undefined && { quotes }),
-          facts: periodFactsOf(rules.period),
-        },
-        time.turn,
-        {
-          now: time.now,
-          zone: time.zone,
-          ...(time.appZone !== undefined && { appZone: time.appZone }),
-          granularityMs: granularityMsOf(periodFactsOf(rules.period)),
-        },
-      ),
-    );
-  }
-  return decisions;
-}
-
 /** The arguments a decision FILLS — the chosen form's, by name — or none. */
 function filledArguments(decision: CallWindow | undefined): ReadonlySet<string> {
   return decision?.how === 'filled'
@@ -659,7 +581,7 @@ export function verifyPlan(
     const decision = decisions.get(address);
     // Refused before dispatch on its window (step T5b): the call will not run, so none of its
     // arguments is filled, asked or filed — its `call-window` row is the record.
-    if (decision?.how === 'refused') continue;
+    if (decision?.how === 'refused' && decision.comparisonAsk === undefined) continue;
     const owner = {
       toolCallId: planned.toolCallId,
       toolName: planned.toolName,
@@ -705,7 +627,11 @@ export function verifyPlan(
         checked.push({ ...base, source: sourceOfWindow(from), filled: true, window: from });
         continue;
       }
-      if (alternatives.has(p.argument)) continue;
+      if (
+        alternatives.has(p.argument) ||
+        (p.period === true && decision?.comparisonAsk !== undefined)
+      )
+        continue;
       if (untaken.has(p.argument) && (p.missing || decision?.how === 'filled')) continue;
       const rule = rules?.ruled.find((r) => r.argument === p.argument);
       const check = p.missing ? undefined : sourceCheckOf(sources, toolOf, call, p.argument, rule);
@@ -834,7 +760,7 @@ export function resolutionsOf(
       continue;
     }
     const decision = decisions?.get(address);
-    if (decision?.how === 'refused') {
+    if (decision?.how === 'refused' && decision.comparisonAsk === undefined) {
       resolutions.push({
         ...owner,
         refused: timeRefusal(
@@ -895,8 +821,9 @@ export function resolutionsOf(
       decision?.how === 'not-filled' &&
       decision.why === 'open-reading' &&
       ask.some((a) => forms.has(a));
-    if (fills.length > 0 || ask.length > 0) {
+    if (fills.length > 0 || ask.length > 0 || decision?.comparisonAsk !== undefined) {
       resolutions.push({
+        ...(decision?.comparisonAsk !== undefined && { comparisonAsk: decision.comparisonAsk }),
         ...owner,
         ...(fills.length > 0 && { fills }),
         ...(decision?.how === 'filled' &&

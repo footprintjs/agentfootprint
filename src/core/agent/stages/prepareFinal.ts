@@ -34,11 +34,7 @@ import {
   copyAnswerCoverage,
   type AnswerCoverage,
 } from '../../../semantics/coverage/index.js';
-import type { TimeLimitLines } from '../../../semantics/coverage/timeLimits.js';
 import type { AgentState } from '../types.js';
-import type { FindingsLedger } from '../findings/types.js';
-import { presentationZoneOf } from '../../../time/rows.js';
-import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
 import { assistantReplayFields } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
@@ -52,6 +48,7 @@ import {
 import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
 import type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
 import { finalStandingOf, type StandingLineEvidence } from './prepareFinal/standing.js';
+import { declaredInZone, presentationOf, timeLinesOf } from './prepareFinal/timeLimits.js';
 export type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
 
 type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
@@ -351,40 +348,6 @@ export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void
   prepareFinalWithLimits(scope);
 
 /**
- * The run's presentation zone (the time layer) — the zone of the turn's
- * `clock` row (`time/rows.ts` · `presentationZoneOf`). Read ONLY by the
- * variants mounted under `.time()`, so an agent without the layer never reads
- * the ledger here. `undefined` when no clock was filed (a paused turn from a
- * runtime without the layer): the lines are then the declared instants.
- */
-async function presentationOf(
-  scope: TypedScope<AgentState>,
-): Promise<BoundPresentation | undefined> {
-  const zone = presentationZoneOf(scope.findingsLedger as FindingsLedger | undefined);
-  if (zone === undefined) return undefined;
-  // The renderer loads only here, under `.time()` — the optional-family law.
-  const { bindPresentation } = await import('../../../time/present.js');
-  return bindPresentation({ zone });
-}
-
-/**
- * The time layer's limits lines for THIS turn (step T8), composed from the
- * record: one line per `period` row whose result checks hold
- * (`coverage/period.ts` · `periodCheckLine`) and the wall-clock sources'
- * `Clocks` lines (`source-clock` rows; `time/check.ts` · `clocksDiffer`).
- * `undefined` when there is no clock (nothing to render in) or nothing to say.
- */
-async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLines | undefined> {
-  // The composer (and the renderer it binds) loads only here, under `.time()` — the
-  // optional-family law, as `presentationOf`.
-  const { timeLimitLinesOf } = await import('../../../semantics/coverage/timeLimits.js');
-  return timeLimitLinesOf(
-    scope.findingsLedger as FindingsLedger | undefined,
-    scope.turnNumber as number | undefined,
-  );
-}
-
-/**
  * `prepareFinalWithLimitsStage` under `.time()` (the time layer): the same
  * block, each `Period:` line rendered in the run's clock zone with the zone
  * named (`coverage/period.ts` · `periodLine`), and — step T8 — the result
@@ -396,7 +359,7 @@ const prepareFinalWithLimitsInZone = async (
   releaseTokens = false,
   displayNameOf?: DisplayNameOf,
 ): Promise<void> => {
-  const declared = scope.coverageDeclared ?? [];
+  const declared = declaredInZone(scope);
   const time = await timeLinesOf(scope);
   const scripts = scriptTextOf(scope);
   const answer =
@@ -450,7 +413,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
 ): FinalStage {
   return async (scope) => {
     const { assumedBlockOf } = await import('../arguments/serve.js');
-    const declared = scope.coverageDeclared ?? [];
+    const declared = inZone ? declaredInZone(scope) : scope.coverageDeclared ?? [];
     // The decisions are read only when there is a row a rewrite could
     // supersede — and only on an agent whose chain can write one.
     const assumed = assumedBlockOf(
@@ -693,7 +656,12 @@ export function prepareFinalWithAnswerLayerStage(
       return;
     }
     const { line, standing } = finalStandingOf(scope, o.standingLine);
-    const declared = o.limits ? scope.coverageDeclared ?? [] : [];
+    const declared =
+      o.limits && o.inZone === true
+        ? declaredInZone(scope)
+        : o.limits
+        ? scope.coverageDeclared ?? []
+        : [];
     let assumed = '';
     // The "Assumed" block when no line names the assumed values: the line arm is
     // off, or its mode left the line off this answer (one composer for one fact,

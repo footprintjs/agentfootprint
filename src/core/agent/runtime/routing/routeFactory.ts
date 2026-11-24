@@ -115,6 +115,7 @@ export function routeFactory(
           environment.inputsArmed
             ? { rewrites: this.configuration.toolMiddleware.length > 0 }
             : undefined,
+          this.configuration.timeOptions !== undefined,
         )
       : routeDecider;
 

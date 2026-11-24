@@ -27,6 +27,7 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { callOccurrenceField, readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { completeClock } from '../../../time/clock.js';
+import { comparisonArgumentsMatch } from '../../../time/comparison/arguments.js';
 import { granularityMsOf } from '../../../time/convert.js';
 import { driftAtDispatch } from '../../../time/drift.js';
 import { checkReading, type TimeReading } from '../../../time/reader.js';
@@ -49,6 +50,7 @@ import {
 } from '../../../tools/declare.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
+import { seedToolSettlements } from '../honesty/settledToolCalls.js';
 import type { AgentInput, AgentState } from '../types.js';
 import type { SeedStageDeps } from './seed.js';
 import type { ToolCallsHandlerDeps } from './toolCalls/index.js';
@@ -69,17 +71,17 @@ import type { ToolCallsHandlerDeps } from './toolCalls/index.js';
 export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): void {
   const draft = deps.timeClock?.(scope);
   if (draft === undefined) return;
-  const answered =
-    draft.zoneSource === 'unknown'
-      ? answeredZoneOf(scope.findingsLedger as FindingsLedger | undefined)
-      : undefined;
+  const turn = scope.turnNumber as number;
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const kept = clockOf(ledger);
+  if (kept?.turn === turn && kept.comparison !== undefined) return;
+  const answered = draft.zoneSource === 'unknown' ? answeredZoneOf(ledger) : undefined;
   const clock = completeClock(draft, scope.turnStartMs as number, answered);
+  if (clock.comparison !== undefined && !('settledToolCalls' in scope)) {
+    seedToolSettlements(scope, true, false);
+  }
   recordFindings(scope, [
-    clockRow(
-      clock,
-      { turn: scope.turnNumber as number, iteration: scope.iteration as number },
-      draft.window,
-    ),
+    clockRow(clock, { turn, iteration: scope.iteration as number }, draft.window),
   ]);
 }
 
@@ -132,6 +134,41 @@ export function readTimeWords(
 }
 
 // ─── ToolCalls ───────────────────────────────────────────────────────────
+
+/** The last accepted arguments must still name only the exact selected period. */
+export function comparisonDispatchProblem(
+  scope: TypedScope<AgentState>,
+  call: TimeCallIdentity,
+  tool: RuledToolLike | undefined,
+  args: Readonly<Record<string, unknown>>,
+  appZone: ZoneName | undefined,
+): string | undefined {
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const clock = clockOf(ledger);
+  const turn = scope.turnNumber as number;
+  if (clock?.turn !== turn || !clock.comparison?.tools.includes(call.toolName)) return undefined;
+  const key = readCallOccurrenceKey(call);
+  const window = callWindowOfCall(
+    ledger,
+    call.toolCallId,
+    turn,
+    (row) => key !== null && readCallOccurrenceKey(row) === key,
+  );
+  const rules = rulesOf(tool);
+  if (
+    window?.comparison !== undefined &&
+    window.form !== undefined &&
+    window.asked !== undefined &&
+    rules !== undefined &&
+    !isRefused(rules) &&
+    comparisonArgumentsMatch(args, periodFormsOf(rules.period), window.form, window.asked, {
+      now: clock.now,
+      appZone,
+    })
+  )
+    return undefined;
+  return 'This source did not run because its final arguments cannot be bound to the confirmed comparison window.';
+}
 
 /**
  * The time layer at one dispatch: the `call` row (`time/rowsBuild.ts` ·

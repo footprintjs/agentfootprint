@@ -52,6 +52,7 @@ export function clockRow(
     nowSource: clock.nowSource,
     zone: clock.zone,
     zoneSource: clock.zoneSource,
+    ...(clock.comparison !== undefined && { comparison: clock.comparison }),
     ...(window !== undefined && {
       window: { ...window, source: 'control' as const },
     }),
@@ -93,6 +94,7 @@ export function clockOnResumeRow(
   const change = clockChange(passed, {
     now: kept.now,
     zone: kept.zone,
+    ...(kept.comparison !== undefined && { comparison: kept.comparison }),
     ...(window !== undefined && {
       window: {
         from: window.from,
@@ -196,6 +198,7 @@ export function callWindowRow(
         form: c.form,
         asked: { from: decision.window.range.from, to: decision.window.range.to },
         person: personOf(decision.window),
+        ...(decision.comparison !== undefined && { comparison: decision.comparison }),
         ...(c.rounded === true && { rounded: true as const }),
         ...(widened !== undefined && { sent: widened.sent }),
         ...(widened !== undefined &&
@@ -212,6 +215,7 @@ export function callWindowRow(
         asked: decision.asked,
         person: personOf(decision.window),
         by: decision.by,
+        ...(decision.comparison !== undefined && { comparison: decision.comparison }),
         ...partly,
       };
     case 'model-chosen':

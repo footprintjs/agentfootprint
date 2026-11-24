@@ -53,6 +53,10 @@ import type { AnswerCoverage, DeclaredCoverage } from '../../../semantics/covera
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import type { RouteBranch } from './route.js';
+import {
+  comparisonCoverageForAnswer,
+  comparisonPeriodAdmission,
+} from '../honesty/comparisonPeriods.js';
 
 /**
  * The inputs layer is armed (honesty layer 2): the typed answer's limits
@@ -90,11 +94,19 @@ async function assumedValuesOf(
 export function withAnswerCoverage(
   decide: (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch>,
   inputs?: AnswerCoverageInputsArm,
+  timeArmed = false,
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   return async (scope) => {
     const branch = await decide(scope);
     if (branch !== 'final') return branch;
-    const declared = scope.coverageDeclared as readonly DeclaredCoverage[] | undefined;
+    const declarations = scope.coverageDeclared as readonly DeclaredCoverage[] | undefined;
+    const declared = timeArmed
+      ? comparisonCoverageForAnswer(
+          declarations,
+          scope.findingsLedger,
+          comparisonPeriodAdmission(() => [scope.settledToolCalls, scope.settledToolCallsComplete]),
+        )
+      : declarations;
     const folded = declared === undefined ? undefined : coverageOfAnswer(declared);
     const assumed = inputs === undefined ? [] : await assumedValuesOf(scope, inputs);
     const limits = answerCoverageOf(folded, assumed);

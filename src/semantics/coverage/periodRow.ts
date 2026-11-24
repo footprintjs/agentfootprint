@@ -36,6 +36,8 @@ export interface PeriodRow {
   readonly callOccurrenceKey?: CallOccurrenceKey;
   /** Legacy draft proof that a native result was served, before the settlement ledger. */
   readonly nativePeriodServed?: true;
+  /** This occurrence used the confirmed comparison interval. */
+  readonly comparison?: true;
   readonly kind: 'period';
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
   readonly turn: number;
