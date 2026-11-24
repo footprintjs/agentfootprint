@@ -34,8 +34,11 @@ settles.
 `selectionAtRequest.ts` binds a visible tool-selection exclusion to the native
 call that accepted the response. It retains the implementation privately when
 the prepared catalog survives to the observed attempt and the adapter reports
-that the name was absent. A winner still offered under the same name requires
-separate collision evidence. A local fallback, missing manifest, altered observed tool
+that the name was absent. When two implementations compete for an offered name,
+the native dispatch registry can establish which one won. The witness checks
+the winning party and exact tool reference before the request and again when the
+response is accepted. A dynamic provider's label cannot establish that binding.
+The private collision row stays separate from names marked absent in a receipt. A local fallback, missing manifest, altered observed tool
 contract, or reused response object supplies no witness. On a receipt-enabled native turn with no active redaction,
 `recordToolSelection.ts` adds visible names and reasons to that call's receipt.
 It shares one row budget across the turn. Unknown capacity on recovery

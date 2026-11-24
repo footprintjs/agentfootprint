@@ -416,13 +416,7 @@ export function buildCallLLMStage(
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
     const selection =
       deps.servedTools?.selection &&
-      selectionAtRequest(
-        deps.servedTools,
-        iteration,
-        scope.$attempt?.(),
-        baseRequest,
-        withheld !== null,
-      );
+      selectionAtRequest(deps, iteration, scope.$attempt?.(), baseRequest, withheld !== null);
     const serving =
       deps.recordReceipt === false
         ? undefined

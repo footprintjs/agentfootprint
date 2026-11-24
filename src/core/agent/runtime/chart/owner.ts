@@ -335,6 +335,7 @@ export function buildChart(
   // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
   // late-binding pattern as seed for toolSchemas (computed below).
   const callLLMFor = requestFactory({
+    registrations: { registryByName, toolClaimants },
     configuration: this.configuration,
     argumentSources,
     governsOutput,

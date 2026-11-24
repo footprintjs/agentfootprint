@@ -16,6 +16,7 @@ import type { OutputSchemaParser } from '../../../../answer-validation/outputSch
 import type { FindingsAnswerAsk, FindingsServeMode } from '../../findings/serve.js';
 
 export interface CallLLMStageDeps {
+  readonly registrations?: import('../toolResolver.js').ToolRegistrations;
   readonly servedTools?: import('../../../slots/commitServedTools.js').ServedToolParties;
   /** Whether this native run can retain newly disclosed catalog names on its receipt. */
   readonly canRecordToolSelection?: () => boolean;

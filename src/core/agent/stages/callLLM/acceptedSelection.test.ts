@@ -100,7 +100,7 @@ it('binds the evidence to one successful attempt and discards an ambiguous reuse
   };
   const req: LLMRequest = { model: 'mock', messages: [], tools: [chosen.schema] };
   const response = await mock({ reply: 'done' }).complete(req);
-  const evidence = selectionAtRequest(owner, 2, native, req, false);
+  const evidence = selectionAtRequest({ servedTools: owner }, 2, native, req, false);
   if (!evidence) throw new Error('missing selection witness');
   const previous = evidence.attempt();
   previous.observe(req);
@@ -113,8 +113,8 @@ it('binds the evidence to one successful attempt and discards an ambiguous reuse
   next.finish(response);
   evidence.accept(response);
   expect(owner.selection?.accepted).toBeUndefined();
-  expect(selectionAtRequest(owner, 3, native, req, false)).toBeUndefined();
-  expect(selectionAtRequest(owner, 2, native, req, true)).toBeUndefined();
+  expect(selectionAtRequest({ servedTools: owner }, 3, native, req, false)).toBeUndefined();
+  expect(selectionAtRequest({ servedTools: owner }, 2, native, req, true)).toBeUndefined();
 });
 
 it('keeps collision winners, a name that another source supplied, and incomplete selection out of the accepted omission list', () => {
@@ -138,13 +138,13 @@ it('keeps collision winners, a name that another source supplied, and incomplete
       ],
     },
   };
-  expect(selectionAtRequest(owner, 1, native, req, false)).toBeUndefined();
+  expect(selectionAtRequest({ servedTools: owner }, 1, native, req, false)).toBeUndefined();
   owner.selection = {
     iteration: 1,
     complete: false,
     rows: [{ kind: 'ledger', name: 'monitor', tool: skipped }],
   };
-  expect(selectionAtRequest(owner, 1, native, req, false)).toBeUndefined();
+  expect(selectionAtRequest({ servedTools: owner }, 1, native, req, false)).toBeUndefined();
 });
 
 it('withholds a completed candidate after native cancellation or an intervening new slot', async () => {
@@ -163,7 +163,7 @@ it('withholds a completed candidate after native cancellation or an intervening 
   for (const cause of ['cancel', 'new-slot']) {
     const controller = new AbortController();
     const witness = selectionAtRequest(
-      owner,
+      { servedTools: owner },
       1,
       { ...native, signal: controller.signal },
       req,

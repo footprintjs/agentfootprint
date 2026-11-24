@@ -1,7 +1,10 @@
+import { registeredToolForParty } from '../toolResolver.js';
+import type { Tool } from '../../../../tools/tools.js';
+import type { CallLLMStageDeps } from './types.js';
 import type { AttemptContext } from 'footprintjs';
 import { matchesPreparedData } from '../../../../lib/matchesPreparedData.js';
 import type { LLMRequest, LLMResponse } from '../../../../provider-contract/types.js';
-import type { AcceptedToolSelection, ServedToolParties } from '../../../slots/commitServedTools.js';
+import type { AcceptedToolSelection } from '../../../slots/commitServedTools.js';
 
 function sameUnforcedCatalog(expected: LLMRequest['tools'], request: LLMRequest): boolean {
   try {
@@ -34,15 +37,16 @@ function confirmsNames(response: LLMResponse, names: readonly string[]): boolean
   }
 }
 
-/** Private, per-call evidence. An adapter manifest attests names only. A collision whose
- * winner was offered needs additional implementation proof before it can travel with a request. */
+/** Private, per-call evidence. An adapter manifest attests names only. For a collision,
+ * the native registration must also bind the exact winner at request and acceptance. */
 export function selectionAtRequest(
-  owner: ServedToolParties | undefined,
+  deps: Pick<CallLLMStageDeps, 'servedTools' | 'registrations'>,
   iteration: number,
   consumer: Pick<AttemptContext, 'series' | 'attempt' | 'signal'> | undefined,
   initial: LLMRequest,
   withheld: boolean,
 ) {
+  const { servedTools: owner, registrations } = deps;
   const selection = owner?.selection;
   if (
     !owner ||
@@ -65,7 +69,27 @@ export function selectionAtRequest(
     names.some((name) => !owner.current.has(name))
   )
     return undefined;
-  const rows = selection.rows.filter((row) => row.kind !== 'collision' && !offered.has(row.name));
+  const eligibleRows = (candidates: AcceptedToolSelection['rows']) => {
+    const bindings = new Map<string, Tool | undefined>();
+    return candidates.filter((row) => {
+      if (row.kind !== 'collision') return !offered.has(row.name);
+      const { name, winner } = row;
+      if (
+        !registrations ||
+        !offered.has(name) ||
+        row.tool === winner.tool ||
+        winner.party.channel === 'provider' ||
+        owner.restored ||
+        owner.pinned?.has(name) ||
+        owner.current.get(name) !== winner.party
+      )
+        return false;
+      if (!bindings.has(name))
+        bindings.set(name, registeredToolForParty(registrations, name, winner.party)?.tool);
+      return bindings.get(name) === winner.tool;
+    });
+  };
+  const rows = eligibleRows(selection.rows);
   if (!rows.length) return undefined;
   // Retain identity only on this native call. A discarded or late response cannot
   // supply the proof for a different response that actually passes validation.
@@ -93,10 +117,12 @@ export function selectionAtRequest(
         !confirmsNames(response, names)
       )
         return undefined;
+      const retained = eligibleRows(rows);
+      if (!retained.length) return undefined;
       const accepted = {
         consumer: { series: consumer.series, attempt: consumer.attempt },
         iteration,
-        rows,
+        rows: retained,
       };
       selection.accepted = accepted;
       return accepted;
