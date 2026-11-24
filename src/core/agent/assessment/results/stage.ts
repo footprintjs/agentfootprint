@@ -17,6 +17,7 @@ import { recoveredCallOutcomes } from '../turnResults.js';
 import type { AssessmentDeclarations } from '../types.js';
 import type { PreparedWarning, WarningContext } from '../warningContext.js';
 import { libraryResultReasons } from './library-did/stage.js';
+import { retrievalReasons } from './retrieval/stage.js';
 
 /** File withholding and legacy period reasons before reading coverage. */
 export function readInitialResults({ admission, periods, g }: PreparedWarning): void {
@@ -37,6 +38,7 @@ export function readResultsCoverage({
   g,
 }: WarningContext): void {
   for (const { reason, witness } of libraryResultReasons(state)) fire(g, reason, witness);
+  for (const { reason, witness } of retrievalReasons(state)) fire(g, reason, witness);
   readCoverageRows(coverage, g);
   readTurnCalls(reads, coverage, resultOpportunities, g);
 }

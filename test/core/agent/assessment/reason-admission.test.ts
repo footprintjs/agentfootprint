@@ -66,6 +66,26 @@ function ledger(row: Row): Seed {
   return { state: { findingsLedger: [{ ...CALL, ...row }] } };
 }
 
+function retrieval(source: Row): Seed {
+  return {
+    state: {
+      iteration: 1,
+      findingsLedger: [
+        {
+          kind: 'retrieval-request',
+          turn: CALL.turn,
+          iteration: 1,
+          accepted: 'absent',
+          acceptedCount: 0,
+          exposure: 'absent',
+          committedProviderResponse: true,
+          sources: [source],
+        },
+      ],
+    },
+  };
+}
+
 function argument(fields: Row): Seed {
   return ledger({ kind: 'argument', argument: 'window', rule: 'assume', value: '4h', ...fields });
 }
@@ -135,6 +155,19 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
       libraryResultLimits: [WINDOW_DROP],
     },
   },
+  'memory-retrieval-timeout': retrieval({
+    kind: 'timeout',
+    admittedCount: 0,
+    exclusions: {},
+    complete: true,
+  }),
+  'memory-retrieval-excluded': retrieval({
+    kind: 'ok',
+    candidateCount: 1,
+    admittedCount: 0,
+    exclusions: { 'below-threshold': 1 },
+    complete: true,
+  }),
   'work-not-finished': { message: { reportedStatus: 'pending' } },
   'coverage-gap': coverage('ledger', { notChecked: ['late arrivals'] }),
   'declared-absent': coverage('absence'),

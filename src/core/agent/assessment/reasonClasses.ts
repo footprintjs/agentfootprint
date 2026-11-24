@@ -53,6 +53,8 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'placed-unread': 'result',
   'times-without-zone': 'result',
   'result-dropped-from-window': 'turn',
+  'memory-retrieval-timeout': 'turn',
+  'memory-retrieval-excluded': 'turn',
   'work-not-finished': 'result',
   'coverage-gap': 'result',
   'declared-absent': 'result',

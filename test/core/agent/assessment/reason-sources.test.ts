@@ -189,6 +189,8 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'asked',
         'check-unreachable',
         'invariant-violation',
+        'memory-retrieval-timeout',
+        'memory-retrieval-excluded',
         'result-dropped-from-window',
         'result-withheld',
         'step-skipped',

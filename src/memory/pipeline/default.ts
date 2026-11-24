@@ -52,6 +52,7 @@
  * // ... continue building your custom flowchart
  * ```
  */
+import type { RetrievalRecording } from '../retrieval/types.js';
 import { flowChart } from 'footprintjs';
 
 import { loadRecent, type LoadRecentConfig } from '../stages/loadRecent.js';
@@ -65,6 +66,7 @@ import type { MemoryStore } from '../store/index.js';
 import type { MemoryPipeline } from './types.js';
 
 export interface DefaultPipelineConfig {
+  readonly recording?: RetrievalRecording;
   /** The store both subflows share. */
   readonly store: MemoryStore;
 
@@ -172,6 +174,7 @@ export function defaultPipeline(config: DefaultPipelineConfig): MemoryPipeline {
     ...(config.maxEntries !== undefined && { maxEntries: config.maxEntries }),
   };
   const formatConfig: FormatDefaultConfig = {
+    ...(config.recording !== undefined && { recording: config.recording }),
     ...(config.formatHeader !== undefined && { header: config.formatHeader }),
     ...(config.formatFooter !== undefined && { footer: config.formatFooter }),
   };

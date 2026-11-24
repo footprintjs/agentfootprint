@@ -80,6 +80,8 @@ export const words1 = {
   mcp: true,
   medium: true,
   memory: true,
+  'memory-retrieval-excluded': true,
+  'memory-retrieval-timeout': true,
   memory_read: true,
   memory_write: true,
   mention: true,
@@ -298,6 +300,4 @@ export const words1 = {
   'store-unavailable': true,
   structural: true,
   subject: true,
-  submitted: true,
-  succeeded: true,
 } as const;
