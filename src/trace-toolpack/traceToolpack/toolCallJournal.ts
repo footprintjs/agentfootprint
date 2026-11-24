@@ -1,10 +1,11 @@
 import {
   historyCallForOccurrence,
+  indexResultRewrites,
+  type ResultRewriteIndex,
   readHistoryCalls,
   rowsForOccurrence,
 } from '../../core/agent/recordedCalls.js';
 import { readCallOccurrenceKey } from '../../lib/callOccurrence.js';
-import type { LLMMessage } from '../../provider-contract/types.js';
 import type { TraceToolpackArtifacts } from '../types.js';
 import type { ToolpackIndex } from './packIndex.js';
 import { committedFinal } from './valueLines.js';
@@ -13,12 +14,15 @@ import type { Tool } from '../../tools/tools.js';
 import { defineTool } from '../../tools/tools.js';
 import { TOOL_CALL_SUGGESTION_CAP, TOOL_RESULT_PREVIEW_CHARS } from './structuralLimits.js';
 import { displayText, renderPreview, boundedPreview } from '../bounded.js';
-import { readNotDispatched, toolRanOf } from '../../semantics/toolRan.js';
+import { toolRanOf } from '../../semantics/toolRan.js';
 import { resultRewriteLine } from './resultRewrite.js';
 import {
   latestCallOccurrence,
   latestKeyedToolCall,
   resumeRefusalOf,
+  settlementMarkerOf,
+  unboundDecisionFor,
+  type Settlement,
   type HistoryTurn,
   type ToolMiddlewareDecisionRow,
   type ToolBracketEvent,
@@ -26,21 +30,6 @@ import {
 } from './toolCallOccurrence.js';
 
 // ── inspect_tool_call ──────────────────────────────────────────────────────
-
-type SettledMarker = NonNullable<LLMMessage['notDispatched']>;
-type Settlement = SettledMarker | 'malformed';
-
-/** Keep an unreadable marker distinct from an absent one when choosing the record to read. */
-function settlementMarkerOf(value: unknown): Settlement | undefined {
-  switch (readNotDispatched(value)) {
-    case 'settled':
-      return value as SettledMarker;
-    case 'malformed':
-      return 'malformed';
-    case 'absent':
-      return undefined;
-  }
-}
 
 /** What one tool call looks like once the four sources are joined. */
 interface ToolCallFacts {
@@ -76,6 +65,8 @@ interface ToolCallReader {
   factsFor(toolCallId: string): ToolCallFacts;
   /** Committed conversation history, lazily materialised. */
   history(): readonly HistoryTurn[];
+  /** Final rewrite metadata from the complete ledger, before occurrence filtering. */
+  resultRewrites(): ResultRewriteIndex;
   /** Typed events of one kind, with their payload + meta lifted. */
   eventsOf(type: string): { payload: Record<string, unknown>; meta: Record<string, unknown> }[];
 }
@@ -105,6 +96,9 @@ function buildToolCallReader(
     }
     return ledgerMemo;
   };
+
+  let rewritesMemo: ResultRewriteIndex | undefined;
+  const resultRewrites = (): ResultRewriteIndex => (rewritesMemo ??= indexResultRewrites(ledger()));
 
   const eventsOf = (type: string) =>
     (artifacts.events ?? [])
@@ -260,9 +254,7 @@ function buildToolCallReader(
       rows,
       notDispatched: marker,
       resumeRefusal: resumeRefusalOf(evidence, rows),
-      unboundRows:
-        key === null ||
-        ledger().some((row) => row.toolCallId === toolCallId && readCallOccurrenceKey(row) == null),
+      unboundRows: key === null || ledger().some((row) => unboundDecisionFor(row, toolCallId)),
       declined: evidence.some(
         (event) =>
           event.type === 'agentfootprint.checkin.decision' && event.payload.approved === false,
@@ -337,7 +329,7 @@ function buildToolCallReader(
     };
   };
 
-  return { knownCalls, factsFor, history, eventsOf };
+  return { knownCalls, factsFor, history, resultRewrites, eventsOf };
 }
 
 /**
@@ -494,7 +486,11 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
             `it may have been denied before it ran, or the turn ended (paused/failed) before ` +
             `it landed.`,
       );
-      const rewriteLine = resultRewriteLine(facts, artifacts.snapshot);
+      const rewriteLine = resultRewriteLine(
+        facts.occurrenceKey,
+        reader.resultRewrites(),
+        artifacts.snapshot,
+      );
       if (rewriteLine !== undefined) lines.push(rewriteLine);
 
       // Outcome + duration: the event tail is the only clock a run has,

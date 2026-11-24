@@ -20,8 +20,6 @@ export { declarationOccurrences, groupOccurrenceEvidence } from './recordedCalls
 export {
   readResultDispositionMark,
   resultDispositions,
-  lastResultRewriteIndex,
-  readResultRewriteName,
 } from './recordedCalls/resultDispositions.js';
 export {
   indexResultRewrites,

@@ -11,16 +11,21 @@ interface ResultRewriteReference {
 
 export type ResultRewriteIndex = ReadonlyMap<string, ResultRewriteReference>;
 
-/** One transient, descriptor-only pass over this read's ledger. No fact is persisted. */
+/** The final recorded changer owns attribution, even when its name is unavailable.
+ * One transient, descriptor-only pass over this read's ledger. No fact is persisted. */
 export function indexResultRewrites(ledger: unknown): ResultRewriteIndex {
   const byOccurrence = new Map<string, ResultRewriteReference>();
   if (!Array.isArray(ledger)) return byOccurrence;
   for (let index = 0; index < ledger.length; index++) {
     const row: unknown = Object.getOwnPropertyDescriptor(ledger, String(index))?.value;
-    if (!isRecord(row)) continue;
-    const key = readCallOccurrenceKey(row);
-    if (typeof key !== 'string') continue;
     const disposition = readRecordedResultDecision(row);
+    if (disposition === undefined || disposition === 'unchanged') continue;
+    const key = isRecord(row) ? readCallOccurrenceKey(row) : undefined;
+    if (typeof key !== 'string') {
+      // An unplaced potential final changer cannot prove which earlier owner survives.
+      byOccurrence.clear();
+      continue;
+    }
     if (disposition === 'rewritten') {
       const name = readResultRewriteName(row);
       byOccurrence.set(key, {

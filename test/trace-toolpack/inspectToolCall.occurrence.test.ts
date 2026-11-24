@@ -59,7 +59,7 @@ function rewrite(label: string, key?: readonly number[]) {
 function inspect(
   history: readonly object[],
   events: readonly AgentfootprintEvent[] | undefined,
-  middlewareDecisions: readonly object[] = [],
+  middlewareDecisions: readonly unknown[] = [],
   showWithheldResults = false,
   servedUnderPolicy = false,
 ) {
@@ -196,4 +196,31 @@ describe('inspect_tool_call from keyed saved recordings', () => {
       expect(out).not.toContain('rewritten by:');
     },
   );
+
+  it.each([
+    ['null row', null],
+    ['opaque row', '[REDACTED]'],
+    ['absent final key', { ...rewrite('unplaced'), moment: 'after-tool' }],
+    ['malformed final key', { ...rewrite('unplaced', [1]), moment: 'after-tool' }],
+  ])('an unavailable %s cannot leave an earlier trace owner', async (_, row) => {
+    const out = await inspect(
+      [proposal('one', second), result('one', second)],
+      [start('4', second), end('4', 0, second)],
+      [{ ...rewrite('inner', second), moment: 'after-tool' }, row],
+      true,
+    );
+    expect(out).toContain('result: "one items"');
+    expect(out).not.toContain('rewritten by:');
+  });
+
+  it('a later bound trace owner survives an earlier null decision', async () => {
+    const out = await inspect(
+      [proposal('one', second), result('one', second)],
+      [start('4', second), end('4', 0, second)],
+      [null, { ...rewrite('final', second), moment: 'after-tool' }],
+      true,
+    );
+    expect(out).toContain('rewritten by: "final-rewrite"');
+    expect(out).toContain('result: "one items"');
+  });
 });
