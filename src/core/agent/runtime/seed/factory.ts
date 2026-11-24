@@ -10,6 +10,8 @@ import type { AgentInput, RunConfig, RunConfigContext } from '../../types.js';
 import { buildSeedStage } from '../../stages/seed.js';
 import { type HonestyLayers } from '../../honesty/armed.js';
 import type { AgentConfiguration } from '../configuration/types.js';
+import { CITATION_PRIVATE_FIELDS } from '../../../../redaction/privateFields.js';
+import { canStorePrivateFields, markPrivateFields } from '../../../../redaction/runRedaction.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
@@ -40,7 +42,7 @@ export function seedFactory(environment: SeedEnvironment) {
       run.value.pendingResumeFindingsLedger = undefined;
       return l;
     };
-    return buildSeedStage({
+    const seed = buildSeedStage({
       hostDecision: run.value.hostTurn !== undefined,
       hostOnly: run.value.hostTurn?.hasInput === false,
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
@@ -233,5 +235,10 @@ export function seedFactory(environment: SeedEnvironment) {
         },
       }),
     });
+    if (environment.configuration.citationOptions === undefined) return seed;
+    return (scope: Parameters<typeof seed>[0]) => {
+      if (canStorePrivateFields(scope)) markPrivateFields(scope, CITATION_PRIVATE_FIELDS);
+      return seed(scope);
+    };
   };
 }

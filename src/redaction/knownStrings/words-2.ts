@@ -46,6 +46,7 @@ export const words2 = {
   unclassified: true,
   unconfirmed: true,
   undeclared: true,
+  'ungrounded-entity': true,
   'unit-scale': true,
   unknown: true,
   'unknown-fact': true,

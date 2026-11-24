@@ -195,11 +195,25 @@ law, not an exception to it.
 
 ***
 
+### citations?
+
+> `readonly` `optional` **citations?**: `ProseCitationOptions`
+
+Defined in: [src/core/agent/types/observation.ts:10](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L10)
+
+Offer citations in prose on adapters that can prove which tool bodies were submitted.
+
+#### Inherited from
+
+`AgentObservationOptions.citations`
+
+***
+
 ### commitValues?
 
 > `readonly` `optional` **commitValues?**: `CommitValuesMode`
 
-Defined in: [src/core/agent/types/observation.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L21)
+Defined in: [src/core/agent/types/observation.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L24)
 
 Commit-log value encoding (#13c-B) — forwarded to the internal
 executor as `{ commitValues }`. Agent default is **`'delta'`**: a
@@ -641,7 +655,7 @@ and the `limit` on the record's `ledgerFacts` block.
 
 > `readonly` `optional` **liveThinkingWithHeldDrafts?**: `"provider-summary"`
 
-Defined in: [src/core/agent/types/observation.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L65)
+Defined in: [src/core/agent/types/observation.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L68)
 
 Serve provider-classified summary fragments while output policy or answer
 validation holds draft answers. Omit to hold all live thinking deltas in
@@ -873,7 +887,7 @@ gate's `posture`; nothing here blocks, revises or rewrites anything.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types/observation.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L51)
+Defined in: [src/core/agent/types/observation.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L54)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -913,7 +927,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types/observation.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L57)
+Defined in: [src/core/agent/types/observation.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L60)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without

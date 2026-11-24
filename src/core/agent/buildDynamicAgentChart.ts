@@ -64,6 +64,7 @@ import { mountAgentMemoryWrites } from './memoryWrites.js';
 import { mountHostTurn } from './hostEnd/chart.js';
 import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
+import { llmCallResponseFields } from './llmCallReads.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import {
   breakFinalStage,
@@ -86,7 +87,6 @@ import {
   RESULTS_LOOP_TARGET,
   startFinalBranch,
 } from './honesty/mounts.js';
-import { responseStopFields } from './honesty/responseStop.js';
 import { retrievalFindingsOf } from './honesty/retrievalRequests.js';
 import type { AgentState } from './types.js';
 import { dynamicTurnInput } from './dynamicTurnInput.js';
@@ -564,7 +564,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           ...acceptedResponseFields(s),
           // Native candidates and prose cutoffs carry stop evidence. Ordinary
           // replies without earlier stop evidence leave the mapper byte-identical.
-          ...responseStopFields(s),
+          ...llmCallResponseFields(s, deps.hasCitations === true),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
           // the SAME past the model was given, not the one before delivery.

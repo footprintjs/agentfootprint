@@ -54,8 +54,8 @@ import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceRecoveryPiece } from '../evidence/recovery.js';
 import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { readExternalGrounds } from './callLLM/externalGrounds.js';
-import { identifyAcceptedToolCalls } from './callLLM/acceptedCalls.js';
-import { recordResponseStop } from '../honesty/responseStop.js';
+import { commitAcceptedResponse } from './callLLM/commitResponse.js';
+import { prepareCitationProjection } from './callLLM/citationProjection.js';
 import { liveChunkEmitter } from './callLLM/liveChunks.js';
 import { recoveryFeedback, requestOnlyMessages } from './callLLM/requestOnly.js';
 import {
@@ -413,6 +413,16 @@ export function buildCallLLMStage(
       continuing,
     );
     const detached = detachProviderInput(baseRequest, cacheMarkers, deps.outputFormat);
+    const citations = prepareCitationProjection(
+      scope,
+      deps.offerCitations === true &&
+        continuing === undefined &&
+        deps.outputSchemaParser === undefined &&
+        deps.outputFormat === undefined,
+      committed,
+      wireMessages,
+      detached.request.messages,
+    );
     const selection =
       deps.servedTools?.selection &&
       selectionAtRequest(deps, iteration, scope.$attempt?.(), baseRequest, withheld !== null);
@@ -599,11 +609,12 @@ export function buildCallLLMStage(
     // once per stage — reused across reliability-loop
     // iterations. Named to avoid shadowing `singleProviderCall`'s own
     // `hooks` parameter, which is the unrelated `{ onFirstChunk }` bag.
-    const providerHooks = resilienceHooks(
+    const ordinaryProviderHooks = resilienceHooks(
       scope,
       deps.recordReceipt !== false,
       deps.onReplayPrepared,
     );
+    const providerHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
     const recall =
       deps.recallRequests === undefined
         ? undefined
@@ -843,46 +854,15 @@ export function buildCallLLMStage(
     if (typeof response.usage.cacheRead === 'number') {
       scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
     }
-    const nativeOutput =
-      deps.outputFormat !== undefined &&
-      !localFallback &&
-      (deps.nativeOutputAuto !== true || answeredBy.native);
-    // A provider that states its manifest (wireManifest.ts)
-    // and says no format crossed sent the request unconstrained while it
-    // declared the capability — refused, never delivered as constrained.
-    if (
-      nativeOutput &&
-      response.wireManifest !== undefined &&
-      response.wireManifest.outputFormat === undefined
-    ) {
-      throw new Error(
-        `Agent: native structured output — '${answeredBy.provider}' ` +
-          `declares a native structured-output format, but its wire manifest says the request ` +
-          `it sent carried none. The answer was not constrained, so it is not delivered as if ` +
-          `it were.`,
-      );
-    }
-    if (deps.findings === true)
-      scope.findingsRequest =
-        acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-    scope.llmLatestContent = response.content;
-    if (recall !== undefined)
-      deps.recallRequests?.(scope, iteration, recall.summary(localFallback ? 'local' : 'provider'));
-    deps.onResponseCommitted?.(scope, localFallback);
-    const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
-    scope.llmLatestToolCalls = acceptedToolCalls;
-    choice?.accepted(
-      scope,
-      localFallback ? undefined : acceptedOffer,
-      localFallback ? undefined : response.wireManifest,
-      acceptedToolCalls,
-    );
-    recordResponseStop(
-      scope,
-      localFallback ? undefined : response.stopReason,
-      nativeOutput,
-      deps.outputFormat !== undefined,
-    );
+    const acceptedToolCalls = commitAcceptedResponse(scope, deps, response, {
+      localFallback,
+      answeredBy,
+      findingsRequest: acceptedFindingsRequest,
+      citationOffer: citations?.accepted(response),
+      sourceOffer: acceptedOffer,
+      iteration,
+      recall: recall?.summary(localFallback ? 'local' : 'provider'),
+    });
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

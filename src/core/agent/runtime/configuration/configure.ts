@@ -7,7 +7,7 @@ import { cacheRequestedWithoutSupport } from '../../cacheSupport.js';
 import { registerConsentLedger, registerConsentRules } from '../../../consentRequest.js';
 import { assertArtifactPlacement } from '../../../../artifacts/placement.js';
 import { assertRedactionPolicy } from '../../../../redaction/policy.js';
-import { declareRedaction } from '../../../../redaction/declared.js';
+import { declarePrivateFields, declareRedaction } from '../../../../redaction/declared.js';
 import { TOOL_TEARDOWN_TIMEOUT_MS } from '../../../../tools/toolSessions.js';
 import type { SkillGraphDeclaredMap } from '../../skillGraphDeclared.js';
 import type { AppliedRecipe } from '../../../../recipes/types.js';
@@ -52,6 +52,7 @@ import { requireKeepLedgerFacts, resolveKeepLedgerFacts } from '../../run/ledger
 import type { Runner } from '../../../runner.js';
 import type { AgentConfigurationValues } from './values.js';
 import { resolveSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
+import { resolveProseCitations } from '../../citations/config.js';
 
 /** Public identity remains on the original runner, at its existing construction points. */
 interface AgentIdentity {
@@ -541,6 +542,10 @@ export function configureAgent(
   if (opts.sourceEvidence !== undefined) {
     if (!config.artifactStore) throw new Error('Agent.sourceEvidence requires an artifact store.');
     config.sourceEvidenceConfig = resolveSourceEvidenceOptions(opts.sourceEvidence);
+  }
+  if (opts.citations !== undefined) {
+    config.citationOptions = resolveProseCitations(opts.citations);
+    declarePrivateFields(runner);
   }
   // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
   // read at exactly one place — the tool-dispatch loop, AFTER

@@ -1,10 +1,13 @@
 import type { CommitValuesMode } from 'foottrace';
 import type { AttachRecorderOptions, FlowChartExecutorOptions } from 'footprintjs';
+import type { ProseCitationOptions } from '../citations/config.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
 /** Options for the events an Agent serves to live observers. */
 export interface AgentObservationOptions {
+  /** Offer citations in prose on adapters that can prove which tool bodies were submitted. */
+  readonly citations?: ProseCitationOptions;
   /**
    * Commit-log value encoding (#13c-B) — forwarded to the internal
    * executor as `{ commitValues }`. Agent default is **`'delta'`**: a

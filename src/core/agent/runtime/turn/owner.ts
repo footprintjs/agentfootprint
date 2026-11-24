@@ -27,6 +27,7 @@ import {
 import { InvalidRunInputError, normalizeRunInput } from '../../../runInput.js';
 import { composedInput } from '../../../messageFrom.js';
 import type { AgentInput, AgentOutput, AgentState } from '../../types.js';
+import { citationCheckpointFromState } from '../../citations/checkpoint.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
 import { requestOf } from '../../../requestOfRun.js';
 import { AROUND_TURN_STAGE_ID } from '../../run/eventStageIds.js';
@@ -277,6 +278,11 @@ export async function runLeg(
       // when nothing was — a failure between brackets, where the error's own
       // text really is the best evidence available (8.14.0).
       const observed = tracker.inFlightPhase;
+      const state = this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined;
+      const citations =
+        this.configuration.citationOptions === undefined
+          ? undefined
+          : citationCheckpointFromState(state);
       const checkpoint = buildCheckpoint(
         tracker,
         {
@@ -289,7 +295,7 @@ export async function runLeg(
         // are committed state. A crash checkpoint that carried the summary
         // in its history but not the span behind it would resume into a
         // conversation whose evidence the crash had quietly eaten.
-        foldedSpansOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        foldedSpansOf(state),
         // A crash checkpoint is the same conversation carrier as
         // `checkpoint()`, so it carries the same two owner facts — otherwise
         // resuming after a crash would be the one path that still lost the
@@ -298,28 +304,24 @@ export async function runLeg(
         this.conversationOwner(invocation.value),
         // …and the same graph cursor (SG-C), from the same snapshot reader —
         // one reader, two carriers, so neither can lose what the other keeps.
-        this.continuityCursorOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
-        evidenceRecoveryOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        this.continuityCursorOf(state),
+        evidenceRecoveryOf(state),
         // …and the findings ledger (9.101.0), from the same snapshot reader
         // `checkpoint()` uses — one reader, two carriers.
-        findingsLedgerOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        findingsLedgerOf(state),
         // …and the turn the failing run was on (honesty layers), so the
         // retry is stamped the same turn — one reader, two carriers.
-        this.turnNumberOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
-        undefined,
+        this.turnNumberOf(state),
+        citations?.claimVerification,
         this.configuration.negativeClaimsConfig === undefined
           ? undefined
-          : negativeCheckpointOf(this.native.liveSnapshot()?.sharedState ?? {}),
-        this.configuration.sourceEvidenceConfig === undefined
-          ? undefined
-          : sourceEvidenceOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
-        sourceDeclarationCorrectionOf(
-          this.native.liveSnapshot()?.sharedState as Partial<AgentState>,
-          'sourceDeclarationCorrectionSpent',
-        ),
+          : negativeCheckpointOf(state ?? {}),
+        this.configuration.sourceEvidenceConfig === undefined ? undefined : sourceEvidenceOf(state),
+        sourceDeclarationCorrectionOf(state, 'sourceDeclarationCorrectionSpent'),
         // …and the receipt of the tickets the library placed, as `checkpoint()` keeps it.
-        (this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)?.placedTickets,
-        this.native.liveSnapshot()?.sharedState,
+        state?.placedTickets,
+        state,
+        citations?.citationSources,
       );
       throw new RunCheckpointError(cause, checkpoint);
     }

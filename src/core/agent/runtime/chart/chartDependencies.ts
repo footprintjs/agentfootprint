@@ -139,6 +139,7 @@ export function chartDependencies(
     // grammar as the slot's `findings` and callLLM's `hasFindingsLedger`,
     // so the three can never disagree about whether the ledger is armed.
     ...(this.configuration.findingsOptions !== undefined && { hasFindingsLedger: true }),
+    ...(this.configuration.citationOptions !== undefined && { hasCitations: true as const }),
     // The inputs layer (honesty layer 2): `sf-inputs` between the LLM call
     // and Route, in both builders through one helper; absent → untouched.
     // With a before-tool chain, the final branch's "Assumed" block also reads
@@ -216,6 +217,7 @@ export function chartDependencies(
             environment.windowStage !== undefined,
           evidenceGate: this.configuration.evidenceGate !== undefined,
           answerValidation: this.configuration.answerValidationConfig !== undefined,
+          citations: this.configuration.citationOptions !== undefined,
           inputs: environment.inputsArmed,
           toolMiddleware: this.configuration.toolMiddleware.length > 0,
           sourceNotConsulted: this.configuration.answerLayerOption.sourceNotConsulted === true,

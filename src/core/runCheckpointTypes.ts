@@ -5,6 +5,7 @@ import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import type { NegativeCheckpoint } from './agent/negativeClaims/checkpoint.js';
+import type { StoredCitationSource } from './agent/citations/capture.js';
 import type { SourceEvidenceIndex } from '../artifacts/sourceEvidence/types.js';
 
 /** Internal repair state kept separately from the human conversation.
@@ -114,11 +115,13 @@ export interface AgentRunCheckpoint {
   readonly findingsLedger?: FindingsLedger;
   /**
    * Private, opt-in exact evidence and reservation counters. Unlike historical
-   * observations, this carrier can support later checks. `resume`, `continueFrom`
-   * and `resumeOnError` refuse a checkpoint holding it in the current release.
+   * observations, this carrier can support later checks on the same request
+   * when accompanied by the citation sources of the opted-in run.
    * Storage ownership/authenticity remains the checkpoint caller's obligation.
    */
   readonly claimVerification?: ClaimVerificationState;
+  /** Private bounded locators beside the canonical receipt carrier. */
+  readonly citationSources?: readonly StoredCitationSource[];
   /**
    * The conversation TURN the stored history ends on — the stored run's
    * `AgentState.turnNumber` — carried while an honesty layer is armed.
