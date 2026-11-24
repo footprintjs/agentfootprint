@@ -526,6 +526,11 @@ The answer layer serves the standing in these places:
 - `{ standingLine: { when } }` says the line only when it matters:
   `'always'` (also `true`), `'unless-consistent'`, or `'not-sure-or-ask'`
   (the default, covering "not sure" and "ask"). `ask` is included in every mode.
+- Add `raiseOn` to choose which recorded reasons trigger a "not sure" line.
+  For example, `{ standingLine: { when: 'not-sure-or-ask', raiseOn: ['missing-column', 'value-unsupported'] } }`
+  shows the full warning if either reason fires. An empty list suppresses
+  "not sure" lines. The assessment, limits, and "ask" behavior stay the same,
+  and configured checks still need to be armed.
 - Call `.answerLayer()` or `.answerLayer({ standingLine: false })` for data only.
   Call `.answerLayer(false)` to turn the layer off. You can also set these
   options through `AgentOptions.answerLayer`.
@@ -562,9 +567,10 @@ Gotchas:
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With
   nothing to append there is no separator.
-- **Silence is never a check.** Under `'not-sure-or-ask'`, an answer with no line
-  means no reason fired — which includes "nothing could be checked". The data still
-  tells the two apart (`standing`, `checked`). If your app hides both the line and
+- **Silence is never a check.** Under `'not-sure-or-ask'` without a `raiseOn`
+  filter, an answer with no line can include "nothing could be checked". With a
+  filter, reasons outside the list can still fire. Read `standing`, `reasons`, and
+  `checked` to see what happened. If your app hides both the line and
   the data, the person cannot tell "checked" from "not assessed"; the limits block,
   the answer's material limitations, stays visible in every mode.
 

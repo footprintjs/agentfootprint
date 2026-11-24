@@ -107,6 +107,12 @@ export function recordedStandingWitnesses(
  * complete recorded display names are unavailable.
  */
 export function appendedStandingLine(end: ViewEvent, view: RecordingView): readonly string[] {
+  // An omitted or unreadable display decision leaves the original answer intact.
+  if (
+    keptOut(end, 'standingLineOmittedByRaiseOn') ||
+    Object.hasOwn(end.payload, 'standingLineOmittedByRaiseOn')
+  )
+    return [];
   const data = assessmentDataFrom(end.payload.answerAssessment);
   if (data === undefined) return [];
   const displayNames = recordedStandingNames(end, view);

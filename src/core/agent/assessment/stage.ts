@@ -49,6 +49,7 @@ import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import { validatedAnswerMayDeliver } from '../stages/prepareFinal.js';
 import { retainedStateValue } from '../../../redaction/runRedaction.js';
+import type { AnswerLayerArm } from './answerLayerOptions.js';
 import { isLibraryLimit } from './results/library-did/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
@@ -59,21 +60,14 @@ import {
   standingFactsOf,
   standingDisplayNames,
   standingLineOf,
-  standingLineSaid,
+  standingLineDisposition,
   type StandingAssumedValue,
-  type StandingLineWhen,
 } from './compose.js';
 
 /** What the mount hands the stage — build-time facts, never scope. */
-export interface AnswerStageDeps {
+export interface AnswerStageDeps extends AnswerLayerArm {
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
-  /**
-   * `.answerLayer({ standingLine })` — compose the line for the person, in
-   * the answers its mode says it for (`compose.ts` · `standingLineSaid`;
-   * `standingLine: true` is `'always'`). Absent → no line.
-   */
-  readonly standingLine?: StandingLineWhen;
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
   readonly validated?: true;
   /**
@@ -156,9 +150,11 @@ export async function assessAnswerStage(
     ...assessmentDataOf(assessed),
   });
   // The line's mode decides whether THIS answer gets one — the data above went out either way.
-  if (deps.standingLine === undefined || !standingLineSaid(deps.standingLine, assessed.standing)) {
-    return;
+  const display = standingLineDisposition(deps.standingLine, assessed, deps.standingLineRaiseOn);
+  if (display === 'omitted-by-raise-on' || 'answerStandingLineOmittedByRaiseOn' in scope) {
+    scope.answerStandingLineOmittedByRaiseOn = display === 'omitted-by-raise-on' ? true : undefined;
   }
+  if (display !== 'show') return;
   const data = assessmentDataOf(assessed);
   const assumed = await assumedValuesOf(assessed, record);
   // The app's words for the calls the reasons rest on — only tools that declare them.
