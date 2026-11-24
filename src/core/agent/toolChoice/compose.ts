@@ -44,6 +44,7 @@ export interface ComposedToolChoice {
   readonly served: readonly LLMToolSchema[];
   readonly servedInjections: readonly InjectionRecord[];
   readonly narrowedTo: ReadonlySet<string> | undefined;
+  readonly omitted?: readonly string[];
 }
 
 /**
@@ -123,5 +124,6 @@ export async function composeToolChoice(
       .filter((_, i) => servedNames.has(injectionNames[i] ?? ''))
       .map((r, i) => ({ ...r, position: i })),
     narrowedTo: servedNames,
+    omitted: narrowing.omitted,
   };
 }

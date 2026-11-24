@@ -24,6 +24,7 @@ import {
   type RunCheckpointTracker,
 } from '../../../runCheckpoint.js';
 import { InvalidRunInputError, normalizeRunInput } from '../../../runInput.js';
+import { composedInput } from '../../../messageFrom.js';
 import type { AgentInput, AgentOutput, AgentState } from '../../types.js';
 import { citationCheckpointFromState } from '../../citations/checkpoint.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
@@ -209,24 +210,17 @@ export async function runLeg(
   invocation.value.clockDraft = clockDraft;
 
   try {
+    const seedInput = {
+      message: runInput.message,
+      ...(invocation.value.identity !== undefined && { identity: invocation.value.identity }),
+    };
     const result = await invocation.execute(
       {
         kind: 'run',
         options: {
-          input: {
-            message: runInput.message,
-            ...(invocation.value.identity !== undefined && {
-              identity: invocation.value.identity,
-            }),
-            // A composed message reaches seed only on an agent that reads it
-            // (declared sources, or the time layer's reader) — every other run's
-            // input is the bytes it was.
-            ...(messageFrom === 'composed' &&
-              (this.configuration.argumentSourcesArmed === true ||
-                this.configuration.timeOptions?.reader !== undefined) && {
-                messageFrom: 'composed',
-              }),
-          },
+          // Use the composition's reader registration here too. A composed
+          // message reaches seed only for features that read its provenance.
+          input: messageFrom === 'composed' ? composedInput(this.runner, seedInput) : seedInput,
           // Co-engineered boundary (#16): the engine's loop-iteration limit
           // (footprintjs 9 default 1000) must never fire BELOW the agent's own
           // budget — give it headroom (×2 + 10 covers double-hop loop shapes).

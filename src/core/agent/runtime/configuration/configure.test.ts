@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../../../Agent.js';
+import { composedInput } from '../../../messageFrom.js';
 import type { AgentOptions } from '../../types.js';
 import { mock } from '../../../../adapters/llm/MockProvider.js';
+import { getAgentRuntime } from '../native/host.js';
 
 const voice = { appName: 'declared actor', commentaryTemplates: {}, thinkingTemplates: {} };
 const options = (): AgentOptions => ({ provider: mock({ reply: 'ok' }), model: 'mock' });
@@ -61,6 +63,41 @@ describe('resolved Agent construction', () => {
       expect(() =>
         Agent.create({ ...options(), liveThinkingWithHeldDrafts: input as never }).build(),
       ).toThrow(/liveThinkingWithHeldDrafts must be 'provider-summary'/);
+    }
+  });
+
+  it('requests composed-message provenance only when skip-source warnings are armed', () => {
+    const input = { message: 'Another runner wrote this.' };
+    const build = () => Agent.create(options());
+    const viaBuilder = build().answerLayer({ sourceNotConsulted: true }).build();
+    const viaOptions = Agent.create({
+      ...options(),
+      answerLayer: { sourceNotConsulted: true, standingLine: { when: 'not-sure-or-ask' } },
+    }).build();
+    for (const agent of [viaBuilder, viaOptions]) {
+      expect(composedInput(agent, input)).toEqual({ ...input, messageFrom: 'composed' });
+    }
+    const unarmed = build().answerLayer({ sourceNotConsulted: false }).build();
+    expect(composedInput(unarmed, input)).toBe(input);
+    expect(composedInput(build().build(), input)).toBe(input);
+    expect(() =>
+      Agent.create({ ...options(), answerLayer: { sourceNotConsulted: 'yes' } as never }).build(),
+    ).toThrow(/sourceNotConsulted must be a boolean/);
+  });
+
+  it('keeps skip-source warnings and selective standing together in the native configuration', () => {
+    const answerLayer = {
+      sourceNotConsulted: true,
+      standingLine: { when: 'not-sure-or-ask', raiseOn: ['source-not-consulted'] },
+    } as const;
+    const viaBuilder = Agent.create(options()).answerLayer(answerLayer).build();
+    const viaOptions = Agent.create({ ...options(), answerLayer }).build();
+    for (const agent of [viaBuilder, viaOptions]) {
+      expect(getAgentRuntime(agent).configuration.answerLayerOption).toEqual({
+        sourceNotConsulted: true,
+        standingLine: 'not-sure-or-ask',
+        standingLineRaiseOn: ['source-not-consulted'],
+      });
     }
   });
 

@@ -7,6 +7,7 @@ import type { ToolArtifactsPort } from './artifacts.js';
 import type { ToolObservationPort } from './observation.js';
 import type { ToolResultsPort } from './results.js';
 import type { ResolvedProseCitations } from '../../../citations/config.js';
+import type { SourceConsultation } from '../../../honesty/sourceConsultation.js';
 
 /** The composed dependency contract consumed by the existing tool-call handler. */
 export interface ToolCallsHandlerDeps
@@ -19,4 +20,5 @@ export interface ToolCallsHandlerDeps
     ToolObservationPort,
     ToolResultsPort {
   readonly citationOptions?: ResolvedProseCitations;
+  readonly sourceConsultation?: SourceConsultation;
 }

@@ -283,6 +283,7 @@ export const words1 = {
   'source-aborted': true,
   'source-declaration-required': true,
   'source-missing': true,
+  'source-not-consulted': true,
   'source-over-bound': true,
   'sources-conflict': true,
   spelling: true,
@@ -299,5 +300,4 @@ export const words1 = {
   store: true,
   'store-unavailable': true,
   structural: true,
-  subject: true,
 } as const;

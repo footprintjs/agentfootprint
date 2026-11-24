@@ -20,6 +20,7 @@ export function commitAcceptedResponse(
     | 'offerCitations'
     | 'onResponseCommitted'
     | 'recallRequests'
+    | 'sourceConsultation'
   >,
   response: LLMResponse,
   accepted: {
@@ -27,6 +28,9 @@ export function commitAcceptedResponse(
     readonly answeredBy: { readonly provider: string; readonly native: boolean };
     readonly findingsRequest: FindingsRequest | undefined;
     readonly citationOffer: SubmittedCitationOffer | undefined;
+    readonly sourceOffer:
+      | ReturnType<NonNullable<CallLLMStageDeps['sourceConsultation']>['capture']>
+      | undefined;
     readonly iteration: number;
     readonly recall: RecallRequestSummary | undefined;
   },
@@ -69,6 +73,12 @@ export function commitAcceptedResponse(
   deps.onResponseCommitted?.();
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
+  deps.sourceConsultation?.accepted(
+    scope,
+    localFallback ? undefined : accepted.sourceOffer,
+    localFallback ? undefined : response.wireManifest,
+    acceptedToolCalls,
+  );
   recordResponseStop(
     scope,
     localFallback ? undefined : response.stopReason,

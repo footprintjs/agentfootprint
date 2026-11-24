@@ -1,4 +1,8 @@
 export interface HonestyState {
+  /** Admitted offers and attempts for this turn's declared-source check. */
+  sourceConsultation?: import('../../honesty/sourceConsultation.js').SourceConsultationRecord;
+  /** The failed turn was recovered without its private choice identity bank. */
+  sourceConsultationInterrupted?: true;
   /** A grouped call's committed recall observation, lifted into the outer findings ledger. */
   retrievalRequest?: import('../../honesty/retrievalRequests.js').RetrievalRequestRow;
   /** Some result-limit facts could not be retained in this turn's bounded list. */

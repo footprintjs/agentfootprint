@@ -128,7 +128,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/injection-engine/skillToolDescriptors.ts': [
     {
       kind: 'registry',
-      count: 5,
+      count: 4,
       why: "the read_skill DESCRIPTION — the registry composes describeOffer's real output at GRAPH_TOOL_DESCRIPTION, a lifetime the graph's refusal of reactMode 'classic' makes derivable rather than asserted",
     },
     {
@@ -1478,11 +1478,12 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Agent runtime split: the same seven host-only literals now have four owners.
         // The combined ledger includes the resume sentence and journal links.
         // The checkpoint ledger split moved one host-only refusal to a new file.
-        // Prose citations add one request system instruction and fifteen test literals.
-        // Fenced-code regressions add nine collector-only test literals.
+        // An empty role-visible catalog withholds read_skill before composing its
+        // description, retiring the registry's former empty-catalog sentence.
+        // Prose citations add one request instruction plus focused fixture literals.
         files: 135,
-        total: 240,
-        registry: 8,
+        total: 239,
+        registry: 7,
         ephemeral: 29,
         unrepaired: 36,
         notModelFacing: 167,

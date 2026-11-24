@@ -12,6 +12,7 @@ export type AnswerFoldKey =
   | 'libraryResultLimitsIncomplete'
   | 'libraryResultLimits'
   | 'settledToolCallsComplete'
+  | 'sourceConsultation'
   | 'stoppedEarly'
   | 'llmLatestStopReason'
   | 'unsupportedValues'
@@ -67,6 +68,7 @@ export function answerFoldReads(arms: {
   readonly citations?: boolean;
   readonly inputs: boolean;
   readonly toolMiddleware: boolean;
+  readonly sourceNotConsulted?: boolean;
 }): readonly AnswerFoldKey[] {
   return [
     'history',
@@ -88,6 +90,7 @@ export function answerFoldReads(arms: {
     ...(arms.tools && arms.resultLimits
       ? (['libraryResultLimits', 'libraryResultLimitsIncomplete'] as const)
       : []),
+    ...(arms.sourceNotConsulted === true ? (['sourceConsultation'] as const) : []),
     ...(arms.evidenceGate ? (['unsupportedValues'] as const) : []),
     ...(arms.answerValidation ? (['answerValidation'] as const) : []),
     ...(arms.citations ? (['answerCitations'] as const) : []),

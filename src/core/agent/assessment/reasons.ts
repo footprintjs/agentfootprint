@@ -80,6 +80,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'findingsLedger: an integrity-finding row of this turn — the tools the model was offered contradict what the run composed or parked (at the write that served them, or on the wire)',
   },
   {
+    reason: 'source-not-consulted',
+    layer: 1,
+    class: 'not-sure',
+    source: 'run',
+    reads: 'sourceConsultation: a declared source had a witnessed offer but no recorded attempt',
+  },
+  {
     reason: 'argument-assumed',
     layer: 2,
     class: 'not-sure',

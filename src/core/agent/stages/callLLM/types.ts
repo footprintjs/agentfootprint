@@ -9,6 +9,7 @@ import type {
 import type { CacheStrategy } from '../../../../cache/types.js';
 import type { ExternalGround } from '../../../../integrity/unsupported-argument/check.js';
 import type { ReceiptDigests } from '../../receipt/receiptDigests.js';
+import type { SourceConsultation } from '../../honesty/sourceConsultation.js';
 import type { EvictedTurnsHandle } from '../../window/evictedTurns.js';
 import type { ResolvedCostBudget } from '../../../cost.js';
 import type { ReliabilityConfig } from '../../../../reliability/types.js';
@@ -20,6 +21,11 @@ import type { AgentState } from '../../types.js';
 
 export interface CallLLMStageDeps {
   readonly offerCitations?: true;
+  readonly sourceConsultation?: SourceConsultation;
+  readonly registrations?: import('../toolResolver.js').ToolRegistrations;
+  readonly servedTools?: import('../../../slots/commitServedTools.js').ServedToolParties;
+  /** Whether this native run can retain newly disclosed catalog names on its receipt. */
+  readonly canRecordToolSelection?: () => boolean;
   /** Present only when retrieval request evidence is armed, independent of receipt capture. */
   readonly recallRequests?: (
     scope: TypedScope<AgentState>,

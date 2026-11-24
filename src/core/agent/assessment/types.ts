@@ -55,6 +55,8 @@ export type AssessmentPointer =
  *   input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent
  *   gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent —
  *   read from the committed state the pause leaves (`pausedToolCallId`);
+ * - `source-not-consulted` — this turn's record shows a declared source was
+ *   offered through a tool and the run attempted no eligible path to it;
  * - `declared-absent` — a tool declared that nothing matched: an `absent()`,
  *   or an empty rowset inside a declared `coverage()` boundary;
  * - `coverage-gap` — a tool declared ground it did not check or can never
@@ -159,6 +161,7 @@ export type AssessmentPointer =
 export type AssessmentReason =
   | 'asked'
   | 'argument-asked'
+  | 'source-not-consulted'
   | 'argument-assumed'
   | 'argument-unverified'
   | 'argument-read'
@@ -267,6 +270,8 @@ export interface AssessmentReasonDetail {
   readonly toolSays?: AssessmentToolWords;
   /** The requested column missing from the complete visible schema of its citation. */
   readonly ungroundedEntity?: { readonly name: string; readonly nearestName?: string };
+  /** App-declared display names of visible tools offered for an unchecked source. */
+  readonly unusedTools?: readonly string[];
   /** A kept count with its unit, or a missing count out of a known whole. */
   readonly counts?:
     | { readonly kept: number; readonly total?: number; readonly unit: string }

@@ -204,6 +204,7 @@ export function chartDependencies(
           citations: this.configuration.citationOptions !== undefined,
           inputs: environment.inputsArmed,
           toolMiddleware: this.configuration.toolMiddleware.length > 0,
+          sourceNotConsulted: this.configuration.answerLayerOption.sourceNotConsulted === true,
         }),
         ...this.configuration.answerLayerOption,
         ...(this.configuration.answerValidationConfig !== undefined && {
@@ -224,6 +225,9 @@ export function chartDependencies(
     // The declared ontology (9.106.0): the grouped chart carries the run
     // constant across the sf-llm-call boundary, under the arm.
     ...(this.configuration.ontology !== undefined && { hasOntology: true }),
+    ...(this.configuration.answerLayerOption?.sourceNotConsulted === true && {
+      sourceNotConsulted: true as const,
+    }),
     // `.limitsTravelWithTheAnswer()` — value-conditional, the
     // `resolvedModel` precedent: absent from the deps object entirely for an
     // agent that did not ask, so both builders mount the final-branch stage

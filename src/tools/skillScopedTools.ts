@@ -50,6 +50,7 @@
 
 import { isDevMode } from 'footprintjs';
 
+import { registerSelectionListing, type ObserveSelection } from './selectionListing.js';
 import type { Tool } from './tools.js';
 import type { ToolProvider, ToolDispatchContext } from './toolProvider.js';
 
@@ -80,35 +81,39 @@ export function skillScopedTools(skillId: string, tools: readonly Tool[]): ToolP
   const captured = [...tools];
   // Dev-mode latch: fact 1 above is a one-time lesson, not a per-iteration one.
   let warnedNotByReadSkill = false;
-  return {
-    id: `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}`,
-    list(ctx: ToolDispatchContext): readonly Tool[] {
-      // Empty list when the skill is not active.
-      if (ctx.activeSkillId !== skillId) {
-        // The silent-empty this provider is most often wired into (8.7.0): the skill
-        // IS loaded this iteration — an entry rule matched, or a skillGraph() edge
-        // routed into it — but it did not arrive by `read_skill`, and `activeSkillId`
-        // only ever reports a `read_skill` activation. Fact 1 in the header says so;
-        // nothing said it at the moment it happened, so the tools simply never
-        // appeared and the run looked fine. `activeSkillIds` (8.7.0) is the real
-        // active set, which is what makes this detectable from inside the provider —
-        // composed into a bigger provider or not.
-        if (isDevMode() && !warnedNotByReadSkill && ctx.activeSkillIds?.includes(skillId)) {
-          warnedNotByReadSkill = true;
-          // eslint-disable-next-line no-console
-          console.warn(
-            `agentfootprint skillScopedTools('${skillId}'): skill '${skillId}' IS active on ` +
-              `iteration ${ctx.iteration}, but it was not activated by read_skill — so ` +
-              `ctx.activeSkillId does not name it and this provider returned NO tools. That is ` +
-              `what happens to a skill an entry rule or a skillGraph() edge activates. Put the ` +
-              `tools on the skill itself (defineSkill({ tools, autoActivate: 'currentSkill' })), ` +
-              `or scope on ctx.activeSkillIds, which follows the graph's position.`,
-          );
-        }
-        return [];
+  function list(ctx: ToolDispatchContext, observe?: ObserveSelection): readonly Tool[] {
+    // Empty list when the skill is not active.
+    if (ctx.activeSkillId !== skillId) {
+      // The silent-empty this provider is most often wired into (8.7.0): the skill
+      // IS loaded this iteration — an entry rule matched, or a skillGraph() edge
+      // routed into it — but it did not arrive by `read_skill`, and `activeSkillId`
+      // only ever reports a `read_skill` activation. Fact 1 in the header says so;
+      // nothing said it at the moment it happened, so the tools simply never
+      // appeared and the run looked fine. `activeSkillIds` (8.7.0) is the real
+      // active set, which is what makes this detectable from inside the provider —
+      // composed into a bigger provider or not.
+      if (isDevMode() && !warnedNotByReadSkill && ctx.activeSkillIds?.includes(skillId)) {
+        warnedNotByReadSkill = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          `agentfootprint skillScopedTools('${skillId}'): skill '${skillId}' IS active on ` +
+            `iteration ${ctx.iteration}, but it was not activated by read_skill — so ` +
+            `ctx.activeSkillId does not name it and this provider returned NO tools. That is ` +
+            `what happens to a skill an entry rule or a skillGraph() edge activates. Put the ` +
+            `tools on the skill itself (defineSkill({ tools, autoActivate: 'currentSkill' })), ` +
+            `or scope on ctx.activeSkillIds, which follows the graph's position.`,
+        );
       }
-      return [...captured];
-    },
+      observe?.({ kind: 'skill-scope', skillId, tools: captured });
+      return [];
+    }
+    return [...captured];
+  }
+  const provider: ToolProvider = {
+    id: `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}`,
+    list: (ctx) => list(ctx),
   };
+  registerSelectionListing(provider, list);
+  return provider;
 }
 // #endregion skillScopedTools

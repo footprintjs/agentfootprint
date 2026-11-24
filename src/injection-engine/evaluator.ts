@@ -59,6 +59,16 @@ export function evaluateInjections(
   injections: readonly Injection[],
   ctx: InjectionContext,
 ): InjectionEvaluation {
+  return evaluateWithSkillDecision(injections, ctx);
+}
+
+/** Internal observer of a framework activation decision. Opaque rule predicates
+ * never acquire a second evaluation or an inferred reason. */
+export function evaluateWithSkillDecision(
+  injections: readonly Injection[],
+  ctx: InjectionContext,
+  inactive?: (skill: Injection) => void,
+): InjectionEvaluation {
   const admitted: Injection[] = [];
   const skipped: Array<{
     id: string;
@@ -140,6 +150,7 @@ export function evaluateInjections(
       }
       case 'llm-activated': {
         if (ctx.activatedInjectionIds.includes(inj.id)) admitted.push(inj);
+        else if (inj.flavor === 'skill') inactive?.(inj);
         break;
       }
       default: {

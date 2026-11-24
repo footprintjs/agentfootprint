@@ -47,6 +47,7 @@ export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'result-dropped-from-window',
   'memory-retrieval-timeout',
   'memory-retrieval-excluded',
+  'source-not-consulted',
   'step-skipped',
   'ungrounded-entity',
 ]);
@@ -182,6 +183,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'negative-prose-unverified': 'howSure.reason.negativeProseUnverified',
   'invariant-violation': 'howSure.reason.invariantViolation',
   'unsupported-argument': 'howSure.reason.unsupportedArgument',
+  'source-not-consulted': 'howSure.reason.sourceNotConsulted',
   'column-type-mismatch': 'howSure.reason.columnTypeMismatch',
   'missing-column': 'howSure.reason.missingColumn',
   'ungrounded-entity': 'howSure.reason.claimUnsettled',
