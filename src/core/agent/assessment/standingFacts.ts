@@ -35,6 +35,7 @@ export interface StandingNames {
   readonly legacyConflictGap?: true;
   readonly omitDeclaredWhy?: true;
   readonly answerValidationGap?: true;
+  readonly submittedSourcesConflict?: true;
 }
 
 /** Reconstruct exact older warning variants from the same retained evidence. */
@@ -129,5 +130,6 @@ export function standingFactsOf(
     ...(gaps?.dispatch.length && { dispatchProofGap: true as const }),
     ...(gaps?.conflict.length && { legacyConflictGap: true as const }),
     ...(gaps?.validator.length && { answerValidationGap: true as const }),
+    ...(assessment.citations?.conflicts?.length && { submittedSourcesConflict: true as const }),
   };
 }

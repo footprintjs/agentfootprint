@@ -160,6 +160,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'one citation-correction system frame through evidenceRecoveryPiece in callLLM; the repair budget is spent and tools withheld, and the instruction never enters conversation history or tool evidence',
     },
   ],
+  'src/core/agent/stages/callLLM/citationOffer.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the marker instruction is a system block on the submitted Anthropic request for its eligible result blocks. It is never appended to conversation history',
+    },
+  ],
   'src/tools/sourceEvidenceTools.ts': [
     {
       kind: 'ephemeral',
@@ -1057,6 +1064,25 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the missing message_stop refusal is thrown to the host as a provider error; it never becomes a completed response or model-facing recovery message',
     },
   ],
+  'src/adapters/llm/anthropicCitationOffer.test.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'a test title describing the signed-prefix preservation assertion',
+    },
+  ],
+  'src/core/agent/assessment/answer/citations/collect/collect.test.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 14,
+      why: 'literal prose and markup fixtures read only by the citation collector tests. No provider receives them',
+    },
+    {
+      kind: 'not-model-facing',
+      count: 9,
+      why: 'fenced Markdown inputs passed directly to the pure collector in unit tests, with no provider call',
+    },
+  ],
   'src/adapters/llm/anthropicThinkingWire.ts': [
     {
       kind: 'not-model-facing',
@@ -1454,12 +1480,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // The checkpoint ledger split moved one host-only refusal to a new file.
         // An empty role-visible catalog withholds read_skill before composing its
         // description, retiring the registry's former empty-catalog sentence.
-        files: 132,
-        total: 214,
+        // Prose citations add one request instruction plus focused fixture literals.
+        files: 135,
+        total: 239,
         registry: 7,
-        ephemeral: 28,
+        ephemeral: 29,
         unrepaired: 36,
-        notModelFacing: 143,
+        notModelFacing: 167,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

@@ -15,13 +15,10 @@ import {
   type RequestSettlement,
 } from '../../../../provider-contract/requestObserver.js';
 import { sourceLinkPathGrant } from '../../../../redaction/runRedaction.js';
-import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
 import type { SourceLinkConsumer } from '../../types/state/records.js';
-import { identifyAcceptedToolCalls } from './acceptedCalls.js';
 import type { liveChunkEmitter } from './liveChunks.js';
-import type { CallLLMStageDeps } from './types.js';
 
 const historyPositionLimit = 256;
 
@@ -111,26 +108,6 @@ export function servedRequestRecorder(
       first = signature;
     },
   };
-}
-
-/** Commit the output and the consumer proved for it in the same native scope. */
-export function commitAcceptedResponse(
-  scope: TypedScope<AgentState>,
-  response: Pick<LLMResponse, 'content' | 'toolCalls'>,
-  serving: ReturnType<typeof servedRequestRecorder>,
-  deps: Pick<CallLLMStageDeps, 'getRunId' | 'onResponseCommitted' | 'recallRequests'>,
-  recall: RecallRequestSummary | undefined,
-) {
-  const runId = deps.getRunId?.();
-  const consumer = serving?.consumerFor(runId);
-  if (consumer !== undefined) scope.sourceLinkConsumer = consumer;
-  else if ('sourceLinkConsumer' in scope) scope.$delete('sourceLinkConsumer');
-  scope.llmLatestContent = response.content;
-  if (recall !== undefined) deps.recallRequests?.(scope, scope.iteration, recall);
-  deps.onResponseCommitted?.();
-  const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
-  scope.llmLatestToolCalls = acceptedToolCalls;
-  return acceptedToolCalls;
 }
 
 /** Compare readonly port requests without serializing values or invoking

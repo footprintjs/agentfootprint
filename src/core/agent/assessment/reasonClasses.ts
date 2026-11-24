@@ -33,6 +33,7 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'sources-conflict': 'result',
   'column-type-mismatch': 'result',
   'missing-column': 'result',
+  'ungrounded-entity': 'turn',
   'value-unsupported': 'turn',
   'value-survived-revision': 'turn',
   'derived-from-reading': 'turn',
