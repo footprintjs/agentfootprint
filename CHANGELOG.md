@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.1.0] - 2026-11-24
+
+### Added
+
+- **Distinguish retrieval timeouts from empty searches.** Memory and RAG accept outcome-aware store reads. The answer warning can explain a recorded timeout or selection limit when the run proves that no recalled content reached a model request. Successful empty searches preserve the ordinary answer. Set `recording: 'ids-only'` for RAG, semantic Top-K or episodic recall to keep identifiers and selection metadata in retrieval evidence while serving the same context to the model.
+
+- **Choose which reasons trigger a standing warning.** Set `standingLine.raiseOn` with the existing `when` mode to show the full "not sure" line when a selected reason fires. All assessment data and limits remain available, and "ask" keeps its existing behavior.
+
 ## [17.0.0] - 2026-11-23
 
 ### Breaking
