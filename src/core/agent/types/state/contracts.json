@@ -114,6 +114,9 @@
       "mapEngagement": ["132cd057c474fa1fedd6ddac250da2b048b890010d40e01df84f06fc8075cef9",true,false],
       "sourceLinkServedRows": ["54362579910e8ecc857d4822cb3c46985ec78042851a6443f5dd4c410e202a48",true,false],
       "coverageDeclared": ["dce5d55803f1873e1c10041913ca0b71c5a81642f3cdb48c1d87d59e172a4ba0",true,false],
+      "citationSources": ["147c48947c927f1a93cef9b44b9336d17bfb8cf2728b5b2080b92ac06dd0a344",true,false],
+      "acceptedCitationOffer": ["a7b6cb874b5c20a38115dd828b35f182c611a3e11e72410dcde5d3a9753deaf4",true,false],
+      "answerCitations": ["26e9d45a2e6fb7d103158a81bbe56e58a45a27fadb92af306f4405ab0e9fcf64",true,false],
       "resultIdentities": ["33aabb3f9980e27559a3b90b340b3507b64a68a98555d66fc67795606677bd74",true,false],
       "negativeClaimState": ["284587e93f786b79daf89c1645e54adfe14fe8f273eaf503342fd45be324d144",true,false],
       "answerNegatives": ["72696d76b92b49a7a7d1291d297e0a15ddf259c28f74fc7a6dc81669c04a749f",true,false],
@@ -166,6 +169,9 @@
       "settledToolCallsComplete": ["3b4c223ff55b39025cefdafb25bd0e5131735182688da0b3f11f896a28ac6357",true,false]
     },
     "comments": {
+      "e70f854e5a7e4bc2ea48a197f018b595342b6a46536a84f935f213e4faad6f8d": 1,
+      "b521a6056464b657c0ea9e411f345f1688035b80764896afa948eea043e73337": 1,
+      "e642ffe3c5b13e551dd036e0c8727a448eb3a62b78cb3d2af7108c9b2f053304": 1,
       "530b0f3ac0b6768f5ddf59fdc76117da00b04ed61a418769fb945509baf16cd6": 1,
       "1607e946a48eef6190769f71b8161c6594aa0f57426d7d66f9f0a8dfcce7a5d2": 1,
       "e7588b28ca09258430f018011d7ec3b6e88ff4dc91ec5b671da028bd0a08979c": 1,

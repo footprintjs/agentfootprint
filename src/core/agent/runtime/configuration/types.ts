@@ -42,10 +42,12 @@ import type { MessageMiddleware, ToolMiddleware } from '../../middleware/types.j
 import type { ToolArgValidationMode } from '../../../../tools/toolArgsValidation.js';
 import type { ThinkingHandler } from '../../../../thinking/types.js';
 import type { ResolvedSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
+import type { ResolvedProseCitations } from '../../citations/config.js';
 
 /** Static run-policy and service declarations, resolved once at construction. */
 export interface AgentConfiguration extends ModelConfiguration {
   readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
+  readonly citationOptions?: ResolvedProseCitations;
   /** Side channel for the conversation's inherited skill cursor (SG-C) —
    *  stashed by `applyContinuation`, consumed-and-cleared by seed. */
   readonly pricingTable?: PricingTable;

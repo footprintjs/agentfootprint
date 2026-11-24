@@ -23,7 +23,11 @@
  */
 
 import type { LLMChunk, LLMRequest, LLMResponse } from '../../provider-contract/types.js';
-import { applyCacheMarkers, readCacheUsage } from './anthropicCacheWire.js';
+import {
+  applyCacheMarkers,
+  readCacheUsage,
+  type AnthropicCacheControl,
+} from './anthropicCacheWire.js';
 import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
 import { UnsupportedToolChoiceError } from '../../provider-contract/forcedToolChoice.js';
 import { UnsupportedNativeOutputError } from '../../provider-contract/nativeOutputSchema.js';
@@ -32,7 +36,11 @@ import type { WireToolManifest } from './wireManifest.js';
 import type { ThinkingMode } from '../../thinking/types.js';
 import type { MessageReplay, ThinkingReplayOmission } from '../../thinking/replay.js';
 import { captureAnthropicResponseReplay, lossyAnthropicReplay } from './anthropicReplayLayout.js';
-import { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjection.js';
+import {
+  toAnthropicMessages,
+  toAnthropicTool,
+  type AnthropicToolResultObserver,
+} from './anthropicMessageProjection.js';
 import { AnthropicToolArguments } from './anthropicToolArguments.js';
 export { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjection.js';
 
@@ -42,7 +50,7 @@ export { toAnthropicMessages, toAnthropicTool } from './anthropicMessageProjecti
 export interface AnthropicMessagesBody {
   max_tokens: number;
   messages: AnthropicMessageParam[];
-  system?: string;
+  system?: string | { type: 'text'; text: string; cache_control?: AnthropicCacheControl }[];
   tools?: AnthropicTool[];
   temperature?: number;
   stop_sequences?: string[];
@@ -61,6 +69,13 @@ export interface AnthropicMessageParam {
   content: string | AnthropicContentBlock[];
 }
 
+export interface AnthropicToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
 export type AnthropicContentBlock =
   | { type: 'text'; text: string; citations?: null | readonly [] }
   | {
@@ -71,7 +86,7 @@ export type AnthropicContentBlock =
       caller?: { readonly type: 'direct' };
       toolset_name?: null;
     }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | AnthropicToolResultBlock
   // v2.14 — extended-thinking blocks. Round-trip on assistant turns
   // when continuing a tool-using extended-thinking conversation;
   // signature MUST be byte-exact or Anthropic returns HTTP 400.
@@ -124,6 +139,8 @@ export interface MessagesBodyOptions {
   readonly maxTokensDefault: number;
   /** `false` caps a reply at one tool call. */
   readonly parallelToolCalls?: boolean;
+  /** Observe source and block identities during the shared Messages projection. */
+  readonly observeToolResult?: AnthropicToolResultObserver;
   /**
    * The adapter's declared `supportsNativeOutputSchema` — whether `model`
    * takes `output_config.format`. ABSENT means the adapter does not carry the
@@ -170,7 +187,7 @@ export function buildMessagesBody(
   const messageIndexMap: number[] = [];
   const body: AnthropicMessagesBody = {
     max_tokens: thinking?.maxTokens ?? req.maxTokens ?? options.maxTokensDefault,
-    messages: toAnthropicMessages(req.messages, messageIndexMap),
+    messages: toAnthropicMessages(req.messages, messageIndexMap, options.observeToolResult),
   };
   if (req.systemPrompt) body.system = req.systemPrompt;
   if (req.tools && req.tools.length > 0) body.tools = req.tools.map(toAnthropicTool);
