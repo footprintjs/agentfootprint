@@ -96,6 +96,13 @@ export {
   type RunRecorder,
 } from './recorders/observability/recordRun.js';
 export {
+  recordingSizeReport,
+  type RecordingSizeFields,
+  type RecordingSizeMount,
+  type RecordingSizeReport,
+  type RecordingSizeRow,
+} from './recorders/observability/recordingSizeReport.js';
+export {
   contextShapeAt,
   type RecordedContextShape,
 } from './recorders/observability/contextShapes/read.js';
