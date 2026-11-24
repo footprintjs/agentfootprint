@@ -4,6 +4,7 @@ import type { CallLLMStageDeps } from './callLLM/types.js';
 import { groundedTextOf } from './callLLM/groundedText.js';
 import { captureFindingsRequest, type FindingsRequest } from '../findings/admission.js';
 import { issuedTicketsOf } from '../placedTickets.js';
+import { recordResponseStop } from '../honesty/responseStop.js';
 import {
   commitAcceptedResponse,
   callObserved,
@@ -845,11 +846,10 @@ export function buildCallLLMStage(
     if (deps.findings === true)
       scope.findingsRequest =
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
-    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps, {
-      recall: recall?.summary(localFallback ? 'local' : 'provider'),
-      stopReason: localFallback ? undefined : response.stopReason,
-      nativeOutput,
-    });
+    const recallSummary = recall?.summary(localFallback ? 'local' : 'provider');
+    const acceptedToolCalls = commitAcceptedResponse(scope, response, serving, deps, recallSummary);
+    const providerStop = localFallback ? undefined : response.stopReason;
+    recordResponseStop(scope, providerStop, nativeOutput, deps.outputFormat !== undefined);
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

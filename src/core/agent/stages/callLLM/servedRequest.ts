@@ -15,7 +15,6 @@ import {
   type RequestSettlement,
 } from '../../../../provider-contract/requestObserver.js';
 import { sourceLinkPathGrant } from '../../../../redaction/runRedaction.js';
-import { recordResponseStop } from '../../honesty/responseStop.js';
 import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
 import { servedHistoryRow, type ServedRow } from '../../receipt/servedRow.js';
 import type { AgentState } from '../../types.js';
@@ -119,31 +118,18 @@ export function commitAcceptedResponse(
   scope: TypedScope<AgentState>,
   response: Pick<LLMResponse, 'content' | 'toolCalls'>,
   serving: ReturnType<typeof servedRequestRecorder>,
-  deps: Pick<
-    CallLLMStageDeps,
-    'getRunId' | 'onResponseCommitted' | 'recallRequests' | 'outputFormat'
-  >,
-  accepted: {
-    readonly recall: RecallRequestSummary | undefined;
-    readonly stopReason: LLMResponse['stopReason'] | undefined;
-    readonly nativeOutput: boolean;
-  },
+  deps: Pick<CallLLMStageDeps, 'getRunId' | 'onResponseCommitted' | 'recallRequests'>,
+  recall: RecallRequestSummary | undefined,
 ) {
   const runId = deps.getRunId?.();
   const consumer = serving?.consumerFor(runId);
   if (consumer !== undefined) scope.sourceLinkConsumer = consumer;
   else if ('sourceLinkConsumer' in scope) scope.$delete('sourceLinkConsumer');
   scope.llmLatestContent = response.content;
-  if (accepted.recall !== undefined) deps.recallRequests?.(scope, scope.iteration, accepted.recall);
+  if (recall !== undefined) deps.recallRequests?.(scope, scope.iteration, recall);
   deps.onResponseCommitted?.();
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
-  recordResponseStop(
-    scope,
-    accepted.stopReason,
-    accepted.nativeOutput,
-    deps.outputFormat !== undefined,
-  );
   return acceptedToolCalls;
 }
 
