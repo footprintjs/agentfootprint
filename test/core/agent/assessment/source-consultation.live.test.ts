@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { meta, run as runExample } from '../../../../examples/features/130-source-not-consulted.js';
+import { composedInput } from '../../../../src/core/messageFrom.js';
 import type { AgentRunCheckpoint } from '../../../../src/core/runCheckpoint.js';
-import { Agent, absent, defineTool, deny } from '../../../../src/index.js';
+import { Agent, LLMCall, absent, defineTool, deny } from '../../../../src/index.js';
 import { defineSkill } from '../../../../src/injection-engine.js';
 import { PermissionPolicy } from '../../../../src/security/PermissionPolicy.js';
 import { assessAnswer, recordRun } from '../../../../src/observe.js';
 import { defineOntology } from '../../../../src/ontology/index.js';
+import { mock } from '../../../../src/providers.js';
 import { requestAttempt } from '../../../../src/provider-contract/requestObserver.js';
 import type { LLMProvider, LLMResponse } from '../../../../src/provider-contract/types.js';
 
@@ -223,6 +225,57 @@ async function exercise({
 }
 
 describe('declared sources skipped in a native turn', () => {
+  it.each([
+    ['a person', false, 1],
+    ['an earlier runner', true, 0],
+  ] as const)(
+    'respects whether the native request came from %s',
+    async (_author, composed, expected) => {
+      const question = 'Give the link observation.';
+      const agent = Agent.create({ provider: scripted(manifest), model: 'mock' })
+        .tools([
+          tool('status', 'array status'),
+          tool('monitor', 'link monitor'),
+          tool('archive', 'link archive'),
+        ])
+        .ontology(map())
+        .answerLayer({ sourceNotConsulted: true })
+        .build();
+      try {
+        if (composed) {
+          const prior = LLMCall.create({
+            provider: mock({ reply: question }),
+            model: 'mock',
+          }).build();
+          try {
+            const message = await prior.run({
+              message: 'Formulate a request to inspect the switch.',
+            });
+            if (typeof message !== 'string')
+              throw new Error('Expected the prior runner to finish.');
+            expect(message).toBe(question);
+            // Hand off through the same mapper as a native composition, then
+            // enter Agent.run so the run owner must preserve the marker.
+            const input = composedInput(agent, { message });
+            expect(input).toHaveProperty('messageFrom', 'composed');
+            await agent.run(input);
+          } finally {
+            await prior.shutdown();
+          }
+        } else {
+          await agent.run({ message: question });
+        }
+        const assessment = await agent.assessment();
+        expect(assessment?.reasons.filter((row) => row.reason === reason)).toHaveLength(expected);
+        expect(agent.getLastSnapshot()?.sharedState.userMessageFrom).toBe(
+          composed ? 'composed' : undefined,
+        );
+      } finally {
+        await agent.shutdown();
+      }
+    },
+  );
+
   it.each([
     ['classic', undefined, false],
     ['classic', manifest, true],
