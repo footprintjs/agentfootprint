@@ -134,15 +134,18 @@ async function inspectDynamicReactSubflows(page, view) {
       target instanceof HTMLElement
         ? { tag: target.tagName, nodeId: target.dataset.id, label: target.getAttribute('aria-label') }
         : null;
-    const snapshot = () => {
+    const describeCompose = () => {
       const rendered = element.querySelector('[data-id="sf-llm-call/sf-system-prompt/compose"]');
-      return {
-        focus: describe(document.activeElement),
-        subflow: element.querySelector('[aria-label="Subflow breadcrumb"] button:disabled')
-          ?.textContent,
-        compose: rendered ? getComputedStyle(rendered).visibility : 'absent',
-      };
+      if (rendered === null) return { mounted: false };
+      const { width, height } = rendered.getBoundingClientRect();
+      return { mounted: true, cssVisibility: getComputedStyle(rendered).visibility, width, height };
     };
+    const snapshot = () => ({
+      focus: describe(document.activeElement),
+      subflow: element.querySelector('[aria-label="Subflow breadcrumb"] button:disabled')
+        ?.textContent,
+      compose: describeCompose(),
+    });
     const listener = new AbortController();
     let keydown;
     document.addEventListener(
