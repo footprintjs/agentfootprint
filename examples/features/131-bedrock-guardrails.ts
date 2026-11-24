@@ -1,5 +1,5 @@
 /** Bedrock guardrail outcomes with local scripted SDK responses. No AWS requests.
- * Run: npm run example -- examples/features/125-bedrock-guardrails.ts
+ * Run: npm run example -- examples/features/131-bedrock-guardrails.ts
  */
 import { Agent, type LLMProvider, type LLMResponse } from '../../src/index.js';
 import {
@@ -12,7 +12,7 @@ import {
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/125-bedrock-guardrails',
+  id: 'features/131-bedrock-guardrails',
   title: 'Keep masked, blocked and unknown Bedrock outcomes distinct',
   group: 'features',
   description:

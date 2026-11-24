@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { meta, run } from '../../../examples/features/125-bedrock-guardrails.js';
+import { meta, run } from '../../../examples/features/131-bedrock-guardrails.js';
 
 describe('published Bedrock guardrail example', () => {
   it('runs both public doors and transports without live provider slots', async () => {
