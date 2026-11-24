@@ -27,6 +27,7 @@ const admission = 'src/core/providerIntervention.ts';
 const classification = 'src/adapters/llm/BedrockProvider/guardrailClassify.ts';
 const guardedStream = 'src/adapters/llm/BedrockProvider/guardedStream.ts';
 const coreTests = 'test/core/provider-intervention.test.ts';
+const directTests = 'test/core-flow/provider-intervention-direct-calls.test.ts';
 const classificationTests = 'test/adapters/unit/BedrockProvider.guardrailClassification.test.ts';
 const streamTests = 'test/adapters/unit/BedrockProvider.guardrailStream.test.ts';
 const coreSuite = 'provider intervention at the admitted native response';
@@ -66,6 +67,24 @@ const maskFirst = `    if (this.masked && this.reads.complete && code !== 'conte
       return { outcome: 'masked', code, filters: this.descriptors };
     if (this.blocked) return { outcome: 'blocked', code, filters: this.descriptors };`;
 const probes = [
+  {
+    id: 'direct-accounting-undo',
+    purpose: 'Suppress completed-response notification before direct native refusal.',
+    source: admission,
+    before: '      beforeRefusal?.();',
+    after: '      // Undo: omit the completion of an admitted terminal response.',
+    assertions: ['parallel merge', 'message API', 'agent message API'].flatMap((door) =>
+      ['blocked', 'unknown', 'masked'].map((outcome) =>
+        assertion(
+          directTests,
+          'every direct native model caller admits provider intervention',
+          `${door}: ${outcome}`,
+          outcome === 'masked' ? 'passed' : 'failed',
+          outcome === 'masked' ? undefined : 'to have a length of 1',
+        ),
+      ),
+    ),
+  },
   {
     id: 'admission-undo',
     purpose: 'Bypass accepted-response admission entirely; masked responses remain usable.',
@@ -304,6 +323,8 @@ function main() {
     classification,
     guardedStream,
     coreTests,
+    directTests,
+    'src/provider-contract/responseAdmission.ts',
     classificationTests,
     streamTests,
     'vitest.config.ts',

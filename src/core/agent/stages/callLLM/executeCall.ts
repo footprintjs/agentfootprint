@@ -30,7 +30,7 @@ import {
   isProviderInterventionError,
 } from '../../../../provider-contract/intervention.js';
 import { admitInterventionError } from '../../../providerIntervention.js';
-import { captureProviderResponse } from './capturedResponse.js';
+import { captureProviderResponse } from '../../../../provider-contract/responseAdmission.js';
 
 export async function executeCall(
   scope: TypedScope<AgentState>,

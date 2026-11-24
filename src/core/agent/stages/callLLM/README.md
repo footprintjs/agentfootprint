@@ -64,7 +64,7 @@ tool arguments, output validation, replay or final-answer delivery can use a
 blocked or indeterminate response. The native terminal owner translates the
 admitted safe fact; raw provider trace never becomes chart state.
 
-`capturedResponse.ts` reads the foreign intervention once into owned data at
+The shared `provider-contract/responseAdmission.ts` reads the foreign intervention once into owned data at
 the provider boundary. Terminal outcomes never read content, tool or replay
 fields; masking-only retains the documented response fields. Later predicates
 read that owned projection, so a changing foreign property cannot turn a block

@@ -121,6 +121,7 @@ export function admitInterventionError<T extends object>(
 export function requireUsableProviderResponse<T extends object>(
   scope: TypedScope<T>,
   response: unknown,
+  beforeRefusal?: () => void,
 ): void {
   const value = providerInterventionOf(response);
   if (value === undefined) {
@@ -129,5 +130,12 @@ export function requireUsableProviderResponse<T extends object>(
     return;
   }
   (scope as TypedScope<T & ProviderInterventionState>).providerIntervention = [value];
-  if (value.outcome !== 'masked') throw interventionErrorOf(value);
+  if (value.outcome !== 'masked') {
+    try {
+      beforeRefusal?.();
+    } catch (cause) {
+      throw interventionErrorOf(value, cause);
+    }
+    throw interventionErrorOf(value);
+  }
 }

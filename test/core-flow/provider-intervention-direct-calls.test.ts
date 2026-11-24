@@ -37,6 +37,7 @@ describe('every direct native model caller admits provider intervention', () => 
       it(`${door}: ${outcome}`, async () => {
         const complete = vi.fn(async () => response(outcome));
         const provider: LLMProvider = { name: 'guarded-double', complete };
+        const ends: { content: string; usage: { input: number; output: number } }[] = [];
         let run: () => Promise<unknown>;
         if (door === 'parallel merge') {
           const parallel = Parallel.create()
@@ -44,6 +45,7 @@ describe('every direct native model caller admits provider intervention', () => 
             .branch('right', leaf())
             .mergeWithLLM({ provider, model: 'mock', prompt: 'Synthesize.' })
             .build();
+          parallel.on('agentfootprint.stream.llm_end', (event) => ends.push(event.payload));
           run = () => parallel.run('hello');
         } else {
           const chart =
@@ -56,6 +58,12 @@ describe('every direct native model caller admits provider intervention', () => 
                   tools: [],
                 });
           const executor = new FlowChartExecutor(chart);
+          executor.attachCombinedRecorder({
+            id: 'test.completed-intervention-accounting',
+            onEmit(event: { name: string; payload: (typeof ends)[number] }) {
+              if (event.name === 'agentfootprint.stream.llm_end') ends.push(event.payload);
+            },
+          } as never);
           run = async () => {
             await executor.run({ input: { message: 'hello' } });
             return executor.getSnapshot()?.sharedState;
@@ -71,6 +79,16 @@ describe('every direct native model caller admits provider intervention', () => 
           });
         }
         expect(complete).toHaveBeenCalledTimes(1);
+        // A bare chart deliberately serves a redacted placeholder. Only a
+        // real Parallel run exposes its safe accounting payload to this tap.
+        const ownEnd =
+          door === 'parallel merge' ? ends.filter((event) => event.usage.output === 2) : ends;
+        expect(ownEnd).toHaveLength(1);
+        if (door === 'parallel merge')
+          expect(ownEnd[0]).toMatchObject({
+            content: outcome === 'masked' ? 'Returned [EMAIL] text.' : '',
+            usage: { input: 1, output: 2 },
+          });
       });
     }
   }

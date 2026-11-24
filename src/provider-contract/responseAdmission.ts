@@ -1,6 +1,6 @@
 /** Capture foreign intervention evidence once before any downstream observer can re-read it. */
-import type { LLMResponse } from '../../../../provider-contract/types.js';
-import { providerInterventionOf } from '../../../../provider-contract/intervention.js';
+import type { LLMResponse } from './types.js';
+import { providerInterventionOf } from './intervention.js';
 
 function ownValue(value: unknown, key: string): unknown {
   if (value === null || typeof value !== 'object') return undefined;
