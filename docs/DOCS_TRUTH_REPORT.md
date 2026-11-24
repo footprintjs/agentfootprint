@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **19 import paths** carrying **2793 distinct named exports**, plus **132 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **19 import paths** carrying **2799 distinct named exports**, plus **132 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**2086 of 2793 exports (75%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**2093 of 2799 exports (75%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
-- **89 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
+- **88 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **16 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **572 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1853 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1860 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 132 typed events are both described on the site and were seen firing in a real run. **33** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **29** are not described in prose on the site at all.
 
@@ -24,15 +24,15 @@ A previous inventory put the undocumented-feature count at roughly 36. That figu
 
 | Counting rule | Undocumented |
 |---|---|
-| every named export not in site prose | 707 |
+| every named export not in site prose | 706 |
 | … of those, absent from every prose anywhere in the repo | 602 |
-| only functions and classes (things you can call) | 150 |
+| only functions and classes (things you can call) | 149 |
 | only exports on the root barrel | 130 |
 | **functions and classes on the root barrel** | **22** |
 | functions and classes that a reference run proves work | 9 |
 | typed events | 29 |
 
-The closest analogue to the remembered 36 is the **22 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 707 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
+The closest analogue to the remembered 36 is the **22 callable things on the root barrel with no prose description** — near enough that the old inventory was probably counting something like it, and far enough from 706 that quoting a single "undocumented" number without saying which rule produced it is how a figure like 36 drifts. Every table below states its rule.
 
 **The worst class is empty: nowhere do the published docs tell a reader to import something that does not exist.** That check is not baselined — it fails the build immediately, always, because a reader who copies such a line is simply broken.
 
@@ -164,7 +164,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (540).** The other 1313 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (544).** The other 1316 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -626,6 +626,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `AutomaticCacheStrategy` | class | `agentfootprint/cache` |
 | `AwaitingDecisionError` | class | `agentfootprint/hosting` |
 | `BedrockAgentMemory` | class | `agentfootprint/memory` |
+| `BedrockProvider` | class | `agentfootprint/providers` |
 | `BoundaryRecorder` | class | `agentfootprint/observe` |
 | `BreakpointCacheStrategy` | class | `agentfootprint/cache` |
 | `BrowserAnthropicProvider` | class | `agentfootprint/providers` |
@@ -677,6 +678,9 @@ The site describes it and it really is exported, but no reference run touches it
 | `PauseNotCarriedError` | class | `agentfootprint/hosting` |
 | `PgVectorSchemaError` | class | `agentfootprint/memory` |
 | `PoolFullError` | class | `agentfootprint/providers` |
+| `ProviderBlockedError` | class | `agentfootprint/providers` |
+| `ProviderGuardrailLimitError` | class | `agentfootprint/providers` |
+| `ProviderInterventionUnknownError` | class | `agentfootprint/providers` |
 | `RecordingTooLargeForAccountError` | class | `agentfootprint/hosting` |
 | `RedirectSignInError` | class | `agentfootprint/hosting` |
 | `ReplacedRunnerMethodError` | class | `agentfootprint/hosting` |
@@ -711,7 +715,7 @@ The site describes it and it really is exported, but no reference run touches it
 
 ### 5. Written but not published
 
-Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **89 symbols.**
+Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the site mentions them. The writing is already done — this is a publishing job, not an authoring job, which makes it the cheapest class to close. **88 symbols.**
 
 | Symbol | Kind | Exported from | Already written up in |
 |---|---|---|---|
@@ -767,7 +771,6 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `typedEmit` | function | `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-turn-artifacts.md` |
 | `writeSnapshot` | function | `agentfootprint/memory` | `docs/design/map-walker-trace-fold-lens.md` |
 | `AnthropicProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-findings-ledger-spec.md`, `docs/design/2026-09-honest-answer-ledger.md` |
-| `BedrockProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md` |
 | `BrowserAzureOpenAIProvider` | class | `agentfootprint/providers` | `docs/MENTAL_MODEL.md`, `docs/design/2026-09-findings-ledger-worklog.md` |
 | `EmbeddingCache` | class | `agentfootprint/observe` | `docs/proposals/003-per-loop-influence-credit.md`, `docs/proposals/006-loop-recall-shortlist.md` |
 | `LiveStateRecorder` | class | `agentfootprint/observe` | `docs/MENTAL_MODEL.md` |
@@ -982,7 +985,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
 | `agentfootprint` | 854 | 724 | 85% |
-| `agentfootprint/providers` | 223 | 196 | 88% |
+| `agentfootprint/providers` | 229 | 203 | 89% |
 | `agentfootprint/memory` | 241 | 132 | 55% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
 | `agentfootprint/cache` | 25 | 20 | 80% |
