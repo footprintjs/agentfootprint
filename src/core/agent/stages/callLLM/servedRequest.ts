@@ -125,7 +125,7 @@ export function commitAcceptedResponse(
   >,
   accepted: {
     readonly recall: RecallRequestSummary | undefined;
-    readonly stopReason: LLMResponse['stopReason'];
+    readonly stopReason: LLMResponse['stopReason'] | undefined;
     readonly nativeOutput: boolean;
   },
 ) {
