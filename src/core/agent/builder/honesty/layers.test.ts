@@ -65,4 +65,18 @@ describe('the builder honesty layer declarations', () => {
     configureAnswerLayer(receiver, undefined, receiver);
     expect(receiver.answerLayerValue).toEqual({});
   });
+
+  it('arms skipped-source warnings independently of the standing line', () => {
+    const armed: AnswerLayerPort = {};
+    configureAnswerLayer(armed, { sourceNotConsulted: true }, armed);
+    expect(armed.answerLayerValue).toEqual({ sourceNotConsulted: true });
+    const unarmed: AnswerLayerPort = {};
+    configureAnswerLayer(unarmed, { sourceNotConsulted: false, standingLine: true }, unarmed);
+    expect(unarmed.answerLayerValue).toEqual({ standingLine: 'always' });
+    const invalid: AnswerLayerPort = {};
+    expect(() =>
+      configureAnswerLayer(invalid, { sourceNotConsulted: 'yes' } as never, invalid),
+    ).toThrow(/sourceNotConsulted must be a boolean/);
+    expect(invalid.answerLayerValue).toBeUndefined();
+  });
 });
