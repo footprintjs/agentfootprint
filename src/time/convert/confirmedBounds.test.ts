@@ -34,7 +34,9 @@ describe('confirmed conversion honors the declared encoding of each bound', () =
     expect(convertForTool(window, [msAndIso], undefined, context)).toEqual({
       conversion: { form: 0, values },
     });
-    expect(readBack(values, msAndIso, precise)).toEqual(window.range);
+    // An inclusive ISO end is read on the grid it was written at, confirmed or not: a tool
+    // handed `18:45:00Z` reads through that second.
+    expect(readBack(values, msAndIso, precise)).toEqual({ from, to: '2026-11-13T18:45:01Z' });
     expect(readBack(values, msAndIso, context)).toEqual({ from, to: '2026-11-13T18:45:01Z' });
     expect(convertForTool(window, [isoAndMs], undefined, context)).toEqual({
       refused: 'no-form-holds',
@@ -104,8 +106,11 @@ describe('confirmed conversion records the actual range sent on a coarse grid', 
         form: 0,
         values: { from: Date.parse(from) / 1_000, to },
         rounded: true,
-        sent: { from, to: window.range.to },
-        extra: [{ from, to: asked.from }],
+        sent: { from, to: '2026-11-13T18:45:01Z' },
+        extra: [
+          { from, to: asked.from },
+          { from: window.range.to, to: '2026-11-13T18:45:01Z' },
+        ],
       },
     });
   });
@@ -131,4 +136,76 @@ describe('confirmed conversion records the actual range sent on a coarse grid', 
       }
     },
   );
+});
+
+describe('a confirmed cutoff as an inclusive ISO end stays on the grid tool parsers read', () => {
+  const joined = {
+    kind: 'joined',
+    argument: 'window',
+    as: 'iso',
+    joiner: '..',
+    edge: 'inclusive',
+  } as const satisfies PeriodForm;
+  const fractionDigits = (value: unknown): number =>
+    Math.max(
+      0,
+      ...[...String(value).matchAll(/:\d\d\.(\d+)/g)].map((m) => (m[1] as string).length),
+    );
+
+  it('writes one second before a whole-second cutoff, never nanoseconds', () => {
+    const window = confirmed({ from, to });
+    const done = convertForTool(window, [joined], undefined, context);
+    expect(done).toEqual({
+      conversion: { form: 0, values: { window: '2026-11-13T18:00:00Z..2026-11-13T18:44:59Z' } },
+    });
+    if ('refused' in done) throw new Error(done.refused);
+    // What the tool reads with it is the confirmed window again, to the instant.
+    expect(readBack(done.conversion.values, joined, precise)).toEqual(window.range);
+  });
+
+  it('writes one millisecond before a millisecond cutoff', () => {
+    const window = confirmed({ from, to: '2026-11-13T18:45:00.250Z' });
+    expect(convertForTool(window, [iso], undefined, context)).toEqual({
+      conversion: { form: 0, values: { from, to: '2026-11-13T18:45:00.249Z' } },
+    });
+  });
+
+  it('a frozen look-back in an inclusive form is sent in UTC on the same grid', () => {
+    const lookback = {
+      ...confirmed({ from, to: context.now }),
+      lookback: '2h',
+      freezeLookback: true,
+    } as const;
+    expect(convertForTool(lookback, [joined], undefined, context)).toEqual({
+      conversion: { form: 0, values: { window: '2026-11-13T18:00:00Z..2026-11-13T19:59:59Z' } },
+    });
+  });
+
+  it('holds for seeded whole-second and millisecond windows: at most three fraction digits', () => {
+    let seed = 20261125;
+    const next = (): number => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    const base = Date.parse(from);
+    for (let i = 0; i < 300; i++) {
+      const unit = next() < 0.5 ? 1_000 : 1;
+      const start = base + Math.floor(next() * 3_600) * unit;
+      const end = start + (1 + Math.floor(next() * 7_200)) * unit;
+      const window = confirmed({
+        from: new Date(start).toISOString(),
+        to: new Date(end).toISOString(),
+      });
+      for (const form of [joined, iso]) {
+        const done = convertForTool(window, [form], undefined, context);
+        if ('refused' in done) throw new Error(`case ${i}: ${done.refused}`);
+        for (const value of Object.values(done.conversion.values)) {
+          expect(fractionDigits(value)).toBeLessThanOrEqual(3);
+        }
+        // The same instants (the spelling of a millisecond may differ).
+        const read = readBack(done.conversion.values, form, precise);
+        expect([Date.parse(read!.from), Date.parse(read!.to)]).toEqual([start, end]);
+      }
+    }
+  });
 });

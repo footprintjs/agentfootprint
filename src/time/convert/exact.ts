@@ -19,6 +19,21 @@ function writeIso(value: InstantText | undefined, utc: boolean) {
   return text === undefined ? undefined : { value: text, rounded: false };
 }
 
+/**
+ * A confirmed cutoff as an INCLUSIVE ISO end: the last instant inside on the grid the cutoff
+ * sits on — one second before a whole-second cutoff, one millisecond before a millisecond one
+ * (the wire law tools were built against, `bounds.ts` · `writeBound`). Only a cutoff written
+ * past the millisecond keeps its exact neighbour, which no coarser grid can name.
+ */
+function inclusiveIsoEnd(cutoff: InstantText, utc: boolean) {
+  const at = instantOf(cutoff, 'strict');
+  if (at === undefined) return undefined;
+  if (at.nanos !== 0) return writeIso(adjacentInstant(cutoff, -1), utc);
+  const ms = at.ms - (at.ms % 1000 === 0 ? 1_000 : 1);
+  const text = spellInstant({ ms, nanos: 0 }, utc ? 0 : at.offsetMinutes);
+  return text === undefined ? undefined : { value: text, rounded: false };
+}
+
 /** A form that can carry both absolute bounds of a frozen look-back. */
 function supportsFrozenLookback(form: PeriodForm): boolean {
   switch (form.kind) {
@@ -80,7 +95,9 @@ function convertOne(
     ? undefined
     : writeBound(from, 'from', fromAs, 'inclusive', zone);
   const b = exactTo
-    ? writeIso(edge === 'exclusive' ? window.range.to : adjacentInstant(window.range.to, -1), utc)
+    ? edge === 'exclusive'
+      ? writeIso(window.range.to, utc)
+      : inclusiveIsoEnd(window.range.to, utc)
     : to === undefined
     ? undefined
     : writeBound(to, 'to', toAs, edge, zone);

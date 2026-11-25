@@ -56,6 +56,7 @@
  */
 
 import {
+  convertExact,
   convertForTool,
   formArguments,
   formFacts,
@@ -350,19 +351,48 @@ function sentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
           (w) =>
             w.quote !== undefined && call.quotes?.some((q) => quoteNames(q, w.quote as string)),
         );
-  const quoted = named.find((w) => isWindow(asked as TimeRange, w, ctx.now)) ?? named[0];
+  // The sent value IS a window when it names the same instants, or when it is exactly what the
+  // library itself would write for that window in this form (an inclusive end sits on the
+  // form's grid, so the same wire value may read back a grid step wider than a confirmed point).
+  const sent = asked;
+  const sentForm = call.forms[form] as PeriodForm;
+  const readContext = {
+    now: ctx.now,
+    ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
+    ...(turn.windows.length === 1 &&
+      turn.windows[0]?.endpoint !== undefined && { precise: true as const }),
+  };
+  const onWire = (w: TurnWindow): boolean => {
+    const written = convertExact(windowToConvert(w), [sentForm], {
+      now: ctx.now,
+      zone: w.zone,
+      ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
+      granularityMs: ctx.granularityMs,
+    });
+    const read =
+      written === undefined ? undefined : readBack(written.values, sentForm, readContext);
+    return read !== undefined && sameRange(read, sent);
+  };
+  const isThis = (w: TurnWindow): boolean => isWindow(sent, w, ctx.now) || onWire(w);
+  // Bound on the wire alone: the call asks for the person's window, whatever the grid reads back.
+  const askedOf = (w: TurnWindow): TimeRange => (isWindow(sent, w, ctx.now) ? sent : w.range);
+  const quoted = named.find(isThis) ?? named[0];
   if (quoted !== undefined) {
     return judged(
-      isWindow(asked, quoted, ctx.now)
-        ? { how: 'bound', form, asked, window: quoted, by: 'quote' }
+      isThis(quoted)
+        ? { how: 'bound', form, asked: askedOf(quoted), window: quoted, by: 'quote' }
         : { how: 'model-chosen', form, asked, person: quoted },
       call,
       ctx.now,
     );
   }
-  const equal = turn.windows.find((w) => isWindow(asked as TimeRange, w, ctx.now));
+  const equal = turn.windows.find(isThis);
   if (equal !== undefined) {
-    return judged({ how: 'bound', form, asked, window: equal, by: 'value' }, call, ctx.now);
+    return judged(
+      { how: 'bound', form, asked: askedOf(equal), window: equal, by: 'value' },
+      call,
+      ctx.now,
+    );
   }
   return judged(
     {
