@@ -73,6 +73,7 @@ import {
   assessment,
   outcomeOf,
 } from './observations/owner.js';
+import { endTurn } from '../hostEnd/entry.js';
 import { finalizeResult } from './terminal/owner.js';
 import { buildChart } from './chart/owner.js';
 
@@ -107,6 +108,7 @@ export function createAgentContext(
     typedOutcome,
     runTyped,
     run,
+    endTurn,
     runOwned,
     runTurn,
     noteAroundTurnFailed,

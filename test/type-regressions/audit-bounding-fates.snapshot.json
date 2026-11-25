@@ -205,6 +205,7 @@
     "finalContent": "chars",
     "iterationCount": "kept",
     "refused.by": "kept",
+    "replyAuthor": "kept",
     "scripts.closedFence.char": "kept",
     "scripts.closedFence.length": "kept",
     "scripts.omitted": "kept",
@@ -811,6 +812,10 @@
     "scoreEvidence": "keys",
     "strategyId": "kept",
     "strategyKind": "kept"
+  },
+  "agentfootprint.memory.write_outcome": {
+    "memoryId": "kept",
+    "outcome": "kept"
   },
   "agentfootprint.memory.written": {
     "actor": "kept",

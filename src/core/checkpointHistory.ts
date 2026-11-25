@@ -17,6 +17,7 @@
  * ```
  */
 
+import { assertStoredReplyOrigin } from './replyOrigin.js';
 import { assertStoredTypedAnswerMark } from '../tools/typedAnswer.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import { applyReplayRetirements } from '../thinking/replayHistory.js';
@@ -40,6 +41,7 @@ export function admitStoredHistory(history: readonly unknown[], folded: unknown)
         }). Each entry must be { role, content }.`,
       );
     }
+    assertStoredReplyOrigin(msg, `history[${i}]`);
     const m = msg as { role?: unknown; content?: unknown };
     if (typeof m.role !== 'string' || typeof m.content !== 'string') {
       throw new TypeError(
@@ -65,6 +67,7 @@ export function admitPauseTypedAnswers(state: Record<string, unknown>): void {
 function admitMarks(messages: unknown, location: string): void {
   if (!Array.isArray(messages)) return;
   for (const [index, message] of messages.entries()) {
+    assertStoredReplyOrigin(message, `${location}[${index}]`);
     assertStoredTypedAnswerMark(message, `${location}[${index}]`);
   }
 }

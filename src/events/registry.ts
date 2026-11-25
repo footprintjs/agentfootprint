@@ -6,6 +6,7 @@
 
 import type { AgentfootprintEventEnvelope } from './types.js';
 import type { ToolEventMap } from './registry/toolEvents.js';
+import type { MemoryEventMap } from './registry/memoryEvents.js';
 import type { SkillEventMap } from './registry/skillEvents.js';
 import type {
   AgentHandoffPayload,
@@ -50,11 +51,6 @@ import type {
   LLMTokenPayload,
   LoopIterationExitPayload,
   LoopIterationStartPayload,
-  MemoryAttachedPayload,
-  MemoryDetachedPayload,
-  MemoryRetrievedPayload,
-  MemoryStrategyAppliedPayload,
-  MemoryWrittenPayload,
   ParallelBranchCompletePayload,
   ParallelForkStartPayload,
   ParallelMergeEndPayload,
@@ -109,7 +105,7 @@ import type {
 export { EVENT_NAMES } from './registry/names.js';
 
 // ─── Event type → payload: the key table typed `.on(type, ...)` reads ───
-export interface AgentfootprintEventMap extends ToolEventMap, SkillEventMap {
+export interface AgentfootprintEventMap extends ToolEventMap, SkillEventMap, MemoryEventMap {
   // composition
   'agentfootprint.composition.enter': AgentfootprintEventEnvelope<
     'agentfootprint.composition.enter',
@@ -265,27 +261,6 @@ export interface AgentfootprintEventMap extends ToolEventMap, SkillEventMap {
   'agentfootprint.context.evaluated': AgentfootprintEventEnvelope<
     'agentfootprint.context.evaluated',
     ContextEvaluatedPayload
-  >;
-  // memory
-  'agentfootprint.memory.strategy_applied': AgentfootprintEventEnvelope<
-    'agentfootprint.memory.strategy_applied',
-    MemoryStrategyAppliedPayload
-  >;
-  'agentfootprint.memory.attached': AgentfootprintEventEnvelope<
-    'agentfootprint.memory.attached',
-    MemoryAttachedPayload
-  >;
-  'agentfootprint.memory.retrieved': AgentfootprintEventEnvelope<
-    'agentfootprint.memory.retrieved',
-    MemoryRetrievedPayload
-  >;
-  'agentfootprint.memory.detached': AgentfootprintEventEnvelope<
-    'agentfootprint.memory.detached',
-    MemoryDetachedPayload
-  >;
-  'agentfootprint.memory.written': AgentfootprintEventEnvelope<
-    'agentfootprint.memory.written',
-    MemoryWrittenPayload
   >;
   // validation
   'agentfootprint.validation.args_invalid': AgentfootprintEventEnvelope<
@@ -570,6 +545,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.memory.retrieved',
   'agentfootprint.memory.detached',
   'agentfootprint.memory.written',
+  'agentfootprint.memory.write_outcome',
   'agentfootprint.tools.offered',
   'agentfootprint.tools.activated',
   'agentfootprint.tools.deactivated',

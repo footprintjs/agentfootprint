@@ -64,11 +64,11 @@ prints both); the results layer (`results/subflow.ts` · `checkPeriods`, handed 
 (`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls/evidence/sourceClock.ts` files a
 `source-clock` row when a dataset it mints declares an axis zone;
 `Agent.run` / `Agent.resume` read the run's `time` through `clock.ts` (refusing a run with no zone
-before the turn starts); `stages/seed.ts` · `stampClock` files the turn's `clock` row;
+before the turn starts); `stages/timeLayer.ts` · `stampClock` files the turn's `clock` row;
 `stages/timeLayer.ts` files each `call` row and, first thing in a resumed leg (either pause
 shape: the `resume` door, or `execute` re-run after the argument ask's `interrupt()`),
 `clock-on-resume`;
-`stages/seed.ts` · `readTimeWords` reads the person's message through the armed reader, right
+`stages/timeLayer.ts` · `readTimeWords` reads the person's message through the armed reader, right
 after the clock, and files the `time-reading` rows.
 `core/checkpointLedger.ts` · `ledgerRowIsWellFormed` routes time rows to `rows.ts`.
 `tools/declare.ts` · `parsesUnderSpelling` reads a look-back through `duration.ts` and

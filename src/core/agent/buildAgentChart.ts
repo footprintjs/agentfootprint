@@ -54,8 +54,8 @@ import {
 } from '../../injection-engine/buildInjectionEngineSubflow.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
 
-import { unwrapMemoryFlowChart } from '../../memory/define.js';
-import { mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { mountAgentMemoryWrites } from './memoryWrites.js';
+import { mountHostTurn } from './hostEnd/chart.js';
 import { mountAgentMemoryReads } from './memoryReads.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
@@ -154,25 +154,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     prepareFinalFor(deps),
     deps.structureRecorders,
   );
-  for (const m of deps.memories) {
-    if (m.write) {
-      finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
-        pipeline: {
-          read: unwrapMemoryFlowChart(m.read) as never,
-          write: unwrapMemoryFlowChart(m.write) as never,
-        },
-        identityKey: 'runIdentity',
-        turnNumberKey: 'turnNumber',
-        contextTokensKey: 'contextTokensRemaining',
-        newMessagesKey: 'newMessages',
-        writeSubflowId: `sf-memory-write-${m.id}`,
-        ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-        // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
-        ...(m.type === 'causal' &&
-          deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
-      });
-    }
-  }
+  finalBranchBuilder = mountAgentMemoryWrites(finalBranchBuilder, deps);
   const finalBranchChart = finalBranchBuilder
     .addFunction(
       'BreakFinal',
@@ -197,6 +179,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
     description: reactMode === 'classic' ? 'Agent: Classic ReAct loop' : 'Agent: ReAct loop',
   });
 
+  builder = mountHostTurn(builder, deps);
   builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — ONE stage, two possible occupants, same id

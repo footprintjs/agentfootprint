@@ -2,6 +2,7 @@ import type { AgentConfiguration } from './types.js';
 
 /** Construction-only mutable storage; readers receive the readonly contract. */
 export class AgentConfigurationValues implements AgentConfiguration {
+  hostEndedTurns = false;
   declare provider: AgentConfiguration['provider'];
   declare model: AgentConfiguration['model'];
   declare temperature?: AgentConfiguration['temperature'];
