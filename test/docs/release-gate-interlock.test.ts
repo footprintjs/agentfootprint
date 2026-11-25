@@ -24,14 +24,16 @@
  * and the 9.58.0 release commit edited it by hand (103 → 105 typed events,
  * nothing else), which left the export count stale AND meant nobody had run the
  * check that would have gone red. A generated file that a human can edit
- * without detection is a generated file that will be edited.
+ * without detection is a generated file that will be edited. Since 25 Nov 2026
+ * the report is not stored at all: it is written on demand and attached to each
+ * CI run, so there is nothing to edit and nothing to go stale.
  *
  * These are file-shape assertions on purpose: they are the only kind that can
  * fail on THIS machine, before the tag is pushed.
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { jobBlock } from '../helpers/workflowText';
@@ -39,7 +41,6 @@ import { jobBlock } from '../helpers/workflowText';
 const ROOT = join(__dirname, '..', '..');
 const PUBLISH_YML = join(ROOT, '.github', 'workflows', 'publish.yml');
 const RELEASE_SH = join(ROOT, 'scripts', 'release.sh');
-const REPORT = join(ROOT, 'docs', 'DOCS_TRUTH_REPORT.md');
 
 const read = (p: string): string => readFileSync(p, 'utf8');
 
@@ -121,47 +122,45 @@ describe('release interlock — a red gate cannot reach npm', () => {
   });
 });
 
-describe('the docs-truth report is generated, never hand-edited', () => {
-  it('regenerating the report reproduces the committed bytes exactly', { timeout: 60_000 }, () => {
-    expect(existsSync(REPORT), 'docs/DOCS_TRUTH_REPORT.md is missing').toBe(true);
-    const committed = read(REPORT);
-
-    // `--report-only` restates current truth against the EXISTING baseline. It
-    // never writes the baseline, so this test can never quietly accept debt.
+describe('the docs-truth report is derived, never stored', () => {
+  it('the report is not a tracked file, so it cannot be stale or edited by hand', () => {
+    // Until 25 Nov 2026 the report was committed and this test regenerated it and
+    // compared bytes. It is not stored any more: every pull request that changed an
+    // export changed its counts, so open pull requests conflicted on it. A file
+    // that is not in the tree cannot be the 9.58.0 hand edit either.
+    const ignored = read(join(ROOT, '.gitignore')).split('\n');
+    expect(ignored, '.gitignore must ignore the derived report').toContain(
+      '/docs/DOCS_TRUTH_REPORT.md',
+    );
+    let tracked = '';
     try {
-      execFileSync('node', ['scripts/docs-truth-check.mjs', '--report-only'], {
+      tracked = execFileSync('git', ['ls-files', '--', 'docs/DOCS_TRUTH_REPORT.md'], {
         cwd: ROOT,
-        stdio: 'pipe',
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
       });
     } catch {
-      // A red ratchet still writes the report; the exit code is the ratchet's
-      // verdict, which its own test owns. Nothing to do here.
+      // Not a git checkout (a packed copy): the ignore rule above is the check.
     }
-    const regenerated = read(REPORT);
-
-    // The one line the comparison must NOT read: the generator stamps
-    // `_Recorded <today>._`, so a byte-exact compare goes red on every
-    // calendar day after the commit — a gate that rots daily is a gate that
-    // gets deleted. The date is metadata about WHEN the truth was restated;
-    // the ratchet's subject is the truth itself, so the stamp is normalized
-    // out of both sides and everything else stays byte-exact.
-    const stripStamp = (s: string): string =>
-      s.replace(/^_Recorded \d{4}-\d{2}-\d{2}\._$/m, '_Recorded <date>._');
-
-    if (regenerated !== committed) {
-      // Restore, so a failing run never leaves the tree dirty for the next one.
-      const { writeFileSync } = require('node:fs') as typeof import('node:fs');
-      writeFileSync(REPORT, committed);
-    }
-
     expect(
-      stripStamp(regenerated),
-      'docs/DOCS_TRUTH_REPORT.md does not match what the generator produces, which means ' +
-        'it was edited by hand or is stale. That is precisely what happened in the 9.58.0 ' +
-        'release commit: "103 typed events" was changed to "105" by hand, the export count ' +
-        'was left stale at 1906, and because nobody ran the generator nobody saw the ' +
-        'ratchet was red. Run `npm run docs:truth:report` and commit the result.',
-    ).toBe(stripStamp(committed));
+      tracked.trim(),
+      'docs/DOCS_TRUTH_REPORT.md is tracked again. It is derived: run `git rm --cached` on it. ' +
+        '`npm run docs:truth:report` writes it locally and CI attaches it to each run.',
+    ).toBe('');
+  });
+
+  it('CI writes the report and attaches it to the run', () => {
+    const job = jobBlock(read(join(ROOT, '.github', 'workflows', 'ci.yml')), 'docs-truth');
+    const at = (text: string): number => job.indexOf(text);
+    expect(at('- run: npm run docs:truth\n')).toBeGreaterThan(-1);
+    expect(at('- run: npm run docs:truth:report\n')).toBeGreaterThan(
+      at('- run: npm run docs:truth\n'),
+    );
+    expect(at('path: docs/DOCS_TRUTH_REPORT.md')).toBeGreaterThan(
+      at('- run: npm run docs:truth:report\n'),
+    );
+    // A run that wrote no report must not look like one that did.
+    expect(job).toContain('if-no-files-found: error');
   });
 
   it('the report-only path exists and cannot write the baseline', () => {

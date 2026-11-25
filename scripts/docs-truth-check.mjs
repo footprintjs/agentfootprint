@@ -65,8 +65,9 @@
  *   • CI fails only when the situation gets WORSE than baseline.
  *   • "docs promise something that does not exist" fails ALWAYS, baseline or
  *     not — that class actively misleads readers; there should be zero.
- *   • Fixed a gap? `npm run docs:truth:baseline` re-records and regenerates
- *     docs/DOCS_TRUTH_REPORT.md.
+ *   • Fixed a gap? `npm run docs:truth:baseline` re-records it.
+ *   • docs/DOCS_TRUTH_REPORT.md is DERIVED and not committed (.gitignore says why);
+ *     CI's `docs-truth` job attaches it to the run.
  *
  * Usage:
  *   node scripts/docs-truth-check.mjs                     # check (read-only)
@@ -1222,8 +1223,9 @@ function buildBaseline(result, surface, events, exercised) {
     $schema: 'docs-truth baseline v1',
     note:
       'Recorded state of the docs-vs-code gap. CI fails only when this gets WORSE. ' +
-      'Fixed a gap? Run `npm run docs:truth:baseline` to re-record and regenerate ' +
-      'docs/DOCS_TRUTH_REPORT.md. The "docs-promise-nothing" class is NEVER baselined — ' +
+      'Fixed a gap? Run `npm run docs:truth:baseline` to re-record it. The full report is ' +
+      'written to docs/DOCS_TRUTH_REPORT.md, which is derived and not committed. ' +
+      'The "docs-promise-nothing" class is NEVER baselined — ' +
       'it must always be zero.',
     documentedMeans:
       'the symbol name appears in prose (outside any fenced code block) on a hand-written ' +
@@ -1987,10 +1989,10 @@ if (failed) {
   console.log('');
   console.log('         npm run docs:truth:baseline');
   console.log('');
-  console.log('     That re-records the baseline and regenerates docs/DOCS_TRUTH_REPORT.md, so');
-  console.log('     the new debt lands as a reviewable diff instead of disappearing quietly.');
+  console.log('     That re-records the baseline (docs/docs-truth/baseline.json), so the new');
+  console.log('     debt lands as a reviewable diff instead of disappearing quietly.');
   console.log('');
-  console.log(`Full picture: docs/DOCS_TRUTH_REPORT.md (recorded ${baseline.recordedAt})`);
+  console.log(`Full picture: npm run docs:truth:report writes docs/DOCS_TRUTH_REPORT.md (baseline recorded ${baseline.recordedAt})`);
   process.exit(1);
 }
 

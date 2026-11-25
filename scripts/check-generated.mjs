@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * After `npm run docs:regen`, the tree must be exactly what was committed.
- * Any difference means a generated file (API mirror, docs-truth report, examples
+ * Any difference means a generated file (API mirror, examples
  * README, AI-instruction copies, canonical notes) was not regenerated with the
  * change that made it stale. Run by `npm run docs:check` and CI's `generated` job.
  */

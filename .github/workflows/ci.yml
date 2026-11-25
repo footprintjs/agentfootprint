@@ -422,6 +422,17 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run docs:truth
+      # The full report is derived, not committed (.gitignore says why): it is
+      # written here and attached to the run, with its summary on the run page.
+      - run: npm run docs:truth:report
+      - name: Put the report's summary on the run page
+        run: sed -n '/^## In plain words/,/^---$/p' docs/DOCS_TRUTH_REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-truth-report
+          path: docs/DOCS_TRUTH_REPORT.md
+          if-no-files-found: error
+          retention-days: 30
 
   # Coverage gate — runs vitest with v8 coverage, reported in the merged job.
   # No threshold enforcement (per design memo).
