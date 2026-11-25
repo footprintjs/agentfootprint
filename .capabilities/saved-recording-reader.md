@@ -1,1 +1,0 @@
-| open a saved run recording by ref and read its root or one invocation without the whole run, from a whole recording or one saved in parts | `openSavedRecording` | `src/recorders/observability/recordingParts/open.ts` | unreleased |
