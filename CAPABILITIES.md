@@ -4,9 +4,11 @@
 use (it is keyed by what you would call the thing, not by its name here), then
 for the nearest symbol in `src/index.ts`. Every row below already ships.
 
-A row's **Since** column says `unreleased` until the release that ships it —
-the release fills in the version (see `.changes/README.md`). Never write a
-version number here by hand.
+**Search [`.capabilities/`](.capabilities/README.md) too.** A capability merged
+since the last release waits there, one file per row, and the release moves it
+into this table with its version. Do not add a row here by hand, and never write
+a version number: add a file there (why: every pull request used to add its row
+at the same line of this table, so open pull requests conflicted with each other).
 
 **Read this table before proposing any new capability.** Everything below already
 ships. The failure it exists to stop is real and expensive: a reader searches for

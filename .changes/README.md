@@ -29,5 +29,6 @@ Optional `bump: minor` (or `major`) raises the bump; it can never lower it.
 - Name the file anything descriptive: `.changes/findings-stream-leak.md`.
 - `npm run changes:preview` prints the entry the next release would write.
 - `npm run changes:check` validates every fragment (CI runs it on every PR).
-- A capability added to `CAPABILITIES.md` writes `unreleased` in its Since
-  column; the release replaces it with the version.
+- A new capability adds one file to [`.capabilities/`](../.capabilities/README.md)
+  holding its `CAPABILITIES.md` row with `unreleased` in the Since column; the
+  release moves the row into the table and writes the version.
