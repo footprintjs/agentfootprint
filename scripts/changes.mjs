@@ -100,12 +100,16 @@ export function parseCapabilityRows(file, text) {
   const rows = text.split('\n').filter((line) => line.trim() !== '');
   if (rows.length === 0) throw new Error(`${file}: empty — write one CAPABILITIES.md table row`);
   for (const row of rows) {
-    if (!row.startsWith('| ') || /^\|\s*-{3}/.test(row) || row.split('|').length < 6)
-      throw new Error(`${file}: every line must be one table row: | what you would build | \`symbol\` | \`path\` | unreleased |`);
-    if (!/\|\s*unreleased\s*\|\s*$/.test(row))
+    // Cells are split on unescaped pipes only: a row may write `a \| b` inside a cell.
+    const cells = row.trimEnd().split(/(?<!\\)\|/);
+    if (!row.startsWith('| ') || /^\|\s*-{3}/.test(row) || cells.length !== 6 || cells[5] !== '')
+      throw new Error(`${file}: every line must be one four-cell table row: | what you would build | \`symbol\` | \`path\` | unreleased |`);
+    if (cells[4].trim() !== 'unreleased')
       throw new Error(`${file}: the last cell must be the word unreleased — the release writes the version`);
+    if (cells[1].trim().startsWith('If you are about to build'))
+      throw new Error(`${file}: this is the table's header, not a capability row`);
   }
-  return { file, rows };
+  return { file, rows: rows.map((row) => row.trimEnd()) };
 }
 
 /**
@@ -126,15 +130,38 @@ export function readCapabilityRows(dir = CAPABILITIES_DIR) {
  * placeholder replaced by `version`. Throws when rows wait and the table cannot be found.
  */
 export function foldCapabilities(text, waiting, version) {
-  const lines = text.split('\n');
+  // Only the Since cell (the last one) is stamped: the word may also appear in the row's own
+  // prose. Inside that cell the word alone is replaced, so `9.1.0, refusal unreleased` works.
+  const stamp = (row) => row.replace(UNRELEASED_IN_SINCE, version);
+  const lines = text.split('\n').map((line) => (line.startsWith('|') ? stamp(line) : line));
   if (waiting.length > 0) {
     const separator = lines.findIndex((line) => /^\|\s*-{3}/.test(line));
     if (separator < 0) throw new Error('CAPABILITIES.md has no table to fold .capabilities/ rows into');
-    lines.splice(separator + 1, 0, ...waiting.flatMap((entry) => entry.rows.map((row) => row.trimEnd())));
+    lines.splice(separator + 1, 0, ...waiting.flatMap((entry) => entry.rows.map((row) => stamp(row.trimEnd()))));
   }
-  return lines
-    .map((line) => (line.startsWith('|') ? line.replace(/\bunreleased\b/g, version) : line))
-    .join('\n');
+  return lines.join('\n');
+}
+
+/** The word `unreleased` inside a table row's last cell: the one rule the stamp and the refusal share. */
+const UNRELEASED_IN_SINCE = /\bunreleased\b(?=[^|]*\|\s*$)/;
+
+/**
+ * Table rows of `CAPABILITIES.md` whose Since cell still says `unreleased`: rows written into
+ * the table by hand. The release would still stamp them, but they are exactly what made pull
+ * requests conflict.
+ */
+export function handWrittenUnreleasedRows(text) {
+  return text.split('\n').filter((line) => line.startsWith('|') && UNRELEASED_IN_SINCE.test(line));
+}
+
+/**
+ * The hand-written rows a pull request ADDS: those in its table that the base's table does not
+ * hold. A row already on main (merged before this rule, or from a pull request checked before
+ * it) is not this pull request's to fix, and refusing it would turn every pull request red.
+ */
+export function addedHandWrittenRows(headText, baseText) {
+  const onBase = new Set(handWrittenUnreleasedRows(baseText));
+  return handWrittenUnreleasedRows(headText).filter((row) => !onBase.has(row));
 }
 
 /** The highest bump any fragment needs, or undefined for none. */
@@ -205,6 +232,20 @@ export function renderEntryBody(fragments) {
   return parts.join('\n\n');
 }
 
+/** A file's text at a commit, or '' when the commit has no such file. */
+function fileAt(ref, path) {
+  try {
+    return execFileSync('git', ['show', `${ref}:${path}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return '';
+  }
+}
+
 function changedFilesSince(base) {
   const out = execFileSync('git', ['diff', '--name-status', `${base}...HEAD`], { cwd: ROOT, encoding: 'utf8' });
   return out
@@ -254,6 +295,20 @@ function main(argv) {
     readCapabilityRows(); // throws on the first malformed capability row
     const baseAt = rest.indexOf('--base');
     if (baseAt >= 0) {
+      // Only on a pull request (`--base`), and only for rows it adds: the release's own bare
+      // check must still pass on a main that holds such a row, and the release still stamps it.
+      const capsPath = join(ROOT, 'CAPABILITIES.md');
+      const byHand = existsSync(capsPath)
+        ? addedHandWrittenRows(readFileSync(capsPath, 'utf8'), fileAt(rest[baseAt + 1], 'CAPABILITIES.md'))
+        : [];
+      if (byHand.length > 0) {
+        console.error(
+          `This pull request adds ${byHand.length} row(s) marked unreleased to CAPABILITIES.md. Move each to its own file in ` +
+            '.capabilities/ (see .capabilities/README.md): rows added to the table by hand make open pull requests conflict.\n' +
+            byHand.map((row) => `  ${row.slice(0, 100)}…`).join('\n'),
+        );
+        return 1;
+      }
       const base = rest[baseAt + 1];
       const changed = changedFilesSince(base);
       const touchesSrc = changed.some((c) => c.path.startsWith('src/'));

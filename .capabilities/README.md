@@ -15,6 +15,11 @@ row for the [capability index](../CAPABILITIES.md):
   request), and `test/docs/capability-index.test.ts` holds a waiting row to
   the same truth as a released one: its path exists and its symbol is there.
 - Looking for what already exists? Search `CAPABILITIES.md` AND this folder.
+- A row that a pull request adds straight to the table in `CAPABILITIES.md` with
+  `unreleased` is refused on that pull request (`npm run changes:check -- --base …`), and the
+  message names this folder.
+- Known limit: a release candidate packs `CAPABILITIES.md` as it stands, so its
+  package does not list rows still waiting here. The release that follows does.
 
 Why a folder: every pull request used to add its row at the same line of the
 table, so any two open pull requests conflicted with each other and one had to

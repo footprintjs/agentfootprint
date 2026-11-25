@@ -40,7 +40,7 @@ function preparation(t, label, args = []) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, 'scripts'));
   mkdirSync(path.join(root, '.changes'));
-  for (const name of ['changes.mjs', 'release-prepare.mjs'])
+  for (const name of ['changes.mjs', 'release-prepare.mjs', 'release-size-baseline.mjs'])
     copyFileSync(path.join(ROOT, 'scripts', name), path.join(root, 'scripts', name));
   const fragment =
     '---\ntype: breaking\n---\nA synthetic breaking change.\n\nMigration: use the new synthetic contract.\n';
@@ -69,6 +69,22 @@ function preparation(t, label, args = []) {
   const capabilities =
     '| Capability | Since |\n| --- | --- |\n| Synthetic next feature | unreleased |\n';
   writeFileSync(path.join(root, 'CAPABILITIES.md'), capabilities);
+  // A size baseline with one loose entry, one tight, one for a file now small and one for a file gone.
+  mkdirSync(path.join(root, 'src'));
+  writeFileSync(path.join(root, 'src/loose.ts'), 'x\n'.repeat(650));
+  writeFileSync(path.join(root, 'src/tight.ts'), 'x\n'.repeat(700) + 'unterminated');
+  writeFileSync(path.join(root, 'src/small.ts'), 'x\n'.repeat(600));
+  writeFileSync(
+    path.join(root, '.file-size-baseline.json'),
+    JSON.stringify(
+      {
+        files: { 'src/gone.ts': 800, 'src/loose.ts': 700, 'src/small.ts': 900, 'src/tight.ts': 701 },
+        exclude: [],
+      },
+      null,
+      2,
+    ) + '\n',
+  );
   // One file per waiting row (.capabilities/); the README there is the format doc, not a row.
   mkdirSync(path.join(root, '.capabilities'));
   writeFileSync(path.join(root, '.capabilities/README.md'), '# format\n');
@@ -114,6 +130,11 @@ test('release route: positive: final release consumes fragments and stamps the s
       '| Second waiting feature | `second` | `src/second.ts` | 14.0.0 |\n| Synthetic next feature | 14.0.0 |\n',
   );
   assert.deepEqual(readdirSync(path.join(f.root, '.capabilities')), ['README.md']);
+  // The release writes each size entry down to the measured file and drops the stale ones.
+  assert.deepEqual(JSON.parse(f.read('.file-size-baseline.json')), {
+    files: { 'src/loose.ts': 650, 'src/tight.ts': 701 },
+    exclude: [],
+  });
   assert(f.read('CHANGELOG.md').includes('## [14.0.0] - 2026-11-04'));
 });
 test('release route: a waiting capability row is refused unless it is a table row ending in unreleased', async () => {
@@ -127,12 +148,88 @@ test('release route: a waiting capability row is refused unless it is a table ro
     '| a thing | unreleased |',
     '|---|---|---|---|',
     good + '\nstray prose',
+    '| a thing | `sym` | `src/a.ts` | extra | unreleased |',
+    '| If you are about to build… | It is | Where | unreleased |',
   ])
     assert.throws(() => parseCapabilityRows('.capabilities/a.md', bad), /\.capabilities\/a\.md/, bad);
+  // An escaped pipe inside a cell is not a cell boundary.
+  const piped = '| `a \\| b` thing | `sym` | `src/a.ts` | unreleased |';
+  assert.deepEqual(parseCapabilityRows('.capabilities/a.md', piped).rows, [piped]);
+  // Only the Since cell is stamped, in a waiting row and in a row already in the table.
+  assert.equal(
+    foldCapabilities(
+      '|---|\n| old unreleased words | unreleased |\n',
+      [{ rows: ['| new unreleased words | `s` | `p` | unreleased |'] }],
+      '2.0.0',
+    ),
+    '|---|\n| new unreleased words | `s` | `p` | 2.0.0 |\n| old unreleased words | 2.0.0 |\n',
+  );
+  // A Since cell that names several versions has only the word replaced.
+  assert.equal(
+    foldCapabilities('| x | 9.1.0, refusal unreleased |\n', [], '2.0.0'),
+    '| x | 9.1.0, refusal 2.0.0 |\n',
+  );
+  // A row written into the table by hand is found by the same rule the release stamps with.
+  const { handWrittenUnreleasedRows, addedHandWrittenRows } = await import('./changes.mjs');
+  assert.deepEqual(
+    handWrittenUnreleasedRows(
+      'prose unreleased\n| x | unreleased |\n|y|9.1.0, more unreleased|\n| unreleased words | 1.0.0 |\n',
+    ),
+    ['| x | unreleased |', '|y|9.1.0, more unreleased|'],
+  );
+  // Only the rows a pull request adds are its to fix: one already on the base is not refused.
+  assert.deepEqual(
+    addedHandWrittenRows('| old | unreleased |\n| new | unreleased |\n', '| old | unreleased |\n'),
+    ['| new | unreleased |'],
+  );
+  assert.deepEqual(addedHandWrittenRows('| old | unreleased |\n', '| old | unreleased |\n'), []);
+  const { tightenedBaseline, lineCount } = await import('./release-size-baseline.mjs');
+  assert.equal(lineCount(Buffer.from('')), 0);
+  assert.equal(lineCount(Buffer.from('a\nb')), 2);
+  const tight = JSON.stringify({ files: { 'src/a.ts': 700 }, exclude: [] }, null, 2) + '\n';
+  assert.equal(tightenedBaseline(tight, () => 700), undefined, 'a tight baseline keeps its bytes');
+  assert.equal(tightenedBaseline(tight, () => 750), undefined, 'an entry is never raised');
   // Rows wait but the index has no table: refuse, never drop them.
   assert.throws(() => foldCapabilities('# no table\n', [{ rows: [good] }], '1.0.0'), /no table/);
   // Nothing waiting: the index changes only where a row already said unreleased.
   assert.equal(foldCapabilities('prose unreleased\n| x | unreleased |\n', [], '1.0.0'), 'prose unreleased\n| x | 1.0.0 |\n');
+});
+test('release route: changes check refuses a hand-written row the pull request adds, and only that', (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'release-rows-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const env = { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin', HOME: root, TZ: 'UTC' };
+  const run = (command, args) =>
+    spawnSync(command, args, { cwd: root, encoding: 'utf8', timeout: 10000, env });
+  const git = (...args) => {
+    const done = run('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args]);
+    assert.equal(done.status, 0, done.stderr);
+    return done.stdout.trim();
+  };
+  const check = (base) => run(process.execPath, ['scripts/changes.mjs', 'check', '--base', base]);
+  mkdirSync(path.join(root, 'scripts'));
+  copyFileSync(path.join(ROOT, 'scripts/changes.mjs'), path.join(root, 'scripts/changes.mjs'));
+  writeFileSync(path.join(root, 'package.json'), '{"name":"agentfootprint","version":"1.0.0"}\n');
+  // The base already holds one hand-written row: merged before the rule, not this pull request's.
+  const table = '| what | it | where | since |\n|---|---|---|---|\n| old | `o` | `p` | unreleased |\n';
+  writeFileSync(path.join(root, 'CAPABILITIES.md'), table);
+  git('init', '-q');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'base');
+  const base = git('rev-parse', 'HEAD');
+  writeFileSync(path.join(root, 'README.md'), 'a change that adds no row\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'no row');
+  assert.equal(check(base).status, 0, check(base).stderr);
+  writeFileSync(path.join(root, 'CAPABILITIES.md'), table + '| new | `n` | `p` | unreleased |\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'adds a row by hand');
+  const refused = check(base);
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /adds 1 row\(s\) marked unreleased[\s\S]*\.capabilities\//);
+  assert.match(refused.stderr, /\| new \|/);
+  assert.doesNotMatch(refused.stderr, /\| old \|/);
+  // The release's own bare check never refuses a row: it must pass on such a main.
+  assert.equal(run(process.execPath, ['scripts/changes.mjs', 'check']).status, 0);
 });
 test('release route: release job refuses every force push spelling and force refspec', () => {
   const commands = job('release-pr');

@@ -179,8 +179,10 @@ Settings → Rules → Rulesets → **New branch ruleset**: target the default b
 (0 required approvals if you are the only maintainer — otherwise every release PR waits for
 an approval) and **Require status checks to pass** with: `test (22)`, `test (24)`, `lint`,
 `docs`, `generated`, `docs-links`, `docs-truth`, `coverage`, `changes`, `tested-tree`. The
-release PR skips `docs` and `changes`; GitHub reports a job skipped by its `if:` as passing,
-so neither holds it up. Leave the bypass list empty. Tags are not affected, so the Release
+release PR skips `docs` and `changes`, and an ordinary pull request skips `coverage` (it and the
+test suite on Node 22 run on every push to main, on the release PR and on dependency PRs);
+GitHub reports a job skipped by its `if:` as passing, so none of them holds a pull request up.
+A release still needs `coverage` and both `test` checks to have passed (`publish.yml` · `verdict`). Leave the bypass list empty. Tags are not affected, so the Release
 workflow can still tag and publish.
 
 CI splits the test run across machines. `test (22)`, `test (24)` and `coverage` stay the required
