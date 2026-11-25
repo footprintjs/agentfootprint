@@ -362,9 +362,9 @@ jobs:
   file-size:
     needs: plan
     if: needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc'
-    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
+    uses: footprintjs/ci/.github/workflows/file-size.yml@0238fa6781697bd110a8ac3feea1fb58ddcc960b
     with:
-      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
+      tool_sha: 0238fa6781697bd110a8ac3feea1fb58ddcc960b
       source_sha: ${{ needs.plan.outputs.sha }}
 
   build:

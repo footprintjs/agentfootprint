@@ -27,9 +27,9 @@ concurrency:
 # github-actions manager proposes new pins.
 jobs:
   file-size:
-    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
+    uses: footprintjs/ci/.github/workflows/file-size.yml@0238fa6781697bd110a8ac3feea1fb58ddcc960b
     with:
-      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
+      tool_sha: 0238fa6781697bd110a8ac3feea1fb58ddcc960b
 
   # Release hold, pull-request mode (footprintjs/ci docs/HOLD.md): while an open
   # issue or pull request carries the label `hold-release`, a pull request that
