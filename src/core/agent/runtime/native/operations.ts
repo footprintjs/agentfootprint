@@ -104,6 +104,7 @@ export async function assessment(
     declarations,
     () => retained()?.history,
     (key) => retained()?.[key],
+    selected?.value.sourceConsultation?.checksOmission,
   );
 }
 
