@@ -61,6 +61,7 @@
 import type { InputValue } from '../../../tools/inputRequest.js';
 import {
   callWindowOf,
+  selectedFormOf,
   type CallWindow,
   type TurnWindows,
   type WindowSource,
@@ -268,6 +269,7 @@ export interface ArgumentResolution {
   readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly iteration: number;
   readonly fills?: readonly ArgumentFill[];
+  readonly removePeriodArguments?: readonly string[];
   readonly refused?: string;
   /**
    * The `ask`-ruled arguments to ask the person for, in the rule's declared
@@ -530,24 +532,16 @@ function formArgumentsOf(toolOf: ToolOf, toolName: string): ReadonlySet<string> 
   return new Set(forms.flatMap((f) => formArguments(f).map((a) => a.argument)));
 }
 
-/**
- * The arguments of every form OTHER than the one a present window was read
- * back from (`bound`, `model-chosen`, `model`) that the read form does not
- * also name — an alternative the call did not take. Empty for any other
- * decision; a ruled argument outside every form is never in it.
- */
+/** Alternatives that the selected period form does not also name. */
 function untakenFormArgumentsOf(
   toolOf: ToolOf,
   toolName: string,
   decision: CallWindow | undefined,
 ): ReadonlySet<string> {
-  if (
-    decision === undefined ||
-    (decision.how !== 'bound' && decision.how !== 'model-chosen' && decision.how !== 'model')
-  ) {
-    return new Set();
-  }
-  return untakenBesides(periodFormsOf(readableRules(toolOf, toolName)?.period), decision.form);
+  const form = selectedFormOf(decision);
+  return form === undefined
+    ? new Set()
+    : untakenBesides(periodFormsOf(readableRules(toolOf, toolName)?.period), form);
 }
 
 /**
@@ -712,7 +706,7 @@ export function verifyPlan(
         continue;
       }
       if (alternatives.has(p.argument)) continue;
-      if (p.missing && untaken.has(p.argument)) continue;
+      if (untaken.has(p.argument) && (p.missing || decision?.how === 'filled')) continue;
       const rule = rules?.ruled.find((r) => r.argument === p.argument);
       const check = p.missing ? undefined : sourceCheckOf(sources, toolOf, call, p.argument, rule);
       if (check !== undefined) {
@@ -905,6 +899,10 @@ export function resolutionsOf(
       resolutions.push({
         ...owner,
         ...(fills.length > 0 && { fills }),
+        ...(decision?.how === 'filled' &&
+          decision.replacedForm === true && {
+            removePeriodArguments: [...untakenFormArgumentsOf(toolOf, planned.toolName, decision)],
+          }),
         ...(ask.length > 0 && { ask }),
         ...(quoted.length > 0 && { quoted }),
         ...(window && { window: true as const }),

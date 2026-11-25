@@ -1,4 +1,5 @@
 import { lookbackRange, type TimeRange } from '../range.js';
+import { windowEndpointOf } from '../windowEndpoint.js';
 import type { TimeParts } from '../reader.js';
 import type { ResolveClock } from '../resolveRecord.js';
 import type { Built, Unresolved } from './types.js';
@@ -26,12 +27,13 @@ export function lookbackBuilt(
   const duration = `${rel.count}${LOOKBACK_LETTER[rel.unit] as string}`;
   let range: TimeRange;
   try {
-    range = lookbackRange(clock.now, duration, 'smhdw');
+    range = { from: lookbackRange(clock.now, duration, 'smhdw').from, to: clock.now };
   } catch {
     return { unsupported: 'a look-back past the calendar' };
   }
   const zones = lookbackZoneReadsOf(parts.zoneToken, clock.zone, policy);
   if (!Array.isArray(zones)) return zones;
+  const endpoint = windowEndpointOf(range.to);
   return zones.map(({ read, zone, unconverted }) => {
     const via = viaOf(read);
     return {
@@ -40,6 +42,7 @@ export function lookbackBuilt(
       candidate: {
         window: { kind: 'lookback' as const, duration },
         range,
+        ...(endpoint !== undefined && { endpoint }),
         zone,
         grain: rel.unit,
         implied: [],

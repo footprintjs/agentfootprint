@@ -6,12 +6,10 @@
  * before the fix.
  *
  * Laws pinned:
- *   - `resolve.ts` owns the end edge: a range end said as an o'clock hour
- *     ends AT that instant ("8 AM to 9 AM" is `[08:00, 09:00)`, no
- *     `end-of-grain`); a minute, second or day end, and a lone point, keep
- *     end-of-grain. "Was the end widened?" has ONE answer,
- *     `resolveRecord.ts` · `widenedGrain` — the said end asks it; the label asks
- *     `shownGrain` (that, or a look-back's grain: it ends AT now, never +1 ms).
+ *   - `resolve.ts` owns the end edge: a clock range ends at its exclusive
+ *     cutoff, with the stated precision. A calendar day end and a lone
+ *     point keep end-of-grain. A look-back ends at the recorded clock's now,
+ *     which is also the displayed cutoff.
  *   - the reader returns zone-less parts: a zone after a day word or named
  *     by place (`London time`) is a TOKEN as written; `resolve.ts` ·
  *     `zoneReadsOf` maps it, to the one zone the tz database names, else asks.
@@ -21,7 +19,7 @@
  *
  * Test types:
  *   unit        — each fixed item, and the guards that keep each fix from spreading;
- *   property    — seeded ranges of clock times: an o'clock end is exact, a minute end is +1 min,
+ *   property    — seeded clock ranges keep both o'clock and minute cutoffs exact;
  *                 a bare first side takes the second side's meridiem unless that runs backwards;
  *                 every zone the runtime lists by a unique last segment is found by its place;
  *   G13         — two sides with no meridiem share one (`8:45 to 8:55` → AM–AM, PM–PM), crossing
@@ -100,7 +98,7 @@ const rowsOf = (text: string, policy: TimePolicy = DEFAULT_TIME_POLICY, now = CL
 
 // ─── reader-end-edge ─────────────────────────────────────────────────────
 
-describe('the end edge — an o’clock end is a boundary, owned by resolve.ts', () => {
+describe('the end edge — a clock cutoff is an exclusive boundary owned by resolve.ts', () => {
   it('“8 AM to 9 AM” is one hour: [08:00, 09:00), no end-of-grain', () => {
     const [c, ...rest] = resolve({ rangeOf: [{ wall: am(8) }, { wall: am(9) }] }).candidates;
     expect(rest).toEqual([]);
@@ -114,11 +112,16 @@ describe('the end edge — an o’clock end is a boundary, owned by resolve.ts',
     expect(resolve({ rangeOf: [{ wall: am(8) }, { wall: am(8) }] }).candidates).toEqual([]);
   });
 
-  it('GUARD: a minute end keeps end-of-grain (“to 8:40” → 08:41)', () => {
+  it('GUARD: a minute end keeps its precision without widening (“to 8:40” → 08:40)', () => {
     const [c] = resolve({ rangeOf: [{ wall: am(8) }, { wall: am(8, 40) }] }).candidates;
-    expect(ranges([c!])).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00']);
-    expect(c!.notes).toContainEqual({ kind: 'end-of-grain' });
-    expect(widenedGrain(c!)).toBe('minute');
+    expect(ranges([c!])).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00']);
+    expect(c!.endpoint).toEqual({
+      cutoff: '2026-10-09T08:40:00-07:00',
+      end: 'exclusive',
+      precision: 'minute',
+    });
+    expect(c!.notes).not.toContainEqual({ kind: 'end-of-grain' });
+    expect(widenedGrain(c!)).toBeUndefined();
   });
 
   it('GUARD: a day end keeps its whole day (“10/01/26 to 10/09/26” ends 10-10)', () => {
@@ -146,7 +149,7 @@ describe('the end edge — an o’clock end is a boundary, owned by resolve.ts',
     expect(ask.field.labels![0]!.replace(/\s/g, ' ')).toBe(
       'I read “yesterday 8 AM to 9 AM” as Thu, Oct 8, 2026, 8:00 – 9:00 AM PDT in America/Los_Angeles — is that right?',
     );
-    // A widened end is still shown as said.
+    // A minute cutoff is shown as said.
     const [minute] = rowsOf('errors 8 AM to 8:40 AM');
     expect(
       timeAskOf(minute!, defaultTimeAskMessages)!.field.labels![0]!.replace(/\s/g, ' '),
@@ -154,8 +157,7 @@ describe('the end edge — an o’clock end is a boundary, owned by resolve.ts',
   });
 
   it('a look-back’s confirmation ends at the clock’s now, at its grain — never the +1 ms edge', () => {
-    // A look-back is [now − L, now + 1 ms): its end is not widened to a grain, but the
-    // label still shows the last instant inside it — now — at the grain the person counted in.
+    // A look-back is [now − L, now). The label shows that cutoff at the grain the person counted in.
     const label = (text: string) =>
       timeAskOf(rowsOf(text)[0]!, defaultTimeAskMessages)!.field.labels![0]!.replace(/\s/g, ' ');
     expect(label('errors in the last 40 minutes')).toBe(
@@ -180,7 +182,7 @@ describe('the end edge — an o’clock end is a boundary, owned by resolve.ts',
     expect(said).toEqual(expect.arrayContaining(['8:00', '08:00', '9:00', '09:00', '9:00am']));
   });
 
-  it('property: 600 seeded ranges — an o’clock end is exact, a minute end runs one minute on', () => {
+  it('property: 600 seeded ranges preserve exact exclusive hour and minute cutoffs', () => {
     const r = prng(0x51ed6e);
     for (let i = 0; i < 600; i++) {
       const h1 = int(r, 1, 11);
@@ -203,8 +205,13 @@ describe('the end edge — an o’clock end is a boundary, owned by resolve.ts',
           '0',
         )}:00-07:00`,
       );
-      expect(endMs - saidMs, `${h1}–${h2}:${m2}${mer}`).toBe(m2 === undefined ? 0 : 60_000);
-      expect(widenedGrain(c)).toBe(m2 === undefined ? undefined : 'minute');
+      expect(endMs, `${h1}–${h2}:${m2}${mer}`).toBe(saidMs);
+      expect(c.endpoint).toEqual({
+        cutoff: c.range.to,
+        end: 'exclusive',
+        precision: m2 === undefined ? 'hour' : 'minute',
+      });
+      expect(widenedGrain(c)).toBeUndefined();
     }
   });
 });
@@ -233,8 +240,8 @@ describe('a bare first side takes the second side’s meridiem (English’s own 
   it('GUARD: both sides with no meridiem still leave the meridiem open (AM–AM and PM–PM, G13)', () => {
     const res = resolve({ rangeOf: [{ wall: { h: 8 } }, { wall: { h: 9, m: 40 } }] });
     expect(ranges(res.candidates)).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T09:41:00-07:00',
-      '2026-10-09T20:00:00-07:00/2026-10-09T21:41:00-07:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T09:40:00-07:00',
+      '2026-10-09T20:00:00-07:00/2026-10-09T21:40:00-07:00',
     ]);
     expect(chooseReading(res, DEFAULT_TIME_POLICY, 'rule', undefined, true)).toMatchObject({
       open: ['meridiem', 'confirm'],
@@ -290,13 +297,13 @@ describe('G13 — a range whose two sides say no meridiem shares one (never AM �
       '8:45 to 8:55',
       wall(8, 45),
       wall(8, 55),
-      [span(D, '08:45', D, '08:56'), span(D, '20:45', D, '20:56')],
+      [span(D, '08:45', D, '08:55'), span(D, '20:45', D, '20:55')],
     ],
     [
       '8 to 9:30',
       wall(8),
       wall(9, 30),
-      [span(D, '08:00', D, '09:31'), span(D, '20:00', D, '21:31')],
+      [span(D, '08:00', D, '09:30'), span(D, '20:00', D, '21:30')],
     ],
     ['8 to 9', wall(8), wall(9), [span(D, '08:00', D, '09:00'), span(D, '20:00', D, '21:00')]],
     ['12 to 1', wall(12), wall(1), [span(D, '00:00', D, '01:00'), span(D, '12:00', D, '13:00')]],
@@ -305,7 +312,7 @@ describe('G13 — a range whose two sides say no meridiem shares one (never AM �
       '11:15 to 12:30',
       wall(11, 15),
       wall(12, 30),
-      [span(D, '11:15', D, '12:31'), span(D, '23:15', N, '00:31')],
+      [span(D, '11:15', D, '12:30'), span(D, '23:15', N, '00:30')],
     ],
     ['8 to 8', wall(8), wall(8), [span(D, '08:00', D, '20:00'), span(D, '20:00', N, '08:00')]],
   ] as const) {
@@ -337,10 +344,10 @@ describe('G13 — a range whose two sides say no meridiem shares one (never AM �
     const [row] = rowsOf('any SMB September 29 8:45 to 8:55');
     expect(row!.quote).toBe('September 29 8:45 to 8:55');
     expect(ranges(row!.candidates!)).toEqual([
-      '2026-09-29T08:45:00-07:00/2026-09-29T08:56:00-07:00',
-      '2026-09-29T20:45:00-07:00/2026-09-29T20:56:00-07:00',
-      '2025-09-29T08:45:00-07:00/2025-09-29T08:56:00-07:00',
-      '2025-09-29T20:45:00-07:00/2025-09-29T20:56:00-07:00',
+      '2026-09-29T08:45:00-07:00/2026-09-29T08:55:00-07:00',
+      '2026-09-29T20:45:00-07:00/2026-09-29T20:55:00-07:00',
+      '2025-09-29T08:45:00-07:00/2025-09-29T08:55:00-07:00',
+      '2025-09-29T20:45:00-07:00/2025-09-29T20:55:00-07:00',
     ]);
     expect(row!.choice).toMatchObject({ by: 'open', open: ['year', 'meridiem', 'confirm'] });
     expect(timeRowIsWellFormed(row)).toBe(true);
@@ -349,8 +356,8 @@ describe('G13 — a range whose two sides say no meridiem shares one (never AM �
   it('the reader run: “today 11:00 to 1:00” crosses the half-day — 11 AM – 1 PM, and overnight to 1 AM tomorrow', () => {
     const [row] = rowsOf('errors today 11:00 to 1:00');
     expect(ranges(row!.candidates!)).toEqual([
-      '2026-10-09T11:00:00-07:00/2026-10-09T13:01:00-07:00',
-      '2026-10-09T23:00:00-07:00/2026-10-10T01:01:00-07:00',
+      '2026-10-09T11:00:00-07:00/2026-10-09T13:00:00-07:00',
+      '2026-10-09T23:00:00-07:00/2026-10-10T01:00:00-07:00',
     ]);
   });
 
@@ -432,7 +439,7 @@ describe('G13 — an overnight range said with its meridiems, or past 12 on the 
     // A bare first side takes the second's AM, which runs backwards the same day — so 11 PM.
     ['11 to 1 AM', wall(11), { wall: am(1) }, [span(D, '23:00', N, '01:00')]],
     // Past 12 on the clock says its half-day: "23:00 to 01:00" crosses midnight.
-    ['23:00 to 1:00', wall(23, 0), wall(1, 0), [span(D, '23:00', N, '01:01')]],
+    ['23:00 to 1:00', wall(23, 0), wall(1, 0), [span(D, '23:00', N, '01:00')]],
     // Past the half-day it would cross, a night is no reading: "11 AM to 1 AM" names no window.
     ['11 AM to 1 AM', { wall: am(11) }, { wall: am(1) }, []],
   ] as const) {
@@ -690,8 +697,8 @@ describe('an abbreviation names a zone only through the APP’s map — both rea
     );
     const mdy = res.candidates.filter((c) => c.reading.dateOrder === 'MDY');
     expect(ranges(mdy)).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
-      '2026-10-09T08:00:00-08:00/2026-10-09T08:41:00-08:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00',
+      '2026-10-09T08:00:00-08:00/2026-10-09T08:40:00-08:00',
     ]);
   });
 

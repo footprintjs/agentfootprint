@@ -161,3 +161,43 @@ describe('G16 — served on every request under `.time()`, never without', () =>
     expect(servedAt(agent.getSnapshot(), 1)!.messages.requestOnly).toEqual([]);
   });
 });
+
+it.each(['dynamic', 'dynamic-grouped'] as const)(
+  'serves the exact confirmed cutoff in %s even when it is within one millisecond',
+  async (reactMode) => {
+    const from = '2026-11-24T10:00:00Z';
+    async function windowLine(to: string) {
+      const { provider, requests } = scripted([{ content: 'done' }]);
+      const agent = Agent.create({ provider, model: 'mock', reactMode })
+        .time({ zone: 'UTC' })
+        .build();
+      try {
+        await agent.run({
+          message: 'Use the selected window.',
+          time: { now: '2026-11-24T11:00:00Z', window: { from, to } },
+        });
+        expect(agent.findings()).toContainEqual(
+          expect.objectContaining({
+            kind: 'clock',
+            window: expect.objectContaining({
+              to,
+              endpoint: expect.objectContaining({ cutoff: to }),
+            }),
+          }),
+        );
+        return requests[0]?.messages.find(
+          (message) =>
+            typeof message.content === 'string' &&
+            message.content.includes('window the person set'),
+        )?.content;
+      } finally {
+        await agent.shutdown();
+      }
+    }
+    const minute = await windowLine('2026-11-24T10:45:00Z');
+    const fraction = await windowLine('2026-11-24T10:45:00.0000005Z');
+    expect(minute).toContain('10:00–10:45 UTC (end excluded)');
+    expect(fraction).toContain('10:45:00.000000500 UTC (end excluded)');
+    expect(fraction).not.toBe(minute);
+  },
+);

@@ -8,9 +8,10 @@ import type { MentionRefusal, TimeParts } from '../reader.js';
 import type { CallWindow, WindowSource } from '../bind.js';
 import type { TimeRefusal } from '../periodForm.js';
 import type { ReadingChoice, TimeCandidate } from '../resolveRecord.js';
+import type { RecordedWindow } from '../windowEndpoint.js';
 
 /** A window set in a UI, as the clock row records it. */
-export interface ControlWindow extends TimeRange {
+export interface ControlWindow extends RecordedWindow {
   readonly source: 'control';
 }
 
@@ -115,7 +116,7 @@ export interface TimeReadingRow {
  * `bind.ts` · `turnWindowsOf`, so the rest of the turn uses it as an
  * `answered` window and the served sentence names it with its source.
  */
-export interface TimeAnswerRow extends TimeRange {
+export interface TimeAnswerRow extends RecordedWindow {
   readonly kind: 'time-answer';
   readonly turn: number;
   readonly iteration: number;
@@ -141,10 +142,12 @@ export interface TimeReplyRow extends TimeReplyEvidence {
   readonly mention: number;
 }
 /** The person's window a `call-window` row names — its range, who gave it, and its mention. */
-export interface PersonWindow extends TimeRange {
+export interface PersonWindow extends RecordedWindow {
   readonly source: WindowSource;
   /** The `time-reading` row's mention index — absent on a `control` window. */
   readonly mention?: number;
+  /** This call admitted an absolute encoding of this look-back. */
+  readonly frozenLookback?: true;
 }
 
 /**

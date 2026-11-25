@@ -18,7 +18,7 @@ import {
 import type { ReaderWindows } from '../../../../time/bind.js';
 import { windowToConvert } from '../../../../time/windows.js';
 import type { ZoneName } from '../../../../time/zone.js';
-import { presentRange } from '../../../../time/present.js';
+import { presentRange, presentSpan } from '../../../../time/present.js';
 import { printedValue } from './values.js';
 import { UNKNOWN_ZONE_CLAUSE } from './clock.js';
 import { refusalReason } from './refusals.js';
@@ -84,7 +84,12 @@ function whoseWindow(w: ServedWindows['windows'][number]): string {
  * the half-open range (`time/present.ts` · `presentRange`); the ISO interval if it cannot be.
  */
 function presentedWindow(w: ServedWindows['windows'][number]): string {
+  const { endpoint } = w;
   try {
+    if (endpoint !== undefined) {
+      const range = presentSpan(w.range.from, endpoint.cutoff, { zone: w.zone }, 'exact');
+      return `${range} (end ${endpoint.end === 'exclusive' ? 'excluded' : 'included'})`;
+    }
     return presentRange(w.range, { zone: w.zone }, 'minute');
   } catch {
     return `${w.range.from}/${w.range.to}`;

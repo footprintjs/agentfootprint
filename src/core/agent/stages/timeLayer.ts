@@ -29,6 +29,7 @@ import { callOccurrenceField, readCallOccurrenceKey } from '../../../lib/callOcc
 import { completeClock } from '../../../time/clock.js';
 import { granularityMsOf } from '../../../time/convert.js';
 import { driftAtDispatch } from '../../../time/drift.js';
+import { frozenLookbackDispatchMatches } from '../../../time/frozenDispatch.js';
 import { checkReading, type TimeReading } from '../../../time/reader.js';
 import {
   answeredZoneOf,
@@ -161,8 +162,6 @@ export function timeAtDispatch(
   readonly args: Readonly<Record<string, unknown>>;
   readonly redraw: (args: Readonly<Record<string, unknown>>) => Readonly<Record<string, unknown>>;
 } {
-  const atMs = Date.now();
-  const dispatchedAt = new Date(atMs).toISOString();
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
   const key = readCallOccurrenceKey(call);
@@ -174,6 +173,21 @@ export function timeAtDispatch(
   );
   const clock = clockOf(ledger);
   const rules = window !== undefined && clock !== undefined ? rulesOf(tool) : undefined;
+  if (
+    window?.person?.frozenLookback === true &&
+    (window.how === 'filled' || window.how === 'bound') &&
+    (window.toolName !== call.toolName ||
+      rules === undefined ||
+      isRefused(rules) ||
+      clock?.turn !== turn ||
+      !frozenLookbackDispatchMatches(window, args, periodFormsOf(rules.period), clock.now, appZone))
+  ) {
+    throw new Error(
+      'The tool did not run because its final arguments could not preserve the frozen look-back.',
+    );
+  }
+  const atMs = Date.now();
+  const dispatchedAt = new Date(atMs).toISOString();
   const drift =
     rules !== undefined && !isRefused(rules) && clock !== undefined
       ? driftAtDispatch(window, periodFormsOf(rules.period), {

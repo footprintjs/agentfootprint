@@ -14,7 +14,7 @@ function msOf(text: InstantText): Ms | undefined {
 
 /** The range a form's bounds hold, for a window: a look-back's is `[now − L, now)`. */
 function absoluteOf(window: WindowToConvert, now: InstantText): readonly [Ms, Ms] | undefined {
-  if (window.lookback !== undefined) {
+  if (window.lookback !== undefined && window.freezeLookback !== true) {
     const n = msOf(now);
     const length = durationMs(window.lookback, AXIS_UNITS);
     if (n === undefined || length === undefined) return undefined;
@@ -25,7 +25,13 @@ function absoluteOf(window: WindowToConvert, now: InstantText): readonly [Ms, Ms
   }
   const from = msOf(window.range.from);
   const to = msOf(window.range.to);
-  return from === undefined || to === undefined || from.ms >= to.ms ? undefined : [from, to];
+  if (from === undefined || to === undefined || from.ms >= to.ms) return undefined;
+  return window.freezeLookback === true
+    ? [
+        { ms: from.ms, offsetMinutes: 0 },
+        { ms: to.ms, offsetMinutes: 0 },
+      ]
+    : [from, to];
 }
 
 function spanRange(fromMs: number, toMs: number): TimeRange | undefined {

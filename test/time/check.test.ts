@@ -514,6 +514,81 @@ describe('boundary', () => {
   });
 });
 
+describe('confirmed cutoff evidence', () => {
+  const exactWindow = (range = HOUR, end: 'exclusive' | 'inclusive' = 'exclusive') => ({
+    how: 'filled' as const,
+    asked: range,
+    person: {
+      ...range,
+      source: 'answered' as const,
+      endpoint: { cutoff: HOUR.to, end, precision: 'minute' as const },
+    },
+  });
+
+  it('reports one excluded sample but accepts an inclusive declaration of the last in-range sample', () => {
+    const declared = (to: string) => [{ from: HOUR.from, to }];
+    const run = (to: string, window = exactWindow()) =>
+      periodTimeCheck({ window, declared: declared(to), now: NOW });
+    expect(run('2026-10-09T14:59:59.999Z')).toBeUndefined();
+    expect(run(HOUR.to)?.differs).toMatchObject({
+      against: 'asked',
+      source: 'declared',
+      missing: [],
+      extra: [{ from: HOUR.to, to: '2026-10-09T15:00:00.001Z' }],
+    });
+    expect(run('2026-10-09T14:59:59.998Z')?.differs?.missing).toEqual([
+      { from: '2026-10-09T14:59:59.999Z', to: HOUR.to },
+    ]);
+    expect(
+      periodTimeCheck({ window: filled(), declared: declared(HOUR.to), now: NOW }),
+    ).toBeUndefined();
+  });
+
+  it('ignores grid padding after an included last sample but reports a later sample', () => {
+    const asked = { ...HOUR, to: '2026-10-09T15:00:00.000000001Z' };
+    const run = (to: string, window = exactWindow(asked, 'inclusive')) =>
+      periodTimeCheck({ window, declared: [{ from: HOUR.from, to }], now: NOW });
+    expect(run(HOUR.to)).toBeUndefined();
+    expect(run('2026-10-09T15:00:00.001Z')?.differs?.extra).toEqual([
+      { from: asked.to, to: '2026-10-09T15:00:00.002Z' },
+    ]);
+
+    const range = { ...HOUR, to: '2026-10-09T15:00:30Z' };
+    const fixture = exactWindow(range);
+    const coarse = periodTimeCheck({
+      window: {
+        ...fixture,
+        person: {
+          ...fixture.person,
+          endpoint: { cutoff: range.to, end: 'exclusive', precision: 'second' },
+        },
+      },
+      declared: [{ from: HOUR.from, to: HOUR.to }],
+      facts: { granularity: '1m' },
+      now: NOW,
+    });
+    expect(coarse).toBeUndefined();
+  });
+
+  it('retains sub-millisecond differences in a recorded exact result', () => {
+    const range = { ...HOUR, to: '2026-10-09T15:00:00.0000005Z' };
+    const fixture = exactWindow(range);
+    const differs = periodTimeCheck({
+      window: {
+        ...fixture,
+        person: {
+          ...fixture.person,
+          endpoint: { cutoff: range.to, end: 'exclusive', precision: 'fraction' },
+        },
+        sent: { ...range, to: '2026-10-09T15:00:00.000000501Z' },
+      },
+      now: NOW,
+    })?.differs;
+    expect(differs?.extra).toEqual([{ from: range.to, to: '2026-10-09T15:00:00.000000501Z' }]);
+    expect(isPeriodDiffers(differs)).toBe(true);
+  });
+});
+
 // ─── performance ─────────────────────────────────────────────────────
 
 describe('performance', () => {

@@ -7,9 +7,8 @@
  *   - a part the person WROTE, at the grain they wrote it, is theirs: "8 AM"
  *     is also `8:00` and `08:00`, a confirmed `10/09/26` is `2026-10-09` —
  *     exempt, like their words;
- *   - what the LIBRARY produced from the reading — the end of the said minute
- *     (`08:41` for "8:40 AM"), `-07:00`, `PDT` for a said `PST`, `15:00Z`, the
- *     epoch the call ran with, the served time line — is never called
+ *   - what the LIBRARY produced from the reading — `-07:00`, `PDT` for a said
+ *     `PST`, `15:00Z`, the epoch the call ran with, the served time line — is never called
  *     invented and never the person's: one `time-derived` row, and the
  *     answer's standing folds `derived-from-reading` — "not sure";
  *   - a time no reading produced is still flagged.
@@ -30,7 +29,7 @@ export const meta: ExampleMeta = {
   group: 'features',
   description:
     'Under .time() beside the evidence gate, the parts of a time the person wrote are theirs ' +
-    '("8 AM" is also 08:00), the spellings the library derived from the reading (08:41, -07:00, ' +
+    '("8 AM" is also 08:00), the spellings the library derived from the reading (15:00Z, -07:00, ' +
     'PDT, the epoch the call ran with) are filed as derived-from-reading — "not sure", never ' +
     'invented — and a time nobody read is still flagged.',
   defaultInput: 'Show client activity 10/09/26 8 AM to 8:40 AM PST',
@@ -118,17 +117,27 @@ export async function run(input: string): Promise<string> {
     check(theirs.flagged.length === 0 && theirs.derived.length === 0, 'the person’s parts clean');
 
     // 2. The library's spellings: derived — "not sure", never invented.
-    const library = await fieldRun(input, 'From 15:00Z (-07:00) until 08:41: 42 operations.');
+    const library = await fieldRun(
+      input,
+      'From 15:00Z (-07:00) until 08:40, start_time 1791558000000: 42 operations.',
+    );
     console.log('library spellings → flagged', library.flagged, 'derived', library.derived);
     console.log('  standing:', library.standing);
     check(library.flagged.length === 0, 'nothing called invented');
-    check(library.derived.includes('08:41'), 'the end of the said minute is the library’s');
+    check(library.derived.includes('1791558000000'), 'the converted epoch is the library’s');
+    check(!library.derived.includes('08:40'), 'the confirmed cutoff is the person’s');
     check(library.standing === 'not-sure', 'derived-from-reading folds "not sure"');
 
     // 3. A time nobody read: still flagged.
-    const invented = await fieldRun(input, 'At 09:15 in 2031 there were 42 operations.');
+    const invented = await fieldRun(
+      input,
+      'At 09:15 in 2031 there were 42 operations; the window ended at 08:41.',
+    );
     console.log('invented      → flagged', invented.flagged);
-    check(invented.flagged.includes('09:15') && invented.flagged.includes('2031'), 'still flagged');
+    check(
+      ['09:15', '2031', '08:41'].every((value) => invented.flagged.includes(value)),
+      'unsupported times and the widened cutoff are flagged',
+    );
     return library.standing;
   } finally {
     console.warn = warn;
