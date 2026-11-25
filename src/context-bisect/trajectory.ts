@@ -452,6 +452,9 @@ function assembleGroupedTrajectory(
  *    footprintjs subflow-commit-visibility). Such frames carry `subflowScope` and their array
  *    indices are inner-log-relative.
  *
+ * A recording saved in parts is passed whole: read it with `openSavedRecording(…)` then
+ * `readWhole()` (bounded, all or nothing); grouped frames live in its subflow results.
+ *
  * Standing caveat on every result: contextSources show only sources re-committed to tracked
  * state; context the model retained internally (carried in its own reasoning, never
  * re-committed) leaves no read→write edge and is NOT represented.

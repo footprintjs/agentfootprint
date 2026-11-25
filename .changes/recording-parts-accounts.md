@@ -1,0 +1,4 @@
+---
+type: added
+---
+**The hosted `answer-account` operation explains a recording saved in parts.** A ref naming a `recording/run-index` is explained from its base part alone, read through `openSavedRecording`: an account reads the recording's events, state and recorder rows and never its subflow results, so it equals the account of the same run filed whole. The order and refusals are the operation's own: the base is held to `maxRecordingBytes` from the index before any part is read (and a packed base to its plain size before it expands), and a base part that is missing or changed is the one not-found. Alongside: a parts filing on a store that does not state its budget is named once per store in dev mode, and the readers that take a whole recording (`epochLocations`, `openRecording`, `assembleTrajectory`, `contextLedger().recordRun`) say how to pass one saved in parts.

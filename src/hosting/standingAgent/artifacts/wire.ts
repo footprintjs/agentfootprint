@@ -19,7 +19,11 @@ import { type ArtifactScope, type ArtifactStore } from '../../../artifacts/types
 import { type Configuration } from '../configuration/read.js';
 import { type HostReply, type HostRequest } from '../../types.js';
 import { type LanePool } from '../lanes/pool.js';
-import { RECORDING_ARTIFACT_KIND } from '../../../artifacts/recordingArtifact.js';
+import {
+  RECORDING_ARTIFACT_KIND,
+  RECORDING_INDEX_ARTIFACT_KIND,
+} from '../../../artifacts/recordingArtifact.js';
+import { explainPartsRecording } from './accountParts.js';
 import { type VerifiedIdentity } from '../../identityVerification.js';
 import { bindArtifacts } from '../../../artifacts/capability.js';
 import { deliverArtifact, emitArtifactFact, holds } from './facts.js';
@@ -253,7 +257,9 @@ export function createArtifactWire({
    *     record still exists is the store's answer, so a swept or expired
    *     recording is "not available" even while its account is cached, and a
    *     kind change cannot be masked.
-   *  2. **Kind, then size** — not a `recording/run` → the ONE not-found (and
+   *  2. **Kind, then size** — a `recording/run-index` (a recording saved in
+   *     parts) is explained from its base part by `accountParts.ts ·
+   *     explainPartsRecording`, in this same order. Not a `recording/run` → the ONE not-found (and
    *     nothing was emitted); over the ceiling → the named 413, before a byte
    *     of the payload is read (and again, by the service, on the payload's
    *     REAL size before any parse — a store may under-report `bytes`). Both before the cache: neither can ever have
@@ -277,6 +283,16 @@ export function createArtifactWire({
     reply: HostReply,
   ): Promise<void> {
     const meta = await bindArtifacts(store, scope).head(ref);
+    if (meta !== null && meta.kind === RECORDING_INDEX_ARTIFACT_KIND) {
+      // A recording saved in parts: explained from its base part (`accountParts.ts`).
+      const outcome = await explainPartsRecording(service, store, scope, ref, bound);
+      if (outcome.status === 'answered') {
+        deliverArtifact(reply, { op: 'account', ref, meta, answer: outcome.answer });
+      } else if (outcome.status === 'too-large') {
+        reply.fail(new RecordingTooLargeForAccountError(service.maxRecordingBytes));
+      } else reply.fail(new ArtifactNotFoundError(ref));
+      return;
+    }
     if (meta === null || meta.kind !== RECORDING_ARTIFACT_KIND) {
       reply.fail(new ArtifactNotFoundError(ref));
       return;
