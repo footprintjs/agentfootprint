@@ -59,40 +59,47 @@ it('the build is present under CI (the built-package check never skips there)', 
 
 for (const { format, root } of FORMATS) {
   describe.skipIf(!built)(`the refusal from the built ${format} package`, () => {
-    it('is an instance of the providers door class, with its code, and names the change', async () => {
-      const { main, providers, context } = await load(format, root);
-      const bodies: Body[] = [];
-      const provider = providers.anthropic({
-        _client: scriptedClient('claude-haiku-5-5', bodies, [
-          { tool: 'read_skill', input: { id: 'smb-triage' } },
-          { text: 'done' },
-        ]),
-      });
-      const shareReport = main.defineTool({
-        name: 'share_report',
-        description: 'Report on one SMB share.',
-        inputSchema: { type: 'object', properties: { share: { type: 'string' } } },
-        execute: async () => 'report',
-      });
-      const agent = main.Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
-        .system('You diagnose file-share problems.')
-        .skill(
-          context.defineSkill({
-            id: 'smb-triage',
-            description: 'Diagnose slow SMB shares.',
-            body: 'Check the share report first.',
-            tools: [shareReport],
-            autoActivate: 'currentSkill',
-          }),
-        )
-        .thinking({ budget: 1500 })
-        .build();
-      const error = await agent.run({ message: 'Why slow?' }).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(providers.ContextChangedError);
-      expect((error as { code?: string }).code).toBe('CONTEXT_CHANGED_IN_TURN');
-      expect((error as Error).message).toMatch(/tool 'share_report' was added/);
-      expect(bodies).toHaveLength(1);
-      expect(providers.thinkingBindingOf(provider, 'claude-haiku-5-5').binding).toBe('bound');
-    });
+    // The first load of the whole built package takes several seconds on a loaded CI machine,
+    // more than the 5 s default; the assertions themselves are instant.
+    const LOAD_TIMEOUT_MS = 60_000;
+    it(
+      'is an instance of the providers door class, with its code, and names the change',
+      { timeout: LOAD_TIMEOUT_MS },
+      async () => {
+        const { main, providers, context } = await load(format, root);
+        const bodies: Body[] = [];
+        const provider = providers.anthropic({
+          _client: scriptedClient('claude-haiku-5-5', bodies, [
+            { tool: 'read_skill', input: { id: 'smb-triage' } },
+            { text: 'done' },
+          ]),
+        });
+        const shareReport = main.defineTool({
+          name: 'share_report',
+          description: 'Report on one SMB share.',
+          inputSchema: { type: 'object', properties: { share: { type: 'string' } } },
+          execute: async () => 'report',
+        });
+        const agent = main.Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
+          .system('You diagnose file-share problems.')
+          .skill(
+            context.defineSkill({
+              id: 'smb-triage',
+              description: 'Diagnose slow SMB shares.',
+              body: 'Check the share report first.',
+              tools: [shareReport],
+              autoActivate: 'currentSkill',
+            }),
+          )
+          .thinking({ budget: 1500 })
+          .build();
+        const error = await agent.run({ message: 'Why slow?' }).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(providers.ContextChangedError);
+        expect((error as { code?: string }).code).toBe('CONTEXT_CHANGED_IN_TURN');
+        expect((error as Error).message).toMatch(/tool 'share_report' was added/);
+        expect(bodies).toHaveLength(1);
+        expect(providers.thinkingBindingOf(provider, 'claude-haiku-5-5').binding).toBe('bound');
+      },
+    );
   });
 }
