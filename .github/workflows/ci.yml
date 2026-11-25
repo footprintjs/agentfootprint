@@ -332,7 +332,7 @@ jobs:
         run: git diff --exit-code HEAD -- docs-next/content/docs/api
 
   # Generated files are committed, so they must be regenerated WITH the change
-  # that made them stale: the API mirror, the docs-truth report, the examples
+  # that made them stale: the API mirror, the examples
   # README, the AI-instruction copies. `docs:check` regenerates everything and
   # fails on any diff — the fix is always `npm run docs:regen` + commit.
   generated:
@@ -424,14 +424,24 @@ jobs:
       - run: npm run docs:truth
       # The full report is derived, not committed (.gitignore says why): it is
       # written here and attached to the run, with its summary on the run page.
-      - run: npm run docs:truth:report
+      # `if: always()`, because a red ratchet is exactly when the report is wanted;
+      # `--report-only` writes it and then gives the ratchet's own verdict again.
+      - if: always()
+        run: npm run docs:truth:report
       - name: Put the report's summary on the run page
-        run: sed -n '/^## In plain words/,/^---$/p' docs/DOCS_TRUTH_REPORT.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        run: |
+          awk '/^## In plain words/{on=1; print; next} on && /^## /{exit} on' docs/DOCS_TRUTH_REPORT.md > "$RUNNER_TEMP/docs-truth-summary.md"
+          test -s "$RUNNER_TEMP/docs-truth-summary.md"
+          cat "$RUNNER_TEMP/docs-truth-summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docs-truth-report
           path: docs/DOCS_TRUTH_REPORT.md
           if-no-files-found: error
+          # A re-run's report replaces the last attempt's (see coverage-blob below).
+          overwrite: true
           retention-days: 30
 
   # Coverage gate — runs vitest with v8 coverage, reported in the merged job.

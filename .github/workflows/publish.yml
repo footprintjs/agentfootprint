@@ -795,7 +795,7 @@ jobs:
 
       - run: npm run build
 
-      # Every generated file (API mirror, docs-truth report, examples README,
+      # Every generated file (API mirror, examples README,
       # AI-instruction copies), so the release PR carries docs that match the
       # version it names.
       - name: Regenerate docs for the new version

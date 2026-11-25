@@ -153,14 +153,20 @@ describe('the docs-truth report is derived, never stored', () => {
     const job = jobBlock(read(join(ROOT, '.github', 'workflows', 'ci.yml')), 'docs-truth');
     const at = (text: string): number => job.indexOf(text);
     expect(at('- run: npm run docs:truth\n')).toBeGreaterThan(-1);
-    expect(at('- run: npm run docs:truth:report\n')).toBeGreaterThan(
+    expect(at('run: npm run docs:truth:report\n')).toBeGreaterThan(
       at('- run: npm run docs:truth\n'),
     );
     expect(at('path: docs/DOCS_TRUTH_REPORT.md')).toBeGreaterThan(
-      at('- run: npm run docs:truth:report\n'),
+      at('run: npm run docs:truth:report\n'),
     );
     // A run that wrote no report must not look like one that did.
     expect(job).toContain('if-no-files-found: error');
+    // A red ratchet is when the report is wanted: every report step runs regardless.
+    const reportSteps = job.slice(at('npm run docs:truth:report') - 40);
+    expect(reportSteps.match(/if: always\(\)/g)?.length).toBe(3);
+    // The summary is the report's first section, and an empty one fails the step.
+    expect(job).toContain('/^## In plain words/{on=1; print; next} on && /^## /{exit} on');
+    expect(job).toContain('test -s "$RUNNER_TEMP/docs-truth-summary.md"');
   });
 
   it('the report-only path exists and cannot write the baseline', () => {
