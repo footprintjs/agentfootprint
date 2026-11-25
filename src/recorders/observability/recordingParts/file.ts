@@ -12,6 +12,9 @@
  *
  * ── When it stops ───────────────────────────────────────────────────────────
  *   • the cut refuses the recording (`RecordingSplitError`);
+ *   • the store states a budget (`ArtifactStore.scopeBudget`) that the parts
+ *     and the index together exceed — decided before the first put, so no put,
+ *     no sweep and no delete happens;
  *   • the store refuses a put;
  *   • a put's ticket disagrees with the writer's own byte count or digest —
  *     the store did not keep what it was given;
@@ -43,7 +46,7 @@ import type {
   SweptArtifact,
 } from '../../../artifacts/types.js';
 import { utf8Length } from '../../../lib/utf8.js';
-import { recordingIndexText, splitRecording, type PartText } from './split.js';
+import { recordingIndexText, splitRecording, type PartText, type SplitRecording } from './split.js';
 import { RecordingSplitError } from './splitError.js';
 
 /** Why a filing stopped. */
@@ -52,6 +55,7 @@ export type RecordingPartsRefusal =
   | 'store-refused'
   | 'store-mismatch'
   | 'evicted-own-part'
+  | 'would-not-fit'
   | 'unexpected';
 
 /** What filing a recording in parts did. */
@@ -93,12 +97,13 @@ const SENTENCES: Readonly<Record<RecordingPartsRefusal, string>> = {
   'store-refused': 'the store refused a part',
   'store-mismatch': 'the store kept different bytes than it was given',
   'evicted-own-part': "the store's retention evicted one of its own parts to make room for another",
+  'would-not-fit': "its parts and index together are more than the store's budget for the scope",
   unexpected: 'an unexpected error stopped it',
 };
 
 function sentence(reason: RecordingPartsRefusal, removed: number, left: number): string {
   return (
-    `The run recording was not filed in parts: ${SENTENCES[reason]}. ` +
+    `The run recording was not filed in parts (${reason}): ${SENTENCES[reason]}. ` +
     `${removed} written part(s) removed` +
     (left > 0 ? `, ${left} left to the store's retention.` : '.')
   );
@@ -144,7 +149,10 @@ export async function fileRecordingParts(
     }
     swept.push(...result.swept);
     written.push(result.meta);
-    if (result.meta.bytes !== part.bytes || result.meta.digest !== part.digest) {
+    // The index carries the writer's own digests; a store that keeps none is
+    // checked on its byte count, and the reader verifies every part by its own hash.
+    const digest = result.meta.digest;
+    if (result.meta.bytes !== part.bytes || (digest !== undefined && digest !== part.digest)) {
       throw new Stop('store-mismatch');
     }
     const mine = new Set(written.map((meta) => meta.ref));
@@ -164,6 +172,10 @@ export async function fileRecordingParts(
       if (err instanceof RecordingSplitError) throw new Stop('not-split');
       throw err;
     }
+    // Refuse up front, before any put, when the store states a budget the
+    // whole filing cannot fit in: retention would otherwise evict the scope's
+    // other artifacts to admit early parts, and then the filing would stop.
+    if (!(await fitsBudget(store, scope, split))) throw new Stop('would-not-fit');
     const base = await put(RECORDING_PART_ARTIFACT_KIND, split.base);
     const parts: ArtifactMeta[] = [];
     for (const part of split.parts) parts.push(await put(RECORDING_PART_ARTIFACT_KIND, part));
@@ -216,4 +228,37 @@ function earliestExpiry(written: readonly ArtifactMeta[]): { expiresAt?: number 
     .map((meta) => meta.expiresAt)
     .filter((at): at is number => typeof at === 'number');
   return stamped.length === 0 ? {} : { expiresAt: Math.min(...stamped) };
+}
+
+/** A ref of the minted length, to measure the index before the store mints any. */
+const MINTED_LENGTH_REF = `art_${'0'.repeat(22)}`;
+
+/**
+ * Whether every part and the index fit the budget the store states for the
+ * scope. A store that states none fits by definition (and keeps today's
+ * behaviour: retention decides at each put). This proves the recording fits an
+ * EMPTY scope, the same thing the whole layout's up-front refusal proves; a
+ * filing may still evict older artifacts to make room, as a whole one does.
+ */
+async function fitsBudget(
+  store: ArtifactStore,
+  scope: ArtifactScope,
+  split: SplitRecording,
+): Promise<boolean> {
+  if (typeof store.scopeBudget !== 'function') return true;
+  const budget = await store.scopeBudget(scope);
+  if (budget === null || budget === undefined) return true;
+  const index = recordingIndexText(split.draft, {
+    base: MINTED_LENGTH_REF,
+    parts: split.parts.map(() => MINTED_LENGTH_REF),
+  });
+  const bytes = split.parts.reduce(
+    (sum, part) => sum + part.bytes,
+    split.base.bytes + utf8Length(index),
+  );
+  const count = split.parts.length + 2;
+  return (
+    (budget.maxBytes === undefined || bytes <= budget.maxBytes) &&
+    (budget.maxCount === undefined || count <= budget.maxCount)
+  );
 }

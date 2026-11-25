@@ -100,6 +100,7 @@ title: agentfootprint
 - [ArtifactPutResult](/docs/api/interfaces/ArtifactPutResult)
 - [ArtifactRecord](/docs/api/interfaces/ArtifactRecord)
 - [ArtifactRetention](/docs/api/interfaces/ArtifactRetention)
+- [ArtifactScopeBudget](/docs/api/interfaces/ArtifactScopeBudget)
 - [ArtifactStore](/docs/api/interfaces/ArtifactStore)
 - [ArtifactStoreCase](/docs/api/interfaces/ArtifactStoreCase)
 - [ArtifactStoreHarness](/docs/api/interfaces/ArtifactStoreHarness)

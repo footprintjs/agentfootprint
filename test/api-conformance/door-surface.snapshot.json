@@ -339,6 +339,7 @@
       "ArtifactRefusalReason",
       "ArtifactRetention",
       "ArtifactScope",
+      "ArtifactScopeBudget",
       "ArtifactStore",
       "ArtifactStoreCase",
       "ArtifactStoreCaseName",

@@ -6,7 +6,7 @@ title: gcsArtifacts
 
 > **gcsArtifacts**(`options`): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/artifacts/gcsArtifacts.ts:284](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L284)
+Defined in: [src/artifacts/gcsArtifacts.ts:285](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L285)
 
 An artifact store in a Cloud Storage bucket.
 

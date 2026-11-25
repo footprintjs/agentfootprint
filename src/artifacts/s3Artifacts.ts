@@ -118,6 +118,7 @@ import { computeArtifactDigest, decodeCanonicalPayload, type PayloadShape } from
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -428,6 +429,7 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
   };
 
   return {
+    ...scopeBudgetMember(retention),
     async put(scope, input): Promise<ArtifactPutResult> {
       const at = now();
       const { meta, payload } = await prepareArtifact(
@@ -583,12 +585,10 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
   };
 
   /**
-   * The retention pass, run at put. Returns what it swept.
-   *
-   * With no budget dials there is nothing to plan, so nothing is listed: a
-   * put stays exactly one PutObject. Expiry still binds — it is enforced at
-   * read, where it cannot be missed, and reclaimed in bulk by the lifecycle
-   * rule in this file's header.
+   * The retention pass, run at put. Returns what it swept. With no budget
+   * dials there is nothing to plan, so nothing is listed: a put stays one
+   * PutObject. Expiry still binds — it is enforced at read, where it cannot be
+   * missed, and reclaimed in bulk by the lifecycle rule in this file's header.
    */
   async function applyRetention(
     scope: ArtifactScope,

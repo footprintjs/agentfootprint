@@ -171,6 +171,50 @@ describe("readWhole's maxBytes bounds what it expands", () => {
   });
 });
 
+describe("readWhole's maxBytes is cumulative", () => {
+  it('every packed part under maxBytes, their plain total over it: too-large', async () => {
+    const store = inMemoryArtifacts();
+    const unit = (id: string) => ({
+      subflowId: id,
+      subflowName: id,
+      parentStageId: 'seed',
+      treeContext: {
+        globalContext: { rows: Array.from({ length: 1000 }, () => `${id}:${'v'.repeat(4096)}`) },
+        stageContexts: {},
+        history: [],
+      },
+    });
+    const mount = (key: string, id: string, next?: object) => ({
+      id,
+      name: id,
+      subflowId: id,
+      runtimeStageId: key,
+      ...(next && { next }),
+    });
+    const recording = {
+      snapshot: {
+        runId: 'snapshot-run',
+        executionTree: mount('a#1', 'a', mount('b#2', 'b', mount('c#3', 'c'))),
+        subflowResults: { 'a#1': unit('a'), 'b#2': unit('b'), 'c#3': unit('c') },
+      },
+      events: [],
+      structure: { id: 'seed', name: 'seed' },
+    } as unknown as Recording;
+    const filed = await fileParts(store, recording, { packed: true });
+    const saved = await ready(openSavedRecording(bindArtifacts(store, SCOPE), filed.index));
+    const plainPerPart = saved.invocations.map((row) => row.bytes!);
+    const limit = 8 * 1024 * 1024;
+    // Each part alone fits the budget; all of them do not.
+    expect(plainPerPart.every((bytes) => bytes < limit)).toBe(true);
+    expect(plainPerPart.reduce((sum, bytes) => sum + bytes, 0)).toBeGreaterThan(limit);
+    expect(await saved.readWhole({ maxBytes: limit })).toEqual({
+      status: 'unavailable',
+      reason: 'too-large',
+    });
+    expect((await saved.readWhole({ maxBytes: 32 * 1024 * 1024 })).status).toBe('ready');
+  });
+});
+
 describe('a budget is paid for only where one is in force', () => {
   /** No subflows: everything is in the base part, ~6 MB plain and small packed. */
   function baseOnly(): Recording {

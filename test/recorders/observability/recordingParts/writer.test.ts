@@ -24,13 +24,18 @@ import {
 } from '../../../../src/artifacts/recordingArtifact.js';
 import type { ArtifactScope, ArtifactStore } from '../../../../src/artifacts/types.js';
 import { askHuman } from '../../../../src/core/pause.js';
-import { Agent, defineTool, inMemoryArtifacts } from '../../../../src/index.js';
+import { Agent, defineTool, inMemoryArtifacts, sqliteArtifacts } from '../../../../src/index.js';
 import type { AgentfootprintEvent } from '../../../../src/index.js';
 import { toWireJson } from '../../../../src/lib/wireJson.js';
 import { openSavedRecording, type SavedRecording } from '../../../../src/observe.js';
 import { mock } from '../../../../src/providers.js';
 import { fileRecordingParts } from '../../../../src/recorders/observability/recordingParts/file.js';
-import { STORES } from './helpers.js';
+import { splitRecording } from '../../../../src/recorders/observability/recordingParts/split.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { STORES, sqliteAvailable } from './helpers.js';
 import { viewerProjection } from './viewerWalk.js';
 
 const handed = vi.hoisted(() => [] as unknown[]);
@@ -176,7 +181,7 @@ describe.each(STORES)('the writer through a real agent run — $name', (storeCas
         op: 'put',
         reason: 'invalid-input',
         detail:
-          'The run recording was not filed in parts: the store refused a part. 1 written part(s) removed.',
+          'The run recording was not filed in parts (store-refused): the store refused a part. 1 written part(s) removed.',
       });
       expect(events.some((event) => event.type.endsWith('minted'))).toBe(false);
     } finally {
@@ -184,11 +189,12 @@ describe.each(STORES)('the writer through a real agent run — $name', (storeCas
     }
   });
 
-  it("W2 · retention evicting the recording's own part stops the filing; the sweep is reported", async () => {
-    const store = inMemoryArtifacts({ retention: { maxCountPerScope: 2 } });
+  it("W2 · a store that states no budget: retention evicting the recording's own part stops the filing", async () => {
+    const budgeted = inMemoryArtifacts({ retention: { maxCountPerScope: 2 } });
+    const store = withoutBudget(budgeted);
     const { agent, events } = agentOn(store);
     expect(await agent.run({ message: 'Read two pages.', identity: SCOPE })).toBe('the answer');
-    expect(await kindsIn(store)).toEqual([]);
+    expect(await kindsIn(budgeted)).toEqual([]);
     const expired = events.filter((event) => event.type.endsWith('expired'));
     expect(expired.length).toBeGreaterThan(0);
     expect(expired.every((event) => event.payload.kind === RECORDING_PART_ARTIFACT_KIND)).toBe(
@@ -197,9 +203,20 @@ describe.each(STORES)('the writer through a real agent run — $name', (storeCas
     const refused = events.filter((event) => event.type.endsWith('refused'));
     expect(refused).toHaveLength(1);
     expect(refused[0]!.payload.detail).toMatch(
-      /^The run recording was not filed in parts: the store's retention evicted one of its own parts/,
+      /^The run recording was not filed in parts \(evicted-own-part\): the store's retention evicted one of its own parts/,
     );
     expect(events.some((event) => event.type.endsWith('minted'))).toBe(false);
+  });
+
+  it('a store that states its budget: a recording that cannot fit is refused before any put', async () => {
+    const store = inMemoryArtifacts({ retention: { maxCountPerScope: 2 } });
+    const { agent, events } = agentOn(store);
+    expect(await agent.run({ message: 'Read two pages.', identity: SCOPE })).toBe('the answer');
+    expect(await kindsIn(store)).toEqual([]);
+    expect(events.map((event) => event.type)).toEqual(['agentfootprint.artifacts.refused']);
+    expect(events[0]!.payload.detail).toBe(
+      "The run recording was not filed in parts (would-not-fit): its parts and index together are more than the store's budget for the scope. 0 written part(s) removed.",
+    );
   });
 
   it('W3 · a paused run files nothing', async () => {
@@ -343,21 +360,65 @@ describe('the writer, store by store', () => {
     expect(filed).toMatchObject({ status: 'refused', removed: 0, left: 3 });
     if (filed.status === 'refused') {
       expect(filed.detail).toBe(
-        "The run recording was not filed in parts: the store kept different bytes than it was given. 0 written part(s) removed, 3 left to the store's retention.",
+        "The run recording was not filed in parts (store-mismatch): the store kept different bytes than it was given. 0 written part(s) removed, 3 left to the store's retention.",
       );
     }
     expect(view.deletes).toHaveLength(3);
   });
 
-  it('W2 · a byte budget that cannot hold the whole recording stops at the first self-eviction', async () => {
+  it('W2 · without a stated budget, a byte budget that cannot hold the recording stops at the first self-eviction', async () => {
     const inner = inMemoryArtifacts({ retention: { maxBytesPerScope: 12_000 } });
-    const filed = await fileRecordingParts(inner, SCOPE, recordingOf(6), {
+    const filed = await fileRecordingParts(withoutBudget(inner), SCOPE, recordingOf(6), {
       runId: 'r',
       targetBytes: 4096,
     });
     expect(filed).toMatchObject({ status: 'refused', reason: 'evicted-own-part' });
     expect(filed.swept.length).toBeGreaterThan(0);
     expect(await kindsIn(inner)).toEqual([]);
+  });
+
+  it('a store without the budget member still files, as before', async () => {
+    const inner = inMemoryArtifacts();
+    const filed = await fileRecordingParts(withoutBudget(inner), SCOPE, recordingOf(3), {
+      runId: 'r',
+    });
+    expect(filed.status).toBe('filed');
+  });
+
+  it('a store that keeps no digest still files; the reader verifies each part by its own hash', async () => {
+    const inner = inMemoryArtifacts();
+    const noDigest: ArtifactStore = {
+      ...withoutBudget(inner),
+      put: (scope, input) => {
+        const { digest: _dropped, ...kept } = input;
+        void _dropped;
+        return inner.put(scope, kept);
+      },
+    };
+    const filed = await fileRecordingParts(noDigest, SCOPE, recordingOf(4), {
+      runId: 'r',
+      targetBytes: 4096,
+    });
+    if (filed.status !== 'filed') throw new Error(filed.detail);
+    expect(filed.parts.every((meta) => meta.digest === undefined)).toBe(true);
+    const opened = (await openSavedRecording(
+      bindArtifacts(inner, SCOPE),
+      filed.index.ref,
+    )) as SavedRecording;
+    expect(await opened.readWhole()).toEqual({ status: 'ready', recording: recordingOf(4) });
+    // A part whose bytes then change is still refused, by the reader's own hash.
+    const part = filed.parts[1]!;
+    const held = (await inner.get(SCOPE, part.ref))!.data as string;
+    const changed = held.replace('"pad":"p', '"pad":"q');
+    const view = {
+      head: (ref: string) => inner.head(SCOPE, ref),
+      get: async (ref: string) => {
+        const record = await inner.get(SCOPE, ref);
+        return record && ref === part.ref ? { ...record, data: changed } : record;
+      },
+    };
+    const tampered = (await openSavedRecording(view, filed.index.ref)) as SavedRecording;
+    expect((await tampered.readWhole()).status).toBe('unavailable');
   });
 
   it('the index never outlives a part: its expiry is the earliest part expiry', async () => {
@@ -395,3 +456,112 @@ describe('the writer, store by store', () => {
     expect(view.kinds).toEqual([]);
   });
 });
+
+/** The same store, without the optional `scopeBudget` member: a store that states no budget. */
+function withoutBudget(store: ArtifactStore): ArtifactStore {
+  return {
+    put: store.put.bind(store),
+    head: store.head.bind(store),
+    get: store.get.bind(store),
+    delete: store.delete.bind(store),
+    list: store.list.bind(store),
+  };
+}
+
+/** `count` mounts whose results each serialize to about `pad` bytes. */
+function weighted(count: number, pad: number): Rec {
+  const recording = recordingOf(count);
+  const results = (recording.snapshot as Rec).subflowResults as Record<string, Rec>;
+  for (const result of Object.values(results)) {
+    ((result.treeContext as Rec).globalContext as Rec).pad = 'p'.repeat(pad);
+  }
+  return recording;
+}
+
+describe.each(['inMemoryArtifacts', ...(sqliteAvailable ? ['sqliteArtifacts'] : [])])(
+  'a filing that cannot fit the stated budget leaves the scope as it was — %s',
+  (name) => {
+    function budgeted(retention: { maxBytesPerScope?: number; maxCountPerScope?: number }): {
+      store: ArtifactStore;
+      close(): void;
+    } {
+      if (name === 'inMemoryArtifacts')
+        return { store: inMemoryArtifacts({ retention }), close: () => {} };
+      const dir = mkdtempSync(join(tmpdir(), 'af-parts-budget-'));
+      const store = sqliteArtifacts({ file: join(dir, 'a.sqlite'), retention });
+      return {
+        store,
+        close: () => {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        },
+      };
+    }
+
+    const dataset = {
+      kind: 'dataset/rows',
+      mediaType: 'application/json',
+      data: 'd'.repeat(60_000),
+    };
+
+    it('bytes: six parts of under 20 KB, about 122 KB in all, against a 100 KB scope holding a 60 KB dataset', async () => {
+      const { store, close } = budgeted({ maxBytesPerScope: 100_000 });
+      try {
+        await store.put(SCOPE, dataset);
+        const view = watched(store);
+        const recording = weighted(6, 19_000);
+        const cut = await splitRecording(recording, { runId: 'r', targetBytes: 20_000 });
+        // Every part fits the scope alone; together they do not.
+        expect(cut.parts).toHaveLength(6);
+        expect(cut.parts.every((part) => part.bytes < 20_000)).toBe(true);
+        expect(cut.parts.reduce((sum, part) => sum + part.bytes, cut.base.bytes)).toBeGreaterThan(
+          100_000,
+        );
+        const filed = await fileRecordingParts(view.store, SCOPE, recording, {
+          runId: 'r',
+          targetBytes: 20_000,
+        });
+        expect(filed).toEqual({
+          status: 'refused',
+          reason: 'would-not-fit',
+          detail:
+            "The run recording was not filed in parts (would-not-fit): its parts and index together are more than the store's budget for the scope. 0 written part(s) removed.",
+          swept: [],
+          removed: 0,
+          left: 0,
+        });
+        expect(view.kinds).toEqual([]);
+        expect(view.deletes).toEqual([]);
+        expect(await kindsIn(store)).toEqual(['dataset/rows']);
+        // The same recording, whole, is refused up front by the store too, and keeps the dataset.
+        await expect(
+          store.put(SCOPE, {
+            kind: 'recording/run',
+            mediaType: 'application/json',
+            data: toWireJson(recording),
+          }),
+        ).rejects.toThrow();
+        expect(await kindsIn(store)).toEqual(['dataset/rows']);
+      } finally {
+        close();
+      }
+    });
+
+    it('count: a recording of more artifacts than the scope may hold is refused before any put', async () => {
+      const { store, close } = budgeted({ maxCountPerScope: 3 });
+      try {
+        await store.put(SCOPE, dataset);
+        const view = watched(store);
+        const filed = await fileRecordingParts(view.store, SCOPE, weighted(2, 6000), {
+          runId: 'r',
+          targetBytes: 4096,
+        });
+        expect(filed).toMatchObject({ status: 'refused', reason: 'would-not-fit', swept: [] });
+        expect(view.kinds).toEqual([]);
+        expect(await kindsIn(store)).toEqual(['dataset/rows']);
+      } finally {
+        close();
+      }
+    });
+  },
+);

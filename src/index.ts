@@ -185,8 +185,7 @@ export type { RunnerInvocation, RunnerSelection, RunnerMetadata } from './core/r
 // What `enable.observability()` / `enable.cost()` / `enable.liveStatus()`
 // hand back (8.12.0): the same `Unsubscribe` function, now carrying
 // `flush()` / `stop()`. On the main barrel because it is the return type of a
-// main-barrel method — the strategy interfaces themselves live on
-// `agentfootprint/observe`.
+// main-barrel method — the strategy interfaces themselves live on `agentfootprint/observe`.
 export type { ObservabilityHandle, StrategyHandle } from './strategies/types.js';
 
 // Composition-level UI translation (L1b + L1c). Consumer-facing types
@@ -1037,6 +1036,7 @@ export {
   type ArtifactRefusalReason,
   type ArtifactRetention,
   type ArtifactScope,
+  type ArtifactScopeBudget,
   type ArtifactStore,
   type ArtifactSweepReason,
   type BindArtifactsOptions,

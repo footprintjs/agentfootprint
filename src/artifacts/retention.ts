@@ -26,7 +26,12 @@
  * itself not fit.
  */
 
-import type { ArtifactSweepReason, SweptArtifact } from './types.js';
+import type {
+  ArtifactScopeBudget,
+  ArtifactStore,
+  ArtifactSweepReason,
+  SweptArtifact,
+} from './types.js';
 
 /** The three dials. All optional; absent means that dial does not bind. */
 export interface ArtifactRetention {
@@ -156,4 +161,29 @@ export function resolveExpiresAt(
   if (callerExpiresAt === undefined) return fromTtl;
   if (fromTtl === undefined) return callerExpiresAt;
   return Math.min(callerExpiresAt, fromTtl);
+}
+
+/**
+ * The budget a retention policy makes `put` enforce: the one source for every
+ * adapter's `scopeBudget`. `null` when neither budget dial binds (a ttl alone
+ * is not a budget).
+ */
+export function retentionBudget(
+  retention: ArtifactRetention | undefined,
+): ArtifactScopeBudget | null {
+  const maxBytes = retention?.maxBytesPerScope;
+  const maxCount = retention?.maxCountPerScope;
+  if (maxBytes === undefined && maxCount === undefined) return null;
+  return Object.freeze({
+    ...(maxBytes !== undefined && { maxBytes }),
+    ...(maxCount !== undefined && { maxCount }),
+  });
+}
+
+/** The optional `scopeBudget` member, for an adapter whose `put` plans with `retention`. */
+export function scopeBudgetMember(
+  retention: ArtifactRetention | undefined,
+): Required<Pick<ArtifactStore, 'scopeBudget'>> {
+  const budget = retentionBudget(retention);
+  return { scopeBudget: () => Promise.resolve(budget) };
 }

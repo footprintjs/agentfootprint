@@ -104,6 +104,24 @@ export interface AgentRecordingsOptions {
    * artifacts against the scope's count budget. A small run takes three
    * artifacts instead of one, so a scope that keeps 256 artifacts holds about 85
    * small recordings instead of 256, before anything else it stores.
+   *
+   * A store that states its budget (`ArtifactStore.scopeBudget`; every in-tree
+   * adapter does) lets the writer refuse BEFORE the first put when the parts
+   * and the index together exceed the scope's byte or count budget: no put, no
+   * sweep. That proves the recording fits an EMPTY scope, as the whole layout's
+   * up-front refusal does; filing may still evict older artifacts to make room,
+   * as a whole recording does. A store that states no budget keeps the plain
+   * behaviour: each put is judged alone, so a recording whose parts each fit but
+   * together do not can evict the scope's other artifacts before the writer
+   * stops (a 100 KB scope holding a 60 KB dataset, and six 20 KB parts, ends
+   * empty).
+   *
+   * Also stated: two runs filing into one scope at once can evict each other's
+   * parts (the reader then reports `part-missing` for exactly those, and the
+   * eviction shows on the OTHER run's record as `artifacts.expired`). Filing
+   * takes no cancel signal. A process that dies between puts leaves parts with
+   * no index: no reader can address them, but they count against the scope
+   * until retention removes them.
    */
   readonly layout?: 'whole' | 'parts';
   /**
