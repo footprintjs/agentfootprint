@@ -197,7 +197,8 @@ its `path` of mount keys from the root, its `subflowId`, whether it was
   equals the saved recording value for value, though not byte for byte.
 - `checkParts()` heads every stored part and checks its ticket against the
   index without reading a byte: a host serving something derived from the
-  recording, such as a cached answer, asks it first.
+  recording, such as a cached answer, asks it first. For a whole recording it
+  makes no store call, so head that artifact yourself.
 
 When a read has nothing to return, it answers a `SavedRecordingPartUnavailable`
 whose `reason` is `not-recorded`, `part-missing`, `part-changed` or `too-large`.

@@ -12,7 +12,7 @@
  *     over the ceiling is the same 413, refused before it expands.
  *   • One door fact on a miss (the base part's `get`), none on a hit; another
  *     session's ref is the one not-found.
- *   • `complete: false` is still answered: the account reads only the base.
+ *   • `complete: false` is still answered, from the whole recording read back.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -471,7 +471,7 @@ describe.each(STORES)('answer-account over a recording in parts — %s', (_name,
     }
   });
 
-  it('a recording that is not complete is still explained: the account reads only the base', async () => {
+  it('a recording that is not complete is still explained, from the whole read back', async () => {
     const { store, close } = create();
     try {
       const parsed = JSON.parse(JSON.stringify(real)) as {

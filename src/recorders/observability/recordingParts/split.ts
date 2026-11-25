@@ -97,6 +97,11 @@ export async function splitRecording(
   recording: unknown,
   options: SplitRecordingOptions = {},
 ): Promise<SplitRecording> {
+  // The bounds first, from the iterative walk's counts, before anything
+  // recursive runs: serializing a deep tree overflows the stack at a depth that
+  // depends on the runtime, so a recording past a bound would otherwise be
+  // `unserializable` on one Node and `over-limit` on another.
+  refuseOverLimit(recording);
   let text: string | undefined;
   try {
     text = toWireJson(recording);
@@ -359,4 +364,18 @@ function serialize(write: () => string | undefined): string {
   }
   if (text === undefined) throw new RecordingSplitError('unserializable');
   return text;
+}
+
+/**
+ * Throw the walk's `over-limit` refusal for the live recording, if it has one.
+ * Only the bounds are decided here: any other verdict (a shape the walk cannot
+ * read before the wire rule has run) is left to the walk over the wire form.
+ */
+function refuseOverLimit(recording: unknown): void {
+  if (!isPlainObject(recording)) return;
+  try {
+    walkRecordedInvocations(ownValue(recording, 'snapshot'));
+  } catch (err) {
+    if (err instanceof RecordingSplitError && err.code === 'over-limit') throw err;
+  }
 }

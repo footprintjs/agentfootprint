@@ -18,14 +18,18 @@
  *     its kind, bytes, digest and run checked against the index (no byte
  *     read), BEFORE the cache: a recording that is no longer whole in the
  *     store is "not available" even while its account is cached, and its
- *     cache entry is dropped. A hit therefore costs N + 2 calls: the index's
- *     `head` and `get`, and one `head` per part (base included), and no other
- *     `get`.
- *  3. **The ceiling on the whole** — `maxRecordingBytes` bounds the whole
- *     recording's plain bytes, as it does a whole recording's. When the
- *     index's stored totals already pass it, the named 413 comes before any
- *     part is read; a packed part that would expand past what is left is
- *     refused before it expands (the reader's cumulative bound).
+ *     cache entry is dropped. A hit therefore costs N + 3 calls: the wire's
+ *     kind `head`, the index's `head` and `get`, and one `head` per part
+ *     (base included), and no other `get`.
+ *  3. **The ceiling on the whole** — `maxRecordingBytes` bounds the STORED part
+ *     bytes (base and invocation parts, each with its small part wrapper;
+ *     proven alias copies are restored by reference and not counted), and a
+ *     packed part by what it expands to. So within a narrow band a parts
+ *     recording is explained where the same run filed whole is over the
+ *     ceiling. When the index's stored totals already pass it, the named 413
+ *     comes before any part is read; a packed part that would expand past
+ *     what is left is refused before it expands (the reader's cumulative
+ *     bound).
  *  4. **The cache, then single-flight**, keyed exactly as the whole path.
  *  5. **Door facts** — on a miss, every part's `get` goes through the sinked
  *     binding: one `artifacts.resolved` (`via: 'get'`) per part read, naming
