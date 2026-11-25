@@ -195,6 +195,9 @@ its `path` of mount keys from the root, its `subflowId`, whether it was
 - `readWhole()` returns the whole recording back, all or nothing, within
   `SavedRecordingWholeOptions.maxBytes` of plain JSON (64 MiB by default). It
   equals the saved recording value for value, though not byte for byte.
+- `checkParts()` heads every stored part and checks its ticket against the
+  index without reading a byte: a host serving something derived from the
+  recording, such as a cached answer, asks it first.
 
 When a read has nothing to return, it answers a `SavedRecordingPartUnavailable`
 whose `reason` is `not-recorded`, `part-missing`, `part-changed` or `too-large`.

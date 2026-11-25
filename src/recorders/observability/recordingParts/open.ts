@@ -172,6 +172,17 @@ export interface SavedRecording {
     | SavedRecordingPartUnavailable
   >;
   /**
+   * Whether every stored part is still there as the index names it: a `head`
+   * of each, its kind, bytes, digest and run checked against the index, and no
+   * byte read. `ready`, or the first part's `part-missing` / `part-changed`.
+   * A whole recording has no separate parts and is always `ready`. A host
+   * serving something derived from the recording (a cached answer) asks this
+   * first, so it never serves past the store's own retention.
+   */
+  checkParts(
+    options?: SavedRecordingReadOptions,
+  ): Promise<{ readonly status: 'ready' } | SavedRecordingPartUnavailable>;
+  /**
    * The whole recording, with every result and alias restored; refused whole if
    * any part is. It deep-equals the recording that was saved but is not
    * byte-equal to it: `subflowResults` comes last in the snapshot, its keys are
@@ -415,6 +426,11 @@ function opened(
         invocation: invocations[at] as SavedInvocation,
         result: part.results.get(key),
       });
+    },
+    async checkParts(options) {
+      const signal = signalOf(options);
+      signal?.throwIfAborted();
+      return parts.check(signal);
     },
     async readWhole(options) {
       const signal = signalOf(options);

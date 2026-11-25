@@ -258,7 +258,7 @@ export function createArtifactWire({
    *     recording is "not available" even while its account is cached, and a
    *     kind change cannot be masked.
    *  2. **Kind, then size** — a `recording/run-index` (a recording saved in
-   *     parts) is explained from its base part by `accountParts.ts ·
+   *     parts) is explained from the WHOLE recording read back by `accountParts.ts ·
    *     explainPartsRecording`, in this same order. Not a `recording/run` → the ONE not-found (and
    *     nothing was emitted); over the ceiling → the named 413, before a byte
    *     of the payload is read (and again, by the service, on the payload's
@@ -284,7 +284,7 @@ export function createArtifactWire({
   ): Promise<void> {
     const meta = await bindArtifacts(store, scope).head(ref);
     if (meta !== null && meta.kind === RECORDING_INDEX_ARTIFACT_KIND) {
-      // A recording saved in parts: explained from its base part (`accountParts.ts`).
+      // A recording saved in parts: explained from the whole read back (`accountParts.ts`).
       const outcome = await explainPartsRecording(service, store, scope, ref, bound);
       if (outcome.status === 'answered') {
         deliverArtifact(reply, { op: 'account', ref, meta, answer: outcome.answer });

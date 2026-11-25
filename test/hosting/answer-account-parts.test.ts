@@ -20,7 +20,16 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { Agent, inMemoryArtifacts, recordingPutInput, sqliteArtifacts } from '../../src/index.js';
+import { mockClassifier } from '../../src/classify/mock.js';
+import { defineOntology } from '../../src/ontology/index.js';
+import { recordRun } from '../../src/observe.js';
+import {
+  Agent,
+  defineTool,
+  inMemoryArtifacts,
+  recordingPutInput,
+  sqliteArtifacts,
+} from '../../src/index.js';
 import type { ArtifactScope, ArtifactStore } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { AnswerAccountWireBody, ArtifactWireResult } from '../../src/hosting/index.js';
@@ -76,13 +85,18 @@ const STORES: readonly [string, () => { store: ArtifactStore; close(): void }][]
 function watching(
   inner: ArtifactStore,
   alter?: (ref: string, data: unknown) => unknown,
-): { store: ArtifactStore; gets: string[] } {
+): { store: ArtifactStore; gets: string[]; heads: string[] } {
   const gets: string[] = [];
+  const heads: string[] = [];
   return {
     gets,
+    heads,
     store: {
       put: (scope, input) => inner.put(scope, input),
-      head: (scope, ref) => inner.head(scope, ref),
+      head: (scope, ref) => {
+        heads.push(ref);
+        return inner.head(scope, ref);
+      },
       async get(scope, ref) {
         gets.push(ref);
         const record = await inner.get(scope, ref);
@@ -113,19 +127,93 @@ function bodyOf(delivered: Delivered): AnswerAccountWireBody {
 async function fileBoth(
   store: ArtifactStore,
   recording: Recording,
-  options: { packed?: boolean; runId?: string } = {},
-): Promise<{ whole: string; index: string; base: string }> {
-  const runId = options.runId ?? FLAGSHIP_RUN_ID;
-  const whole = (await store.put(SCOPE, recordingPutInput(recording, { runId }))).meta.ref;
+  options: { packed?: boolean; runId?: string | null } = {},
+): Promise<{ whole: string; index: string; base: string; parts: string[] }> {
+  // `null`: no origin run id, so the account picks the run from the recording itself.
+  const runId = options.runId === null ? undefined : options.runId ?? FLAGSHIP_RUN_ID;
+  const facts = runId === undefined ? {} : { runId };
+  const whole = (await store.put(SCOPE, recordingPutInput(recording, facts))).meta.ref;
   const filed = await fileRecordingParts(store, SCOPE, recording, {
-    runId,
+    ...facts,
     packed: options.packed === true,
   });
   if (filed.status !== 'filed') throw new Error(filed.detail);
-  return { whole, index: filed.index.ref, base: filed.parts[0]!.ref };
+  return {
+    whole,
+    index: filed.index.ref,
+    base: filed.parts[0]!.ref,
+    parts: filed.parts.map((meta) => meta.ref),
+  };
 }
 
 const real = await realRecording();
+
+/**
+ * A run whose tool selection left out the only tool that reaches a declared
+ * source, with the answer layer's source check on: the account's standing
+ * rests on an omission witnessed at each model call. Under
+ * `reactMode: 'dynamic-grouped'` those calls are found only inside the
+ * recording's subflow results.
+ */
+async function omittedSourceRun(reactMode: 'dynamic' | 'dynamic-grouped'): Promise<Recording> {
+  const lookup = (name: string, displayName: string) =>
+    defineTool({
+      name,
+      displayName,
+      description: 'Read a measurement.',
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => 'Observed.',
+    });
+  const classifier = mockClassifier(() => ({
+    model: 'fixture',
+    latencyMs: 1,
+    usage: { inputTokens: 1, outputTokens: 1 },
+    answers: {
+      tool: { type: 'choice', choice: 'status', confidence: 1, probabilities: { status: 1 } },
+    },
+  }));
+  const agent = Agent.create({
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'first', name: 'status', args: {} }] },
+        { content: 'Request complete.' },
+      ],
+    }),
+    reactMode,
+    model: 'mock',
+    recordReceipt: true,
+  })
+    .tools([lookup('status', 'service status'), lookup('archive', 'the archive')])
+    .toolChoice({ classifier, serve: { top: 1 } })
+    .ontology(
+      defineOntology({
+        id: 'inventory',
+        version: '1',
+        nodes: {
+          inventory: {
+            meaning: 'Stored inventory',
+            sources: [{ source: 'catalog', via: ['archive'] }],
+          },
+        },
+        sources: { catalog: { meaning: 'Declared inventory source' } },
+      }),
+    )
+    .answerLayer({ sourceNotConsulted: true, standingLine: { when: 'not-sure-or-ask' } })
+    .build();
+  const recorder = recordRun(agent);
+  try {
+    await agent.run({ message: 'Check inventory.' });
+    return JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+  } finally {
+    recorder.stop();
+    await agent.shutdown();
+  }
+}
+
+const omitted = {
+  dynamic: await omittedSourceRun('dynamic'),
+  'dynamic-grouped': await omittedSourceRun('dynamic-grouped'),
+};
 
 describe.each(STORES)('answer-account over a recording in parts — %s', (_name, create) => {
   for (const packed of [false, true]) {
@@ -151,7 +239,27 @@ describe.each(STORES)('answer-account over a recording in parts — %s', (_name,
     }
   }
 
-  it('one door fact on a miss (the base part), none on a hit; another session is not-found', async () => {
+  for (const packed of [false, true]) {
+    for (const reactMode of ['dynamic', 'dynamic-grouped'] as const) {
+      it(`E6 · a source left out of the tool selection, ${reactMode}${
+        packed ? ', packed' : ''
+      }: parts equal whole`, async () => {
+        const { store, close } = create();
+        try {
+          const refs = await fileBoth(store, omitted[reactMode], { packed, runId: null });
+          const { host } = await served(storeAgent(store), { extra: { answerAccounts: {} } });
+          const fromWhole = bodyOf(await explain(host, refs.whole));
+          // The whole recording's account witnesses the omission; the parts one must too.
+          expect(JSON.stringify(fromWhole.account)).toContain('/omissions/0/callable');
+          expect(bodyOf(await explain(host, refs.index))).toEqual(fromWhole);
+        } finally {
+          close();
+        }
+      });
+    }
+  }
+
+  it('one door fact per part read on a miss, naming the part; none on a hit; another session is not-found', async () => {
     const { store, close } = create();
     try {
       const refs = await fileBoth(store, real);
@@ -161,14 +269,148 @@ describe.each(STORES)('answer-account over a recording in parts — %s', (_name,
       bodyOf(await explain(host, refs.index));
       const resolved = () =>
         events().filter((event) => event.type === 'agentfootprint.artifacts.resolved');
-      expect(resolved()).toHaveLength(1);
-      expect((resolved()[0]!.payload as { ref: string; via: string }).ref).toBe(refs.base);
-      expect((resolved()[0]!.payload as { via: string }).via).toBe('get');
+      const named = resolved().map((event) => event.payload as { ref: string; via: string });
+      expect(named.map((fact) => fact.ref)).toEqual(refs.parts);
+      expect(named.every((fact) => fact.via === 'get')).toBe(true);
+      expect(named.some((fact) => fact.ref === refs.index)).toBe(false);
       bodyOf(await explain(host, refs.index));
-      expect(resolved()).toHaveLength(1);
+      expect(resolved()).toHaveLength(refs.parts.length);
       expect((await explain(host, refs.index, 'another-session')).code).toBe(
         'ERR_ARTIFACT_NOT_FOUND',
       );
+    } finally {
+      close();
+    }
+  });
+
+  it('a cache hit costs heads only, and losing any one part ends it: the next request is not-found', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      const view = watching(store);
+      const { host } = await served(storeAgent(view.store), { extra: { answerAccounts: {} } });
+      bodyOf(await explain(host, refs.index));
+      view.gets.length = 0;
+      view.heads.length = 0;
+      bodyOf(await explain(host, refs.index));
+      // The index is read and verified once (its head and get); every part is head-checked.
+      expect(view.gets).toEqual([refs.index]);
+      expect(view.heads.filter((ref) => ref === refs.index)).toHaveLength(2);
+      expect(view.heads.filter((ref) => ref !== refs.index).sort()).toEqual([...refs.parts].sort());
+      for (const gone of [refs.parts[refs.parts.length - 1]!, refs.base]) {
+        await store.delete(SCOPE, gone);
+        expect((await explain(host, refs.index)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
+      }
+    } finally {
+      close();
+    }
+  });
+
+  it('a missing invocation part is the one not-found, never a partial account', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      expect(refs.parts.length).toBeGreaterThan(1);
+      await store.delete(SCOPE, refs.parts[1]!);
+      const { host } = await served(storeAgent(store), { extra: { answerAccounts: {} } });
+      expect((await explain(host, refs.index)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
+    } finally {
+      close();
+    }
+  });
+
+  it('an invocation part changed in place (its ticket unchanged) is the one not-found, never a partial account', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      const target = refs.parts[1]!;
+      const changed = watching(store, (ref, data) =>
+        ref === target ? (data as string).replace('"subflowId":"sf-', '"subflowId":"SF-') : data,
+      );
+      const { host } = await served(storeAgent(changed.store), { extra: { answerAccounts: {} } });
+      expect((await explain(host, refs.index)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
+    } finally {
+      close();
+    }
+  });
+
+  it('a part missing for one request drops the cached answer: the next request reads the whole again', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      let hide: string | undefined;
+      const view = watching(store);
+      const flaky: ArtifactStore = {
+        ...view.store,
+        head: (scope, ref) => (ref === hide ? Promise.resolve(null) : view.store.head(scope, ref)),
+      };
+      const { host } = await served(storeAgent(flaky), { extra: { answerAccounts: {} } });
+      bodyOf(await explain(host, refs.index));
+      hide = refs.parts[1];
+      expect((await explain(host, refs.index)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
+      hide = undefined;
+      view.gets.length = 0;
+      bodyOf(await explain(host, refs.index));
+      // Not served from a cache that outlived the gap: every part was read again.
+      expect(view.gets.filter((ref) => ref !== refs.index).sort()).toEqual([...refs.parts].sort());
+    } finally {
+      close();
+    }
+  });
+
+  it('every packed part under the ceiling, the whole over it: the named 413, refused before it expands', async () => {
+    const { store, close } = create();
+    try {
+      const unit = (id: string) => ({
+        subflowId: id,
+        subflowName: id,
+        parentStageId: 'seed',
+        treeContext: {
+          globalContext: { rows: Array.from({ length: 1000 }, () => `${id}:${'v'.repeat(4096)}`) },
+          stageContexts: {},
+          history: [],
+        },
+      });
+      const mount = (key: string, id: string, next?: object) => ({
+        id,
+        name: id,
+        subflowId: id,
+        runtimeStageId: key,
+        ...(next && { next }),
+      });
+      const heavy = {
+        snapshot: {
+          runId: 'snap',
+          executionTree: mount('a#1', 'a', mount('b#2', 'b', mount('c#3', 'c'))),
+          subflowResults: { 'a#1': unit('a'), 'b#2': unit('b'), 'c#3': unit('c') },
+        },
+        events: [],
+        structure: { id: 'seed', name: 'seed' },
+      } as unknown as Recording;
+      const refs = await fileBoth(store, heavy, { packed: true });
+      const { host } = await served(storeAgent(store), {
+        extra: { answerAccounts: { maxRecordingBytes: 8 * 1024 * 1024 } },
+      });
+      expect((await explain(host, refs.index)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+    } finally {
+      close();
+    }
+  });
+
+  it('an index past its own cap is the one not-found, not a ceiling the recording may not pass', async () => {
+    const { store, close } = create();
+    try {
+      const view = watching(store);
+      const ref = (
+        await store.put(SCOPE, {
+          kind: 'recording/run-index',
+          mediaType: 'application/json',
+          data: `{"format":"agentfootprint.recording.index.v1","pad":"${'x'.repeat(3_000_000)}"}`,
+        })
+      ).meta.ref;
+      const { host } = await served(storeAgent(view.store), { extra: { answerAccounts: {} } });
+      expect((await explain(host, ref)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
+      expect(view.gets).toEqual([]);
     } finally {
       close();
     }

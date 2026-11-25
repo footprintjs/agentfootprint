@@ -228,5 +228,18 @@ export function partReader(
     return Object.freeze({ status: 'ready', recording: root.recording });
   }
 
-  return { base, invocations, whole };
+  /** Every stored part's ticket, in order, checked against the index: no bytes are read. */
+  async function check(
+    signal: AbortSignal | undefined,
+  ): Promise<{ readonly status: 'ready' } | Unavailable> {
+    for (const entry of [index.base, ...index.parts]) {
+      const checked = await source.check(entry, signal);
+      if ('refused' in checked) {
+        return unavailable(checked.refused === 'missing' ? 'part-missing' : 'part-changed');
+      }
+    }
+    return Object.freeze({ status: 'ready' });
+  }
+
+  return { base, invocations, whole, check };
 }
