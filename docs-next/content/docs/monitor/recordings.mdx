@@ -172,6 +172,66 @@ on once every reader of those artifacts (the Lens, your own viewer) calls
 referred to the same value. Treat a recording as read-only, as every viewer
 does.
 
+## Open a saved recording, one part at a time
+
+A saved recording can be large, and a reader often wants one sub-step of the
+run, not all of it. `openSavedRecording(artifacts, ref, options)` opens a saved
+recording by its ref through a store already bound to one scope (a tool's
+`ctx.artifacts`, or a host's per-request binding from `bindArtifacts`), so a ref
+from any other scope is `not-found`. It answers a `SavedRecording` or a
+`SavedRecordingUnavailable` with a fixed `reason`: `not-found`,
+`not-a-recording`, `too-large`, `invalid-index` or `invalid-recording`.
+
+<CodeFile path="examples/features/132-saved-recording.ts" region="open" title="Open a saved recording and read one invocation" />
+
+A `SavedRecording` lists its `invocations` in the order the Lens lists them.
+Each `SavedInvocation` has its execution `key` (the mount's runtime stage id),
+its `path` of mount keys from the root, its `subflowId`, whether it was
+`recorded`, and the `bytes` of its result. Three reads follow, each with
+`SavedRecordingReadOptions` (a `signal`):
+
+- `readRoot()` returns the recording without its subflow results.
+- `readInvocation(key)` returns one invocation's result.
+- `readWhole()` returns the whole recording back, all or nothing, within
+  `SavedRecordingWholeOptions.maxBytes` (64 MiB by default).
+
+When a read has nothing to return, it answers a `SavedRecordingPartUnavailable`
+whose `reason` is `not-recorded`, `part-missing`, `part-changed` or `too-large`.
+A read never falls back to another source.
+
+A recording is stored in one of two layouts, and the reader opens both:
+
+- **Whole**: one artifact of kind `RECORDING_ARTIFACT_KIND`. It is read once,
+  within `maxRootBytes`, and cut in memory.
+- **Parts**: an index of kind `RECORDING_INDEX_ARTIFACT_KIND`, plus a base part
+  and invocation parts of kind `RECORDING_PART_ARTIFACT_KIND`, about 1 MiB each.
+  A part holds whole results only, so one bigger result is a part of its own.
+  Opening reads only the index. `readRoot` reads the base part, and
+  `readInvocation` reads the one part that holds the invocation. A part that is
+  missing, changed or over its cap is unavailable for exactly the invocations it
+  held. The rest of the run still reads.
+
+`OpenSavedRecordingOptions` caps what a read may take: `maxIndexBytes` (2 MiB),
+`maxRootBytes` (16 MiB) and `maxPartBytes` (16 MiB). Each cap is checked against
+stored metadata before any bytes are read. A part's kind, size, digest and run
+are compared with its index entry before the part is fetched, and its SHA-256 is
+computed again after. The reader asks only for the two verbs it uses, a
+`SavedRecordingArtifacts` (`head` and `get`). `SavedRecording.sizes` is a
+`SavedRecordingSizes`, read from the index alone: how many bytes and artifacts
+hold the recording, and the size of each part.
+
+**Gotchas:**
+
+- A busy or revoked store, or an aborted signal, rejects the read with the
+  original error. It is never reported as a missing part.
+- `complete: false` means the run's tree and its results disagree. Every result
+  is still stored, but the Lens's lazy reader refuses such a recording whole.
+- The parts layout costs artifacts. A small run takes three (the index, the base
+  part and one part) instead of one. A store that keeps 256 artifacts per scope
+  then holds about 85 small recordings instead of 256, before anything else the
+  conversation stores. A large run takes two artifacts plus one per part: with
+  nine parts of results, that is 11 artifacts.
+
 ## What an envelope holds
 
 | field | type | what it says |
