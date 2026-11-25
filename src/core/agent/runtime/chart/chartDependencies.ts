@@ -1,3 +1,5 @@
+import { hostWriters } from '../../hostEnd/projection.js';
+import { chooseHostTurn } from '../../hostEnd/settle.js';
 import type { NativeMappingBinding } from 'footprintjs';
 import { componentEvidence } from '../../componentObservers.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../../../../cache/CacheGateDecider.js';
@@ -57,6 +59,9 @@ export function chartDependencies(
   this: Pick<AgentContext, 'configuration' | 'native' | 'revisionWithholdsTools'>,
   environment: ChartDependenciesEnvironment,
 ) {
+  const writers = this.configuration.hostEndedTurns
+    ? hostWriters(this.configuration.memories)
+    : undefined;
   return {
     memories: this.configuration.memories,
     // Evidence bridge (#5): closure hand-off to the CAUSAL write mounts.
@@ -66,6 +71,17 @@ export function chartDependencies(
     }),
     systemPromptCachePolicy: environment.systemPromptCachePolicy,
     maxIterations: environment.maxIterations,
+    ...(writers && {
+      chooseHostTurn: (
+        scope: import('footprintjs').TypedScope<import('../../types.js').AgentState>,
+      ) =>
+        chooseHostTurn(
+          scope,
+          this.native.runExecution().forScope(scope),
+          this.configuration,
+          writers,
+        ),
+    }),
     seed: environment.seed,
     callLLM: environment.callLLM,
     routeDecider: environment.terminalRouteDecider,

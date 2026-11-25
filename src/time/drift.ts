@@ -23,6 +23,13 @@
  * | larger | the library's look-back fill | yes | the asked range in that form | `drift: { outcome: 'redrawn', form }` |
  * | larger | the library's look-back fill | no | the look-back | `drift: { outcome: 'shifted' }` |
  * | larger | the model's look-back | — | the look-back, as sent | `drift: { outcome: 'shifted' }` |
+ * | larger | the model's look-back BESIDE a confirmed window (`model-chosen`) | yes, and its `maxRange` holds the interval | the interval it named on the frozen clock, in that form | `drift: { outcome: 'redrawn', form }` |
+ * | any | a CONFIRMED look-back in a length-only form (`coversAtDispatch`) | — | the smallest length that still reaches the window's start from dispatch | `drift: { outcome: 'covered', form, sent }` |
+ *
+ * The last row is the widening law at dispatch ({@link coverAtDispatch}): a
+ * confirmed window is never read shorter because a click took time. It is
+ * decided on every such call, whatever the drift, and refuses a window still
+ * running at dispatch or a length past the form's `maxRange`.
  *
  * @example
  * ```ts
@@ -38,7 +45,8 @@
  * ```
  */
 
-import { convertExact, type PeriodForm } from './convert.js';
+import { convertExact, type PeriodFacts, type PeriodForm } from './convert.js';
+import { coveringLookback, formCapMs, type Uncoverable } from './convert/covering.js';
 import { instantOf, type InstantText } from './instant.js';
 import type { TimeRange } from './range.js';
 import type { ZoneName } from './zone.js';
@@ -48,6 +56,12 @@ export interface DispatchedWindow {
   readonly how: string;
   readonly form?: number;
   readonly asked?: TimeRange;
+  readonly coversAtDispatch?: true;
+  /**
+   * The turn holds a CONFIRMED window (the row's `person` carries an endpoint): a look-back the
+   * model wrote names an interval on the frozen clock, so it is re-sent as those bounds too.
+   */
+  readonly confirmedTurn?: true;
 }
 
 /** The clocks and the tool's step. */
@@ -73,6 +87,49 @@ export type DispatchDrift =
       readonly values: Readonly<Record<string, unknown>>;
     }
   | { readonly byMs: number; readonly outcome: 'shifted' };
+
+/** A confirmed look-back's covering value at dispatch, or why none exists. */
+export type DispatchCover =
+  | {
+      readonly byMs: number;
+      readonly outcome: 'covered';
+      readonly form: number;
+      readonly values: Readonly<Record<string, unknown>>;
+      readonly sent: TimeRange;
+    }
+  | { readonly outcome: 'uncoverable'; readonly why: Uncoverable };
+
+/**
+ * The covering look-back for one dispatched call whose `call-window` row says
+ * `coversAtDispatch` (`convert/covering.ts` · `coveringLookback`, measured
+ * from `clock.dispatchedAt`, held to the form's own `maxRange`), or
+ * `undefined` when the row says no such thing. Pure.
+ */
+export function coverAtDispatch(
+  window: DispatchedWindow | undefined,
+  forms: readonly PeriodForm[],
+  clock: Pick<DispatchClock, 'now' | 'dispatchedAt'>,
+  facts?: PeriodFacts,
+): DispatchCover | undefined {
+  if (window?.coversAtDispatch !== true || window.how !== 'filled') return undefined;
+  const form = window.form === undefined ? undefined : forms[window.form];
+  const now = instantOf(clock.now, 'strict');
+  const at = instantOf(clock.dispatchedAt, 'strict');
+  if (form?.kind !== 'lookback' || window.asked === undefined) {
+    return { outcome: 'uncoverable', why: 'still-running' };
+  }
+  if (now === undefined || at === undefined)
+    return { outcome: 'uncoverable', why: 'still-running' };
+  const cover = coveringLookback(window.asked, form, clock.dispatchedAt, formCapMs(form, facts));
+  if ('uncoverable' in cover) return { outcome: 'uncoverable', why: cover.uncoverable };
+  return {
+    byMs: at.ms - now.ms,
+    outcome: 'covered',
+    form: window.form as number,
+    values: cover.values,
+    sent: cover.sent,
+  };
+}
 
 /**
  * Whether the call SENT a look-back: its `call-window` row names a form, that
@@ -102,16 +159,38 @@ export function driftAtDispatch(
   window: DispatchedWindow | undefined,
   forms: readonly PeriodForm[],
   clock: DispatchClock,
+  facts?: PeriodFacts,
 ): DispatchDrift | undefined {
   if (window === undefined || !sentLookback(window, forms)) return undefined;
+  // A covering look-back has its own decision ({@link coverAtDispatch}); it is never shifted.
+  if (window.coversAtDispatch === true) return undefined;
   const now = instantOf(clock.now, 'strict');
   const at = instantOf(clock.dispatchedAt, 'strict');
   if (now === undefined || at === undefined) return undefined;
   const byMs = at.ms - now.ms;
+  // Beside a confirmed window the model's own look-back is an interval on the frozen clock: past
+  // the tool's step it keeps that interval. The spelling changes, never the window.
+  const modelInterval = window.how === 'model-chosen' && window.confirmedTurn === true;
   if (Math.abs(byMs) <= clock.granularityMs) return undefined;
-  // Only the library's own fill is re-sent; the model's value is never written over (§ 7.3).
-  if (window.how === 'filled' && window.asked !== undefined && clock.zone !== undefined) {
-    const absolute = forms.map((f, i) => ({ f, i })).filter(({ f }) => f.kind !== 'lookback');
+  // Otherwise only the library's own fill is re-sent; the model's value runs as sent (§ 7.3).
+  if (
+    (window.how === 'filled' || modelInterval) &&
+    window.asked !== undefined &&
+    clock.zone !== undefined
+  ) {
+    // A form whose own `maxRange` is shorter than the asked range cannot hold it: never redrawn
+    // into (the look-back then runs as sent, `shifted`).
+    const asked = window.asked;
+    const from = instantOf(asked.from, 'strict');
+    const to = instantOf(asked.to, 'strict');
+    const lengthMs = from === undefined || to === undefined ? undefined : to.ms - from.ms;
+    const absolute = forms
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => {
+        if (f.kind === 'lookback') return false;
+        const cap = formCapMs(f, facts);
+        return cap === undefined || (lengthMs !== undefined && lengthMs <= cap + 1);
+      });
     const conversion = convertExact(
       { range: window.asked },
       absolute.map(({ f }) => f),

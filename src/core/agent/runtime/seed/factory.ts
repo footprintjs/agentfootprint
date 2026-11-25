@@ -43,6 +43,8 @@ export function seedFactory(environment: SeedEnvironment) {
       return l;
     };
     const seed = buildSeedStage({
+      hostDecision: run.value.hostTurn !== undefined,
+      hostOnly: run.value.hostTurn?.hasInput === false,
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceMaxReceipts:
           environment.configuration.sourceEvidenceConfig.limits.maxReceipts,
@@ -212,9 +214,10 @@ export function seedFactory(environment: SeedEnvironment) {
       }),
       // The `'input'` half of the message chain, run BEFORE `userMessage` and
       // `history` are committed — see SeedStageDeps.messageMiddleware.
-      ...(environment.configuration.messageMiddleware.length > 0 && {
-        messageMiddleware: environment.configuration.messageMiddleware,
-      }),
+      ...(run.value.hostTurn?.hasInput !== false &&
+        environment.configuration.messageMiddleware.length > 0 && {
+          messageMiddleware: environment.configuration.messageMiddleware,
+        }),
       // `.configure()` — seed is where run-level facts are decided and
       // committed, so the resolver rides that commit. The closure supplies
       // the build-time defaults so a resolver can decide RELATIVE to them

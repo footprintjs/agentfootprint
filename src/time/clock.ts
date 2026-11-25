@@ -42,7 +42,11 @@
  */
 
 import { instantOf, type InstantText } from './instant.js';
-import { isTimeRange, type TimeRange } from './range.js';
+import {
+  readControlWindow,
+  type ControlWindowInput,
+  type RecordedWindow,
+} from './windowEndpoint.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { readerIssue, type TimeReader } from './reader.js';
 import { readPolicy, type TimePolicy } from './resolveRecord.js';
@@ -98,9 +102,10 @@ export interface RunTime {
   readonly zone?: string;
   /**
    * A window set in a UI — a brushed chart range, a range picker — as a
-   * half-open `{ from, to }` of instants. Recorded with `source: 'control'`.
+   * range of instants. The end is exclusive unless `end: 'inclusive'` is supplied.
+   * Optional `precision` keeps the displayed precision even when the ISO spelling is padded.
    */
-  readonly window?: TimeRange;
+  readonly window?: ControlWindowInput;
 }
 
 /** The builder's `.time(options)` — the fallback zone, the reader and its policy (time design § 11). */
@@ -140,7 +145,7 @@ export interface TimeOptions {
 export interface ReadRunTime {
   readonly now?: InstantText;
   readonly zone?: ZoneName;
-  readonly window?: TimeRange;
+  readonly window?: RecordedWindow;
 }
 
 /** {@link TimeOptions} as read — the policy's defaults filled in when a reader is armed. */
@@ -158,7 +163,7 @@ export interface ClockDraft {
   readonly zone: ZoneName;
   /** `'unknown'`: neither the run nor the builder named a zone — `zone` is the UTC spelling. */
   readonly zoneSource: 'run' | 'builder' | 'unknown';
-  readonly window?: TimeRange;
+  readonly window?: RecordedWindow;
 }
 
 /** A read answer: the value, or a problem named in words. */
@@ -241,18 +246,18 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
     if ('problem' in read) return { problem: `time.${read.problem}` };
     zone = read.value;
   }
-  if (value.window !== undefined && !isTimeRange(value.window)) {
+  const window = readControlWindow(value.window);
+  if (value.window !== undefined && window === undefined) {
     return {
       problem:
-        'time.window must be { from, to } — two ISO 8601 instants with a zone, from before to',
+        'time.window needs ISO 8601 from and to with offsets, a valid end policy and matching precision',
     };
   }
-  const window = value.window as TimeRange | undefined;
   return {
     value: {
       ...(now !== undefined && { now }),
       ...(zone !== undefined && { zone }),
-      ...(window !== undefined && { window: { from: window.from, to: window.to } }),
+      ...(window !== undefined && { window }),
     },
   };
 }
@@ -359,7 +364,7 @@ export interface ClockChange {
   readonly kept: {
     readonly now: InstantText;
     readonly zone: ZoneName;
-    readonly window?: TimeRange;
+    readonly window?: RecordedWindow;
   };
 }
 
@@ -377,7 +382,7 @@ export interface ClockChange {
  */
 export function clockChange(
   passed: ReadRunTime,
-  kept: { readonly now: InstantText; readonly zone: ZoneName; readonly window?: TimeRange },
+  kept: { readonly now: InstantText; readonly zone: ZoneName; readonly window?: RecordedWindow },
 ): ClockChange | undefined {
   const nowDiffers = passed.now !== undefined && passed.now !== kept.now;
   const zoneDiffers = passed.zone !== undefined && passed.zone !== kept.zone;
@@ -385,7 +390,11 @@ export function clockChange(
     passed.window !== undefined &&
     (kept.window === undefined ||
       passed.window.from !== kept.window.from ||
-      passed.window.to !== kept.window.to);
+      passed.window.to !== kept.window.to ||
+      (kept.window.endpoint !== undefined &&
+        (passed.window.endpoint?.cutoff !== kept.window.endpoint.cutoff ||
+          passed.window.endpoint?.end !== kept.window.endpoint.end ||
+          passed.window.endpoint?.precision !== kept.window.endpoint.precision)));
   if (!nowDiffers && !zoneDiffers && !windowDiffers) return undefined;
   return {
     passed,

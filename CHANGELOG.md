@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.0.0] - 2026-11-25
+
+### Breaking
+
+- **Keep the time cutoff a person confirmed.** Timestamp ranges now default to an exclusive upper bound. Saved window facts include the cutoff, its confirmed precision and whether it includes the endpoint. A newly resolved look-back uses the run’s recorded clock and reaches tools in an absolute form. When a tool reads a wider or narrower interval, the time limits line explains the recorded difference.
+
+  Migration: A tool that declares only a duration form keeps working: a confirmed look-back reaches it as a length that still covers the confirmed window, recorded as wider than asked. To have the window read exactly, declare an ISO or epoch bounds form alongside the duration form. Supply `time.window.end: 'inclusive'` if the selected endpoint belongs to the window, and set `precision: 'minute'` when your control pads a minute selection to seconds. Existing saved windows retain their recorded bounds.
+
+### Added
+
+- **Choose extractable AgentCore memory events per entry.** `AgentCoreStore` accepts
+  a synchronous `eventPayload` selector for explicit conversational role/text or
+  the existing blob format. A conversational event keeps the original entry blob
+  in the same request, preserving entry reads and versions. Unsupported clients
+  and serializers, invalid projections and oversized conversation payloads are
+  refused before the write, without truncation or a new adapter retry.
+
+  Each batch request receives detached namespace fields, so a custom client cannot
+  redirect later writes by replacing the configuration it was handed. An omitted
+  selector does not inspect the new conversational capability metadata.
+
+  Event acceptance does not prove extraction completed. Entry deletion, session
+  forget and local entry TTL do not erase already-derived long-term records;
+  `extraction: 'skip'` applies only to the current event. SDK transport retry policy
+  is unchanged.
+
+- A host that sets `hostEndedTurns: true` at agent construction can end a turn at admission with `agent.endTurn({ reply, reason: 'host-cap' })`. The run checks the reply against its output policy and records who supplied it. Conversation checkpoints preserve that origin across restarts. The next model request receives the conversation text with the private origin field removed.
+
+  Cancellation is honored through terminal delivery. Episodic window writers project the settled notice in order and report an acknowledged or unknown outcome per memory.
+
+### Changed
+
+- **A confirmed look-back, or a confirmed time range that has already ended, still runs unshortened on a tool that takes only a length of time.** Such a source counts the length back from its own clock when it is handed the call, so the same length sent after a confirmation click would start late and lose the oldest part of the window. The library now sends the smallest length, in the form's own units, that still reaches the start of the confirmed window from the dispatch moment (a two-hour look-back handed over 61 seconds late is sent as `122m`). The call's `call` row records `drift: { outcome: 'covered', form, sent }`, the `call-window` row says `coversAtDispatch`, the result check reads what was sent unless the result declares what it queried, and the model's note names the value that ran and says the source's clock decided the exact bounds. A window still running at dispatch, or a length past the form's `maxRange`, does not run and the model reads why. On a resumed call the dispatch moment is now read after the access and credential checks, so a refused call files no `call` row.
+
+  **A look-back of the model's own beside a confirmed one is recorded, not refused.** A call whose period arguments all name one other window (a longer look-back, or that look-back with matching bounds) is recorded `model-chosen` beside the person's window, as a different absolute range already was. It keeps the interval it named on the run's clock: beside any confirmed window (a look-back, a timestamp range or a UI `time.window`), when the clock has moved past the tool's step and an absolute form can hold the interval within its `maxRange`, the look-back is sent as those bounds; otherwise it runs as sent and is recorded `shifted`. A look-back is no longer redrawn into an absolute form whose `maxRange` is shorter than the range. A call whose own forms name different windows is still refused.
+
 ## [17.2.0] - 2026-11-24
 
 ### Added

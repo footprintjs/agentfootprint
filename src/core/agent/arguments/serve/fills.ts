@@ -26,9 +26,13 @@ export interface FilledArgument {
   /**
    * On a `window` fill: no form held the window exactly, so the value reads a
    * WIDER one (the time layer, step T5b) — `reads-more`, or `tool-trims` when
-   * the tool declares that it drops the rows outside the asked window.
+   * the tool declares that it drops the rows outside the asked window; or the
+   * form takes only a length the source counts back from its own clock, so
+   * the library lengthened it at dispatch — `source-clock`, or
+   * `source-clock-trims` when the tool drops the rows outside (`value` is
+   * then the lengthened value the call ran with).
    */
-  readonly wider?: 'reads-more' | 'tool-trims';
+  readonly wider?: 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims';
   /**
    * The value the call had CARRIED, which the person's answer replaced
    * (declared sources: an untraced value is asked about). Absent: the call
@@ -89,6 +93,11 @@ function printedFill(value: FilledArgument['value']): string {
 //        it was (the person's words, a model reader's unconfirmed reading of them, a UI control)
 // law: may omit, never deny; past tense, naming the call this result answers; a reading of the person's
 //      words is never called their words.
+/** A confirmed look-back in a length-only form: what the library did to the value at dispatch. */
+const LENGTHENED_CLAUSE =
+  '; the tool takes only a length of time, counted back from its own clock, so the value ' +
+  'was lengthened when the call was handed over to still reach the start of that window';
+
 /** The clause for a value the turn's one window of the person's filled (the time layer, step T5a). */
 function windowClause(toolName: string, f: FilledArgument): string {
   const whose =
@@ -108,6 +117,12 @@ function windowClause(toolName: string, f: FilledArgument): string {
       : f.wider === 'tool-trims'
       ? "; the tool's form could not hold that window exactly, so the value reads a wider one, " +
         'and the tool declares that it drops the rows outside the asked window'
+      : f.wider === 'source-clock'
+      ? LENGTHENED_CLAUSE +
+        " — recorded as wider than asked, its exact bounds decided by the source's clock"
+      : f.wider === 'source-clock-trims'
+      ? LENGTHENED_CLAUSE +
+        ', and the tool declares that it drops the rows outside the asked window'
       : '';
   return f.hidden
     ? `\n\n[${f.argument} was not in the ${toolName} call this result answers; the call ran with ` +

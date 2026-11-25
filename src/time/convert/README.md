@@ -14,6 +14,7 @@ modules contain whole private units moved from that file.
 | [`lookback.ts`](lookback.ts) | Exact look-back spelling in the form's declared units. |
 | [`exact.ts`](exact.ts) | One form's existing exact conversion. |
 | [`widen.ts`](widen.ts) | Covering day/look-back conversions and their extra ranges. |
+| [`covering.ts`](covering.ts) | A confirmed look-back for a length-only form: its value before dispatch and the covering value at dispatch. |
 | [`convert.test.ts`](convert.test.ts) | Public composition across rounding, DST, form caps and retention. |
 
 ```mermaid
@@ -26,6 +27,7 @@ flowchart TD
   E -->|no exact form| W[convertWidened]
   W --> D[widen: covering day or look-back]
   D --> C[Calendar and absolute instants]
+  W -->|no form fits, confirmed look-back| S[covering: length-only form, lengthened at dispatch]
   W -->|no form fits| N[Multi-day or no-form refusal]
   Q[readBack] --> I[Inverse bounds and declared zone]
   I --> C

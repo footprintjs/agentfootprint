@@ -1,3 +1,4 @@
+import { acceptedResponseFields } from '../assistantReplay.js';
 import type { AgentChartDeps } from '../buildAgentChart.js';
 import { integrityRail } from '../integrityFindings.js';
 import { dynamicTurnInput } from '../dynamicTurnInput.js';
@@ -28,10 +29,7 @@ export function groupedTurnBoundary(deps: AgentChartDeps) {
             sourceConsultation: s.sourceConsultation,
           }),
         thinkingBlocks: s.thinkingBlocks,
-        // Atomic tuple + Replace below: never merge a former layout or
-        // binding into a new provider proof. Present undefined clears it.
-        ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
-        ...(Object.hasOwn(s, 'requestReplay') && { requestReplay: s.requestReplay }),
+        ...acceptedResponseFields(s),
         // Native candidates and prose cutoffs carry stop evidence. Ordinary
         // replies without earlier stop evidence leave the mapper byte-identical.
         ...llmCallResponseFields(s, deps.hasCitations === true),

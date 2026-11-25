@@ -187,7 +187,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'used to build the continued entry itself, from the raw message, before the chain ran',
     },
   ],
-  'src/core/agent/stages/prepareFinal.ts': [
+  'src/core/agent/assistantReplay.ts': [
     {
       cls: 'person',
       why:

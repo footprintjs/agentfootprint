@@ -1,10 +1,10 @@
 import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../../events/types.js';
 import type { ReportedToolStatus } from '../../semantics/toolOutcome.js';
 import type { ThinkingBlock } from '../../thinking/types.js';
-import type { ToolResultRecord } from '../toolResultRecord.js';
+import type { MessageRecord } from '../toolResultRecord.js';
 import type { LLMResponse } from './response.js';
 
-export interface LLMMessage extends ToolResultRecord {
+export interface LLMMessage extends MessageRecord {
   readonly role: ContextRole;
   readonly content: string;
   /** For `role: 'tool'` — the tool_use id this result corresponds to. */

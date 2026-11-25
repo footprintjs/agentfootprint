@@ -26,9 +26,9 @@ export function recordTerminalResponse(
   prepared: PreparedCall,
   executed: ExecutedCall,
 ): void {
-  const { response, answeredBy } = executed;
+  const { response, answeredBy, localFallback } = executed;
   recordResponseTokens(scope, response);
-  deps.onResponseCommitted?.();
+  deps.onResponseCommitted?.(scope, localFallback);
   typedEmit(scope, 'agentfootprint.stream.llm_end', {
     iteration: prepared.iteration,
     content: '',

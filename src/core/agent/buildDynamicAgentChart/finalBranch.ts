@@ -3,8 +3,7 @@ import type { AgentChartDeps } from '../buildAgentChart.js';
 import { startFinalBranch } from '../honesty/mounts.js';
 import { prepareFinalFor } from '../stages/prepareFinal.js';
 import { breakFinalStage, breakFinalWithValidationStage } from '../stages/breakFinal.js';
-import { mountMemoryWrite } from '../../../memory/wire/mountMemoryPipeline.js';
-import { unwrapMemoryFlowChart } from '../../../memory/define.js';
+import { mountAgentMemoryWrites } from '../memoryWrites.js';
 
 export function groupedFinalBranch(deps: AgentChartDeps): FlowChart {
   // ── Final-branch subflow ─────────────────────────────────────
@@ -21,25 +20,7 @@ export function groupedFinalBranch(deps: AgentChartDeps): FlowChart {
     prepareFinalFor(deps),
     deps.structureRecorders,
   );
-  for (const m of deps.memories) {
-    if (m.write) {
-      finalBranchBuilder = mountMemoryWrite(finalBranchBuilder, {
-        pipeline: {
-          read: unwrapMemoryFlowChart(m.read) as never,
-          write: unwrapMemoryFlowChart(m.write) as never,
-        },
-        identityKey: 'runIdentity',
-        turnNumberKey: 'turnNumber',
-        contextTokensKey: 'contextTokensRemaining',
-        newMessagesKey: 'newMessages',
-        writeSubflowId: `sf-memory-write-${m.id}`,
-        ...(m.corpus !== undefined && { identityOverride: m.corpus }),
-        // Evidence bridge (#5): only CAUSAL pipelines consume run evidence.
-        ...(m.type === 'causal' &&
-          deps.causalEvidenceSource && { evidenceSource: deps.causalEvidenceSource }),
-      });
-    }
-  }
+  finalBranchBuilder = mountAgentMemoryWrites(finalBranchBuilder, deps);
   const finalBranchChart = finalBranchBuilder
     .addFunction(
       'BreakFinal',

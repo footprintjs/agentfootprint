@@ -118,6 +118,9 @@ export function configureAgent(
   scriptTravel?: ResolvedScriptTravel,
   aroundTurn?: AroundTurn,
 ): void {
+  if (opts.hostEndedTurns !== undefined && typeof opts.hostEndedTurns !== 'boolean')
+    throw new TypeError('Agent: hostEndedTurns must be a boolean');
+  config.hostEndedTurns = opts.hostEndedTurns === true;
   config.negativeClaimsConfig = negativeClaimsConfig;
   config.typedNegativeClaimsConfig =
     negativeClaimsConfig?.mode === 'typed' ? negativeClaimsConfig : undefined;

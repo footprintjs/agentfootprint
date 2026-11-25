@@ -2,6 +2,10 @@ import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { ThinkingBlock } from '../../../../thinking/types.js';
 
 export interface ResponseState {
+  /** Host decision at admission. Delivery requires a separately settled reply. */
+  hostEndReason?: 'host-cap';
+  /** The run that accepted the latest provider reply. Local fallbacks clear it. */
+  modelReplyRunId?: string;
   // ── Thinking state (v2.14) ─────────────────────────────────
   /** Provider-specific raw thinking data, set by callLLM after the
    *  LLM response lands. The NormalizeThinking sub-subflow reads this

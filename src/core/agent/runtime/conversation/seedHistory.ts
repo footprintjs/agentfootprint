@@ -105,9 +105,10 @@ function historyForTurn(
 export function seedHistoryForTurn(
   scope: TypedScope<AgentState>,
   resume: PendingResumeHistory | undefined,
-  message: string,
+  message: string | undefined,
 ): readonly LLMMessage[] {
-  const history = historyForTurn(resume, message);
+  const history =
+    message === undefined ? [...(resume?.history ?? [])] : historyForTurn(resume, message);
   scope.history = history;
   if (resume?.appendsUserTurn === false && resume.requestReplay !== undefined)
     writeRequestReplay(scope, resume.requestReplay);

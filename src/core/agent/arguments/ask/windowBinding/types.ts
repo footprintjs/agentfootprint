@@ -2,6 +2,7 @@
 import type { CallWindow } from '../../../../../time/bind.js';
 import type { TimeAnswerRow } from '../../../../../time/rows.js';
 import type { TimeRange } from '../../../../../time/range.js';
+import type { WindowEndpoint } from '../../../../../time/windowEndpoint.js';
 import type { ZoneName } from '../../../../../time/zone.js';
 import type { AskField, WindowFill } from '../types.js';
 
@@ -15,6 +16,7 @@ export type WindowBinding =
       /** The window the person settled: the range, its zone, and whether it was the offered reading. */
       readonly answered: {
         readonly range: TimeRange;
+        readonly endpoint?: WindowEndpoint;
         readonly zone: ZoneName;
         readonly how: TimeAnswerRow['how'];
         readonly corrected?: TimeAnswerRow['corrected'];

@@ -12,7 +12,7 @@
  * Test types:
  *   functional   — the field run ("10/09/26 8 AM to 8:40 AM PST", zone answered, reading confirmed):
  *                  the person's parts at grain (`8:00`, `08:40`, `2026-10-09`) are clean and file
- *                  nothing; the library's (`08:41`, `15:00Z`, `-07:00`, the epoch the call ran
+ *                  nothing; the library's (`15:00Z`, `-07:00`, the epoch the call ran
  *                  with) are filed `time-derived` and fold "not sure" with `derived-from-reading`;
  *   negative     — an invented time and year are still flagged, beside the derived row;
  *   regression   — the landed fix's field case (their "8 Am", a chosen date) stays unflagged;
@@ -146,22 +146,23 @@ describe('the field run — the person’s parts at grain, the library’s spell
 
   it('the library’s spellings are filed `time-derived` and fold "not sure" — never invented, never known', async () => {
     const run = await fieldRun(
-      'From 15:00Z (-07:00) to 08:41, start_time 1791558000000: 42 operations.',
+      'From 15:00Z (-07:00) to 08:40, start_time 1791558000000: 42 operations.',
     );
     expect(run.flagged).toEqual([]);
     expect(run.derived).toHaveLength(1);
     expect(run.derived[0]).toMatchObject({ kind: 'time-derived', turn: 1 });
-    expect(run.derived[0]!.values).toEqual(expect.arrayContaining(['08:41', '1791558000000']));
+    expect(run.derived[0]!.values).toEqual(expect.arrayContaining(['1791558000000']));
+    expect(run.derived[0]!.values).not.toContain('08:40');
     expect(run.standing.standing).toBe('not-sure');
     expect(run.standing.reasons.map((r) => r.reason)).toContain('derived-from-reading');
   });
 
   it('a time no reading produced still fails, beside the derived row', async () => {
     const run = await fieldRun(
-      'At 09:15 in 2031 there were 42 operations; the window ended 08:41.',
+      'At 09:15 in 2031 there were 42 operations; start_time was 1791558000000 and the window ended 08:41.',
     );
-    expect(run.flagged).toEqual(expect.arrayContaining(['09:15', '2031']));
-    expect(run.derived[0]!.values).toEqual(['08:41']);
+    expect(run.flagged).toEqual(expect.arrayContaining(['09:15', '2031', '08:41']));
+    expect(run.derived[0]!.values).toEqual(['1791558000000']);
   });
 });
 
@@ -240,9 +241,9 @@ async function take2Run(answerText: string) {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   try {
     const asked = paused(await agent.run({ message: TAKE2_QUESTION, time: { now: TAKE2_NOW } }));
-    // The person confirms the offered reading — the window [06:25, 06:46) PDT.
+    // The person confirms the offered reading — the window [06:25, 06:45) PDT.
     const offered = asked.awaitingInput.fields[0]!.enum![0]!;
-    expect(offered).toBe('2026-10-01T06:25:00-07:00/2026-10-01T06:46:00-07:00');
+    expect(offered).toBe('2026-10-01T06:25:00-07:00/2026-10-01T06:45:00-07:00');
     const done = await agent.resume(asked.checkpoint as never, {
       requestId: asked.awaitingInput.requestId,
       values: { f1: offered },
@@ -268,10 +269,10 @@ describe('the take-2 video — the window’s length is derived from the reading
     expect(run.standing.reasons.map((r) => r.reason)).not.toContain('value-unsupported');
   });
 
-  it('the end-of-grain length is the library’s reading too: "21-minute" is derived', async () => {
+  it('"21-minute" is unsupported for an exact 20-minute window', async () => {
     const run = await take2Run('Two clients were slow in that 21-minute window.');
-    expect(run.flagged).toEqual([]);
-    expect(run.derived[0]!.values).toEqual(['21-minute']);
+    expect(run.flagged).toEqual(['21-minute']);
+    expect(run.derived).toEqual([]);
   });
 
   it('NEGATIVE: an invented duration ("45-minute") is still flagged', async () => {

@@ -40,7 +40,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../../time/rows.js';
 import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
-import { assistantReplayFields } from '../assistantReplay.js';
+import { modelTurnMessages } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
 import {
   scriptsBlock,
@@ -124,24 +124,7 @@ const captureTurnPayload = (
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
-  // v2.14 — attach thinking blocks to the assistant final message
-  // (if any). For non-Anthropic providers this is informational; for
-  // Anthropic + extended-thinking-with-tool-use, signature round-trip
-  // requires the blocks to persist on the assistant turn even when
-  // it's the FINAL turn (continuation in the next user message).
-  const thinkingBlocks = scope.thinkingBlocks;
-  const hasThinking = thinkingBlocks !== undefined && thinkingBlocks.length > 0;
-  // The turn payload memory writes persist: the user's message
-  // paired with the agent's final answer.
-  scope.newMessages = [
-    { role: 'user', content: scope.userMessage },
-    {
-      role: 'assistant',
-      content: scope.finalContent,
-      ...(hasThinking && { thinkingBlocks }),
-      ...assistantReplayFields(scope),
-    },
-  ];
+  scope.newMessages = modelTurnMessages(scope);
 
   if (commitValidated) {
     scope.answerValidationCommitted = true;

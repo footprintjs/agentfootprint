@@ -62,6 +62,7 @@ import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { finalBranchInput, finalBranchOutput } from './stages/breakFinal.js';
 import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
+import { mountHostTurn } from './hostEnd/chart.js';
 import { mountAgentMemoryReads } from './memoryReads.js';
 import {
   timeClockArg,
@@ -338,6 +339,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     description: 'Agent: ReAct loop',
   });
 
+  builder = mountHostTurn(builder, deps);
   builder = mountAgentMemoryReads(builder, deps.memories);
 
   // The turn-start slot — once per turn on the OUTER scope, before the
