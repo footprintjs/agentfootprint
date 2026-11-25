@@ -2,8 +2,8 @@
  * time/convert/covering — a confirmed look-back for a source that takes only
  * a LENGTH of time (the widening law applied to a frozen look-back).
  *
- * Pattern: two pure steps over one rule. A confirmed look-back is a closed
- *          range `[now − L, now)` on the run's frozen clock. A form that
+ * Pattern: two pure steps over one rule. A confirmed window — a look-back
+ *          `[now − L, now)` or a past range — is closed on the run's frozen clock. A form that
  *          takes only a length is read by the SOURCE against its own clock,
  *          at dispatch, so the same length sent later reads a later window
  *          and loses the oldest part of what the person confirmed. The
@@ -28,7 +28,7 @@
  * ```ts
  * const form = { kind: 'lookback', argument: 'window', signed: false, units: 'm' } as const;
  * const asked = { from: '2026-11-13T18:00:00Z', to: '2026-11-13T20:00:00Z' };
- * sourceClockLookback(asked, form);                          // { values: { window: '120m' }, rounded: false }
+ * sourceClockLookback(asked, form, asked.to);                // { values: { window: '120m' }, rounded: false }
  * coveringLookback(asked, form, '2026-11-13T20:01:01.000Z'); // { values: { window: '122m' }, sent: …, extra: [ … ] }
  * ```
  */
@@ -71,21 +71,26 @@ const valueOf = (form: LookbackForm, spelled: string): Readonly<Record<string, u
 });
 
 /**
- * The value a frozen look-back holds in a length-only form BEFORE dispatch:
- * the window's own length on the frozen clock, rounded up to the form's
- * finest unit. `undefined` when the range is not a closed window or the
- * length is past `capMs` (the form's `maxRange`).
+ * The value a confirmed window holds in a length-only form BEFORE dispatch:
+ * the length that reaches its start from the frozen clock (a look-back's own
+ * length; for a closed past range, the covering one), rounded up to the
+ * form's finest unit. `undefined` when the window is not closed at that
+ * clock or the length is past `capMs` (the form's `maxRange`).
  */
 export function sourceClockLookback(
   range: TimeRange,
   form: LookbackForm,
+  now: InstantText,
   capMs?: number,
 ): { readonly values: Readonly<Record<string, unknown>>; readonly rounded: boolean } | undefined {
   const from = instantOf(range.from, 'strict');
   const to = instantOf(range.to, 'strict');
-  if (from === undefined || to === undefined || compareInstants(from, to) >= 0) return undefined;
-  // Reach back from the first whole millisecond at or after the end to the start's millisecond.
-  const needMs = to.ms + (to.nanos > 0 ? 1 : 0) - from.ms;
+  const at = instantOf(now, 'strict');
+  if (from === undefined || to === undefined || at === undefined) return undefined;
+  // A look-back ends at the clock it is read on: a window still running then has none.
+  if (compareInstants(from, to) >= 0 || compareInstants(to, at) > 0) return undefined;
+  // Reach back from the frozen clock to the start's millisecond (a look-back's own end IS the clock).
+  const needMs = at.ms - from.ms;
   const reach = reachIn(form, needMs);
   if (reach === undefined || (capMs !== undefined && reach.lengthMs > capMs)) return undefined;
   return { values: valueOf(form, reach.spelled), rounded: reach.lengthMs !== needMs };

@@ -248,11 +248,13 @@ export function convertWidened(
     const absolute =
       window.freezeLookback === true ||
       (window.endpoint !== undefined && form.kind !== 'day' && form.kind !== 'lookback');
+    // A CONFIRMED window is never covered from the frozen clock: its look-back is measured where
+    // the source reads it, at dispatch (`sourceClockConversion`, asked last by `convertForTool`).
     const done = absolute
       ? roundedAbsolute(window, form, ctx)
       : form.kind === 'day'
       ? dayWidened(window, form, ctx)
-      : form.kind === 'lookback'
+      : form.kind === 'lookback' && window.endpoint === undefined
       ? lookbackWidened(window, form, ctx)
       : undefined;
     if (done === undefined || done.extra.length === 0) continue;
@@ -377,7 +379,8 @@ export function convertForTool(
   if (read !== undefined) return { conversion: read, ...partly };
   // The widening law for a confirmed look-back no absolute form holds: the covering look-back,
   // measured at dispatch. Asked last, so frozen bounds win whatever the declared order.
-  const covering = frozen ? sourceClockConversion(window, forms, facts) : undefined;
+  const confirmed = frozen || window.endpoint !== undefined;
+  const covering = confirmed ? sourceClockConversion(window, forms, facts, ctx.now) : undefined;
   if (covering !== undefined) return { conversion: covering, ...partly };
   if (spansDaysForDayOnly(window, eligible, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
@@ -385,18 +388,19 @@ export function convertForTool(
 
 /**
  * The first length-only form (in declared order) that reads a confirmed
- * look-back within its own `maxRange` — the value it holds until dispatch
+ * window (a look-back, or a closed past range) within its own `maxRange` — the value it holds until dispatch
  * (`convert/covering.ts` · `sourceClockLookback`), marked `coversAtDispatch`.
  */
 function sourceClockConversion(
   window: WindowToConvert,
   forms: readonly PeriodForm[],
   facts: PeriodFacts | undefined,
+  now: InstantText,
 ): Conversion | undefined {
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
     if (form.kind !== 'lookback') continue;
-    const sent = sourceClockLookback(window.range, form, formCapMs(form, facts));
+    const sent = sourceClockLookback(window.range, form, now, formCapMs(form, facts));
     if (sent === undefined) continue;
     return {
       form: i,

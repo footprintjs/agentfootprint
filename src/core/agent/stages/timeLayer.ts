@@ -196,7 +196,7 @@ export function timeAtDispatch(
   const cover = coversAtDispatch(window, call, turn, rules, clock, args, dispatchedAt);
   const drift =
     cover === undefined && rules !== undefined && !isRefused(rules) && clock !== undefined
-      ? driftAtDispatch(window, periodFormsOf(rules.period), {
+      ? driftAtDispatch(driftWindowOf(window), periodFormsOf(rules.period), {
           now: clock.now,
           dispatchedAt,
           granularityMs: granularityMsOf(periodFactsOf(rules.period)),
@@ -232,6 +232,15 @@ export function timeAtDispatch(
     args: redraw(args),
     redraw,
   };
+}
+
+/** The row as the drift decision reads it: whether the turn's window was a confirmed one. */
+function driftWindowOf(
+  window: ReturnType<typeof callWindowOfCall>,
+): Parameters<typeof driftAtDispatch>[0] {
+  return window?.person?.endpoint !== undefined
+    ? { ...window, confirmedTurn: true as const }
+    : window;
 }
 
 /**

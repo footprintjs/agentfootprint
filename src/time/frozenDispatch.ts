@@ -51,7 +51,7 @@ export function coveringDispatchMatches(
 ): boolean {
   const selected = window.form === undefined ? undefined : forms[window.form];
   if (selected?.kind !== 'lookback' || window.asked === undefined) return false;
-  const filled = sourceClockLookback(window.asked, selected, formCapMs(selected, facts));
+  const filled = sourceClockLookback(window.asked, selected, now, formCapMs(selected, facts));
   if (filled === undefined || !Object.hasOwn(args, selected.argument)) return false;
   const expected = readBack(filled.values, selected, { now });
   const final = readBack(args, selected, { now });

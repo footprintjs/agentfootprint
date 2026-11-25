@@ -23,6 +23,7 @@
  * | larger | the library's look-back fill | yes | the asked range in that form | `drift: { outcome: 'redrawn', form }` |
  * | larger | the library's look-back fill | no | the look-back | `drift: { outcome: 'shifted' }` |
  * | larger | the model's look-back | — | the look-back, as sent | `drift: { outcome: 'shifted' }` |
+ * | any but zero | the model's look-back BESIDE a confirmed window (`model-chosen`) | yes | the interval it named on the frozen clock, in that form | `drift: { outcome: 'redrawn', form }` |
  * | any | a CONFIRMED look-back in a length-only form (`coversAtDispatch`) | — | the smallest length that still reaches the window's start from dispatch | `drift: { outcome: 'covered', form, sent }` |
  *
  * The last row is the widening law at dispatch ({@link coverAtDispatch}): a
@@ -56,6 +57,11 @@ export interface DispatchedWindow {
   readonly form?: number;
   readonly asked?: TimeRange;
   readonly coversAtDispatch?: true;
+  /**
+   * The turn holds a CONFIRMED window (the row's `person` carries an endpoint): a look-back the
+   * model wrote names an interval on the frozen clock, so it is re-sent as those bounds too.
+   */
+  readonly confirmedTurn?: true;
 }
 
 /** The clocks and the tool's step. */
@@ -161,9 +167,16 @@ export function driftAtDispatch(
   const at = instantOf(clock.dispatchedAt, 'strict');
   if (now === undefined || at === undefined) return undefined;
   const byMs = at.ms - now.ms;
-  if (Math.abs(byMs) <= clock.granularityMs) return undefined;
-  // Only the library's own fill is re-sent; the model's value is never written over (§ 7.3).
-  if (window.how === 'filled' && window.asked !== undefined && clock.zone !== undefined) {
+  // Beside a confirmed window the model's own look-back is an interval on the frozen clock: it
+  // keeps that interval whenever the clock moved at all. The spelling changes, never the window.
+  const modelInterval = window.how === 'model-chosen' && window.confirmedTurn === true;
+  if (modelInterval ? byMs === 0 : Math.abs(byMs) <= clock.granularityMs) return undefined;
+  // Otherwise only the library's own fill is re-sent; the model's value runs as sent (§ 7.3).
+  if (
+    (window.how === 'filled' || modelInterval) &&
+    window.asked !== undefined &&
+    clock.zone !== undefined
+  ) {
     const absolute = forms.map((f, i) => ({ f, i })).filter(({ f }) => f.kind !== 'lookback');
     const conversion = convertExact(
       { range: window.asked },

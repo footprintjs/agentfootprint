@@ -281,9 +281,9 @@ regardless of form order. The existing period evidence distinguishes the request
 wider or narrower read.
 
 **A length-only source gets the covering look-back, measured at dispatch.** When no absolute
-form holds a confirmed look-back — the tool declares only a length, or its absolute form's own
-`maxRange` is too small — the widening law applies to it like any closed range: read MORE and
-say so. A length is counted back by the SOURCE from its own clock when it is handed the call,
+form holds a confirmed window — a look-back, or a closed past range with a recorded endpoint;
+the tool declares only a length, or its absolute form's own `maxRange` is too small — the
+widening law applies: read MORE and say so. A length is counted back by the SOURCE from its own clock when it is handed the call,
 so the same length sent after a confirmation click would start later and lose the oldest part
 of the window. The fill therefore holds the window's own length (`convert/covering.ts` ·
 `sourceClockLookback`; the `call-window` row says `coversAtDispatch`, never `frozenLookback`),
@@ -302,9 +302,12 @@ source that cannot take them.
 **The model's own look-back is the model's own window.** Beside a confirmed look-back, a call
 that sends a length naming the SAME window is the library's fill (frozen bounds, or the covering
 look-back above). A call whose forms all name one OTHER window — a longer look-back, or that
-look-back and matching bounds — runs as sent and is recorded `model-chosen` beside the
-person's, exactly as a different absolute range does: a drill-down, a baseline and a comparison
-are normal work, and the standing reads "not sure". Only a call whose own forms name
+look-back and matching bounds — is recorded `model-chosen` beside the person's, exactly as a
+different absolute range is: a drill-down, a baseline and a comparison are normal work, and the
+standing reads "not sure". It keeps the INTERVAL it named on the frozen clock: when the clock
+moved and the tool takes absolute bounds, the look-back is re-sent as those bounds (`drift:
+{ outcome: 'redrawn' }` — the spelling changes, never the window); on a length-only source it
+runs as sent and is recorded `shifted`. Only a call whose own forms name
 different windows does not run (`no-form-holds`): which one the tool would read is unknown. In this repository, the native clock and dispatch checks call
 `rulerTool({ period })` from `test/time/fixtures/rulerTool.ts` through ordinary `Agent.run` and
 `resume`.
@@ -497,10 +500,11 @@ routing and admission must prevent incompatible downgrade before adoption.
 
 ## Not covered yet
 
-- A confirmed LOOK-BACK on a tool with no absolute form is re-spelled from the dispatch clock
-  (`coversAtDispatch`, above). The covering look-back for a closed past RANGE is not yet: it is
-  spelled at the turn's `now`; the person answers later, so it runs after the clock moved on and
-  is recorded `shifted` (the result check then reads the front it missed). A start and end the person gave argument by argument are judged together, but
+- A confirmed look-back or timestamp range (a window with a recorded endpoint) on a tool with
+  no absolute form is re-spelled from the dispatch clock (`coversAtDispatch`, above). A whole
+  calendar period (`yesterday`), which keeps its grain and records no endpoint, is not yet: its
+  covering look-back is spelled at the turn's `now`; the person answers later, so it runs after
+  the clock moved on and is recorded `shifted` (the result check then reads the front it missed). A start and end the person gave argument by argument are judged together, but
   their call's `call-window` row stays `not-filled` (`ctx.time.asked` is absent there). A turn with
   no time words does not carry the last window yet (`time-carried`, § 5.6).
 - The result checks (T8) read what the record holds and nothing else: a call whose tool declares

@@ -239,6 +239,24 @@ describe('a confirmed look-back for a length-only source', () => {
     expect(f.row('period')).toEqual([expect.not.objectContaining({ differs: expect.anything() })]);
   });
 
+  it('covers a confirmed past range from the dispatch moment, not the frozen clock', async () => {
+    // The person set 17:00–18:00 in the app; the call is handed over ten minutes after `now`.
+    vi.setSystemTime(nowMs + 10 * 60_000);
+    const f = fixture([minutes]);
+    const window = { from: '2026-11-13T17:00:00Z', to: '2026-11-13T18:00:00Z' };
+    await f.agent.run({ message: 'depth', time: { now, window } });
+    expect(f.calls).toEqual([{ window: '190m' }]);
+    expect(f.rows()[0]).toBe('R-2026-11-13T17:00Z');
+    expect(f.row('call-window')).toEqual([
+      expect.objectContaining({ how: 'filled', asked: window, coversAtDispatch: true }),
+    ]);
+    expect(f.row('call')).toEqual([
+      expect.objectContaining({
+        drift: expect.objectContaining({ byMs: 600_000, outcome: 'covered' }),
+      }),
+    ]);
+  });
+
   it('lengthens an equivalent look-back the model wrote itself', async () => {
     vi.setSystemTime(nowMs + 61_000);
     const f = fixture([minutes], { window: '120m' });
@@ -274,6 +292,32 @@ describe('the model’s own different look-back beside a confirmed one', () => {
         form: 0,
         person: expect.objectContaining({ from: '2026-11-13T18:00:00Z', to: now }),
       }),
+    ]);
+  });
+
+  it('keeps the interval the model named when the clock moved and the tool takes bounds', async () => {
+    vi.setSystemTime(nowMs + 10 * 60_000);
+    const f = fixture([relative, rulerBounds], { window: '3h' });
+    await f.agent.run({ message: phrase, time: { now } });
+    // `3h` on the frozen clock is 17:00 … 20:00 with both ends inside: sent as those bounds.
+    expect(f.calls).toEqual([{ from: '2026-11-13T17:00:00Z', to: '2026-11-13T20:00:00.001Z' }]);
+    const rows = f.rows();
+    expect([rows[0], rows.at(-1)]).toEqual(['R-2026-11-13T17:00Z', 'R-2026-11-13T20:00Z']);
+    expect(f.row('call-window')).toEqual([expect.objectContaining({ how: 'model-chosen' })]);
+    expect(f.row('call')).toEqual([
+      expect.objectContaining({ drift: { byMs: 600_000, outcome: 'redrawn', form: 1 } }),
+    ]);
+  });
+
+  it('runs the model’s own look-back as sent on a length-only source, recorded shifted', async () => {
+    vi.setSystemTime(nowMs + 10 * 60_000);
+    const f = fixture([relative], { window: '3h' });
+    await f.agent.run({ message: phrase, time: { now } });
+    expect(f.calls).toEqual([{ window: '3h' }]);
+    expect(f.rows()[0]).toBe('R-2026-11-13T17:10Z');
+    expect(f.row('call-window')).toEqual([expect.objectContaining({ how: 'model-chosen' })]);
+    expect(f.row('call')).toEqual([
+      expect.objectContaining({ drift: { byMs: 600_000, outcome: 'shifted' } }),
     ]);
   });
 

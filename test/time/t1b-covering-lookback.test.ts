@@ -51,27 +51,42 @@ const ms = (text: string): number => Date.parse(text);
 
 describe('unit — the value before dispatch', () => {
   it('is the window’s own length in the form’s units', () => {
-    expect(sourceClockLookback(ASKED, minutes)).toEqual({
+    expect(sourceClockLookback(ASKED, minutes, NOW)).toEqual({
       values: { window: '120m' },
       rounded: false,
     });
-    expect(sourceClockLookback(ASKED, hours)).toEqual({ values: { window: '2h' }, rounded: false });
-    expect(sourceClockLookback(ASKED, signed)).toEqual({
+    expect(sourceClockLookback(ASKED, hours, NOW)).toEqual({
+      values: { window: '2h' },
+      rounded: false,
+    });
+    expect(sourceClockLookback(ASKED, signed, NOW)).toEqual({
       values: { window: '-2h' },
+      rounded: false,
+    });
+  });
+
+  it('reaches a closed past range from the frozen clock', () => {
+    const past = { from: '2026-11-13T17:00:00Z', to: '2026-11-13T18:00:00Z' };
+    expect(sourceClockLookback(past, minutes, NOW)).toEqual({
+      values: { window: '180m' },
       rounded: false,
     });
   });
 
   it('rounds up to the finest unit and says so', () => {
     const ninety = { from: '2026-11-13T18:30:00Z', to: NOW };
-    expect(sourceClockLookback(ninety, hours)).toEqual({ values: { window: '2h' }, rounded: true });
+    expect(sourceClockLookback(ninety, hours, NOW)).toEqual({
+      values: { window: '2h' },
+      rounded: true,
+    });
   });
 
-  it('is nothing for an empty or inverted range, or a length past the cap', () => {
-    expect(sourceClockLookback({ from: NOW, to: NOW }, minutes)).toBeUndefined();
-    expect(sourceClockLookback({ from: NOW, to: ASKED.from }, minutes)).toBeUndefined();
-    expect(sourceClockLookback(ASKED, minutes, 2 * 3_600_000)).toBeDefined();
-    expect(sourceClockLookback(ASKED, minutes, 2 * 3_600_000 - 1)).toBeUndefined();
+  it('is nothing for an empty, inverted or still-running range, or a length past the cap', () => {
+    expect(sourceClockLookback({ from: NOW, to: NOW }, minutes, NOW)).toBeUndefined();
+    expect(sourceClockLookback({ from: NOW, to: ASKED.from }, minutes, NOW)).toBeUndefined();
+    expect(sourceClockLookback(ASKED, minutes, iso(NOW_MS - 1))).toBeUndefined();
+    expect(sourceClockLookback(ASKED, minutes, NOW, 2 * 3_600_000)).toBeDefined();
+    expect(sourceClockLookback(ASKED, minutes, NOW, 2 * 3_600_000 - 1)).toBeUndefined();
   });
 });
 
@@ -237,7 +252,7 @@ describe('boundary — closed, running, and the cap', () => {
     const cover = coveringLookback(precise, minutes, iso(NOW_MS + 1));
     if ('uncoverable' in cover) throw new Error(cover.uncoverable);
     expect(ms(cover.sent.from)).toBeLessThanOrEqual(ms(ASKED.from));
-    expect(sourceClockLookback(precise, minutes)).toEqual({
+    expect(sourceClockLookback(precise, minutes, iso(NOW_MS + 1))).toEqual({
       values: { window: '121m' },
       rounded: true,
     });

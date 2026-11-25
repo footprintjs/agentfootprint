@@ -120,7 +120,8 @@ describe('frozen look-back conversion', () => {
   });
 
   it('reads a length-only form as a look-back to lengthen at dispatch, and refuses calendar and wall forms alone', () => {
-    const covering = { form: 0, values: { duration: '2h' }, coversAtDispatch: true };
+    // The clock is an hour past the window's end: the look-back that reaches its start is 3h.
+    const covering = { form: 0, values: { duration: '3h' }, coversAtDispatch: true };
     expect(convertForTool(window, [relative], undefined, ctx)).toEqual({ conversion: covering });
     expect(
       convertForTool(window, [relative, wall, { kind: 'day', argument: 'date' }], undefined, ctx),
@@ -141,11 +142,11 @@ describe('frozen look-back conversion', () => {
       conversion: { form: 2, values },
     });
     expect(convertForTool(window, [relative, short], undefined, ctx)).toEqual({
-      conversion: { form: 0, values: { duration: '2h' }, coversAtDispatch: true },
+      conversion: { form: 0, values: { duration: '3h' }, coversAtDispatch: true },
     });
     // The look-back's own cap still holds: a length past it is not read.
     expect(
-      convertForTool(window, [{ ...relative, maxRange: '1h' }, short], undefined, ctx),
+      convertForTool(window, [{ ...relative, maxRange: '2h' }, short], undefined, ctx),
     ).toEqual({ refused: 'no-form-holds' });
   });
 
@@ -185,10 +186,15 @@ describe('frozen look-back conversion', () => {
       range: { from: '2026-11-13T18:00:00.75Z', to: '2026-11-13T20:00:00.25Z' },
     };
     // The epoch-second bounds round outward past two hours; the look-back's own length fits.
-    expect(convertForTool(ragged, [relative, coarse], { maxRange: '2h' }, ctx)).toEqual({
+    const atCutoff = { ...ctx, now: '2026-11-13T20:00:00.25Z' };
+    expect(convertForTool(ragged, [relative, coarse], { maxRange: '2h' }, atCutoff)).toEqual({
       conversion: { form: 0, values: { duration: '2h' }, rounded: true, coversAtDispatch: true },
     });
-    expect(convertForTool(ragged, [coarse], { maxRange: '2h' }, ctx)).toEqual({
+    // An hour later the covering look-back is 3h, past the same cap: nothing reads it.
+    expect(convertForTool(ragged, [relative, coarse], { maxRange: '2h' }, ctx)).toEqual({
+      refused: 'no-form-holds',
+    });
+    expect(convertForTool(ragged, [coarse], { maxRange: '2h' }, atCutoff)).toEqual({
       refused: 'no-form-holds',
     });
   });
