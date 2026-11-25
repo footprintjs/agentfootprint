@@ -17,6 +17,7 @@ import {
   type ToolPeriod,
 } from '../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
+import { timeRowIsWellFormed } from '../../src/time/rows.js';
 import { rulerBounds, rulerTool } from './fixtures/rulerTool.js';
 
 const now = '2026-11-13T20:00:00Z';
@@ -257,6 +258,18 @@ describe('a confirmed look-back for a length-only source', () => {
     ]);
   });
 
+  it('files a row the checkpoint door admits when the app clock is ahead of dispatch', async () => {
+    // `now` is ten minutes ahead of the wall clock; the past range had still ended by dispatch.
+    vi.setSystemTime(nowMs - 10 * 60_000);
+    const f = fixture([minutes]);
+    const window = { from: '2026-11-13T17:00:00Z', to: '2026-11-13T18:00:00Z' };
+    await f.agent.run({ message: 'depth', time: { now, window } });
+    expect(f.calls).toEqual([{ window: '170m' }]);
+    const [call] = f.row('call');
+    expect(call).toMatchObject({ drift: { byMs: -600_000, outcome: 'covered' } });
+    expect(timeRowIsWellFormed(call as never)).toBe(true);
+  });
+
   it('lengthens an equivalent look-back the model wrote itself', async () => {
     vi.setSystemTime(nowMs + 61_000);
     const f = fixture([minutes], { window: '120m' });
@@ -307,6 +320,25 @@ describe('the model’s own different look-back beside a confirmed one', () => {
     expect(f.row('call')).toEqual([
       expect.objectContaining({ drift: { byMs: 600_000, outcome: 'redrawn', form: 1 } }),
     ]);
+  });
+
+  it('does not redraw into a bounds form whose own cap is shorter than the interval', async () => {
+    vi.setSystemTime(nowMs + 10 * 60_000);
+    // The ruler's bounds read at most 48 h; the model asked for 72 h as a length.
+    const f = fixture([relative, rulerBounds], { window: '72h' });
+    await f.agent.run({ message: phrase, time: { now } });
+    expect(f.calls).toEqual([{ window: '72h' }]);
+    expect(f.row('call')).toEqual([
+      expect.objectContaining({ drift: { byMs: 600_000, outcome: 'shifted' } }),
+    ]);
+  });
+
+  it('runs the model’s look-back as sent while the clock is within the tool’s step', async () => {
+    vi.setSystemTime(nowMs + 5_000);
+    const f = fixture([relative, rulerBounds], { window: '3h' });
+    await f.agent.run({ message: phrase, time: { now } });
+    expect(f.calls).toEqual([{ window: '3h' }]);
+    expect(f.row('call')).toEqual([expect.not.objectContaining({ drift: expect.anything() })]);
   });
 
   it('runs the model’s own look-back as sent on a length-only source, recorded shifted', async () => {

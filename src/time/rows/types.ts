@@ -65,7 +65,7 @@ export interface CallRow extends TimeCallIdentity {
    * a length-only form (`call-window` · `coversAtDispatch`) was lengthened to
    * still reach the window's start from the dispatch moment; `sent` is what
    * the source reads with it if its clock agrees with ours. Always present on
-   * such a call, whatever `byMs` (zero included).
+   * such a call, whatever `byMs` (zero and negative included).
    */
   readonly drift?: CallDrift;
 }

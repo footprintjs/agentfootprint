@@ -287,8 +287,8 @@ What the library then does, under `.time()`:
   to the person's by quote or value, or recorded `model-chosen`. A look-back
   of the model's own that differs from the confirmed one is recorded the same
   way and keeps the interval it named on the run's clock (sent as bounds when
-  the tool takes them); only a call whose own forms name different windows is
-  refused.
+  the clock moved past the tool's step and a bounds form can hold it); only a
+  call whose own forms name different windows is refused.
 - **Refuse before dispatch.** A window outside the tool's `direction`, wholly
   older than its `retention`, wider than its `maxRange`, spanning days for a
   `day` tool, or a wall time the zone skips: the tool never runs, and the model

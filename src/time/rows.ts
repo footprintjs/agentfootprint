@@ -509,10 +509,11 @@ function isCallDrift(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const d = value as Record<string, unknown>;
   if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs)) return false;
-  // A covering look-back is recorded on every such call: the window is closed at dispatch, so
-  // the clock never ran backwards past it, and it may not have moved at all.
+  // A covering look-back is recorded on every such call, whatever the drift: zero when the
+  // clock did not move, negative when an app's `now` is ahead of the dispatch moment and the
+  // window (a past range) had still ended by then.
   if (d.outcome === 'covered') {
-    return Object.keys(d).length === 4 && d.byMs >= 0 && isCount(d.form) && isTimeRange(d.sent);
+    return Object.keys(d).length === 4 && isCount(d.form) && isTimeRange(d.sent);
   }
   if (d.byMs === 0) return false;
   if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);

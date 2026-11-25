@@ -196,13 +196,18 @@ export function timeAtDispatch(
   const cover = coversAtDispatch(window, call, turn, rules, clock, args, dispatchedAt);
   const drift =
     cover === undefined && rules !== undefined && !isRefused(rules) && clock !== undefined
-      ? driftAtDispatch(driftWindowOf(window), periodFormsOf(rules.period), {
-          now: clock.now,
-          dispatchedAt,
-          granularityMs: granularityMsOf(periodFactsOf(rules.period)),
-          zone: clock.zone,
-          ...(appZone !== undefined && { appZone }),
-        })
+      ? driftAtDispatch(
+          driftWindowOf(window),
+          periodFormsOf(rules.period),
+          {
+            now: clock.now,
+            dispatchedAt,
+            granularityMs: granularityMsOf(periodFactsOf(rules.period)),
+            zone: clock.zone,
+            ...(appZone !== undefined && { appZone }),
+          },
+          periodFactsOf(rules.period),
+        )
       : undefined;
   const row = callRow(
     call,

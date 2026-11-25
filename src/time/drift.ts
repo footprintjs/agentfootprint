@@ -23,7 +23,7 @@
  * | larger | the library's look-back fill | yes | the asked range in that form | `drift: { outcome: 'redrawn', form }` |
  * | larger | the library's look-back fill | no | the look-back | `drift: { outcome: 'shifted' }` |
  * | larger | the model's look-back | — | the look-back, as sent | `drift: { outcome: 'shifted' }` |
- * | any but zero | the model's look-back BESIDE a confirmed window (`model-chosen`) | yes | the interval it named on the frozen clock, in that form | `drift: { outcome: 'redrawn', form }` |
+ * | larger | the model's look-back BESIDE a confirmed window (`model-chosen`) | yes, and its `maxRange` holds the interval | the interval it named on the frozen clock, in that form | `drift: { outcome: 'redrawn', form }` |
  * | any | a CONFIRMED look-back in a length-only form (`coversAtDispatch`) | — | the smallest length that still reaches the window's start from dispatch | `drift: { outcome: 'covered', form, sent }` |
  *
  * The last row is the widening law at dispatch ({@link coverAtDispatch}): a
@@ -159,6 +159,7 @@ export function driftAtDispatch(
   window: DispatchedWindow | undefined,
   forms: readonly PeriodForm[],
   clock: DispatchClock,
+  facts?: PeriodFacts,
 ): DispatchDrift | undefined {
   if (window === undefined || !sentLookback(window, forms)) return undefined;
   // A covering look-back has its own decision ({@link coverAtDispatch}); it is never shifted.
@@ -167,17 +168,29 @@ export function driftAtDispatch(
   const at = instantOf(clock.dispatchedAt, 'strict');
   if (now === undefined || at === undefined) return undefined;
   const byMs = at.ms - now.ms;
-  // Beside a confirmed window the model's own look-back is an interval on the frozen clock: it
-  // keeps that interval whenever the clock moved at all. The spelling changes, never the window.
+  // Beside a confirmed window the model's own look-back is an interval on the frozen clock: past
+  // the tool's step it keeps that interval. The spelling changes, never the window.
   const modelInterval = window.how === 'model-chosen' && window.confirmedTurn === true;
-  if (modelInterval ? byMs === 0 : Math.abs(byMs) <= clock.granularityMs) return undefined;
+  if (Math.abs(byMs) <= clock.granularityMs) return undefined;
   // Otherwise only the library's own fill is re-sent; the model's value runs as sent (§ 7.3).
   if (
     (window.how === 'filled' || modelInterval) &&
     window.asked !== undefined &&
     clock.zone !== undefined
   ) {
-    const absolute = forms.map((f, i) => ({ f, i })).filter(({ f }) => f.kind !== 'lookback');
+    // A form whose own `maxRange` is shorter than the asked range cannot hold it: never redrawn
+    // into (the look-back then runs as sent, `shifted`).
+    const asked = window.asked;
+    const from = instantOf(asked.from, 'strict');
+    const to = instantOf(asked.to, 'strict');
+    const lengthMs = from === undefined || to === undefined ? undefined : to.ms - from.ms;
+    const absolute = forms
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => {
+        if (f.kind === 'lookback') return false;
+        const cap = formCapMs(f, facts);
+        return cap === undefined || (lengthMs !== undefined && lengthMs <= cap + 1);
+      });
     const conversion = convertExact(
       { range: window.asked },
       absolute.map(({ f }) => f),

@@ -190,7 +190,9 @@ export function buildResumedInvocation(
       // The time layer's dispatch moment — a resumed call is dispatched NOW, so its
       // `dispatchedAt` is the resume's, not the pause's. Read AFTER the access and credential
       // gates: a refused call files no `call` row, and a length the library measures from this
-      // moment (a covering look-back) is not made short by a gate that took time.
+      // moment (a covering look-back) is not made short by a gate that took time. The one
+      // value this may change after approval is the library's OWN look-back fill, lengthened to
+      // still reach the window the person confirmed; the `call` row records it (`covered`).
       const dispatched =
         deps.time !== undefined
           ? (await import('../../timeLayer.js')).timeAtDispatch(

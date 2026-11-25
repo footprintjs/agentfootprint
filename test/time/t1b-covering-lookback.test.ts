@@ -324,6 +324,10 @@ describe('security — forged rows and rewritten arguments', () => {
       true,
     );
     expect(timeRowIsWellFormed(call({ byMs: 0, outcome: 'covered', form: 0, sent }))).toBe(true);
+    // An app clock ahead of the dispatch moment, a past range already closed: still a valid row.
+    expect(timeRowIsWellFormed(call({ byMs: -600_000, outcome: 'covered', form: 0, sent }))).toBe(
+      true,
+    );
   });
 
   it('refuses a forged covering row', () => {
@@ -336,7 +340,6 @@ describe('security — forged rows and rewritten arguments', () => {
 
   it('refuses a forged covered drift', () => {
     const forged = [
-      { byMs: -1, outcome: 'covered', form: 0, sent },
       { byMs: 61_000, outcome: 'covered', form: 0 },
       { byMs: 61_000, outcome: 'covered', sent },
       { byMs: 61_000, outcome: 'covered', form: 0, sent: { from: 'soon', to: 'later' } },
