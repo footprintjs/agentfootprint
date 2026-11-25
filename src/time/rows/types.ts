@@ -61,7 +61,11 @@ export interface CallRow extends TimeCallIdentity {
    * tool's step. `redrawn`: the library's own look-back fill was re-sent as
    * the asked range in absolute form `form`; `shifted`: the look-back ran as
    * sent (the model's value, or no absolute form), so the tool read a window
-   * shifted by `byMs` — `period-shifted`.
+   * shifted by `byMs` — `period-shifted`. `covered`: a confirmed look-back in
+   * a length-only form (`call-window` · `coversAtDispatch`) was lengthened to
+   * still reach the window's start from the dispatch moment; `sent` is what
+   * the source reads with it if its clock agrees with ours. Always present on
+   * such a call, whatever `byMs` (zero and negative included).
    */
   readonly drift?: CallDrift;
 }
@@ -69,7 +73,13 @@ export interface CallRow extends TimeCallIdentity {
 /** A look-back call's dispatch drift (§ 7.4) — see {@link CallRow.drift}. */
 export type CallDrift =
   | { readonly byMs: number; readonly outcome: 'redrawn'; readonly form: number }
-  | { readonly byMs: number; readonly outcome: 'shifted' };
+  | { readonly byMs: number; readonly outcome: 'shifted' }
+  | {
+      readonly byMs: number;
+      readonly outcome: 'covered';
+      readonly form: number;
+      readonly sent: TimeRange;
+    };
 
 /** The reader a reading came from, as recorded. */
 export interface TimeReaderStamp {
@@ -157,7 +167,7 @@ export interface PersonWindow extends RecordedWindow {
  *
  * | `how` | Means |
  * |-------|-------|
- * | `filled` | the model left the period out; the turn's one window (`person`) went into form `form` exactly (`rounded`: an epoch-seconds bound or a look-back's length moved outward) |
+ * | `filled` | the model left the period out; the turn's one window (`person`) went into form `form` exactly (`rounded`: an epoch-seconds bound or a look-back's length moved outward; `coversAtDispatch`: a confirmed look-back in a length-only form, lengthened at dispatch) |
  * | `bound` | the sent window IS the person's window `person` — named by the model's quote (`by: 'quote'`) or equal in value (`by: 'value'`) |
  * | `model-chosen` | the sent window (`asked`) differs from the person's (`person`, when one window is theirs): it ran as sent (the v1 law) |
  * | `model` | the sent window, and no window of the person's this turn |
@@ -197,6 +207,13 @@ export interface CallWindowRow extends TimeCallIdentity {
   readonly differs?: { readonly extra: readonly TimeRange[] };
   /** A widened fill to a tool that declares `filtersToAsked`. */
   readonly trimmedByTool?: true;
+  /**
+   * A confirmed look-back filled into a length-only form: the source counts
+   * the length back from ITS clock, so the library lengthens it at dispatch
+   * (the `call` row's `drift: { outcome: 'covered', sent }`). The read is
+   * wider than `asked` and its exact bounds are the source's clock's.
+   */
+  readonly coversAtDispatch?: true;
   readonly partlyBeyondRetention?: true;
   /** Why the call was refused before dispatch. */
   readonly refused?: TimeRefusal;

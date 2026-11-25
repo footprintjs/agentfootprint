@@ -58,6 +58,7 @@
  * and never repaired.
  */
 
+import { widerOf } from './wider.js';
 import type { InputValue } from '../../../tools/inputRequest.js';
 import {
   callWindowOf,
@@ -241,7 +242,7 @@ export type ArgumentFill =
       /** The value was written by the library from the WINDOW the person chose (the lazy word-driven ask). */
       readonly window?: true;
       /** …and no form held that window exactly, so it reads a wider one (as a `window` fill's `wider`). */
-      readonly wider?: 'reads-more' | 'tool-trims';
+      readonly wider?: 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims';
     }
   | {
       readonly argument: string;
@@ -251,9 +252,12 @@ export type ArgumentFill =
       /**
        * No form holds the window exactly, so the value reads a WIDER one (step
        * T5b): `reads-more` — the call reads parts nobody asked for;
-       * `tool-trims` — the tool declares `filtersToAsked` and drops them.
+       * `tool-trims` — the tool declares `filtersToAsked` and drops them;
+       * `source-clock` — a confirmed look-back in a length-only form, which
+       * the library lengthens at dispatch (`time/drift.ts` · `coverAtDispatch`);
+       * `source-clock-trims` — the same, to a tool that drops the rows outside.
        */
-      readonly wider?: 'reads-more' | 'tool-trims';
+      readonly wider?: 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims';
     };
 
 /**
@@ -872,12 +876,7 @@ export function resolutionsOf(
     // Under `.time()`: every argument the turn's one window fills — the ruled ones filed above,
     // and an `object` form's (a ruled argument is a flat value, so an object carries no rule).
     if (decision?.how === 'filled') {
-      const wider =
-        'sent' in decision.conversion
-          ? decision.trimmedByTool === true
-            ? ('tool-trims' as const)
-            : ('reads-more' as const)
-          : undefined;
+      const wider = widerOf(decision.conversion, decision.trimmedByTool === true);
       for (const [argument, value] of Object.entries(decision.conversion.values)) {
         fills.push({
           argument,

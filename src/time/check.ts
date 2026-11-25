@@ -25,7 +25,7 @@
  * | Source | The read |
  * |--------|----------|
  * | `declared` | the result's own `period.queried` — inclusive at both ends, read back as `[from, to + step)`, `step` the tool's `granularity` (else 1 ms; § 3.3). Several declared: each is a read |
- * | `sent` | a widened fill the tool does not trim — the `call-window` row's `sent` |
+ * | `sent` | a widened fill the tool does not trim — the `call-window` row's `sent`; or a look-back lengthened at dispatch (the `call` row's `drift: { outcome: 'covered', sent }`) — what the source reads if its clock agrees with ours |
  * | `shifted` | a look-back that ran as sent after the clock moved past the tool's step — the asked range moved by the `call` row's `drift.byMs` |
  * | `asked` | nothing says otherwise — the read IS the asked range (a fill, a binding, a redrawn look-back, a widened fill the tool trims) |
  *
@@ -302,6 +302,10 @@ function readOf(input: PeriodCheckInput, exactEnd?: InstantText): ReadOf | undef
   if (window === undefined || window.how === 'refused') return undefined;
   if (window.sent !== undefined && window.trimmedByTool !== true) {
     return { read: [window.sent], source: 'sent' };
+  }
+  // A look-back lengthened at dispatch: what the source reads if its clock agrees with ours.
+  if (input.drift?.outcome === 'covered' && window.trimmedByTool !== true) {
+    return { read: [input.drift.sent], source: 'sent' };
   }
   if (window.asked === undefined) return undefined;
   if (input.drift?.outcome === 'shifted') {

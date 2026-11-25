@@ -1,4 +1,5 @@
-import { readBack, supportsFrozenLookback } from './convert.js';
+import { readBack, supportsFrozenLookback, type PeriodFacts } from './convert.js';
+import { formCapMs, sourceClockLookback } from './convert/covering.js';
 import type { InstantText } from './instant.js';
 import { formArguments, type PeriodForm } from './periodForm.js';
 import { sameRange } from './range.js';
@@ -33,4 +34,33 @@ export function frozenLookbackDispatchMatches(
       competing === undefined || (supportsFrozenLookback(form) && sameRange(competing, expected))
     );
   });
+}
+
+/**
+ * Check, after tool middleware, that a call filled with a look-back the
+ * library lengthens at dispatch (`coversAtDispatch`) still holds THAT
+ * look-back and no other period argument: the library replaces only its own
+ * fill, never a value a middleware wrote.
+ */
+export function coveringDispatchMatches(
+  window: CallWindowRow,
+  args: Readonly<Record<string, unknown>>,
+  forms: readonly PeriodForm[],
+  now: InstantText,
+  facts?: PeriodFacts,
+): boolean {
+  const selected = window.form === undefined ? undefined : forms[window.form];
+  if (selected?.kind !== 'lookback' || window.asked === undefined) return false;
+  const filled = sourceClockLookback(window.asked, selected, now, formCapMs(selected, facts));
+  if (filled === undefined || !Object.hasOwn(args, selected.argument)) return false;
+  const expected = readBack(filled.values, selected, { now });
+  const final = readBack(args, selected, { now });
+  if (expected === undefined || final === undefined || !sameRange(final, expected)) return false;
+  return forms.every(
+    (form, index) =>
+      index === window.form ||
+      formArguments(form).every(
+        ({ argument }) => argument === selected.argument || !(argument in args),
+      ),
+  );
 }

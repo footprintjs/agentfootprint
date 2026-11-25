@@ -297,7 +297,12 @@ describe('period-differs-from-asked — what was read against what was asked', (
         against: 'asked',
         source: 'sent',
         missing: [],
-        extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }],
+        // A confirmed window's look-back is measured at dispatch (five seconds after `now`
+        // here), in whole minutes: it starts 55 s before the day and ends at the dispatch moment.
+        extra: [
+          { from: '2026-10-08T06:59:05Z', to: '2026-10-08T07:00:00Z' },
+          { from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:05.001Z' },
+        ],
       },
     });
     expect(row).not.toHaveProperty('differs.stepMs');

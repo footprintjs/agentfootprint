@@ -40,14 +40,18 @@ The wall clock when the library handed the call to the tool — UTC, millisecond
 
 > `readonly` `optional` **drift?**: `CallDrift`
 
-Defined in: [src/time/rows/types.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L66)
+Defined in: [src/time/rows/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L70)
 
 The clock at dispatch (§ 7.4, step T5b) — present only when the call sent
 a LOOK-BACK and `dispatchedAt − now` (`byMs`, signed) is more than the
 tool's step. `redrawn`: the library's own look-back fill was re-sent as
 the asked range in absolute form `form`; `shifted`: the look-back ran as
 sent (the model's value, or no absolute form), so the tool read a window
-shifted by `byMs` — `period-shifted`.
+shifted by `byMs` — `period-shifted`. `covered`: a confirmed look-back in
+a length-only form (`call-window` · `coversAtDispatch`) was lengthened to
+still reach the window's start from the dispatch moment; `sent` is what
+the source reads with it if its clock agrees with ours. Always present on
+such a call, whatever `byMs` (zero and negative included).
 
 ***
 

@@ -274,12 +274,29 @@ What the library then does, under `.time()`:
 - **Widen, and say so.** No form holds it exactly: the first form that reads
   more (a `day`, or the covering look-back) is used, and the row records what
   it adds.
+- **Cover a confirmed look-back for a length-only tool.** A tool that takes
+  only a length ("the last N minutes") counts it back from its own clock when
+  it is handed the call. After the person confirms "the last 2 hours", the
+  library sends the smallest length that still reaches the start of that
+  window from the dispatch moment — a click that took a minute sends `122m` —
+  and records `drift: { outcome: 'covered', sent }` on the `CallRow`. The
+  model's note says the value reads wider and that the source's clock decided
+  the exact bounds. Declare a bounds form beside the look-back when the source
+  can take one: the window is then read exactly.
 - **Record the model's window.** A window the model wrote runs as sent — bound
-  to the person's by quote or value, or recorded `model-chosen`.
+  to the person's by quote or value, or recorded `model-chosen`. A look-back
+  of the model's own that differs from the confirmed one is recorded the same
+  way and keeps the interval it named on the run's clock (sent as bounds when
+  the clock moved past the tool's step and a bounds form can hold it); only a
+  call whose own forms name different windows is refused.
 - **Refuse before dispatch.** A window outside the tool's `direction`, wholly
   older than its `retention`, wider than its `maxRange`, spanning days for a
   `day` tool, or a wall time the zone skips: the tool never runs, and the model
   reads why.
+
+A length-only tool and a confirmed look-back, with a click that took a minute:
+
+<CodeFile path="examples/features/85-time-widen-and-refuse.ts" region="length-only-look-back" />
 
 A window the person set in your UI — a run's `time.window`, from a brushed
 chart or a range picker — is named on the model's late line with each tool's

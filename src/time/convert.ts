@@ -148,6 +148,7 @@ export type {
 
 import { epochOrText, formZone, readPeriodBounds, readZone } from './convert/bounds.js';
 import { dateAt, midnightOf, nextDay, spellDate } from './convert/calendar.js';
+import { formCapMs, sourceClockConversion } from './convert/covering.js';
 import { convertOne, supportsFrozenLookback } from './convert/exact.js';
 import type { WindowEndpoint } from './windowEndpoint.js';
 import { absoluteOf, msOf, spanRange } from './convert/instants.js';
@@ -184,6 +185,13 @@ export interface Conversion {
   readonly form: number;
   readonly values: Readonly<Record<string, unknown>>;
   readonly rounded?: true;
+  /**
+   * A confirmed look-back in a form that takes only a length: the SOURCE reads
+   * it against its own clock, so the library lengthens it at dispatch to
+   * still reach the window's start (`convert/covering.ts`). `values` holds
+   * the window's own length until then.
+   */
+  readonly coversAtDispatch?: true;
 }
 
 /**
@@ -240,11 +248,13 @@ export function convertWidened(
     const absolute =
       window.freezeLookback === true ||
       (window.endpoint !== undefined && form.kind !== 'day' && form.kind !== 'lookback');
+    // A CONFIRMED window is never covered from the frozen clock: its look-back is measured where
+    // the source reads it, at dispatch (`sourceClockConversion`, asked last by `convertForTool`).
     const done = absolute
       ? roundedAbsolute(window, form, ctx)
       : form.kind === 'day'
       ? dayWidened(window, form, ctx)
-      : form.kind === 'lookback'
+      : form.kind === 'lookback' && window.endpoint === undefined
       ? lookbackWidened(window, form, ctx)
       : undefined;
     if (done === undefined || done.extra.length === 0) continue;
@@ -316,6 +326,12 @@ export type ToolConversion =
  * now, so it cannot reach a window still running; a covering look-back wider
  * than `maxRange` is not read). Never the tool's own default in its place.
  *
+ * A CONFIRMED look-back (`freezeLookback`) is read as its frozen absolute
+ * bounds whatever the declared order; when no absolute form holds it, the
+ * first length-only form reads it, `coversAtDispatch`: the source counts a
+ * length back from its own clock, so the library lengthens it at dispatch to
+ * still reach the window's start (`drift.ts` · `coverAtDispatch`).
+ *
  * @example
  * ```ts
  * const lookbackOnly = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
@@ -333,8 +349,13 @@ export function convertForTool(
   facts: PeriodFacts | undefined,
   ctx: ConvertContext,
 ): ToolConversion {
-  const eligible = window.freezeLookback === true ? forms.filter(supportsFrozenLookback) : forms;
-  if (window.freezeLookback === true && eligible.length === 0) {
+  // A confirmed look-back is read by an absolute form (its frozen bounds) or, when none holds
+  // it, by a length-only form the library lengthens at dispatch. A day or wall form reads neither.
+  const frozen = window.freezeLookback === true;
+  const eligible = frozen
+    ? forms.filter((form) => supportsFrozenLookback(form) || form.kind === 'lookback')
+    : forms;
+  if (frozen && eligible.length === 0) {
     return { refused: 'no-form-holds' };
   }
   // The tool's facts before a form is chosen: `maxRange` is the widest any form reads, so a window
@@ -356,6 +377,11 @@ export function convertForTool(
     ? convertWithinFormCaps(window, forms, facts, ctx)
     : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, toolCap);
   if (read !== undefined) return { conversion: read, ...partly };
+  // The widening law for a confirmed look-back no absolute form holds: the covering look-back,
+  // measured at dispatch. Asked last, so frozen bounds win whatever the declared order.
+  const confirmed = frozen || window.endpoint !== undefined;
+  const covering = confirmed ? sourceClockConversion(window, forms, facts, ctx.now) : undefined;
+  if (covering !== undefined) return { conversion: covering, ...partly };
   if (spansDaysForDayOnly(window, eligible, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
 }
@@ -372,10 +398,7 @@ function convertWithinFormCaps(
   facts: PeriodFacts | undefined,
   ctx: ConvertContext,
 ): Conversion | WidenedConversion | undefined {
-  const capMs = (form: PeriodForm): number | undefined => {
-    const text = formMaxRange(form, facts);
-    return text === undefined ? undefined : durationMs(text, FACT_UNITS);
-  };
+  const capMs = (form: PeriodForm): number | undefined => formCapMs(form, facts);
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
     const cap = capMs(form);

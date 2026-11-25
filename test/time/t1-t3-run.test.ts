@@ -76,14 +76,15 @@ describe('the native time path with a frozen clock and the ruler tool', () => {
     expect([rows[0], rows.at(-1)]).toEqual(['R-2026-11-13T18:00Z', 'R-2026-11-13T19:59Z']);
   });
 
+  // A length-only tool and the model's own different look-back both run now:
+  // `t1b-covering-lookback-run.test.ts`. What still does not run is a call whose
+  // own forms name different windows.
   it.each([
-    { forms: [relative], raw: {} },
-    { forms: [relative, rulerBounds], raw: { window: '3h' } },
     {
       forms: [relative, rulerBounds],
       raw: { window: '2h', from: '2026-11-13T17:00:00Z', to: now },
     },
-  ])('does not dispatch unsupported durations', async ({ forms, raw }) => {
+  ])('does not dispatch a call whose forms name different windows', async ({ forms, raw }) => {
     const f = fixture(forms, raw);
     expect(isPaused(await f.agent.run({ message: phrase, time: { now } }))).toBe(false);
     expect(f.calls).toEqual([]);
