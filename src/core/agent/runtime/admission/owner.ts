@@ -254,7 +254,7 @@ export function prepareAgentRun(
   // when the configured provider is undecorated or never fails. Also
   // covers a `.reliability()` run: that path is `executeWithReliability`
   // driving `singleProviderCall` inside the SAME call-llm stage
-  // (callLLM.ts), so the decorator's reports ride this bridge too. (It
+  // (callLLM/executeCall.ts), so the decorator's reports ride this bridge too. (It
   // is NOT the `buildReliabilityGateChart` subflow — the Agent never
   // mounts that chart; nothing shipped does.)
   attachObserver(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));

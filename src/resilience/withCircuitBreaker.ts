@@ -106,6 +106,15 @@ import type {
 } from '../provider-contract/types.js';
 import { refuseObservedRequest } from '../provider-contract/requestObserver.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
+import {
+  interventionErrorOf,
+  isProviderInterventionError,
+  providerInterventionOf,
+} from '../provider-contract/intervention.js';
+import {
+  captureProviderChunk,
+  captureProviderResponse,
+} from '../provider-contract/responseAdmission.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -262,20 +271,28 @@ export function withCircuitBreaker(
     return false;
   }
 
-  function recordSuccess(hooks?: LLMCallHooks): void {
-    if (breaker.state === 'half-open') {
-      breaker.consecutiveSuccesses += 1;
-      if (breaker.consecutiveSuccesses >= halfOpenSuccessThreshold) {
-        transition('closed', `${halfOpenSuccessThreshold} probe successes`, hooks);
+  function recordSuccess(hooks?: LLMCallHooks, response?: LLMResponse): void {
+    const intervention = response === undefined ? undefined : providerInterventionOf(response);
+    try {
+      if (breaker.state === 'half-open') {
+        breaker.consecutiveSuccesses += 1;
+        if (breaker.consecutiveSuccesses >= halfOpenSuccessThreshold) {
+          transition('closed', `${halfOpenSuccessThreshold} probe successes`, hooks);
+        }
+      } else if (breaker.state === 'closed') {
+        // Successful call resets the failure counter.
+        breaker.consecutiveFailures = 0;
       }
-    } else if (breaker.state === 'closed') {
-      // Successful call resets the failure counter.
-      breaker.consecutiveFailures = 0;
+    } catch (cause) {
+      // A completed refusal survives a later observer fault, as in native accounting.
+      if (intervention !== undefined && intervention.outcome !== 'masked')
+        throw interventionErrorOf(intervention, cause);
+      throw cause;
     }
   }
 
   function recordFailure(err: unknown, hooks?: LLMCallHooks): void {
-    if (!shouldCount(err)) return;
+    if (isProviderInterventionError(err) || !shouldCount(err)) return;
     breaker.lastError = err;
     if (breaker.state === 'half-open') {
       // Probe failed — re-open the breaker.
@@ -333,8 +350,8 @@ export function withCircuitBreaker(
         // Forward `hooks` inward as well as using them here: this decorator
         // rebuilds a fresh provider object, so an inner decorator's reports
         // are silently swallowed unless they're passed through.
-        const res = await inner.complete(req, hooks);
-        recordSuccess(hooks);
+        const res = captureProviderResponse(await inner.complete(req, hooks));
+        recordSuccess(hooks, res);
         return res;
       } catch (err) {
         // A call the caller cancelled says nothing about the vendor's health,
@@ -351,6 +368,7 @@ export function withCircuitBreaker(
       async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
         rejectFastIfOpen(hooks);
         let yieldedAnyChunk = false;
+        let completedResponse: LLMResponse | undefined;
         try {
           // This stream() method is conditionally defined only when
           // inner.stream exists (see `...(inner.stream && {` above), so
@@ -359,9 +377,12 @@ export function withCircuitBreaker(
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           for await (const chunk of inner.stream!(req, hooks)) {
             yieldedAnyChunk = true;
-            yield chunk;
+            const captured = captureProviderChunk(chunk);
+            // The port admits one final response; later malformed frames cannot replace it.
+            if (captured !== chunk) completedResponse ??= captured.response;
+            yield captured;
           }
-          recordSuccess(hooks);
+          recordSuccess(hooks, completedResponse);
         } catch (err) {
           // Only count as a breaker-tripping failure if the stream
           // failed BEFORE yielding any tokens. Mid-stream errors are

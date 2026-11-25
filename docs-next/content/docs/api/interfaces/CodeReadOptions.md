@@ -4,7 +4,7 @@ title: CodeReadOptions
 
 # Interface: CodeReadOptions
 
-Defined in: [src/provider-contract/types.ts:1230](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1230)
+Defined in: [src/provider-contract/types/code.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L288)
 
 How one [CodeSession.readFile](/docs/api/interfaces/CodeSession#readfile) is bounded.
 
@@ -14,7 +14,7 @@ How one [CodeSession.readFile](/docs/api/interfaces/CodeSession#readfile) is bou
 
 > `readonly` **maxBytes**: `number`
 
-Defined in: [src/provider-contract/types.ts:1235](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1235)
+Defined in: [src/provider-contract/types/code.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L293)
 
 The most bytes this read may return. Required, and a positive whole
 number: a file larger than this is refused, never cut.
@@ -25,6 +25,6 @@ number: a file larger than this is refused, never cut.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/provider-contract/types.ts:1237](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1237)
+Defined in: [src/provider-contract/types/code.ts:295](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L295)
 
 Stop waiting for the read.

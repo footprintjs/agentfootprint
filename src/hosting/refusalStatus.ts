@@ -95,6 +95,11 @@ const statuses = {
   // nothing to deliver. Nothing broke, so never a 5xx. The refusal withholds
   // the answer only: tools the turn already called have run, and are not undone.
   ERR_ANSWER_VALIDATION: 422,
+  // Provider responses withheld on proved blocking or unresolved intervention.
+  ERR_PROVIDER_BLOCKED: 422,
+  ERR_PROVIDER_INTERVENTION_UNKNOWN: 422,
+  // A private guarded stream exceeded its configured pre-release buffer.
+  ERR_PROVIDER_GUARDRAIL_LIMIT: 413,
 } as const;
 
 /** Closed native refusal codes; unknown application strings are never promoted to protocol classification. */

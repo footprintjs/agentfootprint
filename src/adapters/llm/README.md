@@ -4,7 +4,7 @@ shape. The transport of the Lens, not the composition of it.
 
 ## What it reads / what it writes
 Reads the request `callLLM` assembled
-(`src/core/agent/stages/callLLM.ts` · `buildCallLLMStage`);
+(`src/core/agent/stages/callLLM/prepareCall.ts` · `prepareCall`);
 returns content, tool calls, thinking blocks, optional replay evidence and usage.
 It adds nothing by default. The opt-in citation offer is described below.
 The narrowly permitted completed-turn thinking omission is explicit,

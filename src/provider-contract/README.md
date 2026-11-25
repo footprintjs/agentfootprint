@@ -51,3 +51,7 @@ implements it and nothing below `adapters/` imports `adapters/`
 (`npm run check:layering`).
 
 Automatic native output additionally requires `LLMProvider.supportsAutoNativeOutputSchema(model)` to return true. This positive knowledge declaration is separate from the existing forward-compatible `supportsNativeOutputSchema` contract: an unknown model or a missing auto declaration stays on instructions. Retry/circuit wrappers forward it; fallback pairs intersect it.
+
+`responseAdmission.ts` owns the safe foreign-response capture shared by native model callers. It preserves absent-arm identity, projects a terminal intervention without content/tool/replay reads, and retains safe usage before completion notification. The accepted-response stage and direct native callers remain the lifecycle owners.
+
+Usable masked response copies carry the existing private citation association only when the answer text remains byte-identical. `citationResponse.ts` owns that association; terminal blocked or unknown projections never consult or carry it.

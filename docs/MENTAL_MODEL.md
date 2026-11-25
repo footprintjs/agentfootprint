@@ -22,7 +22,7 @@ Context (fork)
 ```
 
 - **messageAPI is a REAL stage**, not a drawing. It assembles the LLM request bulk that today is
-  built invisibly inside `call-llm` (`callLLM.ts:132`): `systemPrompt` (separate field) + `messages`
+  built invisibly inside `call-llm` (`core/agent/stages/callLLM/prepareCall.ts · prepareCall`): `systemPrompt` (separate field) + `messages`
   (= `scope.history`: user/assistant/**tool-result** messages in order) → the message-API payload;
   then `+ tools` (separate field) → Call-LLM. Faithful to the real wire protocol (Anthropic: `system`
   separate, `messages` array, `tools` separate; OpenAI: system becomes first message at the adapter).
@@ -633,7 +633,7 @@ Five places where reality bends the rule (each is a backlog task):
      `onRetry`/`onStateChange`". **SUPERSEDED by v7.8 — see item 4.** 7 tests, tsc clean, full suite
      2211 green.
    - **⚠ NEW BUG FOUND (deferred): live-path `retry-other` does not actually switch providers.**
-     `executeWithReliability` calls `callFn` (= `singleProviderCall` in callLLM.ts) which closes over
+     `executeWithReliability` calls `callFn` (= `singleProviderCall` in `callLLM/executeCall.ts`) which closes over
      the agent's DEFAULT `deps.provider`; on `retry-other` it only bumps `providerIdx` (telemetry +
      breaker keying), never passing `providers[idx].provider` to the real call. So the `providers`
      failover list is **ignored** by the inline path — `retry-other` retries the *same* provider. (Only

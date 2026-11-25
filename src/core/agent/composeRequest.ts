@@ -4,7 +4,7 @@
  *
  * Role:  Lens. Two pure functions, no scope, no events, no I/O. They are the
  *        model-facing half of request assembly that a Fold must be able to
- *        repeat: `callLLM.ts` · `buildCallLLMStage` applies them on the way
+ *        repeat: `callLLM/prepareCall.ts` · `prepareCall` applies them on the way
  *        out, and `servedView.ts` · `servedAt` applies the same two on the way
  *        back, over the same committed values.
  * Reads: its arguments.

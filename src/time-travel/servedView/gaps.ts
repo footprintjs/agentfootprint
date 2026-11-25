@@ -33,7 +33,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // THE RULE FOR THIS LIST is the request the strategy holds: `systemPrompt`
     // (→ `system.*`), `messages` (→ `messages.*`), `tools` and `toolChoice`
     // (→ every `tools.*` field). `tools.forced` and `tools.withheld` were
-    // missing until 9.93.0 (`recorded-not-built.md`, entry 7): `callLLM.ts`
+    // missing until 9.93.0 (`recorded-not-built.md`, entry 7): `callLLM/prepareCall.ts`
     // writes both from assembly's own decision — `deps.schemaTool?.name`,
     // `scope.wrapUpAsked` — and never from `preparedRequest`, so a strategy
     // that dropped the answer tool from `request.tools` or emptied the list

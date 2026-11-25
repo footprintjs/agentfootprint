@@ -769,7 +769,7 @@ or its pure half (below). The docs call it "the honesty ledger".
 resume door already carries it (`core/runCheckpoint.ts`), and refuses malformed rows
 (`checkpointLedger.ts` · `ledgerRowIsWellFormed`). Readers select by kind (`findings/ledger.ts` ·
 `foldLedger`; the lens's findings band and proof map skip other kinds). The model is served it only
-under `.findings()` (`stages/callLLM.ts`, `deps.hasFindingsLedger`). One writer means one event law
+under `.findings()` (`stages/callLLM/prepareCall.ts`, `deps.hasFindingsLedger`). One writer means one event law
 and one redaction surface.
 
 **Costs — each verified on 2026-09-26 — and the answer to each.**

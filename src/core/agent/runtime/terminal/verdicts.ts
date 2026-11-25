@@ -7,6 +7,7 @@ import { evidenceRefusalSentence } from '../../evidence/gate.js';
 import type { ResolvedEvidenceGate } from '../../evidence/types.js';
 import type { MessageMiddleware } from '../../middleware/types.js';
 import type { AgentOptions, AgentState } from '../../types.js';
+import { interventionVerdictOf } from '../../../providerIntervention.js';
 
 /** The declarations that arm terminal records; no runner or execution identity. */
 export interface RefusalPolicy {
@@ -21,6 +22,8 @@ export function refusalVerdictOf(
   state: Readonly<Record<string, unknown>>,
   policy: RefusalPolicy,
 ): TerminalVerdict | undefined {
+  const intervention = interventionVerdictOf(state);
+  if (intervention !== undefined) return intervention;
   // Reliability fail-fast (v2.11.5+) — the loop in callLLM writes the record
   // and calls $break (`reliability/failFastRecord.ts`).
   if (policy.reliabilityConfig !== undefined) {

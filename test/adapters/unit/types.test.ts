@@ -60,7 +60,16 @@ describe('adapter interface conformance', () => {
 
 /** Type regression tests separately prove absence through the public root door. */
 describe('removed unused adapter ports', () => {
-  const source = readFileSync(join(__dirname, '../../../src/provider-contract/types.ts'), 'utf8');
+  const source = [
+    'types.ts',
+    'types/message.ts',
+    'types/request.ts',
+    'types/response.ts',
+    'types/provider.ts',
+    'types/code.ts',
+  ]
+    .map((file) => readFileSync(join(__dirname, '../../../src/provider-contract', file), 'utf8'))
+    .join('\n');
   for (const name of [
     'ResolveCtx',
     'ContextContribution',

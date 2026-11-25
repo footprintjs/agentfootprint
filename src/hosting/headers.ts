@@ -22,3 +22,22 @@ export function lowerCasedHeaders(headers: IncomingMessage['headers']): Record<s
   }
   return out;
 }
+
+/**
+ * A dialect's reply headers, minus the one it does not get to choose.
+ *
+ * `content-type` is the framing, and the framing is this host's decision — one
+ * JSON body or a stream of SSE frames, picked from what the CALLER asked for. A
+ * wire that set it would be answering that question for every caller at once.
+ */
+export function withoutContentType(
+  headers: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (headers === undefined) return undefined;
+  const kept: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === 'content-type') continue;
+    kept[name] = value;
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined;
+}

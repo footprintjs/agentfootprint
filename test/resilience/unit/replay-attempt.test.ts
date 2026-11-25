@@ -83,7 +83,10 @@ describe('attempt report aggregation', () => {
     expect(inner.return).toHaveBeenCalledOnce();
     expect(inner.throw).toHaveBeenCalledExactlyOnceWith(error);
     const quiet = replayAttempts(request()).iterator({ next: inner.next });
-    expect(await quiet.next()).toBe(yielded);
+    const quietResult = await quiet.next();
+    expect(quietResult).not.toBe(yielded);
+    expect(quietResult).toEqual(yielded);
+    expect(quietResult.value).toBe(chunk);
     expect(quiet.return).toBeUndefined();
     expect(quiet.throw).toBeUndefined();
   });

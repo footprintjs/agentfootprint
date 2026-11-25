@@ -8,7 +8,7 @@ import { readAtCall, readRunConstant } from './recordReads.js';
  * narrowed the way every run constant is: only a record carrying a `spec`
  * with `nodes` and `sources` records composes a piece, and an absent key —
  * every agent without `.ontology()` — composes nothing, which is what the
- * wire did (`callLLM.ts · buildCallLLMStage`, under `deps.ontology`).
+ * wire did (`callLLM/prepareCall.ts · prepareCall`, under `deps.ontology`).
  */
 function ontologyOf(
   value: unknown,

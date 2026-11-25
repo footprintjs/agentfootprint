@@ -21,7 +21,7 @@
  *
  * Every mapping function is module-private (`AnthropicProvider · toAnthropicTool`,
  * `OpenAIProvider · toOpenAITool`, `GeminiProvider · toGeminiFunctionDeclaration`,
- * `BedrockProvider · toBedrockTool`, `OllamaProvider · toOllamaTool`,
+ * `BedrockProvider/request.ts · toBedrockTool`, `OllamaProvider · toOllamaTool`,
  * `FoundryLocalProvider · toFoundryTool`, and the two browser twins), so each
  * is reached through its public factory with an injected `_client` (SDK wires)
  * or `_fetch` (fetch wires) that records the request. `foundry()` has no
@@ -49,7 +49,7 @@
  * table (`DRIVERS`) that a drift guard pins to the same names.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -691,12 +691,20 @@ describe('the served schema and the list of wires', () => {
     // Drift guard: a new adapter with its own `{ ...schema.inputSchema }`
     // spread must add a wire test here before it ships, or this list moves.
     const dir = fileURLToPath(new URL('../../src/adapters/llm/', import.meta.url));
-    const sites = readdirSync(dir)
-      .filter((f) => f.endsWith('.ts'))
+    const sourceFiles = (prefix: string): string[] =>
+      readdirSync(join(dir, prefix)).flatMap((name) => {
+        const path = join(prefix, name);
+        return statSync(join(dir, path)).isDirectory()
+          ? sourceFiles(path)
+          : path.endsWith('.ts')
+          ? [path]
+          : [];
+      });
+    const sites = sourceFiles('')
       .filter((f) => /\.\.\.\s*schema\.inputSchema\b/.test(readFileSync(join(dir, f), 'utf8')))
       .sort();
     expect(sites).toStrictEqual([
-      'BedrockProvider.ts',
+      'BedrockProvider/request.ts',
       'BrowserOpenAIProvider.ts',
       'FoundryLocalProvider.ts',
       'GeminiProvider.ts',

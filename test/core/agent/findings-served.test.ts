@@ -6,7 +6,7 @@
  * Pattern: Test-as-specification, scenario style.
  * Role:    Pin the WIRE and the REBUILD together —
  *
- *   • `callLLM · buildCallLLMStage` joins the ledger piece
+ *   • `callLLM/prepareCall.ts · prepareCall` joins the ledger piece
  *     (`findings/serve.ts · findingsLedgerPiece`) AFTER the recovery piece,
  *     into `systemPieces` only, and serves the message list through
  *     `collapseJudged` BEFORE the staged-refs nudge and the receipt mint;

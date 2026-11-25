@@ -816,7 +816,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a runbook warning returned to the caller that ran the walk',
     },
   ],
-  'src/ag-ui/serializer.ts': [
+  'src/ag-ui/serializer/settle.ts': [
     {
       kind: 'not-model-facing',
       count: 1,

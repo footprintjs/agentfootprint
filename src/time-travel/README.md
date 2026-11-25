@@ -704,7 +704,7 @@ describes beside a view that has none.
 
 **Where "last saw it" is**, for the reader who can open the file: `buildReceipt`
 is called with the request about to be passed to `LLMProvider.complete` — the
-provider PORT — from the agent charts' `stages/callLLM.ts`, from `LLMCall.ts` ·
+provider PORT — from the agent charts' `stages/callLLM/prepareCall.ts`, from `LLMCall/chart.ts` ·
 `callLLM`, and from the two message-API charts through `messageApiReceipt.ts`. Three things sit downstream of that
 call and none is on the record: a provider the consumer decorated (a
 `complete()` wrapping a `complete()`), a vendor adapter's own serializer, and

@@ -2,6 +2,7 @@
 and references, folded once from the request the call composed.
 
 ## What it reads / what it writes
+
 - Reads its arguments only: the composed request, its pieces and the run's
   digest memo. Nothing here reads scope, executes or emits.
 - Writes nothing itself. The call-llm stage and the message-API charts commit
@@ -9,8 +10,9 @@ and references, folded once from the request the call composed.
   the mint is `receipt.ts` · `buildReceipt`.
 
 ## Why it lives in core
-The receipt is minted by the call (`core/agent/stages/callLLM.ts`,
-`core/LLMCall.ts`, `core/agent/messageApiReceipt.ts`), so the mint sits with
+
+The receipt is minted by the call (`core/agent/stages/callLLM/prepareCall.ts`,
+`core/LLMCall/chart.ts`, `core/agent/messageApiReceipt.ts`), so the mint sits with
 the code that calls it. The readers stay in `time-travel/`:
 `time-travel/servedView.ts` · `servedAt` rebuilds the request from the
 record and `time-travel/servedView.ts` · `receiptAt` reads the receipt
@@ -29,6 +31,7 @@ evidence for comparing recorded request pieces within a run. Both the input enco
 and the truncated digest can be ambiguous.
 
 ## Files
+
 - `receipt.ts` — the receipt's shape, the salted hash (`receiptHash`), the
   digest inputs (`messageDigestInput`, `toolDigestInput`), the chained
   fingerprint (`transformHashOf`) and the mint (`buildReceipt`).

@@ -151,7 +151,7 @@ the newer word for the same fact, and the one to narrow on.
 
 ### outcome
 
-> `readonly` **outcome**: `"refused"` \| `"allow"` \| `"deny"` \| `"ask"`
+> `readonly` **outcome**: `"allow"` \| `"deny"` \| `"refused"` \| `"ask"`
 
 Defined in: [src/core/agent/middleware/types.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/middleware/types.ts#L353)
 
