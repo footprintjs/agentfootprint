@@ -154,6 +154,13 @@ describe('ci.yml · what a pull request skips, a full run does not', () => {
     expect(byEvent).toEqual(['test-shard']);
   });
 
+  it('coverage runs the suite on Node 22: with `test (24)` that is the suite on both versions', () => {
+    // An ordinary run's `test (22)` does not put the suite on Node 22 behind it
+    // (only a full run does), so what a release's GATES rely on for "the suite
+    // passed on Node 22" is this job. Moving it to 24 would leave nothing.
+    expect(jobBlock(CI, 'coverage-shard')).toMatch(/^ {10}node-version: 22$/m);
+  });
+
   it('the coverage shards and the check that merges them run together or not at all', () => {
     expect(jobBlock(CI, 'coverage-shard')).toContain(`\n    if: ${FULL_RUN}\n`);
     expect(jobBlock(CI, 'coverage')).toContain(`\n    if: always() && (${FULL_RUN})\n`);

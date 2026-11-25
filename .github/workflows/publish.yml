@@ -330,6 +330,7 @@ jobs:
             run_gates "could not list the CI runs of #$NUMBER"
           NEWEST="$(jq -c --arg repo "$REPO" --arg head "$PR_HEAD" '
             [.workflow_runs[] | select(.event == "pull_request" and .head_sha == $head
+              and .head_branch == "release/next"
               and .head_repository.full_name == $repo)] | max_by(.id) // empty' <<<"$RUNS")"
           [ -n "$NEWEST" ] || run_gates "#$NUMBER has no CI run on its head $PR_HEAD"
           RUN="$(jq -r '.id' <<<"$NEWEST")"

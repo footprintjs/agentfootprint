@@ -78,6 +78,14 @@ is retained as its distinct old-toolchain behavior.
 
 ## Source candidate for downstream checks
 
+Which commit the evidence is bound to: a pull request run tests the merge of its
+head into main. When the head already contains main, the tested tree is the
+head's tree and the artifacts carry the head commit's name
+(`agentfootprint-source-<head>`). When the pull request is behind main, they
+carry the tested merge commit's name instead, because the package is not the
+head's tree. To find them then, list the run's artifacts by prefix and read
+`candidate.json`, or update the branch to get an artifact under the head's name.
+
 The ordinary CI package job retains one separate offline/scripts-off pack after
 its native package checks succeed. `candidate.cjs` reuses the canonical verifier,
 requires the tested tree to equal the requested source head's tree, rejects dirty
