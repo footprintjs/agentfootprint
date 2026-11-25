@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.0.0] - 2026-11-25
+
+### Breaking
+
+- **Keep the time cutoff a person confirmed.** Timestamp ranges now default to an exclusive upper bound. Saved window facts include the cutoff, its confirmed precision and whether it includes the endpoint. A newly resolved look-back uses the run’s recorded clock and reaches tools in an absolute form. When a tool reads a wider or narrower interval, the time limits line explains the recorded difference.
+
+  Migration: For tools that receive confirmed look-backs, declare an ISO or epoch bounds form alongside any duration form. Supply `time.window.end: 'inclusive'` if the selected endpoint belongs to the window, and set `precision: 'minute'` when your control pads a minute selection to seconds. Existing saved windows retain their recorded bounds.
+
+### Added
+
+- **Choose extractable AgentCore memory events per entry.** `AgentCoreStore` accepts
+  a synchronous `eventPayload` selector for explicit conversational role/text or
+  the existing blob format. A conversational event keeps the original entry blob
+  in the same request, preserving entry reads and versions. Unsupported clients
+  and serializers, invalid projections and oversized conversation payloads are
+  refused before the write, without truncation or a new adapter retry.
+
+  Each batch request receives detached namespace fields, so a custom client cannot
+  redirect later writes by replacing the configuration it was handed. An omitted
+  selector does not inspect the new conversational capability metadata.
+
+  Event acceptance does not prove extraction completed. Entry deletion, session
+  forget and local entry TTL do not erase already-derived long-term records;
+  `extraction: 'skip'` applies only to the current event. SDK transport retry policy
+  is unchanged.
+
 ## [17.2.0] - 2026-11-24
 
 ### Added
