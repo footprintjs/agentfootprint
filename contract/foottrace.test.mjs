@@ -210,6 +210,17 @@ function contracts(ft, cause, paths) {
       assert.equal(ft.isCommitBundle(log[0]), true);
       assert.equal(ft.isCommitBundle({ ...log[0], trace: [{}] }), false);
     },
+    // The saved-recording reader keeps only execution keys spelled exactly as the
+    // codec builds them: parse, rebuild, compare.
+    'foottrace:buildRuntimeStageId': () => {
+      assert.equal(ft.buildRuntimeStageId('seed', 0), 'seed#0');
+      assert.equal(ft.buildRuntimeStageId('answer', 12, 'outer'), 'outer/answer#12');
+      const parsed = ft.parseRuntimeStageId('sf-llm-call/sf-tools#12');
+      assert.equal(
+        ft.buildRuntimeStageId(parsed.stageId, parsed.executionIndex, parsed.subflowPath),
+        'sf-llm-call/sf-tools#12',
+      );
+    },
     'foottrace:isExecutionKey': () => {
       assert.equal(ft.isExecutionKey('sf-llm-call#0'), true);
       assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools#12'), true);
