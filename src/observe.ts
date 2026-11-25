@@ -102,6 +102,20 @@ export {
   type RecordingSizeReport,
   type RecordingSizeRow,
 } from './recorders/observability/recordingSizeReport.js';
+// A saved recording in either layout — one whole `recording/run`, or an index
+// plus parts — opened by its receipt's ref and read one checked part at a time.
+export {
+  openSavedRecording,
+  type OpenSavedRecordingOptions,
+  type SavedInvocation,
+  type SavedRecording,
+  type SavedRecordingArtifacts,
+  type SavedRecordingPartUnavailable,
+  type SavedRecordingReadOptions,
+  type SavedRecordingSizes,
+  type SavedRecordingUnavailable,
+  type SavedRecordingWholeOptions,
+} from './recorders/observability/recordingParts/open.js';
 export {
   contextShapeAt,
   type RecordedContextShape,

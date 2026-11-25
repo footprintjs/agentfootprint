@@ -2,7 +2,7 @@
 title: Variables
 ---
 
-72 exported from `agentfootprint`.
+74 exported from `agentfootprint`.
 
 - [`ABSENCE_MARKER`](/docs/api/variables/ABSENCE_MARKER)
 - [`ABSENCE_NOTE`](/docs/api/variables/ABSENCE_NOTE)
@@ -56,7 +56,9 @@ title: Variables
 - [`PRIOR_TURN_EVIDENCE_CEILING`](/docs/api/variables/PRIOR_TURN_EVIDENCE_CEILING)
 - [`RECEIPT_BOUNDARY`](/docs/api/variables/RECEIPT_BOUNDARY)
 - [`RECORDING_ARTIFACT_KIND`](/docs/api/variables/RECORDING_ARTIFACT_KIND)
+- [`RECORDING_INDEX_ARTIFACT_KIND`](/docs/api/variables/RECORDING_INDEX_ARTIFACT_KIND)
 - [`RECORDING_MEDIA_TYPE`](/docs/api/variables/RECORDING_MEDIA_TYPE)
+- [`RECORDING_PART_ARTIFACT_KIND`](/docs/api/variables/RECORDING_PART_ARTIFACT_KIND)
 - [`RESERVED_ARGUMENT`](/docs/api/variables/RESERVED_ARGUMENT)
 - [`RESERVED_SUBFLOW_PREFIX`](/docs/api/variables/RESERVED_SUBFLOW_PREFIX)
 - [`RESULT_CLASSES`](/docs/api/variables/RESULT_CLASSES)

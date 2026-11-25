@@ -999,10 +999,10 @@ export {
   ARTIFACT_REF_PREFIX,
   ArtifactIntegrityError,
   bindArtifacts,
-  // Recordings-as-artifacts (9.26.0) — a completed run's
-  // `{ snapshot, events, structure }` checked in under kind 'recording/run',
-  // so the existing artifact wire ops serve the Lens with no new operation.
+  // A completed run's recording, whole ('recording/run') or in parts (an index plus parts).
   RECORDING_ARTIFACT_KIND,
+  RECORDING_INDEX_ARTIFACT_KIND,
+  RECORDING_PART_ARTIFACT_KIND,
   RECORDING_MEDIA_TYPE,
   recordingPutInput,
   // The chart-walk kind (9.76.0) — a runbook's inner walk, one row per
