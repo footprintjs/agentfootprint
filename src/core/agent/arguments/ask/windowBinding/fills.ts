@@ -6,7 +6,8 @@ import { validatePropertyValue } from '../../../../../tools/toolArgsValidation.j
 import { isRefused, periodFactsOf, periodFormsOf, rulesOf } from '../../../../../tools/declare.js';
 import type { BatchAddress } from '../../batchAddress.js';
 import { memberAddresses, windowAddressKey } from '../../askAddresses.js';
-import { widerOf, type BatchCall, type ToolOf } from '../../resolve.js';
+import type { BatchCall, ToolOf } from '../../resolve.js';
+import { widerOf } from '../../wider.js';
 import { WINDOW_FORM_EXPECTATION } from '../constants.js';
 import { refusalExpectation } from '../fields.js';
 import type { AskField, AskTime, WindowFill } from '../types.js';

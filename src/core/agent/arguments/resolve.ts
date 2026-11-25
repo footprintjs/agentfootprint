@@ -58,6 +58,7 @@
  * and never repaired.
  */
 
+import { widerOf } from './wider.js';
 import type { InputValue } from '../../../tools/inputRequest.js';
 import {
   callWindowOf,
@@ -520,23 +521,6 @@ export function timeDecisionsOf(
     );
   }
   return decisions;
-}
-
-/**
- * How a fill reads MORE than its window, for the note: widened before the call
- * (`reads-more`; `tool-trims` when the tool drops the rows outside the asked
- * window), or lengthened at dispatch for a length-only form (`source-clock`;
- * `source-clock-trims`). `undefined` for an exact fill.
- */
-export function widerOf(
-  conversion: { readonly coversAtDispatch?: true },
-  trimmedByTool: boolean,
-): 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims' | undefined {
-  if (conversion.coversAtDispatch === true) {
-    return trimmedByTool ? 'source-clock-trims' : 'source-clock';
-  }
-  if (!('sent' in conversion)) return undefined;
-  return trimmedByTool ? 'tool-trims' : 'reads-more';
 }
 
 /** The arguments a decision FILLS — the chosen form's, by name — or none. */

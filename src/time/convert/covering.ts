@@ -33,9 +33,10 @@
  * ```
  */
 
-import { LOOKBACK_UNITS, spellDuration } from '../duration.js';
+import type { Conversion, WindowToConvert } from '../convert.js';
+import { durationMs, LOOKBACK_UNITS, spellDuration } from '../duration.js';
 import { compareInstants, instantOf, type InstantText } from '../instant.js';
-import type { PeriodForm } from '../periodForm.js';
+import { FACT_UNITS, formMaxRange, type PeriodFacts, type PeriodForm } from '../periodForm.js';
 import { lookbackRange, type TimeRange } from '../range.js';
 import { finestUnitMs } from './lookback.js';
 import { extraOfPrecise } from './widen.js';
@@ -125,4 +126,36 @@ export function coveringLookback(
   const extra = extraOfPrecise(sent, asked);
   if (extra === undefined) return { uncoverable: 'still-running' };
   return { values: valueOf(form, reach.spelled), sent, extra };
+}
+
+/**
+ * The first length-only form (in declared order) that reads a confirmed
+ * window (a look-back, or a closed past range) within its own `maxRange` — the value it holds until dispatch
+ * (`convert/covering.ts` · `sourceClockLookback`), marked `coversAtDispatch`.
+ */
+export function sourceClockConversion(
+  window: WindowToConvert,
+  forms: readonly PeriodForm[],
+  facts: PeriodFacts | undefined,
+  now: InstantText,
+): Conversion | undefined {
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i] as PeriodForm;
+    if (form.kind !== 'lookback') continue;
+    const sent = sourceClockLookback(window.range, form, now, formCapMs(form, facts));
+    if (sent === undefined) continue;
+    return {
+      form: i,
+      values: sent.values,
+      ...(sent.rounded && { rounded: true as const }),
+      coversAtDispatch: true,
+    };
+  }
+  return undefined;
+}
+
+/** One form's effective `maxRange` in milliseconds (`periodForm.ts` · `formMaxRange`), when it has one. */
+export function formCapMs(form: PeriodForm, facts: PeriodFacts | undefined): number | undefined {
+  const text = formMaxRange(form, facts);
+  return text === undefined ? undefined : durationMs(text, FACT_UNITS);
 }

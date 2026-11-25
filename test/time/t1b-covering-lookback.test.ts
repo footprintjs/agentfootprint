@@ -24,7 +24,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { fillsThatRan } from '../../src/core/agent/arguments/dispatch.js';
-import { widerOf, type ArgumentResolution } from '../../src/core/agent/arguments/resolve.js';
+import type { ArgumentResolution } from '../../src/core/agent/arguments/resolve.js';
+import { widerOf } from '../../src/core/agent/arguments/wider.js';
 import { periodTimeCheck } from '../../src/time/check.js';
 import { coveringLookback, sourceClockLookback } from '../../src/time/convert/covering.js';
 import { coverAtDispatch } from '../../src/time/drift.js';

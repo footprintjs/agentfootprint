@@ -45,8 +45,8 @@
  * ```
  */
 
-import { convertExact, formCapMs, type PeriodFacts, type PeriodForm } from './convert.js';
-import { coveringLookback, type Uncoverable } from './convert/covering.js';
+import { convertExact, type PeriodFacts, type PeriodForm } from './convert.js';
+import { coveringLookback, formCapMs, type Uncoverable } from './convert/covering.js';
 import { instantOf, type InstantText } from './instant.js';
 import type { TimeRange } from './range.js';
 import type { ZoneName } from './zone.js';

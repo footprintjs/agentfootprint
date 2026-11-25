@@ -1,5 +1,5 @@
-import { formCapMs, readBack, supportsFrozenLookback, type PeriodFacts } from './convert.js';
-import { sourceClockLookback } from './convert/covering.js';
+import { readBack, supportsFrozenLookback, type PeriodFacts } from './convert.js';
+import { formCapMs, sourceClockLookback } from './convert/covering.js';
 import type { InstantText } from './instant.js';
 import { formArguments, type PeriodForm } from './periodForm.js';
 import { sameRange } from './range.js';

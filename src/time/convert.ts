@@ -148,7 +148,7 @@ export type {
 
 import { epochOrText, formZone, readPeriodBounds, readZone } from './convert/bounds.js';
 import { dateAt, midnightOf, nextDay, spellDate } from './convert/calendar.js';
-import { sourceClockLookback } from './convert/covering.js';
+import { formCapMs, sourceClockConversion } from './convert/covering.js';
 import { convertOne, supportsFrozenLookback } from './convert/exact.js';
 import type { WindowEndpoint } from './windowEndpoint.js';
 import { absoluteOf, msOf, spanRange } from './convert/instants.js';
@@ -384,38 +384,6 @@ export function convertForTool(
   if (covering !== undefined) return { conversion: covering, ...partly };
   if (spansDaysForDayOnly(window, eligible, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
-}
-
-/**
- * The first length-only form (in declared order) that reads a confirmed
- * window (a look-back, or a closed past range) within its own `maxRange` — the value it holds until dispatch
- * (`convert/covering.ts` · `sourceClockLookback`), marked `coversAtDispatch`.
- */
-function sourceClockConversion(
-  window: WindowToConvert,
-  forms: readonly PeriodForm[],
-  facts: PeriodFacts | undefined,
-  now: InstantText,
-): Conversion | undefined {
-  for (let i = 0; i < forms.length; i++) {
-    const form = forms[i] as PeriodForm;
-    if (form.kind !== 'lookback') continue;
-    const sent = sourceClockLookback(window.range, form, now, formCapMs(form, facts));
-    if (sent === undefined) continue;
-    return {
-      form: i,
-      values: sent.values,
-      ...(sent.rounded && { rounded: true as const }),
-      coversAtDispatch: true,
-    };
-  }
-  return undefined;
-}
-
-/** One form's effective `maxRange` in milliseconds (`periodForm.ts` · `formMaxRange`), when it has one. */
-export function formCapMs(form: PeriodForm, facts: PeriodFacts | undefined): number | undefined {
-  const text = formMaxRange(form, facts);
-  return text === undefined ? undefined : durationMs(text, FACT_UNITS);
 }
 
 /**

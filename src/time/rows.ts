@@ -40,6 +40,7 @@ import { isTimeReplyEvidence, type TimeReplyEvidence } from './replyRecord.js';
 import { isCorrectedMeaning } from './rows/meaning.js';
 import { instantOf } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
+import { isCallDrift, widenedOk } from './rows/shapes.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { isTimeParts, type TimeParts } from './reader.js';
 import { TIME_REFUSALS, type TimeRefusal } from './periodForm.js';
@@ -390,34 +391,6 @@ function isPersonWindow(value: unknown): boolean {
   );
 }
 
-function isRangeList(value: unknown): boolean {
-  return Array.isArray(value) && value.length >= 1 && value.length <= 2 && value.every(isTimeRange);
-}
-
-/**
- * A widened fill's fields: `sent` with exactly one of `differs` / `trimmedByTool`, or none of
- * the three. A fill that covers at dispatch has no `sent` yet (the `call` row holds it) and may
- * still say the tool trims.
- */
-function widenedOk(row: Readonly<Record<string, unknown>>): boolean {
-  if (row.coversAtDispatch !== undefined) {
-    return (
-      row.coversAtDispatch === true &&
-      row.sent === undefined &&
-      row.differs === undefined &&
-      (row.trimmedByTool === undefined || row.trimmedByTool === true)
-    );
-  }
-  if (row.sent === undefined) return row.differs === undefined && row.trimmedByTool === undefined;
-  if (!isTimeRange(row.sent)) return false;
-  if (row.trimmedByTool !== undefined)
-    return row.trimmedByTool === true && row.differs === undefined;
-  const differs = row.differs;
-  if (differs === null || typeof differs !== 'object' || Array.isArray(differs)) return false;
-  const d = differs as Record<string, unknown>;
-  return Object.keys(d).length === 1 && isRangeList(d.extra);
-}
-
 function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
   if (typeof row.toolCallId !== 'string' || typeof row.toolName !== 'string') return false;
   if (!HOWS.includes(row.how as string)) return false;
@@ -503,21 +476,6 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
     default:
       return only('why') && WHYS.includes(row.why as string);
   }
-}
-
-function isCallDrift(value: unknown): boolean {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const d = value as Record<string, unknown>;
-  if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs)) return false;
-  // A covering look-back is recorded on every such call, whatever the drift: zero when the
-  // clock did not move, negative when an app's `now` is ahead of the dispatch moment and the
-  // window (a past range) had still ended by then.
-  if (d.outcome === 'covered') {
-    return Object.keys(d).length === 4 && isCount(d.form) && isTimeRange(d.sent);
-  }
-  if (d.byMs === 0) return false;
-  if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);
-  return d.outcome === 'shifted' && Object.keys(d).length === 2;
 }
 
 /** A `time-answer` row: its mention, range, zone, how and optional canonical correction. */
