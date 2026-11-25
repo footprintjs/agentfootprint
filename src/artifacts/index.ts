@@ -22,6 +22,7 @@ export {
   type ArtifactRecord,
   type ArtifactRef,
   type ArtifactScope,
+  type ArtifactScopeBudget,
   type ArtifactStore,
   type ArtifactStreamPutInput,
   type ArtifactStreamRecord,

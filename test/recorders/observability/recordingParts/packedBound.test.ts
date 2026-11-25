@@ -39,6 +39,19 @@ vi.mock('../../../../src/recorders/observability/recordingPack.js', async (impor
   };
 });
 
+const serialised = vi.hoisted(() => ({ on: false, calls: 0 }));
+
+vi.mock('../../../../src/lib/wireJson.js', async (importOriginal) => {
+  const wire = await importOriginal<typeof import('../../../../src/lib/wireJson.js')>();
+  return {
+    ...wire,
+    toWireJson: (...args: Parameters<typeof wire.toWireJson>) => {
+      if (serialised.on) serialised.calls++;
+      return wire.toWireJson(...args);
+    },
+  };
+});
+
 const PACKED = 'agentfootprint.recording.packed.v1';
 
 async function ready(promise: Promise<unknown>): Promise<SavedRecording> {
@@ -155,5 +168,107 @@ describe("readWhole's maxBytes bounds what it expands", () => {
     expect(whole.status).toBe('ready');
     if (whole.status === 'ready')
       expect(whole.recording).toEqual(JSON.parse(JSON.stringify(heavy())));
+  });
+});
+
+describe("readWhole's maxBytes is cumulative", () => {
+  it('every packed part under maxBytes, their plain total over it: too-large', async () => {
+    const store = inMemoryArtifacts();
+    const unit = (id: string) => ({
+      subflowId: id,
+      subflowName: id,
+      parentStageId: 'seed',
+      treeContext: {
+        globalContext: { rows: Array.from({ length: 1000 }, () => `${id}:${'v'.repeat(4096)}`) },
+        stageContexts: {},
+        history: [],
+      },
+    });
+    const mount = (key: string, id: string, next?: object) => ({
+      id,
+      name: id,
+      subflowId: id,
+      runtimeStageId: key,
+      ...(next && { next }),
+    });
+    const recording = {
+      snapshot: {
+        runId: 'snapshot-run',
+        executionTree: mount('a#1', 'a', mount('b#2', 'b', mount('c#3', 'c'))),
+        subflowResults: { 'a#1': unit('a'), 'b#2': unit('b'), 'c#3': unit('c') },
+      },
+      events: [],
+      structure: { id: 'seed', name: 'seed' },
+    } as unknown as Recording;
+    const filed = await fileParts(store, recording, { packed: true });
+    const saved = await ready(openSavedRecording(bindArtifacts(store, SCOPE), filed.index));
+    const plainPerPart = saved.invocations.map((row) => row.bytes!);
+    const limit = 8 * 1024 * 1024;
+    // Each part alone fits the budget; all of them do not.
+    expect(plainPerPart.every((bytes) => bytes < limit)).toBe(true);
+    expect(plainPerPart.reduce((sum, bytes) => sum + bytes, 0)).toBeGreaterThan(limit);
+    expect(await saved.readWhole({ maxBytes: limit })).toEqual({
+      status: 'unavailable',
+      reason: 'too-large',
+    });
+    expect((await saved.readWhole({ maxBytes: 32 * 1024 * 1024 })).status).toBe('ready');
+  });
+});
+
+describe('a budget is paid for only where one is in force', () => {
+  /** No subflows: everything is in the base part, ~6 MB plain and small packed. */
+  function baseOnly(): Recording {
+    return {
+      snapshot: {
+        runId: 'snapshot-run',
+        executionTree: { id: 'seed', name: 'seed' },
+        sharedState: { rows: Array.from({ length: 1500 }, () => `z${'w'.repeat(4096)}`) },
+      },
+      events: [],
+      structure: { id: 'seed', name: 'seed' },
+    };
+  }
+
+  it("the BASE part stays within readWhole's budget, refused before it expands", async () => {
+    const store = inMemoryArtifacts();
+    const filed = await fileParts(store, baseOnly(), { packed: true });
+    const saved = await ready(openSavedRecording(bindArtifacts(store, SCOPE), filed.index));
+    expect(saved.sizes.parts).toEqual([]);
+    expect(saved.sizes.storedBytes).toBeLessThan(64 * 1024);
+    works.length = 0;
+    expect(await saved.readWhole({ maxBytes: 1024 * 1024 })).toEqual({
+      status: 'unavailable',
+      reason: 'too-large',
+    });
+    expect(works).toHaveLength(1);
+    expect(works[0]!.decoded).toBe(0);
+    expect((await saved.readWhole({ maxBytes: 16 * 1024 * 1024 })).status).toBe('ready');
+  });
+
+  it('a single read does not serialise a packed part again; a budgeted read measures it once', async () => {
+    const store = inMemoryArtifacts();
+    const filed = await fileParts(store, await realRecording(), {
+      packed: true,
+      targetBytes: 16384,
+    });
+    const saved = await ready(openSavedRecording(bindArtifacts(store, SCOPE), filed.index));
+    const key = saved.invocations.find((row) => row.recorded)!.key;
+
+    serialised.calls = 0;
+    serialised.on = true;
+    try {
+      expect((await saved.readInvocation(key)).status).toBe('ready');
+      expect((await saved.readRoot()).status).toBe('ready');
+      expect(serialised.calls).toBe(0);
+      // The bounded path still measures — one serialisation per part it reads — and still refuses.
+      expect((await saved.readWhole()).status).toBe('ready');
+      expect(serialised.calls).toBe(saved.sizes.parts.length + 1);
+      expect(await saved.readWhole({ maxBytes: 4096 })).toEqual({
+        status: 'unavailable',
+        reason: 'too-large',
+      });
+    } finally {
+      serialised.on = false;
+    }
   });
 });

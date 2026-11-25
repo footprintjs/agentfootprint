@@ -4,7 +4,7 @@ title: GcsArtifactsOptions
 
 # Interface: GcsArtifactsOptions
 
-Defined in: [src/artifacts/gcsArtifacts.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L205)
+Defined in: [src/artifacts/gcsArtifacts.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L206)
 
 Options for [gcsArtifacts](/docs/api/functions/gcsArtifacts).
 
@@ -14,7 +14,7 @@ Options for [gcsArtifacts](/docs/api/functions/gcsArtifacts).
 
 > `readonly` **bucket**: `string`
 
-Defined in: [src/artifacts/gcsArtifacts.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L207)
+Defined in: [src/artifacts/gcsArtifacts.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L208)
 
 The bucket. It must already exist — this library never creates one.
 
@@ -24,7 +24,7 @@ The bucket. It must already exist — this library never creates one.
 
 > `readonly` `optional` **prefix?**: `string`
 
-Defined in: [src/artifacts/gcsArtifacts.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L209)
+Defined in: [src/artifacts/gcsArtifacts.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L210)
 
 Object-name prefix inside the bucket, so a bucket can be shared.
 
@@ -34,7 +34,7 @@ Object-name prefix inside the bucket, so a bucket can be shared.
 
 > `readonly` `optional` **projectId?**: `string`
 
-Defined in: [src/artifacts/gcsArtifacts.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L212)
+Defined in: [src/artifacts/gcsArtifacts.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L213)
 
 Project id for the client this factory builds. Ignored when `storage` is
  passed — that client's configuration is yours.
@@ -45,7 +45,7 @@ Project id for the client this factory builds. Ignored when `storage` is
 
 > `readonly` `optional` **retention?**: [`ArtifactRetention`](/docs/api/interfaces/ArtifactRetention)
 
-Defined in: [src/artifacts/gcsArtifacts.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L216)
+Defined in: [src/artifacts/gcsArtifacts.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L217)
 
 Retention dials. Budgets evict OLDEST-first (no cheap read-recency).
 
@@ -55,6 +55,6 @@ Retention dials. Budgets evict OLDEST-first (no cheap read-recency).
 
 > `readonly` `optional` **storage?**: `GcsStorageLike`
 
-Defined in: [src/artifacts/gcsArtifacts.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L214)
+Defined in: [src/artifacts/gcsArtifacts.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/gcsArtifacts.ts#L215)
 
 Your own pre-built client; configuration and credentials stay yours.

@@ -533,6 +533,8 @@ export function configureAgent(
           throw new TypeError(
             'Agent artifacts.recordings.trustBoundaries needs a recorder factory.',
           );
+        if (![undefined, 'whole', 'parts'].includes(recordings.layout))
+          throw new TypeError("Agent artifacts.recordings.layout is 'whole' or 'parts'.");
         config.artifactRecordings = { ...recordings, trustBoundaries: trust };
       }
     } else {

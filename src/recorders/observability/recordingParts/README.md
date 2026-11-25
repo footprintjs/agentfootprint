@@ -41,7 +41,49 @@ packPart`), so any part reads alone. The index is never packed.
 | `partReader.ts` | one part's bytes become values: caps, unpacking, exact key sets |
 | `open.ts` | `openSavedRecording`: open either layout, then `readRoot`, `readInvocation`, `readWhole` |
 | `packing.ts` | each part packed on its own with the recording codec |
+| `file.ts` | the writer's sequence: every part, then the index; undo on any failure |
 | `splitError.ts` | why a split was refused, in fixed sentences |
+
+## Writing
+
+`file.ts · fileRecordingParts` puts the base part, then each invocation part in
+order, then the index, each with `digest: 'sha-256'`. After every put it checks
+the store's byte count and digest against its own, and stops when a put's sweep
+names one of this recording's own parts. The index gets the earliest part
+expiry, so it never outlives a part. On any failure it deletes what it wrote
+(best effort), writes no index, and returns a fixed sentence with counts. An
+agent files this way with `artifacts: { recordings: { layout: 'parts' } }`
+(`core/agent/runtime/recording/recording.ts · fileInParts`).
+
+**Refuse before writing when it cannot fit.** Retention judges each put alone,
+so parts that each fit a scope but together do not would evict the scope's other
+artifacts first and only then reach the recording's own part. So the writer asks
+the store's optional `scopeBudget` before its first put and refuses with
+`would-not-fit` when the parts plus the index exceed the byte budget, or parts + 2
+exceed the count budget: no put, no sweep, nothing deleted. This is the ONE store
+capability the layout adds, against the design's "no new capability": a
+statement of the retention every in-tree adapter already enforces
+(`artifacts/retention.ts · retentionBudget`), not a reservation. It proves the
+recording fits an EMPTY scope, as the whole layout's up-front refusal does; a
+filing may still evict older artifacts, as a whole recording does. A store
+without the member keeps the plain behaviour (a 100 KB scope holding a 60 KB
+dataset, and six 20 KB parts, ends empty).
+
+**The refusal sentence.** It is the writer's own: a fixed sentence naming the
+step by its code in parentheses (`would-not-fit`, `store-refused`,
+`store-mismatch`, `evicted-own-part`, `not-split`, `unexpected`) with counts. A
+parts filing is several puts and a delete pass, so the one refusal summarises
+the filing rather than quoting one put's error; the whole layout is one put, so
+the store's own sentence is its whole story and is passed on.
+
+**Not guarded.** Two runs filing into one scope at once can evict each other's
+parts; the reader then reports `part-missing` for exactly those. Filing takes no
+cancel signal. A process that dies between puts leaves parts with no index,
+unaddressable, counted against the scope until retention removes them.
+
+A store that keeps no digest still files: the index carries the writer's own
+SHA-256 of every part, the writer compares the store's digest only when it has
+one, and the reader verifies every part by its own hash.
 
 ## The walk exists twice
 

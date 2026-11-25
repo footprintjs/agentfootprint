@@ -33,6 +33,7 @@ import {
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -138,6 +139,7 @@ export function inMemoryArtifacts(options: InMemoryArtifactsOptions = {}): InMem
       return dropped;
     },
     retention,
+    ...scopeBudgetMember(retention),
 
     async put(scope, input): Promise<ArtifactPutResult> {
       const held = shelf(scope);

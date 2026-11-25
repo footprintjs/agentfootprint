@@ -200,9 +200,9 @@ When a read has nothing to return, it answers a `SavedRecordingPartUnavailable`
 whose `reason` is `not-recorded`, `part-missing`, `part-changed` or `too-large`.
 A read never falls back to another source.
 
-A recording is stored in one of two layouts, and the reader opens both.
-No public call writes the parts layout yet: the next release adds the agent
-option that saves recordings in parts. Today an agent saves its recording whole.
+A recording is stored in one of two layouts, and the reader opens both. An
+agent chooses with `layout` on its recordings option: `'whole'` (the default) or
+`'parts'`.
 
 - **Whole**: one artifact of kind `RECORDING_ARTIFACT_KIND`. It is read once,
   within `maxRootBytes`, and cut in memory.
@@ -223,8 +223,48 @@ computed again after. The reader asks only for the two verbs it uses, a
 `SavedRecordingSizes`, read from the index alone: how many bytes and artifacts
 hold the recording, and the size of each part.
 
+### Save a run in parts
+
+`artifacts: { store, recordings: { layout: 'parts' } }` files each completed run
+in parts: the base part first, then each invocation part in order, then the
+index. The receipt names the index. With `packed: true`, each part is packed on
+its own, so any part still reads alone.
+
+<CodeFile path="examples/features/133-recording-in-parts.ts" region="write" title="File the run recording in parts" />
+
+<CodeFile path="examples/features/133-recording-in-parts.ts" region="read" title="Open the index and read one invocation" />
+
+The writer checks every stored part's size and digest against its own, and it
+writes the index last, so a reader never finds an index whose parts were never
+written. The index expires no later than its earliest part. If a filing cannot
+finish (the store refuses a part, keeps different bytes, or its retention evicts
+one of this recording's own parts to make room for another), the writer deletes
+what it wrote, writes no index, and puts one `agentfootprint.artifacts.refused`
+fact on the record. The answer is unchanged, as with any recording that was not
+filed. A paused run files nothing; its resumed run files its own recording.
+
+Before its first put, the writer asks the store for the budget it enforces in
+the scope (`ArtifactStore.scopeBudget`, an `ArtifactScopeBudget` of `maxBytes`
+and `maxCount`; every built-in store answers it). When the parts and the index
+together exceed it, the recording is refused as `would-not-fit` with no put and
+nothing evicted. That proves the recording fits an empty scope, the same thing
+the whole layout's up-front refusal proves; a filing can still evict older
+artifacts to make room, as a whole recording can. The refusal's sentence names
+its case in parentheses, for example `(would-not-fit)` or `(store-refused)`.
+
 **Gotchas:**
 
+- Saving in parts costs N + 2 awaited store writes on the way out of `run()`
+  (N invocation parts, the base part and the index) instead of one.
+- A custom store without `scopeBudget` gets no up-front check. Each put is
+  judged alone, so parts that each fit but together do not can evict the scope's
+  other artifacts before the filing stops: a 100 KB scope holding a 60 KB
+  dataset, filed six 20 KB parts, ends empty.
+- Two runs filing into one scope at once can evict each other's parts. The
+  reader then reports `part-missing` for exactly those, and the eviction shows on
+  the other run's record. Filing takes no cancel signal, and a process that dies
+  between puts leaves parts with no index: no reader sees them, but they count
+  against the scope until retention removes them.
 - A busy or revoked store, or an aborted signal, rejects the read with the
   original error. It is never reported as a missing part.
 - `complete: false` means the run's tree and its results disagree. Every result

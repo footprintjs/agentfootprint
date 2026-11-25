@@ -48,7 +48,7 @@ export interface PartContents {
   readonly plainBytes: number;
 }
 
-/** A loaded payload and its plain JSON bytes (after unpacking, for a packed part). */
+/** A loaded payload and its plain JSON bytes (after unpacking, for a packed part; 0 when no budget asked). */
 interface Loaded {
   readonly payload: Record<string, unknown>;
   readonly plainBytes: number;
@@ -101,6 +101,7 @@ export function partReader(
     entry: StoredPartEntry,
     limit: number,
     signal: AbortSignal | undefined,
+    budgeted: boolean,
   ): Promise<Loaded | Unavailable> {
     // Decided from the index alone: no store call for a part over the cap.
     if (entry.bytes > limit) return unavailable('too-large');
@@ -126,8 +127,13 @@ export function partReader(
     }
     signal?.throwIfAborted();
     if (!isPlainObject(parsed)) return unavailable('part-changed');
-    // A plain part's plain bytes are its text; a packed one is measured after its bounded expansion.
-    const plainBytes = index.packed ? utf8Length(toWireJson(parsed)) : utf8Length(fetched.text);
+    // A plain part's plain bytes are its text. A packed one is measured after its bounded
+    // expansion, and only when a budget asks: a single read pays no second serialisation.
+    const plainBytes = !budgeted
+      ? 0
+      : index.packed
+      ? utf8Length(toWireJson(parsed))
+      : utf8Length(fetched.text);
     return { payload: parsed, plainBytes };
   }
 
@@ -135,7 +141,12 @@ export function partReader(
     signal: AbortSignal | undefined,
     budget = Number.POSITIVE_INFINITY,
   ): Promise<{ readonly recording: Recording; readonly plainBytes: number } | Unavailable> {
-    const loaded = await load(index.base, Math.min(caps.root, budget), signal);
+    const loaded = await load(
+      index.base,
+      Math.min(caps.root, budget),
+      signal,
+      budget !== Number.POSITIVE_INFINITY,
+    );
     if (!('payload' in loaded)) return loaded;
     const { payload } = loaded;
     if (!exactKeys(payload, ['format', 'part', 'recording'], index.runId)) {
@@ -164,7 +175,12 @@ export function partReader(
   ): Promise<PartContents | Unavailable> {
     const entry = index.parts[part];
     if (entry === undefined) return unavailable('not-recorded');
-    const loaded = await load(entry, Math.min(caps.part, budget), signal);
+    const loaded = await load(
+      entry,
+      Math.min(caps.part, budget),
+      signal,
+      budget !== Number.POSITIVE_INFINITY,
+    );
     if (!('payload' in loaded)) return loaded;
     const { payload } = loaded;
     if (
