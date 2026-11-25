@@ -15,6 +15,8 @@ import type {
   ArtifactStore,
 } from '../../../../src/artifacts/types.js';
 import { bindArtifacts } from '../../../../src/artifacts/capability.js';
+import { computeArtifactDigest } from '../../../../src/artifacts/payload.js';
+import { utf8Length } from '../../../../src/lib/utf8.js';
 import {
   RECORDING_INDEX_ARTIFACT_KIND,
   RECORDING_PART_ARTIFACT_KIND,
@@ -219,4 +221,57 @@ export function parsedWhole(recording: Recording): Record<string, unknown> {
 export function executionKeys(whole: Record<string, unknown>): string[] {
   const snapshot = whole.snapshot as { subflowResults?: Record<string, unknown> };
   return Object.keys(snapshot.subflowResults ?? {}).filter((key) => key.includes('#'));
+}
+
+/**
+ * Store a replacement for one part of `filed` (`at` = an ordinal, or `'base'`)
+ * holding `text`, and an index that names it with ITS byte count and digest:
+ * consistent on the digest, so only the reader's other checks can refuse it.
+ * Returns the new index's ref.
+ */
+export async function forgePart(
+  store: ArtifactStore,
+  filed: FiledParts,
+  at: number | 'base',
+  text: string,
+  origin: { runId?: string } = { runId: RUN_ID },
+): Promise<string> {
+  const ref = (
+    await store.put(SCOPE, {
+      kind: RECORDING_PART_ARTIFACT_KIND,
+      mediaType: 'application/json',
+      data: text,
+      digest: 'sha-256',
+      origin,
+    })
+  ).meta.ref;
+  const entry = { bytes: utf8Length(text), digest: await computeArtifactDigest(text) };
+  const draft = filed.split.draft;
+  const forged = {
+    ...draft,
+    base: at === 'base' ? entry : draft.base,
+    parts: draft.parts.map((part, i) => (i === at ? { ...part, ...entry } : part)),
+  };
+  const refs = {
+    base: at === 'base' ? ref : filed.base,
+    parts: filed.parts.map((part, i) => (i === at ? ref : part)),
+  };
+  return (
+    await store.put(SCOPE, {
+      kind: RECORDING_INDEX_ARTIFACT_KIND,
+      mediaType: 'application/json',
+      data: recordingIndexText(forged, refs),
+      digest: 'sha-256',
+      origin: { runId: RUN_ID },
+    })
+  ).meta.ref;
+}
+
+/** `text` with the character after the first `marker` replaced by another of the same byte length. */
+export function alterSameLength(text: string, marker: string): string {
+  const at = text.indexOf(marker);
+  if (at < 0) throw new Error(`marker not found: ${marker}`);
+  const i = at + marker.length;
+  const swap = text[i] === 'Q' ? 'R' : 'Q';
+  return text.slice(0, i) + swap + text.slice(i + 1);
 }

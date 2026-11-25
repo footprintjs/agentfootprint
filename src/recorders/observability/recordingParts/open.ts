@@ -67,7 +67,11 @@ export interface OpenSavedRecordingOptions {
   readonly signal?: AbortSignal;
   /** The largest index, in bytes. Default 2 MiB. */
   readonly maxIndexBytes?: number;
-  /** The largest base part, or whole recording, in bytes (a packed one: its plain size). Default 16 MiB. */
+  /**
+   * The largest base part, or whole recording, in bytes (a packed one: its plain
+   * size). Default 16 MiB. A whole recording within it opens, and the parts it is
+   * cut into in memory are not capped again.
+   */
   readonly maxRootBytes?: number;
   /** The largest invocation part, in bytes (a packed one: its plain size). Default 16 MiB. */
   readonly maxPartBytes?: number;
@@ -80,7 +84,11 @@ export interface SavedRecordingReadOptions {
 
 /** Options for {@link SavedRecording.readWhole}. */
 export interface SavedRecordingWholeOptions extends SavedRecordingReadOptions {
-  /** The most stored bytes the whole read may take, summed from the index first. Default 64 MiB. */
+  /**
+   * The most plain JSON bytes the whole read may take. Default 64 MiB. The stored
+   * total is checked from the index first; then each part may expand only to what
+   * the parts before it left, so a packed part is refused before it expands past it.
+   */
   readonly maxBytes?: number;
 }
 
@@ -134,7 +142,11 @@ export interface SavedRecording {
   readonly runId?: string;
   /** `snapshot.runId`, the engine's executor id: what a viewer address's `runId` must equal. */
   readonly snapshotRunId?: string;
-  /** `false` when the tree and the results disagree; a lazy viewer refuses such a recording whole. */
+  /**
+   * `false` when the tree and the results disagree, or a result is not in the
+   * shape the lazy viewer admits; such a viewer refuses the recording whole.
+   * Check it before relying on what `readInvocation` returns.
+   */
   readonly complete: boolean;
   readonly invocations: readonly SavedInvocation[];
   /** Path aliases proven equal to an invocation's result: alias → execution key. */
@@ -146,7 +158,12 @@ export interface SavedRecording {
   ): Promise<
     { readonly status: 'ready'; readonly recording: Recording } | SavedRecordingPartUnavailable
   >;
-  /** One invocation's result, read from the one part that holds it. */
+  /**
+   * One invocation's result, read from the one part that holds it. The result
+   * is the stored one, proven by digest and key set. Its SHAPE was checked when
+   * the recording was cut: on a recording that is not `complete`, a `ready`
+   * result may be one the lazy viewer would refuse, so check `complete` first.
+   */
   readInvocation(
     key: string,
     options?: SavedRecordingReadOptions,
@@ -154,7 +171,12 @@ export interface SavedRecording {
     | { readonly status: 'ready'; readonly invocation: SavedInvocation; readonly result: unknown }
     | SavedRecordingPartUnavailable
   >;
-  /** The whole recording, with every result and alias restored; refused whole if any part is. */
+  /**
+   * The whole recording, with every result and alias restored; refused whole if
+   * any part is. It deep-equals the recording that was saved but is not
+   * byte-equal to it: `subflowResults` comes last in the snapshot, its keys are
+   * in part order, and a proven alias shares its key's result object.
+   */
   readWhole(
     options?: SavedRecordingWholeOptions,
   ): Promise<
@@ -211,8 +233,18 @@ export async function openSavedRecording(
   const meta = await artifacts.head(ref);
   signal?.throwIfAborted();
   if (meta === null) return unavailable('not-found');
-  if (meta.mediaType !== RECORDING_MEDIA_TYPE) return unavailable('not-a-recording');
-  if (meta.kind === RECORDING_INDEX_ARTIFACT_KIND) {
+  const isIndex = meta.kind === RECORDING_INDEX_ARTIFACT_KIND;
+  if (
+    meta.mediaType !== RECORDING_MEDIA_TYPE ||
+    (!isIndex && meta.kind !== RECORDING_ARTIFACT_KIND)
+  ) {
+    return unavailable('not-a-recording');
+  }
+  // The ticket must be the one asked for, and its size a size, before any cap reads it.
+  if (meta.ref !== ref || !Number.isSafeInteger(meta.bytes) || meta.bytes < 0) {
+    return unavailable(isIndex ? 'invalid-index' : 'invalid-recording');
+  }
+  if (isIndex) {
     if (meta.bytes > caps.index) return unavailable('too-large');
     const index = await readIndex(artifacts, meta, signal);
     if ('reason' in index) return index;
@@ -232,7 +264,6 @@ export async function openSavedRecording(
     };
     return opened(index, 'parts', storeSource(artifacts, index.runId), sizes, caps, signal);
   }
-  if (meta.kind !== RECORDING_ARTIFACT_KIND) return unavailable('not-a-recording');
   return openWhole(artifacts, meta, caps, signal);
 }
 
@@ -274,8 +305,12 @@ async function openWhole(
   }
   let data: unknown;
   if ('text' in got) {
-    // A store may under-report bytes: the real size decides before any parse.
-    if (utf8Length(got.text) > caps.root) return unavailable('too-large');
+    // The same checks as an index: the exact length, and the store's digest by our own hash.
+    if (utf8Length(got.text) !== meta.bytes) return unavailable('invalid-recording');
+    if (meta.digest !== undefined && (await computeArtifactDigest(got.text)) !== meta.digest) {
+      return unavailable('invalid-recording');
+    }
+    signal?.throwIfAborted();
     try {
       data = JSON.parse(got.text);
     } catch {
@@ -313,7 +348,9 @@ async function openWhole(
     parts: split.draft.parts.map((part) => ({ ref: memoryRef, ...part })),
   };
   const sizes: SavedRecordingSizes = { storedBytes: meta.bytes, artifacts: 1, parts: [] };
-  return opened(index, 'whole', memorySource(texts), sizes, caps, signal);
+  // The whole was admitted within maxRootBytes; the parts cut from it in memory are not capped again.
+  const admitted = { root: Number.POSITIVE_INFINITY, part: Number.POSITIVE_INFINITY };
+  return opened(index, 'whole', memorySource(texts), sizes, admitted, signal);
 }
 
 function opened(
@@ -388,7 +425,7 @@ function opened(
       }
       const total = index.parts.reduce((sum, part) => sum + part.bytes, index.base.bytes);
       if (total > limit) return Object.freeze({ status: 'unavailable', reason: 'too-large' });
-      return parts.whole(signal);
+      return parts.whole(signal, limit);
     },
   });
 }

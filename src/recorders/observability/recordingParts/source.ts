@@ -101,6 +101,7 @@ export function storeSource(
       signal?.throwIfAborted();
       if (meta === null) return { refused: 'missing' };
       if (
+        meta.ref !== entry.ref ||
         meta.kind !== RECORDING_PART_ARTIFACT_KIND ||
         meta.mediaType !== RECORDING_MEDIA_TYPE ||
         meta.bytes !== entry.bytes ||

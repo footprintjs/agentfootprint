@@ -193,13 +193,16 @@ its `path` of mount keys from the root, its `subflowId`, whether it was
 - `readRoot()` returns the recording without its subflow results.
 - `readInvocation(key)` returns one invocation's result.
 - `readWhole()` returns the whole recording back, all or nothing, within
-  `SavedRecordingWholeOptions.maxBytes` (64 MiB by default).
+  `SavedRecordingWholeOptions.maxBytes` of plain JSON (64 MiB by default). It
+  equals the saved recording value for value, though not byte for byte.
 
 When a read has nothing to return, it answers a `SavedRecordingPartUnavailable`
 whose `reason` is `not-recorded`, `part-missing`, `part-changed` or `too-large`.
 A read never falls back to another source.
 
-A recording is stored in one of two layouts, and the reader opens both:
+A recording is stored in one of two layouts, and the reader opens both.
+No public call writes the parts layout yet: the next release adds the agent
+option that saves recordings in parts. Today an agent saves its recording whole.
 
 - **Whole**: one artifact of kind `RECORDING_ARTIFACT_KIND`. It is read once,
   within `maxRootBytes`, and cut in memory.

@@ -73,8 +73,13 @@ if (saved.status === 'ready') {
 - Metadata before bytes: every cap is decided from the index, or from `head`,
   before any `get`. A part's kind, byte count, digest and run are checked
   against the index before its `get`; its own SHA-256 is recomputed after.
+- The ticket first: `head` must answer for the ref asked, with a size that is
+  a whole number, before any cap reads it. A whole recording gets the index's
+  checks too: its exact length and, when the store stamped one, its digest.
 - Exactly the invocations a part held: a missing, changed or oversized part is
-  unavailable for its invocations only. `readWhole` is all-or-nothing.
+  unavailable for its invocations only. `readWhole` is all-or-nothing, and its
+  `maxBytes` bounds the plain total: each packed part may expand only to what
+  the parts before it left.
 - No renaming of failures: a busy or revoked store and an aborted signal are
   thrown as they are, never reported as a missing part.
 - No value in a refusal: reasons are fixed codes, and the index holds no

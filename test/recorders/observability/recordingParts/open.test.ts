@@ -9,7 +9,11 @@ import { describe, expect, it } from 'vitest';
 import { ArtifactIntegrityError, type ArtifactStore } from '../../../../src/artifacts/types.js';
 import { bindArtifacts } from '../../../../src/artifacts/capability.js';
 import { RECORDING_INDEX_ARTIFACT_KIND } from '../../../../src/artifacts/recordingArtifact.js';
-import { openSavedRecording, type SavedRecording } from '../../../../src/observe.js';
+import {
+  openSavedRecording,
+  type Recording,
+  type SavedRecording,
+} from '../../../../src/observe.js';
 import { recordingIndexText } from '../../../../src/recorders/observability/recordingParts/split.js';
 import {
   RUN_ID,
@@ -334,6 +338,68 @@ describe('opening what is not a saved recording', () => {
       await expect(openSavedRecording(view.artifacts, ref, { maxPartBytes: 0 })).rejects.toThrow(
         RangeError,
       );
+    } finally {
+      close();
+    }
+  });
+});
+
+describe('a whole recording at its bounds', () => {
+  it('opens at exactly maxRootBytes and serves its root and every invocation; one byte less is too-large', async () => {
+    const { store, close } = STORES[0]!.create();
+    try {
+      const ref = await fileWhole(store, recording);
+      const bytes = (await store.head(SCOPE, ref))!.bytes;
+      const atCap = await opened(bindArtifacts(store, SCOPE), ref, { maxRootBytes: bytes });
+      expect((await atCap.readRoot()).status).toBe('ready');
+      for (const invocation of atCap.invocations) {
+        expect((await atCap.readInvocation(invocation.key)).status, invocation.key).toBe('ready');
+      }
+      expect(
+        await openSavedRecording(bindArtifacts(store, SCOPE), ref, { maxRootBytes: bytes - 1 }),
+      ).toEqual({ status: 'unavailable', reason: 'too-large' });
+    } finally {
+      close();
+    }
+  });
+
+  it('a whole run with no subflows at exactly maxRootBytes reads its root: the in-memory cut is not capped again', async () => {
+    const { store, close } = STORES[0]!.create();
+    try {
+      const bare = {
+        snapshot: { runId: 'r', executionTree: { id: 'seed', name: 'seed' } },
+        events: [],
+        structure: { id: 'seed', name: 'seed' },
+      } as unknown as Recording;
+      const ref = await fileWhole(store, bare);
+      const bytes = (await store.head(SCOPE, ref))!.bytes;
+      const atCap = await opened(bindArtifacts(store, SCOPE), ref, { maxRootBytes: bytes });
+      expect(await atCap.readRoot()).toEqual({
+        status: 'ready',
+        recording: JSON.parse(JSON.stringify(bare)),
+      });
+      // maxPartBytes bounds stored parts; the parts of an admitted whole are not stored ones.
+      const wholeRef = await fileWhole(store, recording);
+      const small = await opened(bindArtifacts(store, SCOPE), wholeRef, { maxPartBytes: 1024 });
+      expect((await small.readInvocation(small.invocations[0]!.key)).status).toBe('ready');
+    } finally {
+      close();
+    }
+  });
+
+  it('a hand-filed recording nested too deep to write again is invalid-recording, not a thrown error', async () => {
+    const { store, close } = STORES[0]!.create();
+    try {
+      const deep = `${'['.repeat(5000)}${']'.repeat(5000)}`;
+      const text = `{"snapshot":{"runId":"r","executionTree":null},"events":[${deep}],"structure":{}}`;
+      expect(() => JSON.parse(text)).not.toThrow();
+      const ref = (
+        await store.put(SCOPE, { kind: 'recording/run', mediaType: 'application/json', data: text })
+      ).meta.ref;
+      expect(await openSavedRecording(bindArtifacts(store, SCOPE), ref)).toEqual({
+        status: 'unavailable',
+        reason: 'invalid-recording',
+      });
     } finally {
       close();
     }

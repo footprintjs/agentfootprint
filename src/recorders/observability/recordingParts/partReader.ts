@@ -10,6 +10,8 @@
  * Emits: N/A.
  */
 
+import { utf8Length } from '../../../lib/utf8.js';
+import { toWireJson } from '../../../lib/wireJson.js';
 import type { Recording } from '../recordRun.js';
 import {
   PackedRecordingError,
@@ -39,10 +41,17 @@ function unavailable(reason: Unavailable['reason']): Unavailable {
   return Object.freeze({ status: 'unavailable', reason });
 }
 
-/** One invocation part's contents, keyed. */
+/** One invocation part's contents, keyed, and the plain JSON bytes they took. */
 export interface PartContents {
   readonly results: ReadonlyMap<string, unknown>;
   readonly aliases: ReadonlyMap<string, unknown>;
+  readonly plainBytes: number;
+}
+
+/** A loaded payload and its plain JSON bytes (after unpacking, for a packed part). */
+interface Loaded {
+  readonly payload: Record<string, unknown>;
+  readonly plainBytes: number;
 }
 
 /** The exact own keys of a payload object, the run's `runId` among them iff the index has one. */
@@ -83,12 +92,16 @@ export function partReader(
   for (const { key, part } of index.unmounted) results[part]?.add(key);
   for (const alias of index.aliases) if ('part' in alias) aliases[alias.part]?.add(alias.name);
 
-  /** Cap, fetch, parse, unpack: a payload object, or why there is none. */
+  /**
+   * Cap, fetch, parse, unpack: a payload object, or why there is none. `limit`
+   * bounds the stored bytes before any store call and the PLAIN bytes a packed
+   * part may expand to, refused before it expands.
+   */
   async function load(
     entry: StoredPartEntry,
     limit: number,
     signal: AbortSignal | undefined,
-  ): Promise<{ readonly payload: Record<string, unknown> } | Unavailable> {
+  ): Promise<Loaded | Unavailable> {
     // Decided from the index alone: no store call for a part over the cap.
     if (entry.bytes > limit) return unavailable('too-large');
     const fetched = await source.fetch(entry, signal);
@@ -112,13 +125,17 @@ export function partReader(
       }
     }
     signal?.throwIfAborted();
-    return isPlainObject(parsed) ? { payload: parsed } : unavailable('part-changed');
+    if (!isPlainObject(parsed)) return unavailable('part-changed');
+    // A plain part's plain bytes are its text; a packed one is measured after its bounded expansion.
+    const plainBytes = index.packed ? utf8Length(toWireJson(parsed)) : utf8Length(fetched.text);
+    return { payload: parsed, plainBytes };
   }
 
   async function base(
     signal: AbortSignal | undefined,
-  ): Promise<{ readonly recording: Recording } | Unavailable> {
-    const loaded = await load(index.base, caps.root, signal);
+    budget = Number.POSITIVE_INFINITY,
+  ): Promise<{ readonly recording: Recording; readonly plainBytes: number } | Unavailable> {
+    const loaded = await load(index.base, Math.min(caps.root, budget), signal);
     if (!('payload' in loaded)) return loaded;
     const { payload } = loaded;
     if (!exactKeys(payload, ['format', 'part', 'recording'], index.runId)) {
@@ -137,16 +154,17 @@ export function partReader(
       return unavailable('part-changed');
     }
     if (index.hasSubflowResults && !isPlainObject(snapshot)) return unavailable('part-changed');
-    return { recording: recording as unknown as Recording };
+    return { recording: recording as unknown as Recording, plainBytes: loaded.plainBytes };
   }
 
   async function invocations(
     part: number,
     signal: AbortSignal | undefined,
+    budget = Number.POSITIVE_INFINITY,
   ): Promise<PartContents | Unavailable> {
     const entry = index.parts[part];
     if (entry === undefined) return unavailable('not-recorded');
-    const loaded = await load(entry, caps.part, signal);
+    const loaded = await load(entry, Math.min(caps.part, budget), signal);
     if (!('payload' in loaded)) return loaded;
     const { payload } = loaded;
     if (
@@ -158,19 +176,28 @@ export function partReader(
     const held = keyed(ownValue(payload, 'results'), results[part] as Set<string>);
     const named = keyed(ownValue(payload, 'aliases'), aliases[part] as Set<string>);
     if (held === undefined || named === undefined) return unavailable('part-changed');
-    return { results: held, aliases: named };
+    return { results: held, aliases: named, plainBytes: loaded.plainBytes };
   }
 
-  /** Every part, in order; the first one that is unavailable makes the whole unavailable. */
+  /**
+   * Every part, in order; the first one that is unavailable makes the whole
+   * unavailable. `maxBytes` bounds the PLAIN total: each part may take only
+   * what the parts before it left, so a packed part that would expand past
+   * the rest of the budget is refused before it expands.
+   */
   async function whole(
     signal: AbortSignal | undefined,
+    maxBytes: number,
   ): Promise<{ readonly status: 'ready'; readonly recording: Recording } | Unavailable> {
-    const root = await base(signal);
+    let remaining = maxBytes;
+    const root = await base(signal, remaining);
     if ('reason' in root) return root;
+    remaining -= root.plainBytes;
     const found: Record<string, unknown> = {};
     for (let at = 0; at < index.parts.length; at++) {
-      const contents = await invocations(at, signal);
+      const contents = await invocations(at, signal, remaining);
       if ('reason' in contents) return contents;
+      remaining -= contents.plainBytes;
       for (const [key, value] of contents.results) assign(found, key, value);
       for (const [name, value] of contents.aliases) assign(found, name, value);
     }

@@ -4,7 +4,7 @@ title: UnserializableRecordingError
 
 # Class: UnserializableRecordingError
 
-Defined in: [src/artifacts/recordingArtifact.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L105)
+Defined in: [src/artifacts/recordingArtifact.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L106)
 
 Raised when a recording could not be turned into bytes.
 
@@ -21,7 +21,7 @@ failure: a full store is retryable and a cyclic snapshot is not.
 
 > **new UnserializableRecordingError**(`detail`): `UnserializableRecordingError`
 
-Defined in: [src/artifacts/recordingArtifact.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L108)
+Defined in: [src/artifacts/recordingArtifact.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L109)
 
 #### Parameters
 
@@ -55,7 +55,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_UNSERIALIZABLE_RECORDING"`
 
-Defined in: [src/artifacts/recordingArtifact.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L106)
+Defined in: [src/artifacts/recordingArtifact.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L107)
 
 ***
 

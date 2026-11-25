@@ -210,3 +210,52 @@ describe('what the cut refuses', () => {
     );
   });
 });
+
+describe('the cut answers what the viewer would refuse', () => {
+  it('an empty subflowResults key is a malformed recording, not a large one', async () => {
+    const recording = recordingOf(mount('a#1', 'a'), { 'a#1': unit('a'), '': { odd: true } });
+    await expect(splitRecording(recording)).rejects.toMatchObject({ code: 'not-a-recording' });
+    const store = inMemoryArtifacts();
+    const ref = (
+      await store.put(SCOPE, {
+        kind: 'recording/run',
+        mediaType: 'application/json',
+        data: JSON.stringify(recording),
+      })
+    ).meta.ref;
+    expect(await openSavedRecording(bindArtifacts(store, SCOPE), ref)).toEqual({
+      status: 'unavailable',
+      reason: 'invalid-recording',
+    });
+  });
+
+  it('a recording with no snapshot is not complete', async () => {
+    const split = await splitRecording({ events: [], structure: {} });
+    expect(split.draft.complete).toBe(false);
+    expect(split.draft.invocations).toEqual([]);
+  });
+
+  it('a root drill path that takes a mount past 128 segments is not complete', async () => {
+    const drilled = (depth: number): Recording => {
+      const drillPath = Array.from({ length: depth }, (_, i) => `outer${i}#${i}`);
+      const result = unit('a');
+      (result.treeContext as Rec).logAddress = {
+        logRunId: 'log',
+        drillPath: [...drillPath, 'a#1'],
+      };
+      return {
+        snapshot: {
+          runId: 'snapshot-run',
+          logAddress: { logRunId: 'log', drillPath },
+          executionTree: mount('a#1', 'a'),
+          subflowResults: { 'a#1': result },
+        },
+        events: [],
+        structure: {},
+      };
+    };
+    expect((await splitRecording(drilled(127))).draft.complete).toBe(true);
+    expect((await splitRecording(drilled(128))).draft.complete).toBe(false);
+    expect((await splitRecording(drilled(129))).draft.complete).toBe(false);
+  });
+});

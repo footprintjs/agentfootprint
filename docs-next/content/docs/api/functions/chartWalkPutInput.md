@@ -6,7 +6,7 @@ title: chartWalkPutInput
 
 > **chartWalkPutInput**(`rows`, `facts?`): [`PutArtifactInput`](/docs/api/interfaces/PutArtifactInput)
 
-Defined in: [src/artifacts/recordingArtifact.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L185)
+Defined in: [src/artifacts/recordingArtifact.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L186)
 
 Turn one chart walk into the `put` input that stores it under
 [CHART\_WALK\_ARTIFACT\_KIND](/docs/api/variables/CHART_WALK_ARTIFACT_KIND).

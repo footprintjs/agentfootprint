@@ -57,7 +57,8 @@ export const CHART_WALK_ARTIFACT_KIND = 'recording/chart-walk';
  * {@link RECORDING_PART_ARTIFACT_KIND} and all in the same scope. The receipt
  * names the index. Its own kind keeps every reader that expects a whole
  * recording from reading an index as one. `openSavedRecording` (from
- * `agentfootprint/observe`) opens either layout.
+ * `agentfootprint/observe`) opens either layout. No public call writes the
+ * parts layout yet; agents save their recordings whole.
  */
 export const RECORDING_INDEX_ARTIFACT_KIND = 'recording/run-index';
 

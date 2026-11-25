@@ -67,11 +67,12 @@ interface LogAddress {
 export function walkRecordedInvocations(snapshot: unknown): RecordingWalk {
   const limits = RECORDING_PARTS_LIMITS;
   if (!isPlainObject(snapshot)) {
+    // Nothing to address — and the lazy viewer refuses a recording with no snapshot.
     return {
       invocations: [],
       unmounted: [],
       aliases: [],
-      complete: true,
+      complete: false,
       hasSubflowResults: false,
     };
   }
@@ -91,6 +92,8 @@ export function walkRecordedInvocations(snapshot: unknown): RecordingWalk {
   if (isPlainObject(rawResults)) {
     for (const key of Object.keys(rawResults)) {
       spend();
+      // An empty key is a malformed recording; only a long one is a bound.
+      if (key.length === 0) throw new RecordingSplitError('not-a-recording');
       if (!isName(key)) throw new RecordingSplitError('over-limit', 'name');
       const value = ownValue(rawResults, key);
       if (isCanonicalExecutionKey(key)) units.set(key, value);
@@ -200,7 +203,16 @@ function readLogAddress(value: unknown): LogAddress | undefined {
   const drillPath = ownValue(value, 'drillPath');
   if (!isName(logRunId) || !Array.isArray(drillPath)) return undefined;
   if (!drillPath.every((segment) => isCanonicalExecutionKey(segment))) return undefined;
+  if (!withinPathBounds(drillPath as string[])) return undefined;
   return { logRunId, drillPath: drillPath as string[] };
+}
+
+/** The viewer's path bounds: at most 128 segments and 8,192 characters. */
+function withinPathBounds(path: readonly string[]): boolean {
+  const chars = path.reduce((sum, segment) => sum + segment.length, 0);
+  return (
+    path.length <= RECORDING_PARTS_LIMITS.pathSegments && chars <= RECORDING_PARTS_LIMITS.pathChars
+  );
 }
 
 /** The unit shape the viewer admits for one mount (its `completeUnit`). */
@@ -223,6 +235,8 @@ function unitConforms(
   if (rawAddress === undefined) return true;
   const address = readLogAddress(rawAddress);
   if (address === undefined) return false;
+  // Both drill paths are bounded where they are read (`readLogAddress`), so an
+  // expected path past the viewer's bound can never equal the unit's own.
   const expected = [...(rootAddress?.drillPath ?? []), ...path];
   if (address.drillPath.length !== expected.length) return false;
   if (address.drillPath.some((segment, i) => segment !== expected[i])) return false;

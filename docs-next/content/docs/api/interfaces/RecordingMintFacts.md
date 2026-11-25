@@ -4,7 +4,7 @@ title: RecordingMintFacts
 
 # Interface: RecordingMintFacts
 
-Defined in: [src/artifacts/recordingArtifact.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L73)
+Defined in: [src/artifacts/recordingArtifact.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L74)
 
 What a recording mint needs to know beyond the recording itself.
 
@@ -14,7 +14,7 @@ What a recording mint needs to know beyond the recording itself.
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L96)
+Defined in: [src/artifacts/recordingArtifact.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L97)
 
 The operator's label, when they set one.
 
@@ -31,7 +31,7 @@ useful honest sentence available at mint time.
 
 > `readonly` `optional` **runId?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L76)
+Defined in: [src/artifacts/recordingArtifact.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L77)
 
 The run this recording is OF — stamped on `origin.runId`, which is the
  join back to the trace.
@@ -42,7 +42,7 @@ The run this recording is OF — stamped on `origin.runId`, which is the
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/artifacts/recordingArtifact.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L85)
+Defined in: [src/artifacts/recordingArtifact.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/recordingArtifact.ts#L86)
 
 The tool call this recording is OF, when a TOOL minted it (9.79.0) —
 stamped on `origin.toolCallId`, the join back to the call that produced

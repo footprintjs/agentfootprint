@@ -133,7 +133,7 @@ export async function splitRecordingData(
   const walk = walkRecordedInvocations(snapshot);
 
   const entry = (slot: Entry['slot'], key: string, value: unknown): Entry => {
-    const text = toWireJson(value);
+    const text = serialize(() => toWireJson(value));
     return { slot, key, value, text, bytes: utf8Length(text) };
   };
   const results: Entry[] = [];
@@ -195,14 +195,16 @@ export async function splitRecordingData(
         for (const item of items) assign(out, item.key, item.value);
         return out;
       };
-      return toWireJson(
-        packPart({
-          format: RECORDING_PART_FORMAT,
-          ...(runId !== undefined && { runId }),
-          part: at,
-          results: fold(slot('results')),
-          aliases: fold(slot('aliases')),
-        }),
+      return serialize(() =>
+        toWireJson(
+          packPart({
+            format: RECORDING_PART_FORMAT,
+            ...(runId !== undefined && { runId }),
+            part: at,
+            results: fold(slot('results')),
+            aliases: fold(slot('aliases')),
+          }),
+        ),
       );
     }
     const members = (items: Entry[]): string =>
@@ -218,7 +220,7 @@ export async function splitRecordingData(
     part: 'base',
     recording: withoutResults(data, snapshot),
   };
-  const baseText = toWireJson(packed ? packPart(basePayload) : basePayload);
+  const baseText = serialize(() => toWireJson(packed ? packPart(basePayload) : basePayload));
 
   const withDigest = async (text: string): Promise<PartText> => ({
     text,
@@ -341,4 +343,20 @@ function withoutResults(data: Record<string, unknown>, snapshot: unknown): Recor
     } else assign(out, key, value);
   }
   return out;
+}
+
+/**
+ * Write one value as JSON, or refuse the recording as `unserializable`: the one
+ * boundary where a value too deep for the serializer's stack (a `RangeError`)
+ * or one JSON cannot carry becomes a reason instead of an escaping error.
+ */
+function serialize(write: () => string | undefined): string {
+  let text: string | undefined;
+  try {
+    text = write();
+  } catch {
+    throw new RecordingSplitError('unserializable');
+  }
+  if (text === undefined) throw new RecordingSplitError('unserializable');
+  return text;
 }
