@@ -69,6 +69,11 @@ function preparation(t, label, args = []) {
   const capabilities =
     '| Capability | Since |\n| --- | --- |\n| Synthetic next feature | unreleased |\n';
   writeFileSync(path.join(root, 'CAPABILITIES.md'), capabilities);
+  // One file per waiting row (.capabilities/); the README there is the format doc, not a row.
+  mkdirSync(path.join(root, '.capabilities'));
+  writeFileSync(path.join(root, '.capabilities/README.md'), '# format\n');
+  writeFileSync(path.join(root, '.capabilities/b-second.md'), '| Second waiting feature | `second` | `src/second.ts` | unreleased |\n');
+  writeFileSync(path.join(root, '.capabilities/a-first.md'), '| First waiting feature | `first` | `src/first.ts` | unreleased |\n');
   const output = spawnSync(
     process.execPath,
     ['scripts/release-prepare.mjs', '--bump', 'major', '--date', '2026-11-04', ...args],
@@ -103,8 +108,31 @@ test('release route: positive: final release consumes fragments and stamps the s
   assert.equal(JSON.parse(f.read('package.json')).version, '14.0.0');
   assert.equal(JSON.parse(f.read('package-lock.json')).version, '14.0.0');
   assert.deepEqual(readdirSync(path.join(f.root, '.changes')), []);
-  assert(f.read('CAPABILITIES.md').includes('| 14.0.0 |'));
+  assert.equal(
+    f.read('CAPABILITIES.md'),
+    '| Capability | Since |\n| --- | --- |\n| First waiting feature | `first` | `src/first.ts` | 14.0.0 |\n' +
+      '| Second waiting feature | `second` | `src/second.ts` | 14.0.0 |\n| Synthetic next feature | 14.0.0 |\n',
+  );
+  assert.deepEqual(readdirSync(path.join(f.root, '.capabilities')), ['README.md']);
   assert(f.read('CHANGELOG.md').includes('## [14.0.0] - 2026-11-04'));
+});
+test('release route: a waiting capability row is refused unless it is a table row ending in unreleased', async () => {
+  const { parseCapabilityRows, foldCapabilities } = await import('./changes.mjs');
+  const good = '| a thing | `sym` | `src/a.ts` | unreleased |';
+  assert.deepEqual(parseCapabilityRows('.capabilities/a.md', good + '\n\n').rows, [good]);
+  for (const bad of [
+    '',
+    'prose, not a row',
+    '| a thing | `sym` | `src/a.ts` | 18.2.0 |',
+    '| a thing | unreleased |',
+    '|---|---|---|---|',
+    good + '\nstray prose',
+  ])
+    assert.throws(() => parseCapabilityRows('.capabilities/a.md', bad), /\.capabilities\/a\.md/, bad);
+  // Rows wait but the index has no table: refuse, never drop them.
+  assert.throws(() => foldCapabilities('# no table\n', [{ rows: [good] }], '1.0.0'), /no table/);
+  // Nothing waiting: the index changes only where a row already said unreleased.
+  assert.equal(foldCapabilities('prose unreleased\n| x | unreleased |\n', [], '1.0.0'), 'prose unreleased\n| x | 1.0.0 |\n');
 });
 test('release route: release job refuses every force push spelling and force refspec', () => {
   const commands = job('release-pr');

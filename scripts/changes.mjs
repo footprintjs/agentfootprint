@@ -89,6 +89,54 @@ export function readFragments(dir = CHANGES_DIR) {
     .map((f) => parseFragment(`.changes/${f}`, readFileSync(join(dir, f), 'utf8')));
 }
 
+export const CAPABILITIES_DIR = join(ROOT, '.capabilities');
+
+/**
+ * One file's capability rows: each non-blank line is one `CAPABILITIES.md` table row whose
+ * Since cell is the placeholder `unreleased`. Throws with the file name on anything else,
+ * so a malformed row fails the pull request and never reaches a release.
+ */
+export function parseCapabilityRows(file, text) {
+  const rows = text.split('\n').filter((line) => line.trim() !== '');
+  if (rows.length === 0) throw new Error(`${file}: empty — write one CAPABILITIES.md table row`);
+  for (const row of rows) {
+    if (!row.startsWith('| ') || /^\|\s*-{3}/.test(row) || row.split('|').length < 6)
+      throw new Error(`${file}: every line must be one table row: | what you would build | \`symbol\` | \`path\` | unreleased |`);
+    if (!/\|\s*unreleased\s*\|\s*$/.test(row))
+      throw new Error(`${file}: the last cell must be the word unreleased — the release writes the version`);
+  }
+  return { file, rows };
+}
+
+/**
+ * Every capability row waiting for a release, sorted by filename (README.md is the format doc).
+ * Why files and not lines in CAPABILITIES.md: every pull request added its row at the same
+ * line of that table, so any two open pull requests conflicted. One file per row cannot.
+ */
+export function readCapabilityRows(dir = CAPABILITIES_DIR) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.md') && f !== 'README.md')
+    .sort()
+    .map((f) => parseCapabilityRows(`.capabilities/${f}`, readFileSync(join(dir, f), 'utf8')));
+}
+
+/**
+ * `CAPABILITIES.md` with the waiting rows placed first in its table and every `unreleased`
+ * placeholder replaced by `version`. Throws when rows wait and the table cannot be found.
+ */
+export function foldCapabilities(text, waiting, version) {
+  const lines = text.split('\n');
+  if (waiting.length > 0) {
+    const separator = lines.findIndex((line) => /^\|\s*-{3}/.test(line));
+    if (separator < 0) throw new Error('CAPABILITIES.md has no table to fold .capabilities/ rows into');
+    lines.splice(separator + 1, 0, ...waiting.flatMap((entry) => entry.rows.map((row) => row.trimEnd())));
+  }
+  return lines
+    .map((line) => (line.startsWith('|') ? line.replace(/\bunreleased\b/g, version) : line))
+    .join('\n');
+}
+
 /** The highest bump any fragment needs, or undefined for none. */
 export function requiredBump(fragments) {
   let at = -1;
@@ -203,6 +251,7 @@ function main(argv) {
   }
   if (cmd === 'check') {
     const fragments = readFragments(); // throws on the first malformed fragment
+    readCapabilityRows(); // throws on the first malformed capability row
     const baseAt = rest.indexOf('--base');
     if (baseAt >= 0) {
       const base = rest[baseAt + 1];

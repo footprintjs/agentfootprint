@@ -6,8 +6,9 @@
  *      (or take an explicit --bump, which may raise but never lower that).
  *   2. Write the `## [X.Y.Z] - date` entry at the top of CHANGELOG.md.
  *   3. Set the version in package.json and package-lock.json.
- *   4. Replace the placeholder `unreleased` in CAPABILITIES.md table rows with X.Y.Z.
- *   5. Delete the folded fragments.
+ *   4. Move the rows waiting in `.capabilities/` into the CAPABILITIES.md table and replace the
+ *      placeholder `unreleased` in its rows with X.Y.Z.
+ *   5. Delete the folded fragments and capability rows.
  *   6. Write the entry body to --notes-out (the GitHub release notes).
  *
  * Callers: .github/workflows/publish.yml (the automated release) and
@@ -29,6 +30,8 @@ import {
   ROOT,
   BUMPS,
   readFragments,
+  readCapabilityRows,
+  foldCapabilities,
   requiredBump,
   incVersion,
   renderEntryBody,
@@ -94,16 +97,17 @@ if (fragments.length > 0) {
   notes = (end < 0 ? rest : rest.slice(0, end)).trim();
 }
 
-// CAPABILITIES.md: rows added since the last release say `unreleased` in their Since cell.
+// CAPABILITIES.md: rows waiting in `.capabilities/` (one file per row) join the table, and every
+// `unreleased` Since cell, theirs or one already in the table, becomes this version.
 const capsPath = join(ROOT, 'CAPABILITIES.md');
+const capabilityRows = readCapabilityRows();
 let capsNext;
 if (existsSync(capsPath)) {
   const caps = readFileSync(capsPath, 'utf8');
-  capsNext = caps
-    .split('\n')
-    .map((line) => (line.startsWith('|') ? line.replace(/\bunreleased\b/g, version) : line))
-    .join('\n');
+  capsNext = foldCapabilities(caps, capabilityRows, version);
   if (capsNext === caps) capsNext = undefined;
+} else if (capabilityRows.length > 0) {
+  fail('.capabilities/ holds rows but CAPABILITIES.md is missing');
 }
 
 console.error(`release-prepare: ${current} → ${version} (${bump}; ${fragments.length} fragment(s))`);
@@ -125,6 +129,7 @@ if (existsSync(lockPath)) {
 }
 if (capsNext !== undefined) writeFileSync(capsPath, capsNext);
 for (const f of fragments) rmSync(join(ROOT, f.file));
+for (const entry of capabilityRows) rmSync(join(ROOT, entry.file));
 const notesOut = arg('notes-out');
 if (notesOut) writeFileSync(notesOut, `${notes}\n`);
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);

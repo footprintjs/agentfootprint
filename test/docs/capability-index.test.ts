@@ -22,7 +22,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** `| what you'd build | `symbol` | `path` | since |` */
 function indexRows(): { symbol: string; where: string }[] {
-  const md = readFileSync(join(ROOT, 'CAPABILITIES.md'), 'utf8');
+  // Released rows live in the table; rows waiting for a release are one file each in
+  // `.capabilities/` (so two pull requests never edit the same line) and are held to the same truth.
+  const waitingDir = join(ROOT, '.capabilities');
+  const waiting = existsSync(waitingDir)
+    ? readdirSync(waitingDir)
+        .filter((f) => f.endsWith('.md') && f !== 'README.md')
+        .map((f) => readFileSync(join(waitingDir, f), 'utf8'))
+    : [];
+  const md = [readFileSync(join(ROOT, 'CAPABILITIES.md'), 'utf8'), ...waiting].join('\n');
   const rows: { symbol: string; where: string }[] = [];
   for (const line of md.split('\n')) {
     if (!line.startsWith('| ') || line.startsWith('| If you are') || line.startsWith('|---'))
