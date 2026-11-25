@@ -89,8 +89,8 @@ describe('G5 — compact look-backs read', () => {
     });
   }
 
-  it('“last 24h” resolves to the look-back [now − 24h, now]', () => {
-    expect(windowsOf('last 24h')).toEqual(['2026-10-08T16:00:00Z/2026-10-09T16:00:00.001Z']);
+  it('“last 24h” resolves to the look-back [now − 24h, now)', () => {
+    expect(windowsOf('last 24h')).toEqual(['2026-10-08T16:00:00Z/2026-10-09T16:00:00Z']);
   });
 
   for (const [text, quote] of [
@@ -141,8 +141,8 @@ describe('G3 — a date with a named month', () => {
     expect(m).toMatchObject({ quote: '14:15 and 14:40 on 11 September' });
     expect(m!.problem).toBeUndefined();
     expect(windowsOf(field)).toEqual([
-      '2026-09-11T14:15:00-07:00/2026-09-11T14:41:00-07:00',
-      '2025-09-11T14:15:00-07:00/2025-09-11T14:41:00-07:00',
+      '2026-09-11T14:15:00-07:00/2026-09-11T14:40:00-07:00',
+      '2025-09-11T14:15:00-07:00/2025-09-11T14:40:00-07:00',
     ]);
   });
 

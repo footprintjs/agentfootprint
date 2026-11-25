@@ -422,8 +422,8 @@ describe('G15 — an agent with no zone anywhere asks the person’s zone first,
     expect(isInputPause(out)).toBe(false);
     expect(timeLineOf(requests[0])).toBe(
       `${TIME_LINE_SOURCE} This turn's time: Friday 2026-10-09 15:40 UTC (the person's time zone is not ` +
-        "known). The window the person set in the app's time control is 2026-10-09 15:00–15:29 " +
-        "UTC (the person's time zone is not known) — client_activity start_time " +
+        "known). The window the person set in the app's time control is 2026-10-09 15:00–15:30 " +
+        "UTC (end excluded) (the person's time zone is not known) — client_activity start_time " +
         `${Date.parse(window.from)}, end_time ${Date.parse(window.to)}. A call may pass these ` +
         'values as written; an answer built on them states that window.',
     );

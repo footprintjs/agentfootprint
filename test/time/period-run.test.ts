@@ -87,7 +87,7 @@ const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';
 const MESSAGE = 'Show client activity 10/09/26 8 AM to 8:40 AM';
 const FROM_MS = Date.parse('2026-10-09T08:00:00-07:00');
-const TO_MS = Date.parse('2026-10-09T08:41:00-07:00');
+const TO_MS = Date.parse('2026-10-09T08:40:00-07:00');
 
 const RANGE_PARTS: TimeParts = {
   date: { kind: 'numeric', fields: [10, 9, 26] },
@@ -219,9 +219,10 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         iteration: 1,
         mention: 0,
         from: '2026-10-09T08:00:00-07:00',
-        to: '2026-10-09T08:41:00-07:00',
+        to: '2026-10-09T08:40:00-07:00',
         zone: LA,
         how: 'confirmed',
+        endpoint: { cutoff: '2026-10-09T08:40:00-07:00', end: 'exclusive', precision: 'minute' },
       },
     ]);
     // The served line before the next call — the request's LAST line, late at the decision
@@ -229,7 +230,7 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
     const lines = requests[1]!.messages;
     expect(lines[lines.length - 1]).toMatchObject({ role: 'user' });
     expect(lines[lines.length - 1]!.content as string).toContain(
-      '“10/09/26 8 AM to 8:40 AM” is 2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00), the ' +
+      '“10/09/26 8 AM to 8:40 AM” is 2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00) (end excluded), the ' +
         'window the person confirmed when asked what their words meant — client_activity ' +
         `start_time ${FROM_MS}, end_time ${TO_MS}.`,
     );
@@ -242,7 +243,7 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
       version: 1,
       asked: {
         from: '2026-10-09T08:00:00-07:00',
-        to: '2026-10-09T08:41:00-07:00',
+        to: '2026-10-09T08:40:00-07:00',
         edge: 'exclusive',
       },
       zone: LA,
@@ -268,12 +269,13 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         callOccurrenceKey: callRow.callOccurrenceKey,
         how: 'filled',
         form: 0,
-        asked: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' },
+        asked: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:40:00-07:00' },
         person: {
           from: '2026-10-09T08:00:00-07:00',
-          to: '2026-10-09T08:41:00-07:00',
+          to: '2026-10-09T08:40:00-07:00',
           source: 'answered',
           mention: 0,
+          endpoint: { cutoff: '2026-10-09T08:40:00-07:00', end: 'exclusive', precision: 'minute' },
         },
       },
     ]);
@@ -314,7 +316,7 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         argument: 'window',
         source: 'app',
         appSource: 'time.window',
-        value: '2026-10-09T14:00:00Z..2026-10-09T14:59:59Z',
+        value: '2026-10-09T14:00:00Z..2026-10-09T14:59:59.999999999Z',
       },
     ]);
     // In process, `ctx.time` is a field on the execution context.
@@ -369,7 +371,7 @@ describe('a window the model chose — record and run', () => {
       asked: { from: '2026-10-09T16:00:00Z', to: '2026-10-09T17:00:00Z' },
       person: {
         from: '2026-10-09T08:00:00-07:00',
-        to: '2026-10-09T08:41:00-07:00',
+        to: '2026-10-09T08:40:00-07:00',
         source: 'answered',
         mention: 0,
       },

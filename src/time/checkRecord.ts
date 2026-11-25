@@ -24,9 +24,10 @@
  * ```
  */
 
-import { instantOf } from './instant.js';
+import { compareInstants, instantOf } from './instant.js';
 import type { TimeRange } from './range.js';
 import type { ZoneName } from './zone.js';
+import { endpointFits, type WindowEndpoint } from './windowEndpoint.js';
 
 // ─── The shapes ──────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ export interface PeriodDiffers {
   readonly against: 'asked' | 'person';
   /** The range compared against. */
   readonly asked: TimeRange;
+  readonly endpoint?: WindowEndpoint;
   /** What the call read — one range per declared period, else one. */
   readonly read: readonly TimeRange[];
   readonly source: ReadSource;
@@ -101,9 +103,9 @@ export function clocksDiffer(sources: readonly SourceClock[]): ClocksDiffer | un
 const isRange = (value: unknown): value is TimeRange => {
   if (typeof value !== 'object' || value === null) return false;
   const r = value as Record<string, unknown>;
-  const from = instantOf(r.from, 'lenient')?.ms;
-  const to = instantOf(r.to, 'lenient')?.ms;
-  return from !== undefined && to !== undefined && from < to;
+  const from = instantOf(r.from, 'lenient');
+  const to = instantOf(r.to, 'lenient');
+  return from !== undefined && to !== undefined && compareInstants(from, to) < 0;
 };
 const isRanges = (value: unknown): boolean => Array.isArray(value) && value.every(isRange);
 
@@ -114,6 +116,7 @@ export function isPeriodDiffers(value: unknown): value is PeriodDiffers {
   return (
     (d.against === 'asked' || d.against === 'person') &&
     isRange(d.asked) &&
+    (d.endpoint === undefined || endpointFits(d.endpoint, d.asked as TimeRange)) &&
     isRanges(d.read) &&
     (d.read as unknown[]).length > 0 &&
     (d.source === 'declared' ||

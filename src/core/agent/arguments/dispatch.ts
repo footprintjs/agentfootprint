@@ -74,6 +74,7 @@ export function withFills(args: ToolArgs, resolution: ArgumentResolution | undef
   const fills = resolution?.fills;
   if (fills === undefined || fills.length === 0) return args;
   const filled: Record<string, unknown> = { ...args };
+  for (const argument of resolution?.removePeriodArguments ?? []) delete filled[argument];
   for (const fill of fills) filled[fill.argument] = fill.value;
   return filled;
 }
@@ -174,14 +175,24 @@ export function keptNote(
  * omitted, never denied: the rewrite is on `middlewareDecisions`
  * (`changedKeys`), which the answer's standing and the "Assumed" block read.
  * Strict equality on purpose: the note prints the value, so it must be the
- * value that ran, byte for byte.
+ * value that ran, byte for byte. One fill is the library's own to lengthen: a
+ * confirmed look-back in a length-only form (`wider: 'source-clock…'`), which
+ * the dispatch moment replaces after checking the final arguments still held
+ * it (`stages/timeLayer.ts` · `timeAtDispatch`). It ran, with the lengthened
+ * value, and the fill handed back carries THAT value so the note prints it.
  */
 export function fillsThatRan(
   resolution: ArgumentResolution | undefined,
   ranWith: ToolArgs,
 ): readonly ArgumentFill[] {
   const fills = resolution?.fills ?? [];
-  return fills.filter((f) => ranWith[f.argument] === f.value);
+  return fills.flatMap((f) => {
+    if (ranWith[f.argument] === f.value) return [f];
+    const ran = ranWith[f.argument];
+    const lengthened =
+      'wider' in f && (f.wider === 'source-clock' || f.wider === 'source-clock-trims');
+    return lengthened && typeof ran === 'string' ? [{ ...f, value: ran }] : [];
+  });
 }
 
 /** The value the model's call carried for `argument` — `undefined` when it left it out. */

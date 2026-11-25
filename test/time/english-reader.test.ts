@@ -433,13 +433,13 @@ describe('a reading only PROPOSES — never the person’s words (the owner’s 
     }
   });
 
-  it('“last 2 hours” is offered as the look-back ending now, in the run’s zone', () => {
+  it('“last 2 hours” is offered as the look-back with an exclusive clock cutoff, in the run’s zone', () => {
     const [row] = rowsOf('any errors in the last 2 hours?');
     expect(row!.choice).toEqual({ by: 'open', remaining: [0], open: ['confirm'] });
-    // Half-open, so `now` itself is inside the look-back.
+    // Half-open, with the recorded clock's now as the exclusive end.
     expect(row!.candidates![0]!.range).toEqual({
       from: '2026-10-09T13:40:00Z',
-      to: '2026-10-09T15:40:00.001Z',
+      to: '2026-10-09T15:40:00Z',
     });
     expect(row!.candidates![0]!.zone).toBe(LA);
   });
@@ -535,9 +535,9 @@ describe('the field sentences — parts, then resolve, the policy and the ask', 
     const parses = withZoneAnswered(read(FIELD).mentions[0]!.parses, LA);
     const res = resolveMention(parses, CLOCK, RULE);
     expect(res.candidates.map((c) => [c.reading.dateOrder, c.range.from, c.range.to])).toEqual([
-      ['MDY', '2026-10-09T08:00:00-07:00', '2026-10-09T08:41:00-07:00'],
-      ['DMY', '2026-09-10T08:00:00-07:00', '2026-09-10T08:41:00-07:00'],
-      ['YMD', '2010-09-26T08:00:00-07:00', '2010-09-26T08:41:00-07:00'],
+      ['MDY', '2026-10-09T08:00:00-07:00', '2026-10-09T08:40:00-07:00'],
+      ['DMY', '2026-09-10T08:00:00-07:00', '2026-09-10T08:40:00-07:00'],
+      ['YMD', '2010-09-26T08:00:00-07:00', '2010-09-26T08:40:00-07:00'],
     ]);
     expect(chooseReading(res, DEFAULT_TIME_POLICY, 'rule')).toMatchObject({
       by: 'open',

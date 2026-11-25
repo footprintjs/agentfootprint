@@ -152,13 +152,36 @@ function epochTool(seen: Record<string, unknown>[] = [], facts: Record<string, u
 }
 
 /** A look-back-only search, as today's `{ argument, spelling }` sugar declares it. */
-function lookbackTool(seen: Record<string, unknown>[] = []) {
+function lookbackTool(seen: Record<string, unknown>[] = [], absoluteBounds = false) {
   return defineTool({
     name: 'search_logs',
     description: 'Error lines over a look-back window.',
-    inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
-    askOrAssume: { window: { assume: '1h' } },
-    period: { argument: 'window', spelling: 'lookback' } as never,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        window: { type: 'string' },
+        ...(absoluteBounds && { from: { type: 'string' }, to: { type: 'string' } }),
+      },
+    },
+    askOrAssume: {
+      window: { assume: '1h' },
+      ...(absoluteBounds && {
+        from: { ask: 'From when?' },
+        to: { ask: 'Until when?' },
+      }),
+    },
+    period: absoluteBounds
+      ? {
+          forms: [
+            { kind: 'lookback', argument: 'window', signed: false },
+            {
+              kind: 'bounds',
+              from: { argument: 'from', as: 'iso' },
+              to: { argument: 'to', as: 'iso', edge: 'exclusive' },
+            },
+          ],
+        }
+      : { argument: 'window', spelling: 'lookback' },
     execute: (args) => {
       seen.push(args);
       return 'no errors';
@@ -267,9 +290,9 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     // Off the reader's allow-list (a numeric date): every reading is offered to CONFIRM, with its zone.
     expect(field.description).toBe('Is this the time you meant by “10/09/26 8 AM to 8:40 AM PST”?');
     expect(field.enum).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
-      '2026-09-10T08:00:00-07:00/2026-09-10T08:41:00-07:00',
-      '2010-09-26T08:00:00-07:00/2010-09-26T08:41:00-07:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00',
+      '2026-09-10T08:00:00-07:00/2026-09-10T08:40:00-07:00',
+      '2010-09-26T08:00:00-07:00/2010-09-26T08:40:00-07:00',
     ]);
     expect(field.labels).toHaveLength(3);
     expect(field.labels![0]).toContain('PDT');
@@ -281,8 +304,11 @@ describe('the field sentence — the zone, then the date order, then the tool ru
       values: { f1: field.enum![0]! },
     });
     expect(isInputPause(done)).toBe(false);
-    // 08:00 PDT is 15:00Z; the exclusive end is 08:41 PDT.
-    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560460000 });
+    // 08:00 PDT is 15:00Z; the exclusive end is the stated 08:40 PDT cutoff.
+    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560400000 });
+    expect(ofKind(agent, 'time-answer')).toMatchObject([
+      { endpoint: { cutoff: '2026-10-09T08:40:00-07:00', end: 'exclusive', precision: 'minute' } },
+    ]);
     expect(ofKind(agent, 'argument')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ argument: 'start_time', source: 'answered' }),
@@ -310,7 +336,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
       }),
     );
     const field = second.awaitingInput.fields[0]!;
-    expect(field.enum).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00']);
+    expect(field.enum).toEqual(['2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00']);
     expect(field.labels![0]!.replace(/\s/g, ' ')).toBe(
       'I read “10/09/26 8 AM to 8:40 AM PST” as Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT in America/Los_Angeles — is that right?',
     );
@@ -320,7 +346,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
       values: { f1: field.enum![0]! },
     });
     expect(isInputPause(done)).toBe(false);
-    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560460000 });
+    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560400000 });
   });
 
   it('the ask crosses a JSON round trip of its checkpoint onto a fresh agent', async () => {
@@ -357,16 +383,18 @@ describe('the field sentence — the zone, then the date order, then the tool ru
       [epochTool(seen, { direction: 'future' })],
       (b) => b.time({ zone: LA, reader }),
     );
-    const first = paused(await agent.run({ message: FIELD, time: { now: NOW } }));
+    const first = paused(
+      await agent.run({ message: FIELD, time: { now: '2026-10-09T15:39:00Z' } }),
+    );
     const second = paused(
       await agent.resume(first.checkpoint as never, {
         requestId: first.awaitingInput.requestId,
         values: { f1: LA },
       }),
     );
-    // 10 Sep 2026 and 26 Sep 2010 are over; 9 Oct 08:00–08:41 still runs past now (08:40).
+    // 10 Sep 2026 and 26 Sep 2010 are over; 9 Oct 08:00–08:40 still runs past now (08:39).
     expect(second.awaitingInput.fields[0]!.enum).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00',
     ]);
     expect(second.awaitingInput.fields[0]!.labels).toHaveLength(1);
     const third = paused(
@@ -532,7 +560,8 @@ describe('every chat reading is a confirmation — never filed as said (the owne
         iteration: 1,
         mention: 0,
         from: '2026-10-09T13:40:00Z',
-        to: '2026-10-09T15:40:00.001Z',
+        to: NOW,
+        endpoint: { cutoff: NOW, end: 'exclusive', precision: 'second' },
         zone: LA,
         how: 'confirmed',
       },
@@ -589,7 +618,7 @@ describe('every chat reading is a confirmation — never filed as said (the owne
     const seen: Record<string, unknown>[] = [];
     const { agent } = build(
       [call('c1', 'search_logs', {}), answer('none')],
-      [lookbackTool(seen)],
+      [lookbackTool(seen, true)],
       (b) => b.time({ zone: LA, reader }),
     );
     const first = paused(
@@ -601,8 +630,8 @@ describe('every chat reading is a confirmation — never filed as said (the owne
       values: { f1: first.awaitingInput.fields[0]!.enum![0]! },
     });
     expect(isInputPause(done)).toBe(false);
-    // The confirmed look-back, in the tool's own form — not the rule's `1h`.
-    expect(seen).toEqual([{ window: '2h' }]);
+    // Its absolute form carries the confirmed look-back. The rule's duration default is unused.
+    expect(seen).toEqual([{ from: '2026-10-09T13:40:00Z', to: NOW }]);
   });
 });
 
@@ -632,7 +661,7 @@ describe('the one served time sentence — the confirmed window and its source',
     it(`"last 2 hours": nothing served before the confirmation; after it, the next request names the window in each tool's own form, as the person's confirmation (${mode})`, async () => {
       const { agent, requests } = build(
         [call('c0', 'search_logs', {}), answer('none')],
-        [lookbackTool(), epochTool()],
+        [lookbackTool([], true), epochTool()],
         (b) => b.time({ zone: LA, reader }),
         mode,
       );
@@ -649,7 +678,7 @@ describe('the one served time sentence — the confirmed window and its source',
       expect(timeLineOf(requests[0])).toBe(
         pendingLine(
           'last 2 hours',
-          'search_logs is called with window left out, or client_activity is called with ' +
+          'search_logs is called with window, from, to left out, or client_activity is called with ' +
             'start_time, end_time left out',
         ),
       );
@@ -665,8 +694,10 @@ describe('the one served time sentence — the confirmed window and its source',
       ]);
       expect(timeLineOf(requests[1])).toBe(
         `${OPEN} The person's time words, as the library holds them: “last 2 hours” is ` +
-          `${WINDOW_2H}, the window the person confirmed when asked what their words meant — ` +
-          `search_logs window "2h"; client_activity start_time ${NOW_MS - 2 * 3_600_000}, ` +
+          `${WINDOW_2H} (end excluded), the window the person confirmed when asked what their words meant — ` +
+          `search_logs from "2026-10-09T13:40:00Z", to "${NOW}"; client_activity start_time ${
+            NOW_MS - 2 * 3_600_000
+          }, ` +
           `end_time ${NOW_MS}. A call may pass these values as written; an answer built on them ` +
           'states that window.',
       );
@@ -678,7 +709,7 @@ describe('the one served time sentence — the confirmed window and its source',
     const seen: Record<string, unknown>[] = [];
     const { agent, requests } = build(
       [call('c0', 'search_logs', {}), call('c1', 'search_logs', {}), answer('none')],
-      [lookbackTool(seen), epochTool()],
+      [lookbackTool(seen, true), epochTool()],
       (b) => b.time({ zone: LA, reader }),
       'classic',
     );
@@ -694,7 +725,10 @@ describe('the one served time sentence — the confirmed window and its source',
     // run clock with it (G16): classic mode serves the whole line on its first request only.
     expect(timeLineOf(requests[0])).toContain('is not settled yet');
     expect(timeLineOf(requests[1])).toBeUndefined();
-    expect(seen).toEqual([{ window: '2h' }, { window: '2h' }]);
+    expect(seen).toEqual([
+      { from: '2026-10-09T13:40:00Z', to: NOW },
+      { from: '2026-10-09T13:40:00Z', to: NOW },
+    ]);
     expect(ofKind(agent, 'call-window').filter((r) => r.toolCallId === 'c1')).toMatchObject([
       { how: 'filled', person: { source: 'answered', mention: 0 } },
     ]);
@@ -854,8 +888,8 @@ describe('reader edges — the end edge, a named zone, the app’s abbreviation 
     const field = first.awaitingInput.fields[0]!;
     expect(field.format).toBe('time-range');
     expect(field.enum).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
-      '2026-10-09T08:00:00-08:00/2026-10-09T08:41:00-08:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00',
+      '2026-10-09T08:00:00-08:00/2026-10-09T08:40:00-08:00',
     ]);
     expect(field.labels![0]).toContain('in America/Los_Angeles');
     expect(field.labels![1]).toContain('in Etc/GMT+8');
@@ -864,7 +898,7 @@ describe('reader edges — the end edge, a named zone, the app’s abbreviation 
       values: { f1: field.enum![0]! },
     });
     expect(isInputPause(done)).toBe(false);
-    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560460000 });
+    expect(seen[0]).toMatchObject({ start_time: 1791558000000, end_time: 1791560400000 });
     expect(ofKind(agent, 'time-answer')).toMatchObject([{ zone: LA, how: 'confirmed' }]);
   });
 });
@@ -887,8 +921,8 @@ describe('G13 — “September 29 8:45 to 8:55” through a real agent', () => {
     );
     const field = first.awaitingInput.fields[0]!;
     expect(field.enum).toEqual([
-      '2026-09-29T08:45:00-07:00/2026-09-29T08:56:00-07:00',
-      '2026-09-29T20:45:00-07:00/2026-09-29T20:56:00-07:00',
+      '2026-09-29T08:45:00-07:00/2026-09-29T08:55:00-07:00',
+      '2026-09-29T20:45:00-07:00/2026-09-29T20:55:00-07:00',
     ]);
     const done = await agent.resume(first.checkpoint as never, {
       requestId: first.awaitingInput.requestId,
@@ -897,7 +931,7 @@ describe('G13 — “September 29 8:45 to 8:55” through a real agent', () => {
     expect(isInputPause(done)).toBe(false);
     expect(seen[0]).toMatchObject({
       start_time: Date.parse('2026-09-30T03:45:00Z'),
-      end_time: Date.parse('2026-09-30T03:56:00Z'),
+      end_time: Date.parse('2026-09-30T03:55:00Z'),
     });
   });
 });

@@ -12,8 +12,8 @@
  *     quote. It never picks an order, a zone or an instant;
  *   - the library RESOLVES the parts against the run's clock into every candidate
  *     window (three date orders, am and pm for a bare `8:40`, both instants of a
- *     wall time the clocks go back through), each read to the end of its grain
- *     ("to 8:40" is `[08:00, 08:41)`);
+ *     wall time the clocks go back through); a range ending at a clock time
+ *     keeps that exact cutoff ("to 8:40" is `[08:00, 08:40)`);
  *   - the POLICY narrows them (`dateOrder: 'MDY'` → recorded); and whatever is
  *     left is only a PROPOSAL (the owner's decision "Always confirm"): no
  *     reading is filed as the person's words — the time ask offers it,
@@ -122,8 +122,11 @@ export async function run(input: string): Promise<string> {
   check(window?.said.length === 0, 'the reading is not filed as the person’s words');
   check(
     window?.range.from === '2026-10-09T08:00:00-07:00' &&
-      window.range.to === '2026-10-09T08:41:00-07:00',
-    '"to 8:40" read to the end of its minute',
+      window.range.to === '2026-10-09T08:40:00-07:00' &&
+      window.endpoint?.cutoff === window.range.to &&
+      window.endpoint.end === 'exclusive' &&
+      window.endpoint.precision === 'minute',
+    '"to 8:40" keeps its exclusive minute cutoff',
   );
   return `${window?.range.from} → ${window?.range.to} (${assumed?.reader.id} ${assumed?.reader.version}, tzdata ${assumed?.tzdata})`;
 }
