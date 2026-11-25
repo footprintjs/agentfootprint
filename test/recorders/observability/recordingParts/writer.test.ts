@@ -29,7 +29,11 @@ import type { AgentfootprintEvent } from '../../../../src/index.js';
 import { toWireJson } from '../../../../src/lib/wireJson.js';
 import { openSavedRecording, type SavedRecording } from '../../../../src/observe.js';
 import { mock } from '../../../../src/providers.js';
-import { fileRecordingParts } from '../../../../src/recorders/observability/recordingParts/file.js';
+import { enableDevMode, disableDevMode } from 'footprintjs';
+import {
+  NO_BUDGET_WARNING,
+  fileRecordingParts,
+} from '../../../../src/recorders/observability/recordingParts/file.js';
 import { splitRecording } from '../../../../src/recorders/observability/recordingParts/split.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -290,7 +294,7 @@ function recordingOf(count: number): Rec {
 /** A store view that records every put's kind, and can lie about or refuse calls. */
 function watched(
   store: ArtifactStore,
-  options: { mismatchAt?: number; failDelete?: boolean } = {},
+  options: { mismatchAt?: number; digestMismatchAt?: number; failDelete?: boolean } = {},
 ): { store: ArtifactStore; kinds: string[]; deletes: string[] } {
   const kinds: string[] = [];
   const deletes: string[] = [];
@@ -305,6 +309,9 @@ function watched(
       async put(scope, input) {
         kinds.push(input.kind);
         const result = await store.put(scope, input);
+        if (kinds.length === options.digestMismatchAt) {
+          return { ...result, meta: { ...result.meta, digest: `sha-256:${'0'.repeat(64)}` } };
+        }
         return kinds.length === options.mismatchAt
           ? { ...result, meta: { ...result.meta, bytes: result.meta.bytes + 1 } }
           : result;
@@ -565,3 +572,85 @@ describe.each(['inMemoryArtifacts', ...(sqliteAvailable ? ['sqliteArtifacts'] : 
     });
   },
 );
+
+describe('the budget check at its boundary', () => {
+  /** What a clean filing of `recording` really stores: bytes over every artifact, and their count. */
+  async function measured(recording: Rec): Promise<{ bytes: number; count: number }> {
+    const filed = await fileRecordingParts(inMemoryArtifacts(), SCOPE, recording, {
+      runId: 'r',
+      targetBytes: 4096,
+    });
+    if (filed.status !== 'filed') throw new Error(filed.detail);
+    const all = [...filed.parts, filed.index];
+    return { bytes: all.reduce((sum, meta) => sum + meta.bytes, 0), count: all.length };
+  }
+
+  it('an exact fit files with nothing swept; one byte less is refused before any put', async () => {
+    const recording = recordingOf(6);
+    const { bytes } = await measured(recording);
+    const exact = await fileRecordingParts(
+      inMemoryArtifacts({ retention: { maxBytesPerScope: bytes } }),
+      SCOPE,
+      recording,
+      { runId: 'r', targetBytes: 4096 },
+    );
+    expect(exact).toMatchObject({ status: 'filed', swept: [] });
+    const view = watched(inMemoryArtifacts({ retention: { maxBytesPerScope: bytes - 1 } }));
+    const short = await fileRecordingParts(view.store, SCOPE, recording, {
+      runId: 'r',
+      targetBytes: 4096,
+    });
+    expect(short).toMatchObject({ status: 'refused', reason: 'would-not-fit', swept: [] });
+    expect(view.kinds).toEqual([]);
+  });
+
+  it('an exact count files; one artifact fewer is refused before any put', async () => {
+    const recording = recordingOf(6);
+    const { count } = await measured(recording);
+    const exact = await fileRecordingParts(
+      inMemoryArtifacts({ retention: { maxCountPerScope: count } }),
+      SCOPE,
+      recording,
+      { runId: 'r', targetBytes: 4096 },
+    );
+    expect(exact).toMatchObject({ status: 'filed', swept: [] });
+    const view = watched(inMemoryArtifacts({ retention: { maxCountPerScope: count - 1 } }));
+    expect(
+      await fileRecordingParts(view.store, SCOPE, recording, { runId: 'r', targetBytes: 4096 }),
+    ).toMatchObject({ status: 'refused', reason: 'would-not-fit' });
+    expect(view.kinds).toEqual([]);
+  });
+
+  it('a ticket with the right byte count but another digest stops the filing as store-mismatch', async () => {
+    const inner = inMemoryArtifacts();
+    const view = watched(inner, { digestMismatchAt: 2 });
+    const filed = await fileRecordingParts(view.store, SCOPE, recordingOf(6), {
+      runId: 'r',
+      targetBytes: 4096,
+    });
+    expect(filed).toMatchObject({ status: 'refused', reason: 'store-mismatch', removed: 2 });
+    expect(await kindsIn(inner)).toEqual([]);
+  });
+});
+
+describe('a store that states no budget is named once, in dev mode', () => {
+  it('warns once per store instance, and never for a store that states its budget', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    enableDevMode();
+    try {
+      const plain = withoutBudget(inMemoryArtifacts());
+      await fileRecordingParts(plain, SCOPE, recordingOf(2), { runId: 'r' });
+      await fileRecordingParts(plain, SCOPE, recordingOf(2), { runId: 'r' });
+      expect(warn.mock.calls.filter((call) => call[0] === NO_BUDGET_WARNING)).toHaveLength(1);
+      await fileRecordingParts(withoutBudget(inMemoryArtifacts()), SCOPE, recordingOf(2), {
+        runId: 'r',
+      });
+      expect(warn.mock.calls.filter((call) => call[0] === NO_BUDGET_WARNING)).toHaveLength(2);
+      await fileRecordingParts(inMemoryArtifacts(), SCOPE, recordingOf(2), { runId: 'r' });
+      expect(warn.mock.calls.filter((call) => call[0] === NO_BUDGET_WARNING)).toHaveLength(2);
+    } finally {
+      disableDevMode();
+      warn.mockRestore();
+    }
+  });
+});

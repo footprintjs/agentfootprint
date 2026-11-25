@@ -6,7 +6,7 @@ title: epochAt
 
 > **epochAt**(`source`, `epoch`): [`EpochLocation`](/docs/api/interfaces/EpochLocation) \| `undefined`
 
-Defined in: [src/time-travel/epochs.ts:298](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/epochs.ts#L298)
+Defined in: [src/time-travel/epochs.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/epochs.ts#L301)
 
 One epoch by number, or `undefined` when the run has no such iteration.
 

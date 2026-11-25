@@ -67,7 +67,8 @@ statement of the retention every in-tree adapter already enforces
 recording fits an EMPTY scope, as the whole layout's up-front refusal does; a
 filing may still evict older artifacts, as a whole recording does. A store
 without the member keeps the plain behaviour (a 100 KB scope holding a 60 KB
-dataset, and six 20 KB parts, ends empty).
+dataset, and six 20 KB parts, ends empty), and in dev mode such a store is named
+once per instance with a fixed `console.warn` sentence (`file.ts · NO_BUDGET_WARNING`).
 
 **The refusal sentence.** It is the writer's own: a fixed sentence naming the
 step by its code in parentheses (`would-not-fit`, `store-refused`,

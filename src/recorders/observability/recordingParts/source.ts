@@ -39,6 +39,11 @@ export type FetchedPart = { readonly text: string } | { readonly refused: FetchR
 /** Where parts come from. */
 export interface PartSource {
   fetch(entry: StoredPartEntry, signal: AbortSignal | undefined): Promise<FetchedPart>;
+  /** The ticket alone, checked against the entry: no bytes are read. */
+  check(
+    entry: StoredPartEntry,
+    signal: AbortSignal | undefined,
+  ): Promise<{ readonly present: true } | { readonly refused: FetchRefusal }>;
 }
 
 /** The payload of one artifact `get`, decoded to text when it is text. */
@@ -94,22 +99,35 @@ export function storeSource(
   artifacts: SavedRecordingArtifacts,
   runId: string | undefined,
 ): PartSource {
+  /** `head` the entry's ref and check its ticket against the entry, before any `get`. */
+  const ticket = async (
+    entry: StoredPartEntry,
+    signal: AbortSignal | undefined,
+  ): Promise<ArtifactMeta | { readonly refused: FetchRefusal }> => {
+    signal?.throwIfAborted();
+    const meta = await artifacts.head(entry.ref);
+    signal?.throwIfAborted();
+    if (meta === null) return { refused: 'missing' };
+    if (
+      meta.ref !== entry.ref ||
+      meta.kind !== RECORDING_PART_ARTIFACT_KIND ||
+      meta.mediaType !== RECORDING_MEDIA_TYPE ||
+      meta.bytes !== entry.bytes ||
+      (meta.digest !== undefined && meta.digest !== entry.digest) ||
+      meta.origin?.runId !== runId
+    ) {
+      return { refused: 'changed' };
+    }
+    return meta;
+  };
   return {
+    async check(entry, signal) {
+      const meta = await ticket(entry, signal);
+      return 'refused' in meta ? meta : { present: true };
+    },
     async fetch(entry, signal) {
-      signal?.throwIfAborted();
-      const meta = await artifacts.head(entry.ref);
-      signal?.throwIfAborted();
-      if (meta === null) return { refused: 'missing' };
-      if (
-        meta.ref !== entry.ref ||
-        meta.kind !== RECORDING_PART_ARTIFACT_KIND ||
-        meta.mediaType !== RECORDING_MEDIA_TYPE ||
-        meta.bytes !== entry.bytes ||
-        (meta.digest !== undefined && meta.digest !== entry.digest) ||
-        meta.origin?.runId !== runId
-      ) {
-        return { refused: 'changed' };
-      }
+      const meta = await ticket(entry, signal);
+      if ('refused' in meta) return meta;
       const got = await fetchPayload(artifacts, meta, signal);
       if ('refused' in got) return got;
       if (!('text' in got)) return { refused: 'changed' };
@@ -129,6 +147,11 @@ export function memorySource(texts: ReadonlyMap<string, string>): PartSource {
       signal?.throwIfAborted();
       const text = texts.get(entry.digest);
       return text === undefined ? { refused: 'missing' } : { text };
+    },
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async check(entry, signal) {
+      signal?.throwIfAborted();
+      return texts.has(entry.digest) ? { present: true } : { refused: 'missing' };
     },
   };
 }

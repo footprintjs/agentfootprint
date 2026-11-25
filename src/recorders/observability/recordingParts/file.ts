@@ -32,6 +32,8 @@
  * no reader can address.
  */
 
+import { isDevMode } from 'footprintjs';
+
 import { computeArtifactDigest } from '../../../artifacts/payload.js';
 import {
   RECORDING_INDEX_ARTIFACT_KIND,
@@ -245,7 +247,10 @@ async function fitsBudget(
   scope: ArtifactScope,
   split: SplitRecording,
 ): Promise<boolean> {
-  if (typeof store.scopeBudget !== 'function') return true;
+  if (typeof store.scopeBudget !== 'function') {
+    warnNoBudget(store);
+    return true;
+  }
   const budget = await store.scopeBudget(scope);
   if (budget === null || budget === undefined) return true;
   const index = recordingIndexText(split.draft, {
@@ -261,4 +266,21 @@ async function fitsBudget(
     (budget.maxBytes === undefined || bytes <= budget.maxBytes) &&
     (budget.maxCount === undefined || count <= budget.maxCount)
   );
+}
+
+/** Stores already warned about, so each instance is named once. */
+const warnedStores = new WeakSet<object>();
+
+/** The sentence a store without `scopeBudget` gets, once per instance, in dev mode. */
+export const NO_BUDGET_WARNING =
+  '[agentfootprint] recordings in parts: this artifact store does not state its budget ' +
+  '(scopeBudget), so a recording too large for the scope is found out only after its parts ' +
+  "have evicted the scope's other artifacts. Implement scopeBudget on the store to refuse " +
+  'such a recording before its first put.';
+
+function warnNoBudget(store: ArtifactStore): void {
+  if (!isDevMode() || warnedStores.has(store)) return;
+  warnedStores.add(store);
+  // eslint-disable-next-line no-console
+  console.warn(NO_BUDGET_WARNING);
 }
