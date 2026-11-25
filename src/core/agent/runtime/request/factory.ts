@@ -60,6 +60,7 @@ export function requestFactory(environment: RequestEnvironment) {
         })),
       }),
       servedTools: run.value.servedTools,
+      contextBinding: run.value.contextBaseline,
       registrations: environment.registrations,
       ...(environment.configuration.recordReceiptValue !== false &&
         run.own && {

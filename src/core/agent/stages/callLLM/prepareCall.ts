@@ -32,6 +32,7 @@ import { prepareCitationProjection } from './citationProjection.js';
 import type { OntologyPiece } from '../../../../ontology/serve.js';
 import type { OntologyRecord } from '../../../../ontology/types.js';
 import type { AgentState } from '../../types.js';
+import { contextCheckFor } from '../../contextBinding/forCall.js';
 
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
@@ -264,6 +265,12 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
           ...tail,
         ];
 
+  const contextCheck = contextCheckFor(deps, provider, model, {
+    systemText: systemPrompt,
+    systemPieces,
+    tools: activeToolSchemas,
+    wire: wireMessages,
+  });
   typedEmit(scope, 'agentfootprint.stream.llm_start', {
     iteration,
     provider: provider.name,
@@ -289,6 +296,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
       })),
     }),
     ...(deps.temperature !== undefined && { temperature: deps.temperature }),
+    ...(contextCheck?.outcome.note !== undefined && { contextChange: contextCheck.outcome.note }),
   });
 
   const startMs = Date.now();
@@ -527,6 +535,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     llmRequest,
     startMs,
     messages,
+    contextCheck,
   };
 }
 

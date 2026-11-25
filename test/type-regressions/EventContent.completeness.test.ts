@@ -673,6 +673,25 @@ const CANARY_PAYLOAD: {
     temperature: 0,
     providerRequestRef: 'req-00ff',
     brain: { via: 'skill', skillId: 'refunds' },
+    contextChange: {
+      check: 'compared',
+      refused: true,
+      binding: 'bound',
+      by: 'app',
+      changes: [
+        {
+          slot: 'tools',
+          change: 'added',
+          source: 'skill',
+          id: 'refunds',
+          tool: 'orders_search',
+          party: { channel: 'skill', id: 'refunds' },
+          position: 2,
+          role: 'tool',
+        },
+      ],
+      omittedChanges: 1,
+    },
   }),
   'agentfootprint.stream.tool_progress': (c) => ({
     toolCallId: 'call-1',

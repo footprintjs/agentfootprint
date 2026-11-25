@@ -35,7 +35,10 @@ import {
   anthropicModelFacts,
   anthropicTakesForcedToolChoice,
   anthropicTakesNativeOutputSchema,
+  anthropicThinkingBinding,
+  type StatedThinkingBinding,
 } from './anthropicModels.js';
+import type { ThinkingBinding } from '../../provider-contract/thinkingBinding.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
@@ -94,6 +97,12 @@ export interface BrowserAnthropicProviderOptions {
    * `AnthropicProviderOptions.thinkingMode` — see there.
    */
   readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
+  /**
+   * Whether a model's thinking is bound to its context, for an id the table
+   * cannot place. Return `undefined` to use the table. Mirror of
+   * `AnthropicProviderOptions.thinkingBinding` — see there.
+   */
+  readonly thinkingBinding?: StatedThinkingBinding;
   /** @internal Custom fetch implementation for tests / workers. */
   readonly _fetch?: typeof fetch;
 }
@@ -137,6 +146,9 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
     carriesForcedToolChoice: true,
     supportsForcedToolChoice: (model) =>
       anthropicTakesForcedToolChoice(modelOf(model, defaultModel)),
+    // Preserved thinking's prefix check, per model; an unknown id is bound.
+    thinkingBinding: (model) =>
+      anthropicThinkingBinding(modelOf(model, defaultModel), options.thinkingBinding),
     // `output_config.format` — the `'native'` output strategy — per model, from
     // the same table (anthropicModels.ts) the body is built with.
     carriesNativeOutputSchema: true,
@@ -263,11 +275,13 @@ export class BrowserAnthropicProvider implements LLMProvider {
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
   readonly thinkingMode: (model: string) => ThinkingMode;
+  readonly thinkingBinding: (model: string) => ThinkingBinding;
   private readonly inner: LLMProvider;
 
   constructor(options: BrowserAnthropicProviderOptions) {
     this.inner = browserAnthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
+    this.thinkingBinding = this.inner.thinkingBinding!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
     this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
     this.supportsAutoNativeOutputSchema =

@@ -7,6 +7,7 @@ import {
   anthropicModelFacts,
   anthropicModelFamily,
   anthropicTakesForcedToolChoice,
+  anthropicThinkingBinding,
   anthropicThinkingMode,
 } from '../../../src/adapters/llm/anthropicModels.js';
 
@@ -19,12 +20,19 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicTakesForcedToolChoice(family)).toBe(facts.forcedToolChoice);
     expect(Object.isFrozen(facts)).toBe(true);
     const bound = [
+      'claude-fable-5-2',
+      'claude-mythos-5-2',
       'claude-fable-5-1',
+      'claude-mythos-5-1',
       'claude-opus-5-5',
       'claude-sonnet-5-5',
       'claude-haiku-5-5',
     ].includes(family);
     expect(facts.thinkingPrefixBinding).toBe(bound ? true : undefined);
+    expect(anthropicThinkingBinding(family)).toEqual({
+      binding: bound ? 'bound' : 'unbound',
+      by: 'provider',
+    });
     expect(Object.keys(facts).sort()).toEqual(
       bound
         ? ['forcedToolChoice', 'nativeOutputSchema', 'thinking', 'thinkingPrefixBinding']
@@ -65,16 +73,20 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicTakesForcedToolChoice(id)).toBe(ANTHROPIC_MODELS[family].forcedToolChoice);
   });
 
-  it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1', 'claude-mythos-5-1'])(
-    'refuses forced tools for known %s, but not arbitrary aliases mentioning it',
-    (family) => {
-      expect(anthropicTakesForcedToolChoice(family)).toBe(false);
-      for (const alias of [`my-${family}`, `${family}-deployment`, `${family}:deployment`]) {
-        expect(anthropicModelFacts(alias)).toBeUndefined();
-        expect(anthropicTakesForcedToolChoice(alias)).toBe(true);
-      }
-    },
-  );
+  it.each([
+    'claude-opus-5-5',
+    'claude-sonnet-5-5',
+    'claude-fable-5-1',
+    'claude-mythos-5-1',
+    'claude-fable-5-2',
+    'claude-mythos-5-2',
+  ])('refuses forced tools for known %s, but not arbitrary aliases mentioning it', (family) => {
+    expect(anthropicTakesForcedToolChoice(family)).toBe(false);
+    for (const alias of [`my-${family}`, `${family}-deployment`, `${family}:deployment`]) {
+      expect(anthropicModelFacts(alias)).toBeUndefined();
+      expect(anthropicTakesForcedToolChoice(alias)).toBe(true);
+    }
+  });
 
   it.each([
     '',
@@ -112,6 +124,18 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicModelFamily(id)).toBeUndefined();
     expect(anthropicModelFacts(id)).toBeUndefined();
     expect(anthropicTakesForcedToolChoice(id)).toBe(true);
+    // The binding of an id the table cannot place is unknown, not guessed —
+    // unless the app states it.
+    expect(anthropicThinkingBinding(id)).toEqual({ binding: 'unknown', by: 'provider' });
+    expect(anthropicThinkingBinding(id, () => 'bound')).toEqual({ binding: 'bound', by: 'app' });
+    expect(anthropicThinkingBinding(id, () => 'unbound')).toEqual({
+      binding: 'unbound',
+      by: 'app',
+    });
+    expect(anthropicThinkingBinding(id, () => undefined)).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+    });
   });
 
   it('does not infer hard facts from the historical adaptive thinking default', () => {

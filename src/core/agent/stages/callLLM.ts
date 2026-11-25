@@ -27,6 +27,7 @@ import { executeCall } from './callLLM/executeCall.js';
 import { acceptResponse } from './callLLM/acceptResponse.js';
 import { admitProviderIntervention } from '../../providerIntervention.js';
 import { recordTerminalResponse } from './callLLM/responseAccounting.js';
+import { rememberForCall } from '../contextBinding/forCall.js';
 
 // LENS · system-text + tool-list · request-ephemeral
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
@@ -50,6 +51,10 @@ export function buildCallLLMStage(
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
     const prepared = await prepareCall(scope, deps);
+    // A bound model's tool turn whose context changed under its signed
+    // reasoning stops here, named, before the adapter's own guard would.
+    const refusal = prepared.contextCheck?.outcome.refusal;
+    if (refusal !== undefined) throw refusal;
     const executed = await executeCall(scope, deps, prepared);
     if (executed === undefined) return;
     if (
@@ -59,6 +64,7 @@ export function buildCallLLMStage(
     )
       return;
     await acceptResponse(scope, deps, prepared, executed);
+    rememberForCall(deps, prepared.contextCheck, executed.response);
   };
 }
 

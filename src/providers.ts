@@ -43,6 +43,8 @@ export {
   UnsupportedNativeOutputError,
 } from './provider-contract/nativeOutputSchema.js';
 export { UnsafeThinkingReplayError } from './thinking/replay.js';
+export { ContextChangedError, type ContextChange } from './thinking/contextChange.js';
+export { thinkingBindingOf, type ThinkingBinding } from './provider-contract/thinkingBinding.js';
 export {
   ProviderBlockedError,
   ProviderInterventionUnknownError,

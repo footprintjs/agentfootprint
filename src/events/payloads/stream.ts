@@ -55,6 +55,16 @@ export interface LLMStartPayload {
     readonly via: 'skill' | 'escalation';
     readonly skillId?: string;
   };
+  /**
+   * On a model whose thinking is bound to its context, or whose binding the
+   * provider cannot tell (`thinkingBinding` answers `bound` or `unknown`): what
+   * this request changes under the newest signed reasoning in its history, by
+   * name. ABSENT when nothing changed, when no signed reasoning is in the
+   * history, and on every unbound model — those runs keep their exact prior
+   * event bytes. `refused: true` means the call stops here with
+   * `ContextChangedError` (bound models only).
+   */
+  readonly contextChange?: import('./contextChange.js').ContextChangeCheck;
 }
 
 export interface LLMEndPayload {

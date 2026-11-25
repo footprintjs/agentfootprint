@@ -187,11 +187,19 @@ describe('Anthropic active-turn replay policy', () => {
       }),
     ).toThrow(UnsafeThinkingReplayError);
   });
-  it.each(['claude-sonnet-4-5-20250929', 'claude-mythos-5-1', 'opaque-alias'])(
+  it.each(['claude-sonnet-4-5-20250929', 'claude-mythos-5', 'opaque-alias'])(
     'does not invent prefix binding for %s',
     (model) => {
       const request = { ...active(model), systemPrompt: 'changed' };
       expect(plan(request).request).toBe(request);
+    },
+  );
+  it.each(['claude-mythos-5-1', 'claude-fable-5-2', 'claude-mythos-5-2'])(
+    'checks the documented prefix binding of %s',
+    (model) => {
+      expect(() => plan({ ...active(model), systemPrompt: 'changed' })).toThrow(
+        UnsafeThinkingReplayError,
+      );
     },
   );
   it('changing models alone is server-owned, not a reason to omit', () => {

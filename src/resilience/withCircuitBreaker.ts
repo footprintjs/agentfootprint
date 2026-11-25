@@ -344,6 +344,7 @@ export function withCircuitBreaker(
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
     ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
     ...(inner.thinkingMode !== undefined && { thinkingMode: inner.thinkingMode }),
+    ...(inner.thinkingBinding !== undefined && { thinkingBinding: inner.thinkingBinding }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       rejectFastIfOpen(hooks);
       try {

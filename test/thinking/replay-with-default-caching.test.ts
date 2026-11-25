@@ -493,9 +493,12 @@ describe('signed tool turns with native context features', () => {
       .thinking({ budget: 2048 })
       .build();
     try {
+      // The agent's own check names the edit before the adapter's guard: the
+      // library's request-only line can no longer be restored ahead of the
+      // signed turn, so the signed request's second message is not where it was.
       await expect(agent.run({ message: 'What is k1?' })).rejects.toMatchObject({
-        code: 'UNSAFE_THINKING_REPLAY',
-        reason: 'prefix-changed',
+        code: 'CONTEXT_CHANGED_IN_TURN',
+        changes: [{ slot: 'messages', change: 'changed', position: 1 }],
       });
       expect(bodies).toHaveLength(1);
       expect(bodies[0]!.messages[0]!.content).toBe(rewritten);

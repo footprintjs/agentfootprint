@@ -19,7 +19,12 @@ export { DEFAULT_CARRIES_IN_MESSAGES, type WireRole } from './wireRole.js';
 export type { LLMMessage } from './types/message.js';
 export type { LLMRequest } from './types/request.js';
 export type { LLMResponse, WireToolManifest, LLMChunk } from './types/response.js';
-export type { ResilienceReport, LLMCallHooks, LLMProvider } from './types/provider.js';
+export type {
+  ResilienceReport,
+  LLMCallHooks,
+  LLMProvider,
+  ThinkingBinding,
+} from './types/provider.js';
 export {
   STAGED_INPUTS_ENV,
   canStageCodeInputs,

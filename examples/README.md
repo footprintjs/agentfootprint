@@ -352,6 +352,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | 98 | [`98-request-credentials.ts`](features/98-request-credentials.ts) | Request credentials — a per-request token, filled into MCP tool arguments by the host | requestContext seals the incoming request’s secrets for one run; requestCredentials vends them to declared needs and fails closed by name. hostFilled removes a tool argument from the model’s schema, refuses a model-sent value by name and fills it from the credential — the MCP token wrapper, in the library. |
 | 99 | [`99-guard-presented-code.ts`](features/99-guard-presented-code.ts) | An output guard that sees which tools ran — refuse code that was never executed | answerValidation reads context.toolCalls (name, call id, outcome — no arguments or results) and fails the run when the answer presents code but no code-execution tool ran. |
 | — | [`answer-source-link.ts`](features/answer-source-link.ts) | Record the source of a checked answer value | A scripted agent records a match between its final answer and a served tool result. |
+| — | [`context-changed-in-tool-turn.ts`](features/context-changed-in-tool-turn.ts) | A changed tool turn, refused by name | A skill loaded mid-turn on Claude Haiku 5.5 is refused before sending with ContextChangedError naming the skill and its tool; the same skill with its tools always listed and its body in the read_skill result passes. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

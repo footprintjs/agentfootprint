@@ -160,6 +160,7 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     // And which thinking each model takes — dropped, the agent could no
     // longer refuse `.thinking()` for a model that cannot think.
     ...(provider.thinkingMode !== undefined && { thinkingMode: provider.thinkingMode }),
+    ...(provider.thinkingBinding !== undefined && { thinkingBinding: provider.thinkingBinding }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       const attempts = replayAttempts(req, hooks);
       // t0 for the `recovered` report's totalDurationMs. New

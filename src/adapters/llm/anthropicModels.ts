@@ -39,6 +39,7 @@
  */
 
 import type { ThinkingMode } from '../../thinking/types.js';
+import type { ThinkingBinding } from '../../provider-contract/thinkingBinding.js';
 
 /** What one Claude model family takes on the wire. */
 export interface AnthropicModelFacts {
@@ -79,9 +80,20 @@ const legacy = (thinking: ThinkingMode): AnthropicModelFacts => row(thinking, tr
 export const ANTHROPIC_MODELS: Readonly<Record<string, AnthropicModelFacts>> = Object.freeze({
   // Adaptive only — `budget_tokens` is a 400 (Claude 4.7 and later). Opus 5.5,
   // Sonnet 5.5, Fable 5.1 and Mythos 5.1 also reject a forced tool choice on
-  // every request.
+  // every request. Sources for the 5.2 rows and the third column, from
+  // Anthropic's model-migration and preserved-thinking guides:
+  //   - third column (prefix check): "On models with preserved thinking (Claude
+  //     Fable 5.2, Claude Mythos 5.2, Claude Fable 5.1, Claude Mythos 5.1,
+  //     Claude Opus 5.5, Claude Sonnet 5.5, and Claude Haiku 5.5 today; …"
+  //   - Fable 5.2, from Opus 5.5: "both models always think adaptively and
+  //     reject forced `tool_choice`"
+  //   - Mythos 5.2: "Moving from Claude Mythos 5.1 to Claude Mythos 5.2 follows
+  //     the same steps as moving to Claude Fable 5.2 … Coming from Claude
+  //     Mythos 5, the forced `tool_choice` 400 applies too."
+  'claude-fable-5-2': row('adaptive', false, true),
+  'claude-mythos-5-2': row('adaptive', false, true),
   'claude-fable-5-1': row('adaptive', false, true),
-  'claude-mythos-5-1': row('adaptive', false),
+  'claude-mythos-5-1': row('adaptive', false, true),
   'claude-fable-5': row('adaptive'),
   'claude-mythos-5': row('adaptive'),
   'claude-opus-5-5': row('adaptive', false, true),
@@ -244,4 +256,41 @@ export function anthropicTakesForcedToolChoice(model: string): boolean {
  */
 export function anthropicTakesNativeOutputSchema(model: string): boolean {
   return anthropicModelFacts(model)?.nativeOutputSchema ?? true;
+}
+
+/** An app's statement for a model id the table cannot place; `undefined` defers to the table. */
+export type StatedThinkingBinding = (model: string) => 'bound' | 'unbound' | undefined;
+
+/**
+ * Whether a thinking block this Claude model returns is bound to the context
+ * it was written under (preserved thinking: the API refuses or drops a block
+ * replayed after the system prompt, the tool list or an earlier message
+ * changed). The adapters' `thinkingBinding` answer.
+ *
+ * THE UNKNOWN-ID POLICY, named: an id the table does not know answers
+ * `unknown` — an application inference profile, a gateway alias, a deployment
+ * name, a model newer than the table. A Claude-looking substring is not
+ * evidence of the model behind it, and such an id may serve an older model
+ * whose thinking is not bound, so the agent records a change there and never
+ * refuses it. An app that knows the model behind the id says so with the
+ * adapter's `thinkingBinding` option, which answers first (`by: 'app'`).
+ *
+ * @example
+ *   anthropicThinkingBinding('claude-haiku-5-5'); // { binding: 'bound', by: 'provider' }
+ *   anthropicThinkingBinding('claude-haiku-4-5'); // { binding: 'unbound', by: 'provider' }
+ *   anthropicThinkingBinding('claude-opus-6');    // { binding: 'unknown', by: 'provider' }
+ *   anthropicThinkingBinding('my-profile', () => 'bound'); // { binding: 'bound', by: 'app' }
+ */
+export function anthropicThinkingBinding(
+  model: string,
+  stated?: StatedThinkingBinding,
+): ThinkingBinding {
+  const said = stated?.(model);
+  if (said === 'bound' || said === 'unbound') return { binding: said, by: 'app' };
+  const facts = anthropicModelFacts(model);
+  return {
+    binding:
+      facts === undefined ? 'unknown' : facts.thinkingPrefixBinding === true ? 'bound' : 'unbound',
+    by: 'provider',
+  };
 }

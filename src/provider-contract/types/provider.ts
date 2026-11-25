@@ -177,6 +177,23 @@ export interface LLMProvider {
    */
   readonly thinkingMode?: (model: string) => import('../../thinking/types.js').ThinkingMode;
   /**
+   * Whether a thinking block this model returns stays valid only under the
+   * system prompt, tool list and earlier messages it was written under
+   * (Anthropic's preserved thinking: the API refuses or drops a block replayed
+   * after any of them changed) — `bound`, `unbound` or `unknown`, and who said
+   * so. Read with `thinkingBindingOf(provider, model)`. On a `bound` model the
+   * agent refuses by name a tool turn whose context changed under its signed
+   * reasoning (`ContextChangedError`); on an `unknown` one it sends the request
+   * and records the change.
+   *
+   * A plain function of the model id (no `this`). **Absence means unbound.**
+   * The Anthropic-wire adapters answer from their model table, `unknown` for an
+   * id the table cannot place, and take the app's statement for such an id
+   * (`thinkingBinding` option, `by: 'app'`). A WRAPPER must forward it;
+   * `withFallback` answers the stricter side (bound, then unknown, then unbound).
+   */
+  readonly thinkingBinding?: (model: string) => ThinkingBinding;
+  /**
    * v7.21 — which roles this provider carries INSIDE the `messages` array.
    *
    * The wires disagree, and the disagreement is invisible from the outside:
@@ -269,4 +286,16 @@ export interface LLMProvider {
    */
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
   stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;
+}
+
+/** A provider's answer to `thinkingBinding`: the fact, and who stated it. */
+export interface ThinkingBinding {
+  /**
+   * `bound`: a thinking block is valid only under the system prompt, tool list
+   * and earlier messages it was written under. `unbound`: it is not. `unknown`:
+   * the provider cannot tell for this model id (an id its table cannot place).
+   */
+  readonly binding: 'bound' | 'unbound' | 'unknown';
+  /** `provider`: the adapter's own knowledge. `app`: the application stated it. */
+  readonly by: 'provider' | 'app';
 }
