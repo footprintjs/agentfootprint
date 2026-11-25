@@ -137,6 +137,7 @@ describe('IMPORT-GRAPH FENCE', () => {
       'semantics/coverage/read.ts', // strip — the ONE owner of what the record-only strip serves
       'semantics/toolOutcome.ts', // reportedStatusOf and callOutcomeOf share the zero-import settlement vocabulary
       'semantics/toolRan.ts', // toolRanOf — the ONE reader of "did this call's tool run"
+      'time-travel/selectionWitness.ts', // recordedOmissions matches a source omission to the recorded tool selection
     ]);
   });
 });

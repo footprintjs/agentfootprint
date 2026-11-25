@@ -84,7 +84,8 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 1,
     class: 'not-sure',
     source: 'run',
-    reads: 'sourceConsultation: a declared source had a witnessed offer but no recorded attempt',
+    reads:
+      'sourceConsultation: a declared source had a witnessed offer or selection omission and no eligible attempt',
   },
   {
     reason: 'argument-assumed',

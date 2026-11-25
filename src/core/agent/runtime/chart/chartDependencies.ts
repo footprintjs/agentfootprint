@@ -223,6 +223,10 @@ export function chartDependencies(
           sourceNotConsulted: this.configuration.answerLayerOption.sourceNotConsulted === true,
         }),
         ...this.configuration.answerLayerOption,
+        ...(this.configuration.answerLayerOption.sourceNotConsulted === true && {
+          omissionCheckFor: (scope: object) =>
+            this.native.runExecution().forScope(scope).value.sourceConsultation?.checksOmission,
+        }),
         ...(this.configuration.answerValidationConfig !== undefined && {
           validated: true as const,
         }),
