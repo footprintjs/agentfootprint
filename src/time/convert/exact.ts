@@ -22,13 +22,21 @@ function writeIso(value: InstantText | undefined, utc: boolean) {
 /**
  * A confirmed cutoff as an INCLUSIVE ISO end: the last instant inside on the grid the cutoff
  * sits on — one second before a whole-second cutoff, one millisecond before a millisecond one
- * (the wire law tools were built against, `bounds.ts` · `writeBound`). Only a cutoff written
- * past the millisecond keeps its exact neighbour, which no coarser grid can name.
+ * (the wire law tools were built against, `bounds.ts` · `writeBound`). A cutoff written past
+ * the millisecond keeps its exact neighbour, which no coarser grid can name; when that
+ * neighbour lands on a grid point the read is a grid step wider, and the write says `rounded`.
  */
 function inclusiveIsoEnd(cutoff: InstantText, utc: boolean) {
   const at = instantOf(cutoff, 'strict');
   if (at === undefined) return undefined;
-  if (at.nanos !== 0) return writeIso(adjacentInstant(cutoff, -1), utc);
+  if (at.nanos !== 0) {
+    // One nanosecond past a grid point (an inclusive control point): the neighbour IS that grid
+    // point, which a tool reads through its whole second — wider than the window, so not exact.
+    const neighbour = adjacentInstant(cutoff, -1);
+    const written = writeIso(neighbour, utc);
+    const onGrid = neighbour !== undefined && instantOf(neighbour, 'strict')?.nanos === 0;
+    return written === undefined ? undefined : { value: written.value, rounded: onGrid };
+  }
   const ms = at.ms - (at.ms % 1000 === 0 ? 1_000 : 1);
   const text = spellInstant({ ms, nanos: 0 }, utc ? 0 : at.offsetMinutes);
   return text === undefined ? undefined : { value: text, rounded: false };

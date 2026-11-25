@@ -76,22 +76,32 @@ async function recordCall(
   }
 }
 
+// An inclusive ISO end sits on the second grid: the tool reads through 18:45:00's whole second.
+// A fill records the person's window with what the read adds; the same value sent by the model
+// reads as that wider second, so it is the model's own window beside the person's.
 it.each([
-  { args: {}, how: 'filled' },
-  { args: { from: Date.parse(from), to }, how: 'bound' },
+  { args: {}, how: 'filled', asked: '2026-11-13T18:45:00.000000001Z' },
+  { args: { from: Date.parse(from), to }, how: 'model-chosen', asked: '2026-11-13T18:45:01Z' },
 ])(
-  'keeps the confirmed inclusive point across mixed-bound $how dispatch',
-  async ({ args, how }) => {
+  'sends the confirmed inclusive point on the grid across mixed-bound $how dispatch',
+  async ({ args, how, asked }) => {
     const run = await recordCall(mixed, { from, to, end: 'inclusive', precision: 'minute' }, args);
     expect(run.calls).toEqual([{ from: Date.parse(from), to }]);
     expect(run.endSamples).toEqual(['R-2026-11-13T18:45Z']);
     expect(run.rows).toContainEqual(
-      expect.objectContaining({
-        kind: 'call-window',
-        how,
-        asked: { from, to: '2026-11-13T18:45:00.000000001Z' },
-      }),
+      expect.objectContaining({ kind: 'call-window', how, asked: { from, to: asked } }),
     );
+    if (how === 'filled') {
+      expect(run.rows).toContainEqual(
+        expect.objectContaining({
+          kind: 'call-window',
+          sent: { from, to: '2026-11-13T18:45:01Z' },
+          differs: {
+            extra: [{ from: '2026-11-13T18:45:00.000000001Z', to: '2026-11-13T18:45:01Z' }],
+          },
+        }),
+      );
+    }
   },
 );
 

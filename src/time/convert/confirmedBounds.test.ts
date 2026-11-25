@@ -25,14 +25,21 @@ function confirmed(control: ControlWindowInput) {
 }
 
 describe('confirmed conversion honors the declared encoding of each bound', () => {
-  it('writes and reads a mixed inclusive ISO point while retaining the legacy read-back', () => {
+  it('writes an inclusive point on the second grid and says the tool reads through that second', () => {
     const window = confirmed({ from, to, end: 'inclusive', precision: 'minute' });
     const values = { from: Date.parse(from), to };
+    // The point 18:45:00 is the last grid instant inside; a second-grid tool reads the whole
+    // second, so the conversion is recorded as wider than the window, never as exact.
+    const widened = {
+      rounded: true,
+      sent: { from, to: '2026-11-13T18:45:01Z' },
+      extra: [{ from: window.range.to, to: '2026-11-13T18:45:01Z' }],
+    };
     expect(convertForTool(window, [iso], undefined, context)).toEqual({
-      conversion: { form: 0, values: { from, to } },
+      conversion: { form: 0, values: { from, to }, ...widened },
     });
     expect(convertForTool(window, [msAndIso], undefined, context)).toEqual({
-      conversion: { form: 0, values },
+      conversion: { form: 0, values, ...widened },
     });
     // An inclusive ISO end is read on the grid it was written at, confirmed or not: a tool
     // handed `18:45:00Z` reads through that second.
