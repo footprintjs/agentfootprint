@@ -127,6 +127,27 @@ jobs:
           # The candidate receipt reads the PR head, a parent of the tested merge.
           fetch-depth: 2
 
+      # WHICH COMMIT THE PACKAGE EVIDENCE BELOW IS BOUND TO. This run tests one
+      # tree: for a pull request, the merge of its head into main. When the head
+      # already contains main, that tree IS the head's tree, and the evidence is
+      # bound to the head commit, the name a downstream check knows. When main
+      # has moved since, the two trees differ, and the evidence is bound to the
+      # tested merge commit instead, under that commit's name. It used to fail
+      # the job there, which made every open pull request need a base update
+      # and a full rerun each time anything merged; nothing about the pull
+      # request was wrong. The evidence never claims a tree this run did not
+      # test. First in the job, before any dependency code runs.
+      - name: Name the commit this run tested
+        id: tested
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bound="$(git rev-parse HEAD)"
+          if [ -n "$PR_HEAD" ] && [ "$(git rev-parse "$PR_HEAD^{tree}")" = "$(git rev-parse 'HEAD^{tree}')" ]; then
+            bound="$PR_HEAD"
+          fi
+          echo "commit=$bound" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
@@ -157,7 +178,7 @@ jobs:
       - name: Retain original source candidate
         if: matrix.node-version == 24
         env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_HEAD: ${{ steps.tested.outputs.commit }}
         run: |
           mkdir "$RUNNER_TEMP/af-source-candidate"
           npm pack --ignore-scripts --offline --json --pack-destination "$RUNNER_TEMP/af-source-candidate" > "$RUNNER_TEMP/af-source-pack.json"
@@ -166,7 +187,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: matrix.node-version == 24
         with:
-          name: agentfootprint-source-${{ github.event.pull_request.head.sha || github.sha }}
+          name: agentfootprint-source-${{ steps.tested.outputs.commit }}
           path: ${{ runner.temp }}/af-source-candidate/
           if-no-files-found: error
           retention-days: 7
@@ -179,13 +200,13 @@ jobs:
       - name: Four strict native context roots and public producer identities
         id: native_context
         env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_HEAD: ${{ steps.tested.outputs.commit }}
         run: node scripts/check-context-package-strict.mjs "$RUNNER_TEMP/af-strict-context" "$SOURCE_HEAD"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && (steps.native_context.outcome == 'success' || steps.native_context.outcome == 'failure')
         with:
-          name: agentfootprint-native-context-${{ matrix.node-version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: agentfootprint-native-context-${{ matrix.node-version }}-${{ steps.tested.outputs.commit }}
           path: ${{ runner.temp }}/af-strict-context/
           if-no-files-found: error
           retention-days: 7
