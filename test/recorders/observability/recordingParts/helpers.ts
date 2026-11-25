@@ -25,6 +25,7 @@ import {
 import { recordRun, type Recording } from '../../../../src/observe.js';
 import { mock } from '../../../../src/providers.js';
 import { conversationRedaction } from '../../../../src/doors/security.js';
+import { fileRecordingParts } from '../../../../src/recorders/observability/recordingParts/file.js';
 import {
   recordingIndexText,
   splitRecording,
@@ -137,31 +138,28 @@ export interface FiledParts {
   readonly indexText: string;
 }
 
-/** Store a recording in parts the way the writer will: every part first, the index last. */
+/**
+ * Store a recording in parts through the REAL writer (`fileRecordingParts`),
+ * and recompute the same deterministic cut beside it, so a test can forge one
+ * part of exactly what was stored.
+ */
 export async function fileParts(
   store: ArtifactStore,
   recording: Recording,
   options: SplitRecordingOptions = {},
 ): Promise<FiledParts> {
   const runId = options.runId ?? RUN_ID;
+  const filed = await fileRecordingParts(store, SCOPE, recording, {
+    runId,
+    packed: options.packed === true,
+    ...(options.targetBytes !== undefined && { targetBytes: options.targetBytes }),
+  });
+  if (filed.status !== 'filed') throw new Error(`not filed: ${filed.detail}`);
   const split = await splitRecording(recording, { ...options, runId });
-  const put = async (kind: string, text: string): Promise<string> =>
-    (
-      await store.put(SCOPE, {
-        kind,
-        mediaType: 'application/json',
-        data: text,
-        digest: 'sha-256',
-        origin: { runId },
-        label: `run ${runId}`,
-      })
-    ).meta.ref;
-  const base = await put(RECORDING_PART_ARTIFACT_KIND, split.base.text);
-  const parts: string[] = [];
-  for (const part of split.parts) parts.push(await put(RECORDING_PART_ARTIFACT_KIND, part.text));
-  const indexText = recordingIndexText(split.draft, { base, parts });
-  const index = await put(RECORDING_INDEX_ARTIFACT_KIND, indexText);
-  return { index, base, parts, split, indexText };
+  const [base, ...parts] = filed.parts.map((meta) => meta.ref);
+  const index = filed.index.ref;
+  const indexText = (await store.get(SCOPE, index))!.data as string;
+  return { index, base: base!, parts, split, indexText };
 }
 
 export interface Counted {

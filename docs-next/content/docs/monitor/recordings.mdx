@@ -200,9 +200,9 @@ When a read has nothing to return, it answers a `SavedRecordingPartUnavailable`
 whose `reason` is `not-recorded`, `part-missing`, `part-changed` or `too-large`.
 A read never falls back to another source.
 
-A recording is stored in one of two layouts, and the reader opens both.
-No public call writes the parts layout yet: the next release adds the agent
-option that saves recordings in parts. Today an agent saves its recording whole.
+A recording is stored in one of two layouts, and the reader opens both. An
+agent chooses with `layout` on its recordings option: `'whole'` (the default) or
+`'parts'`.
 
 - **Whole**: one artifact of kind `RECORDING_ARTIFACT_KIND`. It is read once,
   within `maxRootBytes`, and cut in memory.
@@ -223,8 +223,30 @@ computed again after. The reader asks only for the two verbs it uses, a
 `SavedRecordingSizes`, read from the index alone: how many bytes and artifacts
 hold the recording, and the size of each part.
 
+### Save a run in parts
+
+`artifacts: { store, recordings: { layout: 'parts' } }` files each completed run
+in parts: the base part first, then each invocation part in order, then the
+index. The receipt names the index. With `packed: true`, each part is packed on
+its own, so any part still reads alone.
+
+<CodeFile path="examples/features/133-recording-in-parts.ts" region="write" title="File the run recording in parts" />
+
+<CodeFile path="examples/features/133-recording-in-parts.ts" region="read" title="Open the index and read one invocation" />
+
+The writer checks every stored part's size and digest against its own, and it
+writes the index last, so a reader never finds an index whose parts were never
+written. The index expires no later than its earliest part. If a filing cannot
+finish (the store refuses a part, keeps different bytes, or its retention evicts
+one of this recording's own parts to make room for another), the writer deletes
+what it wrote, writes no index, and puts one `agentfootprint.artifacts.refused`
+fact on the record. The answer is unchanged, as with any recording that was not
+filed. A paused run files nothing; its resumed run files its own recording.
+
 **Gotchas:**
 
+- Saving in parts costs N + 2 awaited store writes on the way out of `run()`
+  (N invocation parts, the base part and the index) instead of one.
 - A busy or revoked store, or an aborted signal, rejects the read with the
   original error. It is never reported as a missing part.
 - `complete: false` means the run's tree and its results disagree. Every result

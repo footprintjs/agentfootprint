@@ -25,6 +25,32 @@ would be overruling the name you chose.
 
 ***
 
+### layout?
+
+> `readonly` `optional` **layout?**: `"whole"` \| `"parts"`
+
+Defined in: [src/core/agent/types/artifacts.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L108)
+
+How the recording is stored. Default `'whole'`: one `recording/run`
+artifact, exactly as before.
+
+`'parts'` stores an index (`recording/run-index`), the base part (the
+recording without its subflow results) and invocation parts of about 1 MiB
+(`recording/run-part`), all in the run's scope. A reader then opens the
+index and reads only the part it needs: `openSavedRecording` (from
+`agentfootprint/observe`) reads both layouts. With `packed`, each part is
+packed on its own. Every part is written first and the index last; the
+receipt names the index. A filing that cannot finish deletes what it wrote,
+writes no index and lands as `agentfootprint.artifacts.refused`.
+
+The cost, stated: N + 2 awaited store writes on the way out of `run()` (N
+invocation parts, the base part, the index) instead of one, and as many
+artifacts against the scope's count budget. A small run takes three
+artifacts instead of one, so a scope that keeps 256 artifacts holds about 85
+small recordings instead of 256, before anything else it stores.
+
+***
+
 ### packed?
 
 > `readonly` `optional` **packed?**: `boolean`
@@ -48,7 +74,7 @@ a plain recording unchanged — adopt the reader first, then pack.
 
 > `readonly` `optional` **trustBoundaries?**: () => `TrustBoundaryRecorder`
 
-Defined in: [src/core/agent/types/artifacts.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L95)
+Defined in: [src/core/agent/types/artifacts.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L115)
 
 Create a fresh recorder for each invocation, typically with
 `trustBoundaryRecorder` from `agentfootprint/observe`. Its snapshot contains

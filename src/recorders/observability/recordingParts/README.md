@@ -41,7 +41,19 @@ packPart`), so any part reads alone. The index is never packed.
 | `partReader.ts` | one part's bytes become values: caps, unpacking, exact key sets |
 | `open.ts` | `openSavedRecording`: open either layout, then `readRoot`, `readInvocation`, `readWhole` |
 | `packing.ts` | each part packed on its own with the recording codec |
+| `file.ts` | the writer's sequence: every part, then the index; undo on any failure |
 | `splitError.ts` | why a split was refused, in fixed sentences |
+
+## Writing
+
+`file.ts · fileRecordingParts` puts the base part, then each invocation part in
+order, then the index, each with `digest: 'sha-256'`. After every put it checks
+the store's byte count and digest against its own, and stops when a put's sweep
+names one of this recording's own parts. The index gets the earliest part
+expiry, so it never outlives a part. On any failure it deletes what it wrote
+(best effort), writes no index, and returns a fixed sentence with counts. An
+agent files this way with `artifacts: { recordings: { layout: 'parts' } }`
+(`core/agent/runtime/recording/recording.ts · fileInParts`).
 
 ## The walk exists twice
 
