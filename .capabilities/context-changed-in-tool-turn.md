@@ -1,1 +1,0 @@
-| a tool turn that changes its system prompt, tools or earlier messages on a model that binds its reasoning to them is refused by name before sending | `ContextChangedError` | `src/thinking/contextChange.ts` | unreleased |
