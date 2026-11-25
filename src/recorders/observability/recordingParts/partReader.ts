@@ -122,6 +122,9 @@ export function partReader(
       } catch (err) {
         if (err instanceof PackedRecordingTooLargeError) return unavailable('too-large');
         if (err instanceof PackedRecordingError) return unavailable('part-changed');
+        // Verified bytes too deep to expand on this runtime's stack: a resource
+        // bound of this reader, not a change to the part.
+        if (err instanceof RangeError) return unavailable('too-large');
         throw err;
       }
     }

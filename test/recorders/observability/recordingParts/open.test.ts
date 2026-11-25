@@ -22,6 +22,7 @@ import {
   counted,
   fileParts,
   fileWhole,
+  forgePart,
   realRecording,
   type FiledParts,
 } from './helpers.js';
@@ -387,10 +388,51 @@ describe('a whole recording at its bounds', () => {
     }
   });
 
+  it('a hand-filed PACKED recording too deep to expand on any stack is invalid-recording, not a thrown error', async () => {
+    const { store, close } = STORES[0]!.create();
+    try {
+      const deep = `${'['.repeat(100_000)}${']'.repeat(100_000)}`;
+      const text =
+        `{"format":"agentfootprint.recording.packed.v1","values":[${deep}],` +
+        `"recording":{"snapshot":{"runId":"r","executionTree":null},"events":[{"$af:ref":0}],"structure":{}}}`;
+      const ref = (
+        await store.put(SCOPE, { kind: 'recording/run', mediaType: 'application/json', data: text })
+      ).meta.ref;
+      expect(await openSavedRecording(bindArtifacts(store, SCOPE), ref)).toEqual({
+        status: 'unavailable',
+        reason: 'invalid-recording',
+      });
+    } finally {
+      close();
+    }
+  });
+
+  it('a verified packed part too deep to expand on any stack is too-large for this reader, not a thrown error', async () => {
+    const { store, close } = STORES[0]!.create();
+    try {
+      const filed = await fileParts(store, recording, { packed: true, targetBytes: 16 * 1024 });
+      const key = keysIn(filed, 0)[0]!;
+      const deep = `${'['.repeat(100_000)}${']'.repeat(100_000)}`;
+      const part =
+        `{"format":"agentfootprint.recording.packed.v1","values":[${deep}],` +
+        `"recording":{"format":"agentfootprint.recording.part.v1","runId":"${RUN_ID}","part":0,` +
+        `"results":{${JSON.stringify(key)}:{"$af:ref":0}},"aliases":{}}}`;
+      const index = await forgePart(store, filed, 0, part);
+      const saved = await opened(bindArtifacts(store, SCOPE), index);
+      expect(await saved.readInvocation(key)).toEqual({
+        status: 'unavailable',
+        reason: 'too-large',
+      });
+    } finally {
+      close();
+    }
+  });
+
   it('a hand-filed recording nested too deep to write again is invalid-recording, not a thrown error', async () => {
     const { store, close } = STORES[0]!.create();
     try {
-      const deep = `${'['.repeat(5000)}${']'.repeat(5000)}`;
+      // Deep enough to overflow the serializer on every runtime, not only on a small stack.
+      const deep = `${'['.repeat(100_000)}${']'.repeat(100_000)}`;
       const text = `{"snapshot":{"runId":"r","executionTree":null},"events":[${deep}],"structure":{}}`;
       expect(() => JSON.parse(text)).not.toThrow();
       const ref = (

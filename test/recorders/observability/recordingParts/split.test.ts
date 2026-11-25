@@ -179,15 +179,44 @@ describe('the cut', () => {
 
 describe('what the cut refuses', () => {
   it('more invocations than the viewer lists is over-limit, and names the bound', async () => {
-    let tree: Rec | undefined;
+    // A wide tree: the realistic way a run exceeds the count.
+    const children: Rec[] = [];
     const results: Rec = {};
-    for (let i = 4097; i >= 1; i--) {
-      tree = mount(`s${i}#${i}`, `s${i}`, tree);
+    for (let i = 1; i <= 4097; i++) {
+      children.push(mount(`s${i}#${i}`, `s${i}`));
       results[`s${i}#${i}`] = unit(`s${i}`);
     }
-    const refused = await splitRecording(recordingOf(tree!, results)).catch((err: unknown) => err);
+    const refused = await splitRecording(
+      recordingOf({ id: 'seed', name: 'seed', children }, results),
+    ).catch((err: unknown) => err);
     expect(refused).toBeInstanceOf(RecordingSplitError);
     expect(refused).toMatchObject({ code: 'over-limit', limit: 'invocations' });
+  });
+
+  it('a chain too deep for any stack AND over the count is over-limit: the bounds are decided before serializing', async () => {
+    // 60,000 levels of `next` overflow JSON's serializer on every runtime; 4,097 of them are mounts.
+    let tree: Rec | undefined;
+    const results: Rec = {};
+    for (let i = 60_000; i >= 1; i--) {
+      const isMount = i % 14 === 0 && Object.keys(results).length < 4097;
+      if (isMount) {
+        tree = mount(`s${i}#${i}`, `s${i}`, tree);
+        results[`s${i}#${i}`] = unit(`s${i}`);
+      } else tree = { id: `p${i}`, name: `p${i}`, ...(tree && { next: tree }) };
+    }
+    expect(Object.keys(results)).toHaveLength(4097);
+    const refused = await splitRecording(recordingOf(tree!, results)).catch((err: unknown) => err);
+    expect(refused).toMatchObject({ code: 'over-limit', limit: 'invocations' });
+  });
+
+  it('a chain too deep for any stack but within the bounds is unserializable', async () => {
+    let tree: Rec | undefined;
+    for (let i = 100_000; i >= 1; i--) {
+      tree = { id: `p${i}`, name: `p${i}`, ...(tree && { next: tree }) };
+    }
+    await expect(splitRecording(recordingOf(tree!, {}))).rejects.toMatchObject({
+      code: 'unserializable',
+    });
   });
 
   it('a value that is not a recording, a non-object subflowResults, and a cycle are refused by code', async () => {

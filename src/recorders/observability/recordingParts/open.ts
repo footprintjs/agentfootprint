@@ -175,7 +175,8 @@ export interface SavedRecording {
    * Whether every stored part is still there as the index names it: a `head`
    * of each, its kind, bytes, digest and run checked against the index, and no
    * byte read. `ready`, or the first part's `part-missing` / `part-changed`.
-   * A whole recording has no separate parts and is always `ready`. A host
+   * A whole recording has no separate parts: this makes NO store call for it
+   * and is always `ready`, so a host must `head` that artifact itself. A host
    * serving something derived from the recording (a cached answer) asks this
    * first, so it never serves past the store's own retention.
    */
@@ -333,6 +334,9 @@ async function openWhole(
   } catch (err) {
     if (err instanceof PackedRecordingTooLargeError) return unavailable('too-large');
     if (err instanceof PackedRecordingError) return unavailable('invalid-recording');
+    // Too deep to expand on this runtime's stack: unreadable here, as a plain
+    // recording too deep to serialize is (a reason, never an escaping error).
+    if (err instanceof RangeError) return unavailable('invalid-recording');
     throw err;
   }
   const runId = isName(meta.origin?.runId) ? meta.origin?.runId : undefined;
