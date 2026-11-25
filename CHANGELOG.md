@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.2.0] - 2026-11-25
+
+### Added
+
+- **Save a run's recording in parts, so a reader opens one invocation without the whole run.** `artifacts: { store, recordings: { layout: 'parts' } }` files each completed run as an index (`recording/run-index`), a base part and invocation parts of about 1 MiB (`recording/run-part`); the receipt names the index, and `openSavedRecording` reads only the part it needs. Every part is written first and the index last; each stored part's size and digest are checked against the writer's own, and the index expires no later than its earliest part. The artifact store port gains one optional member, `scopeBudget(scope)`, which states the byte and count budget `put` enforces (every built-in store implements it); when a store states one, a recording whose parts and index cannot fit is refused before the first put, so nothing in the scope is evicted for it. If a filing cannot finish (the store refuses a part, keeps different bytes, or its retention evicts one of the recording's own parts), the writer deletes what it wrote, writes no index and reports one `agentfootprint.artifacts.refused`; the answer is unchanged. The default stays `'whole'`, byte for byte as before. The cost, stated on the option: N + 2 awaited store writes per turn instead of one, and a small run takes three artifacts instead of one.
+
+- **Open a saved recording and read one invocation without reading the whole run.** `openSavedRecording(artifacts, ref)` (from `agentfootprint/observe`) opens a saved recording through a scope-bound store and serves `readRoot()`, `readInvocation(key)` and `readWhole()`. It opens both layouts: one whole `recording/run` artifact, and a recording saved in parts, which is an index (`RECORDING_INDEX_ARTIFACT_KIND`) plus a base part and parts of about 1 MiB (`RECORDING_PART_ARTIFACT_KIND`). For a recording in parts, only the part that holds what was asked for is read. Every size cap is checked from stored metadata before any bytes are read, and every part is checked against the SHA-256 in its index. A missing, changed or oversized part is reported as unavailable (`part-missing`, `part-changed`, `too-large`) for exactly the invocations it held, and the rest of the run still reads. A busy store or a cancelled read rejects with the original error. Agents still save their recordings whole; this adds the reader only.
+
 ## [18.1.1] - 2026-11-25
 
 ### Fixed
