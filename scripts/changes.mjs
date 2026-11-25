@@ -130,8 +130,9 @@ export function readCapabilityRows(dir = CAPABILITIES_DIR) {
  * placeholder replaced by `version`. Throws when rows wait and the table cannot be found.
  */
 export function foldCapabilities(text, waiting, version) {
-  // Only a row's Since cell is stamped: the word may also appear in the row's own prose.
-  const stamp = (row) => row.replace(/\|\s*unreleased\s*\|\s*$/, `| ${version} |`);
+  // Only the Since cell (the last one) is stamped: the word may also appear in the row's own
+  // prose. Inside that cell the word alone is replaced, so `9.1.0, refusal unreleased` works.
+  const stamp = (row) => row.replace(UNRELEASED_IN_SINCE, version);
   const lines = text.split('\n').map((line) => (line.startsWith('|') ? stamp(line) : line));
   if (waiting.length > 0) {
     const separator = lines.findIndex((line) => /^\|\s*-{3}/.test(line));
@@ -141,13 +142,26 @@ export function foldCapabilities(text, waiting, version) {
   return lines.join('\n');
 }
 
+/** The word `unreleased` inside a table row's last cell: the one rule the stamp and the refusal share. */
+const UNRELEASED_IN_SINCE = /\bunreleased\b(?=[^|]*\|\s*$)/;
+
 /**
  * Table rows of `CAPABILITIES.md` whose Since cell still says `unreleased`: rows written into
  * the table by hand. The release would still stamp them, but they are exactly what made pull
- * requests conflict, so `changes check` refuses them and names the folder to use.
+ * requests conflict.
  */
 export function handWrittenUnreleasedRows(text) {
-  return text.split('\n').filter((line) => line.startsWith('| ') && /\|\s*unreleased\s*\|\s*$/.test(line));
+  return text.split('\n').filter((line) => line.startsWith('|') && UNRELEASED_IN_SINCE.test(line));
+}
+
+/**
+ * The hand-written rows a pull request ADDS: those in its table that the base's table does not
+ * hold. A row already on main (merged before this rule, or from a pull request checked before
+ * it) is not this pull request's to fix, and refusing it would turn every pull request red.
+ */
+export function addedHandWrittenRows(headText, baseText) {
+  const onBase = new Set(handWrittenUnreleasedRows(baseText));
+  return handWrittenUnreleasedRows(headText).filter((row) => !onBase.has(row));
 }
 
 /** The highest bump any fragment needs, or undefined for none. */
@@ -218,6 +232,20 @@ export function renderEntryBody(fragments) {
   return parts.join('\n\n');
 }
 
+/** A file's text at a commit, or '' when the commit has no such file. */
+function fileAt(ref, path) {
+  try {
+    return execFileSync('git', ['show', `${ref}:${path}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return '';
+  }
+}
+
 function changedFilesSince(base) {
   const out = execFileSync('git', ['diff', '--name-status', `${base}...HEAD`], { cwd: ROOT, encoding: 'utf8' });
   return out
@@ -267,13 +295,15 @@ function main(argv) {
     readCapabilityRows(); // throws on the first malformed capability row
     const baseAt = rest.indexOf('--base');
     if (baseAt >= 0) {
-      // Only on a pull request (`--base`): the release's own bare check must still pass on a main
-      // that already holds such a row, and the release still stamps it.
+      // Only on a pull request (`--base`), and only for rows it adds: the release's own bare
+      // check must still pass on a main that holds such a row, and the release still stamps it.
       const capsPath = join(ROOT, 'CAPABILITIES.md');
-      const byHand = existsSync(capsPath) ? handWrittenUnreleasedRows(readFileSync(capsPath, 'utf8')) : [];
+      const byHand = existsSync(capsPath)
+        ? addedHandWrittenRows(readFileSync(capsPath, 'utf8'), fileAt(rest[baseAt + 1], 'CAPABILITIES.md'))
+        : [];
       if (byHand.length > 0) {
         console.error(
-          `CAPABILITIES.md has ${byHand.length} row(s) marked unreleased. Move each to its own file in ` +
+          `This pull request adds ${byHand.length} row(s) marked unreleased to CAPABILITIES.md. Move each to its own file in ` +
             '.capabilities/ (see .capabilities/README.md): rows added to the table by hand make open pull requests conflict.\n' +
             byHand.map((row) => `  ${row.slice(0, 100)}…`).join('\n'),
         );

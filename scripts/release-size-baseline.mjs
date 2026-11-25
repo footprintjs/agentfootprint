@@ -8,6 +8,9 @@
  * merged without a recheck), so one actor, the release, writes each entry back down to the
  * file's measured size and drops entries for files now at most the limit or gone.
  * An entry is never raised here: a file larger than its entry is the check's to refuse.
+ *
+ * `LIMIT` and `lineCount` repeat the check's own rule (footprintjs/ci at the commit ci.yml pins,
+ * `src/file-size/policy.mjs` and `git-tree.mjs`). Re-read them when that pin moves.
  */
 const LIMIT = 600;
 
