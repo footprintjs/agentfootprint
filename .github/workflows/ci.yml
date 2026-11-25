@@ -62,6 +62,21 @@ jobs:
       tool_sha: b14f372d4c26e9f3059068b250544aa320b834aa
       mode: pull-request
 
+  # WHAT A PULL REQUEST RUNS, AND WHAT WAITS FOR MAIN. An ordinary pull request
+  # runs the suite on Node 24 only and skips coverage. Everything runs — both Node
+  # versions and coverage — on every push to main, on the release pull request
+  # (`release/next`, whose run publish.yml's `verdict` reads as the release gate)
+  # and on a dependency pull request (`renovate/*`, where a Node-specific break is
+  # most likely). Why: coverage ran the whole suite a second time and was the
+  # slowest thing a pull request waited for (measured 25 Nov 2026: about 12
+  # minutes with it, about 9 without), and the Node 22 legs doubled the machines.
+  # The condition is written out in full at each of the five places that use it,
+  # because a matrix and a job-level `if:` cannot read a shared variable;
+  # test/docs/ci-test-shards.test.ts refuses any two that differ. A job that does
+  # not run is SKIPPED and says so; nothing reports a pass for work it did not do.
+  # The ruleset on main therefore requires `test (24)` on a pull request, not
+  # `test (22)` or `coverage`; a release still needs all three (`verdict`'s GATES).
+  #
   # The test suite, split across machines: `--shard=i/N` hands each machine its
   # share of the test files, so all N together run every file exactly once.
   # Vitest splits by file count, not by time. To change N, edit the `shard` list
@@ -73,7 +88,7 @@ jobs:
       # Every shard finishes, so one run shows every failure.
       fail-fast: false
       matrix:
-        node-version: [22, 24]
+        node-version: ${{ fromJSON((github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')) && '[22, 24]' || '[24]') }}
         shard: [1, 2, 3, 4]
 
     steps:
@@ -99,7 +114,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22, 24]
+        node-version: ${{ fromJSON((github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')) && '[22, 24]' || '[24]') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -207,7 +222,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22, 24]
+        node-version: ${{ fromJSON((github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')) && '[22, 24]' || '[24]') }}
 
     steps:
       - name: Every job behind this check succeeded
@@ -430,6 +445,7 @@ jobs:
   # blob, and `coverage` below merges them. A shard's own log prints only its
   # partial figures; the merged figures are the ones that count.
   coverage-shard:
+    if: github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -467,7 +483,7 @@ jobs:
   # the shards, and `if: always()` plus the first step fail closed exactly as in
   # `test` above: unless every shard succeeded, nothing below that step runs.
   coverage:
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/'))
     needs: coverage-shard
     runs-on: ubuntu-24.04
     timeout-minutes: 15

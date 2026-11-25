@@ -481,7 +481,11 @@ describe('publish.yml · only the verdict can skip a gate, and only a gate', () 
       const job = jobBlock(CI, leg ? leg[1] : gate); // throws when the job is gone
       // A job-level `name:` would change the check name the Jobs API reports.
       expect(job, `ci.yml · ${gate} must keep its default name`).not.toMatch(/^ {4}name:/m);
-      if (leg) expect(job).toMatch(new RegExp(`node-version: \\[[^\\]]*\\b${leg[2]}\\b[^\\]]*\\]`));
+      // The full-run list of the matrix: the first quoted list in `fromJSON(… && '[22, 24]' || '[24]')`.
+      if (leg)
+        expect(job).toMatch(
+          new RegExp(`node-version: [^\\n]*&& '\\[[^\\]]*\\b${leg[2]}\\b[^\\]]*\\]'`),
+        );
     }
   });
 
