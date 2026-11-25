@@ -36,6 +36,7 @@ export const fields0 = {
   answeredById: true,
   answersAsk: true,
   any: true,
+  appStatement: true,
   approved: true,
   args: true,
   argsFingerprint: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   lastError: true,
   lastFiredAt: true,
   lastIndexOf: true,
-  latencyMs: true,
 } as const;

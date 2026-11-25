@@ -9,12 +9,26 @@
 import { describe, expect, it } from 'vitest';
 import type { LLMMessage, LLMResponse, LLMToolSchema } from '../../../provider-contract/types.js';
 import { ContextChangedError } from '../../../thinking/contextChange.js';
-import { checkContextBinding, MAX_CONTEXT_CHANGES, rememberContextBaseline } from './check.js';
+import {
+  checkContextBinding,
+  MAX_BASELINES,
+  MAX_CONTEXT_CHANGES,
+  rememberContextBaseline,
+} from './check.js';
 import type { ContextBaselineHolder } from './check.js';
 import type { RequestContext, SystemPiece } from './composition.js';
 import type { CheckedBinding } from './check.js';
 
-const BOUND: CheckedBinding = { binding: 'bound', by: 'provider' };
+const MODEL = 'claude-haiku-5-5';
+const BOUND: CheckedBinding = { binding: 'bound', by: 'provider', family: MODEL };
+const bindingOf = (model: string) =>
+  model === MODEL || model === 'claude-haiku-5-5-20261001'
+    ? BOUND
+    : model === 'claude-haiku-4-5'
+    ? ({ binding: 'unbound', by: 'provider', family: model } as const)
+    : model === 'claude-opus-5-5'
+    ? ({ binding: 'bound', by: 'provider', family: model } as const)
+    : ({ binding: 'unknown', by: 'provider' } as const);
 const NAMES = { binding: 'bound', by: 'provider' } as const;
 
 const base: SystemPiece = { source: 'base', rawContent: 'You diagnose.', contentHash: 'b1' };
@@ -32,7 +46,11 @@ const tool = (name: string, description = `${name} tool`): LLMToolSchema => ({
 
 const user: LLMMessage = { role: 'user', content: 'Why is the finance share slow?' };
 
-function signedAssistant(id: string, stopReason: 'tool_use' | 'end_turn'): LLMMessage {
+function signedAssistant(
+  id: string,
+  stopReason: 'tool_use' | 'end_turn',
+  writer: string = MODEL,
+): LLMMessage {
   return {
     role: 'assistant',
     content: stopReason === 'end_turn' ? 'done' : '',
@@ -47,6 +65,14 @@ function signedAssistant(id: string, stopReason: 'tool_use' | 'end_turn'): LLMMe
       layout: [{ type: 'thinking', index: 0 }],
       stopReason,
       contentDigest: `digest-${id}`,
+      binding: {
+        model: writer,
+        salt: id,
+        system: 's',
+        tools: 't',
+        messages: 'm',
+        priorThinking: [],
+      },
     },
   };
 }
@@ -57,8 +83,12 @@ const result = (id: string): LLMMessage => ({
   toolCallId: `call-${id}`,
 });
 
-function response(id: string, stopReason: 'tool_use' | 'end_turn'): LLMResponse {
-  const message = signedAssistant(id, stopReason);
+function response(
+  id: string,
+  stopReason: 'tool_use' | 'end_turn',
+  writer: string = MODEL,
+): LLMResponse {
+  const message = signedAssistant(id, stopReason, writer);
   return {
     content: message.content,
     toolCalls: [],
@@ -80,8 +110,9 @@ function check(holder: ContextBaselineHolder, r: RequestContext) {
   return checkContextBinding(holder, {
     ...r,
     provider: 'anthropic',
-    model: 'claude-haiku-5-5',
+    model: MODEL,
     binding: BOUND,
+    bindingOf,
   });
 }
 
@@ -246,16 +277,30 @@ describe('between turns: recorded, not refused', () => {
   });
 });
 
+/** One signed tool call written by `writer`, then a changed request to `model`. */
+function underTarget(
+  writer: string,
+  model: string,
+  binding: CheckedBinding,
+  pieces: readonly SystemPiece[] = [base, skill],
+) {
+  const holder: ContextBaselineHolder = {};
+  rememberContextBaseline(holder, request(), response('r1', 'tool_use', writer));
+  const wire = [user, signedAssistant('r1', 'tool_use', writer), result('r1')];
+  return checkContextBinding(holder, {
+    ...request({ wire, systemPieces: pieces }),
+    provider: 'anthropic',
+    model,
+    binding,
+    bindingOf,
+  });
+}
+
 describe('a model whose binding is unknown: sent and recorded, never refused', () => {
   it('the same change inside a signed open tool turn is recorded with binding unknown', () => {
-    const holder: ContextBaselineHolder = {};
-    rememberContextBaseline(holder, request(), response('r1', 'tool_use'));
-    const wire = [user, signedAssistant('r1', 'tool_use'), result('r1')];
-    const outcome = checkContextBinding(holder, {
-      ...request({ wire, systemPieces: [base, skill] }),
-      provider: 'anthropic',
-      model: 'team-profile',
-      binding: { binding: 'unknown', by: 'provider' },
+    const outcome = underTarget('team-profile', 'team-profile', {
+      binding: 'unknown',
+      by: 'provider',
     });
     expect(outcome.refusal).toBeUndefined();
     expect(outcome.note).toEqual({
@@ -267,22 +312,117 @@ describe('a model whose binding is unknown: sent and recorded, never refused', (
     });
   });
 
-  it('an app that states the id bound gets the refusal, recorded by app', () => {
-    const holder: ContextBaselineHolder = {};
-    rememberContextBaseline(holder, request(), response('r1', 'tool_use'));
-    const wire = [user, signedAssistant('r1', 'tool_use'), result('r1')];
-    const outcome = checkContextBinding(holder, {
-      ...request({ wire, systemPieces: [base, skill] }),
-      provider: 'anthropic',
-      model: 'team-profile',
-      binding: { binding: 'bound', by: 'app' },
+  it('an app statement that failed is said on the row', () => {
+    const outcome = underTarget('team-profile', 'team-profile', {
+      binding: 'unknown',
+      by: 'provider',
+      appStatement: 'failed',
     });
+    expect(outcome.note).toMatchObject({ refused: false, appStatement: 'failed' });
+  });
+
+  it('an app that states the id bound gets the refusal, recorded by app', () => {
+    const outcome = underTarget('team-profile', 'team-profile', { binding: 'bound', by: 'app' });
     expect(outcome.refusal).toBeInstanceOf(ContextChangedError);
     expect(outcome.note).toMatchObject({ refused: true, binding: 'bound', by: 'app' });
   });
 });
 
+describe('who wrote the block decides whether there is anything to check', () => {
+  it('a block an unbound model wrote carries nothing to check: no row, no refusal', () => {
+    expect(underTarget('claude-haiku-4-5', MODEL, BOUND)).toEqual({});
+  });
+
+  it('a block another family wrote meets the model check, not this one: no row, no refusal', () => {
+    expect(underTarget('claude-opus-5-5', MODEL, BOUND)).toEqual({});
+  });
+
+  it('a block written under another id of the same family is checked', () => {
+    const outcome = underTarget('claude-haiku-5-5-20261001', MODEL, BOUND);
+    expect(outcome.refusal).toBeInstanceOf(ContextChangedError);
+    expect(outcome.refusal?.message).toMatch(/^Refused before sending: claude-haiku-5-5 binds/);
+  });
+
+  it('a block with no recorded writer is not checked locally (the adapter does not either)', () => {
+    const holder: ContextBaselineHolder = {};
+    rememberContextBaseline(holder, request(), response('r1', 'tool_use'));
+    const signed = signedAssistant('r1', 'tool_use');
+    const { binding: _binding, ...replay } = signed.replay!;
+    const wire = [user, { ...signed, replay }, result('r1')];
+    expect(check(holder, request({ wire, systemPieces: [base, skill] }))).toEqual({});
+  });
+});
+
+describe('the library retiring finished-turn thinking is not an edit', () => {
+  it('a retired message (new digest, thinkingRetired, no blocks) hashes as the same message', () => {
+    const holder: ContextBaselineHolder = {};
+    const first = request();
+    rememberContextBaseline(holder, first, response('r1', 'end_turn'));
+    const ended = signedAssistant('r1', 'end_turn');
+    const asked: LLMMessage = { role: 'user', content: 'And HR?' };
+    const second = request({ wire: [user, ended, asked] });
+    rememberContextBaseline(holder, second, response('r2', 'tool_use'));
+    // The adapter retired r1's thinking between the two requests of this turn.
+    const { thinkingBlocks: _t, ...rest } = ended;
+    const retired: LLMMessage = {
+      ...rest,
+      replay: { ...ended.replay!, thinkingRetired: true, contentDigest: 'another-digest' },
+    };
+    const wire = [user, retired, asked, signedAssistant('r2', 'tool_use'), result('r2')];
+    expect(check(holder, request({ wire }))).toEqual({});
+  });
+});
+
+describe('the base is the request behind the newest signed block', () => {
+  it('not the conversation first request', () => {
+    const holder: ContextBaselineHolder = {};
+    // Turn one under [base]; the turn ends signed.
+    rememberContextBaseline(holder, request(), response('r1', 'end_turn'));
+    const asked: LLMMessage = { role: 'user', content: 'And HR?' };
+    const turnTwo = request({
+      wire: [user, signedAssistant('r1', 'end_turn'), asked],
+      systemPieces: [base, skill],
+    });
+    // Between turns: recorded against r1's request, not refused.
+    expect(check(holder, turnTwo).note).toMatchObject({ refused: false });
+    rememberContextBaseline(holder, turnTwo, response('r2', 'tool_use'));
+    // Same context as the request r2 was written under: nothing to say. Against
+    // the first request it would be a refused skill addition in an open turn.
+    const wire = [...turnTwo.wire, signedAssistant('r2', 'tool_use'), result('r2')];
+    expect(check(holder, request({ wire, systemPieces: [base, skill] }))).toEqual({});
+  });
+
+  it('keeps each response its own base: a newer signed draft left off the wire does not blind it', () => {
+    const holder: ContextBaselineHolder = {};
+    rememberContextBaseline(holder, request(), response('r1', 'tool_use'));
+    const wire = [user, signedAssistant('r1', 'tool_use'), result('r1')];
+    // A signed draft (r2) is accepted and then kept off the wire by a revision.
+    rememberContextBaseline(holder, request({ wire }), response('r2', 'end_turn'));
+    const outcome = check(holder, request({ wire, tools: [] }));
+    expect(outcome.note?.check).toBe('compared');
+    expect(outcome.refusal).toBeInstanceOf(ContextChangedError);
+  });
+});
+
+describe('the bases one run keeps are bounded', () => {
+  it('the newest MAX_BASELINES responses keep a base; the oldest go first', () => {
+    const holder: ContextBaselineHolder = {};
+    for (let i = 0; i < MAX_BASELINES + 4; i++)
+      rememberContextBaseline(holder, request(), response(`r${i}`, 'tool_use'));
+    expect(holder.bases?.size).toBe(MAX_BASELINES);
+    expect(holder.bases?.has('r0')).toBe(false);
+    expect(holder.latest).toBe(`r${MAX_BASELINES + 3}`);
+  });
+});
+
 describe('no recorded base: unchecked', () => {
+  it('unchecked is said once per response, not on every call', () => {
+    const holder: ContextBaselineHolder = {};
+    const wire = [user, signedAssistant('earlier', 'tool_use'), result('earlier')];
+    expect(check(holder, request({ wire })).note?.check).toBe('unchecked');
+    expect(check(holder, request({ wire }))).toEqual({});
+  });
+
   it('a continued conversation records unchecked and refuses nothing', () => {
     const wire = [
       user,

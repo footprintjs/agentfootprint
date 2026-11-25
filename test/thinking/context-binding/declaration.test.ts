@@ -53,13 +53,20 @@ describe('the Anthropic-wire adapters answer per model', () => {
       'claude-opus-5-5',
       'claude-fable-5-1',
       'claude-fable-5-2',
-      'claude-mythos-5-1',
       'claude-mythos-5-2',
       'us.anthropic.claude-opus-5-5-v1:0',
     ])
-      expect(of(id), id).toEqual({ binding: 'bound', by: 'provider' });
+      expect(of(id), id).toMatchObject({ binding: 'bound', by: 'provider' });
+    expect(of('us.anthropic.claude-opus-5-5-v1:0').family).toBe('claude-opus-5-5');
     for (const id of ['claude-haiku-4-5', 'claude-opus-4-8', 'claude-opus-5', 'claude-3-5-haiku'])
-      expect(of(id), id).toEqual({ binding: 'unbound', by: 'provider' });
+      expect(of(id), id).toMatchObject({ binding: 'unbound', by: 'provider' });
+    // Mythos 5.1 is not checked by default on every platform: unknown, as are
+    // the ids the table cannot place.
+    expect(of('claude-mythos-5-1')).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+      family: 'claude-mythos-5-1',
+    });
     for (const id of ['claude-opus-6', PROFILE, 'team-alias'])
       expect(of(id), id).toEqual({ binding: 'unknown', by: 'provider' });
   });
@@ -68,17 +75,36 @@ describe('the Anthropic-wire adapters answer per model', () => {
     adapters((id) => (id === PROFILE ? 'bound' : id === 'team-alias' ? 'unbound' : undefined)).map(
       (p) => [p.name, p] as const,
     ),
-  )('%s takes the app statement for an id, and the table for the rest', (_, provider) => {
-    expect(thinkingBindingOf(provider, PROFILE)).toEqual({ binding: 'bound', by: 'app' });
-    expect(thinkingBindingOf(provider, 'team-alias')).toEqual({ binding: 'unbound', by: 'app' });
-    expect(thinkingBindingOf(provider, 'claude-opus-6')).toEqual({
+  )(
+    '%s takes the app statement for an id the table cannot place, never over the table',
+    (_, provider) => {
+      expect(thinkingBindingOf(provider, PROFILE)).toEqual({ binding: 'bound', by: 'app' });
+      expect(thinkingBindingOf(provider, 'team-alias')).toEqual({ binding: 'unbound', by: 'app' });
+      expect(thinkingBindingOf(provider, 'claude-opus-6')).toEqual({
+        binding: 'unknown',
+        by: 'provider',
+      });
+      expect(thinkingBindingOf(provider, 'claude-haiku-5-5')).toMatchObject({
+        binding: 'bound',
+        by: 'provider',
+      });
+    },
+  );
+
+  it('a statement that throws does not fail anything: unknown, appStatement failed', () => {
+    const provider = anthropic({
+      apiKey: 'k',
+      thinkingBinding: () => {
+        throw new Error('app boom');
+      },
+    });
+    expect(thinkingBindingOf(provider, PROFILE)).toEqual({
       binding: 'unknown',
       by: 'provider',
+      appStatement: 'failed',
     });
-    expect(thinkingBindingOf(provider, 'claude-haiku-5-5')).toEqual({
-      binding: 'bound',
-      by: 'provider',
-    });
+    // A table id never asks the app.
+    expect(thinkingBindingOf(provider, 'claude-haiku-4-5').binding).toBe('unbound');
   });
 });
 
@@ -114,20 +140,18 @@ describe('wrappers keep the answer', () => {
     expect(withRetry(other).thinkingBinding).toBeUndefined();
     expect(withCircuitBreaker(other).thinkingBinding).toBeUndefined();
   });
-  it('withFallback takes the stricter side: bound, then unknown, then unbound', () => {
+  it("withFallback forwards its primary's answer for the model asked, never a blend", () => {
     expect(thinkingBindingOf(withFallback(claude, other), 'claude-haiku-5-5').binding).toBe(
       'bound',
     );
+    // The primary is silent (unbound): the pair is unbound, though the fallback binds.
+    expect(withFallback(other, claude).thinkingBinding).toBeUndefined();
     expect(thinkingBindingOf(withFallback(other, claude), 'claude-haiku-5-5').binding).toBe(
-      'bound',
-    );
-    expect(thinkingBindingOf(withFallback(other, claude), 'claude-opus-6').binding).toBe('unknown');
-    expect(thinkingBindingOf(withFallback(claude, other), 'claude-haiku-4-5').binding).toBe(
       'unbound',
     );
-    const stated = anthropic({ apiKey: 'k', thinkingBinding: () => 'bound' });
-    expect(thinkingBindingOf(withFallback(claude, stated), 'claude-opus-6')).toEqual({
-      binding: 'bound',
+    const statedUnbound = anthropic({ apiKey: 'k', thinkingBinding: () => 'unbound' });
+    expect(thinkingBindingOf(withFallback(statedUnbound, claude), PROFILE)).toEqual({
+      binding: 'unbound',
       by: 'app',
     });
     expect(withFallback(other, mock({ reply: 'y' })).thinkingBinding).toBeUndefined();

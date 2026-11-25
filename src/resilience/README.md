@@ -36,8 +36,9 @@ markers, no thinking stage, no build-time thinking refusal). `withFallback`
 combines what both sides declare — for `thinkingMode`, the LEAST either side
 promises for the model (`'none'` < `'adaptive'` < `'budget'`), so a fallback
 that cannot think is refused at build, not on the call it serves; for
-`thinkingBinding`, the STRICTER side (bound, then unknown, then unbound),
-because the history the pair sends may reach either side. It never maps
+`thinkingBinding`, the PRIMARY's answer for the model asked: every call goes
+to it first, and a call the fallback serves is checked by the fallback's own
+adapter. It never maps
 thinking itself: each side's adapter sends its own model's shape. A request an
 adapter refused BEFORE sending (`UnsupportedThinkingError`, `UnsupportedToolChoiceError`
 or `UnsafeThinkingReplayError`) is a wrong request,

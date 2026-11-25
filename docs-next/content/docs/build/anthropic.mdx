@@ -171,14 +171,23 @@ sequence rules follow Anthropic's
 
 ## A tool turn that changes its own context
 
-On Claude Haiku, Sonnet and Opus 5.5, Fable 5.1 and 5.2, and Mythos 5.1 and 5.2,
-a signed thinking block stays valid only under the system prompt, tool list and
+On Claude Haiku, Sonnet and Opus 5.5, Fable 5.1 and 5.2, and Mythos 5.2, a
+signed thinking block stays valid only under the system prompt, tool list and
 earlier messages it was written under. These models think on requests that do
 not ask for it, so this holds with or without `.thinking()`. The Anthropic
 adapters answer per model through `thinkingBinding`, read with
 `thinkingBindingOf(provider, model)`, which returns a `ThinkingBinding`: `bound`,
-`unbound`, or `unknown` for an id their table cannot place, such as an inference
-profile, a gateway alias or a model newer than the table.
+`unbound`, or `unknown`. It is `unknown` for an id their table cannot place, such
+as an inference profile, a gateway alias or a model newer than the table, and
+for Mythos 5.1, which Anthropic documents as checked by default on some
+platforms and not on Amazon Bedrock.
+
+The answer that counts is the one for the model this call goes to, and the
+reasoning must have been written by a bound model of the same family. A model
+named only later in a reliability chain, or the fallback side of
+`withFallback`, does not change it: that provider's own adapter checks the calls
+it serves. A block written by an unbound model, or by another family after a
+model switch, has nothing here to check.
 
 When a feature changes that context in the middle of a tool turn, the agent
 refuses the next request before sending it, with `ContextChangedError` from
@@ -204,8 +213,12 @@ An id the table cannot place may serve an older model whose thinking is not
 bound, so the agent does not refuse there: it sends the request and records the
 change with `binding: 'unknown'`, and the provider's own answer stands. If you
 know the model behind the id, say so with the adapter's `thinkingBinding`
-option. `'bound'` gives that id the named refusal, `'unbound'` leaves it
-untouched, and the record says `by: 'app'`:
+option. It is asked only for ids the table cannot place; for a model the table
+knows, the table answers, so the option and the adapter's own replay check
+never disagree. `'bound'` gives that id the named refusal, `'unbound'` leaves it
+untouched, and the record says `by: 'app'`. A statement that throws or answers
+anything else is not used: the id stays `unknown` and the record says
+`appStatement: 'failed'`.
 
 <CodeFile path="examples/features/context-changed-in-tool-turn.ts" region="declare" title="examples/features/context-changed-in-tool-turn.ts (region: declare)" />
 
@@ -213,8 +226,10 @@ A change outside an unfinished tool turn is not refused. The finished turn's
 reasoning is retired, as described above, and the request's
 `agentfootprint.stream.llm_start` event carries `contextChange` naming what
 changed. The final wrap-up call, which withdraws the tools, is recorded the
-same way. A conversation continued from an earlier run is recorded
-`unchecked`: this release keeps the comparison base for one run only.
+same way. Retiring that earlier reasoning is not itself a change. A
+conversation continued from an earlier run is recorded `unchecked` once, on the
+first request that carries the earlier reasoning: this release keeps the
+comparison bases for one run only.
 
 ## Streaming
 

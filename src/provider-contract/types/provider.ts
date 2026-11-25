@@ -190,7 +190,8 @@ export interface LLMProvider {
    * The Anthropic-wire adapters answer from their model table, `unknown` for an
    * id the table cannot place, and take the app's statement for such an id
    * (`thinkingBinding` option, `by: 'app'`). A WRAPPER must forward it;
-   * `withFallback` answers the stricter side (bound, then unknown, then unbound).
+   * `withFallback` forwards its primary's answer, the side every call goes to
+   * first (a fallback's own adapter checks the calls it serves).
    */
   readonly thinkingBinding?: (model: string) => ThinkingBinding;
   /**
@@ -298,4 +299,12 @@ export interface ThinkingBinding {
   readonly binding: 'bound' | 'unbound' | 'unknown';
   /** `provider`: the adapter's own knowledge. `app`: the application stated it. */
   readonly by: 'provider' | 'app';
+  /**
+   * The model family the provider resolved the id to, when it knows it. Two
+   * ids of one family read each other's reasoning bindings (a dated id and its
+   * alias); a block written by another family is not checked against this one.
+   */
+  readonly family?: string;
+  /** The app's statement for this id was asked and could not be used (it threw or answered something else). */
+  readonly appStatement?: 'failed';
 }

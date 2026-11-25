@@ -34,10 +34,12 @@ export interface MessageEntry {
   readonly role: string;
 }
 
-/** The request the newest signed reasoning was written under. */
+/** The request a signed response's reasoning was written under. */
 export interface ContextBaseline {
   /** The provider response that carried that reasoning. */
   readonly replayId: string;
+  /** The model that wrote it, as the adapter recorded it (`replay.binding.model`). */
+  readonly writer?: string;
   readonly systemText: string;
   readonly system: readonly PieceEntry[];
   readonly tools: readonly ToolEntry[];
@@ -68,18 +70,17 @@ const messageHashes = new WeakMap<LLMMessage, string>();
 export function messageHash(message: LLMMessage): string {
   const held = messageHashes.get(message);
   if (held !== undefined) return held;
-  // A provider response replayed from its own layout goes on the wire as those
-  // bytes, whatever the library later did to its text: hash what is sent.
-  const replay = message.replay;
+  // The fields a provider wire carries, and only those: what the adapter's own
+  // guard compares (`messagesWithoutThinking`). Thinking blocks and replay
+  // metadata are left out — the library's retirement of a finished turn's
+  // thinking rewrites both, and removing reasoning is not an edit of the context.
   const hash = short(
-    replay?.version === 1 && !replay.lossy
-      ? canonicalJson({ role: message.role, replay: replay.id, digest: replay.contentDigest })
-      : canonicalJson({
-          role: message.role,
-          content: message.content,
-          toolCallId: message.toolCallId ?? null,
-          toolCalls: (message.toolCalls ?? []).map((call) => [call.id, call.name, call.args]),
-        }),
+    canonicalJson({
+      role: message.role,
+      content: message.content,
+      toolCallId: message.toolCallId ?? null,
+      toolCalls: (message.toolCalls ?? []).map((call) => [call.id, call.name, call.args]),
+    }),
   );
   messageHashes.set(message, hash);
   return hash;
@@ -129,9 +130,14 @@ export function messageEntries(messages: readonly LLMMessage[]): MessageEntry[] 
 }
 
 /** Freeze one request as the baseline its signed response is checked against. */
-export function baselineOf(replayId: string, request: RequestContext): ContextBaseline {
+export function baselineOf(
+  replayId: string,
+  writer: string | undefined,
+  request: RequestContext,
+): ContextBaseline {
   return {
     replayId,
+    ...(writer !== undefined && { writer }),
     systemText: short(request.systemText),
     system: pieceEntries(request.systemPieces),
     tools: toolEntries(request.tools, request.parties),

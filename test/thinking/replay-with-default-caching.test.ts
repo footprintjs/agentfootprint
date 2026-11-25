@@ -287,9 +287,16 @@ describe('signed tool turns with native context features', () => {
       try {
         const run = agent.run({ message: 'How many objects did the lookup find?' });
         if (end === 'unknown end') {
+          // The draft that stopped at max_tokens is kept off the wire, so the
+          // newest signed reasoning on it is the first response's, still in its
+          // open tool turn. Its own baseline names what the revision changed,
+          // where the adapter's guard used to say only `prefix-changed`.
           await expect(run).rejects.toMatchObject({
-            code: 'UNSAFE_THINKING_REPLAY',
-            reason: 'prefix-changed',
+            code: 'CONTEXT_CHANGED_IN_TURN',
+            changes: [
+              { slot: 'system-prompt', change: 'added', source: 'evidence-recovery' },
+              { slot: 'tools', change: 'removed', tool: 'lookup' },
+            ],
           });
           expect(bodies).toHaveLength(2);
           expect(lookups).toEqual(['k1']);

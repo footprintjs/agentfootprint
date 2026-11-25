@@ -7,7 +7,8 @@
  * (OpenAI-family, Gemini, Ollama, a hand-written mock) keeps its exact
  * request path. The Anthropic-wire adapters answer per model from their table,
  * `unknown` for an id the table cannot place, and take an app's statement for
- * such an id through their `thinkingBinding` option (`by: 'app'`).
+ * such an id through their `thinkingBinding` option (`by: 'app'`). A
+ * declaration that throws or answers something else reads as `unknown`.
  *
  * @example
  *   thinkingBindingOf(anthropic(), 'claude-haiku-5-5'); // { binding: 'bound', by: 'provider' }
@@ -19,22 +20,28 @@ import type { LLMProvider, ThinkingBinding } from './types.js';
 export type { ThinkingBinding } from './types.js';
 
 const UNBOUND: ThinkingBinding = Object.freeze({ binding: 'unbound', by: 'provider' });
-const ORDER = ['unbound', 'unknown', 'bound'] as const;
+const UNKNOWN: ThinkingBinding = Object.freeze({ binding: 'unknown', by: 'provider' });
 
 export function thinkingBindingOf(
   provider: Pick<LLMProvider, 'thinkingBinding'>,
   model: string,
 ): ThinkingBinding {
   if (provider.thinkingBinding === undefined) return UNBOUND;
-  const answer = provider.thinkingBinding(model) as Partial<ThinkingBinding> | undefined;
+  let answer: Partial<ThinkingBinding> | undefined;
+  try {
+    answer = provider.thinkingBinding(model) as Partial<ThinkingBinding> | undefined;
+  } catch {
+    // A declaration that throws is not evidence either way: unknown, which
+    // records and never refuses. The run itself is not failed by it.
+    return UNKNOWN;
+  }
   const binding = answer?.binding;
-  // A malformed answer is not evidence either way: unknown, which records and never refuses.
-  if (binding !== 'bound' && binding !== 'unbound' && binding !== 'unknown')
-    return { binding: 'unknown', by: 'provider' };
-  return { binding, by: answer?.by === 'app' ? 'app' : 'provider' };
-}
-
-/** The stricter of two answers: bound over unknown over unbound. */
-export function stricterBinding(a: ThinkingBinding, b: ThinkingBinding): ThinkingBinding {
-  return ORDER.indexOf(b.binding) > ORDER.indexOf(a.binding) ? b : a;
+  // A malformed answer is not evidence either way: unknown.
+  if (binding !== 'bound' && binding !== 'unbound' && binding !== 'unknown') return UNKNOWN;
+  return {
+    binding,
+    by: answer?.by === 'app' ? 'app' : 'provider',
+    ...(typeof answer?.family === 'string' && { family: answer.family }),
+    ...(answer?.appStatement === 'failed' && { appStatement: 'failed' as const }),
+  };
 }

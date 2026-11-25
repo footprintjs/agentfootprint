@@ -12,6 +12,24 @@ import type { ContextChange } from '../events/payloads/contextChange.js';
 
 export type { ContextChange } from '../events/payloads/contextChange.js';
 
+// Control characters, line and paragraph separators, and the bidi controls.
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+
+/**
+ * A name made safe to carry: control characters become spaces and the text is
+ * cut at `max` characters with `…`. Names come from the app (skill and
+ * injection ids) and from servers (MCP tool names), so they are untrusted text.
+ */
+export function boundName(text: string, max: number): string {
+  const plain = text.replace(CONTROL, ' ');
+  return plain.length <= max ? plain : `${plain.slice(0, max - 1)}…`;
+}
+
+/** A name as the refusal's sentence quotes it: bounded, with markup characters replaced. */
+const quoted = (text: string | undefined): string =>
+  boundName(text ?? '', 64).replace(/[<>`'"\\]/g, '?');
+
 const PARTY: Record<string, string> = {
   skill: 'skill',
   provider: 'tool provider',
@@ -22,7 +40,7 @@ function partyLabel(party: ContextChange['party']): string | undefined {
   if (party.channel === 'registry') return "the agent's own tools";
   if (party.channel === 'framework') return 'the library';
   const kind = PARTY[party.channel] ?? party.channel;
-  return party.id === undefined ? kind : `${kind} '${party.id}'`;
+  return party.id === undefined ? kind : `${kind} '${quoted(party.id)}'`;
 }
 
 /** One change in plain words: `skill 'smb-triage' was added to the system prompt`. */
@@ -33,7 +51,7 @@ export function describeContextChange(change: ContextChange): string {
         ? 'a system prompt piece'
         : change.id === undefined
         ? `the ${change.source} piece`
-        : `${change.source} '${change.id}'`;
+        : `${change.source} '${quoted(change.id)}'`;
     if (change.change === 'added') return `${piece} was added to the system prompt`;
     if (change.change === 'removed') return `${piece} was removed from the system prompt`;
     return change.source === undefined
@@ -43,9 +61,10 @@ export function describeContextChange(change: ContextChange): string {
   if (change.slot === 'tools') {
     const by = partyLabel(change.party);
     const from = by === undefined ? '' : ` (from ${by})`;
-    if (change.change === 'added') return `tool '${change.tool}' was added${from}`;
-    if (change.change === 'removed') return `tool '${change.tool}' was removed${from}`;
-    return `tool '${change.tool}' changed its description or schema${from}`;
+    const tool = quoted(change.tool);
+    if (change.change === 'added') return `tool '${tool}' was added${from}`;
+    if (change.change === 'removed') return `tool '${tool}' was removed${from}`;
+    return `tool '${tool}' changed its description or schema${from}`;
   }
   const where = `message ${change.position ?? '?'}${
     change.role === undefined ? '' : ` (${change.role})`
@@ -86,7 +105,9 @@ export class ContextChangedError extends Error {
     const named = changes.map(describeContextChange).join('; ');
     const more = omittedChanges > 0 ? `; and ${omittedChanges} more` : '';
     super(
-      `Refused before sending: ${model} binds its reasoning to the context it was written ` +
+      `Refused before sending: ${quoted(
+        model,
+      )} binds its reasoning to the context it was written ` +
         `under, and this tool turn changed that context: ${named}${more}. ` +
         'Keep the system prompt, tool list and earlier messages fixed until the turn ends.',
     );

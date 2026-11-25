@@ -23,19 +23,29 @@ describe('Anthropic model facts: complete identifiers only', () => {
       'claude-fable-5-2',
       'claude-mythos-5-2',
       'claude-fable-5-1',
-      'claude-mythos-5-1',
       'claude-opus-5-5',
       'claude-sonnet-5-5',
       'claude-haiku-5-5',
     ].includes(family);
+    // Runs the check, but not by default on every platform: unknown, and the
+    // adapter's own check stays off for it, as before.
+    const varies = family === 'claude-mythos-5-1';
     expect(facts.thinkingPrefixBinding).toBe(bound ? true : undefined);
+    expect(facts.thinkingBindingVaries).toBe(varies ? true : undefined);
     expect(anthropicThinkingBinding(family)).toEqual({
-      binding: bound ? 'bound' : 'unbound',
+      binding: bound ? 'bound' : varies ? 'unknown' : 'unbound',
       by: 'provider',
+      family,
     });
+    // The table wins over the app for an id it places.
+    expect(anthropicThinkingBinding(family, () => (bound ? 'unbound' : 'bound'))).toEqual(
+      anthropicThinkingBinding(family),
+    );
     expect(Object.keys(facts).sort()).toEqual(
       bound
         ? ['forcedToolChoice', 'nativeOutputSchema', 'thinking', 'thinkingPrefixBinding']
+        : varies
+        ? ['forcedToolChoice', 'nativeOutputSchema', 'thinking', 'thinkingBindingVaries']
         : ['forcedToolChoice', 'nativeOutputSchema', 'thinking'],
     );
   });
@@ -135,6 +145,20 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicThinkingBinding(id, () => undefined)).toEqual({
       binding: 'unknown',
       by: 'provider',
+    });
+    // A statement that throws or answers something else is not used, and says so.
+    const throws = () => {
+      throw new Error('app boom');
+    };
+    expect(anthropicThinkingBinding(id, throws)).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+      appStatement: 'failed',
+    });
+    expect(anthropicThinkingBinding(id, (() => 'yes') as never)).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+      appStatement: 'failed',
     });
   });
 

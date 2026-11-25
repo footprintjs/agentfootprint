@@ -5,11 +5,7 @@
  * answer asks nothing, so those requests are untouched.
  */
 import type { LLMProvider } from '../../../provider-contract/types.js';
-import {
-  stricterBinding,
-  thinkingBindingOf,
-  type ThinkingBinding,
-} from '../../../provider-contract/thinkingBinding.js';
+import { thinkingBindingOf } from '../../../provider-contract/thinkingBinding.js';
 import type { CallLLMStageDeps } from '../stages/callLLM/types.js';
 import {
   checkContextBinding,
@@ -24,27 +20,21 @@ export interface ContextCheckForCall {
   readonly outcome: ContextCheckOutcome;
 }
 
-/** The stricter answer of the provider called and every provider the reliability chain may call. */
-export function bindingForCall(
-  deps: Pick<CallLLMStageDeps, 'reliability'>,
-  provider: LLMProvider,
-  model: string,
-): ThinkingBinding {
-  return (deps.reliability?.providers ?? []).reduce(
-    (held, r) => stricterBinding(held, thinkingBindingOf(r.provider, r.model)),
-    thinkingBindingOf(provider, model),
-  );
-}
-
+/**
+ * Asked of the provider and model THIS call goes to — the reliability chain's
+ * first provider, a brain, or the agent's own — and of nothing else. A chain's
+ * later providers are reached only when this one fails, and their own adapters
+ * check the calls they serve; blending them in would refuse a working call.
+ */
 export function contextCheckFor(
-  deps: Pick<CallLLMStageDeps, 'contextBinding' | 'reliability' | 'servedTools'>,
+  deps: Pick<CallLLMStageDeps, 'contextBinding' | 'servedTools'>,
   provider: LLMProvider,
   model: string,
   request: Omit<RequestContext, 'parties'>,
 ): ContextCheckForCall | undefined {
   const holder = deps.contextBinding;
   if (holder === undefined) return undefined;
-  const binding = bindingForCall(deps, provider, model);
+  const binding = thinkingBindingOf(provider, model);
   if (binding.binding === 'unbound') return undefined;
   const full: RequestContext = {
     ...request,
@@ -57,6 +47,7 @@ export function contextCheckFor(
       provider: provider.name,
       model,
       binding: binding as CheckedBinding,
+      bindingOf: (writer) => thinkingBindingOf(provider, writer),
     }),
   };
 }

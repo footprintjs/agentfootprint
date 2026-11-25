@@ -1069,6 +1069,7 @@
   "agentfootprint.stream.llm_start": {
     "brain.skillId": "kept",
     "brain.via": "kept",
+    "contextChange.appStatement": "kept",
     "contextChange.binding": "kept",
     "contextChange.by": "kept",
     "contextChange.changes[].change": "kept",

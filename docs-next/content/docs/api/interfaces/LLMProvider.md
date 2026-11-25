@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types/provider.ts:144](https://github.com/foo
 
 > `readonly` `optional` **carriesForcedToolChoice?**: `boolean`
 
-Defined in: [src/provider-contract/types/provider.ts:245](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L245)
+Defined in: [src/provider-contract/types/provider.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L246)
 
 v7.26 — whether this adapter puts [LLMRequest.toolChoice](/docs/api/interfaces/LLMRequest#toolchoice) on its
 wire as a forced choice of one named tool.
@@ -42,7 +42,7 @@ by `supportsForcedToolChoice`; this existing wire flag remains boolean.
 
 > `readonly` `optional` **carriesInMessages?**: readonly [`WireRole`](/docs/api/type-aliases/WireRole)[]
 
-Defined in: [src/provider-contract/types/provider.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L221)
+Defined in: [src/provider-contract/types/provider.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L222)
 
 v7.21 — which roles this provider carries INSIDE the `messages` array.
 
@@ -74,7 +74,7 @@ because a role only one of them carries is a role the call might drop.
 
 > `readonly` `optional` **carriesNativeOutputSchema?**: `boolean`
 
-Defined in: [src/provider-contract/types/provider.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L265)
+Defined in: [src/provider-contract/types/provider.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L266)
 
 Whether this adapter puts [LLMRequest.outputFormat](/docs/api/interfaces/LLMRequest#outputformat) on its wire —
 the provider's own structured output, `strategy: 'native'`. **Absence
@@ -114,7 +114,7 @@ must consult the same rule before putting cache markers on the wire.
 
 > `readonly` `optional` **supportsAutoNativeOutputSchema?**: (`model`) => `boolean`
 
-Defined in: [src/provider-contract/types/provider.ts:279](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L279)
+Defined in: [src/provider-contract/types/provider.ts:280](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L280)
 
 Positive model knowledge for automatic native output. Unlike explicit
 native support, this must return false for unknown or opaque aliases.
@@ -138,7 +138,7 @@ Wrappers forward it; fallback pairs require both sides to know the model.
 
 > `readonly` `optional` **supportsForcedToolChoice?**: (`model`) => `boolean`
 
-Defined in: [src/provider-contract/types/provider.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L255)
+Defined in: [src/provider-contract/types/provider.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L256)
 
 Optional model-specific restriction on the forced-choice wire capability.
 Read with `forcedToolChoiceFor(provider, model)`: the wire flag must be
@@ -164,7 +164,7 @@ forward it as a value. `withFallback` intersects both sides per model.
 
 > `readonly` `optional` **supportsNativeOutputSchema?**: (`model`) => `boolean`
 
-Defined in: [src/provider-contract/types/provider.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L271)
+Defined in: [src/provider-contract/types/provider.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L272)
 
 Optional per-model restriction on [carriesNativeOutputSchema](/docs/api/interfaces/LLMProvider#carriesnativeoutputschema), the
 `supportsForcedToolChoice` twin: both must answer true. A plain function
@@ -186,7 +186,7 @@ of the model id (no `this`); the adapter resolves its own shorthand.
 
 > `readonly` `optional` **thinkingBinding?**: (`model`) => [`ThinkingBinding`](/docs/api/interfaces/ThinkingBinding)
 
-Defined in: [src/provider-contract/types/provider.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L195)
+Defined in: [src/provider-contract/types/provider.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L196)
 
 Whether a thinking block this model returns stays valid only under the
 system prompt, tool list and earlier messages it was written under
@@ -201,7 +201,8 @@ A plain function of the model id (no `this`). **Absence means unbound.**
 The Anthropic-wire adapters answer from their model table, `unknown` for an
 id the table cannot place, and take the app's statement for such an id
 (`thinkingBinding` option, `by: 'app'`). A WRAPPER must forward it;
-`withFallback` answers the stricter side (bound, then unknown, then unbound).
+`withFallback` forwards its primary's answer, the side every call goes to
+first (a fallback's own adapter checks the calls it serves).
 
 #### Parameters
 
@@ -262,7 +263,7 @@ adapter decides. A plain function of the model id — it must not use
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/provider-contract/types/provider.ts:287](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L287)
+Defined in: [src/provider-contract/types/provider.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L288)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -290,7 +291,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/provider-contract/types/provider.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L288)
+Defined in: [src/provider-contract/types/provider.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L289)
 
 #### Parameters
 

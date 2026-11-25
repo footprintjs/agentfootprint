@@ -5,13 +5,17 @@
  */
 import type { ContextChange } from '../../../events/payloads/contextChange.js';
 import type { ContextBaseline, MessageEntry, PieceEntry, ToolEntry } from './composition.js';
+import { boundName } from '../../../thinking/contextChange.js';
+
+/** Names on the record are bounded too: ids from the app, tool names from servers. */
+const NAME = 128;
 
 function pieceChange(piece: PieceEntry, change: ContextChange['change']): ContextChange {
   return {
     slot: 'system-prompt',
     change,
     source: piece.source,
-    ...(piece.id !== undefined && { id: piece.id }),
+    ...(piece.id !== undefined && { id: boundName(piece.id, NAME) }),
   };
 }
 
@@ -39,8 +43,13 @@ function toolChange(tool: ToolEntry, change: ContextChange['change']): ContextCh
   return {
     slot: 'tools',
     change,
-    tool: tool.name,
-    ...(tool.party !== undefined && { party: tool.party }),
+    tool: boundName(tool.name, NAME),
+    ...(tool.party !== undefined && {
+      party: {
+        channel: tool.party.channel,
+        ...(tool.party.id !== undefined && { id: boundName(tool.party.id, NAME) }),
+      },
+    }),
   };
 }
 

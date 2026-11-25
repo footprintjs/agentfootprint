@@ -38,9 +38,10 @@ export interface ContextChange {
 export interface ContextChangeCheck {
   /**
    * `compared`: this request was compared with the request the newest signed
-   * reasoning was written under. `unchecked`: that request is not on this
-   * run's record (a conversation continued or restored from storage), so
-   * nothing was compared.
+   * reasoning on its wire was written under. `unchecked`: that reasoning came
+   * from a response this run did not record (a conversation continued or
+   * restored from storage), so nothing could be compared; said once per such
+   * response, on the first request that carries it.
    */
   readonly check: 'compared' | 'unchecked';
   /**
@@ -57,6 +58,8 @@ export interface ContextChangeCheck {
   readonly binding: 'bound' | 'unknown';
   /** Who stated the binding: the provider's own knowledge, or the app. */
   readonly by: 'provider' | 'app';
+  /** The app's `thinkingBinding` statement for this id threw or answered something unusable, so it was not used. */
+  readonly appStatement?: 'failed';
   /** The named differences, at most 16. Empty when unchecked. */
   readonly changes: readonly ContextChange[];
   /** Differences beyond the cap, counted. Absent when none were left out. */

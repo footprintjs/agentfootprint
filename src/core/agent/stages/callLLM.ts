@@ -51,10 +51,6 @@ export function buildCallLLMStage(
 ): (scope: TypedScope<AgentState>) => Promise<void> {
   return async (scope) => {
     const prepared = await prepareCall(scope, deps);
-    // A bound model's tool turn whose context changed under its signed
-    // reasoning stops here, named, before the adapter's own guard would.
-    const refusal = prepared.contextCheck?.outcome.refusal;
-    if (refusal !== undefined) throw refusal;
     const executed = await executeCall(scope, deps, prepared);
     if (executed === undefined) return;
     if (

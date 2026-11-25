@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-410 exported from `agentfootprint`.
+411 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 

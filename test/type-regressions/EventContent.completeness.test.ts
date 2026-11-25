@@ -678,6 +678,7 @@ const CANARY_PAYLOAD: {
       refused: true,
       binding: 'bound',
       by: 'app',
+      appStatement: 'failed',
       changes: [
         {
           slot: 'tools',

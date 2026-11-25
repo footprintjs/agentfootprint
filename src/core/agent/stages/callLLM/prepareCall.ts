@@ -329,6 +329,9 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
   // A custom strategy can create remote cache handles, so refuse a known
   // unsupported effective request before even that preparation does I/O.
   assertForcedRequestSupported(provider, baseRequest);
+  // The same rule for a bound model's tool turn whose context changed under its
+  // signed reasoning: refused here, by name, before the strategy's I/O.
+  if (contextCheck?.outcome.refusal !== undefined) throw contextCheck.outcome.refusal;
   const cacheMarkers = replayCacheMarkers(
     (scope.cacheMarkers as readonly CacheMarker[] | undefined) ?? [],
     continuing,

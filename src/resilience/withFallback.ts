@@ -43,7 +43,6 @@ import type { ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { dispatchThinkingHandler, tagThinkingResponse } from '../thinking/dispatch.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../provider-contract/types.js';
 import { forcedToolChoiceFor } from '../provider-contract/forcedToolChoice.js';
-import { stricterBinding, thinkingBindingOf } from '../provider-contract/thinkingBinding.js';
 import {
   autoNativeOutputSchemaFor,
   nativeOutputSchemaFor,
@@ -314,12 +313,10 @@ export function withFallback(
     ...(thinkingHandler !== undefined && { thinkingHandler }),
     // The least either side promises for a model — see `thinkingModeOfPair`.
     ...(thinkingMode !== undefined && { thinkingMode }),
-    // The STRICTER side (bound, then unknown, then unbound): a history the pair
-    // sends may reach either side, so it is held to the stricter rule.
-    ...((primary.thinkingBinding !== undefined || fallback.thinkingBinding !== undefined) && {
-      thinkingBinding: (model: string) =>
-        stricterBinding(thinkingBindingOf(primary, model), thinkingBindingOf(fallback, model)),
-    }),
+    // The PRIMARY's answer, for the model asked: every call goes to it first,
+    // and a call the fallback serves is checked by the fallback's own adapter.
+    // A blend would refuse a working primary for a model it never calls.
+    ...(primary.thinkingBinding !== undefined && { thinkingBinding: primary.thinkingBinding }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       const attempts = replayAttempts(req, hooks);
       try {

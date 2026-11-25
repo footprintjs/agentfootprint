@@ -220,6 +220,7 @@ export function decisionsShapes() {
         refused: bool,
         binding: oneOf('bound', 'unknown'),
         by: oneOf('app', 'provider'),
+        appStatement: oneOf('failed'),
         changes: listOf(
           shapeOf<
             ItemOf<At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'contextChange'>, 'changes'>>
