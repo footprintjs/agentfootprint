@@ -6,7 +6,7 @@ title: receiptAt
 
 > **receiptAt**(`source`, `epoch`): [`StoredReceipt`](/docs/api/type-aliases/StoredReceipt) \| `undefined`
 
-Defined in: [src/time-travel/servedView.ts:516](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L516)
+Defined in: [src/time-travel/servedView.ts:519](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L519)
 
 The receipt epoch `k`'s call left behind, or `undefined`.
 

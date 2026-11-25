@@ -13,6 +13,11 @@ see; the agent composes the request, an adapter carries it.
   (`forcedToolChoiceFor`, `nativeOutputSchemaFor`) and the one typed refusal
   each, for a model that does not take a forced tool choice or a native output
   schema.
+- `thinkingBinding.ts` — `thinkingBindingOf(provider, model)`, the one reader
+  of `LLMProvider.thinkingBinding`: `bound`, `unbound` or `unknown`, and who
+  said so (`provider` or `app`). Absence means unbound. The agent's named
+  refusal for a changed tool turn (`core/agent/contextBinding/`) runs only on
+  `bound`; `unknown` records the change and sends.
 - `permissionDecision.ts` — `readPermissionDecision`, THE ONE READER of a
   permission checker's answer (whether the checker is asked at all stays
   `types.ts` · `checkerGoverns`, inside that allow-listed leaf of the

@@ -7,6 +7,7 @@ import {
   anthropicModelFacts,
   anthropicModelFamily,
   anthropicTakesForcedToolChoice,
+  anthropicThinkingBinding,
   anthropicThinkingMode,
 } from '../../../src/adapters/llm/anthropicModels.js';
 
@@ -19,15 +20,33 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicTakesForcedToolChoice(family)).toBe(facts.forcedToolChoice);
     expect(Object.isFrozen(facts)).toBe(true);
     const bound = [
+      'claude-fable-5-2',
+      'claude-mythos-5-2',
       'claude-fable-5-1',
       'claude-opus-5-5',
       'claude-sonnet-5-5',
       'claude-haiku-5-5',
     ].includes(family);
+    // Runs the check, but not by default on every platform: unknown, and the
+    // adapter's own check stays off for it, as before.
+    const varies = family === 'claude-mythos-5-1';
     expect(facts.thinkingPrefixBinding).toBe(bound ? true : undefined);
+    expect(facts.thinkingBindingVaries).toBe(varies ? true : undefined);
+    expect(anthropicThinkingBinding(family)).toEqual({
+      binding: bound ? 'bound' : varies ? 'unknown' : 'unbound',
+      by: 'provider',
+      family,
+      model: family,
+    });
+    // The table wins over the app for an id it places.
+    expect(anthropicThinkingBinding(family, () => (bound ? 'unbound' : 'bound'))).toEqual(
+      anthropicThinkingBinding(family),
+    );
     expect(Object.keys(facts).sort()).toEqual(
       bound
         ? ['forcedToolChoice', 'nativeOutputSchema', 'thinking', 'thinkingPrefixBinding']
+        : varies
+        ? ['forcedToolChoice', 'nativeOutputSchema', 'thinking', 'thinkingBindingVaries']
         : ['forcedToolChoice', 'nativeOutputSchema', 'thinking'],
     );
   });
@@ -65,16 +84,20 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicTakesForcedToolChoice(id)).toBe(ANTHROPIC_MODELS[family].forcedToolChoice);
   });
 
-  it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1', 'claude-mythos-5-1'])(
-    'refuses forced tools for known %s, but not arbitrary aliases mentioning it',
-    (family) => {
-      expect(anthropicTakesForcedToolChoice(family)).toBe(false);
-      for (const alias of [`my-${family}`, `${family}-deployment`, `${family}:deployment`]) {
-        expect(anthropicModelFacts(alias)).toBeUndefined();
-        expect(anthropicTakesForcedToolChoice(alias)).toBe(true);
-      }
-    },
-  );
+  it.each([
+    'claude-opus-5-5',
+    'claude-sonnet-5-5',
+    'claude-fable-5-1',
+    'claude-mythos-5-1',
+    'claude-fable-5-2',
+    'claude-mythos-5-2',
+  ])('refuses forced tools for known %s, but not arbitrary aliases mentioning it', (family) => {
+    expect(anthropicTakesForcedToolChoice(family)).toBe(false);
+    for (const alias of [`my-${family}`, `${family}-deployment`, `${family}:deployment`]) {
+      expect(anthropicModelFacts(alias)).toBeUndefined();
+      expect(anthropicTakesForcedToolChoice(alias)).toBe(true);
+    }
+  });
 
   it.each([
     '',
@@ -112,6 +135,40 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicModelFamily(id)).toBeUndefined();
     expect(anthropicModelFacts(id)).toBeUndefined();
     expect(anthropicTakesForcedToolChoice(id)).toBe(true);
+    // The binding of an id the table cannot place is unknown, not guessed —
+    // unless the app states it.
+    expect(anthropicThinkingBinding(id)).toEqual({ binding: 'unknown', by: 'provider', model: id });
+    expect(anthropicThinkingBinding(id, () => 'bound')).toEqual({
+      binding: 'bound',
+      by: 'app',
+      model: id,
+    });
+    expect(anthropicThinkingBinding(id, () => 'unbound')).toEqual({
+      binding: 'unbound',
+      by: 'app',
+      model: id,
+    });
+    expect(anthropicThinkingBinding(id, () => undefined)).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+      model: id,
+    });
+    // A statement that throws or answers something else is not used, and says so.
+    const throws = () => {
+      throw new Error('app boom');
+    };
+    expect(anthropicThinkingBinding(id, throws)).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+      model: id,
+      appStatement: 'failed',
+    });
+    expect(anthropicThinkingBinding(id, (() => 'yes') as never)).toEqual({
+      binding: 'unknown',
+      by: 'provider',
+      model: id,
+      appStatement: 'failed',
+    });
   });
 
   it('does not infer hard facts from the historical adaptive thinking default', () => {

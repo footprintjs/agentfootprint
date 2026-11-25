@@ -55,6 +55,19 @@ export interface LLMStartPayload {
     readonly via: 'skill' | 'escalation';
     readonly skillId?: string;
   };
+  /**
+   * On a model whose thinking is bound to its context, or whose binding the
+   * provider cannot tell (`thinkingBinding` answers `bound` or `unknown`): what
+   * this request changes under the newest signed reasoning on its wire, by
+   * name, when that reasoning was written by a model of the same family.
+   * `refused: true` means the call stops here with `ContextChangedError`
+   * (bound models only). A row with `check: 'unchecked'` appears ONCE per
+   * signed response this run did not record (a continued or restored
+   * conversation): nothing could be compared for it.
+   * ABSENT otherwise: when nothing changed, when no such reasoning is on the
+   * wire, and on every unbound model — those runs keep their exact prior bytes.
+   */
+  readonly contextChange?: import('./contextChange.js').ContextChangeCheck;
 }
 
 export interface LLMEndPayload {

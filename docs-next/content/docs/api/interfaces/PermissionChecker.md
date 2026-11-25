@@ -4,7 +4,7 @@ title: PermissionChecker
 
 # Interface: PermissionChecker
 
-Defined in: [src/provider-contract/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L183)
+Defined in: [src/provider-contract/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L188)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:183](https://github.com/footprintjs/
 
 > `readonly` `optional` **governs?**: readonly [`PermissionCapability`](/docs/api/type-aliases/PermissionCapability)[]
 
-Defined in: [src/provider-contract/types.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L216)
+Defined in: [src/provider-contract/types.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L221)
 
 Which capabilities BEYOND `'tool_call'` this checker asks to be consulted
 about (9.11.0). Optional and feature-detected — **absence is NO**.
@@ -53,7 +53,7 @@ a checker that also governs which skills a role may activate
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L184)
+Defined in: [src/provider-contract/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L189)
 
 ## Methods
 
@@ -61,7 +61,7 @@ Defined in: [src/provider-contract/types.ts:184](https://github.com/footprintjs/
 
 > **check**(`request`): [`PermissionDecision`](/docs/api/interfaces/PermissionDecision) \| `Promise`\<[`PermissionDecision`](/docs/api/interfaces/PermissionDecision)\>
 
-Defined in: [src/provider-contract/types.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L185)
+Defined in: [src/provider-contract/types.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L190)
 
 #### Parameters
 

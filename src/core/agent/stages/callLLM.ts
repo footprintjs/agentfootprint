@@ -27,6 +27,7 @@ import { executeCall } from './callLLM/executeCall.js';
 import { acceptResponse } from './callLLM/acceptResponse.js';
 import { admitProviderIntervention } from '../../providerIntervention.js';
 import { recordTerminalResponse } from './callLLM/responseAccounting.js';
+import { rememberForCall } from '../contextBinding/forCall.js';
 
 // LENS · system-text + tool-list · request-ephemeral
 // reads: systemPrompt ← scope.systemPromptInjections, joined by `systemPrompt` below (the system-prompt slot's output)
@@ -59,6 +60,7 @@ export function buildCallLLMStage(
     )
       return;
     await acceptResponse(scope, deps, prepared, executed);
+    rememberForCall(deps, prepared.contextCheck, executed.response);
   };
 }
 

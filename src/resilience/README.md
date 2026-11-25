@@ -31,11 +31,14 @@ carrier. A new call starts fresh; post-first-chunk failures still never retry.
 ## Declarations pass through; a pair answers for both
 A decorator rebuilds the provider object, so it carries every declaration
 across: `carriesInMessages`, `carriesForcedToolChoice`, `supportsForcedToolChoice`, `promptCaching`,
-`thinkingHandler`, `thinkingMode`. Dropping one degrades it silently (no cache
+`thinkingHandler`, `thinkingMode`, `thinkingBinding`. Dropping one degrades it silently (no cache
 markers, no thinking stage, no build-time thinking refusal). `withFallback`
 combines what both sides declare — for `thinkingMode`, the LEAST either side
 promises for the model (`'none'` < `'adaptive'` < `'budget'`), so a fallback
-that cannot think is refused at build, not on the call it serves. It never maps
+that cannot think is refused at build, not on the call it serves; for
+`thinkingBinding`, the PRIMARY's answer for the model asked: every call goes
+to it first, and a call the fallback serves is checked by the fallback's own
+adapter. It never maps
 thinking itself: each side's adapter sends its own model's shape. A request an
 adapter refused BEFORE sending (`UnsupportedThinkingError`, `UnsupportedToolChoiceError`
 or `UnsafeThinkingReplayError`) is a wrong request,

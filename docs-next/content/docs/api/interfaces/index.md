@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-410 exported from `agentfootprint`.
+411 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -345,6 +345,7 @@ title: Interfaces
 - [`SwarmAgent`](/docs/api/interfaces/SwarmAgent)
 - [`SweptArtifact`](/docs/api/interfaces/SweptArtifact)
 - [`TeardownOptions`](/docs/api/interfaces/TeardownOptions)
+- [`ThinkingBinding`](/docs/api/interfaces/ThinkingBinding)
 - [`TimeAnswerRow`](/docs/api/interfaces/TimeAnswerRow)
 - [`TimeCandidate`](/docs/api/interfaces/TimeCandidate)
 - [`TimeClock`](/docs/api/interfaces/TimeClock)

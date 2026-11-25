@@ -177,6 +177,24 @@ export interface LLMProvider {
    */
   readonly thinkingMode?: (model: string) => import('../../thinking/types.js').ThinkingMode;
   /**
+   * Whether a thinking block this model returns stays valid only under the
+   * system prompt, tool list and earlier messages it was written under
+   * (Anthropic's preserved thinking: the API refuses or drops a block replayed
+   * after any of them changed) — `bound`, `unbound` or `unknown`, and who said
+   * so. Read with `thinkingBindingOf(provider, model)`. On a `bound` model the
+   * agent refuses by name a tool turn whose context changed under its signed
+   * reasoning (`ContextChangedError`); on an `unknown` one it sends the request
+   * and records the change.
+   *
+   * A plain function of the model id (no `this`). **Absence means unbound.**
+   * The Anthropic-wire adapters answer from their model table, `unknown` for an
+   * id the table cannot place, and take the app's statement for such an id
+   * (`thinkingBinding` option, `by: 'app'`). A WRAPPER must forward it;
+   * `withFallback` forwards its primary's answer, the side every call goes to
+   * first (a fallback's own adapter checks the calls it serves).
+   */
+  readonly thinkingBinding?: (model: string) => ThinkingBinding;
+  /**
    * v7.21 — which roles this provider carries INSIDE the `messages` array.
    *
    * The wires disagree, and the disagreement is invisible from the outside:
@@ -269,4 +287,30 @@ export interface LLMProvider {
    */
   complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse>;
   stream?(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk>;
+}
+
+/** A provider's answer to `thinkingBinding`: the fact, and who stated it. */
+export interface ThinkingBinding {
+  /**
+   * `bound`: a thinking block is valid only under the system prompt, tool list
+   * and earlier messages it was written under. `unbound`: it is not. `unknown`:
+   * the provider cannot tell for this model id (an id its table cannot place).
+   */
+  readonly binding: 'bound' | 'unbound' | 'unknown';
+  /** `provider`: the adapter's own knowledge. `app`: the application stated it. */
+  readonly by: 'provider' | 'app';
+  /**
+   * The model family the provider resolved the id to, when it knows it. Two
+   * ids of one family read each other's reasoning bindings (a dated id and its
+   * alias); a block written by another family is not checked against this one.
+   */
+  readonly family?: string;
+  /**
+   * The model id the provider resolved the asked id to — an adapter's
+   * shorthand (`'anthropic'`) becomes the id it actually sends. Absent: the
+   * asked id is the one sent.
+   */
+  readonly model?: string;
+  /** The app's statement for this id was asked and could not be used (it threw or answered something else). */
+  readonly appStatement?: 'failed';
 }

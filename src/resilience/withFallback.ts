@@ -313,6 +313,10 @@ export function withFallback(
     ...(thinkingHandler !== undefined && { thinkingHandler }),
     // The least either side promises for a model — see `thinkingModeOfPair`.
     ...(thinkingMode !== undefined && { thinkingMode }),
+    // The PRIMARY's answer, for the model asked: every call goes to it first,
+    // and a call the fallback serves is checked by the fallback's own adapter.
+    // A blend would refuse a working primary for a model it never calls.
+    ...(primary.thinkingBinding !== undefined && { thinkingBinding: primary.thinkingBinding }),
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       const attempts = replayAttempts(req, hooks);
       try {

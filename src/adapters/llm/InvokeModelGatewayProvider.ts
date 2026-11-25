@@ -78,7 +78,11 @@ import {
 } from './anthropicMessagesWire.js';
 import { toolManifestOf } from './wireManifest.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
-import { anthropicTakesForcedToolChoice } from './anthropicModels.js';
+import {
+  anthropicTakesForcedToolChoice,
+  anthropicThinkingBinding,
+  type StatedThinkingBinding,
+} from './anthropicModels.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import type { ReplayPreparation } from '../../thinking/replay.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
@@ -149,17 +153,17 @@ export interface InvokeModelGatewayOptions {
   readonly parallelToolCalls?: boolean;
   /**
    * Which thinking request a model takes, for an id the built-in table cannot
-   * read — the alias your gateway knows, an application-inference-profile ARN,
-   * a provisioned-model ARN. The table reads Bedrock ids
-   * (`us.anthropic.claude-…-v1:0`) itself; an id it does not know is read as
-   * adaptive (every Claude model since 4.7), so a budget-only model behind an
-   * opaque id (Claude 4.5 or earlier) is declared here. Return `undefined` to
-   * use the table. The provider declares the result AND sends that shape.
-   *
+   * read — your gateway's alias, an application-inference-profile ARN, a
+   * provisioned-model ARN. The table reads Bedrock ids (`us.anthropic.claude-…`)
+   * itself and reads an unknown id as adaptive, so declare a budget-only model
+   * (Claude 4.5 or earlier) behind an opaque id here; `undefined` uses the table.
+   * The provider declares the result AND sends that shape.
    * @example
    *   invokeModelGateway({ …, model: 'haiku-fast', thinkingMode: (id) => (id === 'haiku-fast' ? 'budget' : undefined) })
    */
   readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
+  /** Is such an id's thinking `'bound'` or `'unbound'` to its context? `undefined`: the table. */
+  readonly thinkingBinding?: StatedThinkingBinding;
   /** Replace `fetch` — for an mTLS agent, a proxy, or a test. Default: global `fetch`. */
   readonly fetch?: InvokeModelGatewayFetch;
   /**
@@ -355,38 +359,32 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
     return { response, body, bindingFactory, omissions: preparation.omissions };
   }
 
+  const modelFor = (model: string): string => gatewayModelOf(model, options.model);
   return {
     name: PROVIDER_NAME,
-    // `carriesInMessages` is deliberately ABSENT. The default is
-    // ['user', 'assistant'] (DEFAULT_CARRIES_IN_MESSAGES), which is exactly
-    // this wire: `system` rides the top-level field and a `role: 'system'`
-    // message is dropped by `toAnthropicMessages`. Declaring more would let a
-    // system-role injection vanish between the recording and the request
-    // instead of being refused at run start, by name.
+    // `carriesInMessages` is deliberately ABSENT: the default ['user', 'assistant']
+    // (DEFAULT_CARRIES_IN_MESSAGES) is exactly this wire — `system` rides the
+    // top-level field and `toAnthropicMessages` drops a `role: 'system'` message.
+    // Declaring more would let a system-role injection vanish instead of being
+    // refused at run start, by name.
     //
     // `tool_choice: { type: 'tool', name }` is part of the Anthropic body this
     // wire forwards, and a field deployment verified the gateway honours it.
     carriesForcedToolChoice: true,
-    supportsForcedToolChoice: (model) =>
-      anthropicTakesForcedToolChoice(gatewayModelOf(model, options.model)),
+    supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelFor(model)),
+    thinkingBinding: (model) => anthropicThinkingBinding(modelFor(model), options.thinkingBinding),
     // `promptCaching` is deliberately ABSENT, for the same reason the line
     // above is present: a capability is declared where it is true of the
-    // ENDPOINT. This adapter builds the body `anthropic()` builds, so it
-    // writes `cache_control` wherever markers point — but no deployment has
-    // verified that a gateway forwards the field to InvokeModel, and until
-    // one does the agent sends it none. An operator who has verified theirs
-    // declares it on the instance:
+    // ENDPOINT. The body writes `cache_control` wherever markers point, but no
+    // deployment has verified that a gateway forwards the field to InvokeModel,
+    // so the agent sends none. An operator who has verified theirs declares it:
     //   { ...invokeModelGateway(opts), promptCaching: { mode: 'breakpoints', maxBreakpoints: 4, reportsUsage: true } }
     //
-    // The thinking handler IS declared: the response is Anthropic's, parsed
-    // by `fromAnthropicResponse`, which passes thinking blocks through as
-    // `rawThinking`. Matched by name until now, this adapter never had one —
-    // so its signed blocks were never normalized for the echo back.
+    // The thinking handler IS declared: `fromAnthropicResponse` passes blocks as `rawThinking`.
     thinkingHandler: anthropicThinkingHandler,
-    // Which thinking request each model takes (anthropicThinkingWire.ts). The
-    // gateway's ids are Bedrock's (`us.anthropic.claude-…-v1:0`); the table
-    // reads them from `claude-` on, like the Claude API id.
-    thinkingMode: (model) => modeOf(gatewayModelOf(model, options.model)),
+    // Which thinking request each model takes (anthropicThinkingWire.ts); the
+    // gateway's Bedrock ids (`us.anthropic.claude-…-v1:0`) are read from `claude-` on.
+    thinkingMode: (model) => modeOf(modelFor(model)),
 
     async complete(req: LLMRequest, hooks?: LLMCallHooks): Promise<LLMResponse> {
       throwIfAborted(req.signal);
@@ -457,8 +455,9 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
 export class InvokeModelGatewayProvider implements LLMProvider {
   readonly name = PROVIDER_NAME;
   readonly carriesForcedToolChoice = true;
-  /** The inner declaration resolves this adapter's shorthand before looking up the model. */
+  /** The inner declarations resolve this adapter's shorthand before looking up the model. */
   readonly supportsForcedToolChoice: (model: string) => boolean;
+  readonly thinkingBinding: (model: string) => ReturnType<typeof anthropicThinkingBinding>;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
   readonly thinkingMode: (model: string) => ThinkingMode;
@@ -468,6 +467,7 @@ export class InvokeModelGatewayProvider implements LLMProvider {
     this.inner = invokeModelGateway(options);
     this.thinkingMode = this.inner.thinkingMode!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
+    this.thinkingBinding = this.inner.thinkingBinding!;
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.
