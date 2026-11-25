@@ -305,6 +305,12 @@ export interface ThinkingBinding {
    * alias); a block written by another family is not checked against this one.
    */
   readonly family?: string;
+  /**
+   * The model id the provider resolved the asked id to — an adapter's
+   * shorthand (`'anthropic'`) becomes the id it actually sends. Absent: the
+   * asked id is the one sent.
+   */
+  readonly model?: string;
   /** The app's statement for this id was asked and could not be used (it threw or answered something else). */
   readonly appStatement?: 'failed';
 }

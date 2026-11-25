@@ -128,8 +128,11 @@ function checkedByTarget(writer: string | undefined, target: CheckTarget): boole
   if (wrote.binding === 'unbound') return false;
   return wrote.family !== undefined && target.binding.family !== undefined
     ? wrote.family === target.binding.family
-    : writer === target.model;
+    : writer === sentModel(target);
 }
+
+/** The id the call is sent under: the provider's resolution of a shorthand, else the asked id. */
+const sentModel = (target: CheckTarget): string => target.binding.model ?? target.model;
 
 function keep<T>(set: Set<T>, value: T): void {
   set.add(value);
@@ -191,7 +194,7 @@ export function checkContextBinding(
     ...(refused && {
       refusal: new ContextChangedError(
         request.provider,
-        request.model,
+        sentModel(request),
         at,
         row.changes,
         row.omittedChanges ?? 0,

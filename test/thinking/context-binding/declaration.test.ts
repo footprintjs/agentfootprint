@@ -62,13 +62,13 @@ describe('the Anthropic-wire adapters answer per model', () => {
       expect(of(id), id).toMatchObject({ binding: 'unbound', by: 'provider' });
     // Mythos 5.1 is not checked by default on every platform: unknown, as are
     // the ids the table cannot place.
-    expect(of('claude-mythos-5-1')).toEqual({
+    expect(of('claude-mythos-5-1')).toMatchObject({
       binding: 'unknown',
       by: 'provider',
       family: 'claude-mythos-5-1',
     });
     for (const id of ['claude-opus-6', PROFILE, 'team-alias'])
-      expect(of(id), id).toEqual({ binding: 'unknown', by: 'provider' });
+      expect(of(id), id).toMatchObject({ binding: 'unknown', by: 'provider' });
   });
 
   it.each(
@@ -78,9 +78,12 @@ describe('the Anthropic-wire adapters answer per model', () => {
   )(
     '%s takes the app statement for an id the table cannot place, never over the table',
     (_, provider) => {
-      expect(thinkingBindingOf(provider, PROFILE)).toEqual({ binding: 'bound', by: 'app' });
-      expect(thinkingBindingOf(provider, 'team-alias')).toEqual({ binding: 'unbound', by: 'app' });
-      expect(thinkingBindingOf(provider, 'claude-opus-6')).toEqual({
+      expect(thinkingBindingOf(provider, PROFILE)).toMatchObject({ binding: 'bound', by: 'app' });
+      expect(thinkingBindingOf(provider, 'team-alias')).toMatchObject({
+        binding: 'unbound',
+        by: 'app',
+      });
+      expect(thinkingBindingOf(provider, 'claude-opus-6')).toMatchObject({
         binding: 'unknown',
         by: 'provider',
       });
@@ -98,7 +101,7 @@ describe('the Anthropic-wire adapters answer per model', () => {
         throw new Error('app boom');
       },
     });
-    expect(thinkingBindingOf(provider, PROFILE)).toEqual({
+    expect(thinkingBindingOf(provider, PROFILE)).toMatchObject({
       binding: 'unknown',
       by: 'provider',
       appStatement: 'failed',
@@ -112,7 +115,7 @@ describe('every other provider is unbound', () => {
   it('openai and the mock declare nothing', () => {
     for (const provider of [openai({ apiKey: 'k' }), mock({ reply: 'x' })]) {
       expect(provider.thinkingBinding).toBeUndefined();
-      expect(thinkingBindingOf(provider, 'claude-haiku-5-5')).toEqual({
+      expect(thinkingBindingOf(provider, 'claude-haiku-5-5')).toMatchObject({
         binding: 'unbound',
         by: 'provider',
       });
@@ -124,7 +127,7 @@ describe('every other provider is unbound', () => {
       ...mock({ reply: 'x' }),
       thinkingBinding: () => ({ binding: 'yes' } as never),
     };
-    expect(thinkingBindingOf(provider, 'm')).toEqual({ binding: 'unknown', by: 'provider' });
+    expect(thinkingBindingOf(provider, 'm')).toMatchObject({ binding: 'unknown', by: 'provider' });
   });
 });
 
@@ -150,7 +153,7 @@ describe('wrappers keep the answer', () => {
       'unbound',
     );
     const statedUnbound = anthropic({ apiKey: 'k', thinkingBinding: () => 'unbound' });
-    expect(thinkingBindingOf(withFallback(statedUnbound, claude), PROFILE)).toEqual({
+    expect(thinkingBindingOf(withFallback(statedUnbound, claude), PROFILE)).toMatchObject({
       binding: 'unbound',
       by: 'app',
     });

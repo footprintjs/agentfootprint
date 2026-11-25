@@ -36,6 +36,7 @@ describe('Anthropic model facts: complete identifiers only', () => {
       binding: bound ? 'bound' : varies ? 'unknown' : 'unbound',
       by: 'provider',
       family,
+      model: family,
     });
     // The table wins over the app for an id it places.
     expect(anthropicThinkingBinding(family, () => (bound ? 'unbound' : 'bound'))).toEqual(
@@ -136,15 +137,21 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicTakesForcedToolChoice(id)).toBe(true);
     // The binding of an id the table cannot place is unknown, not guessed —
     // unless the app states it.
-    expect(anthropicThinkingBinding(id)).toEqual({ binding: 'unknown', by: 'provider' });
-    expect(anthropicThinkingBinding(id, () => 'bound')).toEqual({ binding: 'bound', by: 'app' });
+    expect(anthropicThinkingBinding(id)).toEqual({ binding: 'unknown', by: 'provider', model: id });
+    expect(anthropicThinkingBinding(id, () => 'bound')).toEqual({
+      binding: 'bound',
+      by: 'app',
+      model: id,
+    });
     expect(anthropicThinkingBinding(id, () => 'unbound')).toEqual({
       binding: 'unbound',
       by: 'app',
+      model: id,
     });
     expect(anthropicThinkingBinding(id, () => undefined)).toEqual({
       binding: 'unknown',
       by: 'provider',
+      model: id,
     });
     // A statement that throws or answers something else is not used, and says so.
     const throws = () => {
@@ -153,11 +160,13 @@ describe('Anthropic model facts: complete identifiers only', () => {
     expect(anthropicThinkingBinding(id, throws)).toEqual({
       binding: 'unknown',
       by: 'provider',
+      model: id,
       appStatement: 'failed',
     });
     expect(anthropicThinkingBinding(id, (() => 'yes') as never)).toEqual({
       binding: 'unknown',
       by: 'provider',
+      model: id,
       appStatement: 'failed',
     });
   });

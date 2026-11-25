@@ -294,15 +294,17 @@ export type StatedThinkingBinding = (model: string) => 'bound' | 'unbound' | und
  * used: the answer stays `unknown`, with `appStatement: 'failed'`.
  *
  * @example
- *   anthropicThinkingBinding('claude-haiku-5-5'); // { binding: 'bound', by: 'provider', family: 'claude-haiku-5-5' }
- *   anthropicThinkingBinding('claude-haiku-4-5'); // { binding: 'unbound', by: 'provider', family: 'claude-haiku-4-5' }
- *   anthropicThinkingBinding('claude-opus-6');    // { binding: 'unknown', by: 'provider' }
- *   anthropicThinkingBinding('my-profile', () => 'bound'); // { binding: 'bound', by: 'app' }
+ *   anthropicThinkingBinding('claude-haiku-5-5'); // { binding: 'bound', by: 'provider', family: 'claude-haiku-5-5', model: 'claude-haiku-5-5' }
+ *   anthropicThinkingBinding('claude-haiku-4-5'); // { binding: 'unbound', …, family: 'claude-haiku-4-5' }
+ *   anthropicThinkingBinding('claude-opus-6');    // { binding: 'unknown', by: 'provider', model: 'claude-opus-6' }
+ *   anthropicThinkingBinding('my-profile', () => 'bound'); // { binding: 'bound', by: 'app', model: 'my-profile' }
  */
 export function anthropicThinkingBinding(
   model: string,
   stated?: StatedThinkingBinding,
 ): ThinkingBinding {
+  // `model` is the id this adapter sends (its shorthand already resolved), and
+  // the answer says so, so a caller compares and names that id, never the alias.
   const family = anthropicModelFamily(model);
   if (family !== undefined) {
     const facts = ANTHROPIC_MODELS[family];
@@ -312,16 +314,16 @@ export function anthropicThinkingBinding(
         : facts.thinkingBindingVaries === true
         ? 'unknown'
         : 'unbound';
-    return { binding, by: 'provider', family };
+    return { binding, by: 'provider', family, model };
   }
-  if (stated === undefined) return { binding: 'unknown', by: 'provider' };
+  if (stated === undefined) return { binding: 'unknown', by: 'provider', model };
   let said: unknown;
   try {
     said = stated(model);
   } catch {
-    return { binding: 'unknown', by: 'provider', appStatement: 'failed' };
+    return { binding: 'unknown', by: 'provider', model, appStatement: 'failed' };
   }
-  if (said === 'bound' || said === 'unbound') return { binding: said, by: 'app' };
-  if (said === undefined) return { binding: 'unknown', by: 'provider' };
-  return { binding: 'unknown', by: 'provider', appStatement: 'failed' };
+  if (said === 'bound' || said === 'unbound') return { binding: said, by: 'app', model };
+  if (said === undefined) return { binding: 'unknown', by: 'provider', model };
+  return { binding: 'unknown', by: 'provider', model, appStatement: 'failed' };
 }

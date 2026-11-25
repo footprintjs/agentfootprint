@@ -14,7 +14,7 @@ A provider's answer to `thinkingBinding`: the fact, and who stated it.
 
 > `readonly` `optional` **appStatement?**: `"failed"`
 
-Defined in: [src/provider-contract/types/provider.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L309)
+Defined in: [src/provider-contract/types/provider.ts:315](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L315)
 
 The app's statement for this id was asked and could not be used (it threw or answered something else).
 
@@ -51,3 +51,15 @@ Defined in: [src/provider-contract/types/provider.ts:307](https://github.com/foo
 The model family the provider resolved the id to, when it knows it. Two
 ids of one family read each other's reasoning bindings (a dated id and its
 alias); a block written by another family is not checked against this one.
+
+***
+
+### model?
+
+> `readonly` `optional` **model?**: `string`
+
+Defined in: [src/provider-contract/types/provider.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/provider.ts#L313)
+
+The model id the provider resolved the asked id to — an adapter's
+shorthand (`'anthropic'`) becomes the id it actually sends. Absent: the
+asked id is the one sent.

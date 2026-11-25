@@ -110,6 +110,9 @@ function withValue(recording: Snapshot, key: string, value: unknown): Snapshot {
 
 const PREFIX = [
   `after:${RECEIPT_KEY}`,
+  // The receipt before the call too: one the key already held is an earlier
+  // call's, never this one's (`recordReads.ts` · `readReceipt`).
+  `at:${RECEIPT_KEY}`,
   'at:systemPromptInjections',
   'at:iteration',
   'at:evidenceRecovery',
@@ -233,7 +236,7 @@ describe('one saved epoch, in the order the request was assembled', () => {
 
   it('reads both conversation sources and lets an empty history win', () => {
     const view = rebuild(withValue(saved, 'history', []));
-    expect(observed.reads.slice(5, 7)).toEqual(['at:history', 'at:messagesInjections']);
+    expect(observed.reads.slice(6, 8)).toEqual(['at:history', 'at:messagesInjections']);
     expect(view.messages.asSent).toEqual([]);
     expect(view.gaps.some((gap) => gap.gap === 'no-conversation-on-record')).toBe(false);
   });

@@ -42,6 +42,7 @@ export function thinkingBindingOf(
     binding,
     by: answer?.by === 'app' ? 'app' : 'provider',
     ...(typeof answer?.family === 'string' && { family: answer.family }),
+    ...(typeof answer?.model === 'string' && { model: answer.model }),
     ...(answer?.appStatement === 'failed' && { appStatement: 'failed' as const }),
   };
 }

@@ -208,7 +208,10 @@ export type ServedGapKind =
  * apart there would be this field repeating the defect it was added to fix.
  *
  * - `'no-receipt-committed'` — nothing was committed under the receipt key on
- *   this epoch's call.
+ *   this epoch's call. The key may still hold an EARLIER call's receipt (a
+ *   request refused before its receipt was minted leaves that): a receipt
+ *   the key already held before this call, by its own basis (epoch and run),
+ *   is that earlier call's, never this one's.
  * - `'receipt-shape-rejected'` — something WAS committed there and the read
  *   refused it, because it carries no basis and a value without one is not a
  *   receipt. This is the value that means DAMAGE: a recording that lost or

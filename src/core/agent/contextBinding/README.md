@@ -24,9 +24,11 @@ under the newest signed reasoning in its history?
   unfinished tool turn, and anything differs from the request it was written under. A block an
   unbound model wrote, or another family wrote (a model switch, which the API answers by
   dropping the block), is not checked here: no row. `ContextChangedError` (from
-  `thinking/contextChange.ts`) is thrown by `stages/callLLM.ts` after the receipt is written and
-  before the provider is called, so the adapter's own guard (`UnsafeThinkingReplayError`) is never
-  the first thing a caller reads. It is a request refusal (`provider-contract/requestRefusal.ts`):
+  `thinking/contextChange.ts`) is thrown by `stages/callLLM/prepareCall.ts` beside
+  `assertForcedRequestSupported`: before the cache strategy prepares the request and before the
+  receipt is minted, so the adapter's own guard (`UnsafeThinkingReplayError`) is never the first
+  thing a caller reads. With no receipt for that call, `time-travel`'s `readReceipt` answers
+  `no-receipt-committed` for its epoch rather than an earlier call's receipt. It is a request refusal (`provider-contract/requestRefusal.ts`):
   not retried, not a fallback reason, not a circuit failure.
 - **Recorded**: any other difference — the reasoning's turn has ended (the adapter retires that
   reasoning and reports it), the wire left the signed turn out (the wrap-up does), or the model's

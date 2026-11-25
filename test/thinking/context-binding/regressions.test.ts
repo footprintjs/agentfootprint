@@ -17,7 +17,9 @@
 import { describe, expect, it } from 'vitest';
 import { Agent, defineRAG, defineTool } from '../../../src/index.js';
 import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
-import { defineInstruction, defineSkill } from '../../../src/injection-engine.js';
+import { defineInstruction, defineSkill, skillGraph } from '../../../src/injection-engine.js';
+import { recordRun } from '../../../src/doors/observe.js';
+import { receiptAt, servedAt } from '../../../src/time-travel/servedView.js';
 import { InMemoryStore } from '../../../src/memory/store/index.js';
 import { ContextChangedError, UnsafeThinkingReplayError } from '../../../src/providers.js';
 import { withFallback } from '../../../src/resilience/withFallback.js';
@@ -341,6 +343,121 @@ describe('P3: the app statement, names, and the moment of refusal', () => {
     expect(run.error).toBeInstanceOf(ContextChangedError);
     expect(run.bodies).toHaveLength(1);
     expect(prepared).toBe(1);
+  });
+});
+
+describe('a refused request has no receipt, and no reader shows another call as its own', () => {
+  const noReceiptGap = (snapshot: unknown, epoch: number) =>
+    servedAt(snapshot, epoch)
+      ?.gaps.filter((g) => g.gap === 'no-receipt-on-chart')
+      .map((g) => (g as { cause?: string }).cause);
+
+  it('the named refusal: epoch 2 reads no receipt, and its view says why', async () => {
+    const bodies: Body[] = [];
+    const provider = anthropic({
+      _client: scriptedClient('claude-haiku-5-5', bodies, READ_SKILL) as never,
+    });
+    const agent = Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
+      .system('You diagnose.')
+      .tool(lookup)
+      .skill(skill)
+      .thinking({ budget: 1500 })
+      .build();
+    recordRun(agent);
+    await expect(agent.run({ message: 'go' })).rejects.toBeInstanceOf(ContextChangedError);
+    const snapshot = agent.getLastSnapshot();
+    expect(receiptAt(snapshot, 1)?.basis.epoch).toBe(1);
+    expect(receiptAt(snapshot, 2)).toBeUndefined();
+    expect(noReceiptGap(snapshot, 2)).toEqual(['no-receipt-committed']);
+  });
+
+  it('the older pre-strategy refusal (a per-skill model without native output) reads the same way', async () => {
+    const bodies: Body[] = [];
+    const provider = anthropic({
+      _client: scriptedClient('claude-haiku-5-5', bodies, [
+        { thinking: false, tool: 'read_skill', input: { id: 'billing' } },
+        { thinking: false, text: '{"count":1}' },
+      ]) as never,
+    });
+    const triage = defineSkill({ id: 'triage', description: 'use triage', body: 't' });
+    const billing = defineSkill({
+      id: 'billing',
+      description: 'use billing',
+      body: 'b',
+      model: 'claude-opus-4-1',
+    });
+    const agent = Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
+      .system('s')
+      .skillGraph(skillGraph().entry(triage).route(triage, billing).build())
+      .outputSchema(
+        { parse: (value: unknown) => value },
+        {
+          strategy: 'native',
+          jsonSchema: {
+            type: 'object',
+            properties: { count: { type: 'number' } },
+            required: ['count'],
+            additionalProperties: false,
+          },
+        },
+      )
+      .build();
+    recordRun(agent);
+    await expect(agent.run({ message: 'go' })).rejects.toMatchObject({
+      name: 'UnsupportedNativeOutputError',
+    });
+    expect(bodies).toHaveLength(1);
+    const snapshot = agent.getLastSnapshot();
+    expect(receiptAt(snapshot, 1)?.basis.epoch).toBe(1);
+    expect(receiptAt(snapshot, 2)).toBeUndefined();
+    expect(noReceiptGap(snapshot, 2)).toEqual(['no-receipt-committed']);
+  });
+});
+
+describe('a shorthand model id is resolved before it is compared or named', () => {
+  const ARN = 'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/team-haiku';
+  for (const [spelling, agentModel] of [
+    ['the shorthand', 'anthropic'],
+    ['the id itself', ARN],
+  ] as const) {
+    it(`an app-stated bound profile is refused under ${spelling}, naming the profile`, async () => {
+      const bodies: Body[] = [];
+      const provider = anthropic({
+        _client: scriptedClient(ARN, bodies, READ_SKILL) as never,
+        defaultModel: ARN,
+        thinkingBinding: (id) => (id === ARN ? 'bound' : undefined),
+      });
+      const agent = Agent.create({ provider, model: agentModel, maxIterations: 4 })
+        .system('You diagnose.')
+        .tool(lookup)
+        .skill(skill)
+        .thinking({ budget: 1500 })
+        .build();
+      const error = await agent.run({ message: 'go' }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ContextChangedError);
+      const refusal = error as ContextChangedError;
+      expect(refusal.model).toBe(ARN);
+      expect(refusal.message).toMatch(/^Refused before sending: arn:aws:bedrock/);
+      expect(refusal.message).not.toMatch(/^Refused before sending: anthropic /);
+      expect(bodies).toHaveLength(1);
+    });
+  }
+
+  it('a table model under the shorthand is named by its own id', async () => {
+    const bodies: Body[] = [];
+    const provider = anthropic({
+      _client: scriptedClient('claude-opus-5-5', bodies, READ_SKILL) as never,
+      defaultModel: 'claude-opus-5-5',
+    });
+    const agent = Agent.create({ provider, model: 'anthropic', maxIterations: 4 })
+      .system('You diagnose.')
+      .tool(lookup)
+      .skill(skill)
+      .thinking({ budget: 1500 })
+      .build();
+    const error = (await agent.run({ message: 'go' }).catch((e: unknown) => e)) as Error;
+    expect(error).toBeInstanceOf(ContextChangedError);
+    expect(error.message).toMatch(/^Refused before sending: claude-opus-5-5 binds/);
   });
 });
 
