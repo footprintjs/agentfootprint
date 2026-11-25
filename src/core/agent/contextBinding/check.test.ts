@@ -16,7 +16,7 @@ import {
   rememberContextBaseline,
 } from './check.js';
 import type { ContextBaselineHolder } from './check.js';
-import type { RequestContext, SystemPiece } from './composition.js';
+import type { RequestComposition, SystemPiece } from './composition.js';
 import type { CheckedBinding } from './check.js';
 
 const MODEL = 'claude-haiku-5-5';
@@ -98,7 +98,7 @@ function response(
   };
 }
 
-const request = (over: Partial<RequestContext> = {}): RequestContext => ({
+const request = (over: Partial<RequestComposition> = {}): RequestComposition => ({
   systemText: (over.systemPieces ?? [base]).map((p) => p.rawContent).join('\n'),
   systemPieces: [base],
   tools: [tool('lookup'), tool('read_skill')],
@@ -106,7 +106,7 @@ const request = (over: Partial<RequestContext> = {}): RequestContext => ({
   ...over,
 });
 
-function check(holder: ContextBaselineHolder, r: RequestContext) {
+function check(holder: ContextBaselineHolder, r: RequestComposition) {
   return checkContextBinding(holder, {
     ...r,
     provider: 'anthropic',
@@ -118,9 +118,9 @@ function check(holder: ContextBaselineHolder, r: RequestContext) {
 
 /** One accepted signed response to `first`, then `next` checked against it. */
 function after(
-  first: RequestContext,
+  first: RequestComposition,
   stop: 'tool_use' | 'end_turn',
-  next: (wire: LLMMessage[]) => RequestContext,
+  next: (wire: LLMMessage[]) => RequestComposition,
 ) {
   const holder: ContextBaselineHolder = {};
   rememberContextBaseline(holder, first, response('r1', stop));
@@ -486,7 +486,7 @@ describe('seeded random walk: refused exactly when an open signed turn sees a ch
       const holder: ContextBaselineHolder = {};
       let current = request();
       let wire: LLMMessage[] = [user];
-      let sentUnder: RequestContext | undefined;
+      let sentUnder: RequestComposition | undefined;
       let open = false;
       for (let step = 0; step < 6; step++) {
         // An edit, or none.

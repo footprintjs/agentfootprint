@@ -39,7 +39,7 @@ import {
   systemTextHash,
   toolEntries,
   type ContextBaseline,
-  type RequestContext,
+  type RequestComposition,
 } from './composition.js';
 
 /** The most changes one check names; the rest are counted. */
@@ -103,7 +103,7 @@ function note(
   };
 }
 
-function compare(base: ContextBaseline, request: RequestContext): ContextChange[] {
+function compare(base: ContextBaseline, request: RequestComposition): ContextChange[] {
   return contextChanges(base, {
     systemText: systemTextHash(request.systemText),
     system: pieceEntries(request.systemPieces),
@@ -141,7 +141,7 @@ function keep<T>(set: Set<T>, value: T): void {
 
 export function checkContextBinding(
   holder: ContextBaselineHolder,
-  request: RequestContext & CheckTarget,
+  request: RequestComposition & CheckTarget,
 ): ContextCheckOutcome {
   const bases = holder.bases;
   const at = newestSigned(request.wire);
@@ -206,7 +206,7 @@ export function checkContextBinding(
 /** After an accepted response: a signed one leaves its baseline, keyed by its replay id. */
 export function rememberContextBaseline(
   holder: ContextBaselineHolder,
-  request: RequestContext,
+  request: RequestComposition,
   response: LLMResponse,
 ): void {
   const replay = response.replay;

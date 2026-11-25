@@ -51,7 +51,7 @@ export type SystemPiece = Pick<InjectionRecord, 'source' | 'sourceId' | 'rawCont
   Partial<Pick<InjectionRecord, 'contentHash' | 'contentSummary'>>;
 
 /** What one request is composed of, as the call stage holds it. */
-export interface RequestContext {
+export interface RequestComposition {
   readonly systemText: string;
   readonly systemPieces: readonly SystemPiece[];
   readonly tools: readonly LLMToolSchema[];
@@ -133,7 +133,7 @@ export function messageEntries(messages: readonly LLMMessage[]): MessageEntry[] 
 export function baselineOf(
   replayId: string,
   writer: string | undefined,
-  request: RequestContext,
+  request: RequestComposition,
 ): ContextBaseline {
   return {
     replayId,

@@ -33,7 +33,12 @@ export const meta: ExampleMeta = {
 
 type Body = Record<string, unknown>;
 
-/** A stand-in for `@anthropic-ai/sdk`: a signed `read_skill` call, then an answer. */
+/**
+ * A stand-in for `@anthropic-ai/sdk`: a signed `read_skill` call, then an answer.
+ * It answers as the model it was asked for, as the API does: the adapter records
+ * the returned model as the one that wrote the reasoning, and only reasoning that
+ * the called model's family wrote is checked against its context.
+ */
 function recordingClient(bodies: Body[]) {
   let n = 0;
   const create = async (params: unknown) => {
@@ -44,7 +49,7 @@ function recordingClient(bodies: Body[]) {
       id: `msg_${n}`,
       type: 'message',
       role: 'assistant',
-      model: 'stand-in',
+      model: (params as { model: string }).model,
       content: first
         ? [
             { type: 'thinking', thinking: 'Load the triage skill.', signature: 'fixture-sig' },

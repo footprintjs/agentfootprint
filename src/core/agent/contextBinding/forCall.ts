@@ -13,10 +13,10 @@ import {
   type ContextCheckOutcome,
   rememberContextBaseline,
 } from './check.js';
-import type { RequestContext } from './composition.js';
+import type { RequestComposition } from './composition.js';
 
 export interface ContextCheckForCall {
-  readonly request: RequestContext;
+  readonly request: RequestComposition;
   readonly outcome: ContextCheckOutcome;
 }
 
@@ -30,13 +30,13 @@ export function contextCheckFor(
   deps: Pick<CallLLMStageDeps, 'contextBinding' | 'servedTools'>,
   provider: LLMProvider,
   model: string,
-  request: Omit<RequestContext, 'parties'>,
+  request: Omit<RequestComposition, 'parties'>,
 ): ContextCheckForCall | undefined {
   const holder = deps.contextBinding;
   if (holder === undefined) return undefined;
   const binding = thinkingBindingOf(provider, model);
   if (binding.binding === 'unbound') return undefined;
-  const full: RequestContext = {
+  const full: RequestComposition = {
     ...request,
     ...(deps.servedTools !== undefined && { parties: deps.servedTools.current }),
   };
