@@ -1,8 +1,9 @@
 /**
  * CI splits the test run across machines, and a check still means what it meant
  * on one machine: every test it names ran and passed. A full run (a push to main,
- * the release pull request, a dependency pull request) covers both Node versions
- * and coverage; an ordinary pull request runs Node 24 and skips the rest.
+ * the release pull request, a dependency pull request) runs the suite on both Node
+ * versions and coverage; an ordinary pull request runs the suite on Node 24, the
+ * package checks on both, and skips coverage.
  *
  * WHY. On one machine the suite and the coverage run took 9 and 17 minutes, and
  * a pull request waited for the slower one. So `test-shard` and `coverage-shard`
@@ -43,15 +44,17 @@ const CI = readWorkflow('ci.yml');
 const PUBLISH = readWorkflow('publish.yml');
 
 /**
- * An ordinary pull request runs Node 24 only and skips coverage; a push to main,
- * the release pull request and a dependency pull request run everything
- * (ci.yml says why, above `test-shard`). The condition is written out at each
- * place that uses it, so what can go wrong is two places disagreeing: a release
- * run that tests one Node version, or a coverage check that waits for shards
- * that never start.
+ * An ordinary pull request runs the suite on Node 24 only and skips coverage; a
+ * push to main, the release pull request and a dependency pull request run
+ * everything (ci.yml says why, above `test-shard`). The condition is written out
+ * at each place that uses it, so what can go wrong is two places disagreeing: a
+ * release run that tests the suite on one Node version, or a coverage check that
+ * waits for shards that never start.
  */
 const FULL_RUN =
   "github.event_name != 'pull_request' || github.head_ref == 'release/next' || startsWith(github.head_ref, 'renovate/')";
+/** The suite's Node versions, as ci.yml · test-shard writes them. */
+const SUITE_NODES = `        node-version: \${{ fromJSON((${FULL_RUN}) && '[22, 24]' || '[24]') }}`;
 
 /** The job's `shard: [...]` list, as numbers. */
 function shardsOf(job: string): number[] {
@@ -107,11 +110,12 @@ describe('ci.yml · every test still runs, under the same required names', () =>
     expect(job).toMatch(/^ {6}fail-fast: false$/m);
   });
 
-  it('the suite and the package checks run on both Node versions in a full run, in the check that adds them up', () => {
-    for (const id of ['test-shard', 'test-package', 'test']) {
-      expect(jobBlock(CI, id), id).toContain(
-        `        node-version: \${{ fromJSON((${FULL_RUN}) && '[22, 24]' || '[24]') }}\n`,
-      );
+  it('a full run tests the suite on both Node versions; the package checks and the check that adds them up always do', () => {
+    expect(jobBlock(CI, 'test-shard')).toContain(`${SUITE_NODES}\n`);
+    // `test-package` is never narrowed: publish.yml · build, the release's fallback,
+    // does not run all of its commands, so a pull request must run them on Node 22.
+    for (const id of ['test-package', 'test']) {
+      expect(jobBlock(CI, id), id).toMatch(/^ {8}node-version: \[22, 24\]$/m);
     }
     expect(needsOf(jobBlock(CI, 'test'))).toEqual(['test-shard', 'test-package', 'test-examples']);
   });
@@ -126,23 +130,28 @@ describe('ci.yml · what a pull request skips, a full run does not', () => {
     expect(jobBlock(PUBLISH, 'verdict')).toContain('.head.ref == "release/next"');
   });
 
-  it('every place that narrows a pull request uses the one condition, and no other place narrows', () => {
-    const narrowing = CI.split('\n').filter(
-      (line) =>
-        !line.trimStart().startsWith('#') && /head_ref|event_name != 'pull_request'/.test(line),
+  it('the three places that narrow a pull request use the one condition', () => {
+    const narrowed = CI.split('\n').filter(
+      (line) => !line.trimStart().startsWith('#') && line.includes('renovate/'),
     );
-    const expected = [
-      ...['test-shard', 'test-package', 'test'].map(
-        () => `        node-version: \${{ fromJSON((${FULL_RUN}) && '[22, 24]' || '[24]') }}`,
-      ),
-      `    if: ${FULL_RUN}`,
-      `    if: always() && (${FULL_RUN})`,
-    ];
-    // `docs` and `changes` skip the release pull request with their own conditions.
-    const own = narrowing.filter((line) => !line.includes('renovate/'));
-    expect(narrowing.filter((line) => line.includes('renovate/')).sort()).toEqual(expected.sort());
-    for (const line of own)
-      expect(line).toMatch(/release\/next|github\.event_name == 'pull_request'/);
+    expect(narrowed.sort()).toEqual(
+      [SUITE_NODES, `    if: ${FULL_RUN}`, `    if: always() && (${FULL_RUN})`].sort(),
+    );
+  });
+
+  it('no other job is conditional: a new `if:` on a required check would skip it unseen', () => {
+    // A skipped job satisfies a required check, so a condition on `lint` or
+    // `generated` would let every pull request through unchecked. The jobs that
+    // may carry one are named here; adding to this list is a reviewed decision.
+    const conditional = jobIds(CI).filter((id) => /^ {4}if:/m.test(jobBlock(CI, id)));
+    expect(conditional.sort()).toEqual(
+      ['changes', 'coverage', 'coverage-shard', 'docs', 'hold', 'test'].sort(),
+    );
+    // And no job narrows its matrix by event except the suite.
+    const byEvent = jobIds(CI).filter((id) =>
+      /^ {6}matrix:[\s\S]*fromJSON/m.test(jobBlock(CI, id)),
+    );
+    expect(byEvent).toEqual(['test-shard']);
   });
 
   it('the coverage shards and the check that merges them run together or not at all', () => {
@@ -150,7 +159,7 @@ describe('ci.yml · what a pull request skips, a full run does not', () => {
     expect(jobBlock(CI, 'coverage')).toContain(`\n    if: always() && (${FULL_RUN})\n`);
   });
 
-  it('a release still needs both Node versions and coverage', () => {
+  it('a release still needs both test checks and coverage to have passed', () => {
     const gates = /^ {10}GATES: '(.*)'$/m.exec(jobBlock(PUBLISH, 'verdict'))?.[1] ?? '[]';
     expect(JSON.parse(gates)).toEqual(
       expect.arrayContaining(['test (22)', 'test (24)', 'coverage']),

@@ -176,16 +176,15 @@ The workflow never enables automatic merging or force-pushes a release proposal.
 Settings → Rules → Rulesets → **New branch ruleset**: target the default branch; enable
 **Restrict deletions**, **Block force pushes**, **Require a pull request before merging**
 (0 required approvals if you are the only maintainer — otherwise every release PR waits for
-an approval) and **Require status checks to pass** with: `test (24)`, `lint`,
+an approval) and **Require status checks to pass** with: `test (22)`, `test (24)`, `lint`,
 `docs`, `generated`, `docs-links`, `docs-truth`, `coverage`, `changes`, `tested-tree`. The
-release PR skips `docs` and `changes`, and an ordinary pull request skips `coverage`; GitHub
-reports a job skipped by its `if:` as passing, so none of them holds a pull request up.
-Do not require `test (22)`: an ordinary pull request runs Node 24 only, so that check does
-not exist there and would wait forever. Node 22 and coverage run on every push to main, on
-the release PR and on dependency PRs, and a release needs all of them (`publish.yml` · `verdict`). Leave the bypass list empty. Tags are not affected, so the Release
+release PR skips `docs` and `changes`, and an ordinary pull request skips `coverage` (it and the
+test suite on Node 22 run on every push to main, on the release PR and on dependency PRs);
+GitHub reports a job skipped by its `if:` as passing, so none of them holds a pull request up.
+A release still needs `coverage` and both `test` checks to have passed (`publish.yml` · `verdict`). Leave the bypass list empty. Tags are not affected, so the Release
 workflow can still tag and publish.
 
-CI splits the test run across machines. `test (22)`, `test (24)` and `coverage` stay the check
+CI splits the test run across machines. `test (22)`, `test (24)` and `coverage` stay the required
 names: each passes only when the `test-*` or `coverage-shard` jobs it needs all succeeded, so
 those jobs need no entry of their own.
 
