@@ -180,7 +180,7 @@ export {
 // silence, never from events. The account's "How sure" row renders the same
 // fold. ONE public type; its family (a reason, a witness, a check that ran) by
 // indexed access. See src/core/agent/assessment/README.md.
-export { assessAnswer } from './core/agent/assessment/assess.js';
+export { assessAnswer } from './time-travel/assessAnswer.js';
 export type { AnswerAssessment } from './core/agent/assessment/types.js';
 
 export {

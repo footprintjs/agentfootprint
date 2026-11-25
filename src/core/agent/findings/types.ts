@@ -349,7 +349,7 @@ export interface ContingentCarrier {
  * call — that came only from results the model itself declared `open`,
  * `noise` or `ruled-out` (9.110.0): a theorem built on a lemma the prover
  * had already set aside. Declared standings plus the evidence corpus's
- * carriers (`evidence/evidenceIndex.ts · EvidenceCorpus.carriers`); no
+ * carriers (`evidence/evidenceIndex.ts · EvidenceCorpus`); no
  * inference, no judge, no second model — `findings/contingent.ts` is the
  * one rule. One row per contingent VALUE per moment (the answer, or the
  * call whose arguments used it), never per carrier.

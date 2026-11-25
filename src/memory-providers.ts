@@ -38,6 +38,8 @@ export {
   // one-to-one — what `defineMemory({ namespaceScope })` and `searchNamespace` map with.
   agentCoreNamespaceValue,
   type AgentCoreStoreOptions,
+  type AgentCoreEventPayloadChoice,
+  type AgentCoreEventPayloadSelector,
   type AgentCoreLikeClient,
   type AgentCoreEvent,
   type AgentCoreMemoryRecord,

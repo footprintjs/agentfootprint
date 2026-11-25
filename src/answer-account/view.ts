@@ -42,6 +42,7 @@
  * An unredacted recording is read through no guard at all.
  */
 
+import { recordedOmissions } from '../time-travel/selectionWitness.js';
 import { issuedTicketsOf, type IssuedPairs } from '../core/agent/placedTickets.js';
 import { eventBelongsToRun } from '../bridge/eventMeta.js';
 import { isPlaceholder, servedUnderPolicy } from '../redaction/marker.js';
@@ -134,6 +135,7 @@ export interface RecordingView {
   readonly stateKeptOut: readonly string[];
   /** The placement pairs this snapshot lets the account read. */
   readonly issuedPlacements: IssuedPairs;
+  readonly checkOmission?: ReturnType<typeof recordedOmissions>;
   /** Whether the record keeps state `key` out — asking handles it (the view's guard). */
   isStateKeptOut(key: string): boolean;
   /**
@@ -319,6 +321,7 @@ export function recordingView(
     servedUnderPolicy: served,
     ...(state !== undefined && { state }),
     stateKeptOut,
+    checkOmission: recordedOmissions(snapshot),
     issuedPlacements: issuedTicketsOf(stripped?.placedTickets),
     isStateKeptOut: (key) => {
       noteName(ASKED, stateOwner, key);
