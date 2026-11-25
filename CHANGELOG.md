@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.1.1] - 2026-11-25
+
+### Fixed
+
+- **A confirmed time window with an ordinary cutoff no longer reaches an inclusive-end tool with a nanosecond end.** Since 18.0.0 a tool whose period form has an inclusive ISO end (the `iso-range` shorthand's default) was handed values like `…T15:59:59.999999999Z` after a confirmation, which many date parsers refuse. The inclusive end is again the last instant inside on the grid the cutoff sits on: one second before a whole-second cutoff (`…T15:59:59Z`), one millisecond before a millisecond one, exactly as before 18.0.0 and as an unconfirmed window was already written. An inclusive ISO end is read back on the grid it was written at. An inclusive control point (`time.window.end: 'inclusive'`) written to an inclusive second-grid form is now recorded as a wider read (`sent`, `differs.extra`: the tool reads through that second), not as exact; written to an exclusive ISO form it still carries the one-nanosecond end that names the point.
+
 ## [18.1.0] - 2026-11-25
 
 ### Added
