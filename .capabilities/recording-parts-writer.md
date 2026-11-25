@@ -1,1 +1,0 @@
-| saving each run's recording in parts (an index, a base part and parts of about 1 MiB) so a reader opens one invocation without reading the whole run, via `artifacts: { recordings: { layout: 'parts' } }` | `AgentRecordingsOptions` + `layout` | `src/core/agent/types/artifacts.ts` | unreleased |
