@@ -9,6 +9,7 @@
  *   4. Move the rows waiting in `.capabilities/` into the CAPABILITIES.md table and replace the
  *      placeholder `unreleased` in its rows with X.Y.Z.
  *   5. Delete the folded fragments and capability rows.
+ *   5b. Tighten `.file-size-baseline.json` to each listed file's measured size.
  *   6. Write the entry body to --notes-out (the GitHub release notes).
  *
  * Callers: .github/workflows/publish.yml (the automated release) and
@@ -36,6 +37,7 @@ import {
   incVersion,
   renderEntryBody,
 } from './changes.mjs';
+import { lineCount, tightenedBaseline } from './release-size-baseline.mjs';
 
 function arg(name, fallback) {
   const at = process.argv.indexOf(`--${name}`);
@@ -100,17 +102,39 @@ if (fragments.length > 0) {
 // CAPABILITIES.md: rows waiting in `.capabilities/` (one file per row) join the table, and every
 // `unreleased` Since cell, theirs or one already in the table, becomes this version.
 const capsPath = join(ROOT, 'CAPABILITIES.md');
-const capabilityRows = readCapabilityRows();
+let capabilityRows;
 let capsNext;
-if (existsSync(capsPath)) {
-  const caps = readFileSync(capsPath, 'utf8');
-  capsNext = foldCapabilities(caps, capabilityRows, version);
-  if (capsNext === caps) capsNext = undefined;
-} else if (capabilityRows.length > 0) {
-  fail('.capabilities/ holds rows but CAPABILITIES.md is missing');
+try {
+  capabilityRows = readCapabilityRows();
+  if (existsSync(capsPath)) {
+    const caps = readFileSync(capsPath, 'utf8');
+    capsNext = foldCapabilities(caps, capabilityRows, version);
+    if (capsNext === caps) capsNext = undefined;
+  } else if (capabilityRows.length > 0) {
+    throw new Error('.capabilities/ holds rows but CAPABILITIES.md is missing');
+  }
+} catch (err) {
+  fail(err.message);
 }
 
-console.error(`release-prepare: ${current} → ${version} (${bump}; ${fragments.length} fragment(s))`);
+// .file-size-baseline.json: write each entry back down to its file's measured size
+// (scripts/release-size-baseline.mjs says why the release is the one actor that does).
+const sizePath = join(ROOT, '.file-size-baseline.json');
+let sizeNext;
+if (existsSync(sizePath)) {
+  try {
+    sizeNext = tightenedBaseline(readFileSync(sizePath, 'utf8'), (path) =>
+      existsSync(join(ROOT, path)) ? lineCount(readFileSync(join(ROOT, path))) : undefined,
+    );
+  } catch (err) {
+    fail(`.file-size-baseline.json: ${err.message}`);
+  }
+}
+
+console.error(
+  `release-prepare: ${current} → ${version} (${bump}; ${fragments.length} fragment(s), ${capabilityRows.length} capability row file(s)` +
+    `${sizeNext === undefined ? '' : ', size baseline tightened'})`,
+);
 if (DRY) {
   console.error(`\n## [${version}] - ${date}\n\n${notes}\n`);
   console.log(version);
@@ -128,6 +152,7 @@ if (existsSync(lockPath)) {
   writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
 }
 if (capsNext !== undefined) writeFileSync(capsPath, capsNext);
+if (sizeNext !== undefined) writeFileSync(sizePath, sizeNext);
 for (const f of fragments) rmSync(join(ROOT, f.file));
 for (const entry of capabilityRows) rmSync(join(ROOT, entry.file));
 const notesOut = arg('notes-out');

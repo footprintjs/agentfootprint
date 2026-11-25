@@ -100,12 +100,16 @@ export function parseCapabilityRows(file, text) {
   const rows = text.split('\n').filter((line) => line.trim() !== '');
   if (rows.length === 0) throw new Error(`${file}: empty — write one CAPABILITIES.md table row`);
   for (const row of rows) {
-    if (!row.startsWith('| ') || /^\|\s*-{3}/.test(row) || row.split('|').length < 6)
-      throw new Error(`${file}: every line must be one table row: | what you would build | \`symbol\` | \`path\` | unreleased |`);
-    if (!/\|\s*unreleased\s*\|\s*$/.test(row))
+    // Cells are split on unescaped pipes only: a row may write `a \| b` inside a cell.
+    const cells = row.trimEnd().split(/(?<!\\)\|/);
+    if (!row.startsWith('| ') || /^\|\s*-{3}/.test(row) || cells.length !== 6 || cells[5] !== '')
+      throw new Error(`${file}: every line must be one four-cell table row: | what you would build | \`symbol\` | \`path\` | unreleased |`);
+    if (cells[4].trim() !== 'unreleased')
       throw new Error(`${file}: the last cell must be the word unreleased — the release writes the version`);
+    if (cells[1].trim().startsWith('If you are about to build'))
+      throw new Error(`${file}: this is the table's header, not a capability row`);
   }
-  return { file, rows };
+  return { file, rows: rows.map((row) => row.trimEnd()) };
 }
 
 /**
@@ -126,15 +130,24 @@ export function readCapabilityRows(dir = CAPABILITIES_DIR) {
  * placeholder replaced by `version`. Throws when rows wait and the table cannot be found.
  */
 export function foldCapabilities(text, waiting, version) {
-  const lines = text.split('\n');
+  // Only a row's Since cell is stamped: the word may also appear in the row's own prose.
+  const stamp = (row) => row.replace(/\|\s*unreleased\s*\|\s*$/, `| ${version} |`);
+  const lines = text.split('\n').map((line) => (line.startsWith('|') ? stamp(line) : line));
   if (waiting.length > 0) {
     const separator = lines.findIndex((line) => /^\|\s*-{3}/.test(line));
     if (separator < 0) throw new Error('CAPABILITIES.md has no table to fold .capabilities/ rows into');
-    lines.splice(separator + 1, 0, ...waiting.flatMap((entry) => entry.rows.map((row) => row.trimEnd())));
+    lines.splice(separator + 1, 0, ...waiting.flatMap((entry) => entry.rows.map((row) => stamp(row.trimEnd()))));
   }
-  return lines
-    .map((line) => (line.startsWith('|') ? line.replace(/\bunreleased\b/g, version) : line))
-    .join('\n');
+  return lines.join('\n');
+}
+
+/**
+ * Table rows of `CAPABILITIES.md` whose Since cell still says `unreleased`: rows written into
+ * the table by hand. The release would still stamp them, but they are exactly what made pull
+ * requests conflict, so `changes check` refuses them and names the folder to use.
+ */
+export function handWrittenUnreleasedRows(text) {
+  return text.split('\n').filter((line) => line.startsWith('| ') && /\|\s*unreleased\s*\|\s*$/.test(line));
 }
 
 /** The highest bump any fragment needs, or undefined for none. */
@@ -254,6 +267,18 @@ function main(argv) {
     readCapabilityRows(); // throws on the first malformed capability row
     const baseAt = rest.indexOf('--base');
     if (baseAt >= 0) {
+      // Only on a pull request (`--base`): the release's own bare check must still pass on a main
+      // that already holds such a row, and the release still stamps it.
+      const capsPath = join(ROOT, 'CAPABILITIES.md');
+      const byHand = existsSync(capsPath) ? handWrittenUnreleasedRows(readFileSync(capsPath, 'utf8')) : [];
+      if (byHand.length > 0) {
+        console.error(
+          `CAPABILITIES.md has ${byHand.length} row(s) marked unreleased. Move each to its own file in ` +
+            '.capabilities/ (see .capabilities/README.md): rows added to the table by hand make open pull requests conflict.\n' +
+            byHand.map((row) => `  ${row.slice(0, 100)}…`).join('\n'),
+        );
+        return 1;
+      }
       const base = rest[baseAt + 1];
       const changed = changedFilesSince(base);
       const touchesSrc = changed.some((c) => c.path.startsWith('src/'));
