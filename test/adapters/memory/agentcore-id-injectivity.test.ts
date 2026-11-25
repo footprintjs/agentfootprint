@@ -62,7 +62,7 @@ async function idsFor(identity: MemoryIdentity): Promise<{ actorId: string; sess
 // ─── The decoders. Their existence IS the injectivity proof ──────────
 //
 // A function with a left inverse cannot map two inputs to one output. These
-// mirror the encoders in `agentcore.ts`; if a change to the encoder breaks the
+// mirror the encoders in `agentcore/identity.ts`; if a change to the encoder breaks the
 // left-inverse tests below, the change broke injectivity.
 
 function unescapeSegment(seg: string, introducer: string): string {

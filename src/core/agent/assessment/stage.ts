@@ -68,6 +68,7 @@ import {
 
 /** What the mount hands the stage — build-time facts, never scope. */
 export interface AnswerStageDeps extends AnswerLayerArm {
+  readonly checkOmission?: import('../honesty/sourceOmission.js').OmissionCheck;
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
@@ -149,6 +150,7 @@ export async function assessAnswerStage(
     undefined,
     (history) => retainedStateValue(scope, 'history', history),
     (key, value) => retainedStateValue(scope, key, value),
+    deps.checkOmission,
   );
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);

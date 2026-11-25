@@ -272,5 +272,5 @@ export async function acceptResponse(
   emitCostTick(scope, deps.pricingTable, deps.costBudget, answeredBy, response.usage);
   const selected = localFallback ? undefined : selection?.accept(response);
   if (selected && deps.servedTools && deps.canRecordToolSelection?.())
-    recordToolSelection(scope, selected, deps.servedTools);
+    recordToolSelection(scope, selected, deps.servedTools, deps.sourceConsultation);
 }

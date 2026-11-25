@@ -575,16 +575,29 @@ the saved rows even if the caller edits the original array while the write is pe
 Opt in with `.answerLayer({ sourceNotConsulted: true })`. The check follows direct
 sources in the ontology when the person's question names a declared term or
 source. It also reads a typed `tryInsteadTool` suggestion from a tool's served
-absence. An adapter's recorded wire manifest must show that the relevant tool
-was offered on an accepted request. An attempt through another eligible holder
-of the same source fulfills that check.
+absence. An adapter's recorded wire manifest identifies the tools offered on an
+accepted request. For a direct ontology declaration, a complete selection
+receipt can also show that the request left out the tool through ranking,
+skill scope, or a ledger decision. The warning uses the tool's display name
+when available. An attempt through any eligible holder of the same source
+clears the warning and preserves the earlier request receipt.
+
+A tree's list of skill IDs and a collision between tools with the same wire name
+remain visible in their own receipts. Neither supplies an unambiguous omitted
+callable for this warning.
 
 Use `displayName` on a tool to let the prose warning refer to it in the app's
 words. The reason also travels in the saved assessment as
 `source-not-consulted`. A request without a manifest leaves the offers for that
 request unknown. The check preserves earlier proved offers within the turn.
+On replay, a warning about an omitted tool needs the matching accepted request
+in the commit log. A checkpoint alone cannot establish that omission. If an
+independent source was offered without a display name, the answer still mentions
+the offer alongside the omission.
 
 <CodeFile path="examples/features/130-source-not-consulted.ts" region="source-not-consulted" title="A skipped link monitor appears in the answer warning" />
+
+<CodeFile path="examples/features/130-source-not-consulted.ts" region="select-one-holder" title="Choose one tool and inspect the declared source left out of the request" />
 
 The answer layer serves the standing in these places:
 

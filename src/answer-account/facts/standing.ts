@@ -84,6 +84,8 @@ export function recordedStandingWitnesses(
     undefined,
     undefined,
     view.events,
+    undefined,
+    view.checkOmission,
   );
   if (assessed.keptOut !== undefined) return undefined;
   const complete = reasons.every(
@@ -363,6 +365,8 @@ export function standingLines(
     undefined,
     declarationAddresses,
     ctx.view.events,
+    undefined,
+    ctx.view.checkOmission,
   );
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {

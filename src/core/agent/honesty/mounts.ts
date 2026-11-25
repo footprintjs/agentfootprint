@@ -466,6 +466,9 @@ export const RESULTS_LOOP_TARGET: string = SUBFLOW_IDS.RESULTS;
 
 /** What an agent with the answer layer armed hands the final branch — build-time facts, never scope. */
 export interface AnswerMountDeps {
+  readonly omissionCheckFor?: (
+    scope: object,
+  ) => import('./sourceOmission.js').OmissionCheck | undefined;
   /** The committed keys the fold reads — only those this agent's arms can write (`answerFoldReads`). */
   readonly reads: readonly AnswerFoldKey[];
   /**
@@ -519,12 +522,14 @@ export function startFinalBranch(
     });
   }
   const assess = async (scope: TypedScope<AgentState>): Promise<void> => {
-    const { displayNameOfFor, ...declarations } = answer;
+    const { displayNameOfFor, omissionCheckFor, ...declarations } = answer;
+    const checkOmission = omissionCheckFor?.(scope);
     const displayNameOf = displayNameOfFor?.(scope);
     await (
       await loadAnswerStage()
     ).assessAnswerStage(scope, {
       ...declarations,
+      ...(checkOmission && { checkOmission }),
       ...(displayNameOf !== undefined && { displayNameOf }),
     });
   };
