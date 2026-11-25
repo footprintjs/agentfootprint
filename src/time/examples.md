@@ -148,7 +148,7 @@ convertExact(
   sugarForms({ argument: 'w', spelling: 'iso-range' }),
   clock,
 );
-// { form: 0, values: { w: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59.999999999-07:00' } }
+// { form: 0, values: { w: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00' } }
 ```
 
 Wider than asked, refused, drifted ([`examples/features/85-time-widen-and-refuse.ts`](../../examples/features/85-time-widen-and-refuse.ts)):

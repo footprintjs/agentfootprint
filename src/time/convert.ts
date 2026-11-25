@@ -66,8 +66,8 @@
  * precision is how it was written: minutes (`to + 1 min`), seconds, or a
  * fraction (`+ 1 ms`). An epoch bound's precision is its unit; a date's is
  * the calendar day in the zone.
- * A confirmed endpoint reads an inclusive ISO bound as a point, including
- * in a form whose other bound uses a different encoding.
+ * A confirmed cutoff follows the same law (one second, or one millisecond,
+ * before it); only one written past the millisecond keeps its exact neighbour.
  *
  * @example
  * ```ts

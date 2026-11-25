@@ -104,6 +104,13 @@ function readBound(
   }
 }
 
+/** The half-open end an inclusive ISO bound names on its written grid; none when it is written past the millisecond. */
+function gridEnd(value: unknown): number | undefined {
+  const at = instantOf(value, 'strict');
+  if (at === undefined || at.nanos !== 0) return undefined;
+  return at.ms + (at.precision === 'minute' ? 60_000 : at.precision === 'second' ? 1_000 : 1);
+}
+
 /** Read each bound on its own declared grid, with ISO cutoffs as exact points when confirmed. */
 function readPeriodBounds(
   lower: { readonly value: unknown; readonly as: BoundAs },
@@ -119,9 +126,18 @@ function readPeriodBounds(
       lower.as === 'iso'
         ? lower.value
         : atUtc(readBound(lower.value, 'from', lower.as, 'inclusive', zone));
+    // An inclusive ISO end a TOOL FORM carries is the last instant inside on the grid it was
+    // written at (minute, second, millisecond — the pre-18 wire law, which tool parsers were
+    // built against); only one written past the millisecond is an exact point.
+    const onGrid = upper.as === 'iso' && edge === 'inclusive' ? gridEnd(upper.value) : undefined;
     const to =
-      upper.as === 'iso' ? upper.value : atUtc(readBound(upper.value, 'to', upper.as, edge, zone));
-    const window = readControlWindow({ from, to, end: upper.as === 'iso' ? edge : 'exclusive' });
+      onGrid !== undefined
+        ? atUtc(onGrid)
+        : upper.as === 'iso'
+        ? upper.value
+        : atUtc(readBound(upper.value, 'to', upper.as, edge, zone));
+    const end = upper.as === 'iso' && onGrid === undefined ? edge : 'exclusive';
+    const window = readControlWindow({ from, to, end });
     return window === undefined ? undefined : { from: window.from, to: window.to };
   }
   const from = readBound(lower.value, 'from', lower.as, 'inclusive', zone);

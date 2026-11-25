@@ -273,6 +273,11 @@ confirmed upper instant. “8:00 to 8:40” uses `[08:00, 08:40)`. A control win
 `end: 'inclusive'` to include the endpoint itself and `precision: 'minute'` when its ISO
 input pads the confirmed minute with seconds. The clock or time-answer row stores the cutoff,
 policy and precision together. Standalone times and whole calendar periods still use their grain.
+Written into a tool's INCLUSIVE ISO end, a cutoff is the last instant inside on its grid — one
+second before a whole-second cutoff, one millisecond before a millisecond one — and is read back
+on the grid it was written at (never nanoseconds: tool parsers refuse them). An inclusive control
+point therefore lands ON a grid second the tool reads whole: that fill is recorded as wider
+(`sent`, `differs.extra`), not as exact.
 Saved historical rows retain their stored bounds.
 
 **Confirmed look-backs use absolute bounds.** The accepted window keeps the run's recorded

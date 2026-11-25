@@ -316,7 +316,7 @@ describe('the fill — the turn’s one window, into the tool’s form, exactly'
         argument: 'window',
         source: 'app',
         appSource: 'time.window',
-        value: '2026-10-09T14:00:00Z..2026-10-09T14:59:59.999999999Z',
+        value: '2026-10-09T14:00:00Z..2026-10-09T14:59:59Z',
       },
     ]);
     // In process, `ctx.time` is a field on the execution context.

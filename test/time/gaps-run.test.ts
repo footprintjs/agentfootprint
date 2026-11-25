@@ -206,7 +206,7 @@ describe('G1 — a reading waiting on its ZONE is open: an assume rule is asked,
     expect(seen).toEqual([
       {
         server: '10.0.0.1',
-        window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59.999999999-07:00',
+        window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00',
       },
     ]);
     expect(ofKind(agent, 'argument').some((r) => r.source === 'default')).toBe(false);
@@ -255,7 +255,7 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
     expect(seen).toEqual([
       {
         server: '10.0.0.1',
-        window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59.999999999-07:00',
+        window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00',
       },
     ]);
     expect(ofKind(agent, 'time-answer')).toMatchObject([
@@ -329,7 +329,7 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
     expect(seen).toEqual([
       {
         server: '10.0.0.1',
-        window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59.999999999-07:00',
+        window: '2026-10-08T06:00:00-07:00..2026-10-08T11:59:59-07:00',
       },
     ]);
   });
@@ -363,7 +363,7 @@ describe('G7 — the value served to the model is the value the tool is handed',
     expect(seen).toHaveLength(1);
     const handed = seen[0]!.window as string;
     // One spelling (`windows.ts` · `windowToConvert` → `convertForTool`): `[now − 2h, now)`.
-    expect(handed).toBe('2026-10-09T14:00:00Z..2026-10-09T15:59:59.999999999Z');
+    expect(handed).toBe('2026-10-09T14:00:00Z..2026-10-09T15:59:59Z');
     expect(timeLineOf(requests[1])).toContain(`smb_records window "${handed}"`);
   });
 });
@@ -373,7 +373,7 @@ describe('G9 — the window set in the app’s time control is served by the lib
   const CONTROL_LINE =
     'The window the person set in the app’s time control is 2026-10-09 08:00–08:40 ' +
     'America/Los_Angeles (UTC-07:00) (end excluded) — smb_records window ' +
-    '"2026-10-09T08:00:00-07:00..2026-10-09T08:39:59.999999999-07:00". A call may pass these ' +
+    '"2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00". A call may pass these ' +
     'values as written; an answer built on them states that window.';
 
   for (const withReader of [true, false]) {
@@ -397,7 +397,7 @@ describe('G9 — the window set in the app’s time control is served by the lib
       expect(seen).toEqual([
         {
           server: '10.0.0.1',
-          window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59.999999999-07:00',
+          window: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00',
         },
       ]);
     });
