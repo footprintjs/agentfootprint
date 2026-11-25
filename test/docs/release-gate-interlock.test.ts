@@ -161,9 +161,16 @@ describe('the docs-truth report is derived, never stored', () => {
     );
     // A run that wrote no report must not look like one that did.
     expect(job).toContain('if-no-files-found: error');
-    // A red ratchet is when the report is wanted: every report step runs regardless.
-    const reportSteps = job.slice(at('npm run docs:truth:report') - 40);
-    expect(reportSteps.match(/if: always\(\)/g)?.length).toBe(3);
+    // A red ratchet is when the report is wanted: every report step runs after it.
+    const reportSteps = job.slice(at('- run: npm run docs:truth\n'));
+    expect(
+      reportSteps.match(/if: \$\{\{ !cancelled\(\) && steps\.build\.outcome == 'success' \}\}/g)
+        ?.length,
+    ).toBe(3);
+    // After a failed build or in a cancelled run the report would be built from a
+    // half-built tree and could read "no regression" under a red job.
+    expect(job).toContain('      - id: build\n        run: npm run build\n');
+    expect(job).not.toContain('if: always()');
     // The summary is the report's first section, and an empty one fails the step.
     expect(job).toContain('/^## In plain words/{on=1; print; next} on && /^## /{exit} on');
     expect(job).toContain('test -s "$RUNNER_TEMP/docs-truth-summary.md"');

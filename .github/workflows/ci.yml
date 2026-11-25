@@ -124,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The candidate receipt reads the PR head, a parent of the tested merge.
+          # The `tested` step below reads the PR head, a parent of the tested merge.
           fetch-depth: 2
 
       # WHICH COMMIT THE PACKAGE EVIDENCE BELOW IS BOUND TO. This run tests one
@@ -232,7 +232,9 @@ jobs:
   # The required checks `test (22)` and `test (24)`, by those exact names: the
   # ruleset and publish.yml · verdict read them, and the matrix is here only to
   # give those two names. They run no tests. Each passes only when every job it
-  # needs succeeded.
+  # needs succeeded. On an ordinary pull request the suite ran on Node 24 only
+  # (see above `test-shard`), so a green `test (22)` there says the package checks
+  # passed on Node 22, not the suite; a full run puts the Node 22 shards behind it.
   #
   # `if: always()` is what makes a failure count. Without it a failed shard SKIPS
   # this job, and GitHub reports a skipped job as Success, even on a required
@@ -461,21 +463,25 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
+      - id: build
+        run: npm run build
       - run: npm run docs:truth
       # The full report is derived, not committed (.gitignore says why): it is
       # written here and attached to the run, with its summary on the run page.
-      # `if: always()`, because a red ratchet is exactly when the report is wanted;
-      # `--report-only` writes it and then gives the ratchet's own verdict again.
-      - if: always()
+      # These steps run even when the ratchet above is red, because that is exactly
+      # when the report is wanted; `--report-only` writes it and then gives the
+      # ratchet's own verdict again. They do NOT run after a failed build or in a
+      # cancelled run: a report built from a half-built tree can read "no
+      # regression" under a red job.
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run docs:truth:report
       - name: Put the report's summary on the run page
-        if: always()
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           awk '/^## In plain words/{on=1; print; next} on && /^## /{exit} on' docs/DOCS_TRUTH_REPORT.md > "$RUNNER_TEMP/docs-truth-summary.md"
           test -s "$RUNNER_TEMP/docs-truth-summary.md"
           cat "$RUNNER_TEMP/docs-truth-summary.md" >> "$GITHUB_STEP_SUMMARY"
-      - if: always()
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docs-truth-report
