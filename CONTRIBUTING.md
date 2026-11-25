@@ -36,14 +36,15 @@ the new export in prose on a page under `docs-next/content/docs`, or accept the
 debt consciously:
 
 ```bash
-npm run docs:truth:baseline   # re-record + regenerate docs/DOCS_TRUTH_REPORT.md
+npm run docs:truth:baseline   # re-record docs/docs-truth/baseline.json
 ```
 
 The re-baseline lands as a reviewable diff, so new debt is visible rather than
 silent. `npm run docs:truth:exercise` refreshes the reference-run evidence behind
 the "exercised" column by running every `examples/` script — no credentials
-needed, and it never reads any. The human-readable findings live in
-[docs/DOCS_TRUTH_REPORT.md](docs/DOCS_TRUTH_REPORT.md).
+needed, and it never reads any. The human-readable findings are a
+derived report, not a committed file: `npm run docs:truth:report` writes
+`docs/DOCS_TRUTH_REPORT.md` locally, and CI's `docs-truth` job attaches it to each run.
 
 ## Project Structure
 

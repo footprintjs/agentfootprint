@@ -25,7 +25,7 @@ engine handlers belong upstream; they are closed extension seams here. Trust cur
 4. A user-visible feature gets a published how-to page and a runnable `examples/` program.
    Feature pages use `<CodeFile region>` to include example code rather than duplicate it.
 5. Regenerate with `npm run docs:regen` and commit its output. The `generated` job checks
-   the API mirror, docs-truth report, examples index, instruction copies and canonical notes.
+   the API mirror, examples index, instruction copies and canonical notes.
 6. Fast checks: `npm run lint`, `npm run format`, and `npx tsc --noEmit`.
 7. Keep docs separate: API reference is generated from export TSDoc; feature pages explain
    use, one example and gotchas; READMEs, scoped rules, designs and proposals hold internals.
