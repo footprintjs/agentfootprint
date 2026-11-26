@@ -1,4 +1,5 @@
 import { isDevMode } from 'footprintjs';
+import { visibleToRole } from '../../lib/spokenIds.js';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
@@ -46,17 +47,13 @@ function visible(
     return (
       party.id !== undefined &&
       hidden !== undefined &&
-      !hidden.has(party.id) &&
+      visibleToRole([party.id], hidden) &&
       claims.some((c) => c.channel === 'skill' && c.id === party.id && c.tool === tool)
     );
   const owners = claims.filter((claim) => claim.tool === tool);
-  return (
-    !owners.length ||
-    owners.some(
-      (c) =>
-        c.channel !== 'skill' || (c.id !== undefined && hidden !== undefined && !hidden.has(c.id)),
-    )
-  );
+  if (owners.length === 0 || owners.some((claim) => claim.channel !== 'skill')) return true;
+  const ids = owners.flatMap(({ id }) => (id === undefined ? [] : [id]));
+  return hidden !== undefined && ids.length > 0 && visibleToRole(ids, hidden);
 }
 
 /** Both the event and the private selection read the same visible losers, in wire order. */

@@ -55,18 +55,16 @@ export function buildCallStart(
     };
     const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
     const served = resolveTool(tc.name);
-    // `listed` only: a scoped skill's tool before its skill is loaded is refused (`skillContext/gate.ts`).
-    const notLoaded =
-      deps.listedScopedTools === undefined
-        ? undefined
-        : notLoadedFor(
-            deps.listedScopedTools,
-            deps.toolDeclaringSkills,
-            tc.name,
-            served.party,
-            scope.activeInjections as readonly ActiveInjection[] | undefined,
-            scope.hiddenSkillIds as readonly string[] | undefined,
-          );
+    // Role visibility applies in either strategy. Only `listed` supplies
+    // the additional loaded-skill gate for its static scoped tools.
+    const notLoaded = notLoadedFor(
+      deps.listedScopedTools,
+      deps.toolDeclaringSkills,
+      tc.name,
+      served.party,
+      scope.activeInjections as readonly ActiveInjection[] | undefined,
+      scope.hiddenSkillIds as readonly string[] | undefined,
+    );
     const resolved = notLoaded === undefined ? served : { refusal: notLoaded };
     const tool = resolved.tool;
     // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`

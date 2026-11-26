@@ -1,4 +1,5 @@
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
+import { notLoadedFor } from '../../../skillContext/gate.js';
 import { batchAddress } from '../../../arguments/batchAddress.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
@@ -63,6 +64,7 @@ export function buildResumedInvocation(
     | 'answerLayer'
     | 'currentRun'
     | 'isRunRetired'
+    | 'toolDeclaringSkills'
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
@@ -82,7 +84,7 @@ export function buildResumedInvocation(
   const executeResumed = async (
     binding: OuterCallBinding,
     scope: TypedScope<AgentState>,
-    resolved: Resolution,
+    candidate: Resolution,
     toolName: string,
     approved: Readonly<Record<string, unknown>>,
     toolCallId: string,
@@ -91,6 +93,15 @@ export function buildResumedInvocation(
     heldTo: PausedGatePolicy['gate'],
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
+    const roleRefusal = notLoadedFor(
+      undefined,
+      deps.toolDeclaringSkills,
+      toolName,
+      candidate.party,
+      undefined,
+      scope.hiddenSkillIds as readonly string[] | undefined,
+    );
+    const resolved = roleRefusal === undefined ? candidate : { refusal: roleRefusal };
     const tool = resolved.tool;
     const occurrence = callOccurrenceField(seen?.callOccurrenceKey);
     if (seen !== undefined)
