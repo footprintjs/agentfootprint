@@ -68,6 +68,15 @@ export interface LLMStartPayload {
    * wire, and on every unbound model — those runs keep their exact prior bytes.
    */
   readonly contextChange?: import('./contextChange.js').ContextChangeCheck;
+  /**
+   * Which way the agent's skills reach the model, and why — on the run's
+   * first request only: the tool strategy (`listed` / `declared`) and the body
+   * channel, each in the shared decision-record shape, and the binding fact
+   * that decided them. ABSENT when the agent has no skill and when the rule
+   * table's default chose `declared` (every model that does not bind its
+   * reasoning), so those runs keep their exact prior bytes.
+   */
+  readonly skillContext?: import('./skillContext.js').SkillContextRecord;
 }
 
 export interface LLMEndPayload {

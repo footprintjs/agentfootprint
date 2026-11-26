@@ -69,6 +69,7 @@ export const fields0 = {
   blockCount: true,
   blockIndex: true,
   blocks: true,
+  body: true,
   bold: true,
   brain: true,
   branch: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   label: true,
   language: true,
   lastError: true,
-  lastFiredAt: true,
 } as const;

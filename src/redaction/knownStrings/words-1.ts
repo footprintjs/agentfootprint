@@ -6,6 +6,7 @@ export const words1 = {
   filter: true,
   final: true,
   findings: true,
+  fixed: true,
   flagged: true,
   fn: true,
   framework: true,
@@ -299,5 +300,4 @@ export const words1 = {
   stale: true,
   'stale-tools': true,
   stay: true,
-  steering: true,
 } as const;

@@ -323,6 +323,13 @@ export interface CallLLMStageDeps {
    */
   readonly recordSystemPrompt?: boolean;
   /**
+   * The skill-context decision (`skillContext/decide.ts`), stamped as
+   * `skillContext` on the `llm_start` of each run's first request (iteration
+   * 1). Absent when the agent has no skill or the table's default chose
+   * `declared`, so those runs keep their exact event bytes.
+   */
+  readonly skillContext?: import('../../../../events/payloads/skillContext.js').SkillContextRecord;
+  /**
    * The run's id, read through an accessor for the same reason seed's
    * `getCurrentRunId` is: a stage factory is built once per agent and the id
    * changes every run.

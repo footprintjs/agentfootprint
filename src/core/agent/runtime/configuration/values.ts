@@ -24,6 +24,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare skillGraphSupersededEntries?: AgentConfiguration['skillGraphSupersededEntries'];
   declare skillGraphIsTree: AgentConfiguration['skillGraphIsTree'];
   declare skillBrains?: AgentConfiguration['skillBrains'];
+  declare skillContext?: AgentConfiguration['skillContext'];
   declare evidenceGate?: AgentConfiguration['evidenceGate'];
   limitsTravelWithTheAnswerValue: AgentConfiguration['limitsTravelWithTheAnswerValue'] = false;
   declare scriptTravel?: AgentConfiguration['scriptTravel'];

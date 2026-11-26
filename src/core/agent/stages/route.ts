@@ -1,5 +1,6 @@
 import { referenceRefusalRow } from '../findings/refusal.js';
 import { findingsReferenceRefusal } from '../findings/admission.js';
+import { honestyHistory } from '../skillContext/honestyView.js';
 import { assertAnswerReferences, withFindingsAdmission } from '../findings/answerAdmission.js';
 /**
  * route — the decider after CallLLM: which of the seven `RouteBranch` values the ReAct loop takes
@@ -318,7 +319,6 @@ function decideBranch(
   // A limit only CUT SHORT a turn if the model still wanted to do something.
   // A turn that ended because the model was done is not an early stop, however
   // many iterations it spent getting there.
-  //
   // 9.56.0 — with ONE addition: a turn that already spent its wrap-up is cut
   // short for every judge downstream, whether or not this last answer still
   // asked for tools. The budget that forced the wrap-up has not come back, and
@@ -809,7 +809,7 @@ function judgeEvidence(
     return undefined;
   }
 
-  const history = scope.history as readonly LLMMessage[];
+  const history = honestyHistory(scope.history as readonly LLMMessage[], gate.skillBodies);
   // Under `decimalRounding`, a scientific token in a result's text also files its decimal.
   const evidence = evidenceFromHistory(history, gate, canObserveAnswerSources(scope) || undefined);
   // Under `.time()` (step T7): the turn's time spellings by lineage.

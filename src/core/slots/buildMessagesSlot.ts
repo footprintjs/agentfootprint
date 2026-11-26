@@ -34,6 +34,7 @@
  */
 
 import { flowChart } from 'footprintjs';
+import { skillBodyOf } from '../agent/skillContext/bodies.js';
 import type { FlowChart, TypedScope } from 'footprintjs';
 import { callOccurrenceField, type CallOccurrenceKey } from '../../lib/callOccurrence.js';
 import { INJECTION_KEYS } from '../../lib/conventions.js';
@@ -69,6 +70,13 @@ export interface MessagesSlotConfig {
   /** Budget cap (chars). Default: 10000. Set from the public door as
    *  `contextBudget.messages` on `AgentOptions` / `LLMCallOptions`. */
   readonly budgetCap?: number;
+  /**
+   * Under the `listed` skill context only: each skill's registered body, by
+   * id. A `read_skill` result that IS a body is the skill's delivery, so its
+   * record credits the skill (`source: 'skill'`, `sourceId`: its id), as the
+   * system-prompt row does under `declared`. Absent, every record as before.
+   */
+  readonly skillBodies?: ReadonlyMap<string, string>;
 }
 
 interface MessagesSubflowState {
@@ -112,7 +120,18 @@ export function buildMessagesSlot(config: MessagesSlotConfig = {}): FlowChart {
       // delivered message got its own hash scheme.
       const injections: MessageInjectionRecord[] = messages.map((m, i) => {
         assertComposable(m, i, messages.length);
-        const by = m.injectedBy;
+        const skillId =
+          config.skillBodies === undefined ? undefined : skillBodyOf(m, config.skillBodies);
+        const by =
+          m.injectedBy ??
+          (skillId === undefined
+            ? undefined
+            : {
+                injectionId: skillId,
+                flavor: 'skill' as const,
+                reason: `skill '${skillId}' body, delivered as its read_skill result`,
+                iteration,
+              });
         return {
           contentSummary: truncate(m.content, 80),
           contentHash: fnv1a(`${m.role}:${i}:${m.content}`),

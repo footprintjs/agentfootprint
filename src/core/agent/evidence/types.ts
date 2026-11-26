@@ -271,6 +271,14 @@ export interface ResolvedEvidenceGate {
    * state key only under it, so an unarmed agent reads nothing new.
    */
   readonly toolsOffAfterRevision?: true;
+  /**
+   * Set by the agent under the `listed` skill context only: each skill's
+   * registered body, by id. A `read_skill` result that IS a body is the app's
+   * own text, so the gate's two moments read it through
+   * `skillContext/honestyView.ts` · `honestyHistory`: as the confirmation it is
+   * under `declared`, with the body exempt as a system-prompt body is.
+   */
+  readonly skillBodies?: ReadonlyMap<string, string>;
 }
 
 /** The gate's verdict on one answer. */
