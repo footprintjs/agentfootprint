@@ -99,6 +99,8 @@ export interface SeedStageDeps {
    * its ledger starts marked incomplete rather than claiming they never ran.
    */
   readonly toolCallLedger?: boolean;
+  /** The configured native tool catalog can observe the execution scope. */
+  readonly observesCodeExecution?: boolean;
   /**
    * The same read-AND-CLEAR accessor for the conversation's folded spans.
    *
@@ -479,9 +481,7 @@ function seedFrom(
   )
     scope.sourceDeclarationCorrectionSpent = true;
   const history = seedHistoryForTurn(scope, resume, deps.hostOnly ? undefined : message);
-  seedToolEvidence(scope, deps, resume);
-  if (deps.honestyLayers?.sourceNotConsulted === true && resume?.appendsUserTurn === false)
-    scope.sourceConsultationInterrupted = true;
+  seedToolEvidence(scope, deps, resume, mounted);
   restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means

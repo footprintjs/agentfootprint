@@ -20,6 +20,7 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
+import { noteExecutionEntry } from '../../../scripts/executionEvidence.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -252,6 +253,7 @@ export async function invokeInitialTool(
     try {
       markWantedResultsRead(scope, frame.wanted.wantedMeta);
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
+      noteExecutionEntry(scope);
       toolInvoked = true;
       const dispatch = beginDeclaredToolDispatch(scope, frame.tc.name);
       const startedAt = Date.now();
@@ -292,6 +294,7 @@ export async function invokeInitialTool(
       toolName: frame.tc.name,
       toolCallId: frame.tc.id,
       takeListed: true,
+      callOccurrenceKey: frame.tc.callOccurrenceKey,
     });
     // The typed effects channel (9.19.0): a recognized envelope is
     // unwrapped HERE, at the one boundary the raw return crosses —

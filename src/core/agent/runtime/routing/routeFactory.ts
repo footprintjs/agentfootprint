@@ -3,6 +3,7 @@ import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import { buildRouteDeciderStage } from '../../stages/route.js';
 import { withNegativeProse } from '../../negativeClaims/observe.js';
 import { withCitationAssessment } from '../../citations/observe.js';
+import { withExecutionClaimAssessment } from '../../assessment/answer/receipt/observe.js';
 import { withAnswerValidation } from '../../stages/answerValidation.js';
 import { finishAnswerEvidence } from '../../stages/answerEvidence.js';
 import { withAnswerCoverage } from '../../stages/answerCoverage.js';
@@ -121,7 +122,7 @@ export function routeFactory(
       : routeDecider;
 
     // toolCallsHandler extracted to ./agent/stages/toolCalls/index.ts (v2.11.2).
-    const assessedRouteDecider =
+    const citationRouteDecider =
       this.configuration.citationOptions !== undefined &&
       this.configuration.outputSchemaParser === undefined
         ? withCitationAssessment(
@@ -130,6 +131,12 @@ export function routeFactory(
             hasOutstandingConsent,
           )
         : terminalRouteDecider;
+    const assessedRouteDecider = withExecutionClaimAssessment(citationRouteDecider, {
+      structured: this.configuration.outputSchemaParser !== undefined,
+      hasOutstandingConsent,
+      isHumanTurn: () =>
+        run.own && run.value.hostTurn === undefined && run.value.executionClaimComposed !== true,
+    });
     if (this.configuration.evidenceGate === undefined) return assessedRouteDecider;
     return async (scope: Parameters<typeof assessedRouteDecider>[0]) => {
       let deliverable = false;

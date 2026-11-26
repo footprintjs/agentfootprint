@@ -4,6 +4,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
+import { noteExecutionEntry } from '../../../scripts/executionEvidence.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
@@ -318,6 +319,7 @@ export function buildResumedInvocation(
       try {
         markWantedResultsRead(scope, wantedMeta);
         recordToolEntry(scope, seen?.callOccurrenceKey);
+        noteExecutionEntry(scope);
         toolInvoked = true;
         const dispatch = beginDeclaredToolDispatch(scope, toolName);
         const startedAt = Date.now();
@@ -340,6 +342,7 @@ export function buildResumedInvocation(
         toolName,
         toolCallId,
         takeListed: false,
+        callOccurrenceKey: seen?.callOccurrenceKey,
       });
       if (seen !== undefined && codeRun !== undefined) seen.codeRun = codeRun;
       if (negativeDispatch !== undefined)

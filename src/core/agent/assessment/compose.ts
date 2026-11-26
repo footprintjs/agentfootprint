@@ -403,6 +403,10 @@ function reasonClause(
   }
   if (reason === 'sources-conflict' && names?.submittedSourcesConflict)
     return 'two results sent to the model disagree';
+  if (reason === 'unsupported-claim' && names?.executionClaimContradiction)
+    return 'a claim about running code disagrees with the recorded evidence';
+  if (reason === 'check-unreachable' && names?.executionClaimUnverified)
+    return 'the recorded evidence could not verify whether code ran';
   const named = NAMED_REASON_WORDS[reason];
   const source = names?.sources.get(reason);
   const detail = names?.details?.get(reason);
