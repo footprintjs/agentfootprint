@@ -1,1 +1,0 @@
-| skills that keep a signed thinking turn intact: every skill tool listed from the first request, the body delivered as the read_skill result, the choice recorded | `AgentSkillContextOptions` | `src/core/agent/types/skillContext.ts` | unreleased |
