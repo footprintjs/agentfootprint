@@ -257,10 +257,10 @@ export async function invokeInitialTool(
       const startedAt = Date.now();
       const startedMonotonic = performance.now();
       const { callArgs } = frame.callArguments;
-      let native: unknown;
-      native = await frame.tool.execute(callArgs, executionContext);
+      const { outcome } = frame;
+      outcome.result = await frame.tool.execute(callArgs, executionContext);
       returned = true;
-      const captured = captureToolReturn(native, startedAt, startedMonotonic, dispatch);
+      const captured = captureToolReturn(outcome.result, startedAt, startedMonotonic, dispatch);
       frame.outcome.result = captured.result;
       declaredFailure = captured.declaredFailure;
       frame.execution.resultFinalizer?.captureReturned?.(frame.outcome.result);
