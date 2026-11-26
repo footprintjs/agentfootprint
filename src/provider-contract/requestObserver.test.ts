@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  observeCacheCommands,
   observeCitationOffers,
+  prepareCacheCommand,
   observeRequests,
   prepareCitationOffer,
   requestAttempt,
@@ -37,5 +39,24 @@ describe('private request offer lifetime', () => {
   it('keeps an unobserved hook object intact', () => {
     const hooks = { onResilience: vi.fn() };
     expect(requestAttempt(hooks, request).hooks).toBe(hooks);
+  });
+});
+
+describe('private cache command lifetime', () => {
+  it('accepts one response during the attempt and rejects late observations', () => {
+    const accepted = vi.fn();
+    const observe = vi.fn(() => ({ id: Symbol(), response: accepted }));
+    const scope = requestAttempt(observeCacheCommands({}, observe), request);
+    const command = { operation: 'Converse', points: 2, reason: 'prepared' } as const;
+    const first = prepareCacheCommand(scope.hooks, command);
+    const abandoned = prepareCacheCommand(scope.hooks, command);
+    expect(first?.id).not.toBe(abandoned?.id);
+    first?.response(response);
+    first?.response(response);
+    scope.close();
+    abandoned?.response(response);
+    expect(prepareCacheCommand(scope.hooks, command)).toBeUndefined();
+    expect(observe).toHaveBeenCalledTimes(2);
+    expect(accepted).toHaveBeenCalledExactlyOnceWith(response);
   });
 });

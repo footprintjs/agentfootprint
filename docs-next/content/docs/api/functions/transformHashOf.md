@@ -6,7 +6,7 @@ title: transformHashOf
 
 > **transformHashOf**(`runId`, `request`): `string`
 
-Defined in: [src/core/agent/receipt/receipt.ts:780](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L780)
+Defined in: [src/core/agent/receipt/receipt.ts:758](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L758)
 
 The fingerprint a receipt records as `cache.transformHash` for the request a
 cache strategy handed back — recompute it from that request to verify a

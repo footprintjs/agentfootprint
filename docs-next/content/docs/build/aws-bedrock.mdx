@@ -45,9 +45,13 @@ The mapping holds on **both** paths — `complete()` and `stream()` produce the 
 `cacheStrategyFor(provider, model)` when attaching a cache meter; the Agent
 resolves it automatically, including a model chosen by `.configure()` or a
 skill brain. `withRetry`, `withCircuitBreaker` and `withFallback` preserve
-this capability. Unknown IDs, custom aliases and profile ARNs have no
-declared caching; the adapter sends no `cachePoint` for them. This is a
-verified subset, not a statement that AWS cannot cache every omitted model.
+this capability. A system inference-profile ARN uses the same cache
+limits as its exact, supported profile ID. For an application inference
+profile, pass its exact ID or ARN in `inferenceProfileModels` with a
+supported backing model or system profile as the value. The adapter keeps
+the original route in `modelId` and does not look up AWS configuration.
+An unrecognized route sends no `cachePoint`.
+[AWS profile metadata](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_GetInferenceProfile.html)
 
 <CodeFile
   path="examples/features/102-bedrock-prompt-cache.ts"
@@ -78,6 +82,15 @@ and repeated prompts do not guarantee a hit.
 checkpoints using a token estimate. A below-minimum prefix does not cache:
 the cache meter reports measured zero writes when AWS returns zero, rather
 than pretending the provider measured nothing.
+
+### Cache evidence in recordings
+
+A call receipt can report `cache.commandPreparations` with the operation,
+inserted point count and reason for each prepared request. This describes
+the SDK input. Transport status stays unknown. When the accepted response
+can be matched to a retained preparation, `cache.acceptedCommand` names its
+ordinal. Provider usage still supplies the measured token counts. The
+receipt retains up to 16 preparations and flags overflow.
 
 ### Verified model facts
 

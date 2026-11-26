@@ -6,7 +6,7 @@ title: messageDigestInput
 
 > **messageDigestInput**(`message`): `string`
 
-Defined in: [src/core/agent/receipt/receipt.ts:577](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L577)
+Defined in: [src/core/agent/receipt/receipt.ts:555](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L555)
 
 The bytes a message's hash covers, each field behind a separator: its role,
 its text, its `toolCallId`, its `toolName`, the calls it asked for (id, name,
