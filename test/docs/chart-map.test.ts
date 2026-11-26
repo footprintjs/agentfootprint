@@ -79,6 +79,12 @@ declare const structural: StructuralPort;
 structural.addSubFlowChartNext('unresolved-port', {}, 'Not proved to be the engine');
 structural.addFunction('Implicit port stage', stage);
 
+const mixedBuilder = flowChart('Mixed root', stage, 'mixed-root');
+declare const mixed: typeof mixedBuilder & {
+  addFunction(name: 'Local specialization', fn: () => void, id: string): void;
+};
+mixed.addFunction('Local specialization', stage, 'mixed-local-overload');
+
 export function mutableLabels() {
   const labels = { id: 'old-id', description: 'Old stage description.' };
   labels.id = 'new-id';
@@ -354,6 +360,14 @@ describe('chart-map source declarations', () => {
     expect(rendered).not.toContain('<tag>');
     expect(rendered).toContain('&lt;tag&gt;');
     expect(rendered).toContain('\\|');
+  });
+
+  it('keeps a local specialized overload unresolved beside engine signatures', () => {
+    expect(stageFor('mixed-local-overload')).toMatchObject({
+      method: 'addFunction',
+      certainty: 'unresolved',
+      name: 'Local specialization',
+    });
   });
 
   it('keeps native spread-bind argument layout unknown without applying its tuple', () => {

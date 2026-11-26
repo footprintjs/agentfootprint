@@ -90,6 +90,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { isAuthoredDocument } from './docs-truth/authoredDocument.mjs';
 import { execFileSync } from 'node:child_process';
 import { join, resolve, dirname, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -361,7 +362,9 @@ function buildDocIndex() {
   }
 
   // (1) hand-written site pages — the truth source.
-  const sitePages = walkFiles(SITE_DOCS, ['.mdx', '.md'], [GENERATED_IN_SITE]).sort();
+  const sitePages = walkFiles(SITE_DOCS, ['.mdx', '.md'], [GENERATED_IN_SITE])
+    .filter((f) => isAuthoredDocument(readFileSync(f, 'utf8')))
+    .sort();
   // (2) + (3) generated trees — enumerated ONLY to quantify the trap they pose.
   const generatedInSite = walkFiles(GENERATED_IN_SITE, ['.md', '.mdx'], []).sort();
   const generatedLegacy = walkFiles(GENERATED_LEGACY, ['.md'], []).sort();
@@ -395,6 +398,7 @@ function buildDocIndex() {
     walkFiles(r, ['.md'], [GENERATED_LEGACY, DATA_DIR, REPORT_PATH]),
   )
     .filter((f) => trackedFiles === null || trackedFiles.has(f))
+    .filter((f) => isAuthoredDocument(readFileSync(f, 'utf8')))
     .sort();
 
   const siteProse = new Map(); // token → Set<page>
@@ -612,7 +616,7 @@ function isDeniedMention(line, index) {
   );
 }
 
-/** 1-based line numbers whose text sits inside a `//` or `/* … *​/` comment. */
+/** 1-based line numbers whose text sits inside a line comment or a block comment. */
 function commentLineNumbers(text) {
   const set = new Set();
   let inBlock = false;
@@ -853,7 +857,7 @@ const DOC_TEXT_RULES = [
     why:
       'It did not, through 8.11.x, and the docs said so loudly. Since 8.12.0 three doors call ' +
       'them: the handle `enable.*` returns (`handle.flush()` / `handle.stop()`), ' +
-      '`agent.shutdown()`, and a `standingAgent` closing with the default `shutdown: \'flush\'`. ' +
+      "`agent.shutdown()`, and a `standingAgent` closing with the default `shutdown: 'flush'`. " +
       'A reader who believes the old sentence writes a SIGTERM handler that duplicates work the ' +
       'library now does — or, worse, concludes the tail batch is still being dropped and builds ' +
       'a workaround around a bug that is fixed.',
@@ -1992,7 +1996,9 @@ if (failed) {
   console.log('     That re-records the baseline (docs/docs-truth/baseline.json), so the new');
   console.log('     debt lands as a reviewable diff instead of disappearing quietly.');
   console.log('');
-  console.log(`Full picture: npm run docs:truth:report writes docs/DOCS_TRUTH_REPORT.md (baseline recorded ${baseline.recordedAt})`);
+  console.log(
+    `Full picture: npm run docs:truth:report writes docs/DOCS_TRUTH_REPORT.md (baseline recorded ${baseline.recordedAt})`,
+  );
   process.exit(1);
 }
 

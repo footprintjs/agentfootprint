@@ -324,7 +324,17 @@ export function collectChartMap(rootDir) {
           (ts.isPropertyAccessExpression(node.expression) &&
             methods.has(node.expression.name.text)))
       ) {
-        const declaration = checker.getResolvedSignature(node)?.declaration;
+        // A symbol already bound to engine declarations needs no argument inference.
+        // Other callable signatures still use the compiler's call resolution.
+        const reference = declarationOf(node.expression);
+        const direct = engineMethod(reference);
+        const signatures = direct
+          ? checker.getTypeAtLocation(node.expression).getCallSignatures()
+          : [];
+        const resolved =
+          signatures.length > 0 &&
+          signatures.every((signature) => engineMethod(signature.declaration) === direct);
+        const declaration = resolved ? reference : checker.getResolvedSignature(node)?.declaration;
         const proven = engineMethod(declaration);
         const alias =
           ts.isIdentifier(node.expression) || ts.isCallExpression(node.expression)
