@@ -129,6 +129,11 @@ export function routeFactory(
             terminalRouteDecider,
             this.configuration.citationOptions,
             hasOutstandingConsent,
+            environment.answerArmed
+              ? (report) => {
+                  run.value.retainedCitations = report;
+                }
+              : undefined,
           )
         : terminalRouteDecider;
     const assessedRouteDecider = withExecutionClaimAssessment(citationRouteDecider, {

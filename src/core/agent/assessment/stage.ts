@@ -69,6 +69,7 @@ import {
 
 /** What the mount hands the stage — build-time facts, never scope. */
 export interface AnswerStageDeps extends AnswerLayerArm {
+  readonly retainedCitations?: import('../citations/accepted.js').RetainedCitationReport;
   readonly checkOmission?: import('../honesty/sourceOmission.js').OmissionCheck;
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
@@ -145,7 +146,11 @@ export async function assessAnswerStage(
     return;
   }
   const citations = record.answerCitations;
-  if (citations !== undefined) {
+  if (deps.retainedCitations !== undefined) {
+    // The writer retains the report before private mapper inputs can mask
+    // unrelated equal values in its public offsets or citation slots.
+    record.answerCitations = deps.retainedCitations.record;
+  } else if (citations !== undefined) {
     record.answerCitations = citationRecordForWarning(
       citations,
       retainedStateValue(scope, 'answerCitations', citations),
