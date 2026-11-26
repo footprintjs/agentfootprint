@@ -320,7 +320,7 @@ describe('restorePayloads refuses a mark it cannot have written, whatever the re
         ],
       },
     };
-    expect(restorePayloads(recording, () => ({ value: 1 }), 1)).toBe(false);
+    expect(restorePayloads(recording, () => ({ value: 1 }), 1, [0])).toBe(false);
   });
 
   const marked = (events: Record<string, unknown>[]) => ({
@@ -337,17 +337,45 @@ describe('restorePayloads refuses a mark it cannot have written, whatever the re
   const entry = { type: 'subflow.entry', runtimeStageId: 'sf-a#1', payloadWith: 'invocation' };
 
   it('fewer marks than the index moved', () => {
-    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 2)).toBe(false);
-    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 1)).toBe(true);
+    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 2, [0])).toBe(false);
+    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 1, [0])).toBe(true);
+  });
+
+  it('a mark beside a payload', () => {
+    // The mark last, as the cut writes it, and a payload before it.
+    const both = {
+      type: 'subflow.entry',
+      runtimeStageId: 'sf-a#1',
+      payload: 1,
+      payloadWith: 'invocation',
+    };
+    expect(restorePayloads(marked([both]), () => ({ value: 1 }), 1, [0])).toBe(false);
+  });
+
+  it('a listed row the cut could not have marked: not full, no fact, or no mark', () => {
+    const notFull = marked([{ ...entry }]);
+    (notFull.snapshot.recorders[0]!.meta as Record<string, unknown>).mode = 'lean';
+    expect(restorePayloads(notFull, () => ({ value: 1 }), 1, [0])).toBe(false);
+    const noFact = marked([{ ...entry }]);
+    delete (noFact.snapshot.recorders[0]!.meta as Record<string, unknown>).subflowPayloads;
+    expect(restorePayloads(noFact, () => ({ value: 1 }), 1, [0])).toBe(false);
+    expect(restorePayloads(marked([]), () => ({ value: 1 }), 0, [0])).toBe(false);
+    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 1, [1])).toBe(false);
+  });
+
+  it('an unlisted row is the recording’s own data: never touched, whatever it holds', () => {
+    const own = marked([{ ...entry }]);
+    expect(restorePayloads(own, () => ({ value: 1 }), 0, [])).toBe(true);
+    expect(own.snapshot.recorders[0]).toEqual(marked([{ ...entry }]).snapshot.recorders[0]);
   });
 
   it('the same mark twice, whatever the index counts', () => {
-    expect(restorePayloads(marked([{ ...entry }, { ...entry }]), () => ({ value: 1 }), 1)).toBe(
-      false,
-    );
-    expect(restorePayloads(marked([{ ...entry }, { ...entry }]), () => ({ value: 1 }), 2)).toBe(
-      false,
-    );
+    expect(
+      restorePayloads(marked([{ ...entry }, { ...entry }]), () => ({ value: 1 }), 1, [0]),
+    ).toBe(false);
+    expect(
+      restorePayloads(marked([{ ...entry }, { ...entry }]), () => ({ value: 1 }), 2, [0]),
+    ).toBe(false);
   });
 });
 

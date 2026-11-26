@@ -140,6 +140,13 @@ export interface IndexSubflowPayloads {
   readonly same: number;
   readonly stored: number;
   readonly restoredBytes: number;
+  /**
+   * Positions in `snapshot.recorders` of the rows the cut marked, ascending:
+   * the only rows a reader restores. Empty exactly when nothing moved. A row
+   * that arrived carrying the row fact or the mark key is never listed: it
+   * is kept whole, as the recording's own data.
+   */
+  readonly rows: readonly number[];
   /** Sub-flow payloads left whole in the base row, by why. */
   readonly kept: {
     /** The rows do not hold exactly one entry and at most one exit with that id and its `subflowId`. */
@@ -356,12 +363,18 @@ function sum(a: number, b: number): number {
 }
 
 function subflowPayloadCounts(value: unknown): IndexSubflowPayloads {
-  const row = fields(value, ['same', 'stored', 'restoredBytes', 'kept']);
+  const row = fields(value, ['same', 'stored', 'restoredBytes', 'rows', 'kept']);
   const kept = fields(row.kept, ['ambiguous', 'notLast', 'noPart']);
+  const rows = list(row.rows, RECORDING_PARTS_LIMITS.parts).map(count);
+  // Strictly ascending positions: no row twice, one order.
+  rows.forEach((at, i) => {
+    if (i > 0 && at <= (rows[i - 1] as number)) refuse();
+  });
   return {
     same: count(row.same),
     stored: count(row.stored),
     restoredBytes: count(row.restoredBytes),
+    rows,
     kept: {
       ambiguous: count(kept.ambiguous),
       notLast: count(kept.notLast),
@@ -515,7 +528,9 @@ function admit(value: unknown): RecordingIndex {
     if (
       subflowPayloads.same !== totals.same ||
       subflowPayloads.stored !== totals.stored ||
-      subflowPayloads.restoredBytes !== totals.restoredBytes
+      subflowPayloads.restoredBytes !== totals.restoredBytes ||
+      // A row is listed exactly when something moved.
+      subflowPayloads.rows.length > 0 !== totals.same + totals.stored > 0
     ) {
       refuse();
     }

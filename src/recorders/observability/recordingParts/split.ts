@@ -450,6 +450,7 @@ export function recordingIndexText(
         same: draft.subflowPayloads.same,
         stored: draft.subflowPayloads.stored,
         restoredBytes: draft.subflowPayloads.restoredBytes,
+        rows: [...draft.subflowPayloads.rows],
         kept: {
           ambiguous: draft.subflowPayloads.kept.ambiguous,
           notLast: draft.subflowPayloads.kept.notLast,

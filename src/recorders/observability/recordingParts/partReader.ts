@@ -138,8 +138,19 @@ export function partReader(
     if (invocation.part !== null) owners.set(invocation.key, invocation.subflowId);
   }
 
-  /** A restored value's plain JSON bytes, measured: the index's figure is only a claim. */
-  const plainBytesOf = (value: unknown): number => utf8Length(toWireJson(value));
+  /**
+   * A restored value's plain JSON bytes, measured: the index's figure is only a
+   * claim. `undefined` when the value is too deep for this runtime's stack to
+   * write: a resource bound of this reader (`too-large`), as when unpacking.
+   */
+  const plainBytesOf = (value: unknown): number | undefined => {
+    try {
+      return utf8Length(toWireJson(value));
+    } catch (err) {
+      if (err instanceof RangeError) return undefined;
+      throw err;
+    }
+  };
 
   /** The stored payloads member of a v2 part: exactly the keys and kinds the index places there. */
   function storedPayloads(
@@ -287,6 +298,7 @@ export function partReader(
     const places = invocation?.payloads;
     if (places === undefined) return undefined;
     let measured = 0;
+    let tooDeep = false;
     const slot = (kind: PayloadKind): SavedPayloadSlot | undefined => {
       const at = places[kind];
       if (at === undefined) return undefined;
@@ -294,13 +306,18 @@ export function partReader(
         at === 'same'
           ? resultValueFor(contents.results.get(key), kind)
           : contents.payloads.get(key)?.[kind];
-      if (at === 'same' && value !== undefined) measured += plainBytesOf(value);
+      if (at === 'same' && value !== undefined) {
+        const bytes = plainBytesOf(value);
+        if (bytes === undefined) tooDeep = true;
+        else measured += bytes;
+      }
       return value === undefined
         ? Object.freeze({ status: 'unavailable', reason: 'part-changed' })
         : Object.freeze({ status: 'ready', value });
     };
     const entry = slot('entry');
     const exit = slot('exit');
+    if (tooDeep) return unavailable('too-large');
     if (measured !== (invocation?.restoredBytes ?? 0)) return unavailable('part-changed');
     return Object.freeze({
       ...(entry !== undefined && { entry }),
@@ -358,6 +375,10 @@ export function partReader(
           if (at === 'same') {
             // Charged as it is restored; refused the moment the budget is spent.
             const bytes = plainBytesOf(value);
+            if (bytes === undefined) {
+              over = true;
+              return undefined;
+            }
             measured.set(key, (measured.get(key) ?? 0) + bytes);
             remaining -= bytes;
             if (remaining < 0) {
@@ -368,6 +389,7 @@ export function partReader(
           return { value };
         },
         counts.same + counts.stored,
+        counts.rows,
       );
       if (over) return unavailable('too-large');
       if (!restored) return unavailable('part-changed');

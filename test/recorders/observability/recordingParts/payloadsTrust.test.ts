@@ -186,6 +186,14 @@ describe('an index that miscounts the payloads kept in the base', () => {
     expect(await saved.readWhole()).toEqual({ status: 'unavailable', reason: 'part-changed' });
   });
 
+  it('a marked row that names another recorder row: part-changed, never a restore elsewhere', async () => {
+    const saved = ready(
+      await forged((index) => (index.subflowPayloads.rows = [index.subflowPayloads.rows[0] + 1])),
+    );
+    expect((await saved.readRoot()).status).toBe('ready');
+    expect(await saved.readWhole()).toEqual({ status: 'unavailable', reason: 'part-changed' });
+  });
+
   it('the honest counts read back', async () => {
     const saved = ready(await forged(() => {}));
     expect((await saved.readWhole()).status).toBe('ready');

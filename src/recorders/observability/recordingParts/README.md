@@ -53,7 +53,12 @@ already holds. `subflowPayloads.ts` owns the rule.
   for the 1 MiB grouping.
 - **The base says so.** A moved event carries `payloadWith: 'invocation'` as
   its last key in place of `payload`; its row's `meta` gains
-  `subflowPayloads: 'with-invocation'` (`mode` stays `'full'`).
+  `subflowPayloads: 'with-invocation'` (`mode` stays `'full'`), and the index
+  lists that row's position (`subflowPayloads.rows`). A reader restores ONLY
+  the listed rows. A row that arrives already holding a `subflowPayloads` key,
+  or an event holding `payloadWith`, is the recording's own data: the cut keeps
+  it whole (its payloads counted `notLast`) and never lists it, so no reader
+  touches it and the recording reads back as it was saved.
   `buildStepGraphFromEvents` turns the mark into `entryPayloadWith` /
   `exitPayloadWith` on the step or slot, so a viewer can say "not loaded"
   rather than "none recorded".
@@ -179,7 +184,11 @@ if (saved.status === 'ready') {
 - Exactly the invocations a part held: a missing, changed or oversized part is
   unavailable for its invocations only. `readWhole` is all-or-nothing, and its
   `maxBytes` bounds the plain total: each packed part may expand only to what
-  the parts before it left.
+  the parts before it left, and each restored `'same'` payload is measured and
+  charged. The one exception, as in 18.3: a proven path alias `{ name, key }`
+  restores its key's result by reference, and those bytes are not counted.
+- No value too deep to measure escapes as an error: a restored value this
+  runtime's stack cannot serialise is `too-large`, as one it cannot unpack is.
 - No renaming of failures: a busy or revoked store and an aborted signal are
   thrown as they are, never reported as a missing part.
 - No value in a refusal: reasons are fixed codes, and the index holds no

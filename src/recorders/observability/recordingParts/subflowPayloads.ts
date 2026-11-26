@@ -39,8 +39,11 @@
  * ── How the base row says so ────────────────────────────────────────────────
  * A moved event loses `payload` and gains `payloadWith: 'invocation'` as its
  * last key; a row that lost one gains `meta.subflowPayloads:
- * 'with-invocation'` (appended; `meta.mode` stays `'full'`). Restoring drops
- * both and appends `payload`, so the text is exactly the text before the cut.
+ * 'with-invocation'` (appended; `meta.mode` stays `'full'`), and the index
+ * lists the row's position (`subflowPayloads.rows`). Restoring touches only
+ * the listed rows: it drops both and appends `payload`, so the text is exactly
+ * the text before the cut. A row that arrived holding the fact key or the mark
+ * key is never marked, never listed and never touched: it reads back whole.
  */
 
 import { utf8Length } from '../../../lib/utf8.js';
@@ -264,7 +267,8 @@ export function cutPayloads(
   const kept = { ambiguous: 0, notLast: 0, noPart: 0 };
   const totals = { same: 0, stored: 0, restoredBytes: 0 };
   const moved = new Map<string, MovedPayloads>();
-  const result = (): PayloadCut => ({ moved, counts: { ...totals, kept } });
+  const marked: number[] = [];
+  const result = (): PayloadCut => ({ moved, counts: { ...totals, rows: marked, kept } });
   const rows = rowsOf(snapshot);
   if (rows === undefined) return result();
 
@@ -285,15 +289,16 @@ export function cutPayloads(
     const id = ownValue(event, 'runtimeStageId') as string;
     const invocation = withResult.get(id) as WalkedInvocation;
     const value = ownValue(event, 'payload');
-    const text = toWireJson(value) as string | undefined;
+    const text = jsonText(value);
     if (text === undefined) {
-      // Nothing JSON can carry (parsed data always can): leave it where it is.
+      // Nothing JSON can carry, or too deep to write (parsed data always can):
+      // leave it where it is; the base then refuses as `unserializable`.
       kept.notLast++;
       continue;
     }
     const own = resultValueFor(invocation.result, kind);
     const place: IndexPayloadPlace =
-      own !== undefined && toWireJson(own) === text ? 'same' : 'stored';
+      own !== undefined && jsonText(own) === text ? 'same' : 'stored';
     const bytes = utf8Length(text);
     const entry = moved.get(id) ?? {};
     entry[kind] = { place, value, text, bytes };
@@ -303,17 +308,21 @@ export function cutPayloads(
       totals.restoredBytes += bytes;
     } else totals.stored++;
 
-    const marked: Record<string, unknown> = {};
+    const withMark: Record<string, unknown> = {};
     for (const key of Object.keys(event)) {
-      if (key !== 'payload') assign(marked, key, ownValue(event, key));
+      if (key !== 'payload') assign(withMark, key, ownValue(event, key));
     }
-    assign(marked, PAYLOAD_MARK_KEY, PAYLOAD_MARK);
+    assign(withMark, PAYLOAD_MARK_KEY, PAYLOAD_MARK);
     const row = rows[rowAt] as Record<string, unknown>;
     const copy = rewritten.get(rowAt) ?? [...(ownValue(row, 'data') as unknown[])];
-    copy[at] = marked;
+    copy[at] = withMark;
     rewritten.set(rowAt, copy);
   }
   if (rewritten.size === 0) return result();
+  // The rows the cut marked, by position: the ONLY rows a reader restores. A
+  // row that arrived carrying the fact or the mark key is kept whole (its
+  // payloads counted as `notLast`), and a reader never touches it.
+  marked.push(...[...rewritten.keys()].sort((a, b) => a - b));
 
   const recordersOut = rows.map((row, at) => {
     const data = rewritten.get(at);
@@ -364,6 +373,19 @@ export function payloadClaims(
   return { moved, kept };
 }
 
+/**
+ * A value's compact JSON text, or `undefined` when JSON cannot carry it or it is
+ * too deep for this runtime's stack to write (a `RangeError`, never escaped).
+ */
+function jsonText(value: unknown): string | undefined {
+  try {
+    return toWireJson(value) as string | undefined;
+  } catch (err) {
+    if (err instanceof RangeError) return undefined;
+    throw err;
+  }
+}
+
 /** A moved payload's value, or `undefined` when the index or its part has none. */
 export type PayloadResolver = (
   key: string,
@@ -372,34 +394,37 @@ export type PayloadResolver = (
 
 /**
  * Put every moved payload back into a v2 base recording, IN PLACE (the reader
- * owns the freshly parsed base). `expected` is the index's `same + stored`.
- * Returns `false`, having proven nothing, when the base and the index
- * disagree: a mark that resolves to nothing, a mark twice, a mark not in the
- * last place or beside a `payload`, a row fact with no mark, or a count that
- * differs. The caller answers that `part-changed`.
+ * owns the freshly parsed base). `rows` is the index's list of the rows the cut
+ * marked, and `expected` its `same + stored`. Only those rows are touched:
+ * any other row, even one whose `meta` holds a `subflowPayloads` key or whose
+ * events hold a `payloadWith` key, is the recording's own data and stays as
+ * stored. Returns `false`, having proven nothing, when the base and the index
+ * disagree: a listed row the cut could not have marked (not a BoundaryEvents
+ * row in full mode, its fact missing or not last, no mark in it), a mark that
+ * resolves to nothing, a mark twice, a mark not in the last place or beside a
+ * `payload`, or a count that differs. The caller answers that `part-changed`.
  */
 export function restorePayloads(
   recording: Record<string, unknown>,
   resolve: PayloadResolver,
   expected: number,
+  rows: readonly number[],
 ): boolean {
   const snapshot = ownValue(recording, 'snapshot');
   const recorders = isPlainObject(snapshot) ? ownValue(snapshot, 'recorders') : undefined;
-  if (!Array.isArray(recorders)) return expected === 0;
+  if (!Array.isArray(recorders)) return expected === 0 && rows.length === 0;
   const restored = new Set<string>();
-  for (let rowAt = 0; rowAt < recorders.length; rowAt++) {
+  for (const rowAt of rows) {
     const row = element(recorders, rowAt);
-    if (!isPlainObject(row)) continue;
+    if (!isBoundaryRow(row)) return false;
     const meta = ownValue(row, 'meta');
-    if (!isPlainObject(meta)) continue;
+    if (!isPlainObject(meta) || ownValue(meta, 'mode') !== 'full') return false;
     const fact = ownValue(meta, SUBFLOW_PAYLOADS_META_KEY);
-    if (fact === undefined) continue;
     const metaKeys = Object.keys(meta);
-    const data = ownValue(row, 'data');
+    const data = ownValue(row, 'data') as unknown[];
     if (
       fact !== SUBFLOW_PAYLOADS_WITH_INVOCATION ||
-      metaKeys[metaKeys.length - 1] !== SUBFLOW_PAYLOADS_META_KEY ||
-      !Array.isArray(data)
+      metaKeys[metaKeys.length - 1] !== SUBFLOW_PAYLOADS_META_KEY
     ) {
       return false;
     }
