@@ -23,7 +23,8 @@ type StandingKey =
   | 'enteredToolCalls'
   | 'enteredToolCallsComplete'
   | 'settledToolCalls'
-  | 'settledToolCallsComplete';
+  | 'settledToolCallsComplete'
+  | 'codeExecutionReceipt';
 
 interface ReferenceCommit {
   overwrite: Partial<Record<StandingKey, unknown>> & {
@@ -31,6 +32,12 @@ interface ReferenceCommit {
   };
   trace: { path: string; verb: string }[];
 }
+
+const executionReceipt = { status: 'confirmed', callOccurrenceKey: [0, 0, 0, 1, 0] };
+const executionReceiptWrites = [
+  [17, 0, executionReceipt],
+  [33, 1, { ...executionReceipt, terminal: true }],
+] as const;
 
 const referencePath = new URL('./reference/standing-evidence/additions.json', import.meta.url);
 const additions = JSON.parse(readFileSync(referencePath, 'utf8')) as Record<
@@ -60,9 +67,15 @@ function insertWrite(
 
 /** Apply only the audited committed additions to a freshly reconstructed expected record. */
 export function withStandingEvidence(reference: unknown, name: string): unknown {
+  const { commitLog } = reference as { commitLog: readonly ReferenceCommit[] };
+  if (name === 'agent-script-artifact') {
+    // The scripted runner exits once. Its exact dispatch receipt is written at
+    // settlement, then sealed at the final Route. The historical capture stays pinned.
+    for (const [commit, trace, value] of executionReceiptWrites)
+      insertWrite(commitLog[commit], trace, 'codeExecutionReceipt', 'set', value, name);
+  }
   const addition = additions[name];
   if (addition === undefined) return reference;
-  const { commitLog } = reference as { commitLog: readonly ReferenceCommit[] };
   let previous: readonly CallOccurrenceKey[] = [];
   for (const [commitIndex, traceIndex, keys] of addition.entryCommits) {
     const commit = commitLog[commitIndex];
@@ -96,6 +109,22 @@ export function withStandingEvidence(reference: unknown, name: string): unknown 
     assert(tool?.role === 'tool' && tool.toolCallId === 'c1', name);
     assert(!Object.hasOwn(tool, 'toolResultExecution'), name);
     tool.toolResultExecution = 'returned';
+  }
+  return reference;
+}
+
+/** Verify both new writes before checking the original default-standing digest. */
+export function withoutExecutionReceipt<T>(reference: T, name: string): T {
+  if (name !== 'agent-script-artifact') return reference;
+  const { commitLog } = reference as { commitLog: readonly ReferenceCommit[] };
+  for (const [commitIndex, , value] of executionReceiptWrites) {
+    const commit = commitLog[commitIndex];
+    assert(commit, name);
+    assert.deepEqual(commit.overwrite.codeExecutionReceipt, value, name);
+    const traceIndex = commit.trace.findIndex(({ path }) => path === 'codeExecutionReceipt');
+    assert.deepEqual(commit.trace[traceIndex], { path: 'codeExecutionReceipt', verb: 'set' }, name);
+    delete commit.overwrite.codeExecutionReceipt;
+    commit.trace.splice(traceIndex, 1);
   }
   return reference;
 }

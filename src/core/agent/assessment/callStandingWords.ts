@@ -1,3 +1,8 @@
+import type { DeclaredToolFailureRecord } from '../../../provider-contract/toolResultRecord.js';
+import {
+  declaredFailureClauses,
+  retainedDeclaredFailure,
+} from './results/outcomes/declaredFailure.js';
 import type { AttemptCategory } from 'footprintjs';
 import { namedCalls } from '../../../lib/displayName.js';
 import { readToolSettlements } from '../recordedCalls.js';
@@ -5,6 +10,7 @@ import type { AssessmentPointer, AssessmentReasonDetail, AssessmentReasonSource 
 
 export type EvictedCallOutcomes = Readonly<Record<'refused' | 'failed' | 'settled', number>> & {
   readonly categories: ReadonlyMap<AttemptCategory, number>;
+  readonly declarations?: readonly DeclaredToolFailureRecord[];
 };
 
 /** Read outcomes only for settlement rows that the assessment used as witnesses. */
@@ -26,12 +32,17 @@ export function evictedCallOutcomes(
   const visible =
     retainedSettlements === undefined ? ledger : readToolSettlements(retainedSettlements(), true);
   const categories = new Map<AttemptCategory, number>();
+  const declarations: DeclaredToolFailureRecord[] = [];
   const counts = { refused: 0, failed: 0, settled: 0, categories };
   for (const [key, { index, fact }] of ledger?.byKey ?? []) {
     if (!indices.has(index) || fact.outcome === undefined) continue;
     counts[fact.outcome]++;
     const category = fact.failureCategory;
     const served = visible?.byKey.get(key);
+    if (fact.outcome === 'failed' && served?.index === index) {
+      const declared = retainedDeclaredFailure(fact.declaredFailure, served.fact.declaredFailure);
+      if (declared !== undefined) declarations.push(declared);
+    }
     if (
       fact.outcome === 'failed' &&
       category !== undefined &&
@@ -41,7 +52,7 @@ export function evictedCallOutcomes(
       categories.set(category, (categories.get(category) ?? 0) + 1);
     }
   }
-  return counts;
+  return declarations.length === 0 ? counts : { ...counts, declarations };
 }
 
 /** The committed settlement marker identifies an undispatched sibling. */
@@ -66,13 +77,15 @@ function failedCallClauses(
   displayNames: ReadonlyMap<string, string>,
   evicted: EvictedCallOutcomes | undefined,
 ): string[] {
-  const clauses: string[] = [];
-  let recorded = evicted?.failed ?? 0;
   const words = (tool: string) => displayNames.get(tool);
+  const declarations = evicted?.declarations ?? [];
+  const clauses = declaredFailureClauses(calls, declarations, words);
+  let recorded = (evicted?.failed ?? 0) - declarations.length;
+  const classifiedCalls = calls.filter((call) => call.declaredFailure === undefined);
   for (const category of Object.keys(FAILURE_WORDS) as AttemptCategory[]) {
     const phrase = FAILURE_WORDS[category];
     if (phrase === undefined) continue;
-    const classified = calls.filter((call) => call.category === category);
+    const classified = classifiedCalls.filter((call) => call.category === category);
     const count = evicted?.categories.get(category) ?? 0;
     if (classified.length + count === 0) continue;
     recorded -= count;
@@ -81,7 +94,7 @@ function failedCallClauses(
       (classified.length + count === 1 ? 'a call' : 'calls');
     clauses.push(`${who} ${phrase}`);
   }
-  const unknown = calls.filter(
+  const unknown = classifiedCalls.filter(
     (call) => call.category === undefined || call.category === 'unknown',
   );
   const count = unknown.length + recorded;

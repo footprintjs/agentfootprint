@@ -15,6 +15,14 @@ export type ToolFailureCategory =
   | 'permanent'
   | 'unknown';
 
+/** An admitted declaration with advice that has passed the result's serving policy. */
+export interface DeclaredToolFailureRecord {
+  readonly origin: 'declared';
+  readonly declaredCategory: ToolFailureCategory;
+  readonly notChecked?: string | { readonly omitted: true };
+  readonly tryInstead?: string | { readonly omitted: true };
+}
+
 /** Committed tool-result facts used by framework readers and kept off the provider wire. */
 export interface ToolResultRecord {
   /**
@@ -41,6 +49,7 @@ export interface ToolResultRecord {
   readonly toolOutputCounts?: ToolOutputCounts;
   /** The engine category of a thrown tool failure, without the error text. */
   readonly toolFailureCategory?: ToolFailureCategory;
+  readonly toolDeclaredFailure?: DeclaredToolFailureRecord;
 }
 
 /** Recording fields carried with the conversation and stripped before the provider port. */

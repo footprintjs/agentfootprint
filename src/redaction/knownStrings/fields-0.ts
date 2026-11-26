@@ -158,6 +158,7 @@ export const fields0 = {
   custom: true,
   decider: true,
   decisive: true,
+  declaredCategory: true,
   declaredOn: true,
   declaredStatus: true,
   declinedOffer: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   label: true,
   language: true,
   lastError: true,
-  lastFiredAt: true,
 } as const;

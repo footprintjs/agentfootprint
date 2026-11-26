@@ -223,7 +223,8 @@ describe('UNIT — the read list and the run constant', () => {
     const none = { tools: false, evidenceGate: false, answerValidation: false, inputs: false };
     // `stoppedEarly` with no arm at all: the Route decider writes it on every
     // agent — a tool-less one included, when its model asks for a call at the
-    // limit (pinned end to end in answer-layer-equality.test.ts).
+    // limit (pinned end to end in answer-layer-equality.test.ts). W2 is also
+    // independent of the optional arms and skips the read if no check filed a report.
     expect(answerFoldReads({ ...none, toolMiddleware: false })).toEqual([
       'history',
       'turnNumber',
@@ -231,6 +232,7 @@ describe('UNIT — the read list and the run constant', () => {
       'findingsLedger',
       'stoppedEarly',
       'llmLatestStopReason',
+      'answerExecutionClaims',
     ]);
     expect(
       answerFoldReads({
@@ -248,6 +250,7 @@ describe('UNIT — the read list and the run constant', () => {
       'findingsLedger',
       'stoppedEarly',
       'llmLatestStopReason',
+      'answerExecutionClaims',
       'coverageDeclared',
       'enteredToolCalls',
       'enteredToolCallsComplete',

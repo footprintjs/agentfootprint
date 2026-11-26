@@ -4,6 +4,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
+import { noteExecutionEntry } from '../../../scripts/executionEvidence.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { Resolution, ResumedCallFacts } from '../contracts/callFacts.js';
@@ -42,7 +43,8 @@ import type {
 } from '../contracts/operations/resumedInvocation.js';
 import { nativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js';
-import { readExecutedResult } from './readExecutedResult.js';
+import { captureToolReturn, readExecutedResult } from './readExecutedResult.js';
+import { beginDeclaredToolDispatch } from '../../../honesty/declaredToolDispatch.js';
 
 /** Compose the existing resumed invocation without changing its catch/cleanup boundary. */
 export function buildResumedInvocation(
@@ -313,12 +315,20 @@ export function buildResumedInvocation(
       }
       let result: unknown;
       let returned = false;
+      let declaredFailure: ReturnType<typeof captureToolReturn>['declaredFailure'];
       try {
         markWantedResultsRead(scope, wantedMeta);
         recordToolEntry(scope, seen?.callOccurrenceKey);
+        noteExecutionEntry(scope);
         toolInvoked = true;
+        const dispatch = beginDeclaredToolDispatch(scope, toolName);
+        const startedAt = Date.now();
+        const startedMonotonic = performance.now();
         result = await tool.execute(args, executionContext);
         returned = true;
+        const captured = captureToolReturn(result, startedAt, startedMonotonic, dispatch);
+        result = captured.result;
+        declaredFailure = captured.declaredFailure;
         seen?.resultFinalizer?.captureReturned?.(result);
       } finally {
         await binding.close(env.signal);
@@ -332,6 +342,7 @@ export function buildResumedInvocation(
         toolName,
         toolCallId,
         takeListed: false,
+        callOccurrenceKey: seen?.callOccurrenceKey,
       });
       if (seen !== undefined && codeRun !== undefined) seen.codeRun = codeRun;
       if (negativeDispatch !== undefined)
@@ -348,7 +359,7 @@ export function buildResumedInvocation(
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
       // judged exactly as an inline one's.
-      const envelope = readExecutedResult(tool, result, codeRunSlot);
+      const envelope = readExecutedResult(tool, result, codeRunSlot, declaredFailure);
       if (envelope !== undefined) {
         // Coverage (this release) before the ceiling, for the same reason the
         // effects are judged even when the payload is refused: the boundary a

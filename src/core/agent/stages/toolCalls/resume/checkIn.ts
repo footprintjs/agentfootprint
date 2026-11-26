@@ -1,3 +1,4 @@
+import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
@@ -277,31 +278,36 @@ export function buildResumeCheckIn(
       const decisionSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
-          {
-            role: 'tool',
-            content: decisionResultStr,
-            ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
-            toolCallId,
-            toolName,
-            ...occurrence,
-            ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
-            ...toolResultExecutionField(
-              deps.answerLayer,
-              scriptSeen.toolResultExecution,
-              !stepToolRan || resultReplaced,
-              { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
-            ),
-            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
-            ...toolFailureCategoryField(
-              scriptSeen,
-              decisionSettled,
-              resultReplaced || toolResultDisposition !== undefined,
-            ),
-            ...innerCallsFieldOf(scope, toolCallId, iteration),
-            // A decline ran nothing → 'refused'; read by the check-in trail.
-            ...outcomeField(decisionSettled),
-            ...reportedStatusField(decisionSettled),
-          },
+          admitDeclaredToolFailure(
+            scope,
+            {
+              role: 'tool',
+              content: decisionResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
+              toolCallId,
+              toolName,
+              ...occurrence,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+              ...toolResultExecutionField(
+                deps.answerLayer,
+                scriptSeen.toolResultExecution,
+                !stepToolRan || resultReplaced,
+                { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
+              ),
+              ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+              ...toolFailureCategoryField(
+                scriptSeen,
+                decisionSettled,
+                resultReplaced || toolResultDisposition !== undefined,
+              ),
+              ...innerCallsFieldOf(scope, toolCallId, iteration),
+              // A decline ran nothing → 'refused'; read by the check-in trail.
+              ...outcomeField(decisionSettled),
+              ...reportedStatusField(decisionSettled),
+            },
+            resumeEnvelope?.declaredFailure,
+          ),
         ],
         { toolName, toolCallId, ...occurrence },
       );
