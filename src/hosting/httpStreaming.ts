@@ -4,6 +4,7 @@ import type { SseFramePosition } from './stream.js';
 import type { PendingAsk } from './types.js';
 import type { ArtifactWireResult } from './artifactWire.js';
 import type { SessionWireResult } from './sessionWire.js';
+import type { RunSettlement } from './protocolAdapter.js';
 
 /**
  * Where a failure came from.
@@ -64,8 +65,13 @@ export interface StreamFraming {
   chunk(text: string): readonly StreamFrame[];
   /** Frames that close a response that completed. */
   complete(output: string): readonly StreamFrame[];
-  /** Frames that close a response that failed. */
-  failure(message: string, code?: string, origin?: FailureOrigin): readonly StreamFrame[];
+  /** Frames that close a failed response; settlement carries only class-derived refusal evidence. */
+  failure(
+    message: string,
+    code?: string,
+    origin?: FailureOrigin,
+    settlement?: Extract<RunSettlement, { kind: 'failed' }>,
+  ): readonly StreamFrame[];
   /**
    * Frames that close a response ending in one of the other terminals. Absent
    * means the single-frame default, so a framing written for text alone keeps

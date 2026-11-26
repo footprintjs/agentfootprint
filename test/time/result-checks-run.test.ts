@@ -297,7 +297,12 @@ describe('period-differs-from-asked — what was read against what was asked', (
         against: 'asked',
         source: 'sent',
         missing: [],
-        extra: [{ from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:00.001Z' }],
+        // A confirmed window's look-back is measured at dispatch (five seconds after `now`
+        // here), in whole minutes: it starts 55 s before the day and ends at the dispatch moment.
+        extra: [
+          { from: '2026-10-08T06:59:05Z', to: '2026-10-08T07:00:00Z' },
+          { from: '2026-10-09T07:00:00Z', to: '2026-10-09T15:40:05.001Z' },
+        ],
       },
     });
     expect(row).not.toHaveProperty('differs.stepMs');
@@ -430,7 +435,7 @@ describe('period-differs-from-asked — what was read against what was asked', (
     expect(await reasonsOf(agent)).toContain('period-differs-from-asked');
   });
 
-  it('§ 7.4: a look-back the tool read a few seconds LATER is the asked range; EARLIER leaves `missing`', async () => {
+  it('reports either direction of shift when the control has an explicit cutoff witness', async () => {
     const lastHour = { from: iso(NOW_MS - 3_600_000), to: NOW };
     const movedBy =
       (ms: number): Declare =>
@@ -450,10 +455,12 @@ describe('period-differs-from-asked — what was read against what was asked', (
       await agent.run({ message: 'errors', time: { now: NOW, window: lastHour } });
       return { row: ofKind(agent, 'period')[0], reasons: await reasonsOf(agent) };
     };
-    // The tool's clock ran 5 s past `now` (the dispatch was within the step).
+    // A shift puts a result outside the explicit window even when it is within the tool's step.
     const later = await run(5_000);
-    expect(later.row).not.toHaveProperty('differs');
-    expect(later.reasons).not.toContain('period-differs-from-asked');
+    expect(later.row).toMatchObject({
+      differs: { source: 'declared', extra: [{ from: NOW, to: '2026-10-09T15:40:05Z' }] },
+    });
+    expect(later.reasons).toContain('period-differs-from-asked');
     // A read 5 s EARLIER never read the newest 5 s that were asked for.
     const earlier = await run(-5_000);
     expect(earlier.row).toMatchObject({

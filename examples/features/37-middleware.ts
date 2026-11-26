@@ -15,7 +15,9 @@
  * There is no fourth verb, and in particular there is no way to return a
  * RESULT. That is not a convention — the union has no arm for one. So
  * whatever a chain decides, the answer the model finally reads is the
- * real tool's output or a refusal. A rule cannot quietly become the tool.
+ * real tool's output, that output as a named after-tool rule rewrote it
+ * (both kept in the record), or a refusal. A rule cannot quietly become
+ * the tool: a rewrite needs a call that ran, and the record names its rule.
  *
  * The same law explains what `ask` resumes with. The human's answer is a
  * DECISION, not a result: approve and the chain continues and the REAL
@@ -45,6 +47,7 @@ import {
   type ToolMiddleware,
 } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { accountForAnswer, recordRun } from '../../src/doors/observe.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -109,6 +112,41 @@ const fourEyes: ToolMiddleware = {
       : allow(),
 };
 // #endregion tool-rules
+
+// #region rewritten-by
+/** An after-tool rule may replace what the tool returned; the model reads the replacement. */
+const receiptOnly: ToolMiddleware = {
+  name: 'receipt-only',
+  onToolResult: (call) =>
+    call.toolName === 'issue_refund'
+      ? allow('refund issued', 'kept the order number out of the transcript')
+      : allow(),
+};
+
+/** The account of a recorded run names the final rule that rewrote each result. */
+async function whoRewroteTheRefund(): Promise<string | undefined> {
+  const agent = Agent.create({
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'c2', name: 'issue_refund', args: { orderId: '7', amount: 20 } }] },
+        { content: 'The refund is issued.' },
+      ],
+    }),
+    model: 'small-model',
+  })
+    .tool(refund)
+    .act({ afterTool: [receiptOnly] })
+    .build();
+  const recorder = recordRun(agent);
+  await agent.run({ message: 'Refund order 7, $20.' });
+  const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
+  recorder.stop();
+  const refundCall = accountForAnswer(recording).facts.calls.find(
+    (call) => call.toolName === 'issue_refund',
+  );
+  return refundCall?.rewrittenBy; // 'receipt-only'
+}
+// #endregion rewritten-by
 
 function show(rows: readonly MiddlewareDecision[]): void {
   for (const r of rows) {
@@ -185,6 +223,13 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   );
 
   if (typeof answer !== 'string') throw new Error('Agent paused unexpectedly.');
+
+  // ── An after-tool rewrite is on the record under its rule's name. ──
+  const rewrittenBy = await whoRewroteTheRefund();
+  if (rewrittenBy !== 'receipt-only') throw new Error('Expected the rewrite to name its rule.');
+  console.log(
+    `\nA second run rewrote the refund's result; its account says rewrittenBy: '${rewrittenBy}'.`,
+  );
   return answer;
 }
 

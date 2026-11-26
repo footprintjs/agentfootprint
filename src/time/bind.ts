@@ -43,7 +43,12 @@
  *   sent wall time the zone skips. A window only partly beyond `retention`
  *   runs, marked. An open reading the tool can read in NO reading is refused
  *   too, and never asked.
- * - **A present window is never written over.** Bound by quote (the model's
+ * - **A present window normally runs as sent.** A duration equivalent to an
+ *   admitted frozen look-back is the library's fill: the clock-bound
+ *   absolute form, or for a length-only tool the look-back lengthened at
+ *   dispatch. A call whose forms all name one OTHER window is the model's
+ *   own; forms of one call that name different windows are refused. Other
+ *   present windows are bound by quote (the model's
  *   declared `user` quote names a recorded mention) or by value (the sent
  *   value, read back, IS a window of this turn); otherwise it runs as sent and
  *   is recorded `model-chosen` beside the person's window — a drill-down, a
@@ -67,7 +72,7 @@ import {
   type WidenedConversion,
 } from './convert.js';
 import type { InstantText } from './instant.js';
-import type { TimeRange } from './range.js';
+import { lookbackRange, type TimeRange } from './range.js';
 import type { ZoneName } from './zone.js';
 
 // ─── The turn's windows (`windows.ts`) ───────────────────────────────────
@@ -126,6 +131,8 @@ export type CallWindow =
       readonly window: TurnWindow;
       /** Exact, or — when no form holds the window exactly — WIDENED (it carries `sent` and `extra`). */
       readonly conversion: Conversion | WidenedConversion;
+      /** Remove another form's supplied arguments when freezing an equivalent duration. */
+      readonly replacedForm?: true;
       /** Widened, and the tool declares `filtersToAsked`: it trims its rows to the asked window. */
       readonly trimmedByTool?: true;
       readonly partlyBeyondRetention?: true;
@@ -174,6 +181,20 @@ export type CallWindow =
       readonly how: 'not-filled';
       readonly why: 'no-window' | 'several-mentions' | 'open-reading';
     };
+
+/** The chosen form whose alternatives should be ignored for this decision. */
+export function selectedFormOf(decision: CallWindow | undefined): number | undefined {
+  switch (decision?.how) {
+    case 'bound':
+    case 'model-chosen':
+    case 'model':
+      return decision.form;
+    case 'filled':
+      return decision.replacedForm === true ? decision.conversion.form : undefined;
+    default:
+      return undefined;
+  }
+}
 
 const normalQuote = (text: string): string => text.toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -244,6 +265,10 @@ function fillWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
   if (turn.mentions > 1) return { how: 'not-filled', why: 'several-mentions' };
   const window = turn.windows[0];
   if (window === undefined) return openReadingWindow(call, turn, ctx);
+  return filledWindow(call, window, ctx);
+}
+
+function filledWindow(call: CallToBind, window: TurnWindow, ctx: BindContext): CallWindow {
   const read = convertForTool(windowToConvert(window), call.forms, call.facts, {
     now: ctx.now,
     zone: window.zone,
@@ -255,12 +280,13 @@ function fillWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): Call
   if ('refused' in read) {
     return { how: 'refused', refused: read.refused, asked: window.range, person: window };
   }
+  // A read wider than the window — widened now, or lengthened at dispatch — that the tool trims.
+  const readsMore = 'sent' in read.conversion || read.conversion.coversAtDispatch === true;
   return {
     how: 'filled',
     window,
     conversion: read.conversion,
-    ...('sent' in read.conversion &&
-      call.facts?.filtersToAsked === true && { trimmedByTool: true as const }),
+    ...(readsMore && call.facts?.filtersToAsked === true && { trimmedByTool: true as const }),
     ...(read.partlyBeyondRetention === true && { partlyBeyondRetention: true as const }),
   };
 }
@@ -286,6 +312,20 @@ function openReadingWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext
 
 /** A present window: bound, the model's own, unread — or refused on a skipped wall time or a fact. */
 function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): CallWindow {
+  const relativeForms = call.forms.filter(
+    (form) => form.kind === 'lookback' && !call.isMissing(form.argument),
+  );
+  const frozen = turn.windows.filter(
+    (window) => window.endpoint !== undefined && window.lookback !== undefined,
+  );
+  if (relativeForms.length > 0 && frozen.length > 0) {
+    return freezePresentWindow(call, turn, frozen, relativeForms, ctx);
+  }
+  return sentWindow(call, turn, ctx);
+}
+
+/** A window sent as it stands: bound by quote or value, else the model's own, else unread. */
+function sentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): CallWindow {
   // The first form whose arguments read back as a range.
   let form = -1;
   let asked: TimeRange | undefined;
@@ -295,6 +335,8 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
     asked = readBack(call.args, f, {
       now: ctx.now,
       ...(ctx.appZone !== undefined && { appZone: ctx.appZone }),
+      ...(turn.windows.length === 1 &&
+        turn.windows[0]?.endpoint !== undefined && { precise: true as const }),
     });
     if (asked !== undefined) form = i;
   }
@@ -332,6 +374,44 @@ function presentWindow(call: CallToBind, turn: TurnWindows, ctx: BindContext): C
     call,
     ctx.now,
   );
+}
+
+function freezePresentWindow(
+  call: CallToBind,
+  turn: TurnWindows,
+  windows: readonly TurnWindow[],
+  relativeForms: readonly PeriodForm[],
+  ctx: BindContext,
+): CallWindow {
+  const [window] = windows;
+  if (windows.length !== 1 || window?.lookback === undefined || window.endpoint === undefined) {
+    return { how: 'refused', refused: 'no-form-holds' };
+  }
+  const { cutoff } = window.endpoint;
+  const legacy = lookbackRange(cutoff, window.lookback, 'smhdw');
+  // What each sent form names on the frozen clock: a look-back as `[cutoff − L, cutoff)`.
+  const lengths = relativeForms.map((form) => readBack(call.args, form, { now: cutoff }));
+  const bounds = call.forms.flatMap((form) => {
+    if (form.kind === 'lookback') return [];
+    const range = readBack(call.args, form, { ...ctx, precise: true });
+    return range === undefined ? [] : [range];
+  });
+  const equivalent = lengths.every((sent) => sent !== undefined && sameRange(sent, legacy));
+  const conflicting = bounds.some((range) => !sameRange(range, window.range));
+  if (equivalent && !conflicting) {
+    const decision = filledWindow(call, window, ctx);
+    return decision.how === 'filled' ? { ...decision, replacedForm: true } : decision;
+  }
+  // The call names ONE other window in every form it sent: the model's own (§ 7.3). It runs
+  // as sent, recorded `model-chosen` beside the person's — a look-back and a range alike.
+  const first = lengths[0];
+  const oneWindow =
+    first !== undefined &&
+    lengths.every((sent) => sent !== undefined && sameRange(sent, first)) &&
+    bounds.every((range) => sameRange(range, { from: first.from, to: cutoff }));
+  if (oneWindow) return sentWindow(call, turn, ctx);
+  // Forms of one call that name different windows: which one the tool would read is unknown.
+  return { how: 'refused', refused: 'no-form-holds', asked: window.range, person: window };
 }
 
 /** No form reads the call back: a sent wall time the zone skips is refused (§ 7.2); anything else runs `unread`. */

@@ -5,7 +5,7 @@ import {
   type RetainedReasonState,
 } from '../reasonDetails.js';
 import { reasonEntry } from '../reasons.js';
-import type { AnswerAssessment, AssessmentReason } from '../types.js';
+import type { AnswerAssessment, AssessmentReason, AssessmentReasonDetail } from '../types.js';
 import type { WarningContext } from '../warningContext.js';
 
 /** Finish the standing only after the fold knows whether it read withheld state. */
@@ -14,7 +14,7 @@ export function composeWarning(
   integrity: IntegrityReading,
   declarationAddresses: ReadonlyMap<number, number> | undefined,
   retain: RetainedReasonState,
-  unusedTools: readonly string[],
+  consultation: AssessmentReasonDetail | undefined,
 ): AnswerAssessment {
   const { asked, from, g, current, coverage, state, admission, results, historyCalls, begins } =
     gathered;
@@ -48,7 +48,7 @@ export function composeWarning(
       declaredFailures: detail.declaredByHistory,
     },
     detail,
-    unusedTools,
+    consultation,
   );
   return {
     assessment,

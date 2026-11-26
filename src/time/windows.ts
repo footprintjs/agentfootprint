@@ -28,6 +28,7 @@ import type { WindowToConvert } from './convert.js';
 import type { DurationText } from './duration.js';
 import type { InstantText } from './instant.js';
 import { sameRange, type TimeRange } from './range.js';
+import type { WindowEndpoint } from './windowEndpoint.js';
 import type { TimeCandidate } from './resolveRecord.js';
 import type { TimeRefusal } from './periodForm.js';
 import {
@@ -62,6 +63,7 @@ export interface TurnWindow {
   /** The accepted correction supersedes the original words, which are not quoted as its source. */
   readonly corrected?: true;
   readonly range: TimeRange;
+  readonly endpoint?: WindowEndpoint;
   /** The look-back it was said as, when it was one. */
   readonly lookback?: DurationText;
   /** The zone the person meant, else the clock's. */
@@ -127,10 +129,15 @@ export function offeredLookback(
 export function windowToConvert(window: {
   readonly range: TimeRange;
   readonly lookback?: DurationText;
+  readonly endpoint?: WindowEndpoint;
 }): WindowToConvert {
   return {
     range: window.range,
-    ...(window.lookback !== undefined && { lookback: window.lookback }),
+    ...(window.endpoint !== undefined && { endpoint: window.endpoint }),
+    ...(window.lookback !== undefined && {
+      lookback: window.lookback,
+      ...(window.endpoint !== undefined && { freezeLookback: true as const }),
+    }),
   };
 }
 
@@ -186,6 +193,7 @@ export function turnWindowsOf(
         ...(answer.corrected === undefined && { quote: row.quote }),
         ...(answer.corrected !== undefined && { corrected: true }),
         range,
+        ...(answer.endpoint !== undefined && { endpoint: answer.endpoint }),
         ...(lookback !== undefined && { lookback }),
         zone: answer.zone,
         answer: answer.how,
@@ -212,19 +220,28 @@ export function turnWindowsOf(
       ...(row.mention !== undefined && { mention: row.mention }),
       quote: row.quote,
       range: candidate.range,
+      ...(candidate.endpoint !== undefined && { endpoint: candidate.endpoint }),
       ...(candidate.window.kind === 'lookback' && { lookback: candidate.window.duration }),
       zone: candidate.zone,
     });
   }
-  if (clock?.window !== undefined) {
+  const control = controlWindowOf(clock);
+  if (control !== undefined) {
     mentions++;
-    windows.push({
-      source: 'control',
-      range: { from: clock.window.from, to: clock.window.to },
-      zone: clock.zone,
-    });
+    windows.push(control);
   }
   return { windows, mentions, ...(open.length > 0 && { open }) };
+}
+
+function controlWindowOf(clock: ClockRow | undefined): TurnWindow | undefined {
+  if (clock?.window === undefined) return undefined;
+  const { from, to, endpoint } = clock.window;
+  return {
+    source: 'control',
+    range: { from, to },
+    ...(endpoint !== undefined && { endpoint }),
+    zone: clock.zone,
+  };
 }
 
 /** The windows of the person's words this turn, with the turn's clock — what the served sentence names. */
@@ -424,14 +441,7 @@ export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderW
   const answers = answersOf(ledger, turn);
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);
-  const control: TurnWindow | undefined =
-    clock.window === undefined
-      ? undefined
-      : {
-          source: 'control',
-          range: { from: clock.window.from, to: clock.window.to },
-          zone: clock.zone,
-        };
+  const control = controlWindowOf(clock);
   if (windows.length === 0 && pending.length === 0 && control === undefined) return undefined;
   const zones = pendingZonesOf(readings, pending);
   const unread = pendingUnreadOf(readings, pending);

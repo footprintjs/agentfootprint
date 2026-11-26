@@ -23,6 +23,7 @@ import type { buildRouteDeciderStage } from './stages/route.js';
 import type { SourceEvidenceIndex } from '../../artifacts/sourceEvidence/types.js';
 import type { HostedRecording } from '../runnerLive.js';
 import type { SourceConsultation } from './honesty/sourceConsultation.js';
+import type { ContextBaselineHolder } from './contextBinding/check.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
 export interface AgentRunValues extends RunnerCoreValues {
@@ -36,6 +37,9 @@ export interface AgentRunValues extends RunnerCoreValues {
   compactionMeter?: CompactionMeterHandle;
   resources?: ComponentResources;
   servingConversation?: string;
+  hostTurn?: import('./hostEnd/entry.js').HostDecision & { readonly hasInput: boolean };
+  hostAdmission?: import('./hostEnd/delivery.js').HostAdmission;
+  hostSettlement?: import('../../provider-contract/types.js').LLMMessage;
   hadAdmitted: boolean;
   modelResponseCommitted: boolean;
   pauseOutcome?: RunnerPauseOutcome;
@@ -68,6 +72,8 @@ export interface AgentRunValues extends RunnerCoreValues {
   seed?: ReturnType<typeof buildSeedStage>;
   readonly providerToolCache: ProviderToolCache;
   readonly servedTools: ServedToolParties;
+  /** The request behind this run's newest signed response (`contextBinding/check.ts`). */
+  readonly contextBaseline: ContextBaselineHolder;
   sourceConsultation?: SourceConsultation;
   readonly receiptDigests: ReceiptDigests;
   readonly evictedTurnsHandle?: EvictedTurnsHandle;
@@ -94,6 +100,7 @@ export function createAgentRunValues(options: {
       ...(options.sourceNotConsulted === true && { currentImplementations: new Map() }),
     },
     receiptDigests: createReceiptDigests(),
+    contextBaseline: {},
     ...(options.window && { evictedTurnsHandle: createEvictedTurnsHandle() }),
   };
 }

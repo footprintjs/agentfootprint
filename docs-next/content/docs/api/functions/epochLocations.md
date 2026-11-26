@@ -6,7 +6,7 @@ title: epochLocations
 
 > **epochLocations**(`source`): readonly [`EpochLocation`](/docs/api/interfaces/EpochLocation)[]
 
-Defined in: [src/time-travel/epochs.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/epochs.ts#L217)
+Defined in: [src/time-travel/epochs.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/epochs.ts#L220)
 
 Every epoch in a recording, in run order — the ONE owner of the flat /
 grouped fork.
@@ -29,6 +29,9 @@ everybody's answer. The same law `keyedFold.ts` · `freezeDeep` states for a
 folded value. What is NOT frozen is what a location POINTS AT — `log`,
 `source`, `runSource` are the caller's own recording, and this file does not
 get to lock down an object it was merely handed.
+
+A recording saved in parts is read whole first, with `openSavedRecording(…)`
+then `readWhole()` (bounded, all or nothing): epochs live in its subflow results.
 
 ## Parameters
 

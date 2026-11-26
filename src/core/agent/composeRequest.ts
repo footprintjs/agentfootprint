@@ -4,7 +4,7 @@
  *
  * Role:  Lens. Two pure functions, no scope, no events, no I/O. They are the
  *        model-facing half of request assembly that a Fold must be able to
- *        repeat: `callLLM.ts` · `buildCallLLMStage` applies them on the way
+ *        repeat: `callLLM/prepareCall.ts` · `prepareCall` applies them on the way
  *        out, and `servedView.ts` · `servedAt` applies the same two on the way
  *        back, over the same committed values.
  * Reads: its arguments.
@@ -206,6 +206,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
     toolDeclaredFailure: _declaredFailure,
     toolChars: _toolBytes,
     foldedExempt: _lineage,
+    replyOrigin: _replyOrigin,
     answersAsk: _typedAnswer,
     calls: _inner,
     outcome: _settledAs,
@@ -223,6 +224,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
   void _declaredFailure;
   void _toolBytes;
   void _lineage;
+  void _replyOrigin;
   void _typedAnswer;
   void _inner;
   void _settledAs;
@@ -253,6 +255,7 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     'toolDeclaredFailure' in message ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
+    'replyOrigin' in message ||
     message.answersAsk !== undefined ||
     message.calls !== undefined ||
     message.outcome !== undefined ||

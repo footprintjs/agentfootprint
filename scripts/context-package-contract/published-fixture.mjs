@@ -46,7 +46,7 @@ export function publishedFixture(t, hooks = {}) {
   });
   write(join(base, 'keep-parent.txt'), 'keep parent');
   write(join(sourceRoot, 'keep-source.txt'), 'keep source');
-  const versions = { footprintjs: '14.0.0', foottrace: '2.3.2', contextfootprint: '0.1.1' };
+  const versions = { footprintjs: '14.3.0', foottrace: '2.3.2', contextfootprint: '0.1.1' };
   const archives = {},
     payloads = {},
     selected = {};
@@ -55,7 +55,7 @@ export function publishedFixture(t, hooks = {}) {
       name,
       version,
       main: 'dist/index.js',
-      ...(name === 'footprintjs' ? { peerDependencies: { foottrace: '^2.1.0' } } : {}),
+      ...(name === 'footprintjs' ? { peerDependencies: { foottrace: '^2.3.1' } } : {}),
     };
     const bytes = archiveBytes(manifest);
     const integrity = 'sha512-' + hash(bytes, 'sha512', 'base64');
@@ -65,7 +65,7 @@ export function publishedFixture(t, hooks = {}) {
       version,
       resolved: `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`,
       integrity,
-      ...(name === 'footprintjs' ? { dev: true, peerDependencies: { foottrace: '^2.1.0' } } : {}),
+      ...(name === 'footprintjs' ? { dev: true, peerDependencies: { foottrace: '^2.3.1' } } : {}),
     };
   }
   const agentFiles = {};
@@ -92,8 +92,8 @@ export function publishedFixture(t, hooks = {}) {
     type: 'commonjs',
     exports,
     dependencies: { foottrace: '^2.3.2', contextfootprint: '0.1.1' },
-    peerDependencies: { footprintjs: '^14.0.0' },
-    devDependencies: { footprintjs: '^14.0.0', typescript: '~5.4.5' },
+    peerDependencies: { footprintjs: '^14.3.0' },
+    devDependencies: { footprintjs: '^14.3.0', typescript: '~5.4.5' },
   };
   const compilerRecord = { version: '5.4.5', resolved: 'https://registry.npmjs.org/typescript/-/typescript-5.4.5.tgz', integrity: 'sha512-' + Buffer.alloc(64, 4).toString('base64'), dev: true };
   const lock = {

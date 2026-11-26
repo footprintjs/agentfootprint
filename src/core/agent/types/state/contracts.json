@@ -4,6 +4,8 @@
   "sourceSha256": "b66238dea0877374fa69f073aff37854e98d7bc6877c368c14a8bfd2d279b24e",
   "contract": {
     "fields": {
+      "hostEndReason": ["beb64417fc6b22632f6ba145e49dc186f39ed30f51a8bead47dd53a03cc0f488",true,false],
+      "modelReplyRunId": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",true,false],
       "sourceConsultation": ["5c6cd741ace3c8707c3c79bcec22fa55a6e19d48c025a3f8384781cf5c6eee18",true,false],
       "sourceConsultationInterrupted": ["44b845f61c46910592484d0514819a5f1c33403ace6266e3a5d5ef62b5df9d33",true,false],
       "retrievalRequest": ["e39a0605e29c1e30b58a2f54c0dad0ef3dc7741705a9cbe7a966cbcf9ca7b432",true,false],
@@ -172,6 +174,8 @@
       "settledToolCallsComplete": ["3b4c223ff55b39025cefdafb25bd0e5131735182688da0b3f11f896a28ac6357",true,false]
     },
     "comments": {
+      "3c6805f0041d1dc0c6e97dd9c39a7a0e4ef0af22f605436ebc3015600335d7ed": 1,
+      "5f0e1ed8b92a8e6fbbdd8038caa37b74919628174ebd5479e0dce38d0d77fe5a": 1,
       "0be82d3b3860217bc1165afe740c74cffabcb525388a5c1d2c46bfb9b2e0311a": 1,
       "a9fcda61616a8f3510b66d3b5058a6f938940bbfd96b62d5e149d8950067444b": 1,
       "ca6f55d417fcb35eff55f0c115070f422caa7cf925f48d9ec778530ac6237028": 1,

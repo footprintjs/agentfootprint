@@ -78,6 +78,7 @@ export function lifecycleShapes() {
     }),
 
     'agentfootprint.agent.turn_end': eventShape<'agentfootprint.agent.turn_end'>({
+      replyAuthor: oneOf('host'),
       turnIndex: num,
       finalContent: charsMarker,
       totalInputTokens: num,

@@ -93,7 +93,11 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_550_000, records: 2_000 };
+// RAISED 25 Nov 2026 (search gzip 2_550_000 -> 2_800_000) by owner decision, about 10% headroom
+// so the next few pull requests do not trip it. Clean EXPORT=true measurements: main at 7ab1d86a
+// 2,547,461 B gzip, 10,263,949 B raw, 1,118 records; the saved-recording reader branch 2,551,142 B
+// gzip, 10,280,335 B raw, 1,120 records. Reducing the site's size is tracked as a separate task.
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_800_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with
@@ -343,7 +347,11 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_550_000, records: 2_000 };
 // feature: 237,248,831 B / 6,098 files (+2,862,225 B, +102 files). Both exports
 // have zero duplicate RSC bytes. 242,000,000 B is ~2% above the measured feature.
 // File-count, duplicates, route/runtime and deferred-demo limits remain fixed.
-const OUTPUT_LIMITS = { bytes: 242_000_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 25 Nov 2026 (bytes 242_000_000 -> 266_000_000) by owner decision, about 10% headroom
+// so the next few pull requests do not trip it. Clean EXPORT=true measurements: main at 7ab1d86a
+// 241,762,796 B across 6,169 files; the saved-recording reader branch 242,049,313 B across 6,181
+// files. Reducing the site's size is tracked as a separate task. Other limits are unchanged.
+const OUTPUT_LIMITS = { bytes: 266_000_000, files: 8_270, duplicateRscBytes: 0 };
 
 function formatBytes(bytes) {
   if (bytes < 1_000) return `${bytes} B`;

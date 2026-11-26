@@ -24,9 +24,9 @@ durationMs('30s', LOOKBACK_UNITS); // undefined — seconds are a tool's opt-in 
 // 01:30 on 1 Nov 2026 happens twice in Los Angeles; 'reject' refuses to pick.
 wallToInstant({ year: 2026, month: 11, day: 1, hour: 1, minute: 30 }, 'America/Los_Angeles', 'reject'); // undefined
 
-// "8:00 to 8:40" read to the end of its grain, then written with inclusive ends for a SQL BETWEEN.
-const asked = parseRange('2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00')!;
-toInclusive(asked, 60_000); // { from: '…T08:00:00-07:00', to: '…T08:40:00-07:00' }
+// "8:00 to 8:40" ends at the stated cutoff. A minute-grid SQL BETWEEN uses the last minute inside.
+const asked = parseRange('2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00')!;
+toInclusive(asked, 60_000); // { from: '…T08:00:00-07:00', to: '…T08:39:00-07:00' }
 
 // A dataset's time column, compared as instants: two 01:30 rows across the fall-back, by row order.
 normaliseInstants(
@@ -41,10 +41,10 @@ draftClock({ now: '2026-10-09T15:40:00Z' }, { zone: 'America/Los_Angeles' });
 // { now: '2026-10-09T15:40:00Z', zone: 'America/Los_Angeles', zoneSource: 'builder' }
 draftClock({}, {}); // { zone: 'UTC', zoneSource: 'unknown' } — asked, never guessed (G15)
 
-// "to 8:40", read to the end of its minute, shown to the person as 08:40.
-presentRange(asked, { zone: 'America/Los_Angeles' }, 'minute');
+// The confirmed cutoff ends the window at 08:40.
+presentRange(asked, { zone: 'America/Los_Angeles' });
 // '2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)'
-presentRange(asked, { zone: 'America/Los_Angeles', locale: 'en-US' }, 'minute');
+presentRange(asked, { zone: 'America/Los_Angeles', locale: 'en-US' });
 // 'Fri, Oct 9, 2026, 8:00 – 8:40 AM PDT' — the reader's language
 
 // The time ask: one judge of an answer, a reason from the catalog.
@@ -140,11 +140,15 @@ defineTool({
   execute: (args, ctx) => query(args, ctx.time?.asked), // ctx.time = { version, asked, zone, now, dispatchedAt }
 });
 // "10/09/26 8 AM to 8:40 AM": the person confirms the reading in the time ask; a later call of the
-//   turn leaves the period out → the tool runs with { start_time: 1791558000000, end_time: 1791560460000 };
+//   turn leaves the period out → the tool runs with { start_time: 1791558000000, end_time: 1791560400000 };
 //   agent.findings() → … { kind: 'argument', argument: 'start_time', source: 'answered', matched: 'mention' },
 //                       { kind: 'call-window', how: 'filled', form: 0, asked: {…}, person: { …, source: 'answered', mention: 0 } }
-convertExact({ range: asked }, sugarForms({ argument: 'w', spelling: 'iso-range' }), clock);
-// { form: 0, values: { w: '2026-10-09T08:00:00-07:00..2026-10-09T08:40:59-07:00' } } — inclusive end, to the second
+convertExact(
+  { range: asked, endpoint: { cutoff: asked.to, end: 'exclusive', precision: 'minute' } },
+  sugarForms({ argument: 'w', spelling: 'iso-range' }),
+  clock,
+);
+// { form: 0, values: { w: '2026-10-09T08:00:00-07:00..2026-10-09T08:39:59-07:00' } }
 ```
 
 Wider than asked, refused, drifted ([`examples/features/85-time-widen-and-refuse.ts`](../../examples/features/85-time-widen-and-refuse.ts)):

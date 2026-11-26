@@ -288,7 +288,10 @@ describe("security — the review's counterexamples are misses, in both directio
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ text: submitted, rewritten: true, outcome: 'completed' });
     // The earlier text is on no ROW and on no script-record event (history keeps the emission).
-    expect(JSON.stringify(stateOf(asProposed.agent).findingsLedger)).not.toContain('4242');
+    // The earlier text whole, and its number as a number of its own (digits inside a hash do not count).
+    const ledgerText = JSON.stringify(stateOf(asProposed.agent).findingsLedger);
+    expect(ledgerText).not.toContain('draft 4242');
+    expect(ledgerText).not.toMatch(/(?<!\d)4242(?!\d)/);
     for (const e of asProposed.events.filter((x) => /evidence_checked|code_run/.test(x.name))) {
       expect(JSON.stringify(e.payload)).not.toContain('draft 4242');
     }

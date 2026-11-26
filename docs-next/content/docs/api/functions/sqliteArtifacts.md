@@ -6,7 +6,7 @@ title: sqliteArtifacts
 
 > **sqliteArtifacts**(`options`): [`SqliteArtifacts`](/docs/api/interfaces/SqliteArtifacts)
 
-Defined in: [src/artifacts/sqliteArtifacts.ts:200](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L200)
+Defined in: [src/artifacts/sqliteArtifacts.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/sqliteArtifacts.ts#L201)
 
 An artifact store in one SQLite file — durable across restarts, crash-safe
 under WAL, and the natural neighbour of `sqliteSessions({ file })`.

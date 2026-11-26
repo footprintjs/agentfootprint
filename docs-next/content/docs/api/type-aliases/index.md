@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-161 exported from `agentfootprint`.
+162 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -165,3 +165,4 @@ title: Type Aliases
 - [`WindowRefusalReason`](/docs/api/type-aliases/WindowRefusalReason)
 - [`WireRole`](/docs/api/type-aliases/WireRole)
 - [`WriteProvenanceMode`](/docs/api/type-aliases/WriteProvenanceMode)
+- [`WriteTrackingMode`](/docs/api/type-aliases/WriteTrackingMode)

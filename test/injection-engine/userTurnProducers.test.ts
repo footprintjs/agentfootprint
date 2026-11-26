@@ -187,7 +187,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
         'used to build the continued entry itself, from the raw message, before the chain ran',
     },
   ],
-  'src/core/agent/stages/prepareFinal.ts': [
+  'src/core/agent/assistantReplay.ts': [
     {
       cls: 'person',
       why:
@@ -202,7 +202,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   'src/core/agent/buildAgentMessageApiChart.ts': [
     { cls: 'person', why: "the message-API agent chart's seed: `args.message`, as given" },
   ],
-  'src/core/LLMCall.ts': [
+  'src/core/LLMCall/chart.ts': [
     {
       cls: 'person',
       why:
@@ -287,7 +287,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       why: 'Replay of the recorded findings DATA layout, never a conversation turn.',
     },
   ],
-  'src/core/agent/stages/reliabilityExecution.ts': [
+  'src/core/agent/stages/reliabilityExecution/feedback.ts': [
     {
       cls: 'never-in-history',
       why: "the retry feedback line, carried `ephemeral: true` on one attempt's request",
@@ -307,7 +307,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   'src/injection-engine/llmClassifier.ts': [
     { cls: 'never-in-history', why: 'the classifier request — one provider call' },
   ],
-  'src/core-flow/Parallel.ts': [
+  'src/core-flow/Parallel/merge.ts': [
     { cls: 'never-in-history', why: "the merge call's request over the branches' outputs" },
   ],
   'src/memory/stages/summarize.ts': [
@@ -342,7 +342,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
     },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],
-  'src/adapters/llm/BedrockProvider.ts': [
+  'src/adapters/llm/BedrockProvider/request.ts': [
     { cls: 'never-in-history', why: 'wire translation: a text turn in the vendor shape' },
     { cls: 'never-in-history', why: 'wire translation: a tool-result turn in the vendor shape' },
   ],

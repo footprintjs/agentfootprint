@@ -120,7 +120,9 @@ export interface ContextLedger {
    * activatedInjectionIds, the final answer's dependency slice), and
    * accumulate. Accepts a runner or a snapshot. A runner of this library is
    * read LIVE (its live snapshot and end state — never its served record);
-   * any other runner through `getLastSnapshot()`.
+   * any other runner through `getLastSnapshot()`. A recording saved in parts
+   * is passed as its whole snapshot: `openSavedRecording(…)` then `readWhole()`
+   * (bounded, all or nothing).
    */
   recordRun(source: RunnerLike | unknown): RecordedRun | undefined;
   /**

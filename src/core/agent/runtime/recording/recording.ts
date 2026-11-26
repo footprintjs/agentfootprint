@@ -4,6 +4,9 @@ import { recordingPutInput } from '../../../../artifacts/recordingArtifact.js';
 import { eventBelongsToRun } from '../../../../bridge/eventMeta.js';
 import { recordRunWhere, type RunRecorder } from '../../../../recorders/observability/recordRun.js';
 import { packRecording } from '../../../../recorders/observability/recordingPack.js';
+import { fileRecordingParts } from '../../../../recorders/observability/recordingParts/file.js';
+import type { ArtifactMeta, SweptArtifact } from '../../../../artifacts/types.js';
+import type { AgentRecordingsOptions } from '../../types/artifacts.js';
 import type { TrustBoundaryRecorder } from '../../../../trust-boundaries/types.js';
 import { isPaused, type RunnerPauseOutcome } from '../../../pause.js';
 import type { Runner } from '../../../runner.js';
@@ -126,6 +129,10 @@ async function fileRunRecording(
   }
   if (isPaused(outcome)) return;
   const runId = invocation.context().runId;
+  if (config.artifactRecordings.layout === 'parts') {
+    await fileInParts(runner, store, invocation, recorder, config.artifactRecordings, runId);
+    return;
+  }
   let input;
   try {
     const recording = recorder.toRecording();
@@ -152,26 +159,81 @@ async function fileRunRecording(
     // Sweeps ride the put result, so retention that evicted an older
     // recording to make room says so on the record — the same law a tool's
     // own mint follows.
-    for (const swept of result.swept) {
-      runner.emit('agentfootprint.artifacts.expired', {
-        ref: swept.ref,
-        reason: swept.reason,
-        kind: swept.kind,
-        bytes: swept.bytes,
-      });
-    }
-    runner.emit('agentfootprint.artifacts.minted', {
-      ref: result.meta.ref,
-      kind: result.meta.kind,
-      mediaType: result.meta.mediaType,
-      bytes: result.meta.bytes,
-      ...(result.meta.label !== undefined && { label: result.meta.label }),
-      ...(result.meta.expiresAt !== undefined && { expiresAt: result.meta.expiresAt }),
-      ...(result.meta.origin !== undefined && { origin: result.meta.origin }),
-    });
+    reportSwept(runner, result.swept);
+    reportMinted(runner, result.meta);
   } catch (err) {
     reportRecordingRefused(runner, err, 'invalid-input');
   }
+}
+
+/**
+ * File the recording in parts (`recordings: { layout: 'parts' }`): every part
+ * first, the index last, the receipt naming the index. The sequencing and its
+ * undo belong to `recordingParts/file.ts · fileRecordingParts`; this puts its
+ * facts on the record. Real sweeps are reported whether or not the filing
+ * finished; a filing that stopped is ONE refusal, with what it wrote deleted.
+ */
+async function fileInParts(
+  runner: Runner,
+  store: NonNullable<AgentConfiguration['artifactStore']>,
+  invocation: RunnerInvocation<AgentRunValues>,
+  recorder: RunRecorder,
+  options: AgentRecordingsOptions,
+  runId: string | undefined,
+): Promise<void> {
+  let recording;
+  try {
+    recording = recorder.toRecording();
+  } catch (err) {
+    reportRecordingRefused(runner, err, 'invalid-input');
+    return;
+  }
+  const scope = Object.freeze(runArtifactScope(invocation));
+  const filed = await fileRecordingParts(store, scope, recording, {
+    ...(runId !== undefined && { runId }),
+    ...(options.label !== undefined && { label: options.label }),
+    packed: options.packed === true,
+  });
+  reportSwept(runner, filed.swept);
+  if (filed.status === 'refused') {
+    runner.emit('agentfootprint.artifacts.refused', {
+      op: 'put',
+      reason: 'invalid-input',
+      detail: filed.detail,
+    });
+    return;
+  }
+  const { ref, bytes } = filed.index;
+  if (isArtifactRef(ref) && Number.isSafeInteger(bytes) && bytes >= 0) {
+    invocation.value.recording = { scope, receipt: Object.freeze({ ref, bytes }) };
+  }
+  for (const part of filed.parts) reportMinted(runner, part);
+  reportMinted(runner, filed.index);
+}
+
+/** One expiry fact per artifact retention swept to admit a put. */
+function reportSwept(runner: Runner, swept: readonly SweptArtifact[]): void {
+  for (const row of swept) {
+    runner.emit('agentfootprint.artifacts.expired', {
+      ref: row.ref,
+      reason: row.reason,
+      kind: row.kind,
+      bytes: row.bytes,
+    });
+  }
+}
+
+/** One mint fact per stored artifact: its ticket, never its bytes. */
+function reportMinted(runner: Runner, meta: ArtifactMeta): void {
+  runner.emit('agentfootprint.artifacts.minted', {
+    ref: meta.ref,
+    kind: meta.kind,
+    mediaType: meta.mediaType,
+    bytes: meta.bytes,
+    ...(meta.label !== undefined && { label: meta.label }),
+    ...(meta.expiresAt !== undefined && { expiresAt: meta.expiresAt }),
+    ...(meta.origin !== undefined && { origin: meta.origin }),
+  });
 }
 
 /** One refusal fact for a recording that could not be filed. The message is

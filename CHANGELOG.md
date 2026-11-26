@@ -5,6 +5,118 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.1.0] - 2026-11-26
+
+### Fixed
+
+- **Allowed result rewrites keep the original read's declared limits.** Coverage gaps, declared absences and period limits remain answer evidence, while a replacement adds its own independently attributable declarations. Replacement bytes keep their own shape interpretation; withheld results remain withheld. The answer account's optional `ToolCallFact.rewrittenBy` and the host-visible call inspector identify the final named changing rule from the existing occurrence-linked decision ledger, without exposing its input or reason.
+
+  When the record cannot establish the final changing rule (its decision row, occurrence key or name is missing, malformed or kept out), the reader omits the attribution and its decision pointer. An earlier readable rule is not credited for the final result, and the native result's admitted limits remain available. Under any redaction policy the answer account declines to explain a run that called a tool, as it did before this change, so there the inspector is the reader that omits the masked final rule.
+
+  After an after-tool scrub, the native result's declared words reach the answer's standing line as they do on a native turn. Only redacting `coverageDeclared`, or `conversationRedaction()`, hides them.
+
+## [19.0.0] - 2026-11-26
+
+### Breaking
+
+- **An agent's snapshot keeps a short marker for each write instead of the whole written value, so long runs record a much smaller execution tree.** `writeTracking` joins `readTracking` and `commitValues` on the agent's options and is forwarded to its executor the same way. Its agent default is `'summary'`: each written key in `StageSnapshot.stageWrites` is a `WriteSummaryMarker` (`{ __writeSummary, type, size, preview? }`) rather than the full value. The tree nests one stage inside the next and each pass rewrites growing arrays (`history`, decision lists), so full values grew it with the square of the run length; in one measured 19-call run they were 3.6 of the tree's 3.85 MB. `'full'` keeps today's values, `'off'` records no write view. The commit log, the narrative and `onWrite` events are unchanged in every mode, and a redaction policy still applies first. `onCommit` is not: its `mutations` are the same write view, so their values are markers under `'summary'` and `mutations` is empty under `'off'`. Hosted durability (`standingAgent` with `durability: 'sync'` or `'async'`) now learns that a stage wrote `history` from `onWrite` rather than from those mutations, so it writes the same conversations at the same commits in every mode. The dial reaches the agent's own executor; an agent mounted inside a composition keeps the engine's `'full'`, as `readTracking` and `commitValues` do. `WriteTrackingMode` and `WriteSummaryMarker` are exported beside `ReadTrackingMode`.
+
+  Migration: An app that reads written VALUES from `agent.getSnapshot()` or a recording's `executionTree` (`stageWrites[key]`) sets `writeTracking: 'full'` on the agent, or reads the value from the commit log with `commitValueAt`, which every mode keeps. A recorder that reads committed values from `onCommit` gets markers under `'summary'` and no mutations under `'off'`: read the values from `onWrite` or the commit log (`commitValueAt`), or set `writeTracking: 'full'`. The stored-cause tools admit a native capture from an executor run with `captureCoverage`, `readTracking: 'full'`, `writeTracking: 'full'` and `writeProvenance: 'reads-prefix'` (anything else is `modes-not-supported`); an agent does not produce such a capture today, on this version or the previous one, whatever its dials.
+
+- **A recording saved in parts keeps each sub-flow's input and output with that sub-flow, so the largest runs open at the root.** In a run saved with `artifacts: { recordings: { layout: 'parts' } }`, almost all of the base part was one field: the `payload` of every `subflow.entry` and `subflow.exit` boundary event, a second copy of what each invocation's own part already holds (17.6 MB of a 28.8 MB base in one measured run of 19 model calls). The writer now files index format 2 (`agentfootprint.recording.index.v2`, with `…part.v2` parts): such a payload moves to its invocation's part, only on proof (the boundary rows hold exactly one entry and at most one exit with that `runtimeStageId` and its `subflowId`, `payload` is the event's last key, and the invocation has a part; anything else stays in the base and is counted). A payload whose JSON text equals the result's own value is not stored again (`'same'`); any other is stored beside the result (`'stored'`), as under a redaction policy that selects a seeded key, a nested name rule or an empty seed. The base row says so: a moved event carries `payloadWith: 'invocation'` in place of `payload`, and its row's `meta.subflowPayloads` is `'with-invocation'`. `openSavedRecording(…).readInvocation(key)` returns the invocation's `payloads` (`{ entry?, exit? }`, each `{ status: 'ready', value }` or `{ status: 'unavailable', reason }`) beside its result; `readRoot` returns the base as stored; `readWhole` puts every payload back (the boundary row is the same JSON text) and measures each one it restores from a result, charging it against `maxBytes` as it goes; `sizes.restoredBytes` reports those bytes as the index states them, and a read whose measured bytes, moved payloads or kept counts differ from the index's is refused as `part-changed`. `buildStepGraphFromEvents` carries the mark: a step or slot gets `entryPayloadWith` / `exitPayloadWith: 'invocation'` instead of a value, so "with the invocation" is never shown as "none recorded". The reader still opens index format 1 (filed by 18.2 and 18.3) and whole recordings exactly as before, and answers an index of a format it does not know with the new reason `unsupported-format`.
+
+  Migration: Upgrade every reader before any writer files a new recording: an 18.2 or 18.3 reader refuses an index-format-2 recording at open as `invalid-index`. A viewer that draws sub-flow inputs and outputs from the root's boundary events must, for an event or step that carries `payloadWith` / `entryPayloadWith` / `exitPayloadWith: 'invocation'`, read that invocation (`readInvocation(runtimeStageId)` and its `payloads`; a host passes the reply's `payloads` through) or say the value is not loaded. Code that switches over `SavedRecordingUnavailable['reason']` handles `'unsupported-format'`. A host that sizes a whole read from `sizes.storedBytes` uses `sizes.restoredBytes`. A `'same'` payload that `readInvocation` or `readWhole` serves IS the result's own object (as a proven alias is), so code that edits a served payload in place copies it first.
+
+## [18.3.0] - 2026-11-25
+
+### Added
+
+- **A tool turn that changes its own context is refused by name, before the request is sent.** On Claude models that accept signed reasoning only under the system prompt, tool list and earlier messages it was written under (Haiku, Sonnet and Opus 5.5, Fable 5.1 and 5.2, Mythos 5.2), loading a skill mid-turn, an instruction or fact whose `activeWhen` reads a tool result, a tool provider whose list moves, or a skill graph step stopped the run with the adapter's `UnsafeThinkingReplayError: prefix-changed, message 1`, which named none of them. Those runs stop with `ContextChangedError` (from `agentfootprint/providers`): a fixed sentence plus the slot and the skill, injection or tool that changed, bounded and escaped, never their content. It is raised only where the adapter's own check would have refused the same request (for the model the call goes to, and reasoning that model's family wrote), or where the app stated an id bound; it is a request refusal, so it is not retried or sent to a fallback. This change makes no failing run pass, apart from the two new table rows below. These models think without `.thinking()`, so the check does not depend on it.
+
+  Every other change under signed reasoning is recorded on `agentfootprint.stream.llm_start` as `contextChange`, by name, and the request is sent: after a finished turn, the final wrap-up call that withdraws the tools, or a model whose binding is unknown. A conversation continued from an earlier run is recorded `unchecked` once.
+
+  New public API: `LLMProvider.thinkingBinding(model)`, read with `thinkingBindingOf(provider, model)`, answers `bound`, `unbound` or `unknown` (a `ThinkingBinding`), and who said so. The Anthropic, browser Anthropic and InvokeModel gateway adapters answer from their model table and answer `unknown` for an id it cannot place (an application inference profile, a gateway alias, a model newer than the table) and for `claude-mythos-5-1`, which Anthropic documents as checked by default on some platforms and not on Amazon Bedrock. On an unknown model a changed tool turn is sent as before and recorded with `binding: 'unknown'`. Their new `thinkingBinding` option (`(id) => 'bound' | 'unbound' | undefined`) states the model behind an id the table cannot place, and only such ids; the record then says `by: 'app'`, and a statement that throws or answers anything else is ignored and recorded as `appStatement: 'failed'`. `withRetry` and `withCircuitBreaker` forward the answer, and `withFallback` forwards its primary's.
+
+  What changes for `claude-fable-5-2` and `claude-mythos-5-2`, which had no table row: both are marked as running the prefix check (Anthropic enforces it on every account for them) and as rejecting a forced tool choice. A forced tool choice is refused before sending with `UnsupportedToolChoiceError` by the Anthropic, browser Anthropic, InvokeModel gateway and Bedrock Converse (`bedrock()`) adapters, where the API answered 400. The adapter's replay check runs for them, as for the other bound models: a changed unfinished tool turn is refused before sending, where the API answered 400; thinking of a finished turn that no longer matches is left out of the request and reported with `agentfootprint.agent.thinking_omitted`, where the API answered 400 "bound to a different conversation" — that conversation now continues without that reasoning. One local reason can differ from the API: an assistant turn whose layout the adapter marked lossy is refused as `content-changed`, as it already is for the other bound models.
+
+  Until the agent delivers such changes as appended messages, keep a skill's tools listed from the first request and its body in the `read_skill` result (`surfaceMode: 'tool-only'`).
+
+## [18.2.0] - 2026-11-25
+
+### Added
+
+- **The hosted `answer-account` operation explains a recording saved in parts.** A ref naming a `recording/run-index` is explained from the whole recording read back with `openSavedRecording(…).readWhole()`, so the answer equals the one for the same run filed whole, including under `reactMode: 'dynamic-grouped'`, where the account's omission check reads the subflow results. `maxRecordingBytes` bounds the stored part bytes (and a packed part by what it expands to), so within a narrow band a parts recording is explained where the same run filed whole is over the ceiling; any part missing or changed is the one not-found, never a partial account. Before a cached answer is served, every part is head-checked against the index, so an answer is never served for a recording that is no longer whole in the store. On a miss the door facts are one `artifacts.resolved` per part read, naming the part. `SavedRecording` gains `checkParts()`, the heads-only presence check (for a whole recording it makes no store call). Alongside: a parts filing on a store that does not state its budget is named once per store in dev mode, and the readers that take a whole recording (`epochLocations`, `openRecording`, `assembleTrajectory`, `contextLedger().recordRun`) say how to pass one saved in parts.
+
+- **Save a run's recording in parts, so a reader opens one invocation without the whole run.** `artifacts: { store, recordings: { layout: 'parts' } }` files each completed run as an index (`recording/run-index`), a base part and invocation parts of about 1 MiB (`recording/run-part`); the receipt names the index, and `openSavedRecording` reads only the part it needs. Every part is written first and the index last; each stored part's size and digest are checked against the writer's own, and the index expires no later than its earliest part. The artifact store port gains one optional member, `scopeBudget(scope)`, which states the byte and count budget `put` enforces (every built-in store implements it); when a store states one, a recording whose parts and index cannot fit is refused before the first put, so nothing in the scope is evicted for it. If a filing cannot finish (the store refuses a part, keeps different bytes, or its retention evicts one of the recording's own parts), the writer deletes what it wrote, writes no index and reports one `agentfootprint.artifacts.refused`; the answer is unchanged. The default stays `'whole'`, byte for byte as before. The cost, stated on the option: N + 2 awaited store writes per turn instead of one, and a small run takes three artifacts instead of one.
+
+- **Open a saved recording and read one invocation without reading the whole run.** `openSavedRecording(artifacts, ref)` (from `agentfootprint/observe`) opens a saved recording through a scope-bound store and serves `readRoot()`, `readInvocation(key)` and `readWhole()`. It opens both layouts: one whole `recording/run` artifact, and a recording saved in parts, which is an index (`RECORDING_INDEX_ARTIFACT_KIND`) plus a base part and parts of about 1 MiB (`RECORDING_PART_ARTIFACT_KIND`). For a recording in parts, only the part that holds what was asked for is read. Every size cap is checked from stored metadata before any bytes are read, and every part is checked against the SHA-256 in its index. A missing, changed or oversized part is reported as unavailable (`part-missing`, `part-changed`, `too-large`) for exactly the invocations it held, and the rest of the run still reads. A busy store or a cancelled read rejects with the original error. Agents still save their recordings whole; this adds the reader only.
+
+### Fixed
+
+- **A recording over the invocation limit is refused as over the limit on every Node version.** On Node 22, saving a deep recording with more invocations than the parts layout allows was refused as unserialisable instead of over the limit, because the recording was serialised before its invocations were counted and Node 22's smaller stack overflowed first. The bounds are now decided from the iterative walk's counts before anything is serialised. Opening a hand-filed packed recording, or a packed part, too deep to expand now answers a reason (`invalid-recording`, or `too-large` for a part) instead of throwing a stack overflow. For an account over a parts recording, `maxRecordingBytes` bounds the stored part bytes, not the recording's plain bytes.
+
+## [18.1.1] - 2026-11-25
+
+### Fixed
+
+- **A confirmed time window with an ordinary cutoff no longer reaches an inclusive-end tool with a nanosecond end.** Since 18.0.0 a tool whose period form has an inclusive ISO end (the `iso-range` shorthand's default) was handed values like `…T15:59:59.999999999Z` after a confirmation, which many date parsers refuse. The inclusive end is again the last instant inside on the grid the cutoff sits on: one second before a whole-second cutoff (`…T15:59:59Z`), one millisecond before a millisecond one, exactly as before 18.0.0 and as an unconfirmed window was already written. An inclusive ISO end is read back on the grid it was written at. An inclusive control point (`time.window.end: 'inclusive'`) written to an inclusive second-grid form is now recorded as a wider read (`sent`, `differs.extra`: the tool reads through that second), not as exact; written to an exclusive ISO form it still carries the one-nanosecond end that names the point.
+
+## [18.1.0] - 2026-11-25
+
+### Added
+
+- **Explicit Bedrock guardrails preserve masked output and distinguish blocked from unknown responses.** Both Converse transports accept a guardrail declaration, privately classify supported assessment actions and carry bounded safe intervention metadata. Masked output keeps the returned text and normal final-memory path; blocked and unresolved outcomes stop before tools, output repair or final-memory writes. Configured streams hold content through post-stop metadata and natural completion, refuse a private-buffer overflow without truncation, and do not resend an incomplete or terminal response. An optional synchronous clean-message hook changes presentation only. Raw trace and matched values stay out of returned intervention metadata and recordings; earlier effects are not rolled back.
+
+  An assessment outside the admitted streaming sequence cannot be discarded to authorize later output. Resilience wrappers and direct native accounting capture completed interventions before unrelated response decoration, pricing or recording; withheld completions retain their marker. Hosted protocol failures preserve the distinction between actual typed provider refusals and application errors that merely carry the same code.
+
+  A recovery or circuit-transition callback that throws after a completed blocked or unknown response preserves that terminal disposition, with the original callback fault as its cause. The callback cannot turn the completed refusal into another retry or fallback request.
+
+  Usable masked responses preserve the accepting request’s citation proof through owned response copies when answer bytes are unchanged. Terminal blocked or unknown outcomes still stop before citation acceptance.
+
+## [18.0.0] - 2026-11-25
+
+### Breaking
+
+- **Keep the time cutoff a person confirmed.** Timestamp ranges now default to an exclusive upper bound. Saved window facts include the cutoff, its confirmed precision and whether it includes the endpoint. A newly resolved look-back uses the run’s recorded clock and reaches tools in an absolute form. When a tool reads a wider or narrower interval, the time limits line explains the recorded difference.
+
+  Migration: A tool that declares only a duration form keeps working: a confirmed look-back reaches it as a length that still covers the confirmed window, recorded as wider than asked. To have the window read exactly, declare an ISO or epoch bounds form alongside the duration form. Supply `time.window.end: 'inclusive'` if the selected endpoint belongs to the window, and set `precision: 'minute'` when your control pads a minute selection to seconds. Existing saved windows retain their recorded bounds.
+
+### Added
+
+- **Choose extractable AgentCore memory events per entry.** `AgentCoreStore` accepts
+  a synchronous `eventPayload` selector for explicit conversational role/text or
+  the existing blob format. A conversational event keeps the original entry blob
+  in the same request, preserving entry reads and versions. Unsupported clients
+  and serializers, invalid projections and oversized conversation payloads are
+  refused before the write, without truncation or a new adapter retry.
+
+  Each batch request receives detached namespace fields, so a custom client cannot
+  redirect later writes by replacing the configuration it was handed. An omitted
+  selector does not inspect the new conversational capability metadata.
+
+  Event acceptance does not prove extraction completed. Entry deletion, session
+  forget and local entry TTL do not erase already-derived long-term records;
+  `extraction: 'skip'` applies only to the current event. SDK transport retry policy
+  is unchanged.
+
+- A host that sets `hostEndedTurns: true` at agent construction can end a turn at admission with `agent.endTurn({ reply, reason: 'host-cap' })`. The run checks the reply against its output policy and records who supplied it. Conversation checkpoints preserve that origin across restarts. The next model request receives the conversation text with the private origin field removed.
+
+  Cancellation is honored through terminal delivery. Episodic window writers project the settled notice in order and report an acknowledged or unknown outcome per memory.
+
+### Changed
+
+- **A confirmed look-back, or a confirmed time range that has already ended, still runs unshortened on a tool that takes only a length of time.** Such a source counts the length back from its own clock when it is handed the call, so the same length sent after a confirmation click would start late and lose the oldest part of the window. The library now sends the smallest length, in the form's own units, that still reaches the start of the confirmed window from the dispatch moment (a two-hour look-back handed over 61 seconds late is sent as `122m`). The call's `call` row records `drift: { outcome: 'covered', form, sent }`, the `call-window` row says `coversAtDispatch`, the result check reads what was sent unless the result declares what it queried, and the model's note names the value that ran and says the source's clock decided the exact bounds. A window still running at dispatch, or a length past the form's `maxRange`, does not run and the model reads why. On a resumed call the dispatch moment is now read after the access and credential checks, so a refused call files no `call` row.
+
+  **A look-back of the model's own beside a confirmed one is recorded, not refused.** A call whose period arguments all name one other window (a longer look-back, or that look-back with matching bounds) is recorded `model-chosen` beside the person's window, as a different absolute range already was. It keeps the interval it named on the run's clock: beside any confirmed window (a look-back, a timestamp range or a UI `time.window`), when the clock has moved past the tool's step and an absolute form can hold the interval within its `maxRange`, the look-back is sent as those bounds; otherwise it runs as sent and is recorded `shifted`. A look-back is no longer redrawn into an absolute form whose `maxRange` is shorter than the range. A call whose own forms name different windows is still refused.
+
+## [17.2.0] - 2026-11-24
+
+### Added
+
+- Flat Agent recordings can link a value checked in a final answer to the exact served tool result that supported the match. The evidence verdict, refusal, and answer standing retain their existing behavior.
+
+- **Explain when tool selection left out a declared source.** With the source consultation check enabled, a complete request receipt can show that a tool for the question was left out. The answer and its saved assessment disclose the omission. Trying an equivalent source clears the warning. Saved warnings require the matching accepted request, and unnamed offers remain visible alongside omissions.
+
 ## [17.1.0] - 2026-11-24
 
 ### Added

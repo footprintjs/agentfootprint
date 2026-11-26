@@ -171,7 +171,12 @@ describe('one reading per turn, one row per mention', () => {
       expect(typeof row?.tzdata).toBe('string');
       expect(row?.candidates?.[0]?.range).toEqual({
         from: '2026-10-09T08:00:00-07:00',
-        to: '2026-10-09T08:41:00-07:00',
+        to: '2026-10-09T08:40:00-07:00',
+      });
+      expect(row?.candidates?.[0]?.endpoint).toEqual({
+        cutoff: '2026-10-09T08:40:00-07:00',
+        end: 'exclusive',
+        precision: 'minute',
       });
     });
   }
@@ -198,7 +203,7 @@ describe('one reading per turn, one row per mention', () => {
     await agent.run({ message: MESSAGE, time: { now: NOW, zone: 'Asia/Kolkata' } });
     expect(readings(agent)[0]?.candidates?.[0]?.range).toEqual({
       from: '2026-10-09T08:00:00+05:30',
-      to: '2026-10-09T08:41:00+05:30',
+      to: '2026-10-09T08:40:00+05:30',
     });
   });
 

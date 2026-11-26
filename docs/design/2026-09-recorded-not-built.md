@@ -121,7 +121,7 @@ change, and it belongs in a release note rather than in a walk.
 
 **What deciding to fix it would involve.**
 
-- Deciding the report's *subject*: today it answers "which two ACTIVE sources
+- Deciding the report's _subject_: today it answers "which two ACTIVE sources
   disagree", and the honest question is "did the contract on the wire and the
   implementation that answered come from different places". Those are different
   checks with different inputs — `activeInjections` versus `registryByName`
@@ -137,9 +137,9 @@ change, and it belongs in a release note rather than in a walk.
   The same widening decides a fourth family the walk found and this note does
   not otherwise cover: **`claim-swallowed`**, 22 baseline rows — 18 where a
   provider's or a skill's tool whose name a registry-list holder already owns
-  loses the wire *and* dispatch and is simply dead, and 4 where the
+  loses the wire _and_ dispatch and is simply dead, and 4 where the
   FRAMEWORK's own `run_overview` is the dead claimant (entry 4). (This bullet
-  said *16 rows* until 9.86.1; the widening that added entries 4 and 5 added
+  said _16 rows_ until 9.86.1; the widening that added entries 4 and 5 added
   six rows to this family, and this sentence was not on the list of the ones it
   corrected.) `reportShadowedTools` cannot see those either,
   and for the same reason as above — the only loop it has is over
@@ -245,8 +245,8 @@ behaviour changes for anyone consuming the event.
   winner off it, rather than passing `providerSchemas` and asserting. This is
   the small half.
 - The vocabulary. `schemaFrom` is `'registry' | 'provider' | 'skill' |
-  'framework'`, and an always-visible skill tool riding the static registry
-  list is honestly *both* `registry` (the channel) and `skill` (the owner).
+'framework'`, and an always-visible skill tool riding the static registry
+  list is honestly _both_ `registry` (the channel) and `skill` (the owner).
   Pick one and say why; `schemaFromId` already carries the owner.
 - Whether a fired-then-silent transition needs a note. A consumer with an
   alert on this event will see it stop firing for a configuration that has not
@@ -343,7 +343,7 @@ fires today, and does not stop the procedure from advancing.
   answering), but it is the same blind spot. `.selfExplain()`'s `run_overview`
   is a fourth family with the same reservation, and the walk records it too.
 - A decision on procedure integrity specifically: `skip_step` is the tool whose
-  entire job is that a skipped step is *recorded* as skipped. A silent advance
+  entire job is that a skipped step is _recorded_ as skipped. A silent advance
   on a misread contract is the failure that tool exists to prevent, which is an
   argument for treating this one as more urgent than its two siblings.
 
@@ -359,7 +359,7 @@ Not defects — prose that the code moved out from under. Both are cheap, and
 both are left alone here only because this pass was not touching behaviour and
 a comment edit in the same diff would blur which is which.
 
-*(Both corrected in 9.92.0, in the same diff as the seam they describe.)*
+_(Both corrected in 9.92.0, in the same diff as the seam they describe.)_
 
 **`buildToolsSlot.ts:579-588` — "PROVIDER schemas merge unfiltered".** The
 compose-seam backstop's header still describes the world before the park
@@ -376,7 +376,7 @@ route, leaked through exactly one of the three"). The backstop is still worth
 keeping; its stated reason for existing is the part that is out of date.
 
 **`buildToolRegistry.ts:149-151` — "refused below".** The shadow bullet says
-the pair this file *can* see is refused here:
+the pair this file _can_ see is refused here:
 
 > The pair this file CAN see — a static `.tool()` against a skill tool — is
 > refused below, which is the better answer whenever the answer is available
@@ -397,7 +397,7 @@ tool name") is belt-and-suspenders that this pair never reaches.
 `buildToolsSlot.ts` · "`buildToolRegistry` already throws on that pair at build time"
 carries the same claim a second time
 ("`buildToolRegistry` already throws on that pair at build time") and is stale
-in the same way. The claim's *substance* — the pair is refused at build, which
+in the same way. The claim's _substance_ — the pair is refused at build, which
 is why the report does not cover it — is true; only the address is wrong.
 
 ---
@@ -408,7 +408,7 @@ The three entries above were written when `frameworkCases()` crossed the
 framework's auto-attach names against **three** of the seven claimants —
 `static`, `provider`, `skill-active`. The filter was a leftover, not a
 decision: the framework's four reservations each read a different build-time
-list, so *which source* holds the contested name is precisely what decides
+list, so _which source_ holds the contested name is precisely what decides
 whether a reservation can see it. Filtering sources filtered answers.
 
 Dropping the filter took the walk from 60 configurations to 76 and from 36
@@ -418,7 +418,7 @@ of the ten reach seams already recorded above through a source that had not
 been crossed before — an MCP-served catalog, a never-activated scoped skill —
 and their `tolerated` reasons say so and point back up this page. **Six
 record the two defects below**: four for entry 4 and two for entry 5. (Until
-9.86.1 this paragraph said *eight* and *two* — a count of defects presented as
+9.86.1 this paragraph said _eight_ and _two_ — a count of defects presented as
 a count of rows.)
 
 Three sentences above were WRONG once entries 4 and 5 landed, and all three
@@ -426,12 +426,12 @@ are now corrected in place. The record of what changed is this list — a reader
 who opens a file and reads its title must not be told the wrong count and then
 corrected three hundred lines later:
 
-- the title said *three defects*; it records **five**, and now says so;
-- entry 2's closing line said *"Eight baseline rows carry it"*; the
+- the title said _three defects_; it records **five**, and now says so;
+- entry 2's closing line said _"Eight baseline rows carry it"_; the
   misattributed-report family is **ten** rows, and entry 5 is about the two
   that are new;
-- entry 1's fourth bullet said *"`claim-swallowed`, 16 baseline rows, where a
-  provider tool … is simply dead"*; the family is **22** rows and in four of
+- entry 1's fourth bullet said _"`claim-swallowed`, 16 baseline rows, where a
+  provider tool … is simply dead"_; the family is **22** rows and in four of
   them the framework is the victim (corrected in 9.86.1).
 
 Written against 9.85.0 plus the uncommitted Packet A and this packet. Line
@@ -492,7 +492,7 @@ builds. Each block below is a real run — the framework's trace pack stamps no
 token, so an unstamped description is the framework's own and
 `[contract:skill-*]` is the consumer's.
 
-*An always-visible skill (`framework/run_overview-vs-skill-static`):*
+_An always-visible skill (`framework/run_overview-vs-skill-static`):_
 
 ```
 epoch 1  wire[run_overview] = "run_overview tool [contract:skill-static]"
@@ -508,8 +508,8 @@ is in the system prompt telling the model to start with `run_overview`; the
 model does, and gets somebody else's function. Baseline row:
 `framework/run_overview-vs-skill-static::run_overview::claim-swallowed(framework)`.
 
-*A never-activated scoped skill (`framework/run_overview-vs-skill-inactive`) —
-the same configuration under `.toolsFromActiveSkill()`:*
+_A never-activated scoped skill (`framework/run_overview-vs-skill-inactive`) —
+the same configuration under `.toolsFromActiveSkill()`:_
 
 ```
 epoch 1  wire[run_overview] = ABSENT
@@ -524,7 +524,7 @@ description — the model reads "Start here. One bounded summary of the complete
 run" — and a skill that was offered on no epoch of the run answers it. Baseline
 row: `framework/run_overview-vs-skill-inactive::run_overview@e2::contract-swap`.
 
-*A stepped skill (`framework/run_overview-vs-step-skill`)* swallows it the same
+_A stepped skill (`framework/run_overview-vs-step-skill`)_ swallows it the same
 way the always-visible one does, and additionally draws two shadow events that
 name the wrong source — that is entry 5.
 
@@ -546,15 +546,15 @@ skill shapes build.
 The other three auto-attach names each have a net that catches a skill, and
 they were written independently, which is why they catch different subsets:
 
-| name | what its reservation reads | skill tool refused? |
-|---|---|---|
-| `present` | static registry **+ `skillToolEntries` + `sharedSkillTools`** (`buildToolRegistry.ts`, the `holders.includes(PRESENT_TOOL_NAME)` check) | always-visible, scoped, stepped — all three |
-| `skip_step` | `registryByName`, after skill tools were merged into it (`buildToolRegistry.ts`, the `registryByName.has(SKIP_STEP_TOOL_NAME)` check) | all three |
-| `read_skill` | `staticNames` only (`validators.ts:92-98`) — but always-visible and stepped skill tools then hit the duplicate-name throw in `buildToolRegistry.ts` (the `seenNames` loop) | always-visible and stepped; a scoped one slips (recorded above as `read_skill-vs-skill-active` / `-vs-skill-inactive`) |
-| `run_overview` | `this.registry` only (`AgentBuilder.ts:2628`) | **none** — and there is no downstream net, because the trace tools ride a `skillScopedTools` provider and never enter `augmentedRegistry`, so the duplicate-name throw never sees them |
+| name           | what its reservation reads                                                                                                                                                 | skill tool refused?                                                                                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `present`      | static registry **+ `skillToolEntries` + `sharedSkillTools`** (`buildToolRegistry.ts`, the `holders.includes(PRESENT_TOOL_NAME)` check)                                    | always-visible, scoped, stepped — all three                                                                                                                                            |
+| `skip_step`    | `registryByName`, after skill tools were merged into it (`buildToolRegistry.ts`, the `registryByName.has(SKIP_STEP_TOOL_NAME)` check)                                      | all three                                                                                                                                                                              |
+| `read_skill`   | `staticNames` only (`validators.ts:92-98`) — but always-visible and stepped skill tools then hit the duplicate-name throw in `buildToolRegistry.ts` (the `seenNames` loop) | always-visible and stepped; a scoped one slips (recorded above as `read_skill-vs-skill-active` / `-vs-skill-inactive`)                                                                 |
+| `run_overview` | `this.registry` only (`AgentBuilder.ts:2628`)                                                                                                                              | **none** — and there is no downstream net, because the trace tools ride a `skillScopedTools` provider and never enter `augmentedRegistry`, so the duplicate-name throw never sees them |
 
-The comment directly above the check says it "mirrors the read_skill rule". It
-mirrors the *weakest* of the three, and then loses the backstop that makes even
+The comment directly above the check says it "mirrors the read*skill rule". It
+mirrors the \_weakest* of the three, and then loses the backstop that makes even
 that one hold for two of the three skill shapes.
 
 **Why it is not fixed here.** Widening the search from `this.registry` to
@@ -629,7 +629,7 @@ and its `@e4` twin.
 **The cause.** Entry 2's, exactly — `reportShadowedTools` asserts
 `schemaFrom: 'provider'` (`buildToolsSlot.ts`, the literal in `reportShadowedTools`) instead of reading the
 winner off `merged`, and the always-visible skill's schema beat the provider to
-the wire. What is new is *which* provider gets named. `skillScopedTools` builds
+the wire. What is new is _which_ provider gets named. `skillScopedTools` builds
 its id as `` `${SKILL_SCOPED_TOOLS_ID_PREFIX}${skillId}` ``
 (`skillScopedTools.ts:78`), and `.selfExplain()` mounts its trace pack through
 that helper (`selfExplain.ts:332`). So `schemaFromId` is
@@ -727,22 +727,22 @@ which asserts the whole shape rather than only the half that is reassuring:
 ```ts
 const tool = flowchartAsTool({
   name: 'inner_chart',
-  flowchart: chart,          // sets scope.apiKey = 'sk-inner-secret'
+  flowchart: chart, // sets scope.apiKey = 'sk-inner-secret'
   keepRecord: true,
   redact: { keys: ['apiKey'] },
 });
 await tool.execute({}, { toolCallId: 'c1' } as never);
 const snapshot = innerRunsOf(tool)!.get('c1')!.recording!.snapshot;
 
-JSON.stringify(snapshot.commitLog).includes('sk-inner-secret');  // false — scrubbed
-JSON.stringify(snapshot.commitLog).includes('REDACTED');         // true
-snapshot.sharedState.apiKey;                                     // 'sk-inner-secret'
+JSON.stringify(snapshot.commitLog).includes('sk-inner-secret'); // false — scrubbed
+JSON.stringify(snapshot.commitLog).includes('REDACTED'); // true
+snapshot.sharedState.apiKey; // 'sk-inner-secret'
 ```
 
 **The cause.** Two mechanisms that are correct on their own and were never
 composed. `executor.setRedactionPolicy` makes footprintjs scrub at COMMIT time,
 so the value is `'REDACTED'` in every bundle. The live state view is not a
-commit: it is the run's own heap, and the *redacted mirror* of it is served only
+commit: it is the run's own heap, and the _redacted mirror_ of it is served only
 by `getSnapshot({ redact: true })`. `flowchartAsTool.ts` · `keepRecordOf` calls
 `executor.getSnapshot()` with no argument, so the retained
 `recording.snapshot.sharedState` is the unredacted view. Every fold in
@@ -802,7 +802,7 @@ here instead of in the diff.
 > strategy that strips the forced answer tool from `request.tools` and the
 > forcing from `toolChoice` on a `'tool-forced'` agent leaves the wire with no
 > tool and no forcing while the receipt says `tools.forced:
-> 'respond_with_schema'` and `params.toolChoice` absent — the two halves of one
+'respond_with_schema'` and `params.toolChoice` absent — the two halves of one
 > fact disagreeing on one receipt, as predicted — and `cache-transform` now
 > names the half that describes the decision
 > (`receipt-conformance.test.ts` · "a strategy that drops the forced answer
@@ -891,8 +891,8 @@ mechanism that cannot be present.
 **What was done here instead.** The printed sentence was made honest about being
 the WEAKEST claim on the view rather than about the mechanism that makes it one.
 It says what reached the provider may differ from the fields below and that
-*"where another gap on this view covers one of them, that gap is the stronger
-claim"* — so a reader who also has `no-fold-base` or `no-receipt-on-chart` in
+_"where another gap on this view covers one of them, that gap is the stronger
+claim"_ — so a reader who also has `no-fold-base` or `no-receipt-on-chart` in
 front of them knows which sentence governs. Two later rounds moved the rest out
 of it: the sixth deleted the mechanism clause that named the charts (a printed
 sentence names no chart), and the seventh removed the quoted `RECEIPT_BOUNDARY`,
@@ -928,7 +928,7 @@ really is short.
 > drop; the two message-API charts have no window at all; and the AGENT
 > chart's window stage (`stages/window.ts`) evicts turns with
 > `reason: 'budget'` on every run whose strategy engages — `keepRecentTurns:
-> 1`, four tool calls, `compactions` recording `removedMessageCount: 2` at
+1`, four tool calls, `compactions` recording `removedMessageCount: 2` at
 > iterations 3, 4 and 5 — and every one of those receipts read
 > `omittedForAttention: undefined`. A shipped chart drops for attention and
 > never wrote the field.
@@ -1019,7 +1019,7 @@ nobody recorded a drop, never that nothing was dropped.
 >   view, intact and damaged, and measures each against that gap's own claim
 >   (`STRONGER_CLAIM_OF`; an unmeasured kind fails by name) — the pairings
 >   that occur are `no-fold-base` and `forced-tool-schema`, and "stronger"
->   turned out to be *may be short* (≤), not *is short*: on a fresh run with
+>   turned out to be _may be short_ (≤), not _is short_: on a fresh run with
 >   its base stripped the rebuild recovers everything; (3) `forced-tool-schema`'s
 >   "the tool list is complete" runs on both chart shapes. What still stands
 >   in general: a clause not named here has its quantifier checked by a person
@@ -1071,7 +1071,6 @@ new file's header, in
 `test/helpers/gapProseClaims.ts`, and in the CHANGELOG: **the blind spot is a
 claim nobody wrote an assertion for.**
 
-
 ---
 
 # Appended 2026-09-10 — BUILT: the three charts that served a model and minted nothing
@@ -1082,12 +1081,12 @@ Not an entry — the closing of a standing fact that entries 8 and 9 and
 `servedView.ts`'s own module comment all rested on: **`buildReceipt` was called
 from exactly one place**, the agent charts' `call-llm` stage, while three other
 charts in this library handed a model a request and left `no-receipt-on-chart`
-on every view they produced (`LLMCall.ts` · `callLLM`, `buildMessageApiChart`,
+on every view they produced (`LLMCall/chart.ts` · `callLLM`, `buildMessageApiChart`,
 `buildAgentMessageApiChart`).
 
 **The two recorded reasons, and what happened to them.**
 
-- *The cache verdict.* `Receipt.cache.transform` was said to have no honest
+- _The cache verdict._ `Receipt.cache.transform` was said to have no honest
   value on a chart running no cache strategy, because `'unchanged'` would claim
   a strategy returned what it was given. Refuted in 9.88.0's fourth round and
   left refuted in the source: an `Agent` with a pass-through strategy records
@@ -1095,7 +1094,7 @@ on every view they produced (`LLMCall.ts` · `callLLM`, `buildMessageApiChart`,
   is true for the same reason on a chart with no strategy at all — the request
   that went out IS the request that was assembled. **No fourth enum value was
   added.**
-- *The salt.* It never applied to `LLMCall`, which owns its executor and mints a
+- _The salt._ It never applied to `LLMCall`, which owns its executor and mints a
   run id per run exactly as `Agent` does (a shipped sentence said otherwise
   until 9.88.0 measured it). It DOES apply to the two message-API charts, which
   are exported chart BUILDERS handed to an executor the caller owns — and

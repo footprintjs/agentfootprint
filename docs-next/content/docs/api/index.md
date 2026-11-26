@@ -100,6 +100,7 @@ title: agentfootprint
 - [ArtifactPutResult](/docs/api/interfaces/ArtifactPutResult)
 - [ArtifactRecord](/docs/api/interfaces/ArtifactRecord)
 - [ArtifactRetention](/docs/api/interfaces/ArtifactRetention)
+- [ArtifactScopeBudget](/docs/api/interfaces/ArtifactScopeBudget)
 - [ArtifactStore](/docs/api/interfaces/ArtifactStore)
 - [ArtifactStoreCase](/docs/api/interfaces/ArtifactStoreCase)
 - [ArtifactStoreHarness](/docs/api/interfaces/ArtifactStoreHarness)
@@ -402,6 +403,7 @@ title: agentfootprint
 - [SwarmAgent](/docs/api/interfaces/SwarmAgent)
 - [SweptArtifact](/docs/api/interfaces/SweptArtifact)
 - [TeardownOptions](/docs/api/interfaces/TeardownOptions)
+- [ThinkingBinding](/docs/api/interfaces/ThinkingBinding)
 - [TimeAnswerRow](/docs/api/interfaces/TimeAnswerRow)
 - [TimeCandidate](/docs/api/interfaces/TimeCandidate)
 - [TimeClock](/docs/api/interfaces/TimeClock)
@@ -435,6 +437,8 @@ title: agentfootprint
 - [ToolDispatch](/docs/api/interfaces/ToolDispatch)
 - [ToolDispatchCallOptions](/docs/api/interfaces/ToolDispatchCallOptions)
 - [ToolExecutionContext](/docs/api/interfaces/ToolExecutionContext)
+- [ToolFailureDeclaration](/docs/api/interfaces/ToolFailureDeclaration)
+- [ToolFailureResult](/docs/api/interfaces/ToolFailureResult)
 - [ToolMiddlewareContext](/docs/api/interfaces/ToolMiddlewareContext)
 - [ToolPeriod](/docs/api/interfaces/ToolPeriod)
 - [ToolRegistryEntry](/docs/api/interfaces/ToolRegistryEntry)
@@ -471,6 +475,7 @@ title: agentfootprint
 - [WireToolManifest](/docs/api/interfaces/WireToolManifest)
 - [WorkflowOptions](/docs/api/interfaces/WorkflowOptions)
 - [WriteEvent](/docs/api/interfaces/scope-events#interface-writeevent)
+- [WriteSummaryMarker](/docs/api/interfaces/WriteSummaryMarker)
 - [ZoneAbbreviation](/docs/api/interfaces/ZoneAbbreviation)
 - [ZoneArgument](/docs/api/interfaces/ZoneArgument)
 
@@ -637,6 +642,7 @@ title: agentfootprint
 - [WindowRefusalReason](/docs/api/type-aliases/WindowRefusalReason)
 - [WireRole](/docs/api/type-aliases/WireRole)
 - [WriteProvenanceMode](/docs/api/type-aliases/WriteProvenanceMode)
+- [WriteTrackingMode](/docs/api/type-aliases/WriteTrackingMode)
 
 ## Variables
 
@@ -692,7 +698,9 @@ title: agentfootprint
 - [PRIOR\_TURN\_EVIDENCE\_CEILING](/docs/api/variables/PRIOR_TURN_EVIDENCE_CEILING)
 - [RECEIPT\_BOUNDARY](/docs/api/variables/RECEIPT_BOUNDARY)
 - [RECORDING\_ARTIFACT\_KIND](/docs/api/variables/RECORDING_ARTIFACT_KIND)
+- [RECORDING\_INDEX\_ARTIFACT\_KIND](/docs/api/variables/RECORDING_INDEX_ARTIFACT_KIND)
 - [RECORDING\_MEDIA\_TYPE](/docs/api/variables/RECORDING_MEDIA_TYPE)
+- [RECORDING\_PART\_ARTIFACT\_KIND](/docs/api/variables/RECORDING_PART_ARTIFACT_KIND)
 - [RESERVED\_ARGUMENT](/docs/api/variables/RESERVED_ARGUMENT)
 - [RESERVED\_SUBFLOW\_PREFIX](/docs/api/variables/RESERVED_SUBFLOW_PREFIX)
 - [RESULT\_CLASSES](/docs/api/variables/RESULT_CLASSES)
@@ -861,6 +869,7 @@ title: agentfootprint
 - [tokenBudget](/docs/api/functions/tokenBudget)
 - [toolContractCheckup](/docs/api/functions/toolContractCheckup)
 - [toolDigestInput](/docs/api/functions/toolDigestInput)
+- [toolFailure](/docs/api/functions/toolFailure)
 - [toolSessionKey](/docs/api/functions/toolSessionKey)
 - [toolSessionsOf](/docs/api/functions/toolSessionsOf)
 - [topK](/docs/api/functions/topK)

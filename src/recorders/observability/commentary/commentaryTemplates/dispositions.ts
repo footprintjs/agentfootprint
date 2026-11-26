@@ -70,6 +70,7 @@ export const eventDispositions: Readonly<
   'agentfootprint.memory.attached': 'Memory was attached to the run.',
   'agentfootprint.memory.retrieved': 'The run retrieved memory.',
   'agentfootprint.memory.detached': 'Memory was detached from the run.',
+  'agentfootprint.memory.write_outcome': 'The run recorded the outcome of a memory write.',
   'agentfootprint.memory.written': 'The run wrote memory.',
   'agentfootprint.tools.offered': 'The agent recorded the tools offered for selection.',
   'agentfootprint.tools.activated': 'A tool became available.',

@@ -223,7 +223,13 @@ async function correctionExample(): Promise<void> {
       requestId: changed.awaitingInput.requestId,
       values: { [offer.id]: offer.enum[0] },
     });
-    check(handed.length === 1, 'one execution follows confirmation');
+    check(
+      JSON.stringify(handed) ===
+        JSON.stringify([
+          { start_time: Date.parse('2026-10-09T14:40:00Z'), end_time: Date.parse(time.now) },
+        ]),
+      'one execution receives the frozen hour as absolute epoch bounds',
+    );
   } finally {
     await agent.shutdown();
   }
@@ -353,8 +359,8 @@ export async function run(input: string): Promise<string> {
   if (!isInputPause(elapsed)) return String(elapsed);
   const hour = elapsed.awaitingInput.fields[0];
   check(
-    hour?.enum?.[0] === '2026-10-09T14:40:00Z/2026-10-09T15:40:00.001Z',
-    'the original elapsed endpoints',
+    hour?.enum?.[0] === '2026-10-09T14:40:00Z/2026-10-09T15:40:00Z',
+    'the elapsed hour ends exclusively at the frozen clock',
   );
   check(hour?.labels?.[0]?.includes('America/New_York') === true, 'the stated display zone');
   return String(done);

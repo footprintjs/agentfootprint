@@ -1,3 +1,16 @@
+import { addressOf, owned } from './serializer/values.js';
+import { eventTranslator } from './serializer/translate.js';
+import { settleTranslation } from './serializer/settle.js';
+import { leads, record, text, questionOf, AG_UI_SUBAGENT_UNFINISHED } from './serializer/values.js';
+import type { AgUiSerializerOptions, AgUiTranslation } from './serializer/types.js';
+export type { AgUiSerializerOptions, AgUiTranslation } from './serializer/types.js';
+export {
+  AG_UI_RUN_FAILED,
+  AG_UI_ANSWER_WITHHELD,
+  AG_UI_SUBAGENT_UNFINISHED,
+  AG_UI_SUBAGENT_CANCELLED,
+} from './serializer/values.js';
+
 /**
  * serializer — one run's served agentfootprint events → AG-UI events.
  *
@@ -70,131 +83,21 @@
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
-import type { RunTranslation } from '../hosting/protocolAdapter.js';
-import { unstreamedText } from '../hosting/unstreamedText.js';
-import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
-import { toWireJson, withWireErrors } from '../lib/wireJson.js';
-import { newScope, takeCall, type Scope, type OpenText } from './translationScope.js';
+import { withWireErrors } from '../lib/wireJson.js';
+import { newScope, type Scope } from './translationScope.js';
 import { agUiIdMinter } from './ids.js';
-import { failedCallWords } from './toolResultWords.js';
-import { argsShownOf, checkInHiddenNamesOf } from './shownArgs.js';
+import { checkInHiddenNamesOf } from './shownArgs.js';
 import {
   AG_UI_PROTOCOL_VERSION,
-  type AgUiAddress,
   type AgUiEvent,
   type AgUiInterrupt,
-  type AgUiMetadata,
   type AgUiSuspendedScope,
   type AgUiSuspension,
 } from './types.js';
 
-import { AG_UI_CUSTOM_EVENTS, type AgUiCustomProjection } from './customEvents.js';
+import { AG_UI_CUSTOM_EVENTS } from './customEvents.js';
 export { AG_UI_CUSTOM_EVENTS } from './customEvents.js';
 export type { AgUiCustomContext, AgUiCustomProjection } from './customEvents.js';
-
-/** Options for {@link agUiSerializer}. */
-export interface AgUiSerializerOptions {
-  /** Explicit host delivery: withhold candidate text at every depth until the authorized final output. Record-only is the default. */
-  readonly delivery?: 'host';
-  /** Optional served-only projection for calls without a protected argument view. */
-  readonly toolArguments?: AgUiCustomProjection;
-  /** Optional served-only result projection; fixed failed-tool words still take precedence. */
-  readonly toolResults?: AgUiCustomProjection;
-  /** The conversation this run belongs to — `RunAgentInput.threadId`. */
-  readonly threadId: string;
-  /** This run's AG-UI id — `RunAgentInput.runId`. Every id the run mints is under it. */
-  readonly runId: string;
-  /**
-   * The events with no AG-UI equivalent that go out as `CUSTOM`, keyed by event
-   * type, each with the projection that picks its fields. Default
-   * {@link AG_UI_CUSTOM_EVENTS}; `{}` sends none. An event not listed sends
-   * nothing. Events the mapping consumes (tokens, tool calls, turns,
-   * iterations, compositions, the pause and the fatal error) are never CUSTOM.
-   */
-  readonly custom?: Readonly<Record<string, AgUiCustomProjection>>;
-  /**
-   * Write the model's reasoning — `REASONING_*` events from the served
-   * `stream.thinking_*` events. Default `false`: a model's chain of thought is
-   * shown to a person only when the app decides it is.
-   */
-  readonly reasoning?: boolean;
-  /**
-   * What a FAILED tool call's result says. Default `'withheld'`: fixed words
-   * (`toolResultWords.ts`) — "The tool failed.", or "The call was not executed."
-   * for a call that never reached its tool (an unknown name, rejected
-   * arguments) — as the record's result for a failed call is the thrown text,
-   * which may hold a connection string, a path or a provider's response.
-   * `'served'` sends the record's own result (still the served value: the
-   * placeholder wherever a redaction policy selected one).
-   */
-  readonly toolErrors?: 'withheld' | 'served';
-  /**
-   * Which served events are this run's. Default: the events of the first run
-   * an event names (plus events that name no run). Pass it when the listener
-   * can hear more than one run — an instance several callers share — so the
-   * translation never binds to whichever run spoke first.
-   */
-  readonly owns?: (event: AgentfootprintEvent) => boolean;
-  /**
-   * The paused run this one continues — what that run's translation returned
-   * from `suspension()` after it settled `'paused'`. Its suspended sub-agents
-   * and open steps re-open under the same ids, and the call it stopped in is
-   * answered under its own id (or, for a frontend tool, not at all: the client
-   * already holds the result it sent).
-   */
-  readonly resume?: AgUiSuspension;
-}
-
-/** One run's AG-UI translation — and, once it pauses, what its continuation needs. */
-export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
-  /**
-   * The record to `resume` from. Before settling, what a `'paused'` settlement
-   * with the same `awaiting` will hand out (keep it first, then settle); after
-   * `settle({ kind: 'paused' })`, what it handed out; after any other ending,
-   * `undefined`.
-   */
-  suspension(awaiting?: 'person' | 'caller'): AgUiSuspension | undefined;
-}
-
-/** Said by `RUN_ERROR` when the run's `error.fatal` is not one of the record's fixed sentences. */
-export const AG_UI_RUN_FAILED = 'The run failed.';
-
-/**
- * Said by `RUN_ERROR` (with `code: 'ERR_ANSWER_VALIDATION'`) when an enforcing
- * `.answerValidation()` withheld the answer: a refusal, not a crash.
- */
-export const AG_UI_ANSWER_WITHHELD =
-  "The answer was withheld: it did not pass the app's answer checks.";
-
-/** Is `said` one of the record's fixed failure sentences — the only `error.fatal` words a `RUN_ERROR` repeats? */
-const isFixedFailure = (said: string): boolean =>
-  (Object.values(LLM_ERROR_SENTENCES) as readonly string[]).includes(said);
-
-/** Said by `SUBAGENT_ERROR` for a sub-agent whose turn ended without an answer. */
-export const AG_UI_SUBAGENT_UNFINISHED = "The sub-agent's turn ended without an answer.";
-
-/** Said by `SUBAGENT_ERROR` for a sub-agent still running when its run was cancelled. */
-export const AG_UI_SUBAGENT_CANCELLED = 'The run was cancelled before this sub-agent finished.';
-
-/** Does `prefix` lead `path`, segment by segment? */
-function leads(prefix: readonly string[], path: readonly string[]): boolean {
-  if (prefix.length > path.length) return false;
-  for (let i = 0; i < prefix.length; i++) if (prefix[i] !== path[i]) return false;
-  return true;
-}
-
-const sameMount = (a: readonly string[], b: readonly string[]): boolean =>
-  a.length === b.length && leads(a, b);
-
-const record = (value: unknown): Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : {};
-
-const text = (value: unknown): string | undefined =>
-  typeof value === 'string' ? value : undefined;
-
-/** A tool result as AG-UI text: a string as it is, anything else through the wire rule. */
-const resultText = (value: unknown): string =>
-  typeof value === 'string' ? value : value === undefined ? '' : toWireJson(value);
 
 /**
  * The AG-UI serializer for ONE run: feed it every served agentfootprint event
@@ -264,21 +167,6 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
     }
     return best;
   };
-
-  /** The record's address of `event`, as AG-UI metadata. */
-  const addressOf = (event: AgentfootprintEvent, extra?: Partial<AgUiAddress>): AgUiMetadata => ({
-    agentfootprint: {
-      runtimeStageId: event.meta.runtimeStageId,
-      subflowPath: [...event.meta.subflowPath],
-      ...extra,
-    },
-  });
-
-  /** The fields every event of `scope` carries. */
-  const owned = (scope: Scope, event?: AgentfootprintEvent) => ({
-    ...(event !== undefined && { timestamp: event.meta.wallClockMs }),
-    ...(scope.subagentRunId !== undefined && { subagentRunId: scope.subagentRunId }),
-  });
 
   // ── closers — each leaves its entity closed and writes the events that say so ──
 
@@ -407,297 +295,53 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
 
   // ── the mapping ──
 
-  const translate = (event: AgentfootprintEvent, out: AgUiEvent[]): void => {
-    const path = event.meta.subflowPath;
-    const address = event.meta.runtimeStageId;
-    const payload = record(event.payload);
-    switch (event.type) {
-      case 'agentfootprint.agent.turn_start': {
-        if (path.length === 0) {
-          root.isAgent = true;
-          return;
-        }
-        const previous = scopes.find((s) => s !== root && sameMount(s.mount, path));
-        if (previous !== undefined) endScope(previous, out, unfinished);
-        const parent = scopeOf(path);
-        const scope = newScope(
-          path,
-          ids.next('agent', address).id,
-          path.join('/'),
-          parent.subagentRunId,
-        );
-        scope.isAgent = true;
-        scopes.push(scope);
-        out.push({
-          type: 'SUBAGENT_STARTED',
-          subagentRunId: scope.subagentRunId as string,
-          name: scope.name as string,
-          ...(parent.subagentRunId !== undefined && { parentSubagentRunId: parent.subagentRunId }),
-          timestamp: event.meta.wallClockMs,
-          metadata: addressOf(event),
-        });
-        return;
-      }
-      case 'agentfootprint.agent.turn_end': {
-        const rootEnd = !hostDelivery && event.meta.rootTurn === true;
-        const scope = rootEnd ? root : scopeOf(path);
-        if (!scope.isAgent && !rootEnd) {
-          // This reader missed the open, and the record doesn't name it as root.
-          pushCustom(event, scope, out);
-          return;
-        }
-        closeText(scope, out);
-        closeReasoning(scope, out);
-        const refused = payload.refused !== undefined;
-        const answer = refused ? undefined : text(payload.finalContent);
-        if (!hostDelivery && answer !== undefined) {
-          const written = scope.streamedText ?? (rootEnd ? rootCallText : undefined);
-          const rest = unstreamedText(written, answer);
-          if (rest !== undefined) wholeText(scope, rest, event, out);
-        }
-        if (scope === root) {
-          rootResult = answer;
-          closeSteps(scope, out);
-          return;
-        }
-        endScope(scope, out, (subagentRunId) => ({
-          type: 'SUBAGENT_FINISHED',
-          subagentRunId,
-          ...(!hostDelivery && answer !== undefined && { result: answer }),
-          timestamp: event.meta.wallClockMs,
-        }));
-        return;
-      }
-      case 'agentfootprint.agent.iteration_start':
-        openStep(scopeOf(path), `iteration ${String(payload.iterIndex)}`, event, out);
-        return;
-      case 'agentfootprint.agent.iteration_end':
-        finishStep(scopeOf(path), `iteration ${String(payload.iterIndex)}`, event, out);
-        return;
-      case 'agentfootprint.composition.enter':
-        openStep(scopeOf(path), compositionStep(payload.kind, path), event, out);
-        return;
-      case 'agentfootprint.composition.exit': {
-        // A turn under this composition that is still open never answered — a
-        // branch a tolerant merge let fail. Said, never left dangling.
-        for (const inner of scopesUnder(path)) closeScope(inner, out, unfinished);
-        finishStep(scopeOf(path), compositionStep(payload.kind, path), event, out);
-        return;
-      }
-      case 'agentfootprint.stream.llm_start': {
-        const scope = scopeOf(path);
-        closeText(scope, out);
-        closeReasoning(scope, out);
-        if (scope === root) rootCallText = undefined;
-        scope.streamedText = undefined;
-        scope.callMessageId = undefined;
-        scope.llmAddress = address;
-        return;
-      }
-      case 'agentfootprint.stream.token': {
-        if (hostDelivery) return;
-        const content = text(payload.content);
-        if (content === undefined) return;
-        const scope = scopeOf(path);
-        const index = typeof payload.tokenIndex === 'number' ? payload.tokenIndex : Number.NaN;
-        const open = scope.text;
-        if (open === undefined || open.address !== address || !(index > open.lastTokenIndex)) {
-          // A new message: the first token of a call, another stage's tokens (an
-          // answer released after validation), or a stream that restarted.
-          closeText(scope, out);
-          const { id } = ids.next('text', address);
-          scope.text = { id, address, lastTokenIndex: Number.isNaN(index) ? -1 : index };
-          scope.callMessageId = id;
-          out.push({
-            type: 'TEXT_MESSAGE_START',
-            messageId: id,
-            role: 'assistant',
-            ...owned(scope, event),
-            metadata: addressOf(event),
-          });
-        } else {
-          open.lastTokenIndex = index;
-        }
-        scope.streamedText = (scope.streamedText ?? '') + content;
-        out.push({
-          type: 'TEXT_MESSAGE_CONTENT',
-          messageId: (scope.text as OpenText).id,
-          delta: content,
-          ...owned(scope, event),
-        });
-        return;
-      }
-      case 'agentfootprint.stream.llm_end': {
-        const scope = scopeOf(path);
-        if (hostDelivery) return;
-        closeText(scope, out);
-        // A scope that did not see an agent turn open can already have written
-        // the text of a complete-only call by the time its root end arrives.
-        const content = text(payload.content);
-        const quiet = scope.streamedText === undefined && payload.contentWithheld !== true;
-        if (!scope.isAgent && quiet && content) {
-          wholeText(scope, content, event, out);
-          if (scope === root) rootCallText = content;
-        }
-        return;
-      }
-      case 'agentfootprint.stream.thinking_delta': {
-        const content = text(payload.content);
-        if (!reasoning || content === undefined) return;
-        const scope = scopeOf(path);
-        if (scope.reasoning === undefined || scope.reasoning.iteration !== payload.iteration) {
-          closeReasoning(scope, out);
-          const { id } = ids.next('reasoning', address);
-          scope.reasoning = { id, iteration: payload.iteration };
-          out.push({
-            type: 'REASONING_START',
-            messageId: id,
-            ...owned(scope, event),
-            metadata: addressOf(event),
-          });
-          out.push({
-            type: 'REASONING_MESSAGE_START',
-            messageId: id,
-            role: 'reasoning',
-            ...owned(scope, event),
-          });
-        }
-        out.push({
-          type: 'REASONING_MESSAGE_CONTENT',
-          messageId: scope.reasoning.id,
-          delta: content,
-          ...owned(scope, event),
-        });
-        return;
-      }
-      case 'agentfootprint.stream.thinking_end': {
-        if (!reasoning) return;
-        const scope = scopeOf(path);
-        if (scope.reasoning !== undefined && scope.reasoning.iteration === payload.iteration) {
-          closeReasoning(scope, out);
-          return;
-        }
-        // Nothing streamed for this call: the blocks are the reasoning, one
-        // message each, in one span. A redacted block carries no text to show.
-        const blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
-        const thoughts = blocks
-          .map((block) => record(block))
-          .filter((block) => block.type === 'thinking')
-          .map((block) => text(block.content))
-          .filter((content): content is string => content !== undefined && content.length > 0);
-        if (thoughts.length === 0) return;
-        closeReasoning(scope, out);
-        const messageIds = thoughts.map(() => ids.next('reasoning', address).id);
-        const span = messageIds[0] as string;
-        out.push({
-          type: 'REASONING_START',
-          messageId: span,
-          ...owned(scope, event),
-          metadata: addressOf(event),
-        });
-        thoughts.forEach((content, i) => {
-          const messageId = messageIds[i] as string;
-          out.push({
-            type: 'REASONING_MESSAGE_START',
-            messageId,
-            role: 'reasoning',
-            ...owned(scope, event),
-          });
-          out.push({
-            type: 'REASONING_MESSAGE_CONTENT',
-            messageId,
-            delta: content,
-            ...owned(scope, event),
-          });
-          out.push({ type: 'REASONING_MESSAGE_END', messageId, ...owned(scope, event) });
-        });
-        out.push({ type: 'REASONING_END', messageId: span, ...owned(scope, event) });
-        return;
-      }
-      case 'agentfootprint.stream.tool_start': {
-        const scope = scopeOf(path);
-        // The call's arguments are complete: its text message and its reasoning are over.
-        closeText(scope, out);
-        closeReasoning(scope, out);
-        // Every call of one LLM response belongs to ONE assistant message: the
-        // call's text message when it wrote any, else a message minted at the
-        // LLM call's own address for the first call and held for the rest.
-        if (scope.callMessageId === undefined)
-          scope.callMessageId = ids.next('text', scope.llmAddress ?? address).id;
-        const { id, n } = ids.next('tool', address);
-        scope.calls.push({ id, n, address, servedId: payload.toolCallId });
-        const toolCallName = text(payload.toolName) ?? '';
-        const view = argsShownOf(payload, id, options.toolArguments);
-        out.push({
-          type: 'TOOL_CALL_START',
-          toolCallId: id,
-          toolCallName,
-          parentMessageId: scope.callMessageId,
-          ...owned(scope, event),
-          metadata: addressOf(event, view.address),
-        });
-        out.push({
-          type: 'TOOL_CALL_ARGS',
-          toolCallId: id,
-          delta: toWireJson(view.args),
-          ...owned(scope, event),
-        });
-        out.push({ type: 'TOOL_CALL_END', toolCallId: id, ...owned(scope, event) });
-        return;
-      }
-      case 'agentfootprint.stream.tool_end': {
-        const scope = scopeOf(path);
-        const call = takeCall(scope, address, payload.toolCallId);
-        if (call === undefined) {
-          // A result the record cannot tie to a call this run opened — never
-          // attached to a call it may not belong to (CUSTOM only if listed).
-          pushCustom(event, scope, out);
-          return;
-        }
-        // A frontend tool's result is the one the client sent: it holds it already.
-        if (call.client === true) return;
-        // A FAILED call's result is the thrown text — a connection string, a
-        // stack line, a provider's body. A person reads the fixed words unless
-        // the app chose to serve the record's own.
-        // Any `error` but an explicit `false` counts — under a policy that
-        // selects the key, the flag itself is served as the placeholder.
-        const failed =
-          payload.error !== undefined && payload.error !== false && toolErrors !== 'served';
-        out.push({
-          type: 'TOOL_CALL_RESULT',
-          messageId:
-            call.n < 0 ? ids.next('result', address).id : ids.at('result', call.n, call.address),
-          toolCallId: call.id,
-          content: failed
-            ? failedCallWords(payload)
-            : resultText(
-                options.toolResults === undefined
-                  ? payload.result
-                  : options.toolResults(payload, {
-                      toolCallId: call.id,
-                      ...(typeof payload.toolName === 'string' && { toolName: payload.toolName }),
-                    }),
-              ),
-          role: 'tool',
-          ...owned(scope, event),
-        });
-        return;
-      }
-      case 'agentfootprint.pause.request':
-        pause = { event, scope: scopeOf(path) };
-        return;
-      case 'agentfootprint.error.fatal': {
-        // Only a FIXED sentence goes to a browser. The record's own fallback
-        // quotes the raw thrown message ("The AI call failed: …"), which may
-        // hold anything a provider or a tool put in it.
-        const said = text(payload.error);
-        if (said !== undefined && isFixedFailure(said)) fatal = said;
-        return;
-      }
-      default:
-        pushCustom(event, scopeOf(path), out);
-    }
-  };
+  const translate = eventTranslator({
+    options,
+    root,
+    scopes,
+    ids,
+    hostDelivery,
+    reasoning,
+    toolErrors,
+    scopeOf,
+    addressOf,
+    owned,
+    closeText,
+    closeReasoning,
+    closeSteps,
+    closeScope,
+    scopesUnder,
+    endScope,
+    unfinished,
+    openStep,
+    finishStep,
+    wholeText,
+    pushCustom,
+    get rootCallText() {
+      return rootCallText;
+    },
+    set rootCallText(value) {
+      rootCallText = value;
+    },
+    get rootResult() {
+      return rootResult;
+    },
+    set rootResult(value) {
+      rootResult = value;
+    },
+    get pause() {
+      return pause;
+    },
+    set pause(value) {
+      pause = value;
+    },
+    get fatal() {
+      return fatal;
+    },
+    set fatal(value) {
+      fatal = value;
+    },
+  });
 
   /**
    * Re-open what the paused run left open — the scopes (same `subagentRunId`),
@@ -904,132 +548,40 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       settled = true;
       const out: AgUiEvent[] = [];
       start(out);
-      switch (settlement.kind) {
-        case 'failed':
-          if (settlement.refusal !== undefined && settlement.refusal !== 'ERR_ANSWER_VALIDATION') {
-            out.push({
-              type: 'RUN_ERROR',
-              code: settlement.refusal,
-              message:
-                settlement.refusal === 'ERR_STREAM_LIMIT'
-                  ? 'The stream exceeded its configured delivery limit.'
-                  : settlement.refusal === 'ERR_FRONTEND_TOOLS_UNSUPPORTED'
-                  ? 'This hosting strategy does not support per-request frontend tools.'
-                  : settlement.refusal === 'ERR_IDENTITY_NOT_VERIFIED'
-                  ? 'The caller could not be verified.'
-                  : settlement.refusal === 'ERR_IDENTITY_VERIFIER_UNAVAILABLE'
-                  ? 'Identity verification is unavailable. Try again when the service is reachable.'
-                  : 'The host refused this request.',
-            });
-            return out;
-          }
-          // A refusal by its code, in fixed words; otherwise the record's own
-          // words for the failure — never the thrown value.
-          out.push(
-            settlement.refusal === 'ERR_ANSWER_VALIDATION'
-              ? { type: 'RUN_ERROR', message: AG_UI_ANSWER_WITHHELD, code: settlement.refusal }
-              : { type: 'RUN_ERROR', message: fatal ?? AG_UI_RUN_FAILED },
-          );
-          return out;
-        case 'paused': {
-          const { record, clientCall } = pausedRecord(settlement.awaiting);
-          suspended = record;
-          if (clientCall !== undefined) {
-            // A tool the client runs: the run COMPLETED this segment and left
-            // the call for the application to answer in its next input.
-            endAllNested(out, () => (subagentRunId) => ({
-              type: 'SUBAGENT_FINISHED',
-              subagentRunId,
-              outcome: { type: 'suspended' },
-            }));
-            closeContents(root, out);
-            out.push({
-              type: 'RUN_FINISHED',
-              threadId,
-              runId,
-              outcome: { type: 'success', pendingToolCallIds: [clientCall] },
-            });
-            return out;
-          }
-          const interrupt = interruptOf();
-          endAllNested(out, (scope) => (subagentRunId) => ({
-            type: 'SUBAGENT_FINISHED',
-            subagentRunId,
-            outcome: {
-              type: 'suspended',
-              ...(pause?.scope === scope && { interruptIds: [interrupt.id] }),
-            },
-          }));
-          closeContents(root, out);
-          out.push({
-            type: 'RUN_FINISHED',
-            threadId,
-            runId,
-            outcome: { type: 'interrupt', interrupts: [interrupt] },
-          });
-          return out;
-        }
-        case 'cancelled':
-          endAllNested(out, () => (subagentRunId) => ({
-            type: 'SUBAGENT_ERROR',
-            subagentRunId,
-            message: AG_UI_SUBAGENT_CANCELLED,
-            code: 'cancelled',
-          }));
-          closeContents(root, out);
-          out.push({
-            type: 'RUN_FINISHED',
-            threadId,
-            runId,
-            outcome: { type: 'cancelled' },
-          });
-          return out;
-        case 'finished':
-          if (hostDelivery) {
-            rootResult = settlement.output;
-            if (settlement.output) {
-              const id = ids.next('text', 'host-delivery').id;
-              out.push(
-                { type: 'TEXT_MESSAGE_START', messageId: id, role: 'assistant' },
-                { type: 'TEXT_MESSAGE_CONTENT', messageId: id, delta: settlement.output },
-                { type: 'TEXT_MESSAGE_END', messageId: id },
-              );
-            }
-          }
-          endAllNested(out, () => unfinished);
-          closeContents(root, out);
-          out.push({
-            type: 'RUN_FINISHED',
-            threadId,
-            runId,
-            ...(rootResult !== undefined && { result: rootResult }),
-          });
-          return out;
-      }
+      return settleTranslation(settlement, out, {
+        root,
+        threadId,
+        runId,
+        ids,
+        hostDelivery,
+        pausedRecord,
+        endAllNested,
+        closeContents,
+        interruptOf,
+        unfinished,
+        get rootResult() {
+          return rootResult;
+        },
+        set rootResult(value) {
+          rootResult = value;
+        },
+        get suspended() {
+          return suspended;
+        },
+        set suspended(value) {
+          suspended = value;
+        },
+        get fatal() {
+          return fatal;
+        },
+        get pause() {
+          return pause;
+        },
+      });
     },
     suspension: (awaiting) => {
       if (settled) return suspended;
       return pausedRecord(awaiting).record;
     },
   };
-}
-
-/**
- * The question a pause put to a person, from whichever home its kind keeps it
- * in: a plain ask (`askHuman` / `pauseHere` / an input request) at the top, a
- * middleware's ask on `ask.question`, a check-in as the plain-words claim of
- * what the tool will do (`checkIn.evidence.willDo`).
- */
-function questionOf(payload: Readonly<Record<string, unknown>>): string | undefined {
-  return (
-    text(payload.question) ??
-    text(record(payload.ask).question) ??
-    text(record(record(payload.checkIn).evidence).willDo)
-  );
-}
-
-/** A composition's step name: its kind, and where it is mounted when it is not the run itself. */
-function compositionStep(kind: unknown, path: readonly string[]): string {
-  const name = typeof kind === 'string' && kind.length > 0 ? kind : 'Composition';
-  return path.length === 0 ? name : `${name}:${path.join('/')}`;
 }

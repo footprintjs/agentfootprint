@@ -181,7 +181,7 @@
  * came off before the judge.
  *
  * `agent-findings` REGENERATED ALONE for step 3 (the answer turn served from
- * the ledger — `findings/serve.ts`, joined by `callLLM · buildCallLLMStage`
+ * the ledger — `findings/serve.ts`, joined by `callLLM/prepareCall.ts · prepareCall`
  * and recomposed by `servedView · viewOf`); none of the 15 moved (run on the
  * step-3 tree first: 16/16 green, then the one scenario under
  * `AF_TOOLS_REFERENCE=update -t agent-findings` with the 15 copied aside and
@@ -1651,8 +1651,42 @@ function normalise(value: unknown, key?: string): unknown {
   return value;
 }
 
+type HistoricalCommit = { overwrite: Record<string, unknown>; trace: unknown[] };
+
+/** The contingent findings fixture has one native answer witness added since its archived capture. */
+function removeContingentAnswerWitness(
+  snapshot: Snapshot,
+  projectedLog: readonly HistoricalCommit[],
+): void {
+  const key = 'sourceLinkRows';
+  const commitIndex = 50;
+  const traceIndex = 4;
+  const row = {
+    kind: 'source-link',
+    version: 1,
+    linkBasis: 'match',
+    check: 'value-found',
+    consumer: 'call-llm#58',
+    output: { key: 'llmLatestContent', checkedIn: 'written', span: [21, 26] },
+    input: { key: 'history', element: 4 },
+  };
+  const commit = snapshot.commitLog[commitIndex]!;
+  const projected = projectedLog[commitIndex]!;
+  expect(commit).toMatchObject({ stageId: 'sf-route', runtimeStageId: 'sf-route#59' });
+  expect(commit.trace[traceIndex]).toEqual({ path: key, verb: 'set' });
+  expect(commit.trace.filter(({ path }) => path === key)).toHaveLength(1);
+  expect(commit.overwrite[key]).toEqual([row]);
+  expect(commit.updates).not.toHaveProperty(key);
+  expect(snapshot.commitLog[commitIndex - 1]?.runtimeStageId).toBe(row.consumer);
+  expect((commit.overwrite.llmLatestContent as string).slice(21, 26)).toBe('fc2/9');
+  expect(projected.overwrite[key]).toEqual([row]);
+  expect(projected.trace[traceIndex]).toEqual({ path: key, verb: 'set' });
+  delete projected.overwrite[key];
+  projected.trace.splice(traceIndex, 1);
+}
+
 /** What a scenario is judged by: the whole log, and the served view of every epoch. */
-function projection(snapshot: Snapshot): unknown {
+function projection(snapshot: Snapshot, scenario?: string): unknown {
   const epochs = epochLocations(snapshot);
   const record = normalizeCallOccurrences(
     normalise({
@@ -1665,10 +1699,10 @@ function projection(snapshot: Snapshot): unknown {
       })),
     }),
   );
-  const prior = record as {
-    commitLog: { overwrite: Record<string, unknown>; trace: unknown[] }[];
-  };
+  const prior = record as { commitLog: HistoricalCommit[] };
   removeVerifiedSourceLinkConsumers(snapshot, prior.commitLog, epochs);
+  if (scenario === 'agent-findings-contingent')
+    removeContingentAnswerWitness(snapshot, prior.commitLog);
   return prior;
 }
 
@@ -1775,7 +1809,7 @@ describe('byte-identity — exact whole-record contract for native component own
       const { snapshot } = off;
       const additions = V15_NATIVE_CAPTURES.get(name);
       if (additions) assertNativeReadWindowMetadata(snapshot, additions);
-      const observed = projection(snapshot);
+      const observed = projection(snapshot, name);
       const path = referencePath(name);
       expect(existsSync(path), `no reference for ${name}`).toBe(true);
       const reference: unknown = JSON.parse(readFileSync(path, 'utf8'));
@@ -1833,7 +1867,7 @@ describe('byte-identity — exact whole-record contract for native component own
 
       const current = await drive(Agent.create);
       if (additions) assertNativeReadWindowMetadata(current.snapshot, additions);
-      const currentProjection = projection(current.snapshot);
+      const currentProjection = projection(current.snapshot, name);
       const fingerprint = DEFAULT_STANDING.projections[name];
       if (fingerprint === undefined) {
         expect(currentProjection).toEqual(expected);

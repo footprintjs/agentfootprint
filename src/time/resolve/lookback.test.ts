@@ -5,7 +5,7 @@ import { DEFAULT_TIME_POLICY } from '../resolveRecord.js';
 
 const CLOCK = { now: '2026-11-06T18:01:00Z', zone: 'America/Los_Angeles' };
 const READER = { id: 'zone-test', kind: 'rule' as const };
-const RANGE = { from: '2026-11-06T17:01:00Z', to: '2026-11-06T18:01:00.001Z' };
+const RANGE = { from: '2026-11-06T17:01:00Z', to: '2026-11-06T18:01:00Z' };
 const resolve = (parts: TimeParts, clock = CLOCK) => resolveMention([parts], clock, READER);
 const relative = { unit: 'hour', count: 1 } as const;
 
@@ -125,7 +125,7 @@ describe('explicit zones on elapsed and calendar time', () => {
     ]);
     expect(result.candidates[0]!.range).toEqual({
       from: '2026-07-06T17:01:00Z',
-      to: '2026-07-06T18:01:00.001Z',
+      to: '2026-07-06T18:01:00Z',
     });
   });
 
@@ -159,9 +159,10 @@ describe('explicit zones on elapsed and calendar time', () => {
     expect(result.unsupported).toContain('a look-back with other parts');
   });
 
-  it('leaves plain lookback endpoints and metadata unchanged', () => {
+  it('records the clock’s exclusive cutoff for a plain look-back', () => {
     expect(resolve({ relative }).candidates[0]).toMatchObject({
       range: RANGE,
+      endpoint: { cutoff: CLOCK.now, end: 'exclusive', precision: 'second' },
       zone: CLOCK.zone,
       anchor: 'message',
       said: ['duration'],
@@ -188,7 +189,7 @@ describe('explicit zones on elapsed and calendar time', () => {
     expect(elapsed.candidates).toHaveLength(1);
     expect(elapsed.candidates[0]!.range).toEqual({
       from: '2026-03-07T12:00:00Z',
-      to: '2026-03-08T12:00:00.001Z',
+      to: '2026-03-08T12:00:00Z',
     });
   });
 });
@@ -238,7 +239,7 @@ describe('fixed and regional zones at the autumn clock change', () => {
     const result = read({ relative, zoneToken: 'EST' }, '2026-11-02T17:00:00Z');
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates.map((candidate) => bounds(candidate.range))).toEqual([
-      ['2026-11-02T16:00:00.000Z', '2026-11-02T17:00:00.001Z'],
+      ['2026-11-02T16:00:00.000Z', '2026-11-02T17:00:00.000Z'],
     ]);
   });
 });

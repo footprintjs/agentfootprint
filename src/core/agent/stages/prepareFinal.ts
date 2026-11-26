@@ -40,7 +40,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../../time/rows.js';
 import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
-import { assistantReplayFields } from '../assistantReplay.js';
+import { modelTurnMessages } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
 import {
   scriptsBlock,
@@ -50,7 +50,7 @@ import {
   type AttachmentBoundary,
 } from '../scripts/attachment.js';
 import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
-import type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
+import type { FinalStageArms, DisplayNameOf, FinalTurn } from './finalStageContract.js';
 import { finalStandingOf, type StandingLineEvidence } from './prepareFinal/standing.js';
 export type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
 
@@ -113,41 +113,25 @@ function scriptTextOf(scope: object): '' | ((before: string) => string) {
   };
 }
 
+const ORDINARY: FinalTurn = { releaseTokens: false, asksOrigin: false };
 const captureTurnPayload = (
   scope: TypedScope<AgentState>,
   answer: string,
   commitValidated = false,
   answerCoverage?: AnswerCoverage,
   answerAssessment?: AnswerAssessmentData,
-  releaseTokens = false,
+  turn: FinalTurn = ORDINARY,
   standing?: StandingLineEvidence,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
-  // v2.14 — attach thinking blocks to the assistant final message
-  // (if any). For non-Anthropic providers this is informational; for
-  // Anthropic + extended-thinking-with-tool-use, signature round-trip
-  // requires the blocks to persist on the assistant turn even when
-  // it's the FINAL turn (continuation in the next user message).
-  const thinkingBlocks = scope.thinkingBlocks;
-  const hasThinking = thinkingBlocks !== undefined && thinkingBlocks.length > 0;
-  // The turn payload memory writes persist: the user's message
-  // paired with the agent's final answer.
-  scope.newMessages = [
-    { role: 'user', content: scope.userMessage },
-    {
-      role: 'assistant',
-      content: scope.finalContent,
-      ...(hasThinking && { thinkingBlocks }),
-      ...assistantReplayFields(scope),
-    },
-  ];
+  scope.newMessages = modelTurnMessages(scope, turn.asksOrigin);
 
   if (commitValidated) {
     scope.answerValidationCommitted = true;
   }
   const refused = RAILS_REFUSED.has(scope);
-  if ((commitValidated || releaseTokens) && !refused) {
+  if ((commitValidated || turn.releaseTokens) && !refused) {
     // The stream carries exactly the captured candidate, including any
     // earlier output transformation. Replaying provider chunks would undo it.
     // A refused answer is never released.
@@ -207,7 +191,7 @@ const captureTurnPayload = (
   });
 };
 
-const prepareFinal = (scope: TypedScope<AgentState>, releaseTokens = false): void => {
+const prepareFinal = (scope: TypedScope<AgentState>, turn = ORDINARY): void => {
   const scripts = scriptTextOf(scope);
   const answer =
     scripts === ''
@@ -222,7 +206,7 @@ const prepareFinal = (scope: TypedScope<AgentState>, releaseTokens = false): voi
           undefined,
           scripts,
         );
-  captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
+  captureTurnPayload(scope, answer, false, undefined, undefined, turn);
 };
 export const prepareFinalStage = (scope: TypedScope<AgentState>): void => prepareFinal(scope);
 
@@ -232,10 +216,12 @@ export const prepareFinalStage = (scope: TypedScope<AgentState>): void => prepar
  * final guard prevents a missing report or prior refusal from reaching the
  * capture, its public events or the memory writers mounted after it.
  */
-export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): void => {
+const prepareFinalWithValidation = (scope: TypedScope<AgentState>, turn = ORDINARY): void => {
   if (withheldByValidation(scope)) return;
-  captureTurnPayload(scope, scope.llmLatestContent, true);
+  captureTurnPayload(scope, scope.llmLatestContent, true, undefined, undefined, turn);
 };
+export const prepareFinalWithValidationStage = (scope: TypedScope<AgentState>): void =>
+  prepareFinalWithValidation(scope);
 
 /**
  * The validated door's guard, ONE owner for both of its stages (with and
@@ -289,10 +275,7 @@ function withheldByValidation(scope: TypedScope<AgentState>): boolean {
  * chart (`./answerCoverage.ts` · `withAnswerCoverage`). The key is read only
  * under this arm: a run that asked for neither never reads it.
  */
-const prepareFinalWithLimitsAsData = (
-  scope: TypedScope<AgentState>,
-  releaseTokens = false,
-): void => {
+const prepareFinalWithLimitsAsData = (scope: TypedScope<AgentState>, turn = ORDINARY): void => {
   const limits = scope.answerCoverage;
   captureTurnPayload(
     scope,
@@ -300,7 +283,7 @@ const prepareFinalWithLimitsAsData = (
     false,
     limits === undefined ? undefined : copyAnswerCoverage(limits),
     undefined,
-    releaseTokens,
+    turn,
   );
 };
 export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>): void =>
@@ -327,7 +310,7 @@ export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>)
  */
 const prepareFinalWithLimits = (
   scope: TypedScope<AgentState>,
-  releaseTokens = false,
+  turn = ORDINARY,
   displayNameOf?: DisplayNameOf,
 ): void => {
   const declared = scope.coverageDeclared;
@@ -345,7 +328,7 @@ const prepareFinalWithLimits = (
           scripts,
         )
       : scope.llmLatestContent;
-  captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
+  captureTurnPayload(scope, answer, false, undefined, undefined, turn);
 };
 export const prepareFinalWithLimitsStage = (scope: TypedScope<AgentState>): void =>
   prepareFinalWithLimits(scope);
@@ -393,7 +376,7 @@ async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLine
  */
 const prepareFinalWithLimitsInZone = async (
   scope: TypedScope<AgentState>,
-  releaseTokens = false,
+  turn = ORDINARY,
   displayNameOf?: DisplayNameOf,
 ): Promise<void> => {
   const declared = scope.coverageDeclared ?? [];
@@ -412,7 +395,7 @@ const prepareFinalWithLimitsInZone = async (
           scripts,
         )
       : scope.llmLatestContent;
-  captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
+  captureTurnPayload(scope, answer, false, undefined, undefined, turn);
 };
 export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>): Promise<void> =>
   prepareFinalWithLimitsInZone(scope);
@@ -445,7 +428,7 @@ export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>)
 export function prepareFinalWithLimitsAndAssumedStage(
   readsRewrites: boolean,
   inZone = false,
-  releaseTokens = false,
+  turn = ORDINARY,
   displayNameOf?: DisplayNameOf,
 ): FinalStage {
   return async (scope) => {
@@ -477,7 +460,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
             scripts,
           )
         : scope.llmLatestContent;
-    captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
+    captureTurnPayload(scope, answer, false, undefined, undefined, turn);
   };
 }
 type BoundFinalStageArms = Omit<FinalStageArms, 'displayNameOfFor'> & {
@@ -575,22 +558,20 @@ function withScripts(
 
 /** Pick the existing composer; output admission wraps it without recomposing the answer. */
 function finalStageFor(arms: BoundFinalStageArms): FinalStage {
-  const releaseTokens = arms.releaseOutputTokens === true;
+  const asksOrigin = arms.hostEndedTurns === true;
+  const turn: FinalTurn = { releaseTokens: arms.releaseOutputTokens === true, asksOrigin };
+  const bound = turn.releaseTokens || asksOrigin;
   const displayNameOf = arms.displayNameOf;
-  // A stage's second argument belongs to the engine. Bind delivery (and the
-  // app's words for a call) here, never add a policy parameter to the function
-  // the executor invokes.
+  // A stage's second argument is the engine's: bind policy here, never as a parameter it fills.
   const select = (
     original: FinalStage,
     body: (
       scope: TypedScope<AgentState>,
-      releaseTokens: boolean,
+      turn: FinalTurn,
       displayNameOf?: DisplayNameOf,
     ) => void | Promise<void>,
   ): FinalStage =>
-    releaseTokens || displayNameOf !== undefined
-      ? (scope) => body(scope, releaseTokens, displayNameOf)
-      : original;
+    bound || displayNameOf !== undefined ? (scope) => body(scope, turn, displayNameOf) : original;
   if (arms.answerLayer !== undefined) {
     return prepareFinalWithAnswerLayerStage(
       {
@@ -604,29 +585,31 @@ function finalStageFor(arms: BoundFinalStageArms): FinalStage {
         ...(arms.timeLayer === true && { inZone: true }),
         ...(displayNameOf !== undefined && { displayNameOf }),
       },
-      releaseTokens,
+      turn,
     );
   }
   const inZone = arms.timeLayer === true;
   return arms.hasAnswerValidation === true
-    ? prepareFinalWithValidationStage
+    ? bound
+      ? (scope) => prepareFinalWithValidation(scope, turn)
+      : prepareFinalWithValidationStage
     : arms.coverageLimitsAsData === true
-    ? releaseTokens
-      ? (scope) => prepareFinalWithLimitsAsData(scope, true)
+    ? bound
+      ? (scope) => prepareFinalWithLimitsAsData(scope, turn)
       : prepareFinalWithLimitsAsDataStage
     : arms.attachCoverageLimits === true
     ? arms.inputsLayer !== undefined
       ? prepareFinalWithLimitsAndAssumedStage(
           arms.inputsLayer.rewrites === true,
           inZone,
-          releaseTokens,
+          turn,
           displayNameOf,
         )
       : inZone
       ? select(prepareFinalWithLimitsInZoneStage, prepareFinalWithLimitsInZone)
       : select(prepareFinalWithLimitsStage, prepareFinalWithLimits)
-    : releaseTokens
-    ? (scope) => prepareFinal(scope, true)
+    : bound
+    ? (scope) => prepareFinal(scope, turn)
     : prepareFinalStage;
 }
 
@@ -670,14 +653,14 @@ export function prepareFinalWithAnswerLayerStage(
     /** A tool's `displayName` — the limits block names an item's calls in the app's words. */
     readonly displayNameOf?: DisplayNameOf;
   },
-  releaseTokens = false,
+  turn = ORDINARY,
 ): FinalStage {
   return async (scope) => {
     const filed = scope.$getValue('answerAssessment') as AnswerAssessmentData | undefined;
     const assessed = filed === undefined ? undefined : copyAssessment(filed);
     if (o.validation) {
       if (withheldByValidation(scope)) return;
-      captureTurnPayload(scope, scope.llmLatestContent, true, undefined, assessed);
+      captureTurnPayload(scope, scope.llmLatestContent, true, undefined, assessed, turn);
       return;
     }
     if (o.limitsAsData) {
@@ -688,7 +671,7 @@ export function prepareFinalWithAnswerLayerStage(
         false,
         limits === undefined ? undefined : copyAnswerCoverage(limits),
         assessed,
-        releaseTokens,
+        turn,
       );
       return;
     }
@@ -726,6 +709,6 @@ export function prepareFinalWithAnswerLayerStage(
             scripts,
           )
         : scope.llmLatestContent;
-    captureTurnPayload(scope, answer, false, undefined, assessed, releaseTokens, standing);
+    captureTurnPayload(scope, answer, false, undefined, assessed, turn, standing);
   };
 }

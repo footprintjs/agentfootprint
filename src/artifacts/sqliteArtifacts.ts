@@ -37,6 +37,7 @@ import {
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -309,6 +310,7 @@ export function sqliteArtifacts(options: SqliteArtifactsOptions): SqliteArtifact
   // sqliteSessions law about not needing two error handlers.
   return {
     journalMode,
+    ...scopeBudgetMember(retention),
 
     async put(scope, input): Promise<ArtifactPutResult> {
       open('store an artifact');

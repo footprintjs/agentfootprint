@@ -1498,8 +1498,8 @@ describe('batch settlement — under `.findings()` a settled call is not a resul
     expect(findingsFrame(requests[3]!.messages).data.undeclaredResultIds).toEqual(['c1', 'c2']);
     // And no request carried the marker. Requests 3 and 4 were built on the
     // COLLAPSE path (x1's ticket), which collapses the committed conversation
-    // — marker and all — and strips afterwards (`callLLM.ts` ·
-    // `buildCallLLMStage`); without that strip the marker reaches the provider.
+    // — marker and all — and strips afterwards (`callLLM/prepareCall.ts` ·
+    // `prepareCall`); without that strip the marker reaches the provider.
     for (const request of requests) {
       expect(request.messages.some((m) => 'notDispatched' in m || 'toolResultOrigin' in m)).toBe(
         false,

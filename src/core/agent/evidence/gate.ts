@@ -64,6 +64,8 @@ import { validateRecoveryInstruction } from './recovery.js';
 import type { StagedRefsMatch } from '../stagedRefs.js';
 import { stagedRefsTeachingClause } from '../stagedRefs.js';
 import type { EvidenceCorpus } from './evidenceIndex.js';
+import { sourceMatches } from './sourceMatches.js';
+import type { CheckSourceMatch } from './sourceMatches.js';
 import { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
 import { candidateForms, readAnswer } from './extract.js';
 import type { FigureCheck } from './figures.js';
@@ -274,12 +276,14 @@ export function checkAnswer(
      * `AnswerReadOptions`). Absent → keys are read too.
      */
     readonly typed?: boolean;
+    readonly onSourceMatch?: CheckSourceMatch;
   },
 ): EvidenceVerdict {
   const reading = readAnswer(answer, args.gate, {
     figures: args.figures?.numbers,
     exactTokens: args.evidence.values,
     typed: args.typed === true,
+    ...(args.onSourceMatch !== undefined && { captureSpans: true }),
   });
   const candidates = reading.candidates;
   const unsupported: UnsupportedValue[] = [];
@@ -289,7 +293,7 @@ export function checkAnswer(
   let fromThisTurn = 0;
   let fromPriorTurns = 0;
   let latestPriorTurn: number | undefined;
-  for (const candidate of candidates) {
+  for (const [index, candidate] of candidates.entries()) {
     // The value's forms, plus its glued-unit token's when it came from one
     // (9.110.0): the lookup meets `1007us` under both spellings; the index
     // was never widened. The exempt check over the same forms is the safe
@@ -332,6 +336,9 @@ export function checkAnswer(
     // Unclipped, with the forms as looked up: the contingent check asks the
     // corpus the same question, never a wider one.
     grounded.push({ value: candidate.value, forms });
+    const span = reading.candidateSpans?.[index];
+    if (span !== undefined && args.onSourceMatch !== undefined)
+      args.onSourceMatch(span, sourceMatches(args.evidence, forms, turn));
     if (turn >= args.evidence.currentTurn) {
       fromThisTurn += 1;
       continue;

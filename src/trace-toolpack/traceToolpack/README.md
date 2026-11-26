@@ -3,7 +3,7 @@
 `../traceToolpack.ts` remains the canonical entry and forwards only `traceToolpack`, `callTraceTool` and the existing lightweight `TRACE_TOOL_NAMES` export. This folder moves complete existing units; it does not add another query implementation.
 
 - `recursiveFactory.ts` keeps the factory, both recursive descent doors and offline invocation together. Its offline context is still created once.
-- `toolCallJournal.ts` owns the lazy history/ledger/event join and tool-call inspection. Its nested readers and caches stay inside the original reader function.
+- `toolCallJournal.ts` owns the lazy history/ledger/event join and tool-call inspection. Its nested readers and caches stay inside the original reader function. Rewrite attribution uses the shared transient occurrence index over the complete ledger, so filtering cannot hide an unavailable final decision.
 - `contextErrors.ts`, `findInTrace.ts`, `runOverview.ts`, `nodeView.ts`, `sliceView.ts`, `backtrackView.ts`, `valueQueries.ts` and `narrativeView.ts` own their existing tool views.
 - `findingEvidence.ts` reads the recorded integrity findings and dispositions. `innerRecords.ts` reads retained inner records and their control-dependence lookup.
 - `packIndex.ts` builds the same per-pack index. `navigationHints.ts`, `parameterSchemas.ts`, `valueLines.ts`, `writerHints.ts` and `structuralLimits.ts` supply the same navigation, schema and bounded display facts.

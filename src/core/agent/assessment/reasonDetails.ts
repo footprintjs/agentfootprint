@@ -95,7 +95,7 @@ export function assessmentValueOf(
   g: Gathered,
   sourceRead: SourceRead,
   detailRead: DetailRead,
-  unusedTools: readonly string[],
+  consultation: AssessmentReasonDetail | undefined,
 ): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
   const reasons = REASONS.flatMap((entry) => {
     const witness = g.fired.get(entry.reason);
@@ -106,8 +106,8 @@ export function assessmentValueOf(
         ? 'answer'
         : entry.source;
     const detail =
-      entry.reason === 'source-not-consulted' && unusedTools.length > 0
-        ? { unusedTools }
+      entry.reason === 'source-not-consulted'
+        ? consultation
         : detailOf(entry.reason, witness, detailRead);
     return [
       {

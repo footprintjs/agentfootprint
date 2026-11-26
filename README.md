@@ -82,9 +82,9 @@ have different jobs and must be configured for the claims your app needs to chec
 | [`Tool.search` and typed `.negativeClaims()`](docs-next/content/docs/build/negative-claims.mdx) | Composed search scope and library-written statements for cited structured negative claims, retaining gaps and withholding or reporting unsupported claims according to policy. | **Opt-in, available but not recommended pending benchmark gates.** Accuracy and usefulness remain unmeasured. Depends on truthful app-owned search declarations; other answer fields remain unchecked model text. |
 | [`.negativeClaims({ prose: true })`](docs-next/content/docs/build/negative-claims.mdx) | Bounded heuristic warnings on the model's own negative sentences. | Never verifies, blocks or rewrites an answer. The previous detector failed its benchmark; the revised path is unmeasured. No warning does not mean verified. |
 
-The links above describe this branch. Features marked **unreleased** in the
-[capability index](CAPABILITIES.md) are not yet available in the published package;
-check its availability column and the [release notes](CHANGELOG.md) for your
+The links above describe this branch. Capabilities waiting in
+[`.capabilities/`](.capabilities/README.md) are not yet available in the published package;
+check the [capability index](CAPABILITIES.md)'s Since column and the [release notes](CHANGELOG.md) for your
 installed version. The basic quick start below does not enable these checks.
 
 ## How this compares with LangChain and Mastra
@@ -107,18 +107,11 @@ exclusive capabilities or measured superiority in answer accuracy.
 ## Quick start — runs offline, no API key
 
 ```bash
-npm install 'agentfootprint@^15.0.0' 'footprintjs@^14.0.0'
+npm install agentfootprint footprintjs
 ```
 
-Agentfootprint 15 requires FootprintJS `^14.0.0` as a peer and Foottrace
-`^2.1.0` as a dependency. Install FootprintJS explicitly as shown above.
-During the release train, pair the published Agentfootprint 15 candidate with
-`footprintjs@14.0.0`. Use this command once npm's `next` tag points to the
-Agentfootprint 15 candidate.
-
-```bash
-npm install agentfootprint@next footprintjs@14.0.0
-```
+Agentfootprint requires FootprintJS `^14.3.0` as a peer, so install it
+explicitly as shown above. Foottrace comes with Agentfootprint as a dependency.
 
 ```typescript
 import { Agent, defineTool } from 'agentfootprint';

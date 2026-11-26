@@ -6,7 +6,7 @@ title: ServedGapCause
 
 > **ServedGapCause** = `"no-receipt-committed"` \| `"receipt-shape-rejected"`
 
-Defined in: [src/time-travel/servedView.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L217)
+Defined in: [src/time-travel/servedView.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L220)
 
 WHAT STOOD IN THE WAY, as far as the record shows — computed at the read that
 failed, so it is a value and not a sentence.
@@ -24,7 +24,10 @@ key — so they all land on `'no-receipt-committed'`. Claiming to tell them
 apart there would be this field repeating the defect it was added to fix.
 
 - `'no-receipt-committed'` — nothing was committed under the receipt key on
-  this epoch's call.
+  this epoch's call. The key may still hold an EARLIER call's receipt (a
+  request refused before its receipt was minted leaves that): a receipt
+  the key already held before this call, by its own basis (epoch and run),
+  is that earlier call's, never this one's.
 - `'receipt-shape-rejected'` — something WAS committed there and the read
   refused it, because it carries no basis and a value without one is not a
   receipt. This is the value that means DAMAGE: a recording that lost or

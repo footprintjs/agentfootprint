@@ -6,7 +6,7 @@ title: s3Artifacts
 
 > **s3Artifacts**(`options`): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
-Defined in: [src/artifacts/s3Artifacts.ts:308](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/s3Artifacts.ts#L308)
+Defined in: [src/artifacts/s3Artifacts.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/s3Artifacts.ts#L309)
 
 An artifact store in an S3 bucket.
 

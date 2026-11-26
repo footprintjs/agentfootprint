@@ -28,6 +28,7 @@ import type { DurationText } from './duration.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import type { Grain } from './present.js';
+import { endpointFits, type WindowEndpoint } from './windowEndpoint.js';
 
 // ─── The shapes (time design § 3.2) ──────────────────────────────────────
 
@@ -103,6 +104,7 @@ export interface ResolvedWindow {
   readonly window: TimeWindow;
   /** Always present: a look-back resolved against the clock. Spelled in the offset the person meant. */
   readonly range: TimeRange;
+  readonly endpoint?: WindowEndpoint;
   /** The zone the person meant, else the clock's. */
   readonly zone: ZoneName;
   /** The finest part the person said. */
@@ -410,6 +412,7 @@ export function candidateIsWellFormed(value: unknown): boolean {
   return (
     isWindow(value.window) &&
     isTimeRange(value.range) &&
+    (value.endpoint === undefined || endpointFits(value.endpoint, value.range)) &&
     isZoneName(value.zone) &&
     GRAINS.includes(value.grain as string) &&
     isPartList(value.said) &&

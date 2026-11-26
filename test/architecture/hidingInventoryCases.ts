@@ -75,7 +75,7 @@ export const inventoriedCalls = [
   {
     writer: `${agent}/stages/callLLM/commitResponse`,
     exportName: 'commitAcceptedResponse',
-    sites: [[`${agent}/stages/callLLM.ts`, 'buildCallLLMStage']],
+    sites: [[`${agent}/stages/callLLM/acceptResponse.ts`, 'acceptResponse']],
   },
 ] as const;
 

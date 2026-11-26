@@ -31,11 +31,14 @@ carrier. A new call starts fresh; post-first-chunk failures still never retry.
 ## Declarations pass through; a pair answers for both
 A decorator rebuilds the provider object, so it carries every declaration
 across: `carriesInMessages`, `carriesForcedToolChoice`, `supportsForcedToolChoice`, `promptCaching`,
-`thinkingHandler`, `thinkingMode`. Dropping one degrades it silently (no cache
+`thinkingHandler`, `thinkingMode`, `thinkingBinding`. Dropping one degrades it silently (no cache
 markers, no thinking stage, no build-time thinking refusal). `withFallback`
 combines what both sides declare — for `thinkingMode`, the LEAST either side
 promises for the model (`'none'` < `'adaptive'` < `'budget'`), so a fallback
-that cannot think is refused at build, not on the call it serves. It never maps
+that cannot think is refused at build, not on the call it serves; for
+`thinkingBinding`, the PRIMARY's answer for the model asked: every call goes
+to it first, and a call the fallback serves is checked by the fallback's own
+adapter. It never maps
 thinking itself: each side's adapter sends its own model's shape. A request an
 adapter refused BEFORE sending (`UnsupportedThinkingError`, `UnsupportedToolChoiceError`
 or `UnsafeThinkingReplayError`) is a wrong request,
@@ -68,6 +71,26 @@ for await (const chunk of robust.stream!(req, hooks)) {
   // A reset after the first chunk → thrown here, never replayed.
 }
 ```
+
+## Provider interventions precede response decoration
+Each response boundary uses `captureProviderResponse` before thinking tags or
+replay omission aggregation. Blocked and unknown outcomes keep the owned
+terminal projection without reading raw thinking or replay fields, attaching
+omission reports, or triggering another provider call. Retry shares this
+boundary through `replayAttempt.ts`; circuit breaker captures complete and
+stream responses directly. Before stream decoration, `captureProviderChunk`
+pins the response slot once and projects a terminal chunk without foreign
+spreads or unrelated getters. It retains only a safe numeric token index and
+the captured terminal response. Ordinary and usable masked chunks keep their
+identity at this boundary; existing thinking and replay decoration still applies.
+Ordinary responses retain identity when no metadata changes, and usable masked
+responses retain their thinking and replay metadata.
+
+Recovery and breaker-success notifications follow capture. If a callback throws
+after a completed blocked or unknown response, the existing typed refusal keeps
+the callback exception as its cause; another provider is never asked. Ordinary
+and masked results keep their existing callback-failure behavior. A guardrail
+limit thrown before a response remains the original typed refusal.
 
 ## Retry reads what the error declares
 `withRetry`'s default predicate (`withRetry.ts` · `defaultShouldRetry`, shared

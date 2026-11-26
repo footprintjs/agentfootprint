@@ -115,8 +115,9 @@ export interface ArtifactStoreHarness {
    * A fresh, empty store whose per-scope byte budget is `maxBytesPerScope`.
    *
    * The ceiling law needs a ceiling small enough to hit in a test, and a
-   * budget is configuration rather than a verb — there is no way to ask for it
-   * through the port. A store with no configurable ceiling declares the case.
+   * budget is configuration: a store may STATE its budget (the optional
+   * `scopeBudget`), but no store can be told to adopt one through the port. A
+   * store with no configurable ceiling declares the case.
    */
   boundedStore?(maxBytesPerScope: number): ArtifactStore | Promise<ArtifactStore>;
   /**

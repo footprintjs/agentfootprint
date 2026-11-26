@@ -30,7 +30,7 @@ and name which files carry which.
 `src/memory/wire/` (declared stage compositions).
 
 Mixed folders carrying Map: `src/core-flow/` (three declared control-flow shapes
-plus Parallel's declared half; `Parallel.ts` · `mergeWithLLM` runs in the walk
+plus Parallel's declared half; `Parallel/merge.ts` · `mergeWithLLM` runs in the walk
 and composes the merging model's turn) · `src/memory/pipeline/` (five
 declaration-only presets; `auto.ts` mounts a stage of its own and composes the
 message it injects) · `src/patterns/` (seven caller-prompted research
@@ -135,7 +135,7 @@ question 1 below turns on the difference, so the qualifier is part of the claim.
 Mixed folders carrying Lens: `src/core/slots/` (`buildSystemPromptSlot.ts`,
 `buildToolsSlot.ts`) · `src/core/agent/stages/` (the same Mixed folder listed
 under Walker: `toolCalls/routing/readSkillRoute.ts`'s refusals, `stepNudge.ts`, `evidenceRecheck.ts`,
-`wrapUp.ts`, and the wire assembly in `callLLM.ts` · `buildCallLLMStage`) ·
+`wrapUp.ts`, and the wire assembly in `callLLM/prepareCall.ts` · `prepareCall`) ·
 `src/core/agent/window/` (`notice.ts`, `summarize.ts`) ·
 `src/semantics/coverage/` (`answer.ts`) · `src/core/agent/`
 (`selfCallNotice.ts`, `stagedRefs.ts`, `presentTool.ts`, `repeatedCall.ts`,
@@ -152,7 +152,7 @@ prompt), `src/memory/facts/` (`formatFacts.ts`, and `llmFactExtractor.ts`'s
 extractor prompt), `src/memory/causal/` (`loadSnapshot.ts`) ·
 `src/memory/pipeline/` (`auto.ts` · `renderAutoMessage`) ·
 `src/patterns/` (`LlmRouter.ts` · `compileRouterPrompt`) ·
-`src/core-flow/` (`Parallel.ts` · `mergeWithLLM`) ·
+`src/core-flow/` (`Parallel/merge.ts` · `mergeWithLLM`) ·
 `src/injection-engine/factories/` (`defineRelevanceHint.ts` ·
 `defineRelevanceHint`) · the seven integrity check folders that compose their
 own finding prose — `src/integrity/empty-lookup/`,

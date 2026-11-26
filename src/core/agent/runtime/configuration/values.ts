@@ -2,6 +2,7 @@ import type { AgentConfiguration } from './types.js';
 
 /** Construction-only mutable storage; readers receive the readonly contract. */
 export class AgentConfigurationValues implements AgentConfiguration {
+  hostEndedTurns = false;
   declare provider: AgentConfiguration['provider'];
   declare model: AgentConfiguration['model'];
   declare temperature?: AgentConfiguration['temperature'];
@@ -51,6 +52,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare messageMiddleware: AgentConfiguration['messageMiddleware'];
   declare aroundTurnPort: AgentConfiguration['aroundTurnPort'];
   declare readTracking: AgentConfiguration['readTracking'];
+  declare writeTracking: AgentConfiguration['writeTracking'];
   declare commitValues: AgentConfiguration['commitValues'];
   declare writeProvenance: AgentConfiguration['writeProvenance'];
   declare credentialProvider?: AgentConfiguration['credentialProvider'];

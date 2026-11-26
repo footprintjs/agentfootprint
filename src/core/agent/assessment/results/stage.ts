@@ -86,7 +86,7 @@ export function readResultEvidence(
     admission.settlements === undefined,
   );
   readPeriodVerdicts(
-    periodRows(state, (row) => callIndexOf(row, resolveCurrent), admission.nativeResult),
+    periodRows(state, (row) => callIndexOf(row, resolveCurrent), admission.declaredResult),
     enteredArguments,
     g,
   );

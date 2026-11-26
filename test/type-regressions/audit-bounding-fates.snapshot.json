@@ -205,6 +205,7 @@
     "finalContent": "chars",
     "iterationCount": "kept",
     "refused.by": "kept",
+    "replyAuthor": "kept",
     "scripts.closedFence.char": "kept",
     "scripts.closedFence.length": "kept",
     "scripts.omitted": "kept",
@@ -812,6 +813,10 @@
     "strategyId": "kept",
     "strategyKind": "kept"
   },
+  "agentfootprint.memory.write_outcome": {
+    "memoryId": "kept",
+    "outcome": "kept"
+  },
   "agentfootprint.memory.written": {
     "actor": "kept",
     "contentSummary": "chars",
@@ -1064,6 +1069,21 @@
   "agentfootprint.stream.llm_start": {
     "brain.skillId": "kept",
     "brain.via": "kept",
+    "contextChange.appStatement": "kept",
+    "contextChange.binding": "kept",
+    "contextChange.by": "kept",
+    "contextChange.changes[].change": "kept",
+    "contextChange.changes[].id": "kept",
+    "contextChange.changes[].party.channel": "kept",
+    "contextChange.changes[].party.id": "kept",
+    "contextChange.changes[].position": "kept",
+    "contextChange.changes[].role": "kept",
+    "contextChange.changes[].slot": "kept",
+    "contextChange.changes[].source": "kept",
+    "contextChange.changes[].tool": "kept",
+    "contextChange.check": "kept",
+    "contextChange.omittedChanges": "kept",
+    "contextChange.refused": "kept",
     "estimatedPromptTokens": "kept",
     "iteration": "kept",
     "messagesCount": "kept",

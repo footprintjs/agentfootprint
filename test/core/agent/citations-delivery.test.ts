@@ -214,3 +214,48 @@ it('offers only the surviving result from an applied window on the same request'
     ],
   });
 });
+
+it('records both terminal citations and checked-answer source links on the same prose answer', async () => {
+  const tool = defineTool({
+    name: 'measure',
+    description: 'Read a measurement.',
+    inputSchema,
+    execute: () => reading(12),
+  });
+  let delivered = '';
+  const { provider } = scripted([
+    () => call('measurement', 'mm'),
+    (request) => {
+      delivered = `North recorded 12 mm ${onlyLabel(request)}.`;
+      return [{ type: 'text', text: delivered }];
+    },
+  ]);
+  const agent = Agent.create({ provider, model: 'claude-sonnet-4-6', citations })
+    .tool(tool)
+    .namesAndNumbersFromEvidence({
+      posture: 'assist',
+      minDigits: 2,
+      // The test's framework-generated citation handle is not a measurement.
+      exempt: [/^c:[a-f0-9-]+:\d+$/u],
+    })
+    .build();
+  try {
+    const answer = await agent.run({ message: 'Read the measurement.' });
+    expect(answer).toBe(delivered);
+    const snapshot = agent.getSnapshot();
+    expect(snapshot?.sharedState?.answerCitations).toMatchObject({
+      complete: true,
+      findings: [{ kind: 'citation', slot: 1, outcome: 'supported' }],
+    });
+    const from = delivered.indexOf('12');
+    expect(snapshot?.sharedState?.sourceLinkRows).toContainEqual(
+      expect.objectContaining({
+        linkBasis: 'match',
+        check: 'value-found',
+        output: { key: 'llmLatestContent', checkedIn: 'read', span: [from, from + 2] },
+      }),
+    );
+  } finally {
+    await agent.shutdown();
+  }
+});

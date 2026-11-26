@@ -196,7 +196,11 @@ describe('one clock row per turn', () => {
     const window = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' };
     const { agent } = agentWith([answer('hi')], (b) => b.time({ zone: LA }));
     await agent.run({ message: 'errors in this range?', time: { window } });
-    expect(ofKind<ClockRow>(agent, 'clock')[0]?.window).toEqual({ ...window, source: 'control' });
+    expect(ofKind<ClockRow>(agent, 'clock')[0]?.window).toEqual({
+      ...window,
+      source: 'control',
+      endpoint: { cutoff: window.to, end: 'exclusive', precision: 'second' },
+    });
   });
 
   it('AgentOptions.time is the same door', async () => {

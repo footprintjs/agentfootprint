@@ -30,6 +30,12 @@
  *   - a look-back the clock drifted past (after a pause) is redrawn as the
  *     asked range when the library wrote it and the tool takes an absolute
  *     form; the model's own look-back runs as sent and is recorded shifted;
+ *   - a CONFIRMED look-back ("the last 2 hours") on a tool that takes ONLY a
+ *     length is lengthened when the call is handed over, so it still reaches
+ *     the start of the window the person confirmed: a click that took a
+ *     minute sends `122m`, never `2h` read a minute late. The `call` row
+ *     records `drift: { outcome: 'covered', sent }` and the note says the
+ *     source's own clock decided the exact bounds;
  *   - an app that needs the same answer OUTSIDE a run (a preview of what a
  *     tool would read) asks the library's own conversion through
  *     `agentfootprint/time` — `convertForTool` over the tool's own `period`
@@ -53,7 +59,8 @@ export const meta: ExampleMeta = {
     'that holds more (a covering look-back, a whole day) and records what it adds; a call whose ' +
     "window breaks the tool's declared facts (direction, retention, maxRange, one day per call, a " +
     'skipped wall time) or that no form can read even wider is refused before it runs, with the ' +
-    'reason.',
+    'reason. A confirmed look-back on a length-only tool is lengthened at dispatch so it still ' +
+    'reaches the start of the confirmed window.',
   defaultInput: 'Any backup errors yesterday? And what is scheduled tomorrow?',
   providerSlots: [],
   tags: ['features', 'observability'],
@@ -175,6 +182,49 @@ const shortDesk = Agent.create({
   .build();
 // #endregion no-form-holds
 
+// #region length-only-look-back
+// A source that takes ONLY a length ("the last N minutes") counts it back from ITS clock, when
+// it is handed the call. The person confirmed "the last 2 hours"; the click took a minute. The
+// same `2h` sent now would start a minute late and lose the oldest minute they confirmed, so
+// the library sends the smallest length that still reaches the window's start.
+const depthHanded: unknown[] = [];
+const queueDepth = defineTool({
+  name: 'queue_depth',
+  description: 'Queue depth samples over a look-back window ending now, in whole minutes.',
+  inputSchema: { type: 'object', properties: { window: { type: 'string' } } },
+  askOrAssume: { window: { assume: '60m' } },
+  period: {
+    forms: [{ kind: 'lookback', argument: 'window', signed: false, units: 'm' }],
+    direction: 'past',
+  },
+  execute: (args) => {
+    depthHanded.push(args);
+    return '{"max":41}';
+  },
+});
+const lastTwoHours: TimeReader = {
+  id: 'example/last-two-hours',
+  version: '1.0.0',
+  locale: 'en-US',
+  kind: 'rule',
+  read: (text) =>
+    text.includes('last 2 hours')
+      ? {
+          mentions: [{ quote: 'last 2 hours', parses: [{ relative: { unit: 'hour', count: 2 } }] }],
+        }
+      : { mentions: [] },
+};
+const depthDesk = Agent.create({
+  provider: mock({
+    replies: [toolCall('d0', 'queue_depth', {}), { content: 'The queue peaked at 41.' }],
+  }),
+  model: 'small-model',
+})
+  .tool(queueDepth)
+  .time({ zone: 'America/Los_Angeles', reader: lastTwoHours })
+  .build();
+// #endregion length-only-look-back
+
 type WindowRow = {
   kind: string;
   toolCallId?: string;
@@ -288,7 +338,39 @@ export async function run(input: string): Promise<string> {
     'the 25-hour fall-back day exceeds the one-day cap',
   );
   console.log('\nthe one-day tool:', JSON.stringify(latest(shortRows, 's1')));
-  return `${String(out)}\n${String(short)}`;
+
+  // The length-only tool. The run's clock is the moment the person asked — here 61 seconds
+  // before they clicked Confirm (whole seconds, so the look-back spells cleanly).
+  const askedAt = new Date(Math.floor((Date.now() - 61_000) / 1000) * 1000).toISOString();
+  const offered = await depthDesk.run({
+    message: 'How deep was the queue in the last 2 hours?',
+    time: { now: askedAt },
+  });
+  check(isInputPause(offered), '"last 2 hours" offered to confirm');
+  if (!isInputPause(offered)) return String(offered);
+  const depth = await depthDesk.resume(offered.checkpoint, {
+    requestId: offered.awaitingInput.requestId,
+    values: { f1: offered.awaitingInput.fields[0]?.enum?.[0] as string },
+  });
+  const depthRows = (depthDesk.findings() ?? []) as readonly (WindowRow & {
+    coversAtDispatch?: boolean;
+    drift?: { outcome: string; byMs: number; sent?: { from: string; to: string } };
+  })[];
+  const covering = latest(depthRows, 'd0') as (typeof depthRows)[number] | undefined;
+  const dispatched = depthRows.find((r) => r.kind === 'call' && r.toolCallId === 'd0');
+  console.log('\nthe length-only tool was handed:', JSON.stringify(depthHanded));
+  console.log('its call row:', JSON.stringify(dispatched));
+  // 2 h + 61 s (and the milliseconds of this run) back from the dispatch moment, in whole minutes.
+  check(JSON.stringify(depthHanded) === '[{"window":"122m"}]', 'the look-back was lengthened');
+  check(covering?.coversAtDispatch === true, 'the fill says it covers at dispatch');
+  check(dispatched?.drift?.outcome === 'covered', 'the call row records the covering read');
+  check(
+    dispatched?.drift?.sent !== undefined &&
+      covering?.asked !== undefined &&
+      Date.parse(dispatched.drift.sent.from) <= Date.parse(covering.asked.from),
+    'the read still reaches the start of the confirmed window',
+  );
+  return `${String(out)}\n${String(short)}\n${String(depth)}`;
 }
 
 if (isCliEntry(import.meta.url)) {

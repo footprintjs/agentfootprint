@@ -109,9 +109,9 @@ describe('the pure time reply facade', () => {
     expect(result.rule).toBe('time-words-corrected');
     expect(result.row.quote).toBe('last 2 hours');
     expect(result.row.choice).toMatchObject({ by: 'open', open: ['confirm'] });
-    expect(result.row.candidates?.[0].range).toEqual({
-      from: '2026-11-03T15:00:00Z',
-      to: '2026-11-03T17:00:00.001Z',
+    expect(result.row.candidates?.[0]).toMatchObject({
+      range: { from: '2026-11-03T15:00:00Z', to: '2026-11-03T17:00:00Z' },
+      endpoint: { cutoff: '2026-11-03T17:00:00Z', end: 'exclusive' },
     });
     expect(result).not.toHaveProperty('rawCorrection');
   });

@@ -31,6 +31,13 @@ export function readRecordedResultDecision(
   return changed === true && (outcome === 'deny' || outcome === 'refused') ? 'withheld' : 'unknown';
 }
 
+/** After occurrence/decision admission, read its own nonblank name once, without a getter. */
+export function readResultRewriteName(row: unknown): string | undefined {
+  if (!isRecord(row)) return undefined;
+  const name = dataField(row, 'middleware');
+  return typeof name === 'string' && name.trim().length > 0 ? name : undefined;
+}
+
 export function readResultDispositionMark(message: object): Disposition | 'unknown' | undefined {
   const field = Object.getOwnPropertyDescriptor(message, 'toolResultDisposition');
   if (field === undefined) return undefined;

@@ -1,5 +1,6 @@
 /** Disclose a declared source that the model could have consulted during this turn. */
 import { Agent, defineTool } from '../../src/index.js';
+import { mockClassifier } from '../../src/doors/classify.js';
 import { mock } from '../../src/doors/providers.js';
 import { defineOntology } from '../../src/ontology/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
@@ -16,7 +17,7 @@ export const meta: ExampleMeta = {
 };
 
 // #region source-not-consulted
-export async function run(message: string) {
+export async function run(message: string, selectOne = false) {
   const map = defineOntology({
     id: 'switches',
     version: '1',
@@ -28,7 +29,7 @@ export async function run(message: string) {
     },
     sources: { monitor: { meaning: 'The live link monitor' } },
   });
-  const agent = Agent.create({
+  const builder = Agent.create({
     provider: mock({
       replies: [
         { toolCalls: [{ id: 'status-1', name: 'read_status', args: {} }] },
@@ -53,8 +54,28 @@ export async function run(message: string) {
       }),
     )
     .ontology(map)
-    .answerLayer({ sourceNotConsulted: true, standingLine: { when: 'not-sure-or-ask' } })
-    .build();
+    .answerLayer({ sourceNotConsulted: true, standingLine: { when: 'not-sure-or-ask' } });
+  // #region select-one-holder
+  if (selectOne) {
+    builder.toolChoice({
+      classifier: mockClassifier(() => ({
+        model: 'fixture',
+        latencyMs: 0,
+        usage: { inputTokens: 0, outputTokens: 0 },
+        answers: {
+          tool: {
+            type: 'choice',
+            choice: 'read_status',
+            confidence: 1,
+            probabilities: { read_status: 1 },
+          },
+        },
+      })),
+      serve: { top: 1 },
+    });
+  }
+  // #endregion select-one-holder
+  const agent = builder.build();
 
   try {
     return { answer: await agent.run({ message }), assessment: await agent.assessment() };

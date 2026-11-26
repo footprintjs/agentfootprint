@@ -4,7 +4,7 @@ title: CodeResult
 
 # Interface: CodeResult
 
-Defined in: [src/provider-contract/types.ts:1328](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1328)
+Defined in: [src/provider-contract/types/code.ts:386](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L386)
 
 What one execution produced.
 
@@ -14,7 +14,7 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:1390](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1390)
+Defined in: [src/provider-contract/types/code.ts:448](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L448)
 
 Files the run produced, described rather than inlined — the whole point is
  that big data does not enter the window. All fields beyond the original
@@ -52,7 +52,7 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1346](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1346)
+Defined in: [src/provider-contract/types/code.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L404)
 
 The exit status — exactly when the runner reported one. Never inferred
  from an error flag, never defaulted.
@@ -63,7 +63,7 @@ The exit status — exactly when the runner reported one. Never inferred
 
 > `readonly` `optional` **ok?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1341](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1341)
+Defined in: [src/provider-contract/types/code.ts:399](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L399)
 
 Did the code run to completion without an error exit? WHAT THE RUNNER
 REPORTED, nothing more.
@@ -82,7 +82,7 @@ unconfirmed), and a process ended before it exited (`terminatedBy`).
 
 > `readonly` `optional` **serviceError?**: `true`
 
-Defined in: [src/provider-contract/types.ts:1353](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1353)
+Defined in: [src/provider-contract/types/code.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L411)
 
 `true` when the backend flagged its answer as an error and reported NO
 exit status: whether the code ran at all is not confirmed. That is not a
@@ -95,7 +95,7 @@ program that failed — a program that ran and failed has an `exitCode`.
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/provider-contract/types.ts:1343](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1343)
+Defined in: [src/provider-contract/types/code.ts:401](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L401)
 
 ***
 
@@ -103,7 +103,7 @@ Defined in: [src/provider-contract/types.ts:1343](https://github.com/footprintjs
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/provider-contract/types.ts:1342](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1342)
+Defined in: [src/provider-contract/types/code.ts:400](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L400)
 
 ***
 
@@ -111,7 +111,7 @@ Defined in: [src/provider-contract/types.ts:1342](https://github.com/footprintjs
 
 > `readonly` `optional` **terminatedBy?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1360](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1360)
+Defined in: [src/provider-contract/types/code.ts:418](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L418)
 
 The signal that ended the process before it exited, when the runner knows
 it (`'SIGKILL'`): there is no exit status then, and none is made up. A
@@ -124,7 +124,7 @@ its output passed the buffer ceiling. `ok` is `false` alongside it.
 
 > `readonly` `optional` **truncated?**: [`CodeTruncation`](/docs/api/interfaces/CodeTruncation)
 
-Defined in: [src/provider-contract/types.ts:1400](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1400)
+Defined in: [src/provider-contract/types/code.ts:458](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/code.ts#L458)
 
 Present IFF output was cut — see [CodeTruncation](/docs/api/interfaces/CodeTruncation). An unstated
  slice is a silent success.

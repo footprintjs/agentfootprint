@@ -6,7 +6,6 @@
  */
 
 import type { ReadTrackingMode, RedactionPolicy, StructureRecorder } from 'footprintjs';
-import type { CommitValuesMode } from 'foottrace';
 import type { GroupTranslator } from '../translator.js';
 import type {
   LLMProvider,
@@ -50,6 +49,8 @@ export type { RunConfig, RunConfigContext, RunConfigFn } from './types/configura
 export type { AgentInput, AgentOutput } from './types/input.js';
 
 export interface AgentOptions extends AgentObservationOptions {
+  /** Enable host-ended turns and record reply authorship. Defaults to false. */
+  readonly hostEndedTurns?: boolean;
   readonly provider: LLMProvider;
   /** Human-friendly name shown in events/metrics. Default: 'Agent'. */
   readonly name?: string;
@@ -466,20 +467,6 @@ export interface AgentOptions extends AgentObservationOptions {
    * behavior-change callout.
    */
   readonly readTracking?: ReadTrackingMode;
-  /**
-   * Commit-log value encoding (#13c-B) — forwarded to the internal
-   * executor as `{ commitValues }`. Agent default is **`'delta'`**: a
-   * stage whose net change to a tracked array is "the old array plus a
-   * tail" (the agent's `history` every iteration) records ONLY the tail
-   * (`append` verb); key removals record a `delete` verb. LOSSLESS — any
-   * step's full value reconstructs by replay (`commitValueAt` from
-   * `foottrace`), which is why this is safe for audit trails.
-   * Retained commit-log memory becomes linear instead of quadratic.
-   * Set `'full'` for footprintjs's default encoding (every changed key
-   * stores its full final value) if a downstream consumer reads
-   * `bundle.overwrite[key]` as the complete value.
-   */
-  readonly commitValues?: CommitValuesMode;
   /**
    * Per-write read provenance — forwarded to the internal executor as
    * `{ writeProvenance }`. Default **`'off'`** (footprintjs's own default):

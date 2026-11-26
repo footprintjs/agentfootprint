@@ -10,7 +10,7 @@ with the reason); `compose.ts` — `composeToolChoice`, the slot's armed tail
 behind one `import()`. Trace: `record.ts` — `recordToolChoice`, `outcomeRowFor`.
 The site that asks and commits is `src/core/slots/buildToolsSlot.ts ·
 composeStage`; the site that files the outcome is
-`src/core/agent/stages/callLLM.ts · buildCallLLMStage`.
+`src/core/agent/stages/callLLM/acceptResponse.ts · acceptResponse`.
 
 # `toolChoice/` — tool choice by classifier
 
@@ -108,7 +108,7 @@ minus the doors and `served` is exactly what was committed. It is awaited;
 the stage returns a promise only under the arm. `reactMode: 'classic'` is
 refused at build: the slot runs on turn 1 only there, so a pick would be made
 once and a narrowed list served on every later call. The seed's static
-fallback (`callLLM.ts · registeredToolSchemas`, `scope.dynamicToolSchemas ??
+fallback (`callLLM/prepareCall.ts · registeredToolSchemas`, `scope.dynamicToolSchemas ??
 deps.toolSchemas` — a chart with no tools slot) runs no pick and narrows
 nothing: with no Compose stage to ask from, the request simply carries the
 build-time schemas as sent. A call with no candidate beyond the doors makes
