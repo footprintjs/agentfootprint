@@ -225,6 +225,10 @@ export function requestFactory(environment: RequestEnvironment) {
       // Opt-in system-prompt capture (9.50.0) — value-conditional, so an agent
       // that never asked keeps byte-identical llm_start events.
       ...(environment.configuration.recordSystemPromptValue && { recordSystemPrompt: true }),
+      // The skill-context decision, recorded on the run's first request (`skillContext/decide.ts`).
+      ...(environment.configuration.skillContext?.recorded === true && {
+        skillContext: environment.configuration.skillContext.record,
+      }),
       // "The cursor picks the brain" (9.19.0) — wired only when a per-skill
       // brain or an escalation exists, so every other agent's stage reads no
       // new scope key and resolves on the exact line it always did. The

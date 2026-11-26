@@ -58,3 +58,20 @@ export interface SpokenIds {
 export function spoken(all: readonly string[], mayName: (id: string) => boolean): SpokenIds {
   return { named: all.filter(mayName), held: all.length > 0 };
 }
+
+/**
+ * The sole-owner rule for a name skills declare: it may be shown to a role
+ * unless EVERY skill that declares it is hidden from that role. A shared name
+ * is a visible skill's too; a name no skill declares (`owners` undefined or
+ * empty) is never the skill filter's to hide.
+ *
+ * @example
+ *   visibleToRole(['billing'], new Set(['billing']));            // false
+ *   visibleToRole(['billing', 'support'], new Set(['billing'])); // true
+ */
+export function visibleToRole(
+  owners: readonly string[] | undefined,
+  hidden: ReadonlySet<string>,
+): boolean {
+  return owners === undefined || owners.length === 0 || owners.some((id) => !hidden.has(id));
+}

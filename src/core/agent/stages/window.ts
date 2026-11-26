@@ -48,6 +48,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
+import { activeSkillBodyCallIds } from '../skillContext/bodies.js';
 import type { LLMMessage, PricingTable } from '../../../provider-contract/types.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -110,6 +111,12 @@ export interface WindowStageDeps {
    * object it always did.
    */
   readonly keepLastToolResults?: number | false;
+  /**
+   * Under the `listed` skill context only: each skill's registered body, by
+   * id. A `read_skill` result whose text is the body of a skill still active
+   * this turn refuses to leave (`'active-skill-body'`): it is the only copy.
+   */
+  readonly skillBodies?: ReadonlyMap<string, string>;
   /**
    * The findings ledger is armed on this agent (9.102.0) — `.findings()` was
    * called. The ONE gate under which this stage may read
@@ -324,8 +331,19 @@ export function buildWindowStage(
         ? ledgerFactPinsOf(turns, history, standingOf, currentRequestIndex)
         : [];
 
+    const bodyCallIds =
+      deps.skillBodies === undefined
+        ? undefined
+        : activeSkillBodyCallIds(history, deps.skillBodies, [
+            ...((scope.activatedInjectionIds as readonly string[] | undefined) ?? []),
+            ...((scope.activeInjections as readonly { id: string }[] | undefined) ?? []).map(
+              (active) => active.id,
+            ),
+          ]);
     const guards: RemovalGuards = {
       answeredCallIds: answeredCallIds(history),
+      ...(bodyCallIds !== undefined &&
+        bodyCallIds.size > 0 && { activeSkillBodyCallIds: bodyCallIds }),
       ...(currentRequestIndex >= 0 && { currentRequestIndex }),
       ...(pausedToolCallId !== undefined && { pausedToolCallId }),
       ...(scope.pausedCheckIn === true && { pausedCheckIn: true }),

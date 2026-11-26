@@ -291,6 +291,8 @@ describe('the window-strategy seam is publicly writable (7.17)', () => {
           return 'the paused tool';
         case 'pending-check-in':
           return 'a check-in';
+        case 'active-skill-body':
+          return "an active skill's body";
         case 'inside-keep-window':
           return 'the recent window';
         case 'only-existing-summary':
