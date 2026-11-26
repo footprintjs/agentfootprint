@@ -252,13 +252,17 @@ function allOf(reader: LedgerReader): LedgerEntry[] {
   return out;
 }
 
-/** A refusal branch: the word into scope, the reply into the frame, and the run ends. */
-export function refuse(frame: CallFrame, word: LedgerRefusal) {
+/** A refusal branch: the word into scope, the reply into the frame (with `submit`, when its batch
+ * stands), and the run ends. */
+export function refuse(frame: CallFrame, word: LedgerRefusal, submit?: number) {
   return (s: Scope) => {
     const store = word === 'store-refused' ? frame.refusal?.store : undefined;
     frame.refusal = { word, ...(store === undefined ? {} : { store }) };
     s.refused = word;
-    frame.reply = { ok: false, refused: word, ...(store === undefined ? {} : { store }) };
+    const reply: { [key: string]: LedgerServed } = { ok: false, refused: word };
+    if (store !== undefined) reply.store = store;
+    if (submit !== undefined) reply.submit = submit;
+    frame.reply = reply;
     s.$break();
   };
 }
@@ -543,7 +547,8 @@ export function awaitPerson(frame: CallFrame) {
  * (at most `maxAttempts`, then `busy`); a store refusal is `store-refused` with its code (a
  * `lock-lost` reloads once and stands only if the entry is there). No path replies `ok` unless the
  * entry is in the log; otherwise the report still, truthfully, reads waiting for a person, and the
- * caller can ask the person again.
+ * refusal carries the submit's seq: its batch stands, so the caller asks the person again, never
+ * submits again.
  */
 export function appendReleased(frame: CallFrame) {
   return async (s: Scope): Promise<void> => {
@@ -583,11 +588,11 @@ export function appendReleased(frame: CallFrame) {
         frame.loads++;
         log = (await frame.store.load(frame.session)).entries;
       }
-      refuse(frame, 'busy')(s);
+      refuse(frame, 'busy', submit)(s);
     } catch (error) {
       if (!(error instanceof LedgerStoreError)) throw error;
       frame.refusal = { word: 'store-refused', store: error.code };
-      refuse(frame, 'store-refused')(s);
+      refuse(frame, 'store-refused', submit)(s);
     }
   };
 }

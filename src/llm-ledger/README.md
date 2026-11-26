@@ -33,7 +33,7 @@ this folder imports it yet, and no `package.json` door reaches it.
 | `fileStore.ts` | `fileLedgerStore({ dir, key, uid })`: one MAC-chained JSON-lines file per session, every line marked with its batch's end. The only file here that imports Node |
 | `rules/` | the checks port and the three built-in rules (`rules/README.md`) |
 | `reader.ts` | `readerOf`: one loaded log, indexed by seq and kind; held in a stage's closure, never in a run's scope |
-| `report.ts` | `foldReport`: the last submit's checks as AgentFootprint's standing (`ask`, `not-sure`, `consistent`, `not-assessed`) and its reasons |
+| `report.ts` | `foldReport`: the last submit's checks as AgentFootprint's standing (`ask`, `not-sure`, `consistent`, `not-assessed`) and its reasons. It never trusts that the value law ran: a subject with no `traceable-values@1` record reads at most `open`, and a submit with no value-law record for its draft reads `not-assessed` at best |
 | `serve.ts` | the one funnel everything served passes through (`serveReport`, `serveReceipts`, `serveRefusal`); receipt tokens, queries and supplied content are never read by it |
 | `stages.ts` | the stage functions of a call's chart, over one `CallFrame` (the call's closure) |
 | `calls.ts` | `runCall`: the chart of one call, one fresh `FlowChartExecutor`, input `{ call }`, and the one pause |
@@ -169,7 +169,8 @@ port, or when the port fails, the answer is `withhold` with `why: 'no-person-cha
 dies while waiting, no `released` entry exists, and the report reads `ask`. The answer is never lost and
 never reported as written when it is not: a store error while appending `released` replies
 `store-refused` with its code, three conflicts reply `busy`, and in both the report still reads waiting
-for a person, so the caller can ask again. No path replies `ok` unless the entry is in the log.
+for a person. Both refusals carry `submit`, the submit's seq: its batch stands, so the caller asks the
+person again and never submits again. No path replies `ok` unless the entry is in the log.
 
 **Served.** `serve.ts` builds every reply that carries a log's content. With a host `redaction` policy,
 every string is served as `{ masked: '[REDACTED]', span }` unless it is a ledger word, a rule id, a

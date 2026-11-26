@@ -12,11 +12,17 @@
  * check is NOT CHECKED, never a pass: a submit whose checks are missing reads `not-assessed` at best
  * (the batch mark makes it impossible in a log; the fold does not rely on that). A claim with no
  * visible token is never a pass: the value law runs in every session and gives it `unreachable`.
+ *
+ * The fold never trusts that the value law ran. A log written by hand, or checked by a build
+ * without it, can hold passing records for a value no receipt holds, so: a subject with no
+ * `traceable-values@1` record reads at most `open` (`check-unreachable`), and a submit with no
+ * value-law record for its draft reads `not-assessed` at best.
  */
 import { isIncomplete } from './entries.js';
 import type { LedgerReader } from './reader.js';
 import { weakest } from './rules/port.js';
 import type { LedgerCheckCounts } from './rules/port.js';
+import { VALUE_LAW } from './rules/traceableValues.js';
 import type { LedgerCheckWhy, LedgerDisposition, LedgerNote, LedgerVerdict } from './types.js';
 
 /** The report's standing, in AgentFootprint's words. */
@@ -112,13 +118,19 @@ function openReason(check: LedgerCheckView): 'claim-unsettled' | 'check-unreacha
   return unsettled ? 'claim-unsettled' : 'check-unreachable';
 }
 
-/** One subject's line, from its checks. */
+/** Whether `checks` hold a record of the value law (whatever its disposition). */
+const valueLawRan = (checks: readonly LedgerCheckView[]): boolean =>
+  checks.some((c) => c.rule === VALUE_LAW);
+
+/** One subject's line, from its checks: at most `open` without a value-law record. */
 function subjectOf(reader: LedgerReader, checks: readonly LedgerCheckView[]): LedgerSubjectReport {
-  const verdict = weakest(checks.map((c) => c.verdict));
+  const found = weakest(checks.map((c) => c.verdict));
+  const lawless = !valueLawRan(checks);
+  const verdict = lawless && found !== undefined ? weakest([found, 'open']) : found;
   const reason: LedgerSubjectReport['reason'] =
     verdict !== 'open'
       ? undefined
-      : checks.some((c) => c.verdict === 'open' && openReason(c) === 'check-unreachable')
+      : lawless || checks.some((c) => c.verdict === 'open' && openReason(c) === 'check-unreachable')
       ? 'check-unreachable'
       : 'claim-unsettled';
   const seqs = [...new Set(checks.flatMap((c) => c.restsOn))];
@@ -197,7 +209,11 @@ export function foldReport(
   if (release === 'withheld' || release === 'no-person-channel') reasons.add('report-withheld');
   if (delivery === 'differs') reasons.add('delivery-differs');
 
-  const assessed = claims.length > 0 && claims.every((c) => c.verdict !== undefined);
+  // A dry `ask` has no draft; a submit does, and its draft never passes unchecked by the value law.
+  const assessed =
+    claims.length > 0 &&
+    claims.every((c) => c.verdict !== undefined) &&
+    (preview !== undefined || valueLawRan(draftChecks));
   const standing: LedgerStanding = reasons.has('asked')
     ? 'ask'
     : reasons.size > 0

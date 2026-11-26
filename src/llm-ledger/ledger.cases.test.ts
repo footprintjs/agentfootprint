@@ -406,17 +406,21 @@ describe('the person answer is never lost (ruling 3)', () => {
       { ok: false, refused: 'store-refused', store: 'lock-lost' },
     ],
   ] as const)(
-    '%s: a refusal, never ok; the report still reads waiting for a person',
+    '%s: a refusal with the standing submit, never ok; the report still reads waiting',
     async (_n, how, reply) => {
       const { store, real } = onReleased(how);
       const { ledger, session } = await confirmed(store);
-      expect(await ledger.agentFor(session).submit({ draft: 'a-1234', claims: [3] })).toEqual(
-        reply,
-      );
-      expect((await real.load(session)).entries.map((e) => e.kind)).not.toContain('released');
+      const got = await ledger.agentFor(session).submit({ draft: 'a-1234', claims: [3] });
+      const entries = (await real.load(session)).entries;
+      const submits = entries.filter((e) => e.kind === 'submit');
+      // The submit's batch stands: the refusal names it, so the caller asks the person again.
+      expect(submits).toHaveLength(1);
+      expect(got).toEqual({ ...reply, submit: submits[0].seq });
+      expect(entries.map((e) => e.kind)).not.toContain('released');
       expect(((await ledger.host.report(session)) as Reply).report).toMatchObject({
         standing: 'ask',
         release: 'waiting',
+        submit: submits[0].seq,
       });
     },
   );
@@ -429,6 +433,58 @@ describe('the person answer is never lost (ruling 3)', () => {
       withheld: true,
     });
     expect((await real.load(session)).entries.filter((e) => e.kind === 'released')).toHaveLength(1);
+  });
+});
+
+describe('the fold trusts no check record it finds (P3)', () => {
+  type Check = Extract<LedgerEntry, { kind: 'check' }>;
+  const law = 'traceable-values@1';
+  /**
+   * A real session's log with the value law unpinned and `drop`'s checks left out, written by hand
+   * through the store port to a fresh store: what a build without the value law would leave.
+   */
+  async function handWritten(claim: string, draft: string, drop: (check: Check) => boolean) {
+    const { ledger, session, agent, inner } = await setup();
+    await ledger.host.record(session, { source: 's', text: 'id-1234' });
+    await agent.note({ kind: 'claim', text: claim, cites: [2] });
+    const real = ((await agent.submit({ draft, claims: [3] })) as Reply).report;
+    const entries = (await log(inner, session))
+      .filter((e) => e.kind !== 'check' || !drop(e))
+      .map((e, i) =>
+        e.kind === 'opened'
+          ? { ...e, seq: i + 1, rules: e.rules.filter((r) => r !== law) }
+          : { ...e, seq: i + 1 },
+      ) as LedgerEntry[];
+    const store = memoryLedgerStore();
+    expect(await store.append(session, 0, entries)).toBe(entries.length);
+    const ledgerOf = createLedger({ store, clock: () => AT });
+    return { real, report: ((await ledgerOf.host.report(session)) as Reply).report };
+  }
+
+  it('a claim with no value-law record reads at most open, never verified', async () => {
+    const { real, report } = await handWritten(
+      'id-9999',
+      'id-1234',
+      (c) => c.rule === law && 'note' in c.subject,
+    );
+    expect(real.claims[0].verdict).toBe('unsupported'); // no receipt holds id-9999
+    expect(report.claims[0].checks.map((c: Reply) => c.rule)).not.toContain(law);
+    expect(report.claims[0]).toMatchObject({ verdict: 'open', reason: 'check-unreachable' });
+    expect(report.draft.verdict).toBe('verified');
+    expect(report).toMatchObject({ standing: 'not-sure', reasons: ['check-unreachable'] });
+    expect(report.counts).toMatchObject({ verified: 0, consistentWithReported: 0, open: 1 });
+  });
+
+  it('a submit with no value-law record for its draft reads not-assessed', async () => {
+    const { real, report } = await handWritten(
+      'id-1234',
+      'id-9999',
+      (c) => c.rule === law && 'draft' in c.subject,
+    );
+    expect(real.draft.verdict).toBe('unsupported'); // no receipt holds id-9999
+    expect(report.claims[0].verdict).toBe('verified');
+    expect(report.draft).toBeUndefined();
+    expect(report).toMatchObject({ standing: 'not-assessed', reasons: [] });
   });
 });
 
