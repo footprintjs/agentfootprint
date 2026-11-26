@@ -46,30 +46,19 @@
  *
  * ## Across processes
  *
- * `append` takes `<session>.lock` with `wx` (`O_EXCL`), reads the last line,
- * compares seqs, writes the whole batch with one append and `fsync`s it, then
- * removes the lock. It waits at most `lockWaitMs`, then fails with
- * `locked-timeout`; a lock older than `lockStaleMs` was left by a writer that
- * died and is removed and taken again through the same `wx`. `append` reads
- * the TAIL only — the whole chain is verified by `load`, which every attempt
- * makes first.
- *
- * The stale rule reads the wall clock, so a writer that is still running can
- * look dead (a machine asleep in the middle of an append, a stopped process, a
- * clock stepped forward, a slow fsync), and two waiters on one dead lock can
- * both take it. So an append checks, right before its write, that the lock is
- * still the one it took (same device and inode) and writes nothing if not
- * (`locked-timeout`); and checks again after its fsync (`lock-lost`). What is
- * left: a lock taken over between that last check and the write itself lets
- * two batches land at one seq, and the next `load` refuses the session
- * (`mac-mismatch`) — refused, never forged. Closing that needs a lock the
- * kernel holds, which this release does not take.
- *
- * `load` takes no lock, so it can meet another process's append half-written:
- * a torn tail, an unfinished batch, or a file just created and still empty.
- * Only then does it look at the lock: it waits while a writer holds it (at
- * most `lockWaitMs`) and reads once more. A tail still torn after that is
- * `torn-line`. A load never takes part of a batch for a whole one.
+ * `append` takes `<session>.lock` with `wx` (`O_EXCL`) and writes a random
+ * token into it; it reads the last line, compares seqs, writes the whole batch
+ * with one append and `fsync`s it, then removes the lock. It waits at most
+ * `lockWaitMs` (`locked-timeout`); a lock older than `lockStaleMs` was left by
+ * a writer that died and is removed (if still the same lock, token included)
+ * and taken again through the same `wx`. Right before its write and after its
+ * fsync, an append checks the lock is still its own — device, inode AND token —
+ * and answers `locked-timeout` (nothing written) or `lock-lost` (written; may
+ * not stand). The gap that remains, and what it costs, is in the README.
+ * `append` reads the TAIL only; the whole chain is verified by `load`, which
+ * every attempt makes first. `load` takes no lock: on a torn tail or an
+ * unfinished batch it waits while a writer holds the lock, then reads once
+ * more, so it never takes part of a batch for a whole one.
  *
  * ## The key, and what the MAC does not do
  *
@@ -81,7 +70,7 @@
  * passes (this folder never reads `process`); a wrong `uid` can only refuse
  * (for a process that cannot read other users' files).
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { constants } from 'node:fs';
 import type { Stats } from 'node:fs';
 import { lstat, mkdir, open, unlink } from 'node:fs/promises';
@@ -106,10 +95,15 @@ export interface FileLedgerStoreOptions {
   readonly uid: number;
 }
 
-/** The lock an append took: its device and inode, which no other lock file can share. */
+/**
+ * The lock an append took: its device and inode, and the random token written into it. A file
+ * system may hand a freed inode number straight back to the next file, so device and inode alone
+ * cannot tell this lock from the one that replaced it; the token can.
+ */
 interface LockIdentity {
   readonly dev: number;
   readonly ino: number;
+  readonly token: string;
 }
 
 /** One stored line, read: its batch's end, its entry, its MAC. */
@@ -264,10 +258,28 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       throw error;
     });
 
-  /** Whether the lock at `path` is still the one this append took. */
+  /** The token inside the lock at `path`, read without following a link; `undefined` when unreadable. */
+  const tokenOf = async (path: string): Promise<string | undefined> => {
+    let handle: FileHandle;
+    try {
+      handle = await open(path, constants.O_RDONLY | NOFOLLOW | NONBLOCK);
+    } catch (error) {
+      const code = codeOf(error);
+      if (code === 'ENOENT' || code === 'ELOOP' || code === 'EMLINK') return undefined;
+      throw error;
+    }
+    try {
+      return new TextDecoder().decode(await readAt(handle, 0, 64));
+    } finally {
+      await handle.close();
+    }
+  };
+
+  /** Whether the lock at `path` is still the one this append took: same device, inode and token. */
   const holds = async (path: string, ours: LockIdentity): Promise<boolean> => {
     const stat = await lstatOrNone(path);
-    return stat !== undefined && stat.dev === ours.dev && stat.ino === ours.ino;
+    if (stat === undefined || stat.dev !== ours.dev || stat.ino !== ours.ino) return false;
+    return (await tokenOf(path)) === ours.token;
   };
 
   const readAt = async (
@@ -370,8 +382,11 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
           0o600,
         );
         try {
+          // A token only this append knows: what makes the lock its own, whatever inode it gets.
+          const token = randomBytes(16).toString('hex');
+          await handle.write(token);
           const stat = await handle.stat();
-          return { dev: stat.dev, ino: stat.ino };
+          return { dev: stat.dev, ino: stat.ino, token };
         } finally {
           await handle.close();
         }
@@ -382,9 +397,17 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       if (held !== undefined) {
         refuseUnsafe(held, 'lock');
         if (Date.now() - held.mtimeMs > L.lockStaleMs) {
-          // Left by a writer that died: remove it — only if it is still the same lock — and try again.
+          // Left by a writer that died: remove it — only if it is still the same lock (device,
+          // inode, age and token) — and try again.
+          const judged = await tokenOf(path);
           const again = await lstat(path).catch(() => undefined);
-          if (again !== undefined && again.ino === held.ino && again.mtimeMs === held.mtimeMs)
+          const same =
+            again !== undefined &&
+            again.dev === held.dev &&
+            again.ino === held.ino &&
+            again.mtimeMs === held.mtimeMs &&
+            (await tokenOf(path)) === judged;
+          if (same)
             await unlink(path).catch((error: unknown) => {
               if (codeOf(error) !== 'ENOENT') throw error;
             });

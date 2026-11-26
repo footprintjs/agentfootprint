@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LEDGER_LIMITS } from '../../src/llm-ledger/limits.js';
 import {
+  isJsonValue,
   isToken,
   readTokens,
   readTokensUpTo,
@@ -280,8 +281,163 @@ describe('tokensOf against the character-scan oracle', () => {
   });
 });
 
+describe('isJsonValue against JSON.parse', () => {
+  it('decides exactly what JSON.parse decides, for every text that opens with a bracket', () => {
+    const JSONISH = [
+      '[',
+      ']',
+      '{',
+      '}',
+      ',',
+      ':',
+      ' ',
+      '\n',
+      '"',
+      '"a"',
+      '\\',
+      '\\u0031',
+      '\\q',
+      '\\n',
+      '0',
+      '01',
+      '-',
+      '12',
+      '1.5',
+      '1.',
+      '.5',
+      '1e5',
+      '1E+5',
+      '-0',
+      'true',
+      'false',
+      'null',
+      'tru',
+      'x',
+      '\t',
+      '\u0001',
+      '2026-11-25',
+      '"k":',
+      '[]',
+      '{}',
+      '1,234',
+    ];
+    let valid = 0;
+    for (const body of seededTexts(77_77, JSONISH, 60_000, 12)) {
+      const text = (body.trimStart()[0] === '{' ? '' : '[') + body;
+      let parses = true;
+      try {
+        JSON.parse(text);
+      } catch {
+        parses = false;
+      }
+      expect(isJsonValue(text), JSON.stringify(text)).toBe(parses);
+      if (parses) valid++;
+    }
+    for (const text of ['  [1, 2]  ', '{"a": [true, null, -0.5e+3]}', '[]', '{}', '["\\u00e9"]'])
+      expect(isJsonValue(text)).toBe(true);
+    for (const text of [
+      '',
+      '1',
+      '"x"',
+      '[1] [2]',
+      '[1,]',
+      '{"a"}',
+      '[01]',
+      '["\\x"]',
+      '["\u0001"]',
+    ])
+      expect(isJsonValue(text)).toBe(false);
+    expect(valid).toBeGreaterThan(300);
+    // Valid by construction, then one edit away from valid: both sides of the line, often.
+    const next = seeded(9_191);
+    const leaf = (): unknown => {
+      const r = next();
+      if (r < 0.2)
+        return (
+          Math.round((next() - 0.5) * 10 ** Math.floor(next() * 8)) / 10 ** Math.floor(next() * 3)
+        );
+      if (r < 0.3) return [true, false, null][Math.floor(next() * 3)];
+      return seededTexts(Math.floor(next() * 1e9), JSONISH, 1, 4)[0]!;
+    };
+    const value = (depth: number): unknown =>
+      depth > 2 || next() < 0.35
+        ? leaf()
+        : next() < 0.5
+        ? Array.from({ length: Math.floor(next() * 4) }, () => value(depth + 1))
+        : Object.fromEntries(
+            Array.from({ length: Math.floor(next() * 4) }, () => [
+              String(leaf()),
+              value(depth + 1),
+            ]),
+          );
+    let edited = 0;
+    for (let n = 0; n < 6_000; n++) {
+      const v = value(0);
+      if (typeof v !== 'object' || v === null) continue;
+      const text = JSON.stringify(v, null, next() < 0.3 ? 1 : undefined);
+      expect(isJsonValue(text), text).toBe(true);
+      const at = Math.floor(next() * text.length);
+      const piece = JSONISH[Math.floor(next() * JSONISH.length)]!;
+      for (const variant of [
+        text.slice(0, at) + text.slice(at + 1),
+        text.slice(0, at) + piece + text.slice(at),
+      ]) {
+        let parses = true;
+        try {
+          JSON.parse(variant);
+        } catch {
+          parses = false;
+        }
+        const opens = /^\s*[[{]/.test(variant);
+        expect(isJsonValue(variant), JSON.stringify(variant)).toBe(parses && opens);
+        edited++;
+      }
+    }
+    expect(edited).toBeGreaterThan(5_000);
+  });
+});
+
 describe('a reading cut by a byte cap', () => {
-  /** Seeded texts of two kinds: prose, and one JSON value (so a cut is a cut JSON prefix). */
+  /**
+   * The shapes a cut gets wrong if any rule slips: comma runs that end in a date, a dash or a
+   * longer group (`1,234,2026-11-25`, `120,975,300,1234-5`), grouped runs glued to letters, and
+   * prose that opens with a bracket like a log line (`[2026-11-25 10:00:00] … 1234-5678`).
+   * `LEDGER_CUT_TEXTS` raises the count for a long local run (100,000 was run once).
+   */
+  const SHAPE_PIECES = [
+    '1,',
+    '12,',
+    '120,',
+    '234,',
+    '975,',
+    '300,',
+    '1234',
+    '2026-11-25',
+    '1234-5',
+    '-',
+    '5678',
+    '6789',
+    ',',
+    ',,',
+    ' ',
+    'n ',
+    'x',
+    'host',
+    '[',
+    ']',
+    '"',
+    ':',
+    '10:00:00',
+    '.5',
+    '$',
+    'ms',
+    '0',
+    '00',
+  ];
+  const shapeCount = Number(process.env.LEDGER_CUT_TEXTS ?? 1_500);
+  const shapes = seededTexts(31, SHAPE_PIECES, shapeCount, 10);
+
+  /** Seeded texts of three kinds: prose, one JSON value (so a cut is a cut JSON prefix), shapes. */
   const texts = (() => {
     const next = seeded(404);
     const prose = seededTexts(9, PIECES, 400, 14).map((t) => `p ${t}`);
@@ -294,34 +450,38 @@ describe('a reading cut by a byte cap', () => {
         ),
       ),
     );
-    return [...prose, ...json];
+    return [...prose, ...json, ...shapes, ...shapes.map((t) => `[${t}`)];
   })();
 
-  it('at every cap, keeps only tokens the whole text holds, and more as the cap grows', () => {
-    let cuts = 0;
-    for (const text of texts) {
-      const whole = new Set(tokensOf(text));
-      const bytes = utf8Bytes(text);
-      let before: readonly string[] = [];
-      for (let cap = 0; cap <= bytes; cap++) {
-        const reading = readTokensUpTo(text, cap);
-        for (const token of reading.tokens)
-          expect(whole.has(token), `${JSON.stringify(text)} @${cap}: ${token}`).toBe(true);
-        for (const token of before)
-          expect(reading.tokens, `${JSON.stringify(text)} @${cap}`).toContain(token);
-        expect(reading.bytes).toBe(bytes);
-        if (reading.cut !== undefined) {
-          expect(reading.cut.bytesUnread).toBeGreaterThanOrEqual(bytes - cap);
-          cuts++;
+  it(
+    'at every cap, keeps only tokens the whole text holds, and more as the cap grows',
+    { timeout: 600_000 },
+    () => {
+      let cuts = 0;
+      for (const text of texts) {
+        const whole = new Set(tokensOf(text));
+        const bytes = utf8Bytes(text);
+        let before: readonly string[] = [];
+        for (let cap = 0; cap <= bytes; cap++) {
+          const reading = readTokensUpTo(text, cap);
+          for (const token of reading.tokens)
+            expect(whole.has(token), `${JSON.stringify(text)} @${cap}: ${token}`).toBe(true);
+          for (const token of before)
+            expect(reading.tokens, `${JSON.stringify(text)} @${cap}`).toContain(token);
+          expect(reading.bytes).toBe(bytes);
+          if (reading.cut !== undefined) {
+            expect(reading.cut.bytesUnread).toBeGreaterThanOrEqual(bytes - cap);
+            cuts++;
+          }
+          before = reading.tokens;
         }
-        before = reading.tokens;
+        expect(readTokensUpTo(text, bytes).tokens).toEqual(
+          tokensOf(text).filter((t) => t.length <= LEDGER_LIMITS.maxTokenChars),
+        );
       }
-      expect(readTokensUpTo(text, bytes).tokens).toEqual(
-        tokensOf(text).filter((t) => t.length <= LEDGER_LIMITS.maxTokenChars),
-      );
-    }
-    expect(cuts).toBeGreaterThan(5_000);
-  });
+      expect(cuts).toBeGreaterThan(5_000);
+    },
+  );
 });
 
 describe('readTokens invariants', () => {

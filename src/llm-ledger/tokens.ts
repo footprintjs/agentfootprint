@@ -45,10 +45,12 @@
  * as one piece and so sees neither value; the differential against it lists
  * this as a known difference.
  *
- * A text that is ONE JSON object or array is read value by value instead:
- * every string literal and key as text, every number literal as written. A
- * receipt's text cut by the byte cap is read the same way up to its last
- * whole literal, when what was read can be the start of one JSON value.
+ * A text that is ONE JSON object or array (`isJsonValue`, JSON's grammar in
+ * one pass) is read value by value instead: every string literal and key as
+ * text, every number literal as written. Which way a text is read is decided
+ * on the WHOLE text, also when the byte cap reads only its start, which is
+ * then read the same way up to its last whole literal — so a cut reading can
+ * never keep a token the whole text does not hold.
  *
  * ## The caps (`limits.ts`)
  *
@@ -83,6 +85,9 @@ const LETTER = /[a-z]/;
 const DIGIT = /\d/;
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const JSON_WORDS = ['true', 'false', 'null'];
+/** A number in JSON's own spelling: no leading zero, no bare dot, no sign but a leading minus. */
+const JSON_STRICT_NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+const JSON_SPACE = ' \t\n\r';
 const COMMA = 0x2c;
 const QUOTE = 0x22;
 const BACKSLASH = 0x5c;
@@ -199,95 +204,126 @@ function proseTokens(text: string, into: (token: string) => void): void {
 }
 
 /**
- * Whether `text` can be the START of one JSON object or array: outside its
- * strings, only JSON's own punctuation, number literals and words. A cut
- * prefix of one JSON value always is; prose that merely opens with a bracket
- * (`[INFO] host esx01a`) is not.
+ * The index after the JSON string literal that opens at `i`, or -1 when it is
+ * not one: it never closes, holds a raw control character, or an escape JSON
+ * does not have.
  */
-function jsonShaped(text: string): boolean {
-  for (let i = 0; i < text.length; ) {
-    const c = text.charCodeAt(i);
-    if (c === QUOTE) {
-      let end = i + 1;
-      while (end < text.length && text.charCodeAt(end) !== QUOTE)
-        end += text.charCodeAt(end) === BACKSLASH ? 2 : 1;
-      i = end + 1;
-    } else if (c === 0x2d || isDigitAt(text, i)) {
-      JSON_NUMBER.lastIndex = i;
-      const literal = JSON_NUMBER.exec(text);
-      if (literal === null) return i === text.length - 1; // a lone '-' only where the cut fell
-      i += literal[0].length;
-    } else if (isLetterAt(text, i)) {
-      let end = i;
-      while (end < text.length && isLetterAt(text, end)) end++;
-      const word = text.slice(i, end);
-      const open = end === text.length; // a word the cut fell inside may be a prefix of one
-      if (!JSON_WORDS.some((w) => w === word || (open && w.startsWith(word)))) return false;
-      i = end;
-    } else if (/[\s{}[\],:]/.test(text[i] as string)) i++;
-    else return false;
+function jsonStringEnd(text: string, i: number): number {
+  for (let j = i + 1; j < text.length; ) {
+    const c = text.charCodeAt(j);
+    if (c === QUOTE) return j + 1;
+    if (c < 0x20) return -1;
+    if (c !== BACKSLASH) j++;
+    else if ('"\\/bfnrt'.includes(text[j + 1] ?? '')) j += 2;
+    else if (text[j + 1] === 'u' && /^[0-9a-fA-F]{4}$/.test(text.slice(j + 2, j + 6))) j += 6;
+    else return -1;
   }
-  return true;
+  return -1;
 }
 
 /**
- * Read one JSON object or array value by value: string literals and keys as
- * prose, number literals as written. `complete`: `text` must be one JSON value
- * (`JSON.parse` is the check). Otherwise it is the start of one, cut by the
- * byte cap, and is read up to its last whole literal: a string the cut fell
- * inside is left unread. Returns how many code units were read, or -1 when the
- * text is not (the start of) one JSON value.
+ * Whether `text` is ONE JSON object or array, by JSON's own grammar, followed
+ * token by token with a bracket stack: a value, then only `,` or a closer (`:`
+ * after a key), never two values side by side, numbers and strings in JSON's
+ * own spelling, nothing after the last closer but white space. One pass,
+ * nothing built. It decides how a text is read — the WHOLE text, also when a
+ * byte cap reads only its start, so a cut reading and the whole text are read
+ * the same way. Prose that merely opens with a bracket
+ * (`[2026-11-25 10:00:00] GET 200`) is prose.
  */
-function jsonValues(text: string, into: (token: string) => void, complete: boolean): number {
-  const first = text.trimStart()[0];
-  if (first !== '{' && first !== '[') return -1;
-  if (complete) {
-    try {
-      JSON.parse(text); // the grammar check; the values are read from the text below
-    } catch {
-      return -1;
+export function isJsonValue(text: string): boolean {
+  const stack: string[] = [];
+  let want: 'value' | 'value-or-close' | 'key' | 'key-or-close' | 'colon' | 'after' = 'value';
+  let i = 0;
+  const skip = (): void => {
+    while (i < text.length && JSON_SPACE.includes(text[i] as string)) i++;
+  };
+  skip();
+  if (text[i] !== '{' && text[i] !== '[') return false;
+  for (; i < text.length; skip()) {
+    const c = text[i] as string;
+    const top = stack[stack.length - 1];
+    if (want === 'after') {
+      if (top === undefined) return false; // the value is whole: nothing else may follow
+      if (c === ',') want = top === '[' ? 'value' : 'key';
+      else if ((c === ']' && top === '[') || (c === '}' && top === '{')) stack.pop();
+      else return false;
+      i++;
+    } else if (want === 'colon') {
+      if (c !== ':') return false;
+      want = 'value';
+      i++;
+    } else if (want === 'key' || want === 'key-or-close') {
+      if (c === '}' && want === 'key-or-close') {
+        stack.pop();
+        want = 'after';
+        i++;
+      } else if (c === '"') {
+        i = jsonStringEnd(text, i);
+        if (i === -1) return false;
+        want = 'colon';
+      } else return false;
+    } else if (c === ']' && want === 'value-or-close') {
+      stack.pop();
+      want = 'after';
+      i++;
+    } else if (c === '{' || c === '[') {
+      stack.push(c);
+      want = c === '{' ? 'key-or-close' : 'value-or-close';
+      i++;
+    } else if (c === '"') {
+      i = jsonStringEnd(text, i);
+      if (i === -1) return false;
+      want = 'after';
+    } else if (c === '-' || isDigitAt(text, i)) {
+      JSON_STRICT_NUMBER.lastIndex = i;
+      const literal = JSON_STRICT_NUMBER.exec(text)?.[0];
+      if (literal === undefined) return false;
+      i += literal.length;
+      want = 'after';
+    } else {
+      const word = JSON_WORDS.find((w) => text.startsWith(w, i));
+      if (word === undefined) return false;
+      i += word.length;
+      want = 'after';
     }
-  } else if (!jsonShaped(text)) return -1;
-  // Collected first: a prefix nothing validated may hold a string JSON cannot decode, and then it
-  // is not JSON after all — read as prose, with nothing taken from this reading.
-  const found: string[] = [];
-  const keep = (token: string): void => void found.push(token);
-  let read = text.length;
+  }
+  return want === 'after' && stack.length === 0;
+}
+
+/**
+ * Read a JSON object or array — or the start of one, a byte cap having cut it
+ * — value by value: string literals and keys as prose, number literals as
+ * written. Called only when the whole text is one JSON value. A string the
+ * cut fell inside is left unread: returns how many code units were read.
+ */
+function jsonValues(text: string, into: (token: string) => void): number {
   for (let i = 0; i < text.length; ) {
     const c = text.charCodeAt(i);
     if (c === QUOTE) {
       let end = i + 1;
       while (end < text.length && text.charCodeAt(end) !== QUOTE)
         end += text.charCodeAt(end) === BACKSLASH ? 2 : 1;
-      if (end >= text.length) {
-        read = i; // the cut fell inside this string
-        break;
-      }
-      let decoded: unknown;
-      try {
-        decoded = JSON.parse(text.slice(i, end + 1));
-      } catch {
-        return -1;
-      }
-      proseTokens(decoded as string, keep);
+      if (end >= text.length) return i; // the cut fell inside this string
+      proseTokens(JSON.parse(text.slice(i, end + 1)) as string, into);
       i = end + 1;
     } else if (c === 0x2d || isDigitAt(text, i)) {
       JSON_NUMBER.lastIndex = i;
       const literal = JSON_NUMBER.exec(text)?.[0] ?? text.slice(i, i + 1);
       const token = classify(spelling(literal));
-      if (token !== undefined) keep(token);
+      if (token !== undefined) into(token);
       i += literal.length;
     } else i++;
   }
-  for (const token of found) into(token);
-  return read;
+  return text.length;
 }
 
 /** Every distinct token of `text`, in first-seen order, with no cap. */
 export function tokensOf(text: string): string[] {
   const seen = new Set<string>();
   const add = (token: string): void => void seen.add(token);
-  if (jsonValues(text, add, true) === -1) proseTokens(text, add);
+  if (isJsonValue(text)) jsonValues(text, add);
+  else proseTokens(text, add);
   return [...seen];
 }
 
@@ -375,8 +411,14 @@ function settledLength(p: string): number {
       else break;
     }
     const glued = start > 0 && isLetterAt(p, start - 1);
-    if (lastComma !== -1 && !mayFold(p.slice(start, i), glued, i === p.length))
-      settled = lastComma + 1;
+    const run = p.slice(start, i);
+    if (lastComma === -1 || mayFold(run, glued, i === p.length)) continue;
+    // The run cannot fold, so every one of its commas separates. But the settled part is read on
+    // its own: what it keeps of the run must not fold there either (`120,975,` of
+    // `120,975,300,1234-5` would). Then settle after the run's FIRST comma — one group alone never
+    // folds — rather than after its last.
+    const before = run.slice(0, lastComma - start);
+    settled = mayFold(before, glued, false) ? start + run.indexOf(',') + 1 : lastComma + 1;
   }
   return settled;
 }
@@ -419,13 +461,12 @@ export function readTokensUpTo(text: string, maxBytes: number): LedgerTokenReadi
   }
   const seen = new Set<string>();
   const add = (token: string): void => void seen.add(token);
+  // Read the part read the way the WHOLE text is read: as JSON only when the whole is one value.
   const prefix = text.slice(0, readUnits);
-  if (readUnits === text.length) {
-    if (jsonValues(prefix, add, true) === -1) proseTokens(prefix, add);
-  } else {
-    const read = jsonValues(prefix, add, false);
-    if (read === -1) proseTokens(prefix, add);
-    else if (read < prefix.length) {
+  if (!isJsonValue(text)) proseTokens(prefix, add);
+  else {
+    const read = jsonValues(prefix, add);
+    if (read < prefix.length) {
       readBytes -= utf8Bytes(prefix.slice(read)); // a JSON string the cut fell inside: unread
       readUnits = read;
     }

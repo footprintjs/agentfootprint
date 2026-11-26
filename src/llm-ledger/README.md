@@ -78,7 +78,9 @@ edge is refused, never a raw error.
 
 A wrong MAC on ANY line refuses the whole session (`mac-mismatch`); nothing is loaded in part. A
 batch starts where the last one ended and every one of its lines names the same `end`; a line whose
-MAC verifies but whose `end` breaks that is `malformed`. A file that does not end with a newline,
+MAC verifies but whose `end` breaks that is `malformed` (an `end` that is not a whole number of at
+least 1 is not a line of this store at all, and is refused as `mac-mismatch` before the MAC is
+computed). A file that does not end with a newline,
 whose last line is not JSON, that is empty, or whose last batch is unfinished (it ends before the
 seq its last lines name) is `torn-line`: the adapter never truncates it and has no repair command,
 so the host inspects the file and opens a new session. So a loaded log is always whole batches, and
@@ -93,13 +95,26 @@ the lock and reads once more, so an append still being written is never refused 
 **Two writers and one lock — what is closed, and the gap that remains.** The stale rule reads the
 wall clock, so a writer that is still running can look dead (the machine slept in the middle of an
 append, the process was stopped, the clock stepped forward, an fsync was slow), and two waiters on
-one dead writer's lock can both take it. So an append checks, right before its write, that the lock
-is still the one it took (same device and inode): if not, it writes nothing and answers
-`locked-timeout`. After its fsync it checks again: if the lock was lost by then, it answers
-`lock-lost`, never a seq. What remains: a takeover that lands between that last check and the write
-system call lets two batches reach one seq. The next `load` then refuses the whole session
-(`mac-mismatch`) — refused, never forged, and at most one writer was told its seq. Closing this gap
-needs a lock the kernel holds, which this release does not take.
+one dead writer's lock can both take it. So the lock carries a random token, written when it is
+taken: a lock is this append's own only while its device, inode AND token match (a file system may
+hand a freed inode number straight to the next file, so the inode alone cannot tell a lock from the
+one that replaced it). An append checks this right before its write: if the lock is not its own, it
+writes nothing and answers `locked-timeout`. After its fsync it checks again: if the lock was lost
+by then, it answers `lock-lost`, never a seq. Its release removes the lock only while it is still
+its own, and the stale takeover re-checks the lock it is about to remove, token included.
+
+**What remains, and what it costs:** a takeover that lands between that last check and the write
+system call lets two batches reach one seq. That loses the SESSION: the next `load` refuses it
+(`mac-mismatch`) — refused, never forged — and the one writer that was told a seq was told one that
+does not read back. Closing this gap needs a lock the kernel holds, which this release does not
+take.
+
+**`lock-lost` is not `conflict` — a rule for the next part's `append` stage.** On `conflict`,
+nothing was written: reload, re-check, re-stamp at the new seq and try again. On `lock-lost`, the
+batch was written and may stand: reload, and compare the canonical form of this call's own entries
+with the log at `expectedSeq + 1 … end`. If they are there, the append stood; if not, it did not.
+Never re-stamp and append the same entries on `lock-lost`: if the batch stood, that appends it
+twice.
 
 The directory is created 0700 and refused when it is a link, another user's, or writable by group
 or others. Files are opened with `O_NOFOLLOW` and created 0600, checked with `fstat` on the open
@@ -157,7 +172,15 @@ in CSV — except inside a thousands-grouped number (a run of digits and commas 
 is `41200`). So `1200,9750` gives `1200` and `9750`, and `host-a,1200,9750,ok` gives both values,
 where the extractor sees neither. The differential test against that extractor, planned for the
 plugin adapter, lists these as known differences. One JSON object or array is read value by value
-(numbers as literals), and so is a cut prefix of one, up to its last whole literal.
+(numbers as literals). Which way a text is read is decided on the WHOLE text, by JSON's grammar in
+one pass (`isJsonValue`), also when the byte cap reads only its start: a cut JSON value is then read
+as JSON up to its last whole literal, and prose that merely opens with a bracket (a log line
+`[2026-11-25 10:00:00] …`) is prose. So a cut reading never keeps a token the whole text does not
+hold.
+
+What the rule cannot see: all-letter names; numbers under 4 digits; respellings (`1.2 s` against
+`1200ms`); and a CSV row whose values happen to look thousands-grouped (`x,1,234` reads `1234`, not
+`1` and `234`).
 
 A window is `{ from, to }`, half-open, `from < to`, both RFC 3339 instants with an upper-case `T`,
 `Z` or `±hh:mm`, seconds required, 0–3 fraction digits and no leap second (`window.ts`). It is a
@@ -173,7 +196,12 @@ form and holds each file's bare-specifier allowance: every file may import `foot
 `foottrace/canonical-json`; `fileStore.ts` also `node:fs`, `node:fs/promises`, `node:path` and
 `node:crypto`. Web Crypto appears only in `digest.ts`, as `globalThis.crypto` and no other
 `globalThis.` access; `process`, `require`, `import()`, `import.meta`, `eval`, the `Function`
-constructor, the network (`fetch`, `WebSocket`, `XMLHttpRequest`) and decorators appear nowhere; no
-file runs code at module evaluation. Tests beside the code import only the folder,
+constructor, the network (`fetch`, `WebSocket`, `XMLHttpRequest`) and decorators appear nowhere,
+nor does a `.constructor` or `['constructor']` read (the Function constructor's two common reaches
+without its name) or a triple-slash `/// <reference …>` directive (a type-level edge out); no file
+runs code at module evaluation. A fence over source text cannot stop every call built at run time —
+a property name put together from pieces, a function a host hands in. What it stops: every import
+form, the Node and network globals and `eval` by name, the Function constructor by name and by those
+two reaches, `import.meta`, decorators, code at module evaluation, and Web Crypto outside its file. Tests beside the code import only the folder,
 `vitest`, `footprintjs`, `foottrace` and `node:` builtins; tests that need repository helpers live
 in `test/llm-ledger/`.

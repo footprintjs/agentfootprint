@@ -257,6 +257,43 @@ describe('readTokens — the receipt caps', () => {
     ]);
   });
 
+  it('prose that opens with a bracket is prose, also when it is cut (the review cases)', () => {
+    const lines = Array.from(
+      { length: 30_000 },
+      (_, i) =>
+        `[2026-11-25 10:${String(i % 60).padStart(2, '0')}:00] "GET /x" 200 ${1000 + i}-5678`,
+    ).join('\n');
+    expect(lines.length).toBeGreaterThan(MiB);
+    const reading = readTokens(lines);
+    const whole = new Set(tokensOf(lines));
+    for (const token of reading.tokens) expect(whole.has(token), token).toBe(true);
+    expect(reading.tokens.slice(0, 4)).toEqual(['2026-11-25', '10:00:00', '1000-5678', '10:01:00']);
+    expect(reading.tokens).not.toContain('2026');
+    expect(reading.tokens).not.toContain('-5678');
+    // The 2,048 kept, every other distinct token before the cap counted: nothing dropped uncounted.
+    expect(reading.cut?.tokensDropped).toBeGreaterThan(20_000);
+    const numbers = `[${Array.from(
+      { length: 200_000 },
+      (_, i) => `1,${String(100 + (i % 900))} 5,678`,
+    ).join(' ')}`;
+    const counted = readTokens(numbers);
+    expect(counted.tokens.slice(0, 2)).toEqual(['1100', '5678']);
+    expect(counted.tokens).toHaveLength(901); // 1100…1999 and 5678: every value, none dropped
+    expect(counted.cut?.bytesUnread).toBeGreaterThan(0);
+  });
+
+  it('a cut never keeps a number the grouping of its settled part would invent (the review cases)', () => {
+    const date = 'n 1,234,2026-11-25';
+    for (let cap = 9; cap < date.length; cap++)
+      expect(readTokensUpTo(date, cap).tokens, `cap ${cap}`).not.toContain('1234');
+    expect(tokensOf(date)).toEqual(['2026-11-25']);
+    const row = 'row 120,975,300,1234-5 end';
+    expect(readTokensUpTo(row, 21).tokens).toEqual([]);
+    expect(tokensOf(row)).toEqual(['1234-5']);
+    // A run whose kept part cannot fold on its own still settles at its last comma.
+    expect(readTokensUpTo('x 1200,9750,4321', 14).tokens).toEqual(['1200', '9750']);
+  });
+
   it('readTokensUpTo takes a whole number', () => {
     expect(() => readTokensUpTo('x', -1)).toThrow(RangeError);
     expect(() => readTokensUpTo('x', 1.5)).toThrow(RangeError);

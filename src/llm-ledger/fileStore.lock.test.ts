@@ -9,7 +9,7 @@
  * takeover re-checks the lock it is about to remove.
  */
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { constants, existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
@@ -35,25 +35,34 @@ function unwrap<E extends LedgerEntry>(built: { ok: boolean; entry?: E }): E {
 const note = (text: string) =>
   unwrap(noteEntry({ seq: 2, at: AT }, { kind: 'claim', text, cites: [] }));
 
-type Op = 'lstat' | 'lstat:after' | 'unlink' | 'opened' | 'sync';
+type Op = 'lstat' | 'lstat:after' | 'unlink' | 'opened' | 'created' | 'sync';
 /** The test's hook: runs around each call a hooked store makes, by writer, operation and path. */
 let hook: (writer: string, op: Op, path: string) => Promise<void> = async () => undefined;
 
-/** A file store whose `node:fs/promises` calls pass through `hook`, labelled `writer`. */
+/**
+ * A file store whose `node:fs/promises` calls pass through `hook`, labelled `writer`. With
+ * `reuseInodes`, every stat of a lock reports ONE inode number — a file system that hands a freed
+ * number straight to the next file (ext4 and XFS can).
+ */
 async function hookedStore(
   writer: string,
   options: { dir: string; key: Uint8Array },
+  reuseInodes = false,
 ): Promise<LedgerStore> {
   vi.resetModules();
   vi.doMock('node:fs/promises', async (real) => {
     const fsp = await real<typeof import('node:fs/promises')>();
+    const reused = <S extends object>(path: string, stat: S): S =>
+      reuseInodes && path.endsWith('.lock')
+        ? Object.assign(Object.create(Object.getPrototypeOf(stat)), stat, { ino: 4242 })
+        : stat;
     return {
       ...fsp,
       lstat: async (...args: Parameters<typeof fsp.lstat>) => {
         await hook(writer, 'lstat', String(args[0]));
         const stat = await fsp.lstat(...args);
         await hook(writer, 'lstat:after', String(args[0]));
-        return stat;
+        return reused(String(args[0]), stat);
       },
       unlink: async (...args: Parameters<typeof fsp.unlink>) => {
         await hook(writer, 'unlink', String(args[0]));
@@ -62,7 +71,10 @@ async function hookedStore(
       open: async (...args: Parameters<typeof fsp.open>) => {
         const handle = await fsp.open(...args);
         const path = String(args[0]);
-        await hook(writer, 'opened', path);
+        const creating = typeof args[1] === 'number' && (args[1] & constants.O_EXCL) !== 0;
+        await hook(writer, creating ? 'created' : 'opened', path);
+        const stat = handle.stat.bind(handle);
+        Object.defineProperty(handle, 'stat', { value: async () => reused(path, await stat()) });
         const sync = handle.sync.bind(handle);
         Object.defineProperty(handle, 'sync', {
           value: async () => {
@@ -211,7 +223,7 @@ describe('the stale takeover', () => {
       if (writer === 'W1' && op === 'unlink') await w2Rechecked.promise;
       // ...and removes it only after W1 has taken a fresh one: W2 removes W1's lock.
       if (writer === 'W2' && op === 'unlink') await w1Acquired.promise;
-      if (op === 'opened') (writer === 'W1' ? w1Acquired : w2Acquired).resolve();
+      if (op === 'created') (writer === 'W1' ? w1Acquired : w2Acquired).resolve();
       // W1's check before its write comes after W2 holds the lock it took from W1.
       if (writer === 'W1' && op === 'lstat' && looks.W1 === 3) await w2Acquired.promise;
     };
@@ -225,5 +237,78 @@ describe('the stale takeover', () => {
     const log = await plain.load(s);
     expect(log.seq).toBe(2);
     expect((log.entries[1] as { text: string }).text).toBe('written by W2 2222');
+  }, 15_000);
+});
+
+describe('a file system that reuses inode numbers', () => {
+  it('a lock that replaced ours under the same inode is still not ours: its token differs', async () => {
+    const { dir, key, plain, s, lock } = await session();
+    const a = await hookedStore('A', { dir, key }, true);
+    const b = await hookedStore('B', { dir, key }, true);
+    const bCreated = deferred();
+    const aDone = deferred();
+    let looksB = 0;
+    let bAnswer: Promise<string> | undefined;
+    hook = async (writer, op, path) => {
+      if (path !== lock) return;
+      if (writer === 'B' && op === 'created') bCreated.resolve();
+      // B, holding the lock it took, waits to write until A has made its check.
+      if (writer === 'B' && op === 'lstat' && ++looksB === 3) await aDone.promise;
+      // A stalls just before its check; meanwhile its lock looks stale and B takes it.
+      if (writer === 'A' && op === 'lstat' && bAnswer === undefined) {
+        lookStale(lock);
+        bAnswer = answer(b.append(s, 1, [note('written by B 2222')]));
+        await bCreated.promise;
+      }
+    };
+    const a1 = await answer(a.append(s, 1, [note('written by A 1111')]));
+    aDone.resolve();
+    expect(a1).toBe('locked-timeout');
+    expect(await bAnswer).toBe('2');
+    expect(existsSync(lock)).toBe(false); // A's release never removed B's lock; B removed its own
+    const log = await plain.load(s);
+    expect(log.seq).toBe(2);
+    expect((log.entries[1] as { text: string }).text).toBe('written by B 2222');
+  }, 15_000);
+
+  it('after its write, a writer whose lock was replaced under the same inode answers lock-lost and leaves the new lock', async () => {
+    const { dir, key, plain, s, lock } = await session();
+    const a = await hookedStore('A', { dir, key }, true);
+    let replaced = false;
+    hook = async (writer, op, path) => {
+      if (writer === 'A' && op === 'sync' && path.endsWith('.jsonl') && !replaced) {
+        replaced = true;
+        rmSync(lock);
+        writeFileSync(lock, 'another-writers-token', { mode: 0o600 });
+      }
+    };
+    expect(await answer(a.append(s, 1, [note('written by A 1111')]))).toBe('lock-lost');
+    expect(existsSync(lock)).toBe(true);
+    rmSync(lock);
+    expect((await plain.load(s)).seq).toBe(2);
+  });
+
+  it('the stale takeover leaves a lock that replaced the stale one, though device, inode and age match', async () => {
+    const { dir, key, s, lock } = await session();
+    writeFileSync(lock, 'a-dead-writers-token', { mode: 0o600 });
+    lookStale(lock);
+    const staleAt = Date.now() / 1000 - 31;
+    utimesSync(lock, staleAt, staleAt);
+    const w = await hookedStore('W', { dir, key }, true);
+    let looks = 0;
+    hook = async (writer, op, path) => {
+      if (writer !== 'W' || op !== 'lstat' || path !== lock) return;
+      looks++;
+      if (looks === 2) {
+        // Between W's two looks, a live writer replaced the dead lock — same (reused) inode, the
+        // same age to the millisecond — and only its token tells them apart.
+        rmSync(lock);
+        writeFileSync(lock, 'a-live-writers-token', { mode: 0o600 });
+        utimesSync(lock, staleAt, staleAt);
+      }
+      if (looks === 3) utimesSync(lock, Date.now() / 1000, Date.now() / 1000); // it is live
+    };
+    expect(await answer(w.append(s, 1, [note('written by W 3333')]))).toBe('locked-timeout');
+    expect(existsSync(lock)).toBe(true);
   }, 15_000);
 });

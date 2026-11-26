@@ -20,7 +20,14 @@
  *   - Web Crypto appears only in `digest.ts`, and only as `globalThis.crypto`: no other
  *     `globalThis.` access anywhere, and no bare `crypto`.
  *   - no decorator anywhere, and no computed class member name: both run code when a class is
- *     defined.
+ *     defined; no `.constructor` / `['constructor']` read (the Function constructor without its
+ *     name); no triple-slash `/// <reference …>` directive (a type-level edge out).
+ *
+ * WHAT A FENCE OVER SOURCE TEXT CANNOT DO: stop every call built at run time (a property name put
+ * together from pieces, a function handed in by a host). What it does stop: every import form, the
+ * Node and network globals by name, `eval` and the Function constructor by name and by its two
+ * common reaches, `import.meta`, decorators, code at module evaluation, and Web Crypto outside its
+ * one file.
  *   - no file runs code at module evaluation: the top level holds imports, exports and declarations
  *     whose initializers are inert (literals, functions, `Object.freeze` of a literal).
  *   - a test beside the code imports only the folder, `vitest`, `footprintjs`, `foottrace` and
@@ -308,9 +315,25 @@ function productionFaults(file: string, text: string): string[] {
     }
     if (ts.isMetaProperty(node)) say(node, '`import.meta`');
     if (ts.isDecorator(node)) say(node, 'a decorator: it runs code when its class is defined');
+    // `[].constructor.constructor('…')` reaches the Function constructor without naming it.
+    if (ts.isPropertyAccessExpression(node) && node.name.text === 'constructor')
+      say(node, 'a `.constructor` read: the way to the Function constructor without its name');
+    if (
+      ts.isElementAccessExpression(node) &&
+      ts.isStringLiteralLike(node.argumentExpression) &&
+      node.argumentExpression.text === 'constructor'
+    )
+      say(node, "a `['constructor']` read: the way to the Function constructor without its name");
     ts.forEachChild(node, visit);
   };
   visit(source);
+  // A triple-slash directive is an edge the import walk never sees: a type-level reach out.
+  for (const ref of [
+    ...source.referencedFiles,
+    ...source.typeReferenceDirectives,
+    ...source.libReferenceDirectives,
+  ])
+    faults.push(`${file} — a triple-slash reference to '${ref.fileName}'`);
   return [...faults, ...topLevelCode(source)];
 }
 
@@ -404,6 +427,27 @@ describe('llm-ledger fence — the scanner flags every refused shape', () => {
       'export const g = () => globalThis;',
     ],
     ['a bare crypto in digest.ts', WEB_CRYPTO_FILE, 'export const r = () => crypto.randomUUID();'],
+    [
+      'a triple-slash path reference',
+      PLAIN,
+      '/// <reference path="../time/instant.ts" />\nexport const x = 1;',
+    ],
+    [
+      'a triple-slash types reference',
+      PLAIN,
+      '/// <reference types="node" />\nexport const x = 1;',
+    ],
+    ['a triple-slash lib reference', PLAIN, '/// <reference lib="dom" />\nexport const x = 1;'],
+    [
+      'the Function constructor by .constructor',
+      PLAIN,
+      "export const f = () => [].constructor.constructor('return 1')();",
+    ],
+    [
+      "the Function constructor by ['constructor']",
+      PLAIN,
+      "export const f = () => ({})['constructor']['constructor']('return 1');",
+    ],
   ];
   for (const [name, file, source] of REFUSED) {
     it(`flags ${name}`, () => {
