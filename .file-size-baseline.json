@@ -79,7 +79,7 @@
     "src/memory/define.types.ts": 660,
     "src/memory/stages/summarize.ts": 690,
     "src/recorders/observability/BoundaryRecorder.ts": 909,
-    "src/recorders/observability/FlowchartRecorder.ts": 762,
+    "src/recorders/observability/FlowchartRecorder.ts": 664,
     "src/recorders/observability/recordingEnvelope.ts": 651,
     "src/recorders/observability/recordingPack.ts": 678,
     "src/recorders/observability/RunStepRecorder.ts": 789,
