@@ -28,6 +28,10 @@ the body table still runs.
 
 - `buildToolRegistry` · `listedScopedTools`: scoped tools join the static list; no skill-scope
   omission is reported; `listedScopedTools` names them for the gate.
+- `core/slots/composeSkillCatalog.ts` (handed the claimants by `buildToolsSlot` only under `listed`):
+  the static list drops every tool whose declaring skills are ALL hidden from this iteration's role,
+  by the one sole-owner rule (`lib/spokenIds.ts` · `visibleToRole`, which the dispatch roster asks
+  too). A tool a visible skill also declares stays, with its own description, which names no skill.
 - `runtime/skills/owner.ts` · `readSkillOfferFor`: the description leaves out the cursor, the
   menu and the reachable set (a tree's grantable set is its open skills, which do not move).
 - `stages/toolCalls/execution/callStart.ts`: the gate.
@@ -38,6 +42,12 @@ the body table still runs.
   the default chose `declared`.
 
 ## Known limits
+
+- The role is asked once per iteration, as before (`hiddenSkillIdsOf`). A role changed between
+  turns re-lists on the next turn's first request (slice 1 records it); a role revoked inside a
+  signed tool turn changes the list under the signed reasoning and is slice 1's named refusal.
+- Under `declared` nothing here runs: an UNSCOPED tool of a hidden skill stays on the wire, and a
+  hidden skill's scoped tool called by name runs off the wire, as before this folder existed.
 
 - A skill the graph activates has no `read_skill` result: its body stays in the system prompt from
   the first request it is active on, so a cursor move inside a signed tool turn is still refused

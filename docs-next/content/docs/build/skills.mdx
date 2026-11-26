@@ -599,7 +599,10 @@ it cannot place) the agent's default `skillContext` is `'listed'`:
 - a call to a scoped skill's tool (`autoActivate: 'currentSkill'`, `scopeTools`,
   `.toolsFromActiveSkill()`) before its skill is loaded is refused with a
   sentence that names the skill and the `read_skill` call that loads it, and
-  the tool does not run.
+  the tool does not run;
+- a tool whose declaring skills are all hidden from the caller's role is not
+  listed, and a call to it is refused without naming the skill (a tool a visible
+  skill also declares stays listed, with its own description).
 
 <CodeFile path="examples/features/skills-listed.ts" region="listed" title="examples/features/skills-listed.ts (region: listed)" />
 

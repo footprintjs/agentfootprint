@@ -394,3 +394,172 @@ describe('the body is the app’s own text', () => {
     expect(resultOf(r.bodies[2], 'toolu_1')).not.toBe(`lookup ran: ${'x'.repeat(60)}`);
   });
 });
+
+describe('12. role-hidden skills under listed (security)', () => {
+  // `vault` is hidden from the guest role; `share_lookup` is shared by `vault` and the visible `smb-triage`.
+  const shared = tool('share_lookup');
+  let revoked = false;
+  const revoke = defineTool<Record<string, never>, string>({
+    name: 'revoke',
+    description: 'Revoke a role.',
+    inputSchema: { type: 'object', properties: {} },
+    execute: async () => {
+      revoked = true;
+      return 'revoked';
+    },
+  });
+  const roles = (hiddenFor: (principal: string | undefined, iteration?: number) => boolean) => ({
+    name: 'role-checker',
+    governs: ['skill_read' as const],
+    check: (request: {
+      capability: string;
+      target?: string;
+      identity?: { principal?: string };
+      iteration?: number;
+    }) => ({
+      result:
+        request.capability === 'skill_read' &&
+        request.target === 'skill:vault' &&
+        hiddenFor(request.identity?.principal, request.iteration)
+          ? ('deny' as const)
+          : ('allow' as const),
+    }),
+  });
+  const vault = () =>
+    defineSkill({
+      id: 'vault',
+      description: 'Vault operations.',
+      body: 'VAULT PROCEDURE.',
+      tools: [tool('vault_wipe'), shared],
+      autoActivate: 'currentSkill',
+    });
+  const triage = () =>
+    defineSkill({
+      id: 'smb-triage',
+      description: 'Diagnose slow SMB shares.',
+      body: BODY,
+      tools: [tool('smb_report'), shared],
+      autoActivate: 'currentSkill',
+    });
+
+  function agentFor(
+    bodies: Body[],
+    script: readonly Step[],
+    checker: ReturnType<typeof roles>,
+    skillContext?: 'declared',
+  ) {
+    const provider = anthropic({ _client: scriptedClient(BOUND, bodies, script) as never });
+    const agent = Agent.create({
+      provider,
+      model: BOUND,
+      maxIterations: 6,
+      permissionChecker: checker as never,
+      ...(skillContext !== undefined && { skillContext }),
+    })
+      .system('You diagnose file-share problems.')
+      .tool(revoke)
+      .skill(triage())
+      .skill(vault())
+      .thinking({ budget: 1500 })
+      .build();
+    const starts: Record<string, unknown>[] = [];
+    agent.on('agentfootprint.stream.llm_start', (e) => starts.push(e.payload as never));
+    const ask = (principal: string) =>
+      agent
+        .run({
+          message: 'Why is the finance share slow?',
+          identity: { principal, conversationId: principal },
+        })
+        .catch((e: unknown) => e);
+    return { agent, starts, ask };
+  }
+
+  it('a hidden skill: its tools and its name are absent from every request; a shared tool stays, saying nothing of it', async () => {
+    executed = [];
+    const bodies: Body[] = [];
+    const { starts, ask } = agentFor(
+      bodies,
+      [READ, DONE],
+      roles((p) => p === 'guest'),
+    );
+    const answer = await ask('guest');
+    expect(answer).not.toBeInstanceOf(Error);
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(toolNames(body)).toEqual(['read_skill', 'revoke', 'share_lookup', 'smb_report']);
+      expect(JSON.stringify(body).toLowerCase()).not.toContain('vault');
+    }
+    expect(bodies[0]!.tools!.find((t) => t.name === 'share_lookup')!.description).toBe(
+      'The share_lookup tool.',
+    );
+    expect(JSON.stringify(starts).toLowerCase()).not.toContain('vault');
+    expect(prefixHeld(bodies)).toBe(true);
+  });
+
+  it('a direct call to the hidden skill’s tool: refused, the tool does not run, the skill is not named', async () => {
+    const results: Record<string, { result?: string; ran: string[] }> = {};
+    for (const mode of ['listed', 'declared'] as const) {
+      executed = [];
+      const bodies: Body[] = [];
+      const { ask } = agentFor(
+        bodies,
+        [{ tool: 'vault_wipe', input: {} }, DONE],
+        roles((p) => p === 'guest'),
+        mode === 'declared' ? 'declared' : undefined,
+      );
+      await ask('guest');
+      results[mode] = { result: resultOf(bodies[1], 'toolu_1'), ran: [...executed] };
+    }
+    expect(results.listed!.ran).toEqual([]);
+    expect(results.listed!.result).toBe(
+      "Tool 'vault_wipe' did not run: the skill it belongs to was not loaded on that call.",
+    );
+    expect(results.listed!.result!.toLowerCase()).not.toContain("'vault'");
+    // Today's path (`declared`) RUNS the hidden skill's scoped tool off the wire: the hole `listed` closes.
+    expect(results.declared!.ran).toEqual(['vault_wipe']);
+    expect(results.declared!.result).toMatch(/^vault_wipe ran/);
+  });
+
+  it('two roles on one agent: each run lists what its own role may see', async () => {
+    const bodies: Body[] = [];
+    const { ask } = agentFor(
+      bodies,
+      [DONE],
+      roles((p) => p === 'guest'),
+    );
+    await ask('admin');
+    await ask('guest');
+    expect(toolNames(bodies[0])).toContain('vault_wipe');
+    expect(toolNames(bodies[1])).not.toContain('vault_wipe');
+    expect(JSON.stringify(bodies[1]).toLowerCase()).not.toContain('vault');
+  });
+
+  it('a role change between turns re-lists on the next turn; inside a signed turn it is the named refusal', async () => {
+    revoked = false;
+    const bodies: Body[] = [];
+    const { ask } = agentFor(
+      bodies,
+      [DONE],
+      roles(() => revoked),
+    );
+    await ask('admin');
+    revoked = true;
+    await ask('admin');
+    expect(toolNames(bodies[0])).toContain('vault_wipe');
+    expect(toolNames(bodies[1])).not.toContain('vault_wipe');
+
+    // Revoked between request 1 and request 2 of ONE signed tool turn (by the `revoke` tool): the list
+    // would change under the signed reasoning, so slice 1's check refuses it by name.
+    revoked = false;
+    const inTurn: Body[] = [];
+    const flip = agentFor(
+      inTurn,
+      [{ tool: 'revoke', input: {} }, DONE],
+      roles(() => revoked),
+    );
+    const error = await flip.ask('admin');
+    expect(error).toBeInstanceOf(ContextChangedError);
+    expect((error as Error).message).toMatch(/tool 'vault_wipe' was removed/);
+    expect(inTurn).toHaveLength(1);
+  });
+});

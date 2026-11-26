@@ -16,7 +16,7 @@ import type { Resolution } from '../contracts/callFacts.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { SKIP_STEP_TOOL_NAME } from '../../../../../injection-engine/skillSteps.js';
 import { parkedMemberIds, type MapEngagement } from '../../../../../maps/engagement/types.js';
-import { type SpokenIds, spoken } from '../../../../../lib/spokenIds.js';
+import { type SpokenIds, spoken, visibleToRole } from '../../../../../lib/spokenIds.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import { SOURCES_NOTE } from '../helpers/sourceNote.js';
 
@@ -208,10 +208,7 @@ export function buildToolCatalogOperations(
     const hidden = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
     if (hidden.size === 0) return { named: names, held: names.length > 0 };
     const declaredBy = deps.toolDeclaringSkills;
-    return spoken(names, (name) => {
-      const owners = declaredBy?.get(name);
-      return owners === undefined || owners.some((id) => !hidden.has(id));
-    });
+    return spoken(names, (name) => visibleToRole(declaredBy?.get(name), hidden));
   };
 
   return {

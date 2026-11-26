@@ -7,6 +7,7 @@ On a model whose thinking is bound to the context it was written under (`thinkin
 
 - every skill tool, scoped ones included, is on the tool list from the first request with a description that does not change, and `read_skill`'s description is the catalog for the whole run (it no longer follows the graph cursor or the turn's menu);
 - the body of a skill `read_skill` loads is that call's result, never the system prompt, and it is exempt from `maxToolResultChars` and artifact placement;
+- a tool whose declaring skills are all hidden from the caller's role (a permission checker that governs `skill_read`) is not listed, and a call to it is refused without naming the skill; a tool a visible skill also declares stays listed;
 - **behaviour change:** a call to a scoped skill's tool before its skill is loaded is now refused with a fixed sentence naming the skill and the next step, and the tool does not run. Before, such a call ran without being offered.
 
 The choice is recorded as `skillContext` on the first `agentfootprint.stream.llm_start` of each run: the tool strategy and the body channel in the shared decision-record shape (`strategy`, `by`, `rule`, `label`, `reads`, `voucher`), and the binding answer that decided them. Every other model (OpenAI-family, Gemini, Ollama, mock, older Claude) keeps `'declared'` and its exact request and event bytes. Still refused by name inside a signed tool turn: a skill the graph activates when its cursor moves, step narrowing, an `activeWhen` instruction, a moving tool provider.

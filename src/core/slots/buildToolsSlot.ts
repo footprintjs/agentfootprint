@@ -237,6 +237,8 @@ export interface ToolsSlotConfig {
    * Absent — the message-API charts — and every static schema is `registry`.
    */
   readonly toolClaimants?: ReadonlyMap<string, readonly ToolClaim[]>;
+  /** The `listed` skill context: hidden skills' tools leave the static list (`composeSkillCatalog`). */
+  readonly listedSkillTools?: true;
   /**
    * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
    *
@@ -435,9 +437,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   //     the slot"
   //   • emits `tools.discovery_started`, `tools.discovery_completed` (or
   //     `tools.discovery_failed`) with timing + provider id
-  //
-  // Sync providers still pay zero microtask overhead — the dynamic
-  // `instanceof Promise` check skips await for non-Promise returns.
   const discoverStage = async (scope: TypedScope<ToolsSubflowState>): Promise<void> => {
     const runtime = config.runtime?.(scope);
     if (runtime?.servedTools) delete runtime.servedTools.selection;
@@ -536,6 +535,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       resolvedHidden,
       args.currentSkillId,
       args.turnRoute,
+      config.listedSkillTools === true ? toolClaimants ?? new Map() : undefined,
     );
     // Step narrowing over the STATIC list (9.18.0): hold out the stepped
     // skill's other tools (sole-owner names only — see stepHoldOut), lead the
