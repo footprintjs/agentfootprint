@@ -172,6 +172,37 @@ export function normalizeToken(raw: string): string {
   return v;
 }
 
+/**
+ * Keep a numeric comma run intact for the thousands/list decision, even
+ * when the field before it ends in a digit (e.g. `host1,41,200`).
+ * Declared tokens keep their existing boundaries.
+ */
+function* commaFields(
+  rough: string,
+  keepWhole: (token: string) => boolean,
+): IterableIterator<string> {
+  for (const piece of rough.split(LIST_COMMA)) {
+    if (!piece.includes(',') || keepWhole(normalizeToken(piece))) {
+      yield piece;
+      continue;
+    }
+
+    let start = 0;
+    let offset = 0;
+    let previousWasNumber = true;
+    for (const field of piece.split(',')) {
+      const isNumber = PLAIN_NUMBER.test(tokenSpelling(field));
+      if (!previousWasNumber && isNumber) {
+        yield piece.slice(start, offset - 1);
+        start = offset;
+      }
+      previousWasNumber = isNumber;
+      offset += field.length + 1;
+    }
+    yield piece.slice(start);
+  }
+}
+
 /** How many digit characters a string carries. */
 export function countDigits(v: string): number {
   let n = 0;
@@ -192,18 +223,14 @@ export function tokenize(
   declaredShapes: readonly { readonly match: RegExp }[] = [],
 ): string[] {
   const out: string[] = [];
+  const keepWhole = (token: string) => declaredShapes.some(({ match }) => match.test(token));
   for (const rough of withoutKeyColons(text).replace(INTRA_TOKEN, ' ').split(/\s+/)) {
     if (rough === '') continue;
-    // A comma inside a token is either a thousands separator (keep the token
-    // whole) or a list separator that had no space after it (split).
-    for (const piece of rough.split(LIST_COMMA)) {
+    for (const piece of commaFields(rough, keepWhole)) {
       if (piece.includes(',')) {
         const spelling = tokenSpelling(piece, true);
         const items = numericCommaItems(spelling);
-        if (
-          items !== undefined &&
-          !declaredShapes.some(({ match }) => match.test(normalizeToken(spelling)))
-        ) {
+        if (items !== undefined && !keepWhole(normalizeToken(spelling))) {
           for (const item of items) out.push(normalizeToken(item));
           continue;
         }
@@ -224,12 +251,13 @@ export function tokenize(
 export function answerTokenSpellings(
   text: string,
   onSpan?: (start: number, end: number) => void,
+  keepWhole: (token: string) => boolean = () => false,
 ): string[] {
   const out: string[] = [];
   // Key colons are replaced with one code unit, keeping source indices.
   for (const { 0: rough, index } of withoutKeyColons(text).matchAll(RANGE_TOKEN)) {
     let start = index;
-    for (const piece of rough.split(LIST_COMMA)) {
+    for (const piece of commaFields(rough, keepWhole)) {
       const spelling = tokenSpelling(
         piece,
         true,

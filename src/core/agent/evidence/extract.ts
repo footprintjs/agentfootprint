@@ -422,6 +422,8 @@ export function readAnswer(
       span,
     );
   };
+  const keepWhole = (token: string): boolean =>
+    isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token));
   for (const [text, offset] of answerTexts(answer, typed)) {
     const spans =
       candidateSpans !== undefined && offset !== undefined && budget > 0
@@ -434,6 +436,7 @@ export function readAnswer(
         : (start, end) => {
             if (spans.length < budget) spans.push([offset + start, offset + end]);
           },
+      keepWhole,
     );
     if (budget <= 0) {
       unread += spellings.length; // past the line: counted, never classified
@@ -448,7 +451,7 @@ export function readAnswer(
       const span = spans?.[index];
       const token = normalizeToken(spelling);
       // Test app-owned ID declarations on the intact token before heuristics.
-      if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
+      if (keepWhole(token)) {
         add(spelling, undefined, span);
         continue;
       }
