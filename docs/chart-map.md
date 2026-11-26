@@ -4,7 +4,7 @@
 
 This is a read-only index of production TypeScript source declarations, selected by the repository tsconfig. It does not execute application code, build a configured agent, or run stages, tools, providers or lazy resolvers.
 
-Found **39 mount declaration sites** (39 compiler-resolved engine calls, 0 unresolved structural ports) and **171 chart/stage declaration sites**. These are source sites, not runtime placements; repeated IDs and repeated source placements are retained. No historical mount count is enforced.
+Found **39 mount declaration sites** (39 compiler-resolved engine calls, 0 unresolved structural ports) and **198 chart/stage declaration sites**. These are source sites, not runtime placements; repeated IDs and repeated source placements are retained. No historical mount count is enforced.
 
 Enclosing source conditions and loops are shown without deciding their outcome. Early returns, caller-supplied graphs, lazy expansion and runtime multiplicity remain unresolved. Expressions ending in “see source” are abbreviated display text; each row links to the complete source.
 
@@ -56,7 +56,7 @@ Descriptions below report source arguments only. “Not supplied” does not pro
 
 ## Chart and stage descriptions
 
-32 declarations have no explicit description argument/options property; 0 have an empty literal; 15 have a description expression whose runtime text is not inferred.
+58 declarations have no explicit description argument/options property; 0 have an empty literal; 16 have a description expression whose runtime text is not inferred.
 
 | Declaration | Builder/factory | Method | Declared ID | Name | Explicit description | Enclosing control | Origin |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -143,7 +143,7 @@ Descriptions below report source arguments only. “Not supplied” does not pro
 | [src/core/agent/hostEnd/projection.ts:34](../src/core/agent/hostEnd/projection.ts#L34) | hostWriters | addFunction | acknowledge | Acknowledge projection | Not supplied at this declaration | Inside callback (memories .filter((memory) =&gt; memory.write &amp;&amp; memory.type === 'episodic' &amp;&amp; memory.strategy === 'window') .map) at line 21; outcome not analysed | engine |
 | [src/core/agent/sourceEvidence/flow.ts:31](../src/core/agent/sourceEvidence/flow.ts#L31) | runSourceEvidenceFlow | flowChart | \[expression\] first.id | \[expression\] first.id | Not supplied at this declaration | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/core/agent/sourceEvidence/flow.ts:32](../src/core/agent/sourceEvidence/flow.ts#L32) | runSourceEvidenceFlow | addFunction | \[expression\] step.id | \[expression\] step.id | Not supplied at this declaration | for (const step of steps.slice(1)) | engine |
-| [src/core/slots/buildMessagesSlot.ts:92](../src/core/slots/buildMessagesSlot.ts#L92) | buildMessagesSlot | flowChart | compose | Compose | Compose messages slot | No recorded enclosing source control; caller execution is not inferred. | engine |
+| [src/core/slots/buildMessagesSlot.ts:100](../src/core/slots/buildMessagesSlot.ts#L100) | buildMessagesSlot | flowChart | compose | Compose | Compose messages slot | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/core/slots/buildSystemPromptSlot.ts:86](../src/core/slots/buildSystemPromptSlot.ts#L86) | buildSystemPromptSlot | flowChart | compose | Compose | Compose system-prompt slot | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/core/slots/buildThinkingSubflow.ts:54](../src/core/slots/buildThinkingSubflow.ts#L54) | buildThinkingSubflow | flowChart | \[expression\] \`thinking-${handlerId}\` | Normalize | Expression: \`Normalize ${handlerId} thinking blocks\` | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/core/slots/buildToolsSlot.ts:983](../src/core/slots/buildToolsSlot.ts#L983) | buildToolsSlot | flowChart | discover | Discover | Discover provider tools | No recorded enclosing source control; caller execution is not inferred. | engine |
@@ -152,6 +152,33 @@ Descriptions below report source arguments only. “Not supplied” does not pro
 | [src/injection-engine/buildInjectionEngineSubflow.ts:339](../src/injection-engine/buildInjectionEngineSubflow.ts#L339) | buildObservedInjectionEngine | addFunction | evaluate | Evaluate | Evaluate every Injection trigger; produce activeInjections + metadata | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/injection-engine/buildInjectionEngineSubflow.ts:355](../src/injection-engine/buildInjectionEngineSubflow.ts#L355) | buildObservedInjectionEngine | addFunction | route | Route | Partition active injections into per-slot buckets (system-prompt / messages / tools) | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/injection-engine/buildInjectionEngineSubflow.ts:361](../src/injection-engine/buildInjectionEngineSubflow.ts#L361) | buildObservedInjectionEngine | addFunction | delta | Delta | Per-slot delta vs last turn: what activated / deactivated / stayed | No recorded enclosing source control; caller execution is not inferred. | engine |
+| [src/llm-ledger/calls.ts:214](../src/llm-ledger/calls.ts#L214) | chartOf | flowChart | read-call | read-call | Not supplied at this declaration | No recorded enclosing source control; caller execution is not inferred. | engine |
+| [src/llm-ledger/calls.ts:215](../src/llm-ledger/calls.ts#L215) | chartOf | addFunction | load-log | load-log | Not supplied at this declaration | No recorded enclosing source control; caller execution is not inferred. | engine |
+| [src/llm-ledger/calls.ts:216](../src/llm-ledger/calls.ts#L216) | chartOf | addDeciderFunction | admit | admit | Not supplied at this declaration | No recorded enclosing source control; caller execution is not inferred. | engine |
+| [src/llm-ledger/calls.ts:218](../src/llm-ledger/calls.ts#L218) | chartOf | addFunctionBranch | \[expression\] word | \[expression\] \`refuse: ${word}\` | Not supplied at this declaration | for (const word of ADMIT\_WORDS) | engine |
+| [src/llm-ledger/calls.ts:219](../src/llm-ledger/calls.ts#L219) | chartOf | addFunctionBranch | go | go | Not supplied at this declaration | No recorded enclosing source control; caller execution is not inferred. | engine |
+| [src/llm-ledger/calls.ts:222](../src/llm-ledger/calls.ts#L222) | chartOf | addFunction | extract-tokens | extract-tokens | Not supplied at this declaration | if (k === 'record' \|\| k === 'supply') | engine |
+| [src/llm-ledger/calls.ts:224](../src/llm-ledger/calls.ts#L224) | chartOf | addFunction | stamp | stamp | Not supplied at this declaration | if (k === 'open' \|\| k === 'note' \|\| k === 'withdraw') | engine |
+| [src/llm-ledger/calls.ts:227](../src/llm-ledger/calls.ts#L227) | chartOf | addDeciderFunction | compare | compare | Not supplied at this declaration | if (k === 'deliver') | engine |
+| [src/llm-ledger/calls.ts:228](../src/llm-ledger/calls.ts#L228) | chartOf | addFunctionBranch | matches | matches | Not supplied at this declaration | if (k === 'deliver') | engine |
+| [src/llm-ledger/calls.ts:229](../src/llm-ledger/calls.ts#L229) | chartOf | addFunctionBranch | differs | differs | Not supplied at this declaration | if (k === 'deliver') | engine |
+| [src/llm-ledger/calls.ts:230](../src/llm-ledger/calls.ts#L230) | chartOf | addFunctionBranch | no-submit | no-submit | Not supplied at this declaration | if (k === 'deliver') | engine |
+| [src/llm-ledger/calls.ts:233](../src/llm-ledger/calls.ts#L233) | chartOf | addFunction | stamp-delivered | stamp-delivered | Not supplied at this declaration | if (k === 'deliver') | engine |
+| [src/llm-ledger/calls.ts:236](../src/llm-ledger/calls.ts#L236) | chartOf | addFunction | check-claims | check-claims | Not supplied at this declaration | if (k === 'submit') | engine |
+| [src/llm-ledger/calls.ts:237](../src/llm-ledger/calls.ts#L237) | chartOf | addFunction | check-draft | check-draft | Not supplied at this declaration | if (k === 'submit') | engine |
+| [src/llm-ledger/calls.ts:240](../src/llm-ledger/calls.ts#L240) | chartOf | addFunction | check-claims | check-claims | Not supplied at this declaration | if (k === 'ask') | engine |
+| [src/llm-ledger/calls.ts:246](../src/llm-ledger/calls.ts#L246) | chartOf | addFunction | fold | fold | Not supplied at this declaration | if (k === 'submit' \|\| k === 'ask' \|\| k === 'report') | engine |
+| [src/llm-ledger/calls.ts:249](../src/llm-ledger/calls.ts#L249) | chartOf | addFunction | append | append | Not supplied at this declaration | if (k !== 'ask' &amp;&amp; k !== 'report') | engine |
+| [src/llm-ledger/calls.ts:250](../src/llm-ledger/calls.ts#L250) | chartOf | addDeciderFunction | after-append | after-append | Not supplied at this declaration | if (k !== 'ask' &amp;&amp; k !== 'report') | engine |
+| [src/llm-ledger/calls.ts:251](../src/llm-ledger/calls.ts#L251) | chartOf | addFunctionBranch | appended | appended | Not supplied at this declaration | if (k !== 'ask' &amp;&amp; k !== 'report') | engine |
+| [src/llm-ledger/calls.ts:252](../src/llm-ledger/calls.ts#L252) | chartOf | addFunctionBranch | append-refused | append refused | Not supplied at this declaration | if (k !== 'ask' &amp;&amp; k !== 'report') | engine |
+| [src/llm-ledger/calls.ts:253](../src/llm-ledger/calls.ts#L253) | chartOf | addFunctionBranch | busy | busy | Not supplied at this declaration | if (k !== 'ask' &amp;&amp; k !== 'report') | engine |
+| [src/llm-ledger/calls.ts:254](../src/llm-ledger/calls.ts#L254) | chartOf | addFunctionBranch | conflict | conflict | Expression: undefined | if (k !== 'ask' &amp;&amp; k !== 'report') | engine |
+| [src/llm-ledger/calls.ts:259](../src/llm-ledger/calls.ts#L259) | chartOf | addDeciderFunction | release | release | Not supplied at this declaration | if (k === 'submit') | engine |
+| [src/llm-ledger/calls.ts:260](../src/llm-ledger/calls.ts#L260) | chartOf | addPausableFunctionBranch | await-person | await-person | Not supplied at this declaration | if (k === 'submit') | engine |
+| [src/llm-ledger/calls.ts:261](../src/llm-ledger/calls.ts#L261) | chartOf | addFunctionBranch | no-wait | no-wait | Not supplied at this declaration | if (k === 'submit') | engine |
+| [src/llm-ledger/calls.ts:264](../src/llm-ledger/calls.ts#L264) | chartOf | addFunction | append-released | append-released | Not supplied at this declaration | if (k === 'submit') | engine |
+| [src/llm-ledger/calls.ts:265](../src/llm-ledger/calls.ts#L265) | chartOf | addFunction | reply | reply | Not supplied at this declaration | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/memory/causal/snapshotPipeline.ts:68](../src/memory/causal/snapshotPipeline.ts#L68) | snapshotPipeline | flowChart | load-snapshot | LoadSnapshot | Embed query, retrieve top-K past snapshots, project + format as system messages | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/memory/causal/snapshotPipeline.ts:72](../src/memory/causal/snapshotPipeline.ts#L72) | snapshotPipeline | flowChart | write-snapshot | WriteSnapshot | Capture (query, finalContent) from the run, embed query, persist as MemoryEntry&lt;SnapshotEntry&gt; | No recorded enclosing source control; caller execution is not inferred. | engine |
 | [src/memory/pipeline/auto.ts:228](../src/memory/pipeline/auto.ts#L228) | autoPipeline | flowChart | load-all | LoadAll | Load facts + beats from the shared store; split by payload shape | No recorded enclosing source control; caller execution is not inferred. | engine |
@@ -245,6 +272,32 @@ These rows identify absent or empty source text for follow-up. They do not asser
 | [src/core/agent/hostEnd/projection.ts:34](../src/core/agent/hostEnd/projection.ts#L34) | hostWriters | addFunction | acknowledge | Not supplied at this declaration |
 | [src/core/agent/sourceEvidence/flow.ts:31](../src/core/agent/sourceEvidence/flow.ts#L31) | runSourceEvidenceFlow | flowChart | \[expression\] first.id | Not supplied at this declaration |
 | [src/core/agent/sourceEvidence/flow.ts:32](../src/core/agent/sourceEvidence/flow.ts#L32) | runSourceEvidenceFlow | addFunction | \[expression\] step.id | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:214](../src/llm-ledger/calls.ts#L214) | chartOf | flowChart | read-call | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:215](../src/llm-ledger/calls.ts#L215) | chartOf | addFunction | load-log | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:216](../src/llm-ledger/calls.ts#L216) | chartOf | addDeciderFunction | admit | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:218](../src/llm-ledger/calls.ts#L218) | chartOf | addFunctionBranch | \[expression\] word | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:219](../src/llm-ledger/calls.ts#L219) | chartOf | addFunctionBranch | go | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:222](../src/llm-ledger/calls.ts#L222) | chartOf | addFunction | extract-tokens | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:224](../src/llm-ledger/calls.ts#L224) | chartOf | addFunction | stamp | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:227](../src/llm-ledger/calls.ts#L227) | chartOf | addDeciderFunction | compare | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:228](../src/llm-ledger/calls.ts#L228) | chartOf | addFunctionBranch | matches | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:229](../src/llm-ledger/calls.ts#L229) | chartOf | addFunctionBranch | differs | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:230](../src/llm-ledger/calls.ts#L230) | chartOf | addFunctionBranch | no-submit | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:233](../src/llm-ledger/calls.ts#L233) | chartOf | addFunction | stamp-delivered | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:236](../src/llm-ledger/calls.ts#L236) | chartOf | addFunction | check-claims | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:237](../src/llm-ledger/calls.ts#L237) | chartOf | addFunction | check-draft | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:240](../src/llm-ledger/calls.ts#L240) | chartOf | addFunction | check-claims | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:246](../src/llm-ledger/calls.ts#L246) | chartOf | addFunction | fold | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:249](../src/llm-ledger/calls.ts#L249) | chartOf | addFunction | append | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:250](../src/llm-ledger/calls.ts#L250) | chartOf | addDeciderFunction | after-append | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:251](../src/llm-ledger/calls.ts#L251) | chartOf | addFunctionBranch | appended | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:252](../src/llm-ledger/calls.ts#L252) | chartOf | addFunctionBranch | append-refused | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:253](../src/llm-ledger/calls.ts#L253) | chartOf | addFunctionBranch | busy | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:259](../src/llm-ledger/calls.ts#L259) | chartOf | addDeciderFunction | release | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:260](../src/llm-ledger/calls.ts#L260) | chartOf | addPausableFunctionBranch | await-person | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:261](../src/llm-ledger/calls.ts#L261) | chartOf | addFunctionBranch | no-wait | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:264](../src/llm-ledger/calls.ts#L264) | chartOf | addFunction | append-released | Not supplied at this declaration |
+| [src/llm-ledger/calls.ts:265](../src/llm-ledger/calls.ts#L265) | chartOf | addFunction | reply | Not supplied at this declaration |
 | [src/patterns/MapReduce.ts:147](../src/patterns/MapReduce.ts#L147) | ShardSplitRunner.buildChart | flowChart | split | Not supplied at this declaration |
 | [src/patterns/MapReduce.ts:158](../src/patterns/MapReduce.ts#L158) | ShardSplitRunner.buildChart | addFunction | return | Not supplied at this declaration |
 | [src/patterns/MapReduce.ts:221](../src/patterns/MapReduce.ts#L221) | ShardBranchRunner.buildChart | flowChart | unpack | Not supplied at this declaration |
