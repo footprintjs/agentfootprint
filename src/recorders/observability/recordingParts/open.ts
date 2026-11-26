@@ -16,6 +16,15 @@
  * `readInvocation` the one part holding that invocation. Both layouts answer
  * through the same part reader, so both serve the same values.
  *
+ * ── Two index formats ───────────────────────────────────────────────────────
+ * Format 2 (what the writer writes) keeps a sub-flow invocation's entry and
+ * exit payloads with the invocation (`subflowPayloads.ts`): `readRoot` serves the
+ * base as stored (marked, without them), `readInvocation` serves them beside
+ * the result, `readWhole` puts them back. Format 1 (filed by 18.2 and 18.3)
+ * keeps them in the base row and reads as it always did; so does a whole
+ * recording, whose in-memory cut is format 1. An index of a format this reader
+ * does not know is `unsupported-format`, never a corrupt part.
+ *
  * ── Honesty ─────────────────────────────────────────────────────────────────
  * A missing, changed or oversized part is unavailable for exactly the
  * invocations it holds; every other invocation still reads. Nothing falls
@@ -38,14 +47,18 @@ import {
   unpackRecording,
 } from '../recordingPack.js';
 import {
-  RECORDING_INDEX_FORMAT,
   RECORDING_PARTS_LIMITS,
   RECORDING_PART_TARGET_BYTES,
   isName,
+  isUnsupportedIndexFormat,
   readRecordingIndex,
   type RecordingIndex,
 } from './format.js';
-import { partReader, type SavedRecordingPartUnavailable } from './partReader.js';
+import {
+  partReader,
+  type SavedInvocationPayloads,
+  type SavedRecordingPartUnavailable,
+} from './partReader.js';
 import {
   fetchPayload,
   memorySource,
@@ -57,7 +70,11 @@ import { splitRecordingData } from './split.js';
 import { RecordingSplitError } from './splitError.js';
 
 export type { SavedRecordingArtifacts } from './source.js';
-export type { SavedRecordingPartUnavailable } from './partReader.js';
+export type {
+  SavedInvocationPayloads,
+  SavedPayloadSlot,
+  SavedRecordingPartUnavailable,
+} from './partReader.js';
 
 const MiB = 1024 * 1024;
 
@@ -109,6 +126,15 @@ export interface SavedInvocation {
 export interface SavedRecordingSizes {
   /** Every stored byte of this recording. */
   readonly storedBytes: number;
+  /**
+   * `storedBytes` plus the plain JSON bytes `readWhole` restores from results
+   * (an index-format-2 recording's `'same'` sub-flow payloads, stored once, in
+   * the result), as the index states them. What a whole read holds: a band
+   * decided from it is provisional, since `readWhole` measures what it
+   * restores and refuses a figure that does not match. Equal to `storedBytes`
+   * for a format-1 or whole recording.
+   */
+  readonly restoredBytes: number;
   /** How many artifacts hold it. */
   readonly artifacts: number;
   /** The index's bytes (parts layout only). */
@@ -131,7 +157,9 @@ export interface SavedRecordingUnavailable {
     | 'not-a-recording'
     | 'too-large'
     | 'invalid-index'
-    | 'invalid-recording';
+    | 'invalid-recording'
+    /** An index of a format this reader does not know (`agentfootprint.recording.index.v<N>`). */
+    | 'unsupported-format';
 }
 
 /** An opened saved recording. Only its index (or, for a whole recording, the whole) has been read. */
@@ -163,12 +191,25 @@ export interface SavedRecording {
    * is the stored one, proven by digest and key set. Its SHAPE was checked when
    * the recording was cut: on a recording that is not `complete`, a `ready`
    * result may be one the lazy viewer would refuse, so check `complete` first.
+   *
+   * `payloads` (index format 2): what the invocation was handed (`entry`) and
+   * handed back (`exit`), present exactly when that payload moved out of the
+   * base row (whose event then carries `payloadWith: 'invocation'`). A
+   * `'same'` payload is the result's own object, shared; its bytes are measured,
+   * and differ from the index's `restoredBytes` only on a part that does not
+   * match its index (`part-changed`). Absent for a format-1 or whole
+   * recording, whose payloads are in the base row.
    */
   readInvocation(
     key: string,
     options?: SavedRecordingReadOptions,
   ): Promise<
-    | { readonly status: 'ready'; readonly invocation: SavedInvocation; readonly result: unknown }
+    | {
+        readonly status: 'ready';
+        readonly invocation: SavedInvocation;
+        readonly result: unknown;
+        readonly payloads?: SavedInvocationPayloads;
+      }
     | SavedRecordingPartUnavailable
   >;
   /**
@@ -184,10 +225,15 @@ export interface SavedRecording {
     options?: SavedRecordingReadOptions,
   ): Promise<{ readonly status: 'ready' } | SavedRecordingPartUnavailable>;
   /**
-   * The whole recording, with every result and alias restored; refused whole if
-   * any part is. It deep-equals the recording that was saved but is not
-   * byte-equal to it: `subflowResults` comes last in the snapshot, its keys are
-   * in part order, and a proven alias shares its key's result object.
+   * The whole recording, with every result, alias and moved sub-flow payload
+   * restored; refused whole if any part is. It deep-equals the recording that
+   * was saved but is not byte-equal to it: `subflowResults` comes last in the
+   * snapshot, its keys are in part order, a proven alias shares its key's
+   * result object, and so does a `'same'` payload. The payloads restored from
+   * results are measured and charged against `maxBytes` as they are restored
+   * (`too-large` the moment it is spent); the index's own figure for them only
+   * decides an early refusal, and a figure that differs from what was measured
+   * is `part-changed`.
    */
   readWhole(
     options?: SavedRecordingWholeOptions,
@@ -260,11 +306,13 @@ export async function openSavedRecording(
     if (meta.bytes > caps.index) return unavailable('too-large');
     const index = await readIndex(artifacts, meta, signal);
     if ('reason' in index) return index;
+    const storedBytes = index.parts.reduce(
+      (sum, part) => sum + part.bytes,
+      meta.bytes + index.base.bytes,
+    );
     const sizes: SavedRecordingSizes = {
-      storedBytes: index.parts.reduce(
-        (sum, part) => sum + part.bytes,
-        meta.bytes + index.base.bytes,
-      ),
+      storedBytes,
+      restoredBytes: storedBytes + (index.subflowPayloads?.restoredBytes ?? 0),
       artifacts: index.parts.length + 2,
       index: meta.bytes,
       base: index.base.bytes,
@@ -298,6 +346,7 @@ async function readIndex(
   } catch {
     return unavailable('invalid-index');
   }
+  if (isUnsupportedIndexFormat(parsed)) return unavailable('unsupported-format');
   const index = readRecordingIndex(parsed);
   if (index === undefined || meta.origin?.runId !== index.runId)
     return unavailable('invalid-index');
@@ -342,9 +391,12 @@ async function openWhole(
   const runId = isName(meta.origin?.runId) ? meta.origin?.runId : undefined;
   let split;
   try {
+    // Format 1: a whole recording's payloads stay in its base row, so every
+    // read of it is what it was before format 2.
     split = await splitRecordingData(data, {
       ...(runId !== undefined && { runId }),
       targetBytes: RECORDING_PART_TARGET_BYTES,
+      subflowPayloads: 'in-row',
     });
   } catch (err) {
     if (err instanceof RecordingSplitError) {
@@ -357,12 +409,16 @@ async function openWhole(
   for (const part of split.parts) texts.set(part.digest, part.text);
   const memoryRef = `art_${'0'.repeat(22)}`;
   const index: RecordingIndex = {
-    format: RECORDING_INDEX_FORMAT,
     ...split.draft,
     base: { ref: memoryRef, ...split.draft.base },
     parts: split.draft.parts.map((part) => ({ ref: memoryRef, ...part })),
   };
-  const sizes: SavedRecordingSizes = { storedBytes: meta.bytes, artifacts: 1, parts: [] };
+  const sizes: SavedRecordingSizes = {
+    storedBytes: meta.bytes,
+    restoredBytes: meta.bytes,
+    artifacts: 1,
+    parts: [],
+  };
   // The whole was admitted within maxRootBytes; the parts cut from it in memory are not capped again.
   const admitted = { root: Number.POSITIVE_INFINITY, part: Number.POSITIVE_INFINITY };
   return opened(index, 'whole', memorySource(texts), sizes, admitted, signal);
@@ -425,10 +481,13 @@ function opened(
       }
       const part = await parts.invocations(entry.part, signal);
       if ('reason' in part) return part;
+      const payloads = parts.payloadsOf(key, part);
+      if (payloads !== undefined && 'reason' in payloads) return payloads;
       return Object.freeze({
         status: 'ready',
         invocation: invocations[at] as SavedInvocation,
         result: part.results.get(key),
+        ...(payloads !== undefined && { payloads }),
       });
     },
     async checkParts(options) {
@@ -443,7 +502,12 @@ function opened(
       if (typeof limit !== 'number' || Number.isNaN(limit) || limit <= 0) {
         throw new RangeError('readWhole: maxBytes is a positive number of bytes.');
       }
-      const total = index.parts.reduce((sum, part) => sum + part.bytes, index.base.bytes);
+      // Decided from the index first: every stored part, plus the payloads a
+      // whole read restores from results (format 2), which no part's text counts.
+      const total = index.parts.reduce(
+        (sum, part) => sum + part.bytes,
+        index.base.bytes + (index.subflowPayloads?.restoredBytes ?? 0),
+      );
       if (total > limit) return Object.freeze({ status: 'unavailable', reason: 'too-large' });
       return parts.whole(signal, limit);
     },

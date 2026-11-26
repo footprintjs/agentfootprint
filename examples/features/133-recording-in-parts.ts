@@ -5,7 +5,9 @@
  * completed run as an index, a base part (the recording without its subflow
  * results) and invocation parts of about 1 MiB. The receipt names the index.
  * `openSavedRecording` then reads the index at open, and one invocation reads
- * only the one part that holds it.
+ * only the one part that holds it. What a sub-flow was handed and handed back
+ * lives with it too: `readInvocation` serves those `payloads` beside the
+ * result, and the root marks the step instead of holding a second copy.
  *
  * The cost is stated on the option: N + 2 store writes per turn instead of
  * one, and as many artifacts in the scope.
@@ -72,18 +74,22 @@ export async function run(input: string): Promise<unknown> {
   if (opened.status !== 'ready') throw new Error(`not opened: ${opened.reason}`);
   const first = opened.invocations[0]!;
   const call = await opened.readInvocation(first.key); // reads the index's one part for this key
+  // What the sub-flow was handed, kept with it (the root's event says `payloadWith: 'invocation'`).
+  const handed = call.status === 'ready' ? call.payloads?.entry : undefined;
   // #endregion read
 
   assert.equal(opened.layout, 'parts');
   assert.equal(call.status, 'ready');
+  assert.equal(handed?.status, 'ready');
   await agent.shutdown();
 
   return {
     layout: opened.layout,
     artifacts: opened.sizes.artifacts,
     storedBytes: opened.sizes.storedBytes,
+    restoredBytes: opened.sizes.restoredBytes,
     invocations: opened.invocations.length,
-    firstInvocation: { key: first.key, bytes: first.bytes },
+    firstInvocation: { key: first.key, bytes: first.bytes, input: handed?.status },
   };
 }
 

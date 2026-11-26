@@ -4,8 +4,10 @@
  *
  * Role:  Lens. The one place a part's bytes become values: the size cap
  *        before any store call, the source's metadata and digest checks,
- *        bounded unpacking, then the payload's own fields — its format, its
- *        run, its position and its exact key set.
+ *        bounded unpacking, then the payload's own fields — its format (the
+ *        one the index's format names: a v2 index v2 parts, a v1 index v1
+ *        parts), its run, its position and its exact key set, and in format 2
+ *        its stored sub-flow payloads, exactly the ones the index places there.
  * Reads: the part source it is handed.
  * Emits: N/A.
  */
@@ -19,14 +21,22 @@ import {
   isPackedRecording,
 } from '../recordingPack.js';
 import {
-  RECORDING_PART_FORMAT,
+  RECORDING_INDEX_FORMAT,
   assign,
   isPlainObject,
   ownValue,
+  partFormatOf,
+  type IndexInvocation,
   type RecordingIndex,
   type StoredPartEntry,
 } from './format.js';
 import { unpackPart } from './packing.js';
+import {
+  payloadClaims,
+  restorePayloads,
+  resultValueFor,
+  type PayloadKind,
+} from './subflowPayloads.js';
 import type { PartSource } from './source.js';
 
 /** Why one read from an opened recording returned nothing. */
@@ -41,11 +51,30 @@ function unavailable(reason: Unavailable['reason']): Unavailable {
   return Object.freeze({ status: 'unavailable', reason });
 }
 
+/** One invocation's stored payloads (format 2), each present exactly when the index places it in the part. */
+export interface StoredPayloads {
+  readonly entry?: unknown;
+  readonly exit?: unknown;
+}
+
 /** One invocation part's contents, keyed, and the plain JSON bytes they took. */
 export interface PartContents {
   readonly results: ReadonlyMap<string, unknown>;
   readonly aliases: ReadonlyMap<string, unknown>;
+  /** Format 2: stored payloads by execution key (empty for format 1). */
+  readonly payloads: ReadonlyMap<string, StoredPayloads>;
   readonly plainBytes: number;
+}
+
+/** One payload as a read serves it: its value, or why it has none. */
+export type SavedPayloadSlot =
+  | { readonly status: 'ready'; readonly value: unknown }
+  | { readonly status: 'unavailable'; readonly reason: SavedRecordingPartUnavailable['reason'] };
+
+/** An invocation's moved payloads, as a read serves them (format 2). */
+export interface SavedInvocationPayloads {
+  readonly entry?: SavedPayloadSlot;
+  readonly exit?: SavedPayloadSlot;
 }
 
 /** A loaded payload and its plain JSON bytes (after unpacking, for a packed part; 0 when no budget asked). */
@@ -59,13 +88,14 @@ function exactKeys(
   value: Record<string, unknown>,
   keys: readonly string[],
   runId: unknown,
+  format: string,
 ): boolean {
   const expected = runId === undefined ? keys : [...keys, 'runId'];
   const own = Object.keys(value);
   return (
     own.length === expected.length &&
     expected.every((key) => own.includes(key)) &&
-    ownValue(value, 'format') === RECORDING_PART_FORMAT &&
+    ownValue(value, 'format') === format &&
     ownValue(value, 'runId') === runId
   );
 }
@@ -84,13 +114,60 @@ export function partReader(
   source: PartSource,
   caps: { readonly root: number; readonly part: number },
 ) {
+  const v2 = index.format === RECORDING_INDEX_FORMAT;
+  const partFormat = partFormatOf(index.format);
   const results = index.parts.map(() => new Set<string>());
   const aliases = index.parts.map(() => new Set<string>());
+  /** Per part: execution key → the kinds stored there. */
+  const storedKinds = index.parts.map(() => new Map<string, PayloadKind[]>());
+  const byKey = new Map<string, IndexInvocation>();
   for (const invocation of index.invocations) {
-    if (invocation.part !== null) results[invocation.part]?.add(invocation.key);
+    byKey.set(invocation.key, invocation);
+    if (invocation.part === null) continue;
+    results[invocation.part]?.add(invocation.key);
+    const kinds = (['entry', 'exit'] as const).filter(
+      (kind) => invocation.payloads?.[kind] === 'stored',
+    );
+    if (kinds.length > 0) storedKinds[invocation.part]?.set(invocation.key, kinds);
   }
   for (const { key, part } of index.unmounted) results[part]?.add(key);
   for (const alias of index.aliases) if ('part' in alias) aliases[alias.part]?.add(alias.name);
+  /** Every invocation with a part, to its `subflowId`: the owners the payload rule is run with. */
+  const owners = new Map<string, string>();
+  for (const invocation of index.invocations) {
+    if (invocation.part !== null) owners.set(invocation.key, invocation.subflowId);
+  }
+
+  /**
+   * A restored value's plain JSON bytes, measured: the index's figure is only a
+   * claim. `undefined` when the value is too deep for this runtime's stack to
+   * write: a resource bound of this reader (`too-large`), as when unpacking.
+   */
+  const plainBytesOf = (value: unknown): number | undefined => {
+    try {
+      return utf8Length(toWireJson(value));
+    } catch (err) {
+      if (err instanceof RangeError) return undefined;
+      throw err;
+    }
+  };
+
+  /** The stored payloads member of a v2 part: exactly the keys and kinds the index places there. */
+  function storedPayloads(
+    value: unknown,
+    expected: ReadonlyMap<string, readonly PayloadKind[]>,
+  ): Map<string, StoredPayloads> | undefined {
+    const held = keyed(value, new Set(expected.keys()));
+    if (held === undefined) return undefined;
+    const out = new Map<string, StoredPayloads>();
+    for (const [key, member] of held) {
+      const kinds = expected.get(key) as readonly PayloadKind[];
+      const values = keyed(member, new Set(kinds));
+      if (values === undefined) return undefined;
+      out.set(key, Object.fromEntries(values) as StoredPayloads);
+    }
+    return out;
+  }
 
   /**
    * Cap, fetch, parse, unpack: a payload object, or why there is none. `limit`
@@ -152,7 +229,7 @@ export function partReader(
     );
     if (!('payload' in loaded)) return loaded;
     const { payload } = loaded;
-    if (!exactKeys(payload, ['format', 'part', 'recording'], index.runId)) {
+    if (!exactKeys(payload, ['format', 'part', 'recording'], index.runId, partFormat)) {
       return unavailable('part-changed');
     }
     const recording = ownValue(payload, 'recording');
@@ -186,16 +263,66 @@ export function partReader(
     );
     if (!('payload' in loaded)) return loaded;
     const { payload } = loaded;
-    if (
-      !exactKeys(payload, ['format', 'part', 'results', 'aliases'], index.runId) ||
-      ownValue(payload, 'part') !== part
-    ) {
+    const keys = v2
+      ? ['format', 'part', 'results', 'aliases', 'payloads']
+      : ['format', 'part', 'results', 'aliases'];
+    if (!exactKeys(payload, keys, index.runId, partFormat) || ownValue(payload, 'part') !== part) {
       return unavailable('part-changed');
     }
     const held = keyed(ownValue(payload, 'results'), results[part] as Set<string>);
     const named = keyed(ownValue(payload, 'aliases'), aliases[part] as Set<string>);
-    if (held === undefined || named === undefined) return unavailable('part-changed');
-    return { results: held, aliases: named, plainBytes: loaded.plainBytes };
+    const stored = v2
+      ? storedPayloads(
+          ownValue(payload, 'payloads'),
+          storedKinds[part] as Map<string, PayloadKind[]>,
+        )
+      : new Map<string, StoredPayloads>();
+    if (held === undefined || named === undefined || stored === undefined) {
+      return unavailable('part-changed');
+    }
+    return { results: held, aliases: named, payloads: stored, plainBytes: loaded.plainBytes };
+  }
+
+  /**
+   * One invocation's moved payloads, served from the part that holds its
+   * result: `undefined` when none of its payloads moved (format 1 always). A
+   * `'same'` value is the result's own object, shared. Its bytes are measured
+   * and must equal the index's `restoredBytes` for the invocation; otherwise
+   * the part does not match its index (`part-changed`).
+   */
+  function payloadsOf(
+    key: string,
+    contents: PartContents,
+  ): SavedInvocationPayloads | Unavailable | undefined {
+    const invocation = byKey.get(key);
+    const places = invocation?.payloads;
+    if (places === undefined) return undefined;
+    let measured = 0;
+    let tooDeep = false;
+    const slot = (kind: PayloadKind): SavedPayloadSlot | undefined => {
+      const at = places[kind];
+      if (at === undefined) return undefined;
+      const value =
+        at === 'same'
+          ? resultValueFor(contents.results.get(key), kind)
+          : contents.payloads.get(key)?.[kind];
+      if (at === 'same' && value !== undefined) {
+        const bytes = plainBytesOf(value);
+        if (bytes === undefined) tooDeep = true;
+        else measured += bytes;
+      }
+      return value === undefined
+        ? Object.freeze({ status: 'unavailable', reason: 'part-changed' })
+        : Object.freeze({ status: 'ready', value });
+    };
+    const entry = slot('entry');
+    const exit = slot('exit');
+    if (tooDeep) return unavailable('too-large');
+    if (measured !== (invocation?.restoredBytes ?? 0)) return unavailable('part-changed');
+    return Object.freeze({
+      ...(entry !== undefined && { entry }),
+      ...(exit !== undefined && { exit }),
+    });
   }
 
   /**
@@ -208,22 +335,94 @@ export function partReader(
     signal: AbortSignal | undefined,
     maxBytes: number,
   ): Promise<{ readonly status: 'ready'; readonly recording: Recording } | Unavailable> {
-    let remaining = maxBytes;
+    // The payloads restored from results are bytes of the whole that no part's
+    // text counts. The index's figure for them is a CLAIM: it is reserved here,
+    // provisionally (so an honest index is refused before any part is read),
+    // and released below, where every restored value is measured and charged.
+    const claimed = index.subflowPayloads?.restoredBytes ?? 0;
+    let remaining = maxBytes - claimed;
+    if (remaining < 0) return unavailable('too-large');
     const root = await base(signal, remaining);
     if ('reason' in root) return root;
     remaining -= root.plainBytes;
     const found: Record<string, unknown> = {};
+    const stored = new Map<string, StoredPayloads>();
     for (let at = 0; at < index.parts.length; at++) {
       const contents = await invocations(at, signal, remaining);
       if ('reason' in contents) return contents;
       remaining -= contents.plainBytes;
       for (const [key, value] of contents.results) assign(found, key, value);
       for (const [name, value] of contents.aliases) assign(found, name, value);
+      for (const [key, value] of contents.payloads) stored.set(key, value);
+    }
+    const recording = root.recording as unknown as Record<string, unknown>;
+    const counts = index.subflowPayloads;
+    if (counts !== undefined) {
+      remaining += claimed;
+      const measured = new Map<string, number>();
+      let over = false;
+      const restored = restorePayloads(
+        recording,
+        (key, kind) => {
+          const at = byKey.get(key)?.payloads?.[kind];
+          const value =
+            at === 'same'
+              ? resultValueFor(ownValue(found, key), kind)
+              : at === 'stored'
+              ? stored.get(key)?.[kind]
+              : undefined;
+          if (value === undefined) return undefined;
+          if (at === 'same') {
+            // Charged as it is restored; refused the moment the budget is spent.
+            const bytes = plainBytesOf(value);
+            if (bytes === undefined) {
+              over = true;
+              return undefined;
+            }
+            measured.set(key, (measured.get(key) ?? 0) + bytes);
+            remaining -= bytes;
+            if (remaining < 0) {
+              over = true;
+              return undefined;
+            }
+          }
+          return { value };
+        },
+        counts.same + counts.stored,
+        counts.rows,
+      );
+      if (over) return unavailable('too-large');
+      if (!restored) return unavailable('part-changed');
+      // Every figure the index states, against what was measured and restored:
+      // each invocation's restored bytes (their sum is the total, admitted), and
+      // the payload rule run again over the restored rows, which must move
+      // exactly the payloads the index places and keep the rest for the
+      // reasons it counts.
+      for (const invocation of index.invocations) {
+        if ((invocation.restoredBytes ?? 0) !== (measured.get(invocation.key) ?? 0)) {
+          return unavailable('part-changed');
+        }
+      }
+      const claims = payloadClaims(ownValue(recording, 'snapshot'), owners);
+      const placed = new Set<string>();
+      for (const invocation of index.invocations) {
+        for (const kind of ['entry', 'exit'] as const) {
+          if (invocation.payloads?.[kind] !== undefined) placed.add(`${kind}:${invocation.key}`);
+        }
+      }
+      if (
+        claims.kept.ambiguous !== counts.kept.ambiguous ||
+        claims.kept.notLast !== counts.kept.notLast ||
+        claims.kept.noPart !== counts.kept.noPart ||
+        claims.moved.size !== placed.size ||
+        [...claims.moved].some((slot) => !placed.has(slot))
+      ) {
+        return unavailable('part-changed');
+      }
     }
     for (const alias of index.aliases) {
       if ('key' in alias) assign(found, alias.name, ownValue(found, alias.key));
     }
-    const recording = root.recording as unknown as Record<string, unknown>;
     const snapshot = ownValue(recording, 'snapshot');
     if (index.hasSubflowResults && isPlainObject(snapshot)) {
       assign(snapshot, 'subflowResults', found);
@@ -244,5 +443,5 @@ export function partReader(
     return Object.freeze({ status: 'ready' });
   }
 
-  return { base, invocations, whole, check };
+  return { base, invocations, payloadsOf, whole, check };
 }

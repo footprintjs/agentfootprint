@@ -23,8 +23,9 @@
  *     (base included), and no other `get`.
  *  3. **The ceiling on the whole** — `maxRecordingBytes` bounds the STORED part
  *     bytes (base and invocation parts, each with its small part wrapper;
- *     proven alias copies are restored by reference and not counted), and a
- *     packed part by what it expands to. So within a narrow band a parts
+ *     proven alias copies are restored by reference and not counted) PLUS the
+ *     sub-flow payloads a whole read restores from results (index format 2,
+ *     `sizes.restoredBytes`), and a packed part by what it expands to. So within a narrow band a parts
  *     recording is explained where the same run filed whole is over the
  *     ceiling. When the index's stored totals already pass it, the named 413
  *     comes before any part is read; a packed part that would expand past
@@ -85,8 +86,12 @@ export async function explainPartsRecording(
     service.drop(key);
     return { status: 'not-found' };
   }
-  // Provable from the index alone: the stored parts already pass the ceiling.
-  if (opened.sizes.storedBytes - (opened.sizes.index ?? 0) > ceiling)
+  // Decided from the index alone: the stored parts, with the payloads a whole
+  // read restores from results, already pass the ceiling. The restored share is
+  // the index's claim, so this only refuses early: a pass is provisional, and
+  // `readWhole` measures what it restores against the same ceiling (a figure
+  // that does not match is `part-changed`, the op's one not-found).
+  if (opened.sizes.restoredBytes - (opened.sizes.index ?? 0) > ceiling)
     return { status: 'too-large' };
 
   const answer =

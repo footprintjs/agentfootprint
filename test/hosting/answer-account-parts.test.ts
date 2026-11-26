@@ -22,11 +22,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { mockClassifier } from '../../src/classify/mock.js';
 import { defineOntology } from '../../src/ontology/index.js';
-import { recordRun } from '../../src/observe.js';
+import { openSavedRecording, recordRun } from '../../src/observe.js';
+import { bindArtifacts } from '../../src/artifacts/capability.js';
 import {
   Agent,
   defineTool,
   inMemoryArtifacts,
+  RECORDING_INDEX_ARTIFACT_KIND,
   recordingPutInput,
   sqliteArtifacts,
 } from '../../src/index.js';
@@ -444,6 +446,64 @@ describe.each(STORES)('answer-account over a recording in parts — %s', (_name,
       const got = await explain(host, refs.index);
       expect(got.code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
       expect(view.gets).toEqual([refs.index]);
+    } finally {
+      close();
+    }
+  });
+
+  it('stored parts within the ceiling, the payloads a whole read restores past it: the same 413, from the index', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      const saved = await openSavedRecording(bindArtifacts(store, SCOPE), refs.index);
+      if (saved.status !== 'ready') throw new Error(saved.reason);
+      const stored = saved.sizes.storedBytes - (saved.sizes.index ?? 0);
+      // Index format 2: the `same` sub-flow payloads are stored once, in their results.
+      expect(saved.sizes.restoredBytes).toBeGreaterThan(saved.sizes.storedBytes);
+      const view = watching(store);
+      const { host } = await served(storeAgent(view.store), {
+        extra: { answerAccounts: { maxRecordingBytes: stored } },
+      });
+      expect((await explain(host, refs.index)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+      expect(view.gets).toEqual([refs.index]);
+    } finally {
+      close();
+    }
+  });
+
+  it('an index that understates the restored bytes: measured, the ceiling holds (413); within it, not-found', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      const honest = await openSavedRecording(bindArtifacts(store, SCOPE), refs.index);
+      if (honest.status !== 'ready') throw new Error(honest.reason);
+      // The plain bytes the whole holds: every stored part, plus what it restores.
+      const exact = honest.sizes.restoredBytes - (honest.sizes.index ?? 0);
+      const index = JSON.parse((await store.get(SCOPE, refs.index))!.data as string) as {
+        invocations: { restoredBytes?: number }[];
+        subflowPayloads: { restoredBytes: number };
+      };
+      index.invocations.find((row) => row.restoredBytes !== undefined)!.restoredBytes! -= 1;
+      index.subflowPayloads.restoredBytes -= 1;
+      const forged = (
+        await store.put(SCOPE, {
+          kind: RECORDING_INDEX_ARTIFACT_KIND,
+          mediaType: 'application/json',
+          data: JSON.stringify(index),
+          digest: 'sha-256',
+          origin: { runId: FLAGSHIP_RUN_ID },
+        })
+      ).meta.ref;
+      // The figure passes the up-front check at exact − 1; the measured bytes do not.
+      const tight = await served(storeAgent(store), {
+        extra: { answerAccounts: { maxRecordingBytes: exact - 1 } },
+      });
+      expect((await explain(tight.host, forged)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+      // Within the ceiling, the figure does not match what was measured: no account.
+      const loose = await served(storeAgent(store), {
+        extra: { answerAccounts: { maxRecordingBytes: 32 * 1024 * 1024 } },
+      });
+      expect((await explain(loose.host, forged)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
     } finally {
       close();
     }

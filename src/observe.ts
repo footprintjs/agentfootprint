@@ -108,6 +108,8 @@ export {
   openSavedRecording,
   type OpenSavedRecordingOptions,
   type SavedInvocation,
+  type SavedInvocationPayloads,
+  type SavedPayloadSlot,
   type SavedRecording,
   type SavedRecordingArtifacts,
   type SavedRecordingPartUnavailable,

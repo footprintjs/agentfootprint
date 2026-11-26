@@ -7,6 +7,11 @@
  * against the parts-layout reader (E5), the answer account and the size report
  * computed from the whole (E6, E7), a second split of the same recording (E8),
  * and the same checks over packed parts (E9).
+ *
+ * Index format 2: the parts layout's root holds each moved sub-flow payload's
+ * mark, and the payload comes beside its invocation's result
+ * (`withInvocationPayloads` puts them back the way a viewer does); the whole
+ * layout's root holds them in the row, as before.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -37,6 +42,33 @@ import { viewerProjection } from './viewerWalk.js';
 const recording = await realRecording();
 const whole = parsedWhole(recording);
 const wholeResults = (whole.snapshot as { subflowResults: Record<string, unknown> }).subflowResults;
+
+/**
+ * The root a viewer shows once it has asked each marked step's invocation:
+ * every `payloadWith` mark replaced by the payload `readInvocation` serves,
+ * the row's `subflowPayloads` fact dropped.
+ */
+async function withInvocationPayloads(saved: SavedRecording): Promise<Recording> {
+  const root = await saved.readRoot();
+  if (root.status !== 'ready') throw new Error(root.reason);
+  const recording = JSON.parse(JSON.stringify(root.recording)) as Recording;
+  const rows = (recording.snapshot as { recorders: Record<string, unknown>[] }).recorders;
+  for (const row of rows) {
+    const meta = row.meta as Record<string, unknown> | undefined;
+    if (meta?.subflowPayloads === undefined) continue;
+    delete meta.subflowPayloads;
+    for (const event of row.data as Record<string, unknown>[]) {
+      if (event.payloadWith === undefined) continue;
+      const read = await saved.readInvocation(event.runtimeStageId as string);
+      if (read.status !== 'ready') throw new Error(read.reason);
+      const slot = read.payloads?.[event.type === 'subflow.entry' ? 'entry' : 'exit'];
+      if (slot?.status !== 'ready') throw new Error('payload not served');
+      delete event.payloadWith;
+      event.payload = JSON.parse(JSON.stringify(slot.value)) as unknown;
+    }
+  }
+  return recording;
+}
 
 async function ready(promise: Promise<unknown>): Promise<SavedRecording> {
   const opened = (await promise) as SavedRecording | { status: 'unavailable'; reason: string };
@@ -97,7 +129,7 @@ describe.each(STORES)('a real run saved both ways — $name', (storeCase) => {
           const view = viewerProjection(whole);
           const dto = {
             schema: 'agentfootprint-lens.recording-source/v1',
-            recording: ((await parts.readRoot()) as { recording: Recording }).recording,
+            recording: await withInvocationPayloads(parts),
             invocations: parts.invocations.map((invocation) => ({
               invocationPath: [...invocation.path],
               mountRuntimeStageId: invocation.key,
@@ -124,11 +156,21 @@ describe.each(STORES)('a real run saved both ways — $name', (storeCase) => {
           expect(plain.invocations).toEqual(parts.invocations);
           expect([...plain.aliases]).toEqual([...parts.aliases]);
           expect(plain.complete).toBe(parts.complete);
-          expect(await plain.readRoot()).toEqual(await parts.readRoot());
+          // The whole layout keeps the payloads in the row; the parts layout
+          // serves them beside each result, so the root a viewer shows is equal.
+          const plainRoot = await plain.readRoot();
+          expect(plainRoot.status === 'ready' && plainRoot.recording).toEqual(
+            await withInvocationPayloads(parts),
+          );
           for (const invocation of parts.invocations) {
-            expect(await plain.readInvocation(invocation.key)).toEqual(
-              await parts.readInvocation(invocation.key),
-            );
+            const fromPlain = await plain.readInvocation(invocation.key);
+            const fromParts = await parts.readInvocation(invocation.key);
+            expect(fromPlain.status === 'ready' && 'payloads' in fromPlain).toBe(false);
+            if (fromParts.status === 'ready') {
+              const { payloads: _payloads, ...rest } = fromParts;
+              void _payloads;
+              expect(fromPlain).toEqual(rest);
+            } else expect(fromPlain).toEqual(fromParts);
           }
           expect(await plain.readWhole()).toEqual(await parts.readWhole());
         } finally {
@@ -158,18 +200,33 @@ describe.each(STORES)('a real run saved both ways — $name', (storeCase) => {
           const root = await parts.readRoot();
           if (root.status !== 'ready') throw new Error(root.reason);
           const fromBase = recordingSizeReport(root.recording);
+          const fromRestored = recordingSizeReport(await withInvocationPayloads(parts));
           const fromWhole = recordingSizeReport(whole as unknown as Recording);
           expect(fromBase.events).toEqual(fromWhole.events);
           expect(fromBase.structure).toEqual(fromWhole.structure);
           expect(fromBase.snapshot?.subflows).toBeUndefined();
-          expect(fromBase.snapshot?.fields).toEqual(
+          expect(fromRestored.snapshot?.fields).toEqual(
             fromWhole.snapshot?.fields.filter((row) => row.name !== 'subflowResults'),
+          );
+          // Only the recorder rows shrink: the moved payloads left them.
+          const bytesOf = (report: typeof fromBase, name: string): number =>
+            report.snapshot?.fields.find((row) => row.name === name)?.bytes ?? Number.NaN;
+          expect(bytesOf(fromBase, 'recorders')).toBeLessThan(bytesOf(fromWhole, 'recorders'));
+          expect(fromBase.snapshot?.fields.filter((row) => row.name !== 'recorders')).toEqual(
+            fromWhole.snapshot?.fields.filter(
+              (row) => row.name !== 'subflowResults' && row.name !== 'recorders',
+            ),
           );
           let stored = 0;
           for (const ref of [filed.index, filed.base, ...filed.parts]) {
             stored += (await artifacts.head(ref))?.bytes ?? Number.NaN;
           }
           expect(parts.sizes.storedBytes).toBe(stored);
+          const restored = (
+            JSON.parse(filed.indexText) as { subflowPayloads: { restoredBytes: number } }
+          ).subflowPayloads.restoredBytes;
+          expect(restored).toBeGreaterThan(0);
+          expect(parts.sizes.restoredBytes).toBe(stored + restored);
           expect(parts.sizes.artifacts).toBe(filed.parts.length + 2);
           expect(parts.sizes.parts.map((part) => part.results).reduce((a, b) => a + b, 0)).toBe(
             executionKeys(whole).length,
