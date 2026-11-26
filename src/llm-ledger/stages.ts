@@ -27,6 +27,7 @@ import type { LedgerReader } from './reader.js';
 import { foldReport } from './report.js';
 import type { LedgerCheckView, LedgerReport } from './report.js';
 import { runRule } from './rules/port.js';
+import { withValueLaw } from './rules/traceableValues.js';
 import type {
   LedgerFinding,
   LedgerRule,
@@ -292,7 +293,8 @@ function inputOf(reader: LedgerReader, subject: LedgerRuleInput['subject']): Led
 
 /** The session's rules that apply to `kind`, in `opened.rules` order. */
 function rulesFor(frame: CallFrame, kind: LedgerSubjectKind): LedgerRule[] {
-  return (frame.reader?.opened?.rules ?? [])
+  // The value law runs on every claim and on the draft, in every session (a log opened elsewhere included).
+  return withValueLaw(frame.reader?.opened?.rules ?? [])
     .map((key) => frame.rules.get(key))
     .filter((r): r is LedgerRule => r !== undefined && r.appliesTo.includes(kind));
 }
@@ -536,34 +538,56 @@ export function awaitPerson(frame: CallFrame) {
   };
 }
 
-/** `append-released`: the person's answer, after the submit's batch. A conflict reloads and retries. */
+/**
+ * `append-released`: the person's answer, after the submit's batch. A conflict reloads and retries
+ * (at most `maxAttempts`, then `busy`); a store refusal is `store-refused` with its code (a
+ * `lock-lost` reloads once and stands only if the entry is there). No path replies `ok` unless the
+ * entry is in the log; otherwise the report still, truthfully, reads waiting for a person, and the
+ * caller can ask the person again.
+ */
 export function appendReleased(frame: CallFrame) {
   return async (s: Scope): Promise<void> => {
     if (s.answer !== 'release' && s.answer !== 'withhold') return;
     const submit = s.appendedSeq - (frame.findings?.length ?? 0);
     const at = frame.clock();
+    const stands = (log: readonly LedgerEntry[]) => {
+      frame.after = log;
+      frame.report = foldReport(readerOf({ seq: log.length, entries: log }));
+    };
     let log = frame.after as readonly LedgerEntry[];
-    for (let attempt = 1; attempt <= L.maxAttempts; attempt++) {
-      const entry = {
-        v: 1,
-        seq: log.length + 1,
-        kind: 'released',
-        by: 'person',
-        how: 'reported',
-        at,
-        submit,
-        answer: s.answer,
-        ...(s.answerWhy === 'no-person-channel' ? { why: 'no-person-channel' } : {}),
-      } as LedgerEntry;
-      const got = await frame.store.append(frame.session, log.length, [entry]);
-      if (got !== 'conflict') {
-        frame.after = [...log, entry];
-        const reader = readerOf({ seq: frame.after.length, entries: frame.after });
-        frame.report = foldReport(reader);
-        return;
+    try {
+      for (let attempt = 1; attempt <= L.maxAttempts; attempt++) {
+        const entry = {
+          v: 1,
+          seq: log.length + 1,
+          kind: 'released',
+          by: 'person',
+          how: 'reported',
+          at,
+          submit,
+          answer: s.answer,
+          ...(s.answerWhy === 'no-person-channel' ? { why: 'no-person-channel' } : {}),
+        } as LedgerEntry;
+        let got: number | 'conflict';
+        try {
+          got = await frame.store.append(frame.session, log.length, [entry]);
+        } catch (error) {
+          if (!(error instanceof LedgerStoreError) || error.code !== 'lock-lost') throw error;
+          frame.loads++;
+          const now = (await frame.store.load(frame.session)).entries;
+          const at = now[log.length];
+          if (at === undefined || !same(at, entry)) throw error;
+          got = log.length + 1;
+        }
+        if (got !== 'conflict') return stands([...log, entry]);
+        frame.loads++;
+        log = (await frame.store.load(frame.session)).entries;
       }
-      frame.loads++;
-      log = (await frame.store.load(frame.session)).entries;
+      refuse(frame, 'busy')(s);
+    } catch (error) {
+      if (!(error instanceof LedgerStoreError)) throw error;
+      frame.refusal = { word: 'store-refused', store: error.code };
+      refuse(frame, 'store-refused')(s);
     }
   };
 }

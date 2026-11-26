@@ -33,6 +33,7 @@ import { LEDGER_LIMITS as L } from './limits.js';
 import type { LedgerReader } from './reader.js';
 import type { LedgerReport, LedgerStanding } from './report.js';
 import type { LedgerRule } from './rules/port.js';
+import { withValueLaw } from './rules/traceableValues.js';
 import { serveReceipts, serveReport } from './serve.js';
 import type { LedgerServed } from './serve.js';
 import { isSessionId } from './session.js';
@@ -139,7 +140,12 @@ function reply(frame: CallFrame, ctx: LedgerCallContext) {
     const built = frame.built;
     switch (frame.kind) {
       case 'open':
-        frame.reply = { ok: true, session: frame.session, seq: 1 };
+        frame.reply = {
+          ok: true,
+          session: frame.session,
+          seq: 1,
+          rules: [...(built as LedgerEntry & { kind: 'opened' }).rules],
+        };
         return;
       case 'record': {
         const r = built as LedgerEntry & { kind: 'receipt' };
@@ -278,8 +284,16 @@ export async function runCall(
     input: (input ?? {}) as Record<string, unknown>,
     loads: 0,
   };
-  if (kind === 'open' && isObject(input) && input.rules === undefined)
-    (frame as { input: Record<string, unknown> }).input = { ...input, rules: [...ctx.builtInKeys] };
+  // A session opened without `rules` runs the built-ins; one opened with any set also runs the value law.
+  if (
+    kind === 'open' &&
+    isObject(input) &&
+    (input.rules === undefined || Array.isArray(input.rules))
+  )
+    (frame as { input: Record<string, unknown> }).input = {
+      ...input,
+      rules: withValueLaw(input.rules === undefined ? ctx.builtInKeys : (input.rules as string[])),
+    };
   const executor = new FlowChartExecutor(chartOf(frame, ctx));
   if (ctx.redaction !== undefined) executor.setRedactionPolicy(ctx.redaction);
   let result: unknown = await executor.run({ input: { call: kind } });

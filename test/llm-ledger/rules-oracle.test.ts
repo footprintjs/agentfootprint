@@ -14,14 +14,14 @@ import { runRule } from '../../src/llm-ledger/rules/port.js';
 import type { LedgerRuleInput } from '../../src/llm-ledger/rules/port.js';
 import { timeWindow } from '../../src/llm-ledger/rules/timeWindow.js';
 import { traceableValues } from '../../src/llm-ledger/rules/traceableValues.js';
-import { tokensOf } from '../../src/llm-ledger/tokens.js';
+import { readTokens, tokensOf } from '../../src/llm-ledger/tokens.js';
 import type { LedgerReceipt, LedgerSupplied } from '../../src/llm-ledger/types.js';
 import { instantMs } from '../../src/llm-ledger/window.js';
 import { seeded } from '../helpers/seededText.js';
 
 const AT = '2026-11-26T10:00:00Z';
 const POOL = ['esx01a', 'vm-0042', '41200', 'fc1/3', 'id-7777', 'h-2026'];
-const WORDS = ['host', 'alpha', 'up'];
+const WORDS = ['host', 'alpha', 'up', '41,200', String.raw`\node1234`];
 const HOUR = 3_600_000;
 const iso = (h: number) =>
   new Date(Date.UTC(2026, 10, 25) + h * HOUR).toISOString().replace('.000Z', 'Z');
@@ -105,7 +105,11 @@ function traceableOracle(input: LedgerRuleInput): string {
   const missing = checkable.filter((t) => !held.has(t)).length;
   const incomplete = input.receipts.some(isIncomplete);
   if (missing > 0) return incomplete ? 'unreachable' : 'checked-fail';
-  return 'checked-pass';
+  // A value the token rule cannot read (a grouped number, a piece after an escape) caps it below a pass.
+  const read = readTokens(input.subject.note.text);
+  return (read.groupedNumbers ?? 0) + (read.escapedPieces ?? 0) > 0
+    ? 'unreachable'
+    : 'checked-pass';
 }
 
 /** Milliseconds of `[from, to)` covered by `spans`: a sweep over sorted boundaries, counting depth. */

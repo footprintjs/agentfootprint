@@ -14,7 +14,7 @@
  * - markers planted in every text input never reach a run record, and in the log appear only where
  *   the case table allows (a note's text and values, token sets, the agent's own `why`).
  */
-import { decideFromFacts, decisionRecord } from 'footprintjs';
+import { decideFromFacts, decisionRecord, fixedRecord } from 'footprintjs';
 import { canonicalizeJson } from 'foottrace/canonical-json';
 import { describe, expect, it } from 'vitest';
 
@@ -22,7 +22,7 @@ import { createLedger } from '../../src/llm-ledger/ledger.js';
 import { memoryLedgerStore } from '../../src/llm-ledger/memoryStore.js';
 import { readerOf } from '../../src/llm-ledger/reader.js';
 import { cited } from '../../src/llm-ledger/rules/cited.js';
-import type { LedgerTableRule } from '../../src/llm-ledger/rules/port.js';
+import type { LedgerRule, LedgerTableRule } from '../../src/llm-ledger/rules/port.js';
 import { timeWindow } from '../../src/llm-ledger/rules/timeWindow.js';
 import { traceableValues } from '../../src/llm-ledger/rules/traceableValues.js';
 import type { LedgerStore } from '../../src/llm-ledger/store.js';
@@ -50,23 +50,50 @@ function counting(inner: LedgerStore = memoryLedgerStore()) {
 }
 
 /** One generated session: its ledger, its log and every served reply. */
+/** A host rule that passes everything, resting on every receipt it is given. */
+const ALWAYS: LedgerRule = {
+  id: 'acme/always',
+  version: 1,
+  appliesTo: ['claim', 'ruled-out', 'draft'],
+  decide: (input) => ({
+    outcome: 'checked-pass',
+    label: 'always',
+    restsOn: input.receipts.map((r) => r.seq),
+  }),
+};
+
+/** Every rule set a host can open with: the built-ins, any one of them, a host rule alone, none. */
+const RULE_SETS: readonly (readonly string[] | undefined)[] = [
+  undefined,
+  ['cited@1'],
+  ['time-window@1'],
+  ['acme/always@1'],
+  ['cited@1', 'acme/always@1'],
+  [],
+];
+
 async function session(seed: number) {
   const next = seeded(seed);
   const pick = <T>(xs: readonly T[]) => xs[Math.floor(next() * xs.length)] as T;
   const some = (n: number) => Array.from({ length: n }, () => pick(POOL));
   const { store, counts, inner } = counting();
   const served: unknown[] = [];
-  const ledger = createLedger({ store, clock: () => AT });
-  const opened = (await ledger.host.open({})) as Reply;
+  const ledger = createLedger({ store, clock: () => AT, rules: [ALWAYS] });
+  const ruleSet = RULE_SETS[seed % RULE_SETS.length];
+  const opened = (await ledger.host.open(
+    ruleSet === undefined ? {} : { rules: [...ruleSet] },
+  )) as Reply;
   const s = opened.session as string;
   const agent = ledger.agentFor(s);
   const receiptOnly = `rcpt-${seed}x9`; // a token only receipts hold
+  const queryOnly = `qry-${seed}z8`; // a word only a receipt's query holds
   const receipts = 1 + Math.floor(next() * 3);
   for (let i = 0; i < receipts; i++) {
     const rec: Record<string, unknown> = {
       source: `src${i}`,
       text: [...some(1 + Math.floor(next() * 3)), receiptOnly, pick(WORDS)].join(' '),
       how: next() < 0.3 ? 'reported' : 'observed',
+      query: `select ${queryOnly}`,
     };
     if (next() < 0.2) rec.hidden = 1;
     if (next() < 0.15) rec.limit = { rows: 10, hit: true };
@@ -92,17 +119,45 @@ async function session(seed: number) {
   const before = counts.appends;
   served.push(await agent.ask());
   const askAppended = counts.appends - before;
-  served.push(await agent.submit({ draft: `${some(2).join(' ')} ${pick(WORDS)}`, claims: notes }));
+  const draft = `${some(2).join(' ')} ${pick(WORDS)}`;
+  served.push(await agent.submit({ draft, claims: notes }));
   served.push(await agent.ask());
   served.push(await ledger.host.report(s));
   const log = (await inner.load(s)).entries;
-  return { log, served, receiptOnly, askAppended, counts };
+  return { log, served, receiptOnly, queryOnly, askAppended, counts, draft, ruleSet };
 }
 
 const tokensOfNote = (n: LedgerNote) => new Set([n.text, ...(n.values ?? [])].flatMap(tokensOf));
 
 describe('generated sessions', () => {
   const SESSIONS = 300;
+
+  it('for every rule set a host can open with, the value law holds on claims and on the draft', async () => {
+    let wouldPass = 0;
+    for (let seed = 1; seed <= SESSIONS; seed++) {
+      const { log, served, draft, ruleSet } = await session(seed);
+      const reader = readerOf({ seq: log.length, entries: log });
+      expect((log[0] as { rules: string[] }).rules, `seed ${seed}`).toContain('traceable-values@1');
+      const report = (served.at(-1) as Reply).report;
+      const exempt = new Set(reader.supplied.flatMap((x) => x.tokens));
+      for (const claim of report.claims) {
+        if (claim.verdict !== 'verified' && claim.verdict !== 'consistent-with-reported') continue;
+        const note = reader.note(claim.note) as LedgerNote;
+        const held = note.cites.flatMap((c) => reader.receipt(c)?.tokens ?? []);
+        for (const token of tokensOfNote(note))
+          if (!exempt.has(token))
+            expect(held, `seed ${seed} (${ruleSet}): ${token}`).toContain(token);
+        if (ruleSet !== undefined && !ruleSet.includes('traceable-values@1')) wouldPass++;
+      }
+      if (report.standing === 'consistent') {
+        const held = reader.receipts.flatMap((r) => r.tokens);
+        for (const token of tokensOf(draft))
+          if (!exempt.has(token))
+            expect(held, `seed ${seed} (${ruleSet}) draft: ${token}`).toContain(token);
+      }
+    }
+    expect(wouldPass).toBeGreaterThan(20); // sessions pinning a set without the value law were exercised
+  });
 
   it('verdicts: never verified with a token no observed cited receipt holds; verified only on observed receipts', async () => {
     let verified = 0;
@@ -142,6 +197,12 @@ describe('generated sessions', () => {
       const { log } = await session(seed);
       const reader = readerOf({ seq: log.length, entries: log });
       for (const check of log.filter((e): e is LedgerCheck => e.kind === 'check')) {
+        if (check.rule === 'acme/always@1') {
+          expect(check.decision, `seed ${seed}`).toEqual(
+            fixedRecord(check.disposition, 'always', 'app'),
+          );
+          continue;
+        }
         const rule = RULES[check.rule] as LedgerTableRule;
         const note = 'note' in check.subject ? reader.note(check.subject.note) : undefined;
         const subject =
@@ -163,8 +224,9 @@ describe('generated sessions', () => {
 
   it('no receipt token is served; ask never appends; only the host writes supplied', async () => {
     for (let seed = 1; seed <= SESSIONS; seed++) {
-      const { log, served, receiptOnly, askAppended } = await session(seed);
+      const { log, served, receiptOnly, queryOnly, askAppended } = await session(seed);
       expect(JSON.stringify(served), `seed ${seed}`).not.toContain(receiptOnly);
+      expect(JSON.stringify(served), `seed ${seed}`).not.toContain(queryOnly);
       expect(askAppended).toBe(0);
       for (const e of log.filter((x) => x.kind === 'supplied')) expect(e.by).toBe('host');
     }

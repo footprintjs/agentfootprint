@@ -140,7 +140,8 @@ so the host passes its own `uid`.
 `deliver` and `report`; the agent's calls `note`, `withdraw`, `ask` and `submit` are bound to one
 session and take no session argument. Every reply is `{ ok: true, … }` or
 `{ ok: false, refused: <word> }`, with `store` beside `store-refused`. A session opened without
-`rules` runs the three built-ins.
+`rules` runs the three built-ins. Every session runs the value law, `traceable-values@1`, on every
+claim and on the draft, whatever it pins: `open` adds it to `opened.rules` and its reply lists the rules.
 
 Each call is ONE short FootprintJS run: a fresh `FlowChartExecutor`, a chart built for the call, and
 the input `{ call }` and nothing else. Stage closures hold the call's input and the attempt's reader
@@ -165,7 +166,10 @@ appending nothing.
 `{ submit, standing, counts }`, with no values. The host's `confirm` port answers and the run resumes
 in this process; the checkpoint is never stored or sent. The resumed leg appends `released`. Without a
 port, or when the port fails, the answer is `withhold` with `why: 'no-person-channel'`. If the process
-dies while waiting, no `released` entry exists, and the report reads `ask`.
+dies while waiting, no `released` entry exists, and the report reads `ask`. The answer is never lost and
+never reported as written when it is not: a store error while appending `released` replies
+`store-refused` with its code, three conflicts reply `busy`, and in both the report still reads waiting
+for a person, so the caller can ask again. No path replies `ok` unless the entry is in the log.
 
 **Served.** `serve.ts` builds every reply that carries a log's content. With a host `redaction` policy,
 every string is served as `{ masked: '[REDACTED]', span }` unless it is a ledger word, a rule id, a

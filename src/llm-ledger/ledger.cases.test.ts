@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { openedEntry } from './build.js';
 import { createLedger } from './ledger.js';
 import type { LedgerOptions } from './ledger.js';
 import { memoryLedgerStore } from './memoryStore.js';
@@ -258,7 +259,13 @@ describe('edge cases (§14)', () => {
     const report = ((await agent.submit({ draft: 'id-1234', claims: [3] })) as Reply).report;
     expect(report.claims[0]).toMatchObject({ verdict: 'open', reason: 'check-unreachable' });
     const checks = (await log(inner, session)).filter((e) => e.kind === 'check');
-    expect(checks.map((c) => (c as { rule: string }).rule)).toEqual(['cited@1', 'acme/thrower@1']);
+    // The value law runs whatever the session pinned: on the claim, and on the draft.
+    expect(checks.map((c) => (c as { rule: string }).rule)).toEqual([
+      'cited@1',
+      'acme/thrower@1',
+      'traceable-values@1',
+      'traceable-values@1',
+    ]);
     expect(checks[1]).toMatchObject({
       disposition: 'unreachable',
       verdict: 'open',
@@ -278,5 +285,180 @@ describe('edge cases (§14)', () => {
     expect(report.claims[0].text).toEqual({ masked: '[REDACTED]', span: [0, 22] });
     expect(report.claims[0].missing).toEqual([{ masked: '[REDACTED]', span: [17, 22] }]);
     expect(report.draft.missing).toEqual([{ masked: '[REDACTED]', span: [12, 17] }]);
+  });
+});
+
+const always: LedgerRule = {
+  id: 'acme/always',
+  version: 1,
+  appliesTo: ['claim', 'ruled-out', 'draft'],
+  decide: (input) => ({
+    outcome: 'checked-pass',
+    label: 'always',
+    restsOn: input.receipts.map((r) => r.seq),
+  }),
+};
+
+describe('the value law runs in every session (ruling 1)', () => {
+  it.each([
+    ['only cited@1', {}, ['cited@1']],
+    ['only a host rule that always passes', { rules: [always] }, ['acme/always@1']],
+    ['no rule at all', {}, []],
+  ] as const)(
+    '%s: the value law is added, and a value no receipt holds is unsupported',
+    async (_n, options, rules) => {
+      const t = await setup(options as Partial<LedgerOptions>, { rules: [...rules] });
+      const opened = (await log(t.inner, t.session))[0] as { rules: string[] };
+      expect(opened.rules).toEqual([...rules, 'traceable-values@1']);
+      await t.ledger.host.record(t.session, { source: 's', text: 'v4006k' });
+      await t.agent.note({ kind: 'claim', text: 'v4002k', cites: [2] });
+      const report = ((await t.agent.submit({ draft: 'v4002k', claims: [3] })) as Reply).report;
+      expect(report.claims[0].verdict).toBe('unsupported');
+      expect(report.draft.verdict).toBe('unsupported');
+      expect(report.standing).toBe('not-sure');
+    },
+  );
+
+  it('a session whose opened entry lacks the value law (written elsewhere) still runs it', async () => {
+    const real = memoryLedgerStore();
+    const session = 'ls_0000000000000000000000000A';
+    const opened = openedEntry({ seq: 1, at: AT }, { rules: ['cited@1'] });
+    if (!opened.ok) throw new Error('fixture');
+    await real.append(session, 0, [opened.entry]);
+    const ledger = createLedger({ store: real, clock: () => AT });
+    await ledger.host.record(session, { source: 's', text: 'v4006k' });
+    await ledger.agentFor(session).note({ kind: 'claim', text: 'v4002k', cites: [2] });
+    const report = (
+      (await ledger.agentFor(session).submit({ draft: 'v4002k', claims: [3] })) as Reply
+    ).report;
+    expect(report.claims[0].verdict).toBe('unsupported');
+    expect(report.claims[0].checks.map((c: { rule: string }) => c.rule)).toEqual([
+      'cited@1',
+      'traceable-values@1',
+    ]);
+  });
+
+  it('the open reply lists the rules the session runs', async () => {
+    const ledger = createLedger({ store: memoryLedgerStore(), clock: () => AT });
+    expect(await ledger.host.open({ rules: ['cited@1'] })).toMatchObject({
+      ok: true,
+      seq: 1,
+      rules: ['cited@1', 'traceable-values@1'],
+    });
+    expect(await ledger.host.open({})).toMatchObject({
+      rules: ['cited@1', 'traceable-values@1', 'time-window@1'],
+    });
+  });
+});
+
+describe('a value the token rule cannot read caps the subject (ruling 2)', () => {
+  it.each([
+    ['a number with thousands separators', 'host-7 had 41,200 errors'],
+    ['a piece after an escape', String.raw`host-7 wrote D:\logs\node1234.log`],
+  ])('%s: at most open, never verified, on a claim and on the draft', async (_n, text) => {
+    const { ledger, session, agent } = await setup();
+    await ledger.host.record(session, { source: 's', text: 'host-7' });
+    await agent.note({ kind: 'claim', text, cites: [2] });
+    const report = ((await agent.submit({ draft: text, claims: [3] })) as Reply).report;
+    expect(report.claims[0]).toMatchObject({ verdict: 'open', reason: 'claim-unsettled' });
+    expect(report.draft.verdict).toBe('open');
+  });
+
+  it('its visible tokens are still checked: a missing one is unsupported', async () => {
+    const { ledger, session, agent } = await setup();
+    await ledger.host.record(session, { source: 's', text: 'host-7' });
+    await agent.note({ kind: 'claim', text: 'host-7 and id-9999 had 41,200 errors', cites: [2] });
+    const report = ((await agent.submit({ draft: 'x', claims: [3] })) as Reply).report;
+    expect(report.claims[0].verdict).toBe('unsupported');
+  });
+});
+
+describe('the person answer is never lost (ruling 3)', () => {
+  async function confirmed(store: LedgerStore) {
+    const ledger = createLedger({ store, clock: () => AT, confirm: async () => 'withhold' });
+    const session = ((await ledger.host.open({ confirm: true })) as Reply).session as string;
+    await ledger.host.record(session, { source: 's', text: 'a-1234' });
+    await ledger.agentFor(session).note({ kind: 'claim', text: 'a-1234', cites: [2] });
+    return { ledger, session };
+  }
+  /** A store whose appends of `released` misbehave as `how` says. */
+  function onReleased(how: 'throw' | 'conflict' | 'lost-absent' | 'lost-stood') {
+    const real = memoryLedgerStore();
+    const store: LedgerStore = {
+      load: (s) => real.load(s),
+      append: async (s, seq, entries) => {
+        if (entries[0]?.kind !== 'released') return real.append(s, seq, entries);
+        if (how === 'throw') throw new LedgerStoreError('unsafe-file');
+        if (how === 'conflict') return 'conflict';
+        if (how === 'lost-stood') await real.append(s, seq, entries);
+        throw new LedgerStoreError('lock-lost');
+      },
+    };
+    return { store, real };
+  }
+
+  it.each([
+    ['a store error', 'throw', { ok: false, refused: 'store-refused', store: 'unsafe-file' }],
+    ['three conflicts', 'conflict', { ok: false, refused: 'busy' }],
+    [
+      'lock-lost with the entry absent',
+      'lost-absent',
+      { ok: false, refused: 'store-refused', store: 'lock-lost' },
+    ],
+  ] as const)(
+    '%s: a refusal, never ok; the report still reads waiting for a person',
+    async (_n, how, reply) => {
+      const { store, real } = onReleased(how);
+      const { ledger, session } = await confirmed(store);
+      expect(await ledger.agentFor(session).submit({ draft: 'a-1234', claims: [3] })).toEqual(
+        reply,
+      );
+      expect((await real.load(session)).entries.map((e) => e.kind)).not.toContain('released');
+      expect(((await ledger.host.report(session)) as Reply).report).toMatchObject({
+        standing: 'ask',
+        release: 'waiting',
+      });
+    },
+  );
+
+  it('lock-lost with the entry written: ok, and the entry is in the log once', async () => {
+    const { store, real } = onReleased('lost-stood');
+    const { ledger, session } = await confirmed(store);
+    expect(await ledger.agentFor(session).submit({ draft: 'a-1234', claims: [3] })).toMatchObject({
+      ok: true,
+      withheld: true,
+    });
+    expect((await real.load(session)).entries.filter((e) => e.kind === 'released')).toHaveLength(1);
+  });
+});
+
+describe('laws the suite holds (P2-3)', () => {
+  it('o1: an unsupported draft adds value-unsupported, though every claim passes', async () => {
+    const { ledger, session, agent } = await setup();
+    await ledger.host.record(session, { source: 's', text: 'id-1234' });
+    await agent.note({ kind: 'claim', text: 'id-1234', cites: [2] });
+    const report = ((await agent.submit({ draft: 'id-1234 and 99999', claims: [3] })) as Reply)
+      .report;
+    expect(report.claims[0].verdict).toBe('verified');
+    expect(report.draft.verdict).toBe('unsupported');
+    expect(report).toMatchObject({ standing: 'not-sure', reasons: ['value-unsupported'] });
+  });
+
+  it('o9: a delivery is compared with the newest submit, never an older one', async () => {
+    const { ledger, session, agent } = await setup();
+    await ledger.host.record(session, { source: 's', text: 'id-1234' });
+    await agent.note({ kind: 'claim', text: 'id-1234', cites: [2] });
+    await agent.submit({ draft: 'first id-1234', claims: [3] });
+    expect(await ledger.host.deliver(session, { text: 'first id-1234' })).toMatchObject({
+      matches: true,
+    });
+    const second = (await agent.submit({ draft: 'second id-1234', claims: [3] })) as Reply;
+    expect(second.report.delivery).toBe('not-compared'); // the earlier delivery was of the older submit
+    expect(await ledger.host.deliver(session, { text: 'first id-1234' })).toEqual({
+      ok: true,
+      submit: second.submit,
+      matches: false,
+    });
+    expect(((await ledger.host.report(session)) as Reply).report.delivery).toBe('differs');
   });
 });

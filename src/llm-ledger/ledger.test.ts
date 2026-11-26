@@ -356,6 +356,60 @@ describe('the append frame (§7.2)', () => {
   });
 });
 
+describe('o2: after lock-lost a batch stands only when every entry does', () => {
+  it("a log as long as the batch whose first entry alone is the call's: refused, never reported appended", async () => {
+    const real = memoryLedgerStore();
+    const store: LedgerStore = {
+      load: (s) => real.load(s),
+      append: async (s, seq, entries) => {
+        if (entries[0]?.kind !== 'submit') return real.append(s, seq, entries);
+        // As long as the call's batch, but only its first entry is the call's: the rest are another writer's.
+        await real.append(s, seq, [
+          entries[0] as LedgerEntry,
+          ...entries.slice(1).map(
+            (_, i) =>
+              ({
+                v: 1,
+                seq: seq + 2 + i,
+                kind: 'note',
+                by: 'agent',
+                how: 'observed',
+                at: AT,
+                noteKind: 'question',
+                text: 'another writer',
+                cites: [],
+              } as LedgerEntry),
+          ),
+        ]);
+        throw new LedgerStoreError('lock-lost');
+      },
+    };
+    const ledger = createLedger({ store, clock: () => AT });
+    const session = ((await ledger.host.open()) as Reply).session as string;
+    await ledger.host.record(session, { source: 's', text: 'id-1234' });
+    await ledger.agentFor(session).note({ kind: 'claim', text: 'id-1234', cites: [2] });
+    expect(await ledger.agentFor(session).submit({ draft: 'id-1234', claims: [3] })).toEqual({
+      ok: false,
+      refused: 'store-refused',
+      store: 'lock-lost',
+    });
+  });
+});
+
+describe('o7: ask never serves a receipt query', () => {
+  it('the query is stored, never served', async () => {
+    const { ledger, session, agent, inner } = await setup();
+    await ledger.host.record(session, {
+      source: 's',
+      text: 'id-1234',
+      query: 'select secret_col_q7',
+    });
+    expect(JSON.stringify(await log(inner, session))).toContain('secret_col_q7');
+    expect(JSON.stringify(await agent.ask())).not.toContain('secret_col_q7');
+    expect(JSON.stringify(await ledger.host.report(session))).not.toContain('secret_col_q7');
+  });
+});
+
 describe('ask (§6.3)', () => {
   it('runs no rule and appends nothing by default; under askRunsRules it is a dry run', async () => {
     for (const askRunsRules of [false, true]) {

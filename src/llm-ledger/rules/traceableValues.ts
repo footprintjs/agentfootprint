@@ -10,14 +10,24 @@
  * Tokens come from the note's text and `values`, or from the draft. A token found in a `supplied`
  * entry is exempt: neither missing nor support (only the host writes `supplied`). Every other token
  * rests on the first OBSERVED receipt that holds it, or else the first reported one; a token no
- * receipt holds is missing. With a missing token, an incomplete receipt among the subject's
+ * receipt holds is missing. A subject that states a value the token rule cannot read as one token
+ * (a number with thousands separators, a piece after an escape) is at most `unreachable`, after its
+ * visible tokens are checked: a missing visible token still fails it. With a missing token, an
+ * incomplete receipt among the subject's
  * receipts (`isIncomplete`: cut, masked, limited, holding grouped numbers or escaped pieces) makes
  * the check `unreachable`, never `checked-fail`: the value may be in the part it left out. A
  * note's `values` are what it claims, never support.
  */
 import { isIncomplete } from '../entries.js';
-import { tokensOf } from '../tokens.js';
+import { readTokens, tokensOf } from '../tokens.js';
 import type { LedgerTableRule } from './port.js';
+
+/** The value law's key. It runs in every session, whatever the session pins (`withValueLaw`). */
+export const VALUE_LAW = 'traceable-values@1';
+
+/** `keys` with the value law among them: pinning may add rules, never remove this one. */
+export const withValueLaw = (keys: readonly string[]): string[] =>
+  keys.includes(VALUE_LAW) ? [...keys] : [...keys, VALUE_LAW];
 
 export const traceableValues: LedgerTableRule = {
   id: 'traceable-values',
@@ -30,6 +40,14 @@ export const traceableValues: LedgerTableRule = {
         ? tokensOf(subject.text)
         : [subject.note.text, ...(subject.note.values ?? [])].flatMap(tokensOf),
     );
+    // Values the token rule cannot read as one token: numbers with thousands separators, pieces after an escape.
+    const unreadable = (
+      subject.kind === 'draft'
+        ? [subject.text]
+        : [subject.note.text, ...(subject.note.values ?? [])]
+    )
+      .map(readTokens)
+      .reduce((n, r) => n + (r.groupedNumbers ?? 0) + (r.escapedPieces ?? 0), 0);
     const exempt = new Set(input.supplied.flatMap((s) => s.tokens));
     const holders = (token: string) => input.receipts.filter((r) => r.tokens.includes(token));
     const restsOn: number[] = [];
@@ -53,6 +71,7 @@ export const traceableValues: LedgerTableRule = {
         checkable: stated.size - supplied,
         missing: missing.length,
         incomplete,
+        unreadable,
       },
       restsOn,
       counts,
@@ -79,6 +98,11 @@ export const traceableValues: LedgerTableRule = {
       when: { missing: { gt: 0 } },
       then: 'unreachable',
       label: 'a value may be in the part a receipt left out',
+    },
+    {
+      when: { unreadable: { gt: 0 } },
+      then: 'unreachable',
+      label: 'it states a value this rule cannot read',
     },
   ],
   default: { branch: 'checked-pass', label: 'every value it states is in a receipt' },

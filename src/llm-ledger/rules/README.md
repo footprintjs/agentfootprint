@@ -40,10 +40,14 @@ visible token is never a pass.
 
 ## The three built-ins
 
+**`traceable-values@1` is the value law and runs in every session**, on every claim and ruled-out note and
+on the whole draft, whatever the session pins: pinning may add rules, never remove this one. `open` records
+it in `opened.rules` whatever the host asked for, and its reply lists the rules the session runs.
+
 | Rule | Applies to | Table (first match wins) | Sees | Cannot see |
 |---|---|---|---|---|
 | `cited@1` | claim, ruled-out | `cites eq 0` → checked-fail, "cites no receipt". Default checked-pass, "cites a receipt of its session". Rests on the cited receipts | the note's `cites` | whether a receipt is about the claim |
-| `traceable-values@1` | claim, ruled-out, draft | `visible eq 0` → unreachable; `checkable eq 0` → unreachable ("every value it states was supplied"); `missing gt 0` with `incomplete eq 0` → checked-fail; `missing gt 0` → unreachable ("a value may be in the part a receipt left out"). Default checked-pass. Each token rests on the first observed receipt that holds it, else the first reported one | tokens by the ledger's one token rule (`tokens.ts`), from the note's text and `values` or the draft | all-letter names; numbers under 4 digits; respellings; numbers written with thousands separators; pieces after a backslash that may open an escape; meaning |
+| `traceable-values@1` | claim, ruled-out, draft | `visible eq 0` → unreachable; `checkable eq 0` → unreachable ("every value it states was supplied"); `missing gt 0` with `incomplete eq 0` → checked-fail; `missing gt 0` → unreachable ("a value may be in the part a receipt left out"); `unreadable gt 0` → unreachable ("it states a value this rule cannot read"). Default checked-pass. Each token rests on the first observed receipt that holds it, else the first reported one | tokens by the ledger's one token rule (`tokens.ts`), from the note's text and `values` or the draft; that the subject states a value it cannot read (a number with thousands separators, a piece after an escape), which caps the subject at `open` after its visible tokens are checked | the value of a number written with thousands separators or of a piece after an escape (it is counted, never read); all-letter names; numbers under 4 digits; respellings; meaning |
 | `time-window@1` | a note with a `window` (else not-applicable) | `windowed eq 0` → unreachable; `uncoveredMs gt 0` with `unwindowed gt 0` → unreachable; `uncoveredMs gt 0` → checked-fail; `cutInWindow gt 0` → unreachable. Default checked-pass. Rests on the cited receipts whose windows overlap the claim's | the claim's typed window, the cited receipts' declared windows and `isIncomplete` | times written in prose; whether the rows really span a declared window; zones and wall times |
 
 A token found only in a `supplied` entry is exempt: neither missing nor support, and only the host
@@ -51,4 +55,5 @@ writes `supplied`. A note's own `values` are what it claims, never support. An i
 (`isIncomplete`: cut, masked, limited, holding grouped numbers or escaped pieces) turns a missing value
 into `open`, never `unsupported`.
 
-Each rule has an independent oracle in `test/llm-ledger/rules-oracle.test.ts`.
+A synchronous rule is timed only after it returns: one that never returns blocks the process. Each rule has an
+independent oracle in `test/llm-ledger/rules-oracle.test.ts`.

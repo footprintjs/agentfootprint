@@ -11,13 +11,12 @@
  * A claim's verdict is the weakest of its checks' verdicts (`rules/port.ts` · `weakest`). A claim with no
  * check is NOT CHECKED, never a pass: a submit whose checks are missing reads `not-assessed` at best
  * (the batch mark makes it impossible in a log; the fold does not rely on that). A claim with no
- * visible token is `open`, whatever its rules said (`claim-unsettled`).
+ * visible token is never a pass: the value law runs in every session and gives it `unreachable`.
  */
 import { isIncomplete } from './entries.js';
 import type { LedgerReader } from './reader.js';
 import { weakest } from './rules/port.js';
 import type { LedgerCheckCounts } from './rules/port.js';
-import { tokensOf } from './tokens.js';
 import type { LedgerCheckWhy, LedgerDisposition, LedgerNote, LedgerVerdict } from './types.js';
 
 /** The report's standing, in AgentFootprint's words. */
@@ -105,26 +104,21 @@ export const REPORT_SENTENCES: readonly string[] = Object.freeze([
 
 /** Why an `open` check is open: nothing to compare (`claim-unsettled`), or the check could not run. */
 function openReason(check: LedgerCheckView): 'claim-unsettled' | 'check-unreachable' {
+  // The value law's `unreachable` with nothing missing: no value seen, all supplied, or one it cannot read.
   const unsettled =
     check.why === undefined &&
     check.rule.startsWith('traceable-values@') &&
-    check.counts.visible === check.counts.supplied;
+    check.counts.missing === 0;
   return unsettled ? 'claim-unsettled' : 'check-unreachable';
 }
 
-/** One subject's line, from its checks. `visible` is false for a note with no token at all. */
-function subjectOf(
-  reader: LedgerReader,
-  checks: readonly LedgerCheckView[],
-  visible: boolean,
-): LedgerSubjectReport {
-  let verdict = weakest(checks.map((c) => c.verdict));
-  let reason: LedgerSubjectReport['reason'];
-  if (!visible && verdict !== undefined && verdict !== 'unsupported') {
-    verdict = 'open';
-    reason = 'claim-unsettled';
-  } else if (verdict === 'open')
-    reason = checks.some((c) => c.verdict === 'open' && openReason(c) === 'check-unreachable')
+/** One subject's line, from its checks. */
+function subjectOf(reader: LedgerReader, checks: readonly LedgerCheckView[]): LedgerSubjectReport {
+  const verdict = weakest(checks.map((c) => c.verdict));
+  const reason: LedgerSubjectReport['reason'] =
+    verdict !== 'open'
+      ? undefined
+      : checks.some((c) => c.verdict === 'open' && openReason(c) === 'check-unreachable')
       ? 'check-unreachable'
       : 'claim-unsettled';
   const seqs = [...new Set(checks.flatMap((c) => c.restsOn))];
@@ -142,9 +136,6 @@ function subjectOf(
     restsOn,
   };
 }
-
-const hasToken = (note: LedgerNote): boolean =>
-  [note.text, ...(note.values ?? [])].some((t) => tokensOf(t).length > 0);
 
 const isLive = (reader: LedgerReader, note: LedgerNote): boolean =>
   reader.withdrawalOf(note.seq) === undefined;
@@ -167,7 +158,7 @@ export function foldReport(
     const note = reader.note(seq);
     if (note === undefined || note.noteKind === 'question') continue;
     const own = checks.filter((c) => 'note' in c.subject && c.subject.note === seq);
-    const line = subjectOf(reader, own, hasToken(note));
+    const line = subjectOf(reader, own);
     if (!isLive(reader, note)) {
       withdrawnAfterCheck.push({ note: seq, ...(line.verdict ? { verdict: line.verdict } : {}) });
       continue;
@@ -175,7 +166,7 @@ export function foldReport(
     claims.push({ note: seq, kind: note.noteKind, text: note.text, ...line });
   }
   const draftChecks = checks.filter((c) => 'draft' in c.subject);
-  const draft = draftChecks.length > 0 ? subjectOf(reader, draftChecks, true) : undefined;
+  const draft = draftChecks.length > 0 ? subjectOf(reader, draftChecks) : undefined;
   const subjects: LedgerSubjectReport[] = [...claims, ...(draft === undefined ? [] : [draft])];
   const count = (v: LedgerVerdict) => claims.filter((c) => c.verdict === v).length;
 
