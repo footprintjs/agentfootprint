@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.1.1] - 2026-11-26
+
+### Changed
+
+- **The engine peer is now `footprintjs ^14.3.0`.** The library is built and tested on the current engine: its own checks had been running on the first 14 release, which hid that an ordinary turn's record named a host-end key on newer engines (fixed in this release). An app on an older 14 engine upgrades `footprintjs` to 14.3.0 or newer; nothing else changes.
+
+### Fixed
+
+- **An ordinary turn no longer reads the host-end key `modelReplyRunId`.** Every turn's final stage asked whether a settled reply had a model run id, the key only a `hostEndedTurns: true` agent writes; the engine records that presence check as a read of an unset key, and since footprintjs 14.1.0 names it in a saved snapshot's `undefinedReadKeys`, so an ordinary turn's record carried a host-end name. The final stage now asks only in a host-ended agent; an ordinary turn's recorded reads, saved rows and checkpoint bytes are as they were.
+
 ## [19.1.0] - 2026-11-26
 
 ### Fixed
