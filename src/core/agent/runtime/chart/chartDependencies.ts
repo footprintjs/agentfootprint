@@ -279,6 +279,7 @@ export function chartDependencies(
       negativeRecheckStage: negativeRecheckStage as (scope: never) => void,
     }),
     ...(environment.governsOutput && { releaseOutputTokens: true as const }),
+    ...(this.configuration.hostEndedTurns && { hostEndedTurns: true as const }),
     ...(this.configuration.evidenceGate?.posture === 'rails' && { evidenceRails: true as const }),
     // The out-of-budget wrap-up branch (9.56.0) — the conditional-mount law
     // above, decided once beside the Route decider that routes to it so the
