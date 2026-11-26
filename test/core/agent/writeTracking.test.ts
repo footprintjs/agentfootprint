@@ -177,6 +177,43 @@ describe('AgentOptions.writeTracking — snapshot stageWrites policy', () => {
   });
 });
 
+describe('what a scope recorder sees, per mode', () => {
+  async function observed(mode: WriteTrackingMode) {
+    const agent = buildAgent(mode);
+    const commits: { key: string; value: unknown }[][] = [];
+    const writes: string[] = [];
+    agent.attach({
+      id: 'probe-commits',
+      onWrite: (event: { key: string }) => void writes.push(event.key),
+      onCommit: (event: { mutations: { key: string; value: unknown }[] }) =>
+        void commits.push(event.mutations.map(({ key, value }) => ({ key, value }))),
+    } as never);
+    await agent.run({ message: 'go' });
+    await agent.shutdown();
+    return { commits, writes };
+  }
+
+  it("onCommit carries values under 'full', markers under 'summary', no mutations under 'off'; onWrite is the same in all", async () => {
+    const full = await observed('full');
+    const summary = await observed('summary');
+    const off = await observed('off');
+    const keysOf = (run: typeof full) => run.commits.map((c) => c.map((m) => m.key).sort());
+    const all = (run: typeof full) => run.commits.flat();
+    expect(all(full).some((m) => m.key === 'history')).toBe(true);
+    expect(all(full).some((m) => isWriteMarker(m.value))).toBe(false);
+    // Same keys, at the same commits; every value a marker.
+    expect(keysOf(summary)).toEqual(keysOf(full));
+    for (const m of all(summary))
+      if (m.value !== undefined) expect(isWriteMarker(m.value)).toBe(true);
+    // The same number of commits, none with a mutation.
+    expect(off.commits.length).toBe(full.commits.length);
+    expect(all(off)).toEqual([]);
+    // onWrite does not depend on the dial.
+    expect(summary.writes).toEqual(full.writes);
+    expect(off.writes).toEqual(full.writes);
+  });
+});
+
 describe('the readers of the write view read the same under markers', () => {
   it('the stored-cause projection reads only stageReads: markers in stageWrites project the same', async () => {
     const fixture = await storedCauseFixture();

@@ -655,7 +655,7 @@ and the `limit` on the record's `ledgerFacts` block.
 
 > `readonly` `optional` **liveThinkingWithHeldDrafts?**: `"provider-summary"`
 
-Defined in: [src/core/agent/types/observation.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L98)
+Defined in: [src/core/agent/types/observation.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L105)
 
 Serve provider-classified summary fragments while output policy or answer
 validation holds draft answers. Omit to hold all live thinking deltas in
@@ -887,7 +887,7 @@ gate's `posture`; nothing here blocks, revises or rewrites anything.
 
 > `readonly` `optional` **observerDelivery?**: `"inline"` \| `"deferred"`
 
-Defined in: [src/core/agent/types/observation.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L84)
+Defined in: [src/core/agent/types/observation.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L91)
 
 Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
 byte-identical to every prior release: the Agent's bridge recorders
@@ -927,7 +927,7 @@ Queue stats surface on `agent.getLastSnapshot()?.observerStats`.
 
 > `readonly` `optional` **observerDeliveryOptions?**: [`ObserverDeliveryOptions`](/docs/api/type-aliases/ObserverDeliveryOptions)
 
-Defined in: [src/core/agent/types/observation.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L90)
+Defined in: [src/core/agent/types/observation.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L97)
 
 Queue dials for `observerDelivery: 'deferred'` — see
 `ObserverDeliveryOptions`. Throws at construction when set without
@@ -1550,7 +1550,7 @@ guess. Cost is one small array copy per write.
 
 > `readonly` `optional` **writeTracking?**: `RetentionPolicy`
 
-Defined in: [src/core/agent/types/observation.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L54)
+Defined in: [src/core/agent/types/observation.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/observation.ts#L61)
 
 Write-tracking policy for the snapshot's per-stage write view
 (footprintjs `StageSnapshot.stageWrites`), the sibling of
@@ -1568,13 +1568,20 @@ Write-tracking policy for the snapshot's per-stage write view
   capture, which needs every capture dial at `'full'`.
 - `'off'` — writes are not recorded; `stageWrites` is absent.
 
-The commit log, the narrative and recorder events (`onWrite` / `onCommit`
-payloads) are IDENTICAL in every mode: the policy scopes ONLY the
-snapshot's `stageWrites`. A redaction policy applies first: a marker
-describes what the policy retains, never the raw value. Read a written
-value back from the commit log with `commitValueAt`, which every mode
-keeps. Note the Agent default (`'summary'`) is deliberately cheaper than
+The commit log, the narrative and `onWrite` events are IDENTICAL in every
+mode. `onCommit` is not: its `mutations` are this same write view, so each
+`mutations[].value` is a `WriteSummaryMarker` under `'summary'` (keys and
+operations unchanged) and `mutations` is empty under `'off'`. A recorder
+that needs committed values reads them from `onWrite` or from the commit
+log (`commitValueAt`), which every mode keeps. A redaction policy applies
+first: a marker describes what the policy retains, never the raw value.
+Note the Agent default (`'summary'`) is deliberately cheaper than
 footprintjs's (`'full'`), as `readTracking`'s is.
+
+Forwarded to the agent's OWN executor (its runs and resumes). An agent
+mounted inside a composition (`Sequence`, `Parallel`, `Loop`, …) runs
+under that composition's executor, which keeps the engine's defaults
+(`'full'`), as `readTracking` and `commitValues` do.
 
 #### Inherited from
 

@@ -43,13 +43,20 @@ export interface AgentObservationOptions {
    *   capture, which needs every capture dial at `'full'`.
    * - `'off'` — writes are not recorded; `stageWrites` is absent.
    *
-   * The commit log, the narrative and recorder events (`onWrite` / `onCommit`
-   * payloads) are IDENTICAL in every mode: the policy scopes ONLY the
-   * snapshot's `stageWrites`. A redaction policy applies first: a marker
-   * describes what the policy retains, never the raw value. Read a written
-   * value back from the commit log with `commitValueAt`, which every mode
-   * keeps. Note the Agent default (`'summary'`) is deliberately cheaper than
+   * The commit log, the narrative and `onWrite` events are IDENTICAL in every
+   * mode. `onCommit` is not: its `mutations` are this same write view, so each
+   * `mutations[].value` is a `WriteSummaryMarker` under `'summary'` (keys and
+   * operations unchanged) and `mutations` is empty under `'off'`. A recorder
+   * that needs committed values reads them from `onWrite` or from the commit
+   * log (`commitValueAt`), which every mode keeps. A redaction policy applies
+   * first: a marker describes what the policy retains, never the raw value.
+   * Note the Agent default (`'summary'`) is deliberately cheaper than
    * footprintjs's (`'full'`), as `readTracking`'s is.
+   *
+   * Forwarded to the agent's OWN executor (its runs and resumes). An agent
+   * mounted inside a composition (`Sequence`, `Parallel`, `Loop`, …) runs
+   * under that composition's executor, which keeps the engine's defaults
+   * (`'full'`), as `readTracking` and `commitValues` do.
    */
   readonly writeTracking?: WriteTrackingMode;
   /**
