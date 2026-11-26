@@ -3,7 +3,9 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { MiddlewareDecision } from '../../../middleware/types.js';
-import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMMessage } from '../../../../../provider-contract/types.js';
+import { notLoadedFor } from '../../../skillContext/gate.js';
+import type { Resolution } from '../contracts/callFacts.js';
 import type { Tool } from '../../../../../tools/tools.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { ResumedCallResult } from '../contracts/operations/resumedInvocation.js';
@@ -33,6 +35,27 @@ import {
   beforeToolPolicyNames,
   pausedGatePolicyOf,
 } from './resumePolicyRecord.js';
+
+/** Resolve the original skill under the restored run's captured role view before tool entry. */
+export function buildResumedSkillAdmission(
+  deps: Pick<ToolCallsHandlerDeps, 'permissionChecker' | 'toolDeclaringSkills'>,
+): (scope: TypedScope<AgentState>, toolName: string, candidate: Resolution) => Resolution {
+  const rolePolicy = checkerGoverns(deps.permissionChecker, 'skill_read');
+  return (scope, toolName, candidate) => {
+    const roleRefusal =
+      rolePolicy && candidate.party?.channel === 'skill'
+        ? notLoadedFor(
+            undefined,
+            deps.toolDeclaringSkills,
+            toolName,
+            candidate.party,
+            undefined,
+            scope.hiddenSkillIds as readonly string[] | undefined,
+          )
+        : undefined;
+    return roleRefusal === undefined ? candidate : { refusal: roleRefusal };
+  };
+}
 
 type AccessDeps = Pick<ToolCallsHandlerDeps, 'permissionChecker' | 'toolMiddleware'>;
 type ResumedAdmission =
