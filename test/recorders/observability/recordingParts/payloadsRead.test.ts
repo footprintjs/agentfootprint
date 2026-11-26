@@ -322,6 +322,33 @@ describe('restorePayloads refuses a mark it cannot have written, whatever the re
     };
     expect(restorePayloads(recording, () => ({ value: 1 }), 1)).toBe(false);
   });
+
+  const marked = (events: Record<string, unknown>[]) => ({
+    snapshot: {
+      recorders: [
+        {
+          name: 'BoundaryEvents',
+          data: events,
+          meta: { mode: 'full', subflowPayloads: 'with-invocation' },
+        },
+      ],
+    },
+  });
+  const entry = { type: 'subflow.entry', runtimeStageId: 'sf-a#1', payloadWith: 'invocation' };
+
+  it('fewer marks than the index moved', () => {
+    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 2)).toBe(false);
+    expect(restorePayloads(marked([{ ...entry }]), () => ({ value: 1 }), 1)).toBe(true);
+  });
+
+  it('the same mark twice, whatever the index counts', () => {
+    expect(restorePayloads(marked([{ ...entry }, { ...entry }]), () => ({ value: 1 }), 1)).toBe(
+      false,
+    );
+    expect(restorePayloads(marked([{ ...entry }, { ...entry }]), () => ({ value: 1 }), 2)).toBe(
+      false,
+    );
+  });
 });
 
 describe('the answer account is the same from the same run, before and after', () => {

@@ -86,8 +86,11 @@ export async function explainPartsRecording(
     service.drop(key);
     return { status: 'not-found' };
   }
-  // Provable from the index alone: the stored parts, with the payloads a whole
-  // read restores from results, already pass the ceiling.
+  // Decided from the index alone: the stored parts, with the payloads a whole
+  // read restores from results, already pass the ceiling. The restored share is
+  // the index's claim, so this only refuses early: a pass is provisional, and
+  // `readWhole` measures what it restores against the same ceiling (a figure
+  // that does not match is `part-changed`, the op's one not-found).
   if (opened.sizes.restoredBytes - (opened.sizes.index ?? 0) > ceiling)
     return { status: 'too-large' };
 

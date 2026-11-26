@@ -253,16 +253,28 @@ describe('a budget is paid for only where one is in force', () => {
     });
     const saved = await ready(openSavedRecording(bindArtifacts(store, SCOPE), filed.index));
     const key = saved.invocations.find((row) => row.recorded)!.key;
+    // Index format 2: a `same` sub-flow payload is restored from its result, and
+    // its bytes are measured (the index's figure is only a claim): one
+    // serialisation per `same` payload served, never one of the part.
+    const index = JSON.parse(filed.indexText) as {
+      invocations: { key: string; payloads?: { entry?: string; exit?: string } }[];
+      subflowPayloads: { same: number };
+    };
+    const places = index.invocations.find((row) => row.key === key)!.payloads ?? {};
+    const sameHere = [places.entry, places.exit].filter((at) => at === 'same').length;
+    expect(sameHere).toBeGreaterThan(0);
 
     serialised.calls = 0;
     serialised.on = true;
     try {
       expect((await saved.readInvocation(key)).status).toBe('ready');
       expect((await saved.readRoot()).status).toBe('ready');
-      expect(serialised.calls).toBe(0);
-      // The bounded path still measures — one serialisation per part it reads — and still refuses.
+      expect(serialised.calls).toBe(sameHere);
+      // The bounded path still measures — one serialisation per part it reads,
+      // and one per `same` payload it restores — and still refuses.
+      serialised.calls = 0;
       expect((await saved.readWhole()).status).toBe('ready');
-      expect(serialised.calls).toBe(saved.sizes.parts.length + 1);
+      expect(serialised.calls).toBe(saved.sizes.parts.length + 1 + index.subflowPayloads.same);
       expect(await saved.readWhole({ maxBytes: 4096 })).toEqual({
         status: 'unavailable',
         reason: 'too-large',

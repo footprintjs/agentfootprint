@@ -60,19 +60,28 @@ already holds. `payloads.ts` owns the rule.
 - **Reads.** `readRoot` returns the base as stored. `readInvocation` returns
   `payloads: { entry?, exit? }` beside the result (a `'same'` value is the
   result's own object). `readWhole` restores every payload (the row is the same
-  JSON text) and charges the restored bytes against `maxBytes`, decided from
-  the index (`subflowPayloads.restoredBytes`); `sizes.restoredBytes` reports
-  stored plus restored.
+  JSON text) and charges the restored bytes against `maxBytes` as it measures
+  them; `sizes.restoredBytes` reports stored plus restored, as the index
+  states it.
 - **Formats.** The writer writes index format 2 with part format 2. The reader
   admits format 1 (filed by 18.2 and 18.3: payloads in the row) and format 2,
   each with its own parts, never a mix; an index spelled
   `agentfootprint.recording.index.v<N>` for another N is `unsupported-format`.
   An 18.2 or 18.3 reader refuses a format-2 index at open as `invalid-index`.
   A whole recording's in-memory cut is format 1, so its reads are unchanged.
-- **Counts are admitted.** `readRecordingIndex` checks `same`, `stored` and
-  `restoredBytes` against the invocations' places and each part's `payloads`
-  count; the part reader checks the part's `payloads` member against the same
-  places, and `readWhole` checks the base's marks against them.
+- **Every figure is a claim, checked.** `readRecordingIndex` admits `same`,
+  `stored` and `restoredBytes` against the invocations' places and each part's
+  `payloads` count. The part reader checks the part's `payloads` member against
+  the same places. Bytes a read restores are MEASURED: `readInvocation` and
+  `readWhole` serialise each `'same'` value they serve, `readWhole` charges it
+  against `maxBytes` as it restores it (refusing `too-large` the moment the
+  budget is spent), and an invocation whose measured bytes differ from its
+  `restoredBytes` is `part-changed`. `readWhole` also runs the move rule again
+  over what it restored: it must move exactly the payloads the index places and
+  keep the rest for the reasons `kept` counts, or the read is `part-changed`. A
+  decision taken from the index's figure up front (`readWhole`'s first check, a
+  host's band on `sizes.restoredBytes`) is provisional: a pass is confirmed only
+  by the measurement; a refusal serves no byte.
 
 With `packed`, each part is packed on its own (`recordingParts/packing.ts ·
 packPart`), so any part reads alone. The index is never packed.

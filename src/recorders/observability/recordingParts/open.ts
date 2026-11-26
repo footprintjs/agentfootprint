@@ -129,8 +129,10 @@ export interface SavedRecordingSizes {
   /**
    * `storedBytes` plus the plain JSON bytes `readWhole` restores from results
    * (an index-format-2 recording's `'same'` sub-flow payloads, stored once, in
-   * the result). What a whole read holds; `readWhole` charges it against
-   * `maxBytes`. Equal to `storedBytes` for a format-1 or whole recording.
+   * the result), as the index states them. What a whole read holds: a band
+   * decided from it is provisional, since `readWhole` measures what it
+   * restores and refuses a figure that does not match. Equal to `storedBytes`
+   * for a format-1 or whole recording.
    */
   readonly restoredBytes: number;
   /** How many artifacts hold it. */
@@ -193,8 +195,10 @@ export interface SavedRecording {
    * `payloads` (index format 2): what the invocation was handed (`entry`) and
    * handed back (`exit`), present exactly when that payload moved out of the
    * base row (whose event then carries `payloadWith: 'invocation'`). A
-   * `'same'` payload is the result's own object, shared. Absent for a format-1
-   * or whole recording, whose payloads are in the base row.
+   * `'same'` payload is the result's own object, shared; its bytes are measured,
+   * and differ from the index's `restoredBytes` only on a part that does not
+   * match its index (`part-changed`). Absent for a format-1 or whole
+   * recording, whose payloads are in the base row.
    */
   readInvocation(
     key: string,
@@ -225,8 +229,11 @@ export interface SavedRecording {
    * restored; refused whole if any part is. It deep-equals the recording that
    * was saved but is not byte-equal to it: `subflowResults` comes last in the
    * snapshot, its keys are in part order, a proven alias shares its key's
-   * result object, and so does a `'same'` payload. `maxBytes` is charged
-   * `sizes.restoredBytes`'s restored share before any part is read.
+   * result object, and so does a `'same'` payload. The payloads restored from
+   * results are measured and charged against `maxBytes` as they are restored
+   * (`too-large` the moment it is spent); the index's own figure for them only
+   * decides an early refusal, and a figure that differs from what was measured
+   * is `part-changed`.
    */
   readWhole(
     options?: SavedRecordingWholeOptions,
@@ -475,6 +482,7 @@ function opened(
       const part = await parts.invocations(entry.part, signal);
       if ('reason' in part) return part;
       const payloads = parts.payloadsOf(key, part);
+      if (payloads !== undefined && 'reason' in payloads) return payloads;
       return Object.freeze({
         status: 'ready',
         invocation: invocations[at] as SavedInvocation,

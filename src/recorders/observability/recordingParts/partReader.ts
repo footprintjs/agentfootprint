@@ -31,7 +31,7 @@ import {
   type StoredPartEntry,
 } from './format.js';
 import { unpackPart } from './packing.js';
-import { restorePayloads, resultValueFor, type PayloadKind } from './payloads.js';
+import { payloadClaims, restorePayloads, resultValueFor, type PayloadKind } from './payloads.js';
 import type { PartSource } from './source.js';
 
 /** Why one read from an opened recording returned nothing. */
@@ -127,6 +127,14 @@ export function partReader(
   }
   for (const { key, part } of index.unmounted) results[part]?.add(key);
   for (const alias of index.aliases) if ('part' in alias) aliases[alias.part]?.add(alias.name);
+  /** Every invocation with a part, to its `subflowId`: the owners the payload rule is run with. */
+  const owners = new Map<string, string>();
+  for (const invocation of index.invocations) {
+    if (invocation.part !== null) owners.set(invocation.key, invocation.subflowId);
+  }
+
+  /** A restored value's plain JSON bytes, measured: the index's figure is only a claim. */
+  const plainBytesOf = (value: unknown): number => utf8Length(toWireJson(value));
 
   /** The stored payloads member of a v2 part: exactly the keys and kinds the index places there. */
   function storedPayloads(
@@ -262,11 +270,18 @@ export function partReader(
   /**
    * One invocation's moved payloads, served from the part that holds its
    * result: `undefined` when none of its payloads moved (format 1 always). A
-   * `'same'` value is the result's own object, shared.
+   * `'same'` value is the result's own object, shared. Its bytes are measured
+   * and must equal the index's `restoredBytes` for the invocation; otherwise
+   * the part does not match its index (`part-changed`).
    */
-  function payloadsOf(key: string, contents: PartContents): SavedInvocationPayloads | undefined {
-    const places = byKey.get(key)?.payloads;
+  function payloadsOf(
+    key: string,
+    contents: PartContents,
+  ): SavedInvocationPayloads | Unavailable | undefined {
+    const invocation = byKey.get(key);
+    const places = invocation?.payloads;
     if (places === undefined) return undefined;
+    let measured = 0;
     const slot = (kind: PayloadKind): SavedPayloadSlot | undefined => {
       const at = places[kind];
       if (at === undefined) return undefined;
@@ -274,12 +289,14 @@ export function partReader(
         at === 'same'
           ? resultValueFor(contents.results.get(key), kind)
           : contents.payloads.get(key)?.[kind];
+      if (at === 'same' && value !== undefined) measured += plainBytesOf(value);
       return value === undefined
         ? Object.freeze({ status: 'unavailable', reason: 'part-changed' })
         : Object.freeze({ status: 'ready', value });
     };
     const entry = slot('entry');
     const exit = slot('exit');
+    if (measured !== (invocation?.restoredBytes ?? 0)) return unavailable('part-changed');
     return Object.freeze({
       ...(entry !== undefined && { entry }),
       ...(exit !== undefined && { exit }),
@@ -296,9 +313,12 @@ export function partReader(
     signal: AbortSignal | undefined,
     maxBytes: number,
   ): Promise<{ readonly status: 'ready'; readonly recording: Recording } | Unavailable> {
-    // The payloads restored from results are charged first: they are bytes of
-    // the whole that no part's text counts (`IndexSubflowPayloads.restoredBytes`).
-    let remaining = maxBytes - (index.subflowPayloads?.restoredBytes ?? 0);
+    // The payloads restored from results are bytes of the whole that no part's
+    // text counts. The index's figure for them is a CLAIM: it is reserved here,
+    // provisionally (so an honest index is refused before any part is read),
+    // and released below, where every restored value is measured and charged.
+    const claimed = index.subflowPayloads?.restoredBytes ?? 0;
+    let remaining = maxBytes - claimed;
     if (remaining < 0) return unavailable('too-large');
     const root = await base(signal, remaining);
     if ('reason' in root) return root;
@@ -314,8 +334,11 @@ export function partReader(
       for (const [key, value] of contents.payloads) stored.set(key, value);
     }
     const recording = root.recording as unknown as Record<string, unknown>;
-    if (index.subflowPayloads !== undefined) {
-      const expected = index.subflowPayloads.same + index.subflowPayloads.stored;
+    const counts = index.subflowPayloads;
+    if (counts !== undefined) {
+      remaining += claimed;
+      const measured = new Map<string, number>();
+      let over = false;
       const restored = restorePayloads(
         recording,
         (key, kind) => {
@@ -326,11 +349,49 @@ export function partReader(
               : at === 'stored'
               ? stored.get(key)?.[kind]
               : undefined;
-          return value === undefined ? undefined : { value };
+          if (value === undefined) return undefined;
+          if (at === 'same') {
+            // Charged as it is restored; refused the moment the budget is spent.
+            const bytes = plainBytesOf(value);
+            measured.set(key, (measured.get(key) ?? 0) + bytes);
+            remaining -= bytes;
+            if (remaining < 0) {
+              over = true;
+              return undefined;
+            }
+          }
+          return { value };
         },
-        expected,
+        counts.same + counts.stored,
       );
+      if (over) return unavailable('too-large');
       if (!restored) return unavailable('part-changed');
+      // Every figure the index states, against what was measured and restored:
+      // each invocation's restored bytes (their sum is the total, admitted), and
+      // the payload rule run again over the restored rows, which must move
+      // exactly the payloads the index places and keep the rest for the
+      // reasons it counts.
+      for (const invocation of index.invocations) {
+        if ((invocation.restoredBytes ?? 0) !== (measured.get(invocation.key) ?? 0)) {
+          return unavailable('part-changed');
+        }
+      }
+      const claims = payloadClaims(ownValue(recording, 'snapshot'), owners);
+      const placed = new Set<string>();
+      for (const invocation of index.invocations) {
+        for (const kind of ['entry', 'exit'] as const) {
+          if (invocation.payloads?.[kind] !== undefined) placed.add(`${kind}:${invocation.key}`);
+        }
+      }
+      if (
+        claims.kept.ambiguous !== counts.kept.ambiguous ||
+        claims.kept.notLast !== counts.kept.notLast ||
+        claims.kept.noPart !== counts.kept.noPart ||
+        claims.moved.size !== placed.size ||
+        [...claims.moved].some((slot) => !placed.has(slot))
+      ) {
+        return unavailable('part-changed');
+      }
     }
     for (const alias of index.aliases) {
       if ('key' in alias) assign(found, alias.name, ownValue(found, alias.key));

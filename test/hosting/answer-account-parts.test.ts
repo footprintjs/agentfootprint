@@ -28,6 +28,7 @@ import {
   Agent,
   defineTool,
   inMemoryArtifacts,
+  RECORDING_INDEX_ARTIFACT_KIND,
   recordingPutInput,
   sqliteArtifacts,
 } from '../../src/index.js';
@@ -465,6 +466,44 @@ describe.each(STORES)('answer-account over a recording in parts — %s', (_name,
       });
       expect((await explain(host, refs.index)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
       expect(view.gets).toEqual([refs.index]);
+    } finally {
+      close();
+    }
+  });
+
+  it('an index that understates the restored bytes: measured, the ceiling holds (413); within it, not-found', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      const honest = await openSavedRecording(bindArtifacts(store, SCOPE), refs.index);
+      if (honest.status !== 'ready') throw new Error(honest.reason);
+      // The plain bytes the whole holds: every stored part, plus what it restores.
+      const exact = honest.sizes.restoredBytes - (honest.sizes.index ?? 0);
+      const index = JSON.parse((await store.get(SCOPE, refs.index))!.data as string) as {
+        invocations: { restoredBytes?: number }[];
+        subflowPayloads: { restoredBytes: number };
+      };
+      index.invocations.find((row) => row.restoredBytes !== undefined)!.restoredBytes! -= 1;
+      index.subflowPayloads.restoredBytes -= 1;
+      const forged = (
+        await store.put(SCOPE, {
+          kind: RECORDING_INDEX_ARTIFACT_KIND,
+          mediaType: 'application/json',
+          data: JSON.stringify(index),
+          digest: 'sha-256',
+          origin: { runId: FLAGSHIP_RUN_ID },
+        })
+      ).meta.ref;
+      // The figure passes the up-front check at exact − 1; the measured bytes do not.
+      const tight = await served(storeAgent(store), {
+        extra: { answerAccounts: { maxRecordingBytes: exact - 1 } },
+      });
+      expect((await explain(tight.host, forged)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+      // Within the ceiling, the figure does not match what was measured: no account.
+      const loose = await served(storeAgent(store), {
+        extra: { answerAccounts: { maxRecordingBytes: 32 * 1024 * 1024 } },
+      });
+      expect((await explain(loose.host, forged)).code).toBe('ERR_ARTIFACT_NOT_FOUND');
     } finally {
       close();
     }

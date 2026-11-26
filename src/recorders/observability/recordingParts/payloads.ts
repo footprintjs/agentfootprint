@@ -154,24 +154,29 @@ interface Tally {
   readonly subflowIds: Set<unknown>;
 }
 
-/**
- * Decide which boundary payloads leave the base row (see the file header for
- * the rule). Pure: the snapshot is not changed; the rows that change are
- * copied, every other value is shared.
- */
-export function cutPayloads(
-  snapshot: unknown,
-  invocations: readonly WalkedInvocation[],
-): PayloadCut {
-  const kept = { ambiguous: 0, notLast: 0, noPart: 0 };
-  const totals = { same: 0, stored: 0, restoredBytes: 0 };
-  const moved = new Map<string, MovedPayloads>();
-  const result = (): PayloadCut => ({ moved, counts: { ...totals, kept } });
-  if (!isPlainObject(snapshot)) return result();
-  const recorders = ownValue(snapshot, 'recorders');
-  if (!Array.isArray(recorders)) return result();
+/** Why one sub-flow payload stays in the base row (the index's `kept` reasons), or that it may move. */
+export type PayloadVerdict = 'move' | keyof IndexSubflowPayloads['kept'];
 
-  const rows = recorders.map((_, at) => element(recorders, at));
+/** One payload-bearing sub-flow event and the rule's verdict on it. */
+interface Classified {
+  readonly rowAt: number;
+  readonly at: number;
+  readonly event: Record<string, unknown>;
+  readonly kind: PayloadKind;
+  readonly verdict: PayloadVerdict;
+}
+
+/**
+ * The rule, with no value serialised: every payload-bearing sub-flow event of
+ * every BoundaryEvents row, and whether it may move or why it stays. `owners`
+ * maps each invocation that HAS a part to its `subflowId`. The cut runs it to
+ * decide; a whole read runs it again over what it restored, to check the
+ * index's claims (`payloadClaims`).
+ */
+function classifyPayloads(
+  rows: readonly unknown[],
+  owners: ReadonlyMap<string, string>,
+): Classified[] {
   const candidates = new Set<number>();
   rows.forEach((row, at) => {
     if (isCandidateRow(row) && !usesMarkKey(ownValue(row, 'data') as unknown[])) {
@@ -199,12 +204,7 @@ export function cutPayloads(
     }
   }
 
-  const withResult = new Map<string, WalkedInvocation>();
-  for (const invocation of invocations) {
-    if ('result' in invocation) withResult.set(invocation.key, invocation);
-  }
-
-  const rewritten = new Map<number, unknown[]>();
+  const out: Classified[] = [];
   rows.forEach((row, rowAt) => {
     if (!isBoundaryRow(row)) return;
     const data = ownValue(row, 'data') as unknown[];
@@ -213,16 +213,18 @@ export function cutPayloads(
       if (!isPlainObject(event) || !hasOwn(event, 'payload')) continue;
       const kind = kindOf(ownValue(event, 'type'));
       if (kind === undefined) continue;
+      const verdict = (v: PayloadVerdict): void =>
+        void out.push({ rowAt, at, event, kind, verdict: v });
       if (!candidates.has(rowAt)) {
         // A row not in full mode, or one that already uses the mark key: no
         // mark in it could be told from the row's own data.
-        kept.notLast++;
+        verdict('notLast');
         continue;
       }
       const id = ownValue(event, 'runtimeStageId');
-      const invocation = typeof id === 'string' ? withResult.get(id) : undefined;
-      if (typeof id !== 'string' || invocation === undefined) {
-        kept.noPart++;
+      const subflowId = typeof id === 'string' ? owners.get(id) : undefined;
+      if (typeof id !== 'string' || subflowId === undefined) {
+        verdict('noPart');
         continue;
       }
       const seen = tally.get(id);
@@ -231,43 +233,86 @@ export function cutPayloads(
         seen.entries !== 1 ||
         seen.exits > 1 ||
         seen.subflowIds.size !== 1 ||
-        !seen.subflowIds.has(invocation.subflowId)
+        !seen.subflowIds.has(subflowId)
       ) {
-        kept.ambiguous++;
+        verdict('ambiguous');
         continue;
       }
       const keys = Object.keys(event);
-      if (keys[keys.length - 1] !== 'payload') {
-        kept.notLast++;
-        continue;
-      }
-      const value = ownValue(event, 'payload');
-      const text = toWireJson(value) as string | undefined;
-      if (text === undefined) {
-        // Nothing JSON can carry (parsed data always can): leave it where it is.
-        kept.notLast++;
-        continue;
-      }
-      const own = resultValueFor(invocation.result, kind);
-      const place: IndexPayloadPlace =
-        own !== undefined && toWireJson(own) === text ? 'same' : 'stored';
-      const bytes = utf8Length(text);
-      const entry = moved.get(id) ?? {};
-      entry[kind] = { place, value, text, bytes };
-      moved.set(id, entry);
-      if (place === 'same') {
-        totals.same++;
-        totals.restoredBytes += bytes;
-      } else totals.stored++;
-
-      const marked: Record<string, unknown> = {};
-      for (const key of keys) if (key !== 'payload') assign(marked, key, ownValue(event, key));
-      assign(marked, PAYLOAD_MARK_KEY, PAYLOAD_MARK);
-      const copy = rewritten.get(rowAt) ?? [...data];
-      copy[at] = marked;
-      rewritten.set(rowAt, copy);
+      verdict(keys[keys.length - 1] !== 'payload' ? 'notLast' : 'move');
     }
   });
+  return out;
+}
+
+function rowsOf(snapshot: unknown): unknown[] | undefined {
+  if (!isPlainObject(snapshot)) return undefined;
+  const recorders = ownValue(snapshot, 'recorders');
+  if (!Array.isArray(recorders)) return undefined;
+  return recorders.map((_, at) => element(recorders, at));
+}
+
+/**
+ * Decide which boundary payloads leave the base row (see the file header for
+ * the rule). Pure: the snapshot is not changed; the rows that change are
+ * copied, every other value is shared.
+ */
+export function cutPayloads(
+  snapshot: unknown,
+  invocations: readonly WalkedInvocation[],
+): PayloadCut {
+  const kept = { ambiguous: 0, notLast: 0, noPart: 0 };
+  const totals = { same: 0, stored: 0, restoredBytes: 0 };
+  const moved = new Map<string, MovedPayloads>();
+  const result = (): PayloadCut => ({ moved, counts: { ...totals, kept } });
+  const rows = rowsOf(snapshot);
+  if (rows === undefined) return result();
+
+  const withResult = new Map<string, WalkedInvocation>();
+  const owners = new Map<string, string>();
+  for (const invocation of invocations) {
+    if (!('result' in invocation)) continue;
+    withResult.set(invocation.key, invocation);
+    owners.set(invocation.key, invocation.subflowId);
+  }
+
+  const rewritten = new Map<number, unknown[]>();
+  for (const { rowAt, at, event, kind, verdict } of classifyPayloads(rows, owners)) {
+    if (verdict !== 'move') {
+      kept[verdict]++;
+      continue;
+    }
+    const id = ownValue(event, 'runtimeStageId') as string;
+    const invocation = withResult.get(id) as WalkedInvocation;
+    const value = ownValue(event, 'payload');
+    const text = toWireJson(value) as string | undefined;
+    if (text === undefined) {
+      // Nothing JSON can carry (parsed data always can): leave it where it is.
+      kept.notLast++;
+      continue;
+    }
+    const own = resultValueFor(invocation.result, kind);
+    const place: IndexPayloadPlace =
+      own !== undefined && toWireJson(own) === text ? 'same' : 'stored';
+    const bytes = utf8Length(text);
+    const entry = moved.get(id) ?? {};
+    entry[kind] = { place, value, text, bytes };
+    moved.set(id, entry);
+    if (place === 'same') {
+      totals.same++;
+      totals.restoredBytes += bytes;
+    } else totals.stored++;
+
+    const marked: Record<string, unknown> = {};
+    for (const key of Object.keys(event)) {
+      if (key !== 'payload') assign(marked, key, ownValue(event, key));
+    }
+    assign(marked, PAYLOAD_MARK_KEY, PAYLOAD_MARK);
+    const row = rows[rowAt] as Record<string, unknown>;
+    const copy = rewritten.get(rowAt) ?? [...(ownValue(row, 'data') as unknown[])];
+    copy[at] = marked;
+    rewritten.set(rowAt, copy);
+  }
   if (rewritten.size === 0) return result();
 
   const recordersOut = rows.map((row, at) => {
@@ -289,6 +334,34 @@ export function cutPayloads(
     return out;
   });
   return { ...result(), recorders: recordersOut };
+}
+
+/** What the rule says about a (restored) snapshot: the payloads that may move, and why the rest stay. */
+export interface PayloadClaims {
+  /** `kind:id` of every payload the rule moves. */
+  readonly moved: ReadonlySet<string>;
+  readonly kept: IndexSubflowPayloads['kept'];
+}
+
+/**
+ * The rule run again over a snapshot a whole read restored, with the index's
+ * own invocations as owners: what the index must have said about moves and
+ * kept payloads. No value is serialised; `same` vs `stored` and the restored
+ * bytes are checked by measuring as they are restored.
+ */
+export function payloadClaims(
+  snapshot: unknown,
+  owners: ReadonlyMap<string, string>,
+): PayloadClaims {
+  const kept = { ambiguous: 0, notLast: 0, noPart: 0 };
+  const moved = new Set<string>();
+  const rows = rowsOf(snapshot);
+  if (rows === undefined) return { moved, kept };
+  for (const { event, kind, verdict } of classifyPayloads(rows, owners)) {
+    if (verdict === 'move') moved.add(`${kind}:${ownValue(event, 'runtimeStageId') as string}`);
+    else kept[verdict]++;
+  }
+  return { moved, kept };
 }
 
 /** A moved payload's value, or `undefined` when the index or its part has none. */
