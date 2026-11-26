@@ -46,8 +46,10 @@ export function readExecutionClaimRows(
       const outcome = dataAt(row, 'outcome');
       if (
         (claim !== 'ran-code' && claim !== 'no-code') ||
-        (target !== 'current' && target !== 'previous') ||
-        (outcome !== 'contradicted' && outcome !== 'unverified')
+        (outcome !== 'contradicted' && outcome !== 'unverified') ||
+        (target !== 'current' &&
+          target !== 'previous' &&
+          !(target === 'unresolved' && outcome === 'unverified'))
       )
         return [];
       if (

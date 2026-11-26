@@ -49,6 +49,17 @@ describe('committed execution claim assessments', () => {
     );
   });
 
+  it('carries an unresolved target only as an unverified finding', () => {
+    const reportOf = (outcome: string) => ({
+      complete: true,
+      findings: [{ claim: 'ran-code', target: 'unresolved', outcome }],
+    });
+    expect(fold(reportOf('unverified')).reasons).toMatchObject([
+      { reason: 'check-unreachable', witness: [witness(0)] },
+    ]);
+    expect(fold(reportOf('contradicted'))).toEqual(foldState({}, undefined, false));
+  });
+
   it('gives a verified claim no standing credit, preserving older and skipped records', () => {
     const before = foldState({}, undefined, false);
     expect(fold({ complete: true, findings: [verified] })).toEqual(before);

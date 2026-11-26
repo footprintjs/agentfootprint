@@ -59,7 +59,7 @@ export function withExecutionClaimAssessment(
           const provedByExit =
             (finding.claim === 'ran-code' && finding.outcome === 'verified') ||
             (finding.claim === 'no-code' && finding.outcome === 'contradicted');
-          return provedByExit
+          return provedByExit && finding.target !== 'unresolved'
             ? { ...finding, ...callOccurrenceField(occurrences[finding.target]) }
             : finding;
         }),

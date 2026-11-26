@@ -55,7 +55,42 @@ describe('execution claims', () => {
         reply: 'I ran code for that answer.',
         evidence: { current: 'confirmed' },
       }),
-    ).toEqual(outcome('ran-code', 'unverified'));
+    ).toEqual({
+      complete: true,
+      findings: [{ claim: 'ran-code', target: 'unresolved', outcome: 'unverified' }],
+    });
+  });
+
+  it.each([
+    { current: 'confirmed', previous: 'none' },
+    { current: 'none', previous: 'confirmed' },
+  ] as const)('does not select either receipt for an unresolved demonstrative (%o)', (evidence) => {
+    const input = { defaultTarget: 'current' as const, evidence };
+    expect(assessExecutionClaims({ ...input, reply: 'I ran code for that answer.' })).toEqual({
+      complete: true,
+      findings: [{ claim: 'ran-code', target: 'unresolved', outcome: 'unverified' }],
+    });
+    expect(assessExecutionClaims({ ...input, reply: 'I did not run code for that turn.' })).toEqual(
+      {
+        complete: true,
+        findings: [{ claim: 'no-code', target: 'unresolved', outcome: 'unverified' }],
+      },
+    );
+    expect(assessExecutionClaims({ ...input, reply: 'I ran code for this answer.' })).toEqual(
+      outcome('ran-code', evidence.current === 'confirmed' ? 'verified' : 'contradicted'),
+    );
+    expect(
+      assessExecutionClaims({ ...input, reply: 'I ran code for the previous answer.' }),
+    ).toEqual({
+      complete: true,
+      findings: [
+        {
+          claim: 'ran-code',
+          target: 'previous',
+          outcome: evidence.previous === 'confirmed' ? 'verified' : 'contradicted',
+        },
+      ],
+    });
   });
 
   it('recognizes execution to estimate without treating estimation alone as exclusive', () => {

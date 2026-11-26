@@ -200,6 +200,54 @@ describe('receipt check on a native recorded answer', () => {
     },
   );
 
+  it.each([true, false])(
+    'does not attribute an ambiguous question to either turn when the previous answer ran code is %s',
+    async (previousRan) => {
+      const previous = build(previousRan ? [runCode, neutral] : [neutral]).build();
+      await previous.run({ message: 'Compute this.' });
+      const follow = build(previousRan ? [claimedEstimate] : [runCode, claimedEstimate])
+        .answerLayer()
+        .build();
+      const recorder = recordRun(follow);
+      await follow.run({
+        message: 'Did you run code or estimate for that answer?',
+        continueFrom: saved(previous.checkpoint()),
+      });
+      expect(facts(follow)).toEqual({
+        complete: true,
+        findings: [{ claim: 'no-code', target: 'unresolved', outcome: 'unverified' }],
+      });
+      const assessed = await follow.assessment();
+      expect(assessed?.reasons.map(({ reason }) => reason)).toContain('check-unreachable');
+      expect(assessed?.reasons.map(({ reason }) => reason)).not.toContain('unsupported-claim');
+      expect(assessed).toEqual(assessAnswer(saved(recorder.toRecording())));
+      recorder.stop();
+    },
+  );
+
+  it.each([true, false])(
+    'binds that answer to the exact earlier question when the previous turn ran code is %s',
+    async (previousRan) => {
+      const previous = build(previousRan ? [runCode, neutral] : [neutral]).build();
+      await previous.run({ message: 'Compute this.' });
+      const reply = { content: 'I ran code for that answer.' };
+      const follow = build(previousRan ? [reply] : [runCode, reply]).build();
+      await follow.run({
+        message: 'Did you run code or estimate for the previous answer?',
+        continueFrom: saved(previous.checkpoint()),
+      });
+      expect(facts(follow)).toMatchObject({
+        findings: [
+          {
+            claim: 'ran-code',
+            target: 'previous',
+            outcome: previousRan ? 'verified' : 'contradicted',
+          },
+        ],
+      });
+    },
+  );
+
   it('cannot verify the previous answer from a checkpoint whose receipt belongs to another run', async () => {
     const previous = build([runCode, neutral]).build();
     await previous.run({ message: 'Compute this.' });

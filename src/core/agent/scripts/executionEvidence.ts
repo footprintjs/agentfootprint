@@ -158,7 +158,8 @@ function retainedPrevious(scope: TypedScope<AgentState>): SettledReceipt | undef
 
 const PREVIOUS_METHOD =
   /^(?:did you run code(?: or (?:did you )?(?:just )?estimate)?|did you estimate(?: or (?:did you )?run code)?) (?:for|in) (?:your |the )?(?:previous|last) (?:answer|reply)[?!.]?$/iu;
-const OTHER_TURN = /\b(?:previous|prior|last|earlier|first|second|other) (?:answer|reply|turn)\b/iu;
+const OTHER_TURN =
+  /\b(?:previous|prior|last|earlier|first|second|other|that)\s+(?:answer|reply|turn)\b/iu;
 
 function turnOfQuestion(scope: TypedScope<AgentState>): Target | undefined {
   const message: unknown = scope.$getValue('userMessage');

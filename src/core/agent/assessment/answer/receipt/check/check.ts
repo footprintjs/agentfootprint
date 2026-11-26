@@ -3,6 +3,7 @@ import { MAX_EXECUTION_CLAIM_FINDINGS, MAX_EXECUTION_CLAIM_PROSE_CHARS } from '.
 
 type Claim = 'ran-code' | 'no-code';
 type Target = 'current' | 'previous';
+type ClaimReference = Target | 'demonstrative';
 type Evidence = 'confirmed' | 'none' | 'unknown';
 type Outcome = 'verified' | 'contradicted' | 'unverified';
 
@@ -17,7 +18,7 @@ export interface ExecutionClaimAssessment {
   readonly complete: boolean;
   readonly findings: readonly {
     readonly claim: Claim;
-    readonly target: Target;
+    readonly target: Target | 'unresolved';
     readonly outcome: Outcome;
   }[];
 }
@@ -89,7 +90,7 @@ const ESTIMATED_OUTPUT_WITHOUT_CODE =
 
 function readClaim(
   text: string,
-): { claim: Claim; target: Target | undefined; outputScoped: boolean } | undefined {
+): { claim: Claim; target: ClaimReference | undefined; outputScoped: boolean } | undefined {
   const sentence = text
     .replace(/[.!]$/u, '')
     .replace(/[ \t]+/gu, ' ')
@@ -97,8 +98,9 @@ function readClaim(
   const reference = TURN_REFERENCE.exec(sentence);
   const assertion = reference === null ? sentence : sentence.slice(0, reference.index);
   const wording = reference?.[1]?.toLowerCase();
-  let target: Target | undefined;
-  if (wording !== undefined && !wording.startsWith('that '))
+  let target: ClaimReference | undefined;
+  if (wording?.startsWith('that ')) target = 'demonstrative';
+  else if (wording !== undefined)
     target = /\b(?:previous|last)\b/u.test(wording) ? 'previous' : 'current';
 
   if (RAN.test(assertion)) return { claim: 'ran-code', target, outputScoped: false };
@@ -139,6 +141,9 @@ export function assessExecutionClaims(
   const suppliedTarget = own(input, 'defaultTarget');
   const defaultTarget =
     suppliedTarget === 'current' || suppliedTarget === 'previous' ? suppliedTarget : undefined;
+  // Only an exact earlier-answer question binds "that answer" to a turn.
+  // The ordinary current default supplies no antecedent for a demonstrative.
+  const demonstrativeTarget = defaultTarget === 'previous' ? defaultTarget : undefined;
   const evidence = own(input, 'evidence');
   const blocks = plainBlocks(reply);
   const { units } = unitsOf(reply);
@@ -156,12 +161,13 @@ export function assessExecutionClaims(
     const claim = readClaim(reply.slice(unit.start, unit.end));
     if (claim === undefined) continue;
     if (findings.length === MAX_EXECUTION_CLAIM_FINDINGS) return { complete: false, findings: [] };
-    const target = claim.target ?? defaultTarget;
+    const target =
+      claim.target === 'demonstrative' ? demonstrativeTarget : claim.target ?? defaultTarget;
     const outcome =
       target === undefined || claim.outputScoped
         ? 'unverified'
         : outcomeOf(claim.claim, own(evidence, target));
-    findings.push({ claim: claim.claim, target: target ?? 'current', outcome });
+    findings.push({ claim: claim.claim, target: target ?? 'unresolved', outcome });
   }
   return findings.length > 0 ? { complete: true, findings } : undefined;
 }
