@@ -16,7 +16,12 @@ import type {
 } from './types.js';
 
 export type RetainedReasonState = (
-  key: 'coverageDeclared' | 'findingsLedger' | 'settledToolCalls' | 'sourceConsultation',
+  key:
+    | 'coverageDeclared'
+    | 'findingsLedger'
+    | 'settledToolCalls'
+    | 'sourceConsultation'
+    | 'answerExecutionClaims',
   value: unknown,
 ) => unknown;
 

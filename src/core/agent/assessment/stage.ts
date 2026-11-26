@@ -55,6 +55,7 @@ import { isRetrievalReason } from './results/retrieval/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
 import { citationRecordForWarning } from './answer/citations/record.js';
+import { isExecutionClaimWitness } from './answer/receipt/record.js';
 import type { AnswerAssessment } from './types.js';
 import {
   assessmentDataOf,
@@ -94,8 +95,13 @@ function committedRecordOf(
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const key of reads) {
-    // An absent prose cutoff contributes no reason and must leave no read in the record.
-    if ((key === 'llmLatestStopReason' || key === 'sourceConsultation') && !(key in scope))
+    // An absent optional report contributes no reason and must leave no read in the record.
+    if (
+      (key === 'llmLatestStopReason' ||
+        key === 'sourceConsultation' ||
+        key === 'answerExecutionClaims') &&
+      !(key in scope)
+    )
       continue;
     const value = scope.$getValue(key);
     if (value !== undefined) record[key] = value;
@@ -179,7 +185,9 @@ export async function assessAnswerStage(
     assumed,
     rewrittenBehind(assessed),
     displayNames.size > 0 ||
-      assessed.reasons.some((reason) => reason.detail !== undefined) ||
+      assessed.reasons.some(
+        ({ detail, witness }) => detail !== undefined || witness.some(isExecutionClaimWitness),
+      ) ||
       data.reasons.some(
         (reason) =>
           isLibraryLimit(reason) ||

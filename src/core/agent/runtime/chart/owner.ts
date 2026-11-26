@@ -1,3 +1,5 @@
+import { hasNativeToolExecution } from '../../../../provider-contract/nativeToolExecution.js';
+import { codeRunsOf } from '../../../codeRunnerTool.js';
 import { buildCatalog } from '../catalog/buildCatalog.js';
 import { buildSlots } from '../slots/buildSlots.js';
 import { routeFactory } from '../routing/routeFactory.js';
@@ -139,6 +141,11 @@ export function buildChart(
     this.configuration.negativeClaimsConfig !== undefined;
   const seedFor = seedFactory({
     configuration: this.configuration,
+    observesCodeExecution:
+      this.configuration.externalToolProvider === undefined &&
+      this.configuration.reliabilityConfig === undefined &&
+      hasNativeToolExecution(provider) &&
+      registry.some(({ tool }) => codeRunsOf(tool) !== undefined),
     maxIterations,
     cachingDisabled,
     costBudget,
