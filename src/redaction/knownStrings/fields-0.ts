@@ -94,6 +94,7 @@ export const fields0 = {
   capability: true,
   carriedBy: true,
   carriers: true,
+  category: true,
   cause: true,
   changed: true,
   changedArgKeys: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   layer: true,
   layout: true,
   length: true,
-  limit: true,
 } as const;

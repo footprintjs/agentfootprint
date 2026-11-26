@@ -1,3 +1,4 @@
+import type { DeclaredDispatch } from 'footprintjs/declared-attempts';
 import type { PendingDatasetLimits } from '../../../honesty/libraryResultLimits.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type {
@@ -9,12 +10,21 @@ import type { CodeRunFacts } from '../../../../codeRunnerTool.js';
 import type { NegativeDispatch } from '../../../negativeClaims/capture.js';
 import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.js';
 import type { InnerCallHalt } from '../../../innerCallOuter.js';
+import type { ToolFailureDeclaration } from '../../../../../semantics/toolFailure.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
+
+/** A declaration measured at the native return, before result admission. */
+export interface MeasuredToolFailure extends ToolFailureDeclaration {
+  readonly dispatch?: DeclaredDispatch;
+  readonly startedAt: number;
+  readonly durationMs: number;
+}
 
 /** A tool return admitted by the invocation and kept off the provider wire. */
 export type ExecutedToolResultEnvelope = ReadToolResultEnvelope & {
   readonly outputCounts?: LLMMessage['toolOutputCounts'];
+  readonly declaredFailure?: MeasuredToolFailure;
 };
 
 export interface CallResultCell {

@@ -65,6 +65,18 @@ describe('stripFrameworkFields keeps call occurrence keys on the record', () => 
     },
   );
 
+  it('keeps a declaration and its advice off the provider wire', () => {
+    const resultWithDeclaration: LLMMessage = {
+      ...result,
+      toolDeclaredFailure: {
+        origin: 'declared',
+        category: 'timeout',
+        tryInstead: 'Private advice.',
+      },
+    };
+    expect(stripFrameworkFields([resultWithDeclaration])).toEqual([result]);
+  });
+
   it('reuses a stable projection and rebuilds it when either side changes', () => {
     const recordedResult = { ...result, content: 'found', callOccurrenceKey: occurrence };
     const history = [recordedResult];

@@ -1,5 +1,9 @@
+import { retainedDeclaredFailure } from './declaredFailure.js';
 import type { AttemptCategory } from 'footprintjs';
-import type { ToolOutputCounts } from '../../../../../provider-contract/toolResultRecord.js';
+import type {
+  DeclaredToolFailureRecord,
+  ToolOutputCounts,
+} from '../../../../../provider-contract/toolResultRecord.js';
 import {
   historyCallResolver,
   readToolSettlements,
@@ -13,11 +17,12 @@ export interface OutcomeSettlement {
   readonly index: number;
   readonly fact: Pick<
     RecordedToolSettlement,
-    'outcome' | 'failureCategory' | 'reportedStatus' | 'outputCounts'
+    'outcome' | 'failureCategory' | 'declaredFailure' | 'reportedStatus' | 'outputCounts'
   >;
 }
 
 interface OutcomeDetailRead {
+  readonly declaredByHistory: ReadonlyMap<number, DeclaredToolFailureRecord>;
   readonly failureByHistory: ReadonlyMap<number, AttemptCategory>;
   readonly failureFor: (witness: readonly AssessmentPointer[]) => AttemptCategory | undefined;
   readonly countsFor: (witness: readonly AssessmentPointer[]) => ToolOutputCounts | undefined;
@@ -40,6 +45,7 @@ export function outcomeDetailReader(
   settlements: ReadonlyMap<string, OutcomeSettlement> | undefined,
   readRetained: () => unknown,
 ): OutcomeDetailRead {
+  const declaredByHistory = new Map<number, DeclaredToolFailureRecord>();
   const failureByHistory = new Map<number, AttemptCategory>();
   const failureBySettlement = new Map<number, AttemptCategory>();
   const countsByHistory = new Map<number, ToolOutputCounts>();
@@ -67,8 +73,12 @@ export function outcomeDetailReader(
         fact.reportedStatus === row.fact.reportedStatus
           ? retained
           : undefined;
-      if (category === undefined && measured === undefined) continue;
+      const declared = retainedDeclaredFailure(fact.declaredFailure, row.fact.declaredFailure);
+      if (category === undefined && measured === undefined && declared === undefined) continue;
       const match = (resolve ??= historyCallResolver(calls))(undefined, undefined, key);
+      if (declared !== undefined && match.kind === 'matched') {
+        declaredByHistory.set(match.call.index, declared);
+      }
       if (category !== undefined) {
         failureBySettlement.set(index, category);
         if (match.kind === 'matched') failureByHistory.set(match.call.index, category);
@@ -80,6 +90,7 @@ export function outcomeDetailReader(
     }
   }
   return {
+    declaredByHistory,
     failureByHistory,
     failureFor: (witness) => {
       const categories = new Set<AttemptCategory>();

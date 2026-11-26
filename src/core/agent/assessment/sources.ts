@@ -1,3 +1,4 @@
+import type { DeclaredToolFailureRecord } from '../../../provider-contract/toolResultRecord.js';
 /**
  * assessment/sources — what each reason rests on
  * (`AnswerAssessment.reasons[].source`): specific calls, the answer itself, or
@@ -115,6 +116,7 @@ interface CallRef {
   readonly count?: number;
   readonly outcome?: NonNullable<ReturnType<typeof assessmentCallOutcome>>;
   readonly category?: AttemptCategory;
+  readonly declaredFailure?: DeclaredToolFailureRecord;
   readonly reportedStatus?: NonNullable<ReturnType<typeof unfinishedCallStatus>>;
 }
 
@@ -136,6 +138,7 @@ export interface SourceRead {
   readonly turnBegins?: number;
   readonly declarationAddresses?: ReadonlyMap<number, number> | undefined;
   readonly failureCategories?: ReadonlyMap<number, AttemptCategory>;
+  readonly declaredFailures?: ReadonlyMap<number, DeclaredToolFailureRecord>;
 }
 
 const arrayEntry = (rows: unknown, index: number): unknown =>
@@ -260,6 +263,8 @@ function callsOfWitness(
         ? unfinishedCallStatus(call.message)
         : served.reportedStatus;
     const category = outcome === 'failed' ? read.failureCategories?.get(call.index) : undefined;
+    const declaredFailure =
+      outcome === 'failed' ? read.declaredFailures?.get(call.index) : undefined;
     const id = str(call.providerId);
     const name =
       str(call.toolName) ??
@@ -273,6 +278,7 @@ function callsOfWitness(
         ...(name !== undefined && { name }),
         ...(outcome !== undefined && { outcome }),
         ...(category !== undefined && { category }),
+        ...(declaredFailure !== undefined && { declaredFailure }),
         ...(reportedStatus !== undefined && { reportedStatus }),
       },
     ];
@@ -432,6 +438,7 @@ export function reasonSourceOf(
         toolName,
         ...(ref.outcome !== undefined && { outcome: ref.outcome }),
         ...(ref.category !== undefined && { category: ref.category }),
+        ...(ref.declaredFailure !== undefined && { declaredFailure: ref.declaredFailure }),
         ...(ref.reportedStatus !== undefined && { reportedStatus: ref.reportedStatus }),
       });
     }

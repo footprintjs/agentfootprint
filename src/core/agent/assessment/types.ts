@@ -315,6 +315,7 @@ export type AssessmentReasonSource =
         readonly toolName: string;
         /** The recorded outcome for a call behind `call-not-completed`. */
         readonly outcome?: 'refused' | 'failed';
+        readonly declaredFailure?: import('../../../provider-contract/toolResultRecord.js').DeclaredToolFailureRecord;
         /** The engine's classification of a tool exception. Never its message. */
         readonly category?: import('footprintjs').AttemptCategory;
         /** The committed unfinished status behind work-not-finished. */

@@ -250,6 +250,7 @@ export const words0 = {
   decider: true,
   declaration: true,
   'declaration-overclaimed': true,
+  declared: true,
   'declared-absence': true,
   'declared-absent': true,
   default: true,
@@ -301,5 +302,4 @@ export const words0 = {
   filter: true,
   final: true,
   findings: true,
-  flagged: true,
 } as const;

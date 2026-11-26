@@ -834,6 +834,11 @@ export {
   type ToolResultEnvelope,
   type ToolResultStatus,
 } from './semantics/toolEffects.js';
+export {
+  toolFailure,
+  type ToolFailureDeclaration,
+  type ToolFailureResult,
+} from './semantics/toolFailure.js';
 export type { InstructionLease, PendingToolTransition } from './injection-engine/leases.js';
 // The two coverage primitives — both invented in FIELD USE, on a live triage
 // agent, because the library had no answer for either.
