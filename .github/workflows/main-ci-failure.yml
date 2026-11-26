@@ -1,0 +1,63 @@
+name: Main CI failure alert
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  alert:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    concurrency:
+      group: main-ci-alert-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+      cancel-in-progress: false
+    steps:
+      - name: Open one issue for the failing run attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # Publish only GitHub's run identifiers. Never read a checkout, logs, or artifacts.
+          if ! jq -e '
+            .repository.id as $repository
+            | .workflow_run
+            | $repository != null
+              and .repository.id == $repository
+              and .head_repository.id == $repository
+              and .path == ".github/workflows/ci.yml"
+              and .event == "push"
+              and .head_branch == "main"
+              and .status == "completed"
+              and .conclusion == "failure"
+          ' "$GITHUB_EVENT_PATH" >/dev/null; then
+            exit 0
+          fi
+
+          run_id=$(jq -er '.workflow_run.id | tostring | select(test("^[1-9][0-9]*$"))' "$GITHUB_EVENT_PATH")
+          attempt=$(jq -er '.workflow_run.run_attempt | tostring | select(test("^[1-9][0-9]*$"))' "$GITHUB_EVENT_PATH")
+          commit=$(jq -er '.workflow_run.head_sha | select(test("^[a-f0-9]{40}$"))' "$GITHUB_EVENT_PATH")
+          created_at=$(jq -er '.workflow_run.created_at | select(test("^[0-9TZ:-]+$"))' "$GITHUB_EVENT_PATH")
+          marker="<!-- main-ci-alert:${run_id}:${attempt} -->"
+
+          # Same-attempt deliveries are serialized. Include closed issues in the lookup.
+          exists=$(gh api --method GET 'repos/{owner}/{repo}/issues' --paginate --slurp \
+            -f state=all -f since="$created_at" -f per_page=100 |
+            jq -er --arg marker "$marker" 'any(.[][]; .pull_request == null
+              and .user.login == "github-actions[bot]" and ((.body // "") | contains($marker))) | tostring')
+          if [[ "$exists" == true ]]; then
+            exit 0
+          fi
+
+          body=$(printf '%s\n\nRepository: `%s`\nCommit: `%s`\nRun: %s/%s/actions/runs/%s/attempts/%s\n' \
+            "$marker" "$GH_REPO" "$commit" "$GITHUB_SERVER_URL" "$GH_REPO" "$run_id" "$attempt")
+          gh api --method POST 'repos/{owner}/{repo}/issues' \
+            -f title="CI failed on main (run $run_id, attempt $attempt)" \
+            -f body="$body" --jq .html_url
