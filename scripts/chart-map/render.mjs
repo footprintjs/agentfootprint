@@ -6,10 +6,6 @@ const cell = (value) =>
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replace(/\r?\n/g, '<br>');
-const source = (row) =>
-  `[${cell(row.file)}:${row.line}](../${row.file.split('/').map(encodeURIComponent).join('/')}#L${
-    row.line
-  })`;
 const condition = (row) =>
   row.context.length
     ? row.context.map(cell).join('; ')
@@ -30,6 +26,27 @@ export function renderChartMap(inventory) {
   const stages = [...inventory.stages];
   mounts.sort(sourceOrder);
   stages.sort(sourceOrder);
+  const occurrences = new Map();
+  const citations = new Map();
+  for (const row of [...mounts, ...stages].sort(sourceOrder)) {
+    const key = JSON.stringify([row.file, row.owner, row.id]);
+    const occurrence = (occurrences.get(key) ?? 0) + 1;
+    occurrences.set(key, occurrence);
+    citations.set(
+      row,
+      '[' +
+        cell(row.file) +
+        '](../' +
+        row.file.split('/').map(encodeURIComponent).join('/') +
+        ') · ' +
+        cell(row.owner) +
+        ' · ' +
+        cell(row.id) +
+        (occurrence > 1 ? ' #' + occurrence : ''),
+    );
+  }
+  const source = (row) => citations.get(row);
+
   const proven = mounts.filter((row) => row.certainty === 'engine').length;
   const absent = stages.filter((row) => row.description.state === 'absent');
   const empty = stages.filter(

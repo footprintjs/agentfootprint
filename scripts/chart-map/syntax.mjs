@@ -19,63 +19,77 @@ export const expression = (node) => {
   return text.length <= 160 ? text : `${text.slice(0, 160)}… [see source]`;
 };
 
-export function owner(node) {
+function ownerBoundary(node) {
   for (let parent = node.parent; parent; parent = parent.parent) {
     if (
-      (ts.isFunctionDeclaration(parent) ||
+      ((ts.isFunctionDeclaration(parent) ||
         ts.isMethodDeclaration(parent) ||
         ts.isGetAccessorDeclaration(parent) ||
         ts.isSetAccessorDeclaration(parent)) &&
-      parent.name
-    ) {
-      const container = parent.parent;
-      const prefix =
-        (ts.isClassDeclaration(container) || ts.isClassExpression(container)) && container.name
-          ? `${container.name.text}.`
-          : '';
-      return prefix + parent.name.getText();
-    }
-    if (
-      (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) &&
-      ts.isVariableDeclaration(parent.parent)
+        parent.name) ||
+      ((ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) &&
+        ts.isVariableDeclaration(parent.parent)) ||
+      ts.isConstructorDeclaration(parent)
     )
-      return parent.parent.name.getText();
-    if (ts.isConstructorDeclaration(parent))
-      return `${parent.parent.name?.getText() ?? '<class>'}.constructor`;
+      return parent;
   }
-  return '<module>';
+}
+
+export function owner(node) {
+  const boundary = ownerBoundary(node);
+  if (!boundary) return '<module>';
+  if (ts.isArrowFunction(boundary) || ts.isFunctionExpression(boundary))
+    return boundary.parent.name.getText();
+  const container = boundary.parent;
+  if (ts.isConstructorDeclaration(boundary))
+    return (container.name?.getText() ?? '<class>') + '.constructor';
+  const prefix =
+    (ts.isClassDeclaration(container) || ts.isClassExpression(container)) && container.name
+      ? container.name.text + '.'
+      : '';
+  return prefix + boundary.name.getText();
+}
+
+function functionContext(node) {
+  const parent = node.parent;
+  if (
+    (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+    parent.arguments?.includes(node)
+  )
+    return (
+      'callback (' +
+      (ts.isNewExpression(parent) ? 'new ' : '') +
+      expression(parent.expression) +
+      ')'
+    );
+  const attachment =
+    ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)
+      ? 'property ' + expression(parent.name)
+      : ts.SyntaxKind[parent.kind];
+  return 'function (' + ts.SyntaxKind[node.kind] + ' under ' + attachment + ')';
 }
 
 export function context(node) {
   const rows = [];
-  const enclosing = (shape, point) =>
-    rows.push(
-      'Inside ' +
-        shape +
-        ' at line ' +
-        (point.getSourceFile().getLineAndCharacterOfPosition(point.getStart()).line + 1) +
-        '; outcome not analysed',
-    );
+  const enclosing = (shape) => rows.push('Inside ' + shape + '; outcome not analysed');
+  const boundary = ownerBoundary(node);
   if (
     ts.isCallChain(node) ||
     (ts.isPropertyAccessExpression(node.expression) && node.expression.questionDotToken)
   )
-    enclosing('optional chain', node);
+    enclosing('optional chain');
+  let nested = true;
   for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
-    if (
-      (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) &&
-      ts.isCallExpression(parent.parent) &&
-      parent.parent.arguments.includes(parent)
-    ) {
-      enclosing('callback (' + expression(parent.parent.expression) + ')', parent);
-    }
+    if (parent === boundary) nested = false;
+    if (nested && (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)))
+      enclosing(functionContext(parent));
     if (
       ts.isCaseClause(parent) ||
       ts.isDefaultClause(parent) ||
       ts.isCatchClause(parent) ||
       ts.isTryStatement(parent)
     )
-      enclosing(ts.SyntaxKind[parent.kind], parent);
+      enclosing(ts.SyntaxKind[parent.kind]);
     if (
       ts.isBinaryExpression(parent) &&
       [
@@ -86,7 +100,7 @@ export function context(node) {
       node.pos >= parent.right.pos &&
       node.end <= parent.right.end
     )
-      enclosing('logical ' + parent.operatorToken.getText(), parent);
+      enclosing('logical ' + parent.operatorToken.getText());
     if (ts.isIfStatement(parent)) {
       const otherwise =
         parent.elseStatement &&
