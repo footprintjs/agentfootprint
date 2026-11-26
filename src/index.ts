@@ -537,10 +537,10 @@ export type { ToolArgValidationMode } from './tools/toolArgsValidation.js';
 // `role: 'tool'` message, so the shape AND the guard are public; the measuring
 // helper stays internal to dispatch.
 export { isTruncatedToolResult, type TruncatedToolResult } from './core/agent/toolResultCap.js';
-// #18/#14 — snapshot read-tracking: the mode for AgentOptions.readTracking
-// (re-exported from footprintjs so Agent consumers don't need a direct
-// footprintjs import to type the option).
+// #18/#14 — the snapshot's read and write views: the modes for AgentOptions
+// readTracking / writeTracking and their markers, re-exported from footprintjs.
 export type { ReadSummaryMarker, ReadTrackingMode } from 'footprintjs';
+export type { WriteSummaryMarker, WriteTrackingMode } from 'footprintjs';
 // #P1 — per-write read provenance: the mode for AgentOptions.writeProvenance
 // (structurally derived from footprintjs's executor options — the engine owns
 // the vocabulary but does not export the alias).

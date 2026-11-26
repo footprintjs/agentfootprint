@@ -67,6 +67,7 @@ export function initializeAgent(
     },
     options: {
       readTracking: this.configuration.readTracking,
+      writeTracking: this.configuration.writeTracking,
       commitValues: this.configuration.commitValues,
       writeProvenance: this.configuration.writeProvenance,
     },

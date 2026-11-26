@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-411 exported from `agentfootprint`.
+412 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -415,5 +415,6 @@ title: Interfaces
 - [`WireToolManifest`](/docs/api/interfaces/WireToolManifest)
 - [`WorkflowOptions`](/docs/api/interfaces/WorkflowOptions)
 - [`WriteEvent`](/docs/api/interfaces/scope-events#interface-writeevent)
+- [`WriteSummaryMarker`](/docs/api/interfaces/WriteSummaryMarker)
 - [`ZoneAbbreviation`](/docs/api/interfaces/ZoneAbbreviation)
 - [`ZoneArgument`](/docs/api/interfaces/ZoneArgument)

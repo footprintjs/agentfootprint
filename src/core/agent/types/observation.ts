@@ -1,5 +1,9 @@
 import type { CommitValuesMode } from 'foottrace';
-import type { AttachRecorderOptions, FlowChartExecutorOptions } from 'footprintjs';
+import type {
+  AttachRecorderOptions,
+  FlowChartExecutorOptions,
+  WriteTrackingMode,
+} from 'footprintjs';
 import type { ProseCitationOptions } from '../citations/config.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
@@ -22,6 +26,32 @@ export interface AgentObservationOptions {
    * `bundle.overwrite[key]` as the complete value.
    */
   readonly commitValues?: CommitValuesMode;
+  /**
+   * Write-tracking policy for the snapshot's per-stage write view
+   * (footprintjs `StageSnapshot.stageWrites`), the sibling of
+   * `readTracking`. Forwarded to the internal executor as `{ writeTracking }`.
+   *
+   * - `'summary'` (Agent default) — each written key records a cheap
+   *   `WriteSummaryMarker` (`{ __writeSummary, type, size, preview? }`)
+   *   instead of the full written value. The execution tree nests one stage
+   *   inside the next, and a ReAct pass rewrites growing arrays (`history`,
+   *   decision lists), so full values grew the recorded tree with the SQUARE
+   *   of the run length: measured at 19 model calls, 3.6 of a 3.85 MB tree.
+   * - `'full'` — footprintjs's own default: every written value is kept in
+   *   `stageWrites`. Set it explicitly if you read written VALUES off
+   *   `agent.getSnapshot()` (not just keys), or for a native stored-cause
+   *   capture, which needs every capture dial at `'full'`.
+   * - `'off'` — writes are not recorded; `stageWrites` is absent.
+   *
+   * The commit log, the narrative and recorder events (`onWrite` / `onCommit`
+   * payloads) are IDENTICAL in every mode: the policy scopes ONLY the
+   * snapshot's `stageWrites`. A redaction policy applies first: a marker
+   * describes what the policy retains, never the raw value. Read a written
+   * value back from the commit log with `commitValueAt`, which every mode
+   * keeps. Note the Agent default (`'summary'`) is deliberately cheaper than
+   * footprintjs's (`'full'`), as `readTracking`'s is.
+   */
+  readonly writeTracking?: WriteTrackingMode;
   /**
    * Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
    * byte-identical to every prior release: the Agent's bridge recorders
