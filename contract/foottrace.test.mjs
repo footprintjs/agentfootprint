@@ -30,7 +30,7 @@ const modules = Object.fromEntries(
     ]),
   ),
 );
-function contracts(ft, cause, paths) {
+function contracts(ft, cause, paths, canonical) {
   function commit(stage, idx, key, value, verb = 'set', readKeys = []) {
     return {
       idx,
@@ -226,6 +226,47 @@ function contracts(ft, cause, paths) {
       assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools#12'), true);
       assert.equal(ft.isExecutionKey('sf-llm-call'), false);
       assert.equal(ft.isExecutionKey('sf-llm-call/sf-tools'), false);
+    },
+    // The LLM ledger's one canonical form: its stored lines and the file store's MAC input.
+    'foottrace/canonical-json:canonicalizeJson': () => {
+      assert.equal(
+        canonical.canonicalizeJson({ b: 1, a: [true, null, 'x', -0, 1e21] }),
+        '{"a":[true,null,"x",0,1e+21],"b":1}',
+      );
+      const refused = (value, options) => {
+        try {
+          canonical.canonicalizeJson(value, options);
+          return 'accepted';
+        } catch (error) {
+          assert.ok(error instanceof canonical.CanonicalJsonError);
+          return error.code;
+        }
+      };
+      let read = false;
+      const accessor = Object.defineProperty({}, 'g', {
+        enumerable: true,
+        get() {
+          read = true;
+          return 1;
+        },
+      });
+      const cycle = {};
+      cycle.self = cycle;
+      assert.equal(refused({ f: () => 1 }), 'unsupported');
+      assert.equal(refused({ x: undefined }), 'unsupported');
+      assert.equal(refused(accessor), 'unsupported');
+      assert.equal(read, false);
+      assert.equal(refused(cycle), 'cycle');
+      assert.equal(refused({ s: 'a\ud800' }), 'unicode');
+      assert.equal(refused({ s: 'abcdef' }, { maxBytes: 5 }), 'output-bytes');
+      assert.equal(refused({ a: { b: 1 } }, { maxDepth: 1 }), 'depth');
+      assert.equal(refused([1], { maxNodes: 100_001 }), 'options');
+    },
+    'foottrace/canonical-json:CanonicalJsonError': () => {
+      const error = new canonical.CanonicalJsonError('depth');
+      assert.ok(error instanceof Error);
+      assert.equal(error.code, 'depth');
+      assert.equal(error.message, 'Canonical JSON refused: depth');
     },
     'foottrace/paths:pathSegments': () => {
       assert.deepEqual(paths.pathSegments('literal.dot\u001fitems'), ['literal.dot', 'items']);
@@ -459,7 +500,12 @@ test('physical singleton control refuses a nested copy with identical version an
 test('every source-imported runtime symbol has a behavior contract, with no extra Foottrace features', () => {
   assert.deepEqual(
     Object.keys(
-      contracts(modules.foottrace, modules['foottrace/cause'], modules['foottrace/paths']),
+      contracts(
+        modules.foottrace,
+        modules['foottrace/cause'],
+        modules['foottrace/paths'],
+        modules['foottrace/canonical-json'],
+      ),
     ).sort(),
     runtime,
     `Source imports:\n${JSON.stringify(imported, null, 2)}`,
@@ -470,6 +516,7 @@ for (const mode of ['import', 'require']) {
     mode === 'import' ? modules.foottrace : require('foottrace'),
     mode === 'import' ? modules['foottrace/cause'] : require('foottrace/cause'),
     mode === 'import' ? modules['foottrace/paths'] : require('foottrace/paths'),
+    mode === 'import' ? modules['foottrace/canonical-json'] : require('foottrace/canonical-json'),
   );
   for (const [key, behavior] of Object.entries(cases))
     test(`${mode} ${key}`, { timeout: 5000 }, async () => {
