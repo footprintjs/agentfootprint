@@ -173,8 +173,7 @@ describe('terminal execution claim observation', () => {
     expect(sealExecutionClaimTurn).toHaveBeenCalledWith(turn);
   });
 
-  it('adds no state key when the checker finds no eligible claim', () => {
-    vi.mocked(assessExecutionClaims).mockReturnValue(undefined);
+  it('skips assessment and sealing for an ordinary reply without a receipt', () => {
     const turn = scope({ llmLatestContent: 'Here is the table.' });
     const route = withExecutionClaimAssessment(() => 'final', {
       structured: false,
@@ -182,5 +181,7 @@ describe('terminal execution claim observation', () => {
     });
     expect(route(turn)).toBe('final');
     expect(turn).not.toHaveProperty('answerExecutionClaims');
+    expect(assessExecutionClaims).not.toHaveBeenCalled();
+    expect(sealExecutionClaimTurn).not.toHaveBeenCalled();
   });
 });
