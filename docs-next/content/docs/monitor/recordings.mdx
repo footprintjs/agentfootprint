@@ -232,9 +232,12 @@ and the row's `meta.subflowPayloads` is `'with-invocation'`.
 `SavedInvocationPayloads`: an `entry` and an `exit`, each present only when that
 payload moved, and each a `SavedPayloadSlot` (`{ status: 'ready', value }` or
 `{ status: 'unavailable', reason }`). A step with neither a value nor a mark
-recorded none. `readWhole` puts every payload back and charges the
-bytes it restores against `maxBytes`. `sizes.restoredBytes` reports them, beside
-`sizes.storedBytes`.
+recorded none. `readWhole` puts every payload back. It measures each one it
+restores from a result and charges it against `maxBytes` as it goes. A reader
+never takes the index's word for those bytes: an index that misstates them, or
+the payloads that moved, is refused as `part-changed`. `sizes.restoredBytes`
+reports them as the index states them, beside `sizes.storedBytes`, so a size
+decided from it is an estimate until the read confirms it.
 
 `OpenSavedRecordingOptions` caps what a read may take: `maxIndexBytes` (2 MiB),
 `maxRootBytes` (16 MiB) and `maxPartBytes` (16 MiB). Each cap is checked against
