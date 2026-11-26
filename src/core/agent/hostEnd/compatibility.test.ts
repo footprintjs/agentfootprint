@@ -23,6 +23,24 @@ const grouped = [
   'final#24',
 ];
 
+/** Every stage-tree node that read (or asked for) a host-end key, as `path:key`. */
+function hostEndReads(snapshot: unknown): string[] {
+  const found: string[] = [];
+  const keys = ['modelReplyRunId', 'replyOrigin', 'hostEndReason'];
+  const walk = (node: unknown, path: string): void => {
+    if (node === null || typeof node !== 'object') return;
+    const n = node as { stageReads?: object; undefinedReadKeys?: readonly string[] };
+    for (const key of keys) {
+      if (n.stageReads !== undefined && Object.hasOwn(n.stageReads, key))
+        found.push(`${path}:${key}`);
+      if (n.undefinedReadKeys?.includes(key)) found.push(`${path}:${key}`);
+    }
+    for (const [k, v] of Object.entries(node)) walk(v, `${path}/${k}`);
+  };
+  walk((snapshot as { executionTree?: unknown }).executionTree, '');
+  return found;
+}
+
 for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
   for (const commitValues of ['full', 'delta'] as const) {
     it.each([{}, { hostEndedTurns: false }])(
@@ -42,6 +60,9 @@ for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
         );
         const record = JSON.stringify(snapshot);
         expect(record).not.toMatch(/"modelReplyRunId"|"replyOrigin"|"hostEndReason"/);
+        // No stage of an ordinary turn even asks for the host-end key: not in any stage's reads, kept or unset,
+        // in memory (where an unset read is a key with no value) as well as in a saved record.
+        expect(hostEndReads(snapshot)).toEqual([]);
         const checkpoint = agent.checkpoint()!;
         // The native run supplies its identity and the clock supplies the read time.
         expect(JSON.stringify(checkpoint)).toBe(

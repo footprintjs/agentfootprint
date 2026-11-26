@@ -38,13 +38,17 @@ export function assistantReplayFields(
 }
 
 /** Capture the settled text with its own provider evidence. Legacy and local
- * replies carry no origin. A memory writer also keeps its unsigned thinking. */
+ * replies carry no origin. A memory writer also keeps its unsigned thinking.
+ * `asksOrigin` is the caller's answer to "may `modelReplyRunId` be asked for?":
+ * on a stage's scope asking is a recorded read even of an unset key, so only
+ * an agent built with `hostEndedTurns: true` (the one writer of the key) asks. */
 export function settledModelReply(
   state: Parameters<typeof assistantReplayFields>[0] & Pick<Partial<AgentState>, 'modelReplyRunId'>,
   content: string,
+  asksOrigin: boolean,
   thinkingBlocks?: LLMMessage['thinkingBlocks'],
 ): LLMMessage {
-  const runId = 'modelReplyRunId' in state ? state.modelReplyRunId : undefined;
+  const runId = asksOrigin && 'modelReplyRunId' in state ? state.modelReplyRunId : undefined;
   return {
     role: 'assistant',
     content,
@@ -70,8 +74,9 @@ export function acceptedTurnMessages(input: string | undefined, reply: LLMMessag
   return input === undefined ? [reply] : [{ role: 'user', content: input }, reply];
 }
 
-/** Collect the settled model turn in native recording order for memory writers. */
-export function modelTurnMessages(scope: AgentState): LLMMessage[] {
+/** Collect the settled model turn in native recording order for memory writers;
+ * `asksOrigin` as `settledModelReply` takes it, from the final stage's arms. */
+export function modelTurnMessages(scope: AgentState, asksOrigin: boolean): LLMMessage[] {
   // v2.14 — attach thinking blocks to the assistant final message
   // (if any). For non-Anthropic providers this is informational; for
   // Anthropic + extended-thinking-with-tool-use, signature round-trip
@@ -84,6 +89,6 @@ export function modelTurnMessages(scope: AgentState): LLMMessage[] {
   const memoryThinking = thinkingBlocks?.length ? thinkingBlocks : undefined;
   return acceptedTurnMessages(
     scope.userMessage,
-    settledModelReply(scope, scope.finalContent, memoryThinking),
+    settledModelReply(scope, scope.finalContent, asksOrigin, memoryThinking),
   );
 }
