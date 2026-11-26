@@ -24,6 +24,12 @@ export interface CallLLMStageDeps {
   readonly sourceConsultation?: SourceConsultation;
   readonly registrations?: import('../toolResolver.js').ToolRegistrations;
   readonly servedTools?: import('../../../slots/commitServedTools.js').ServedToolParties;
+  /**
+   * The run's context baseline (`contextBinding/check.ts`): the request behind
+   * the newest signed response. Read only on a model that binds its reasoning
+   * to its context; absent = the check is off (standalone call charts).
+   */
+  readonly contextBinding?: import('../../contextBinding/check.js').ContextBaselineHolder;
   /** Whether this native run can retain newly disclosed catalog names on its receipt. */
   readonly canRecordToolSelection?: () => boolean;
   /** Present only when retrieval request evidence is armed, independent of receipt capture. */
@@ -33,7 +39,7 @@ export interface CallLLMStageDeps {
     summary: RecallRequestSummary,
   ) => void;
   /** Mark the accepted model response on this native leg before checks run. */
-  readonly onResponseCommitted?: () => void;
+  readonly onResponseCommitted?: (scope: TypedScope<AgentState>, localFallback: boolean) => void;
   /** Preserve approved replay retirement for recovery before transport. */
   readonly onReplayPrepared?: LLMCallHooks['onReplayPrepared'];
   /** The LLM provider to invoke. */

@@ -38,6 +38,7 @@ export type {
   ToolProgressPayload,
   ToolEndPayload,
 } from './payloads/stream.js';
+export type { ContextChange, ContextChangeCheck } from './payloads/contextChange.js';
 export type {
   ContextInjectedPayload,
   ContextEvictedPayload,

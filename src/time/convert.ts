@@ -49,6 +49,7 @@
  * |-------|------|------|-------|
  * | a range inside one calendar day (in the form's zone) | `day` | that day | the whole day — the rest of it is `extra` |
  * | a range ending before now (past the tool's step) | `lookback` | the covering look-back from now, in the form's units | `[now − L, now]` — the gap after the range (and any rounding before it) is `extra` |
+ * | a confirmed interval rounded by an `epoch-s` bound | an absolute form | outward whole-second bound values | `sent` and the precise `extra` on each end |
  *
  * A form whose read would be wider than the tool's `maxRange` is skipped.
  * The refusals are tests the binding asks: a range across days when every
@@ -65,6 +66,8 @@
  * precision is how it was written: minutes (`to + 1 min`), seconds, or a
  * fraction (`+ 1 ms`). An epoch bound's precision is its unit; a date's is
  * the calendar day in the zone.
+ * A confirmed cutoff follows the same law (one second, or one millisecond,
+ * before it); only one written past the millisecond keeps its exact neighbour.
  *
  * @example
  * ```ts
@@ -143,11 +146,15 @@ export type {
   ZoneArgument,
 } from './periodForm.js';
 
-import { epochOrText, formZone, readBound, readZone } from './convert/bounds.js';
+import { epochOrText, formZone, readPeriodBounds, readZone } from './convert/bounds.js';
 import { dateAt, midnightOf, nextDay, spellDate } from './convert/calendar.js';
-import { convertOne } from './convert/exact.js';
-import { absoluteOf, msOf, spanRange, type Ms } from './convert/instants.js';
-import { dayWidened, lookbackWidened } from './convert/widen.js';
+import { formCapMs, sourceClockConversion } from './convert/covering.js';
+import { convertOne, supportsFrozenLookback } from './convert/exact.js';
+import type { WindowEndpoint } from './windowEndpoint.js';
+import { absoluteOf, msOf, spanRange } from './convert/instants.js';
+import { dayWidened, extraOfPrecise, lookbackWidened } from './convert/widen.js';
+
+export { supportsFrozenLookback };
 
 // ─── Converting a range into a form ──────────────────────────────────────
 
@@ -168,6 +175,9 @@ export interface WindowToConvert {
   readonly range: TimeRange;
   /** The look-back length the window was said as (`smhdw`), ending at the clock's `now`. */
   readonly lookback?: DurationText;
+  /** The admitted clock already bound this look-back to `range`; dispatch absolute bounds only. */
+  readonly freezeLookback?: true;
+  readonly endpoint?: WindowEndpoint;
 }
 
 /** One exact conversion: the form used (its index), the argument values, and whether it rounded outward. */
@@ -175,6 +185,13 @@ export interface Conversion {
   readonly form: number;
   readonly values: Readonly<Record<string, unknown>>;
   readonly rounded?: true;
+  /**
+   * A confirmed look-back in a form that takes only a length: the SOURCE reads
+   * it against its own clock, so the library lengthens it at dispatch to
+   * still reach the window's start (`convert/covering.ts`). `values` holds
+   * the window's own length until then.
+   */
+  readonly coversAtDispatch?: true;
 }
 
 /**
@@ -189,8 +206,11 @@ export function convertExact(
   ctx: ConvertContext,
 ): Conversion | undefined {
   for (let i = 0; i < forms.length; i++) {
-    const done = convertOne(window, forms[i] as PeriodForm, ctx);
-    if (done !== undefined) {
+    const form = forms[i] as PeriodForm;
+    if (window.freezeLookback === true && !supportsFrozenLookback(form)) continue;
+    const done = convertOne(window, form, ctx);
+    const exactBounds = window.endpoint !== undefined && form.kind !== 'lookback';
+    if (done !== undefined && (!done.rounded || (!exactBounds && window.freezeLookback !== true))) {
       return { form: i, values: done.values, ...(done.rounded && { rounded: true as const }) };
     }
   }
@@ -225,21 +245,41 @@ export function convertWidened(
 ): WidenedConversion | undefined {
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
-    const done =
-      form.kind === 'day'
-        ? dayWidened(window, form, ctx)
-        : form.kind === 'lookback'
-        ? lookbackWidened(window, form, ctx)
-        : undefined;
+    const absolute =
+      window.freezeLookback === true ||
+      (window.endpoint !== undefined && form.kind !== 'day' && form.kind !== 'lookback');
+    // A CONFIRMED window is never covered from the frozen clock: its look-back is measured where
+    // the source reads it, at dispatch (`sourceClockConversion`, asked last by `convertForTool`).
+    const done = absolute
+      ? roundedAbsolute(window, form, ctx)
+      : form.kind === 'day'
+      ? dayWidened(window, form, ctx)
+      : form.kind === 'lookback' && window.endpoint === undefined
+      ? lookbackWidened(window, form, ctx)
+      : undefined;
     if (done === undefined || done.extra.length === 0) continue;
-    const sentFrom = msOf(done.sent.from) as Ms;
-    const sentTo = msOf(done.sent.to) as Ms;
-    // The read's reach, judged as `periodFactProblem` judges a window (`range.ts` · `reachMs`):
-    // a look-back `[now − L, now]` reaches `L`, so one exactly `maxRange` long is read at once.
-    if (widestMs !== undefined && reachMs(sentFrom.ms, sentTo.ms) > widestMs) continue;
+    if (widestMs !== undefined && !fitsCap(window, widestMs, done.sent)) continue;
     return { form: i, ...done };
   }
   return undefined;
+}
+
+/** An absolute form can widen only to the bounds its actual arguments read back. */
+function roundedAbsolute(
+  window: WindowToConvert,
+  form: PeriodForm,
+  ctx: ConvertContext,
+): Omit<WidenedConversion, 'form'> | undefined {
+  if (window.freezeLookback === true && !supportsFrozenLookback(form)) return undefined;
+  const converted = convertOne(window, form, ctx);
+  if (converted?.rounded !== true) return undefined;
+  const sent = readBack(converted.values, form, {
+    ...ctx,
+    ...(window.endpoint !== undefined && { precise: true as const }),
+  });
+  if (sent === undefined) return undefined;
+  const extra = extraOfPrecise(sent, window.range);
+  return extra === undefined ? undefined : { values: converted.values, rounded: true, sent, extra };
 }
 
 /**
@@ -286,6 +326,12 @@ export type ToolConversion =
  * now, so it cannot reach a window still running; a covering look-back wider
  * than `maxRange` is not read). Never the tool's own default in its place.
  *
+ * A CONFIRMED look-back (`freezeLookback`) is read as its frozen absolute
+ * bounds whatever the declared order; when no absolute form holds it, the
+ * first length-only form reads it, `coversAtDispatch`: the source counts a
+ * length back from its own clock, so the library lengthens it at dispatch to
+ * still reach the window's start (`drift.ts` · `coverAtDispatch`).
+ *
  * @example
  * ```ts
  * const lookbackOnly = [{ kind: 'lookback', argument: 'window', signed: false }] as const;
@@ -303,10 +349,19 @@ export function convertForTool(
   facts: PeriodFacts | undefined,
   ctx: ConvertContext,
 ): ToolConversion {
+  // A confirmed look-back is read by an absolute form (its frozen bounds) or, when none holds
+  // it, by a length-only form the library lengthens at dispatch. A day or wall form reads neither.
+  const frozen = window.freezeLookback === true;
+  const eligible = frozen
+    ? forms.filter((form) => supportsFrozenLookback(form) || form.kind === 'lookback')
+    : forms;
+  if (frozen && eligible.length === 0) {
+    return { refused: 'no-form-holds' };
+  }
   // The tool's facts before a form is chosen: `maxRange` is the widest any form reads, so a window
   // is over it only when NO form can read it (`periodForm.ts` · `toolFacts`; the period's own
   // facts when no form declares its own `maxRange`).
-  const judged = facts === undefined ? undefined : toolFacts(forms, facts);
+  const judged = facts === undefined ? undefined : toolFacts(eligible, facts);
   const problem =
     judged === undefined ? undefined : periodFactProblem(window.range, judged, ctx.now);
   if (problem !== undefined) return { refused: problem };
@@ -314,20 +369,28 @@ export function convertForTool(
     facts !== undefined && partlyBeyondRetention(window.range, facts, ctx.now)
       ? { partlyBeyondRetention: true as const }
       : {};
-  const read = forms.some((f) => f.maxRange !== undefined)
+  const toolCap = widestMsOf(facts);
+  const checkEachCap =
+    eligible.some((form) => form.maxRange !== undefined) ||
+    (window.endpoint !== undefined && toolCap !== undefined);
+  const read = checkEachCap
     ? convertWithinFormCaps(window, forms, facts, ctx)
-    : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, widestMsOf(facts));
+    : convertExact(window, forms, ctx) ?? convertWidened(window, forms, ctx, toolCap);
   if (read !== undefined) return { conversion: read, ...partly };
-  if (spansDaysForDayOnly(window, forms, ctx)) return { refused: 'multi-day' };
+  // The widening law for a confirmed look-back no absolute form holds: the covering look-back,
+  // measured at dispatch. Asked last, so frozen bounds win whatever the declared order.
+  const confirmed = frozen || window.endpoint !== undefined;
+  const covering = confirmed ? sourceClockConversion(window, forms, facts, ctx.now) : undefined;
+  if (covering !== undefined) return { conversion: covering, ...partly };
+  if (spansDaysForDayOnly(window, eligible, ctx)) return { refused: 'multi-day' };
   return { refused: 'no-form-holds' };
 }
 
 /**
- * {@link convertForTool}'s exact-then-wider search when a form declares its
- * own `maxRange`: the same order (the first form that holds the window
- * exactly, then the first that holds it by reading more), each form held to
- * ITS cap ({@link formMaxRange}) — an exact form the window reaches past, or a
- * wider read past it, is skipped, and the next form is asked.
+ * {@link convertForTool}'s exact-then-wider search for confirmed windows
+ * with a tool cap or forms with their own caps. Check exact forms first,
+ * then widened forms. Skip any form whose read exceeds its effective cap
+ * ({@link formMaxRange}).
  */
 function convertWithinFormCaps(
   window: WindowToConvert,
@@ -335,17 +398,11 @@ function convertWithinFormCaps(
   facts: PeriodFacts | undefined,
   ctx: ConvertContext,
 ): Conversion | WidenedConversion | undefined {
-  const capMs = (form: PeriodForm): number | undefined => {
-    const text = formMaxRange(form, facts);
-    return text === undefined ? undefined : durationMs(text, FACT_UNITS);
-  };
-  const from = msOf(window.range.from);
-  const to = msOf(window.range.to);
-  const reach = from === undefined || to === undefined ? undefined : reachMs(from.ms, to.ms);
+  const capMs = (form: PeriodForm): number | undefined => formCapMs(form, facts);
   for (let i = 0; i < forms.length; i++) {
     const form = forms[i] as PeriodForm;
     const cap = capMs(form);
-    if (cap !== undefined && (reach === undefined || reach > cap)) continue;
+    if (cap !== undefined && !fitsCap(window, cap)) continue;
     const exact = convertExact(window, [form], ctx);
     if (exact !== undefined) return { ...exact, form: i };
   }
@@ -355,6 +412,21 @@ function convertWithinFormCaps(
     if (widened !== undefined) return { ...widened, form: i };
   }
   return undefined;
+}
+
+function fitsCap(window: WindowToConvert, cap: number, sent?: TimeRange): boolean {
+  const range = sent ?? window.range;
+  const end = sent?.to ?? window.endpoint?.cutoff ?? range.to;
+  const from = instantOf(range.from, 'strict');
+  const cutoff = instantOf(end, 'strict');
+  if (from === undefined || cutoff === undefined) return false;
+  if (window.endpoint === undefined) {
+    const fractional = sent === undefined ? 0 : (cutoff.nanos - from.nanos) / 1_000_000;
+    return reachMs(from.ms, cutoff.ms) + fractional <= cap;
+  }
+  // Compare the sub-millisecond remainder separately to keep it at long durations.
+  const wholeMs = cutoff.ms - from.ms;
+  return wholeMs < cap || (wholeMs === cap && cutoff.nanos <= from.nanos);
 }
 
 /**
@@ -420,7 +492,7 @@ export function readBackLacksZone(
 export function readBack(
   args: Readonly<Record<string, unknown>>,
   form: PeriodForm,
-  ctx: { readonly now: InstantText; readonly appZone?: ZoneName },
+  ctx: { readonly now: InstantText; readonly appZone?: ZoneName; readonly precise?: true },
 ): TimeRange | undefined {
   if (form.kind === 'lookback') {
     const value = args[form.argument];
@@ -469,9 +541,13 @@ export function readBack(
     fromAs = toAs = form.as;
     edge = form.edge;
   }
-  const from = readBound(fromValue, 'from', fromAs, 'inclusive', zone);
-  const to = readBound(toValue, 'to', toAs, edge, zone);
-  return from === undefined || to === undefined ? undefined : spanRange(from, to);
+  return readPeriodBounds(
+    { value: fromValue, as: fromAs },
+    { value: toValue, as: toAs },
+    edge,
+    zone,
+    ctx.precise,
+  );
 }
 
 /**

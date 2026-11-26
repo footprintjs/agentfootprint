@@ -10,7 +10,7 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  *   • `seed` writes the run constant `AgentState.ontology` ONCE per run —
  *     `{ id, version, hash, spec }`, the whole spec — and no stage writes
  *     it again;
- *   • `callLLM · buildCallLLMStage` serves ONE piece with `source:
+ *   • `callLLM/prepareCall.ts · prepareCall` serves ONE piece with `source:
  *     'ontology'` on EVERY call, composed by `ontology/serve.ts ·
  *     ontologyPiece` from that key, joined as the last live system piece
  *     after the optional recovery piece. Live findings DATA arrives in a

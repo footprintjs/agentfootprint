@@ -16,10 +16,10 @@
  *          agentfootprint.error.circuit_changed  (9.32.0)
  *
  * Matched on EXACT full event names rather than the broader
- * `agentfootprint.error.` prefix. `error.fatal` is dispatched directly by
- * ErrorBridge (from footprintjs's `onRunFailed`, never via `$emit`), so a
- * broad prefix would be harmless today — the exact names close the
- * double-dispatch trap outright if that ever changes.
+ * `agentfootprint.error.` prefix. ErrorBridge owns `error.fatal`: structural
+ * failures dispatch from `onRunFailed`, and admitted provider interventions
+ * emit before their clean native break. The exact names keep that terminal
+ * notification out of this second bridge and close the double-dispatch trap.
  *
  * NOTE: this is the DECORATOR family (fixed `maxAttempts` + exponential
  * backoff). The rules-based reliability loop's dynamic decisions ride the

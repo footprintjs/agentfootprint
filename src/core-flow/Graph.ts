@@ -38,7 +38,7 @@
  *      `workflow()` (v7.10.0) exists precisely because of this.
  *   2. `Parallel` has the SAME limit one layer down: its branch type is
  *      `Runner<{ message: string }, string>` and its branch `outputMapper`
- *      coerces a non-string branch output to `''` (`Parallel.ts`, the
+ *      coerces a non-string branch output to `''` (`Parallel/chart.ts`, the
  *      `typeof sfOutput === 'string' ? sfOutput : ''` mapper). So a
  *      Parallel level cannot carry a structured value either.
  *

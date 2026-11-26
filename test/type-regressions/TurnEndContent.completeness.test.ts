@@ -44,6 +44,7 @@ export type FieldKind = 'content' | 'record';
 export const TURN_END_FIELDS = {
   turnIndex: 'record',
   finalContent: 'content',
+  replyAuthor: 'record',
   totalInputTokens: 'record',
   totalOutputTokens: 'record',
   iterationCount: 'record',

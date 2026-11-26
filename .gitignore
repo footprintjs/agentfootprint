@@ -54,3 +54,9 @@ index-claude.html
 
 # Reviewed, commit-pinned dependency for the shared assertion extraction.
 !vendor/contextfootprint/*.tgz
+
+# The docs-truth report is DERIVED: `npm run docs:truth:report` writes it here, and CI's
+# `docs-truth` job attaches it to the run. It is not committed, because every pull request
+# that changed an export changed its counts, so open pull requests conflicted on it; and a
+# file that is not stored cannot be stale or edited by hand (the 9.58.0 defect).
+/docs/DOCS_TRUTH_REPORT.md

@@ -144,7 +144,8 @@ describe('composition members — never the instance’s hand-offs or evidence',
     // The control: Bob's turn was told a time — the builder's zone.
     expect(bob).toContain('UTC');
     expect(bob).not.toContain('Kolkata');
-    expect(bob).not.toContain('2031');
+    // As a number of its own: a timestamp or hash in the request JSON can hold these digits by chance.
+    expect(bob).not.toMatch(/(?<!\d)2031(?!\d)/);
     const aliceTurn = seen.filter((r) => r.includes('alice-turn')).join('\n');
     expect(aliceTurn).toContain('Kolkata');
   });

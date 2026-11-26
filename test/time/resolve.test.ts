@@ -9,7 +9,7 @@
  *   unit        — every candidate for `10/09/26` (MDY, DMY, YMD, each a calendar day, the century
  *                 noted); a bare `8:40` → am and pm; `20:40` → one; a fall-back overlap → both
  *                 instants noted `dst-overlap`; a spring-forward gap → both readings noted
- *                 `dst-gap`; a range read to the end of its grain; `yesterday`; a look-back;
+ *                 `dst-gap`; exact clock cutoffs; `yesterday`; a frozen look-back;
  *                 a said IANA zone, a said offset, an abbreviation (asked, never mapped); the
  *                 unsupported parts named; `chooseReading` under the policy (`only`, `policy`,
  *                 `open` with its questions, `none`); the `model`-reading rule (`said: []`,
@@ -192,7 +192,7 @@ describe('resolveMention — every candidate of the parts', () => {
     });
   });
 
-  it('a range runs to the END of its last grain, and the policy picks the order', () => {
+  it('a clock range keeps its exclusive minute cutoff, and the policy picks the date order', () => {
     const parts: TimeParts = {
       date: { kind: 'numeric', fields: [10, 9, 26] },
       rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40, meridiem: 'am' } }],
@@ -205,12 +205,13 @@ describe('resolveMention — every candidate of the parts', () => {
     expect(res.candidates[0]).toMatchObject({
       window: {
         kind: 'range',
-        range: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:41:00-07:00' },
+        range: { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:40:00-07:00' },
       },
+      endpoint: { cutoff: '2026-10-09T08:40:00-07:00', end: 'exclusive', precision: 'minute' },
       grain: 'minute',
       said: ['year', 'month', 'day', 'hour', 'minute', 'meridiem'],
     });
-    expect(res.candidates[0]?.notes).toContainEqual({ kind: 'end-of-grain' });
+    expect(res.candidates[0]?.notes).not.toContainEqual({ kind: 'end-of-grain' });
   });
 
   it('a range whose end says no meridiem → one candidate per combination that runs forward', () => {
@@ -218,8 +219,8 @@ describe('resolveMention — every candidate of the parts', () => {
       rangeOf: [{ wall: { h: 8, meridiem: 'am' } }, { wall: { h: 8, m: 40 } }],
     });
     expect(ranges(res.candidates)).toEqual([
-      '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00',
-      '2026-10-09T08:00:00-07:00/2026-10-09T20:41:00-07:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T08:40:00-07:00',
+      '2026-10-09T08:00:00-07:00/2026-10-09T20:40:00-07:00',
     ]);
     expect(res.candidates.map((c) => c.reading.endMeridiem)).toEqual(['am', 'pm']);
     expect(chooseReading(res, DEFAULT_TIME_POLICY, 'rule')).toMatchObject({
@@ -286,7 +287,7 @@ describe('resolveMention — every candidate of the parts', () => {
       date: { kind: 'fixed', year: 2026, month: 10, day: 9 },
       rangeOf: [{ wall: { h: 20 } }, { wall: { h: 21, m: 0 }, zoneToken: 'UTC' }],
     });
-    expect(ranges(res.candidates)).toEqual(['2026-10-09T20:00:00Z/2026-10-09T21:01:00Z']);
+    expect(ranges(res.candidates)).toEqual(['2026-10-09T20:00:00Z/2026-10-09T21:00:00Z']);
   });
 
   it('yesterday → the calendar day before the clock’s, in the clock zone, anchored on the message', () => {
@@ -309,11 +310,12 @@ describe('resolveMention — every candidate of the parts', () => {
     });
   });
 
-  it('last 40 minutes → a look-back until the clock’s now', () => {
+  it('last 40 minutes → a look-back with the clock’s now as the exclusive cutoff', () => {
     const res = resolve({ relative: { unit: 'minute', count: 40 } });
     expect(res.candidates[0]).toMatchObject({
       window: { kind: 'lookback', duration: '40m' },
-      range: { from: '2026-10-09T15:00:00Z', to: '2026-10-09T15:40:00.001Z' },
+      range: { from: '2026-10-09T15:00:00Z', to: '2026-10-09T15:40:00Z' },
+      endpoint: { cutoff: '2026-10-09T15:40:00Z', end: 'exclusive', precision: 'second' },
       grain: 'minute',
       said: ['duration'],
       anchor: 'message',

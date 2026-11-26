@@ -639,12 +639,16 @@ describe('recorded settlement across the coordinator window axes', () => {
   );
 
   it.each([
-    { name: 'a public summary', replacement: 'Result on file.', reasons: [] },
-    { name: 'a pending job', replacement: pending(), reasons: ['work-not-finished'] },
+    { name: 'a public summary', replacement: 'Result on file.', reasons: ['coverage-gap'] },
+    {
+      name: 'a pending job',
+      replacement: pending(),
+      reasons: ['work-not-finished', 'coverage-gap'],
+    },
     {
       name: 'a reported failure',
       replacement: { content: 'No public result.', effects: [], status: 'failure' },
-      reasons: ['call-not-completed'],
+      reasons: ['call-not-completed', 'coverage-gap'],
     },
   ])(
     'follows a rewrite to $name with and without the call in history',
@@ -666,6 +670,20 @@ describe('recorded settlement across the coordinator window axes', () => {
         expect(evicted.historyAtRequest.at(-1)).toEqual(['c2']);
         expect(before.event.reasons).toEqual(reasons);
         expect([...after.event.reasons].sort()).toEqual([...reasons, DROP_REASON].sort());
+        const witness = [{ kind: 'state', key: 'coverageDeclared', path: '/0/kind' }];
+        for (const [proof, lost] of [
+          [before, false],
+          [after, true],
+        ] as const) {
+          const gap = proof.saved.reasons.find(({ reason }) => reason === 'coverage-gap');
+          expect(gap?.witness).toEqual(witness);
+          // Losing the result does not erase its declaration or invent a call-name join.
+          expect(gap?.source).toEqual(
+            lost
+              ? { kind: 'calls', calls: [], unplaced: witness }
+              : { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'lookup' }] },
+          );
+        }
         expect(after.returned).toContain(dropClause(1));
       } finally {
         await retained.agent.shutdown();

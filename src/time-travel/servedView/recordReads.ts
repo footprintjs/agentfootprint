@@ -84,5 +84,19 @@ export function readReceipt(location: EpochLocation): ReceiptRead {
   if (value === null || typeof value !== 'object' || typeof candidate.basis?.epoch !== 'number') {
     return { cause: 'receipt-shape-rejected' };
   }
+  // The SAME receipt the key held before this call: this call minted none, and
+  // the key still holds what an earlier call committed (a request refused
+  // before its receipt was minted leaves exactly this). Serving it would show
+  // one call's evidence as another's, so it is this epoch's absence. Judged by
+  // the receipt's own basis on both sides of the call, never by the epoch
+  // number, which a recording without its fold base numbers by position.
+  const before = foldAtCall(location, RECEIPT_KEY) as Partial<StoredReceipt> | null | undefined;
+  if (
+    before !== null &&
+    typeof before === 'object' &&
+    before.basis?.epoch === candidate.basis.epoch &&
+    before.basis?.runId === candidate.basis.runId
+  )
+    return { cause: 'no-receipt-committed' };
   return { receipt: value as StoredReceipt };
 }

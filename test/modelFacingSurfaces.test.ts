@@ -2716,7 +2716,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     module: 'src/ontology/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      '`callLLM · buildCallLLMStage` composes it by `ontologyPiece` from the run constant ' +
+      '`callLLM/prepareCall.ts · prepareCall` composes it by `ontologyPiece` from the run constant ' +
       '`ontology` and that request’s hidden skills, after the optional recovery piece. Live ' +
       'findings DATA rides in the request messages. `servedView/ontology.ts · ontologyAt` ' +
       'recomposes the ontology piece from the record, and the receipt hashes it per request.',

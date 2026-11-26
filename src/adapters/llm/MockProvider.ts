@@ -259,6 +259,7 @@ export class MockProvider implements LLMProvider {
         }),
       },
       stopReason: partial.stopReason ?? (toolCalls.length > 0 ? 'tool_use' : this.stopReason),
+      ...(partial.intervention !== undefined && { intervention: partial.intervention }),
       // Mock has no wire, so its honest manifest is an ECHO of the request's
       // tools — the healthy adapter's shape (body mirrors IR), unless a test
       // scripted a divergent manifest to stand in for a drifting adapter.

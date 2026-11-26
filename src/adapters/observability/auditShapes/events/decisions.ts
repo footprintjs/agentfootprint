@@ -214,6 +214,52 @@ export function decisionsShapes() {
         via: oneOf('escalation', 'skill'),
         skillId: str,
       }),
+      // Names only: a piece's source and id, a tool's name and party, a message's place.
+      contextChange: shapeOf<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'contextChange'>>({
+        check: oneOf('compared', 'unchecked'),
+        refused: bool,
+        binding: oneOf('bound', 'unknown'),
+        by: oneOf('app', 'provider'),
+        appStatement: oneOf('failed'),
+        changes: listOf(
+          shapeOf<
+            ItemOf<At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'contextChange'>, 'changes'>>
+          >({
+            slot: oneOf('messages', 'system-prompt', 'tools'),
+            change: oneOf('added', 'changed', 'removed'),
+            source: oneOf(
+              'assistant',
+              'base',
+              'custom',
+              'evidence-recovery',
+              'fact',
+              'findings',
+              'instructions',
+              'memory',
+              'ontology',
+              'rag',
+              'registry',
+              'skill',
+              'steering',
+              'tool-result',
+              'user',
+            ),
+            id: str,
+            tool: str,
+            party: shapeOf<
+              At<
+                ItemOf<
+                  At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'contextChange'>, 'changes'>
+                >,
+                'party'
+              >
+            >({ channel: oneOf('framework', 'provider', 'registry', 'skill'), id: str }),
+            position: num,
+            role: str,
+          }),
+        ),
+        omittedChanges: num,
+      }),
     }),
 
     'agentfootprint.credential.failed': eventShape<'agentfootprint.credential.failed'>({

@@ -6,6 +6,7 @@ import { readCallOutcomes } from './resultEvidence.js';
 import type { standingAdmission } from './standingAdmission.js';
 import type { TurnResult } from './turnResults.js';
 import type { AssessmentReason } from './types.js';
+import { hasOwnDeclarationWitness } from './results/coverage/declarations.js';
 
 type Settlements = NonNullable<ReturnType<typeof standingAdmission>['settlements']>;
 
@@ -71,9 +72,16 @@ export function readSettledResults(
       else if (fact.reportedStatus !== undefined)
         fire(g, 'work-not-finished', at('reportedStatus'));
     }
-    if (fact.empty !== undefined && !(fact.empty === 'declared-absent' && absenceCalls.has(key)))
+    if (
+      fact.empty !== undefined &&
+      hasOwnDeclarationWitness(
+        fact.delivery,
+        fact.empty === 'declared-absent' && absenceCalls.has(key),
+      )
+    )
       fire(g, fact.empty, at('empty'));
-    if (fact.gap === true && !gapCalls.has(key)) fire(g, 'coverage-gap', at('gap'));
+    if (fact.gap === true && hasOwnDeclarationWitness(fact.delivery, gapCalls.has(key)))
+      fire(g, 'coverage-gap', at('gap'));
     const period =
       fact.rewrittenPeriod === undefined ? undefined : periodReasons[fact.rewrittenPeriod];
     if (period !== undefined) fire(g, period, at('rewrittenPeriod'));

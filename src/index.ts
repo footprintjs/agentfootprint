@@ -185,8 +185,7 @@ export type { RunnerInvocation, RunnerSelection, RunnerMetadata } from './core/r
 // What `enable.observability()` / `enable.cost()` / `enable.liveStatus()`
 // hand back (8.12.0): the same `Unsubscribe` function, now carrying
 // `flush()` / `stop()`. On the main barrel because it is the return type of a
-// main-barrel method — the strategy interfaces themselves live on
-// `agentfootprint/observe`.
+// main-barrel method — the strategy interfaces themselves live on `agentfootprint/observe`.
 export type { ObservabilityHandle, StrategyHandle } from './strategies/types.js';
 
 // Composition-level UI translation (L1b + L1c). Consumer-facing types
@@ -538,10 +537,10 @@ export type { ToolArgValidationMode } from './tools/toolArgsValidation.js';
 // `role: 'tool'` message, so the shape AND the guard are public; the measuring
 // helper stays internal to dispatch.
 export { isTruncatedToolResult, type TruncatedToolResult } from './core/agent/toolResultCap.js';
-// #18/#14 — snapshot read-tracking: the mode for AgentOptions.readTracking
-// (re-exported from footprintjs so Agent consumers don't need a direct
-// footprintjs import to type the option).
+// #18/#14 — the snapshot's read and write views: the modes for AgentOptions
+// readTracking / writeTracking and their markers, re-exported from footprintjs.
 export type { ReadSummaryMarker, ReadTrackingMode } from 'footprintjs';
+export type { WriteSummaryMarker, WriteTrackingMode } from 'footprintjs';
 // #P1 — per-write read provenance: the mode for AgentOptions.writeProvenance
 // (structurally derived from footprintjs's executor options — the engine owns
 // the vocabulary but does not export the alias).
@@ -999,10 +998,10 @@ export {
   ARTIFACT_REF_PREFIX,
   ArtifactIntegrityError,
   bindArtifacts,
-  // Recordings-as-artifacts (9.26.0) — a completed run's
-  // `{ snapshot, events, structure }` checked in under kind 'recording/run',
-  // so the existing artifact wire ops serve the Lens with no new operation.
+  // A completed run's recording, whole ('recording/run') or in parts (an index plus parts).
   RECORDING_ARTIFACT_KIND,
+  RECORDING_INDEX_ARTIFACT_KIND,
+  RECORDING_PART_ARTIFACT_KIND,
   RECORDING_MEDIA_TYPE,
   recordingPutInput,
   // The chart-walk kind (9.76.0) — a runbook's inner walk, one row per
@@ -1037,6 +1036,7 @@ export {
   type ArtifactRefusalReason,
   type ArtifactRetention,
   type ArtifactScope,
+  type ArtifactScopeBudget,
   type ArtifactStore,
   type ArtifactSweepReason,
   type BindArtifactsOptions,

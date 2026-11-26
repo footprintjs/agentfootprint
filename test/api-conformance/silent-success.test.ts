@@ -415,7 +415,9 @@ describe('silent success — a tool result that was quietly cut (9.7.0)', () => 
   it('STATED: the port says why truncation must be reported, and the source still says it', () => {
     // A stated behaviour whose statement was deleted is back to being a silent
     // success, and only this second assertion catches that.
-    expect(read('provider-contract/types.ts')).toContain('An unstated slice is a silent success.');
+    expect(read('provider-contract/types/code.ts')).toContain(
+      'An unstated slice is a silent success.',
+    );
     expect(read('core/codeRunnerTool.ts')).toContain('TRUNCATION IS ALWAYS STATED');
   });
 

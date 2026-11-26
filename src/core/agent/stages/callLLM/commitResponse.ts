@@ -77,7 +77,7 @@ export function commitAcceptedResponse(
   scope.llmLatestContent = response.content;
   if (accepted.recall !== undefined)
     deps.recallRequests?.(scope, accepted.iteration, accepted.recall);
-  deps.onResponseCommitted?.();
+  deps.onResponseCommitted?.(scope, localFallback);
   const acceptedToolCalls = identifyAcceptedToolCalls(response.toolCalls);
   scope.llmLatestToolCalls = acceptedToolCalls;
   deps.sourceConsultation?.accepted(

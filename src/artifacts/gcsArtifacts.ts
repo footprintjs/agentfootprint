@@ -132,6 +132,7 @@ import { computeArtifactDigest, decodeCanonicalPayload, type PayloadShape } from
 import {
   assertRetention,
   planRetention,
+  scopeBudgetMember,
   type ArtifactRetention,
   type RetainedRow,
 } from './retention.js';
@@ -441,6 +442,7 @@ export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
   };
 
   return {
+    ...scopeBudgetMember(retention),
     async put(scope, input): Promise<ArtifactPutResult> {
       const at = now();
       const { meta, payload } = await prepareArtifact(

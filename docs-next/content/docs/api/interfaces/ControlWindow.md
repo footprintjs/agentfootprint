@@ -4,15 +4,27 @@ title: ControlWindow
 
 # Interface: ControlWindow
 
-Defined in: [src/time/rows/types.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L13)
+Defined in: [src/time/rows/types.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L14)
 
 A window set in a UI, as the clock row records it.
 
 ## Extends
 
-- [`TimeRange`](/docs/api/interfaces/TimeRange)
+- `RecordedWindow`
 
 ## Properties
+
+### endpoint?
+
+> `readonly` `optional` **endpoint?**: `WindowEndpoint`
+
+Defined in: [src/time/windowEndpoint.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/time/windowEndpoint.ts#L14)
+
+#### Inherited from
+
+`RecordedWindow.endpoint`
+
+***
 
 ### from
 
@@ -22,7 +34,7 @@ Defined in: [src/time/range.ts:60](https://github.com/footprintjs/agentfootprint
 
 #### Inherited from
 
-[`TimeRange`](/docs/api/interfaces/TimeRange).[`from`](/docs/api/interfaces/TimeRange#from)
+`RecordedWindow.from`
 
 ***
 
@@ -30,7 +42,7 @@ Defined in: [src/time/range.ts:60](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **source**: `"control"`
 
-Defined in: [src/time/rows/types.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L14)
+Defined in: [src/time/rows/types.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L15)
 
 ***
 
@@ -42,4 +54,4 @@ Defined in: [src/time/range.ts:61](https://github.com/footprintjs/agentfootprint
 
 #### Inherited from
 
-[`TimeRange`](/docs/api/interfaces/TimeRange).[`to`](/docs/api/interfaces/TimeRange#to)
+`RecordedWindow.to`

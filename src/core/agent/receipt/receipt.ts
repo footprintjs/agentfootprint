@@ -162,8 +162,8 @@ export const UNSERIALIZABLE = '\u001F<unserializable>';
  * ── THE MECHANISM, WHICH THE PRINTED SENTENCE NO LONGER NAMES (9.88.0) ─────
  * `buildReceipt` is called with the request about to be passed to
  * `LLMProvider.complete` — the PORT, this library's last sight of it. Four
- * stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
- * `LLMCall.ts` · `callLLM`, and the two message-API charts' through
+ * stages call it since 9.91.0: the agent charts' (`stages/callLLM/prepareCall.ts`),
+ * `LLMCall/chart.ts` · `callLLM`, and the two message-API charts' through
  * `messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
  * record: a provider decorated by the consumer (`complete()` wrapping
  * `complete()`), a vendor adapter's own serializer, and the vendor's

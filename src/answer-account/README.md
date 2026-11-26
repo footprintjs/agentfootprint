@@ -8,6 +8,12 @@ fixed set of sentences rendered from those facts by a closed, versioned template
 table. It is a pure read-time Fold over the Trace — no clock, network, model or
 randomness; the same inputs give the same bytes; it never writes into the run.
 
+An allowed result rewrite retains the original read's declared limits. Its
+replacement has its own result shape and declarations. `facts.calls[].rewrittenBy`
+optionally names the final changing after-tool rule from the existing decision
+ledger, bound to the call occurrence. An unnamed, redacted or unbound rule stays
+unnamed; no earlier name is substituted. This adds no warning reason or value.
+
 ```ts
 import { accountForAnswer } from 'agentfootprint/observe';
 

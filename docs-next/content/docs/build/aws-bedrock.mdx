@@ -27,7 +27,7 @@ const provider = bedrock({
 
 const agent = Agent.create({
   provider,
-  model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',  // Bedrock-namespaced model id
+  model: 'anthropic.claude-sonnet-4-5-20250929-v1:0', // Bedrock-namespaced model id
 }).build();
 ```
 
@@ -49,7 +49,11 @@ this capability. Unknown IDs, custom aliases and profile ARNs have no
 declared caching; the adapter sends no `cachePoint` for them. This is a
 verified subset, not a statement that AWS cannot cache every omitted model.
 
-<CodeFile path="examples/features/102-bedrock-prompt-cache.ts" region="cache" title="Two scripted calls, no AWS requests" />
+<CodeFile
+  path="examples/features/102-bedrock-prompt-cache.ts"
+  region="cache"
+  title="Two scripted calls, no AWS requests"
+/>
 
 The executable example uses a fake SDK, including a cache write on the first
 call and a read on the second. These fixture counts prove the wiring;
@@ -84,13 +88,13 @@ does not guarantee account access, region availability or a working bare
 model endpoint. In particular, Haiku 4.5 on-demand calls require a documented
 geography/global inference profile.
 
-| Base model IDs | Minimum prefix | TTLs |
-| --- | --- | --- |
-| `anthropic.claude-haiku-5-5`, `anthropic.claude-sonnet-5-5`, `anthropic.claude-opus-5-5`, `anthropic.claude-fable-5-1`, `anthropic.claude-mythos-5-1`, `anthropic.claude-fable-5`, `anthropic.claude-mythos-5`, `anthropic.claude-opus-5` | 512 | 5 minutes, 1 hour |
-| `anthropic.claude-opus-4-8`, `anthropic.claude-sonnet-5`, `anthropic.claude-sonnet-4-6`, `anthropic.claude-sonnet-4-5-20250929-v1:0` | 1,024 | 5 minutes, 1 hour |
-| `anthropic.claude-opus-4-7`, `anthropic.claude-opus-4-6-v1`, `anthropic.claude-opus-4-5-20251101-v1:0`, `anthropic.claude-haiku-4-5-20251001-v1:0` | 4,096 | 5 minutes, 1 hour |
-| `anthropic.claude-3-7-sonnet-20250219-v1:0`, `anthropic.claude-3-5-sonnet-20241022-v2:0`, `anthropic.claude-sonnet-4-20250514-v1:0`, `anthropic.claude-opus-4-1-20250805-v1:0` | 1,024 | 5 minutes |
-| `amazon.nova-2-lite-v1:0`, `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0`, `amazon.nova-micro-v1:0` | 1K, as AWS states it; maximum 20K | 5 minutes |
+| Base model IDs                                                                                                                                                                                                                            | Minimum prefix                    | TTLs              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ----------------- |
+| `anthropic.claude-haiku-5-5`, `anthropic.claude-sonnet-5-5`, `anthropic.claude-opus-5-5`, `anthropic.claude-fable-5-1`, `anthropic.claude-mythos-5-1`, `anthropic.claude-fable-5`, `anthropic.claude-mythos-5`, `anthropic.claude-opus-5` | 512                               | 5 minutes, 1 hour |
+| `anthropic.claude-opus-4-8`, `anthropic.claude-sonnet-5`, `anthropic.claude-sonnet-4-6`, `anthropic.claude-sonnet-4-5-20250929-v1:0`                                                                                                      | 1,024                             | 5 minutes, 1 hour |
+| `anthropic.claude-opus-4-7`, `anthropic.claude-opus-4-6-v1`, `anthropic.claude-opus-4-5-20251101-v1:0`, `anthropic.claude-haiku-4-5-20251001-v1:0`                                                                                        | 4,096                             | 5 minutes, 1 hour |
+| `anthropic.claude-3-7-sonnet-20250219-v1:0`, `anthropic.claude-3-5-sonnet-20241022-v2:0`, `anthropic.claude-sonnet-4-20250514-v1:0`, `anthropic.claude-opus-4-1-20250805-v1:0`                                                            | 1,024                             | 5 minutes         |
+| `amazon.nova-2-lite-v1:0`, `amazon.nova-pro-v1:0`, `amazon.nova-lite-v1:0`, `amazon.nova-micro-v1:0`                                                                                                                                      | 1K, as AWS states it; maximum 20K | 5 minutes         |
 
 The [API cache-point schema](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_CachePointBlock.html)
 defines `type: 'default'` and optional TTL. Both Converse and ConverseStream
@@ -135,16 +139,98 @@ normal requests without thinking are unchanged.
 
 ## Streaming
 
-`provider.stream(req)` uses ConverseStream — text chunks land as they arrive, and the final chunk carries the authoritative `LLMResponse`.
+`provider.stream(req)` uses ConverseStream. Without a guardrail declaration, text chunks land as they arrive and the final chunk carries the authoritative `LLMResponse`. Configured guardrail streaming holds content until the admission boundary described below.
 
 Streamed tool calls **are** parsed. `bedrock()` accumulates the ConverseStream tool-use events — `contentBlockStart` (id + name), `contentBlockDelta` (JSON argument fragments), `contentBlockStop` — keyed by `contentBlockIndex`, so parallel tool calls whose fragments interleave are reassembled correctly. The completed calls arrive on the terminal chunk's `response.toolCalls`. Tools that take no arguments stream as `args: {}`.
 
 Argument fragments are not yielded as chunks (`LLMChunk` has no field for them); they surface only on the terminal `response`.
 
+## Guardrails
+
+Pass `guardrail` to either `bedrock()` or `BedrockProvider`. `BedrockGuardrailOptions`
+names the explicit configuration: a deployed guardrail ID or ARN, its version,
+optional trace mode and a private stream-buffer ceiling. IDs and versions are
+validated before a command is sent. Streaming uses synchronous screening.
+
+<CodeFile
+  path="examples/features/131-bedrock-guardrails.ts"
+  region="guardrail"
+  title="Explicit guardrail configuration"
+/>
+
+The `BedrockGuardrailTrace` values are `disabled`, `enabled` and `enabled_full`.
+The default is `disabled`; the adapter never silently enables tracing.
+Enabled tracing permits private assessment processing and does not publish
+the raw trace. With trace disabled or absent, an intervention can remain
+unknown even when the provider returned a guardrail stop code.
+
+`LLMResponse.intervention` carries one optional `ProviderIntervention` value.
+Direct provider callers must inspect it before treating a resolved request
+as a usable answer. Agent and LLMCall apply the same terminal distinction.
+
+| Outcome   | What is known                                                                                            | Delivery                                                                                       |
+| --------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `masked`  | The fully examined supported assessment contains anonymization and no block or unresolved action carrier | Exact returned SDK text and ordinary tool validation; Agent keeps its normal final-memory path |
+| `blocked` | A valid supported assessment action proves a block                                                       | No held content or tool calls; native runs raise `ProviderBlockedError`                        |
+| `unknown` | The intervention cannot establish a usable outcome, including missing or incomplete assessment evidence  | No held content or tool calls; native runs raise `ProviderInterventionUnknownError`            |
+
+The original bounded provider code and safe filter descriptors accompany the
+outcome. A guardrail stop code alone does not prove a block: AWS can use it for
+usable masked output. A valid block wins over masks and incomplete siblings.
+Missing optional unused policies do not by themselves make an assessment
+incomplete. The supported returned-shape boundary does not certify that AWS
+assessed every omitted policy. See the [AWS masking contract](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-converse-api.html#guardrails-use-converse-api-response-anonymized)
+and [assessment schema](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_GuardrailAssessment.html).
+
+Configured streams hold text and tool fragments until `messageStop`, later
+assessment metadata and natural stream completion. A missing stream or
+incomplete terminal boundary yields unknown, without a second request.
+A stream that stays open remains governed by its existing abort or transport
+signal; this feature adds no timer. An SDK error or caller abort releases no
+held content and retains its existing error category. An unconfigured prefix
+already served to a caller cannot be recalled.
+
+The default private buffer is 1,048,576 UTF-8 bytes; an exact fit is accepted.
+Overflow raises `ProviderGuardrailLimitError` before release, without
+truncation or resend. Classification separately admits at most 4,096
+structure/action reads. Reaching that bound without a proved block leaves
+unknown. Public descriptors are independently capped at 32, with authorized
+labels at most 128 Unicode scalars; the descriptor cap never stops the search
+for a later block within the inspection budget. These are adapter bounds,
+not total CPU or memory limits: the SDK allocated its response first, key
+enumeration can allocate a foreign key set, and application callbacks or
+Proxy traps can run arbitrary synchronous code.
+
+The optional `cleanMessage` hook runs only for blocked or unknown outcomes.
+It receives detached frozen safe metadata and must synchronously return a
+string of at most 1,024 Unicode scalars and 4,096 UTF-8 bytes. It cannot change
+the outcome, authorize tools or final memory, or turn refusal into success.
+A throw or invalid return preserves the terminal outcome; the original throw
+is available through the error's cause channel. The library makes no model
+call to format this message. Do not publish arbitrary error causes as public
+messages. Hook effects remain the application's responsibility.
+
+Blocked and unknown outcomes bypass tools, output repair and the standard
+final-memory pair. Earlier tool effects, memory-read maintenance and caller
+callbacks are not rolled back. Raw trace, matched values, custom labels and
+regex bodies are excluded from returned intervention metadata. Configuring
+trace processing does not grant access to them in recordings or hosted output.
+
+<CodeFile
+  path="examples/features/131-bedrock-guardrails.ts"
+  region="outcomes"
+  title="Read both transports and handle native terminal outcomes"
+/>
+
+The runnable example uses scripted SDK responses for both constructor doors
+and both transports. It makes no AWS request and supplies no evidence about
+live service latency or screening quality.
+
 <Callout type="warn">
 **Honest by construction:** a response with `stopReason: 'tool_use'` and zero parsed tool calls is never returned quietly. The provider throws a `BedrockProviderError` with `code: 'BEDROCK_STREAM_TOOLUSE_LOST'` so a `reliability` rule can retry, instead of the agent confidently answering without running its tools.
 
 **Fixed in 7.6.1.** Before this, `stream()` ignored the tool-use events entirely and returned `toolCalls: []` — an agent on `bedrock()` with streaming enabled silently produced a final answer instead of calling its tools. The non-streaming path was always correct.
+
 </Callout>
 
 ## Production patterns
@@ -152,13 +238,14 @@ Argument fragments are not yielded as chunks (`LLMChunk` has no field for them);
 - AWS SDK handles credential refresh + region routing automatically.
 - Wrap with `withRetry` (from `agentfootprint/resilience`) for transient throttling. The provider rethrows a `BedrockProviderError`; check `.code` to tell the failure classes apart:
 
-| `.code` | Meaning | Extra fields |
-|---|---|---|
-| *(absent)* | Generic AWS transport / service error | `.status` — the AWS HTTP status code (`err.$metadata.httpStatusCode`) |
-| `BEDROCK_STREAM_TOOLUSE_LOST` | `stopReason 'tool_use'` with zero parsed tool calls — a tripwire for future ConverseStream shape drift | — |
+| `.code`                       | Meaning                                                                                                                                                | Extra fields                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| _(absent)_                    | Generic AWS transport / service error                                                                                                                  | `.status` — the AWS HTTP status code (`err.$metadata.httpStatusCode`)   |
+| `BEDROCK_STREAM_TOOLUSE_LOST` | `stopReason 'tool_use'` with zero parsed tool calls — a tripwire for future ConverseStream shape drift                                                 | —                                                                       |
 | `BEDROCK_MALFORMED_TOOL_ARGS` | The model emitted tool-argument JSON that does not parse. Thrown rather than swallowed to `{}`, so a tool is never executed with its arguments dropped | `.toolName`, `.toolUseId`, `.contentBlockIndex`, `.rawLength`, `.cause` |
 
-  All three are retryable through `withRetry`. A retry usually recovers malformed tool-args JSON (the model re-emits it cleanly); `BEDROCK_STREAM_TOOLUSE_LOST` is a tripwire for persistent stream-shape drift, so if it repeats, report it rather than retrying harder.
+The three ordinary provider errors in this table remain subject to `withRetry` policy. A retry usually recovers malformed tool-args JSON (the model re-emits it cleanly); `BEDROCK_STREAM_TOOLUSE_LOST` is a tripwire for persistent stream-shape drift, so if it repeats, report it rather than retrying harder. The separate guardrail block, unknown and buffer-limit errors are terminal and are not automatically resent.
+
 - Tune the default model and token budget on the factory:
 
 ```ts
@@ -174,7 +261,7 @@ const provider = bedrock({
 ## Limitations
 
 - Multi-modal not exposed yet (text content only).
-- Bedrock Guardrails not exposed in the wrapper — pass via the SDK client directly if you need them.
+- Guardrail classification covers the supported returned assessment shapes; an unresolved intervention stays unknown.
 
 ## Next steps
 

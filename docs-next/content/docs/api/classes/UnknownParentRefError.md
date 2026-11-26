@@ -4,7 +4,7 @@ title: UnknownParentRefError
 
 # Class: UnknownParentRefError
 
-Defined in: [src/artifacts/types.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L301)
+Defined in: [src/artifacts/types.ts:322](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L322)
 
 A `put` named a parent that does not resolve in the same scope — a foreign
 key that would dangle at birth. Refused at mint, because a derivation fact
@@ -21,7 +21,7 @@ inherit the lie.
 
 > **new UnknownParentRefError**(`unresolved`): `UnknownParentRefError`
 
-Defined in: [src/artifacts/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L306)
+Defined in: [src/artifacts/types.ts:327](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L327)
 
 #### Parameters
 
@@ -55,7 +55,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_UNKNOWN_PARENT_REF"`
 
-Defined in: [src/artifacts/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L302)
+Defined in: [src/artifacts/types.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L323)
 
 ***
 
@@ -121,7 +121,7 @@ not capture any frames.
 
 > `readonly` **unresolved**: readonly `string`[]
 
-Defined in: [src/artifacts/types.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L304)
+Defined in: [src/artifacts/types.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/artifacts/types.ts#L325)
 
 The parents that failed to resolve.
 

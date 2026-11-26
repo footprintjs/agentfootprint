@@ -118,6 +118,9 @@ export function configureAgent(
   scriptTravel?: ResolvedScriptTravel,
   aroundTurn?: AroundTurn,
 ): void {
+  if (opts.hostEndedTurns !== undefined && typeof opts.hostEndedTurns !== 'boolean')
+    throw new TypeError('Agent: hostEndedTurns must be a boolean');
+  config.hostEndedTurns = opts.hostEndedTurns === true;
   config.negativeClaimsConfig = negativeClaimsConfig;
   config.typedNegativeClaimsConfig =
     negativeClaimsConfig?.mode === 'typed' ? negativeClaimsConfig : undefined;
@@ -334,6 +337,12 @@ export function configureAgent(
   // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
   // data per 200 iterations. Consumers opt into 'full' explicitly.
   config.readTracking = opts.readTracking ?? 'summary';
+  // Default 'summary' — the write view's full values have no reader that needs
+  // them (the stored-cause reader checks the view is a plain object; durability
+  // reads commit mutation keys; explainable-ui treats markers as atomic), and
+  // they grew the recorded tree with the square of the run length because each
+  // pass rewrites growing arrays. Consumers opt into 'full' explicitly.
+  config.writeTracking = opts.writeTracking ?? 'summary';
   // Default 'delta' — the accepted #13c-B design: agentfootprint opts in
   // immediately (the agent's history-append workload is exactly the case
   // the verb exists for; reconstruction stays lossless via commitValueAt).
@@ -530,6 +539,8 @@ export function configureAgent(
           throw new TypeError(
             'Agent artifacts.recordings.trustBoundaries needs a recorder factory.',
           );
+        if (![undefined, 'whole', 'parts'].includes(recordings.layout))
+          throw new TypeError("Agent artifacts.recordings.layout is 'whole' or 'parts'.");
         config.artifactRecordings = { ...recordings, trustBoundaries: trust };
       }
     } else {

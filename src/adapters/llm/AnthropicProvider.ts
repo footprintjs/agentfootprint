@@ -35,7 +35,10 @@ import {
   anthropicModelFacts,
   anthropicTakesForcedToolChoice,
   anthropicTakesNativeOutputSchema,
+  anthropicThinkingBinding,
+  type StatedThinkingBinding,
 } from './anthropicModels.js';
+import type { ThinkingBinding } from '../../provider-contract/thinkingBinding.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { toolManifestOf } from './wireManifest.js';
 import { AnthropicToolArguments } from './anthropicToolArguments.js';
@@ -158,6 +161,19 @@ export interface AnthropicProviderOptions {
    *   anthropic({ thinkingMode: (id) => (id.startsWith('claude-opus-4-6') ? 'adaptive' : undefined) })
    */
   readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
+  /**
+   * Whether a model's thinking is bound to the context it was written under,
+   * for an id the built-in table cannot place: an application inference
+   * profile, a proxy's alias, a model newer than the table. The table answers
+   * such an id `unknown`, and the agent records a context change there without
+   * refusing it. Say `'bound'` for an id that serves a preserved-thinking model
+   * so the agent refuses a changed tool turn by name; `'unbound'` for one that
+   * serves an older model. Return `undefined` to use the table.
+   *
+   * @example
+   *   anthropic({ thinkingBinding: (id) => (id === 'team-haiku' ? 'bound' : undefined) })
+   */
+  readonly thinkingBinding?: StatedThinkingBinding;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: AnthropicClient;
 }
@@ -219,6 +235,8 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     carriesInMessages: CARRIES_IN_MESSAGES,
     carriesForcedToolChoice: true,
     supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
+    // Preserved thinking's prefix check, per model; an unknown id is bound.
+    thinkingBinding: (model) => anthropicThinkingBinding(modelOf(model), options.thinkingBinding),
     // `output_config.format` — the `'native'` output strategy — on the models
     // the structured-outputs page lists (anthropicModels.ts).
     carriesNativeOutputSchema: true,
@@ -375,11 +393,13 @@ export class AnthropicProvider implements LLMProvider {
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
   readonly thinkingMode: (model: string) => ThinkingMode;
+  readonly thinkingBinding: (model: string) => ThinkingBinding;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {
     this.inner = anthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
+    this.thinkingBinding = this.inner.thinkingBinding!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
     this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
     this.supportsAutoNativeOutputSchema =

@@ -5,6 +5,7 @@ Author: design review, 2026-06-05. Follows the SHIPPED slot parallel-highlight
 (see `time-travel-milestones.md`) and extends it to multi-agent parallel branches.
 
 Read with:
+
 - `agentfootprint/docs/design/time-travel-milestones.md` — milestones + the SHIPPED slot collapse
 - `agentfootprint-lens/src/core/group/cursorPositionsAtDrill.ts` — `coActiveGroupIds` + slot-cohort collapse
 - `agentfootprint-lens/src/core/group/cursorPositionsAtDrill.test.ts` — the canonical Parallel-of-2-LLMCalls fixture (`sf-Committee` → legal ‖ ethics + merge)
@@ -37,7 +38,7 @@ is a bigger gap than the slots.
 ## 2b. CORRECTION (2026-06-05, post-diagnosis): branches are ALREADY subflow-backed
 
 A follow-up diagnosis CONTRADICTS §3 R1's premise. The agentfootprint `Parallel`
-primitive mounts every branch via **`addSubFlowChart`** (Parallel.ts ~390-398) —
+primitive mounts every branch via **`addSubFlowChart`** (`Parallel/chart.ts` · `buildParallelChart`) —
 `isSubflowRoot: true`, fires subflow-mounted — so each branch DOES emit
 `subflow.entry`/`subflow.exit` → a boundary → a Group. Self-Consistency + the
 control-flow Parallel both route through it. So **R1 is already satisfied** — the
@@ -46,6 +47,7 @@ branches are group-backed at runtime.
 YET in the browser those branches had NO cursor stops and never lit, and rendered
 as FLAT plain `stageNode`s (not group/subflow-styled). So the real gap is
 **lens-side**, not builder-side:
+
 - the pattern chart appears to render a FLATTENED viz that doesn't carry the
   branch GROUPS into the rendered nodes (viz-vs-runtime split), and/or
 - the branch groups sit under the Parallel composition, so `cursorPositionsAtDrill`
@@ -65,6 +67,7 @@ Patching the runtime-boundary grouping is unreliable (verified: the parallel-bra
 co-active patch did NOT light `legal`/`ethics` in the control-flow Parallel sample —
 only `seed`/`merge`). The runtime-boundary reconstruction in the lens
 (`buildGroups(recorder.boundary.boundaryIndex)`) is the OLD logic, and it is BUGGY:
+
 - The Parallel composition's group `runtimeGroupId` is literally `seed#0` (the seed
   stage), not a clean composition id.
 - The hierarchy is FLATTENED: every descendant (branch → its LLM-call → its slots)
@@ -76,6 +79,7 @@ THE CLEAN FIX (user's direction — "footprintjs already sends the build structu
 through the build-time recorder; wrap the grouping to derive from it"):
 **derive the lens Group tree from footprintjs's BUILD-TIME structure**, not from
 runtime boundary events. footprintjs already provides the AUTHORITATIVE hierarchy:
+
 - `FlowChart.buildTimeStructure: SerializedPipelineStructure` (footPrint
   footprintjs's own `builder/types.ts` · `SerializedPipelineStructure`) — carries `type`
   ('stage'|'decider'|'selector'|'fork'|'subflow'|'loop'), `children`, `next`,
@@ -95,7 +99,8 @@ correct-but-insufficient interim (works for clean fixtures; superseded by this).
 
 ## 3. Two requirements before any collapse can work (R1 SUPERSEDED — see §2b)
 
-### R1 — branches must be GROUP-BACKED  [ALREADY TRUE via Parallel.addSubFlowChart]
+### R1 — branches must be GROUP-BACKED [ALREADY TRUE via Parallel.addSubFlowChart]
+
 The lens's milestone/co-active machinery keys on GROUPS (subflow/composition
 boundaries) + their member commits. The slot collapse fires only for a true
 `compositionKind: 'Parallel'` group whose children are SUBFLOWS (the canonical
@@ -105,6 +110,7 @@ boundaries) + their member commits. The slot collapse fires only for a true
 Self-Consistency / Debate / Swarm / ToT / MapReduce) model each parallel branch
 as a SUBFLOW (so it emits a boundary → a group → a milestone stop)? Today they
 mount plain functions. Making each branch a subflow:
+
 - ➕ gives every branch a group → the lens lights it; drill-in to inspect each;
   consistent with the slot model; the existing `coActiveGroupIds` collapse reuses
   verbatim.
@@ -117,9 +123,11 @@ without requiring subflow groups). Lighter, but the lens must read the Parallel
 composition's child STAGE ids (not just groups) — a new path.
 
 ### R2 — identical N-way fan-out shares ONE chart node id
+
 `addListOfFunction` / Self-Consistency fan out N IDENTICAL branches. Merge-tree
 chart node ids are build-time `[subflowPath/]stageId` with NO `#executionIndex`,
 so 5 instances map to ONE node → "light all 5" renders as "light 1." Options:
+
 - (a) give fan-out instances per-instance node ids (`stage#0..#4`) at build time —
   the chart draws N nodes, each lights; biggest change.
 - (b) light the single shared node + show a "3/5 done" count badge — cheap, keeps

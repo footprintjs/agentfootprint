@@ -645,6 +645,12 @@ Maps `MemoryStore` onto AgentCore's **append-only event log** (`CreateEvent` / `
 
 ## Write options: extraction and a namespace per tenant
 
+To send selected entries as conversational text that AgentCore can extract,
+use the store's per-entry `eventPayload` strategy. Each selected event keeps its
+original entry blob alongside the conversation text. See
+[Choose AgentCore memory events](doc:agentcore-memory-events) for an offline
+example and the separate source-event, entry-TTL and derived-record lifecycles.
+
 A managed memory service does more than keep what it is handed: it **extracts**
 long-term records from it — facts, summaries, preferences — and files them under
 namespaces. Two things about that are yours to decide, per write, in names that

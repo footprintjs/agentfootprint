@@ -102,6 +102,22 @@ export {
   type RecordingSizeReport,
   type RecordingSizeRow,
 } from './recorders/observability/recordingSizeReport.js';
+// A saved recording in either layout — one whole `recording/run`, or an index
+// plus parts — opened by its receipt's ref and read one checked part at a time.
+export {
+  openSavedRecording,
+  type OpenSavedRecordingOptions,
+  type SavedInvocation,
+  type SavedInvocationPayloads,
+  type SavedPayloadSlot,
+  type SavedRecording,
+  type SavedRecordingArtifacts,
+  type SavedRecordingPartUnavailable,
+  type SavedRecordingReadOptions,
+  type SavedRecordingSizes,
+  type SavedRecordingUnavailable,
+  type SavedRecordingWholeOptions,
+} from './recorders/observability/recordingParts/open.js';
 export {
   contextShapeAt,
   type RecordedContextShape,
@@ -180,7 +196,7 @@ export {
 // silence, never from events. The account's "How sure" row renders the same
 // fold. ONE public type; its family (a reason, a witness, a check that ran) by
 // indexed access. See src/core/agent/assessment/README.md.
-export { assessAnswer } from './core/agent/assessment/assess.js';
+export { assessAnswer } from './time-travel/assessAnswer.js';
 export type { AnswerAssessment } from './core/agent/assessment/types.js';
 
 export {

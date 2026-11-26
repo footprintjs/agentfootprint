@@ -4,6 +4,7 @@ import type { ToolChoiceEntry } from './toolChoice/types.js';
 import type { AgentState } from './types.js';
 import type { RequestReplayValue } from './requestTurn/state.js';
 import { writeRequestReplay } from './requestTurn/native.js';
+import { seedProviderIntervention } from '../providerIntervention.js';
 
 /**
  * Inner seed for the `sf-llm-call` subflow. Initialises the per-turn
@@ -34,6 +35,7 @@ export function dynamicTurnSeed(scope: TypedScope<AgentState>): void {
     priorLatestStopReason?: AgentState['llmLatestStopReason'];
     priorRequestReplay?: RequestReplayValue;
   }>();
+  seedProviderIntervention(scope, args);
 
   // Cross-iteration accumulators — seed working keys from prior totals
   // so they continue to accumulate across loop re-entries.

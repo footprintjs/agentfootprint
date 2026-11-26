@@ -424,8 +424,9 @@ describe('security: the claims row can only withhold', () => {
       .run(ASK)
       .catch((error: unknown) => error)) as AnswerValidationError;
     const rows = JSON.stringify(outcome.report.checks);
-    expect(rows).not.toContain('9750');
-    expect(rows).not.toContain('1250');
+    // Numbers of their own: a digest or counter in the rows can hold these digits by chance.
+    expect(rows).not.toMatch(/(?<!\d)9750(?!\d)/);
+    expect(rows).not.toMatch(/(?<!\d)1250(?!\d)/);
     expect(rows).not.toContain('build-job-72'); // the entity a contract may declare per user
   });
 

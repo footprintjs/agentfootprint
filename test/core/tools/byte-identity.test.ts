@@ -181,7 +181,7 @@
  * came off before the judge.
  *
  * `agent-findings` REGENERATED ALONE for step 3 (the answer turn served from
- * the ledger — `findings/serve.ts`, joined by `callLLM · buildCallLLMStage`
+ * the ledger — `findings/serve.ts`, joined by `callLLM/prepareCall.ts · prepareCall`
  * and recomposed by `servedView · viewOf`); none of the 15 moved (run on the
  * step-3 tree first: 16/16 green, then the one scenario under
  * `AF_TOOLS_REFERENCE=update -t agent-findings` with the 15 copied aside and

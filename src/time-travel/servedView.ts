@@ -56,8 +56,8 @@
  *
  * ── EVERY CHART THAT SERVES A MODEL MINTS, EXCEPT WHERE IT CANNOT SALT ─────
  * Until 9.91.0 `buildReceipt` was called from exactly one place — the agent
- * charts' `call-llm` stage (`stages/callLLM.ts`) — and the three other charts
- * that hand a model a request (`LLMCall.ts` · `callLLM`,
+ * charts' `call-llm` stage (`stages/callLLM/prepareCall.ts`) — and the three other charts
+ * that hand a model a request (`LLMCall/chart.ts` · `callLLM`,
  * `buildMessageApiChart`, `buildAgentMessageApiChart`) left
  * `no-receipt-on-chart` on every view they produced. Two reasons were recorded
  * for that at the time. NEITHER survived.
@@ -208,7 +208,10 @@ export type ServedGapKind =
  * apart there would be this field repeating the defect it was added to fix.
  *
  * - `'no-receipt-committed'` — nothing was committed under the receipt key on
- *   this epoch's call.
+ *   this epoch's call. The key may still hold an EARLIER call's receipt (a
+ *   request refused before its receipt was minted leaves that): a receipt
+ *   the key already held before this call, by its own basis (epoch and run),
+ *   is that earlier call's, never this one's.
  * - `'receipt-shape-rejected'` — something WAS committed there and the read
  *   refused it, because it carries no basis and a value without one is not a
  *   receipt. This is the value that means DAMAGE: a recording that lost or

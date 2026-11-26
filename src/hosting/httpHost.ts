@@ -109,9 +109,10 @@ import {
   WireRequestRefusal,
 } from './errors.js';
 import { REFUSAL_STATUS } from './refusalStatus.js';
+import { failedSettlement } from './failedSettlement.js';
 import type { SessionWireRequest, SessionWireResult } from './sessionWire.js';
 import { SESSION_LIST_OP, SESSION_TRANSCRIPT_OP, SESSION_PENDING_OP } from './sessionWire.js';
-import { lowerCasedHeaders } from './headers.js';
+import { lowerCasedHeaders, withoutContentType } from './headers.js';
 import { bearerToken } from './identityVerification.js';
 import { readSignIn } from './signin/cookie.js';
 import { checkHostSignIn, type ResolvedHostSignIn } from './signin/hostSignIn.js';
@@ -1366,7 +1367,9 @@ async function dispatchOne(
       const code = (error as { code?: string }).code;
       const origin: FailureOrigin = handlerThrew ? 'threw' : 'refused';
       const payload = wire.failure(error.message, code, facts, origin);
-      const closing = wantsStream ? framing?.failure(error.message, code, origin) ?? [] : [];
+      const closing = wantsStream
+        ? framing?.failure(error.message, code, origin, failedSettlement(error)) ?? []
+        : [];
       settled = true;
       if (wantsStream) {
         sendFrames(res, closing);
@@ -1576,25 +1579,6 @@ function sendJson(
 ): void {
   res.writeHead(status, { ...extraHeaders, 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
-}
-
-/**
- * A dialect's reply headers, minus the one it does not get to choose.
- *
- * `content-type` is the framing, and the framing is this host's decision — one
- * JSON body or a stream of SSE frames, picked from what the CALLER asked for. A
- * wire that set it would be answering that question for every caller at once.
- */
-function withoutContentType(
-  headers: Readonly<Record<string, string>> | undefined,
-): Readonly<Record<string, string>> | undefined {
-  if (headers === undefined) return undefined;
-  const kept: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (name.toLowerCase() === 'content-type') continue;
-    kept[name] = value;
-  }
-  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /**

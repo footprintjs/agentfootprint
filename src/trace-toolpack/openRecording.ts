@@ -109,6 +109,9 @@ export function narrativeFrom(snapshot: {
  * with the bound you choose:
  * `openRecording(unpackRecording(packed, { maxBytes }))`.
  *
+ * A recording saved in parts is opened whole: read it with
+ * `openSavedRecording(…)` then `readWhole()` (bounded, all or nothing) first.
+ *
  * @throws PackedRecordingTooLargeError for a packed recording over that bound.
  * @throws when the recording carries no usable snapshot. A toolpack over
  *         an empty bag would answer every question with "nothing

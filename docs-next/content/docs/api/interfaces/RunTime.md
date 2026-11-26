@@ -4,7 +4,7 @@ title: RunTime
 
 # Interface: RunTime
 
-Defined in: [src/time/clock.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L89)
+Defined in: [src/time/clock.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L93)
 
 The run's time input — `agent.run({ message, time })`, or the options bag of
 `run`, `followUp`, `resume` and `resumeOnError`. Every key is optional; a
@@ -22,7 +22,7 @@ await agent.run({ message: 'errors since 8?', time: { now: sentAt, zone: 'Americ
 
 > `readonly` `optional` **now?**: `string` \| `Date`
 
-Defined in: [src/time/clock.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L96)
+Defined in: [src/time/clock.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L100)
 
 The turn's anchor — the MESSAGE's time, so a replay or a late resume
 reads "yesterday" the same way. An ISO 8601 instant with a zone (upper
@@ -33,12 +33,13 @@ recorded `nowSource: 'default'`.
 
 ### window?
 
-> `readonly` `optional` **window?**: [`TimeRange`](/docs/api/interfaces/TimeRange)
+> `readonly` `optional` **window?**: `ControlWindowInput`
 
-Defined in: [src/time/clock.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L103)
+Defined in: [src/time/clock.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L108)
 
 A window set in a UI — a brushed chart range, a range picker — as a
-half-open `{ from, to }` of instants. Recorded with `source: 'control'`.
+range of instants. The end is exclusive unless `end: 'inclusive'` is supplied.
+Optional `precision` keeps the displayed precision even when the ISO spelling is padded.
 
 ***
 
@@ -46,6 +47,6 @@ half-open `{ from, to }` of instants. Recorded with `source: 'control'`.
 
 > `readonly` `optional` **zone?**: `string`
 
-Defined in: [src/time/clock.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L98)
+Defined in: [src/time/clock.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L102)
 
 The person's IANA zone for this run (`'America/Los_Angeles'`). Never an abbreviation.

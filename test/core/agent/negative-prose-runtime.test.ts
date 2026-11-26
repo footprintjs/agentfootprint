@@ -552,10 +552,24 @@ describe('prose evidence remains native', () => {
           onToolResult: () => allow(value, 'Replace model-visible tool text.'),
         });
       const agent = f.build();
-      expect(await agent.run(INPUT)).toBe(text);
+      expect(await agent.run(INPUT)).toBe(
+        source === 'after-tool-text' ? withStanding(text, NO_MATCH) : text,
+      );
       expect(f.read).toHaveBeenCalledTimes(1);
       expect(rows(agent)).toEqual([]);
       expect(f.warnings).toEqual([]);
+      expect(f.tokens.join('')).toBe(text);
+      expect(f.requests).toHaveLength(2);
+      expect((await agent.assessment())?.reasons.map(({ reason }) => reason)).toEqual(
+        source === 'after-tool-text' ? ['declared-absent'] : [],
+      );
+      if (source === 'after-tool-text') {
+        const state = agent.getLastSnapshot()?.sharedState as {
+          negativeClaimState?: { calls: unknown[] };
+        };
+        expect(state.negativeClaimState?.calls).toHaveLength(1);
+        expect(JSON.stringify(state.negativeClaimState?.calls)).not.toContain(value);
+      }
       expect(agent.answerValidation()).toBeUndefined();
     });
   }

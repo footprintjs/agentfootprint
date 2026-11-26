@@ -4,7 +4,7 @@ title: TimeCandidate
 
 # Interface: TimeCandidate
 
-Defined in: [src/time/resolveRecord.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L120)
+Defined in: [src/time/resolveRecord.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L122)
 
 One candidate — produced here, never by a strategy.
 
@@ -18,7 +18,7 @@ One candidate — produced here, never by a strategy.
 
 > `readonly` **anchor**: `"none"` \| `"message"` \| `"previous-window"`
 
-Defined in: [src/time/resolveRecord.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L114)
+Defined in: [src/time/resolveRecord.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L116)
 
 #### Inherited from
 
@@ -26,11 +26,23 @@ Defined in: [src/time/resolveRecord.ts:114](https://github.com/footprintjs/agent
 
 ***
 
+### endpoint?
+
+> `readonly` `optional` **endpoint?**: `WindowEndpoint`
+
+Defined in: [src/time/resolveRecord.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L107)
+
+#### Inherited from
+
+[`ResolvedWindow`](/docs/api/interfaces/ResolvedWindow).[`endpoint`](/docs/api/interfaces/ResolvedWindow#endpoint)
+
+***
+
 ### grain
 
 > `readonly` **grain**: `Grain`
 
-Defined in: [src/time/resolveRecord.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L109)
+Defined in: [src/time/resolveRecord.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L111)
 
 The finest part the person said.
 
@@ -44,7 +56,7 @@ The finest part the person said.
 
 > `readonly` **implied**: readonly [`TimePart`](/docs/api/type-aliases/TimePart)[]
 
-Defined in: [src/time/resolveRecord.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L113)
+Defined in: [src/time/resolveRecord.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L115)
 
 The parts this module filled: from the clock, the policy's candidates, the century.
 
@@ -58,7 +70,7 @@ The parts this module filled: from the clock, the policy's candidates, the centu
 
 > `readonly` **notes**: readonly [`TimeNote`](/docs/api/type-aliases/TimeNote)[]
 
-Defined in: [src/time/resolveRecord.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L116)
+Defined in: [src/time/resolveRecord.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L118)
 
 #### Inherited from
 
@@ -70,7 +82,7 @@ Defined in: [src/time/resolveRecord.ts:116](https://github.com/footprintjs/agent
 
 > `readonly` **parse**: `number`
 
-Defined in: [src/time/resolveRecord.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L123)
+Defined in: [src/time/resolveRecord.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L125)
 
 Which of the mention's parses it came from.
 
@@ -80,7 +92,7 @@ Which of the mention's parses it came from.
 
 > `readonly` **range**: [`TimeRange`](/docs/api/interfaces/TimeRange)
 
-Defined in: [src/time/resolveRecord.ts:105](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L105)
+Defined in: [src/time/resolveRecord.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L106)
 
 Always present: a look-back resolved against the clock. Spelled in the offset the person meant.
 
@@ -94,7 +106,7 @@ Always present: a look-back resolved against the clock. Spelled in the offset th
 
 > `readonly` **reader**: `object`
 
-Defined in: [src/time/resolveRecord.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L115)
+Defined in: [src/time/resolveRecord.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L117)
 
 #### id
 
@@ -114,7 +126,7 @@ Defined in: [src/time/resolveRecord.ts:115](https://github.com/footprintjs/agent
 
 > `readonly` **reading**: [`ReadingTags`](/docs/api/interfaces/ReadingTags)
 
-Defined in: [src/time/resolveRecord.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L121)
+Defined in: [src/time/resolveRecord.ts:123](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L123)
 
 ***
 
@@ -122,7 +134,7 @@ Defined in: [src/time/resolveRecord.ts:121](https://github.com/footprintjs/agent
 
 > `readonly` **said**: readonly [`TimePart`](/docs/api/type-aliases/TimePart)[]
 
-Defined in: [src/time/resolveRecord.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L111)
+Defined in: [src/time/resolveRecord.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L113)
 
 The parts the person said — empty for a `model` reader's reading (§ 5.5).
 
@@ -136,7 +148,7 @@ The parts the person said — empty for a `model` reader's reading (§ 5.5).
 
 > `readonly` **window**: [`TimeWindow`](/docs/api/type-aliases/TimeWindow)
 
-Defined in: [src/time/resolveRecord.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L103)
+Defined in: [src/time/resolveRecord.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L104)
 
 #### Inherited from
 
@@ -148,7 +160,7 @@ Defined in: [src/time/resolveRecord.ts:103](https://github.com/footprintjs/agent
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/time/resolveRecord.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L107)
+Defined in: [src/time/resolveRecord.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/time/resolveRecord.ts#L109)
 
 The zone the person meant, else the clock's.
 

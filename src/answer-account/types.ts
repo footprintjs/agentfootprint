@@ -258,6 +258,12 @@ export interface ToolCallFact {
   readonly refusedBy?: string;
   /** An AFTER-tool deny: the tool ran, the model read the rule's refusal. */
   readonly withheldBy?: string;
+  /**
+   * The last occurrence-linked AFTER-tool rule that replaced this returned
+   * result. Cut at 200 characters; absent when its name or association is
+   * unavailable. Names no hidden value and changes no outcome or standing.
+   */
+  readonly rewrittenBy?: string;
   readonly emptiness: Emptiness;
   /** Rows counted in the model's view (a counted rowset only). */
   readonly rows?: number;

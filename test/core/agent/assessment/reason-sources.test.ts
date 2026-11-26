@@ -1092,7 +1092,9 @@ describe('SECURITY — a source holds kinds, call ids and tool names only', () =
     expect(sources.length).toBeGreaterThan(0);
     const text = JSON.stringify(sources);
     expect(text).not.toContain(secret);
-    expect(text).not.toContain('9917');
+    // The reply's own number, as a number of its own (digits inside a hash do not count).
+    expect(text).not.toContain('9917 rows');
+    expect(text).not.toMatch(/(?<!\d)9917(?!\d)/);
     const keys = new Set<string>();
     const walk = (v: unknown): void => {
       if (Array.isArray(v)) v.forEach(walk);

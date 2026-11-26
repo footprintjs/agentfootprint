@@ -40,13 +40,21 @@ it('never invokes a getter while validating the correction projection', () => {
 });
 
 it('keeps equal nanosecond remainders without rounding either endpoint', () => {
+  const from = '2026-11-06T16:01:00.123456789Z';
   expect(
     isCorrectedMeaning(
       { lookback: '2h' },
       {
-        from: '2026-11-06T16:01:00.123456789Z',
+        from,
         to: '2026-11-06T18:01:00.124456789Z',
       },
+    ),
+  ).toBe(true);
+  const cutoff = '2026-11-06T18:01:00.123456789Z';
+  expect(
+    isCorrectedMeaning(
+      { lookback: '2h' },
+      { from, to: cutoff, endpoint: { cutoff, end: 'exclusive', precision: 'fraction' } },
     ),
   ).toBe(true);
 });

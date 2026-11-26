@@ -1,5 +1,6 @@
 import type { ConvertContext, WidenedConversion, WindowToConvert } from '../convert.js';
 import { LOOKBACK_UNITS, spellDuration } from '../duration.js';
+import { compareInstants, instantOf, spellInstant, type Instant } from '../instant.js';
 import type { PeriodForm } from '../periodForm.js';
 import { lookbackRange, type TimeRange } from '../range.js';
 import { formZone } from './bounds.js';
@@ -15,6 +16,30 @@ function extraOf(sentFrom: number, sentTo: number, from: number, to: number): Ti
   if (before !== undefined) parts.push(before);
   if (after !== undefined) parts.push(after);
   return parts;
+}
+
+/** Record widening only when the read-back covers the request, including fractional endpoints. */
+function extraOfPrecise(sent: TimeRange, asked: TimeRange): readonly TimeRange[] | undefined {
+  const from = instantOf(asked.from, 'strict');
+  const to = instantOf(asked.to, 'strict');
+  const sentFrom = instantOf(sent.from, 'strict');
+  const sentTo = instantOf(sent.to, 'strict');
+  if (from === undefined || to === undefined || sentFrom === undefined || sentTo === undefined) {
+    return undefined;
+  }
+  const start = compareInstants(sentFrom, from);
+  const end = compareInstants(sentTo, to);
+  if (start > 0 || end < 0 || compareInstants(from, to) >= 0) return undefined;
+
+  const utcRange = (from: Instant, to: Instant): TimeRange | undefined => {
+    const lower = spellInstant(from, 0);
+    const upper = spellInstant(to, 0);
+    return lower === undefined || upper === undefined ? undefined : { from: lower, to: upper };
+  };
+  const before = start < 0 ? utcRange(sentFrom, from) : undefined;
+  const after = end > 0 ? utcRange(to, sentTo) : undefined;
+  if ((start < 0 && before === undefined) || (end > 0 && after === undefined)) return undefined;
+  return [before, after].filter((range): range is TimeRange => range !== undefined);
 }
 
 /** A `day` form widened: the one calendar day that holds the whole window. */
@@ -77,4 +102,4 @@ function lookbackWidened(
   };
 }
 
-export { dayWidened, lookbackWidened };
+export { dayWidened, extraOfPrecise, lookbackWidened };

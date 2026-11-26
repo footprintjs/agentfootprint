@@ -11,6 +11,7 @@ export function recordToolSelection(
   scope: TypedScope<AgentState>,
   proof: AcceptedToolSelection,
   budget: { remainingToolOmissions?: number },
+  consultation?: { omitted(scope: TypedScope<AgentState>, proof: AcceptedToolSelection): void },
 ): void {
   const remaining = budget.remainingToolOmissions;
   if (remaining === undefined) return;
@@ -59,4 +60,5 @@ export function recordToolSelection(
     },
   };
   budget.remainingToolOmissions = remaining - retained;
+  if (!bounded) consultation?.omitted(scope, proof);
 }

@@ -1,6 +1,6 @@
 import type { ModelConfiguration } from './model.js';
 import type { AroundTurn } from '../../aroundTurn/index.js';
-import type { ReadTrackingMode } from 'footprintjs';
+import type { ReadTrackingMode, WriteTrackingMode } from 'footprintjs';
 import type { CommitValuesMode } from 'foottrace';
 
 import type { ReliabilityConfig } from '../../../../reliability/types.js';
@@ -46,6 +46,7 @@ import type { ResolvedProseCitations } from '../../citations/config.js';
 
 /** Static run-policy and service declarations, resolved once at construction. */
 export interface AgentConfiguration extends ModelConfiguration {
+  readonly hostEndedTurns: boolean;
   readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
   readonly citationOptions?: ResolvedProseCitations;
   /** Side channel for the conversation's inherited skill cursor (SG-C) —
@@ -183,6 +184,11 @@ export interface AgentConfiguration extends ModelConfiguration {
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
   readonly readTracking: ReadTrackingMode;
+
+  /** Snapshot write-tracking policy — forwarded to the internal executor.
+   *  Agent default is `'summary'` (cheap markers), NOT footprintjs's
+   *  `'full'`. See AgentOptions.writeTracking. */
+  readonly writeTracking: WriteTrackingMode;
 
   /** Commit-log value encoding (#13c-B) — forwarded to the internal
    *  executor. Agent default is `'delta'` (append/delete verbs; growing

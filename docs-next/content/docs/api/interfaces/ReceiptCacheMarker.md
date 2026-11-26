@@ -44,7 +44,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:258](https://github.com/footprint
 
 ### field
 
-> `readonly` **field**: `"system"` \| `"messages"` \| `"tools"`
+> `readonly` **field**: `"messages"` \| `"tools"` \| `"system"`
 
 Defined in: [src/core/agent/receipt/receipt.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L257)
 

@@ -6,11 +6,11 @@ merge step that runs inside the walk and composes a turn of its own.
 Map: `Sequence.ts`, `Conditional.ts`, `Loop.ts`, and Parallel's declared half
 (`Parallel.ts` · `Parallel`, the builder that names branches and a merge
 strategy): what could happen, still, never changed by a walk.
-Walker + Lens: `Parallel.ts` · `mergeWithLLM`. It runs during the fan-in, and
+Walker + Lens: `Parallel/merge.ts` · `mergeWithLLM`. It runs during the fan-in, and
 the merging model's whole user turn is the library's own assembly, not the
 caller's: the caller supplies `opts.prompt`, and this function appends a
 library-authored `<id>…</id>` fencing of every branch's output, escaped by
-`Parallel.ts` · `xmlEscape` so a branch cannot close its own tag and speak
+`Parallel/merge.ts` · `xmlEscape` so a branch cannot close its own tag and speak
 outside it. It then puts that turn on the wire with `opts.provider.complete` and
 brackets the call with `agentfootprint.stream.llm_start` / `llm_end`. This is
 the same ground on which `src/patterns/` is Mixed for `LlmRouter.ts` ·
@@ -153,7 +153,7 @@ Two semantics to know when engaging all-required fail-fast:
 
 ### Decision 9: `core-flow/` has zero LLM dependency
 
-Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`, `../core/terminalVerdict.ts` (a run's terminal verdicts, their error classes and the outcome protocol — no runner, no LLM code; Decision 11). **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
+Every file in this folder depends only on: `footprintjs`, `../core/runner.ts`, `../core/RunnerBase.ts`, `../recorders/core/*`, `../bridge/eventMeta.ts`, `../core/terminalVerdict.ts` (a run's terminal verdicts, their error classes and the outcome protocol — no runner, no LLM code; Decision 11), and `../core/providerIntervention.ts` (the shared accepted-response admission for Parallel's merge). **Never imports from `../core/LLMCall.ts` or `../core/Agent.ts`**.
 
 This is enforced by convention (no import paths cross the line). Compositions take `Runner<T>` generically — they don't know or care whether a child is LLM-backed. That makes them trivially testable with pure-function runner stubs.
 
