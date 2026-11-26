@@ -40,7 +40,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import { presentationZoneOf } from '../../../time/rows.js';
 import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
-import { modelTurnMessages } from '../assistantReplay.js';
+import { hostEndedFinal, modelTurnMessages } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
 import {
   scriptsBlock,
@@ -477,13 +477,11 @@ type BoundFinalStageArms = Omit<FinalStageArms, 'displayNameOfFor'> & {
 export function prepareFinalFor(
   arms: FinalStageArms,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
-  const { displayNameOfFor, ...declarations } = arms;
-  if (displayNameOfFor === undefined) return prepareFinalBound(declarations);
-  return (scope) =>
-    prepareFinalBound({
-      ...declarations,
-      displayNameOf: displayNameOfFor(scope),
-    })(scope);
+  const { displayNameOfFor, hostEndedTurns: host, ...declarations } = arms;
+  if (displayNameOfFor === undefined) return hostEndedFinal(host, prepareFinalBound(declarations));
+  return hostEndedFinal(host, (scope) =>
+    prepareFinalBound({ ...declarations, displayNameOf: displayNameOfFor(scope) })(scope),
+  );
 }
 
 function prepareFinalBound(

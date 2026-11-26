@@ -24,6 +24,12 @@ export interface FinalStageArms {
   /** The evidence gate's `'rails'` posture — a refused answer is recorded flagged and ends the branch. */
   readonly evidenceRails?: true;
   /**
+   * `hostEndedTurns: true` — the final stage may ask for a settled reply's origin
+   * (`assistantReplay.ts` · `settledModelReply`). Absent, an ordinary turn never
+   * reads the host-end key at all.
+   */
+  readonly hostEndedTurns?: true;
+  /**
    * A tool's `displayName`, read through the agent's own tools — present only
    * on an agent where a tool can declare one. The prose limits block then names
    * an item's declaring calls in the app's words (`coverage/answer.ts` ·
