@@ -53,6 +53,7 @@ import type { Runner } from '../../../runner.js';
 import type { AgentConfigurationValues } from './values.js';
 import { resolveSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
 import { resolveProseCitations } from '../../citations/config.js';
+import { applySkillContext } from '../../skillContext/apply.js';
 
 /** Public identity remains on the original runner, at its existing construction points. */
 interface AgentIdentity {
@@ -179,6 +180,7 @@ export function configureAgent(
   config.skillGraphIsTree = skillGraphIsTree ?? false;
   config.skillGraphCascade = skillGraphCascade;
   config.skillBrains = skillBrains;
+  applySkillContext(config, opts.provider, opts.model, opts.skillContext, skillBrains);
   // Under an enforcing answer validation the gate's revision calls no tools
   // (`ResolvedEvidenceGate.toolsOffAfterRevision`): one fact on the one gate
   // every reader is already handed.

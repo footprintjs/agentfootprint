@@ -260,6 +260,43 @@ export function decisionsShapes() {
         ),
         omittedChanges: num,
       }),
+      // Names, strategies and the table author's fixed labels only.
+      skillContext: shapeOf<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'skillContext'>>({
+        tools: shapeOf<
+          At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'skillContext'>, 'tools'>
+        >({
+          strategy: oneOf('declared', 'listed'),
+          by: oneOf('default', 'fixed', 'rule'),
+          rule: num,
+          label: str,
+          reads: listOf(str),
+          voucher: oneOf('app', 'provider'),
+        }),
+        body: shapeOf<At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'skillContext'>, 'body'>>(
+          {
+            strategy: oneOf('declared', 'tool-result'),
+            by: oneOf('default', 'fixed', 'rule'),
+            rule: num,
+            label: str,
+            reads: listOf(str),
+            voucher: oneOf('app', 'provider'),
+            measurement: shapeOf<
+              At<
+                At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'skillContext'>, 'body'>,
+                'measurement'
+              >
+            >({ script: str, run: str }),
+          },
+        ),
+        binding: shapeOf<
+          At<At<PayloadOf<'agentfootprint.stream.llm_start'>, 'skillContext'>, 'binding'>
+        >({
+          binding: oneOf('bound', 'unbound', 'unknown'),
+          by: oneOf('app', 'provider'),
+          provider: str,
+          model: str,
+        }),
+      }),
     }),
 
     'agentfootprint.credential.failed': eventShape<'agentfootprint.credential.failed'>({

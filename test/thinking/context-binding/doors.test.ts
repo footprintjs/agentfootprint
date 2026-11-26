@@ -30,13 +30,16 @@ const t = (name: string) =>
 
 type Builder = ReturnType<typeof Agent.create>;
 
+// Slice 1's refusal is exercised on the skill context that still edits the turn: the app's `declared`.
 async function run(script: readonly Step[], build: (a: Builder) => Builder, maxIterations = 5) {
   const bodies: Body[] = [];
   const provider: LLMProvider = anthropic({
     _client: scriptedClient(MODEL, bodies, script) as never,
   });
   const agent = build(
-    Agent.create({ provider, model: MODEL, maxIterations }).system('You diagnose.'),
+    Agent.create({ provider, model: MODEL, maxIterations, skillContext: 'declared' }).system(
+      'You diagnose.',
+    ),
   ).build();
   const starts: Record<string, unknown>[] = [];
   agent.on('agentfootprint.stream.llm_start', (e) => starts.push(e.payload as never));

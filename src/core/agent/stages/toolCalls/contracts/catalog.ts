@@ -54,4 +54,13 @@ export interface ToolCatalogPort {
    * dispatch set, exactly as it was.
    */
   readonly toolDeclaringSkills?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Present only when the skill context is `listed` (`skillContext/decide.ts`):
+   * each scoped tool name → the scoped skills that declare it. A call to one of
+   * these names, served under a skill's claim, is refused while none of those
+   * skills is active (`execution/callStart.ts`), and a body the framework's
+   * `read_skill` returns is exempt from placement and the result cap
+   * (`execution/finalizeCallResult.ts`).
+   */
+  readonly listedScopedTools?: ReadonlyMap<string, readonly string[]>;
 }

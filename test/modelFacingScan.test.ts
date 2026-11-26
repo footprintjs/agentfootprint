@@ -136,6 +136,11 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 1,
       why: "list_skills' own description — one request's tools array",
     },
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "the read_skill description's tail under the `listed` skill context — a tool description in each request's tools array, never a tool result",
+    },
   ],
   'src/maps/engagement/parkCard.ts': [
     {
@@ -1481,10 +1486,11 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // An empty role-visible catalog withholds read_skill before composing its
         // description, retiring the registry's former empty-catalog sentence.
         // Prose citations add one request instruction plus focused fixture literals.
+        // Skills listed on a bound model: one read_skill description tail (ephemeral 29→30).
         files: 135,
-        total: 239,
+        total: 240,
         registry: 7,
-        ephemeral: 29,
+        ephemeral: 30,
         unrepaired: 36,
         notModelFacing: 167,
         unrepairedEntries: 21,

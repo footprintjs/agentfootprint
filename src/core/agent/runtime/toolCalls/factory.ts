@@ -20,6 +20,7 @@ export interface ToolCallsEnvironment {
   readonly runner: object;
   readonly registryByName: ReturnType<typeof buildToolRegistry>['registryByName'];
   readonly toolDeclaringSkills: ReturnType<typeof buildToolRegistry>['toolDeclaringSkills'];
+  readonly listedScopedTools: ReturnType<typeof buildToolRegistry>['listedScopedTools'];
   readonly toolClaimants: ReturnType<typeof buildToolRegistry>['toolClaimants'];
   readonly scriptRecordArmed: boolean;
   readonly inputsArmed: boolean;
@@ -76,6 +77,10 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       // roster so a role that may not see a skill is not told the names of the
       // tools that skill brought. Value-conditional: an agent whose skills carry
       // no tools hands the handler exactly the deps object it always did.
+      // The skill context's call gate and body exemption (`skillContext/decide.ts`).
+      ...(environment.configuration.skillContext?.strategy === 'listed' && {
+        listedScopedTools: environment.listedScopedTools,
+      }),
       ...(environment.toolDeclaringSkills.size > 0 && {
         toolDeclaringSkills: environment.toolDeclaringSkills,
       }),

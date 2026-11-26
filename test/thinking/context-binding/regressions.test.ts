@@ -82,6 +82,7 @@ function guardOnly(provider: LLMProvider): LLMProvider {
   return rest as LLMProvider;
 }
 
+// Slice 1's refusal is exercised on the skill context that still edits the turn: the app's `declared`.
 async function converse(c: Conversation, mode: 'shipped' | 'guard-only') {
   const bodies: Body[] = [];
   const real = anthropic({
@@ -94,6 +95,7 @@ async function converse(c: Conversation, mode: 'shipped' | 'guard-only') {
     provider,
     model: c.model,
     maxIterations: 6,
+    skillContext: 'declared',
     ...(c.cacheStrategy !== undefined && { cacheStrategy: c.cacheStrategy }),
   })
     .system('You diagnose.')
@@ -357,7 +359,12 @@ describe('a refused request has no receipt, and no reader shows another call as 
     const provider = anthropic({
       _client: scriptedClient('claude-haiku-5-5', bodies, READ_SKILL) as never,
     });
-    const agent = Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
+    const agent = Agent.create({
+      provider,
+      model: 'claude-haiku-5-5',
+      maxIterations: 4,
+      skillContext: 'declared',
+    })
       .system('You diagnose.')
       .tool(lookup)
       .skill(skill)
@@ -386,7 +393,12 @@ describe('a refused request has no receipt, and no reader shows another call as 
       body: 'b',
       model: 'claude-opus-4-1',
     });
-    const agent = Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
+    const agent = Agent.create({
+      provider,
+      model: 'claude-haiku-5-5',
+      maxIterations: 4,
+      skillContext: 'declared',
+    })
       .system('s')
       .skillGraph(skillGraph().entry(triage).route(triage, billing).build())
       .outputSchema(
@@ -427,7 +439,12 @@ describe('a shorthand model id is resolved before it is compared or named', () =
         defaultModel: ARN,
         thinkingBinding: (id) => (id === ARN ? 'bound' : undefined),
       });
-      const agent = Agent.create({ provider, model: agentModel, maxIterations: 4 })
+      const agent = Agent.create({
+        provider,
+        model: agentModel,
+        maxIterations: 4,
+        skillContext: 'declared',
+      })
         .system('You diagnose.')
         .tool(lookup)
         .skill(skill)
@@ -449,7 +466,12 @@ describe('a shorthand model id is resolved before it is compared or named', () =
       _client: scriptedClient('claude-opus-5-5', bodies, READ_SKILL) as never,
       defaultModel: 'claude-opus-5-5',
     });
-    const agent = Agent.create({ provider, model: 'anthropic', maxIterations: 4 })
+    const agent = Agent.create({
+      provider,
+      model: 'anthropic',
+      maxIterations: 4,
+      skillContext: 'declared',
+    })
       .system('You diagnose.')
       .tool(lookup)
       .skill(skill)

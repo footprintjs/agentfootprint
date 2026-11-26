@@ -16,6 +16,8 @@ import type { DispatchCall } from '../contracts/batchCall.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import type { ActiveInjection } from '../../../../../injection-engine/types.js';
+import { notLoadedFor } from '../../../skillContext/gate.js';
 
 interface CallStartLinks {
   readonly resolveTool: ReturnType<typeof buildToolResolver>;
@@ -27,7 +29,7 @@ interface CallStartLinks {
 
 /** Start one call with its original proposal, frozen views, records and clock. */
 export function buildCallStart(
-  deps: Pick<ToolCallsHandlerDeps, 'findings' | 'toolMiddleware'>,
+  deps: Pick<ToolCallsHandlerDeps, 'findings' | 'toolMiddleware' | 'listedScopedTools'>,
   links: CallStartLinks,
 ) {
   const beginDispatchCall = (
@@ -49,7 +51,19 @@ export function buildCallStart(
       ...callOccurrenceField(tc.callOccurrenceKey),
     };
     const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
-    const resolved = resolveTool(tc.name);
+    const served = resolveTool(tc.name);
+    // `listed` only: a scoped skill's tool before its skill is loaded is refused (`skillContext/gate.ts`).
+    const notLoaded =
+      deps.listedScopedTools === undefined
+        ? undefined
+        : notLoadedFor(
+            deps.listedScopedTools,
+            tc.name,
+            served.party,
+            scope.activeInjections as readonly ActiveInjection[] | undefined,
+            scope.hiddenSkillIds as readonly string[] | undefined,
+          );
+    const resolved = notLoaded === undefined ? served : { refusal: notLoaded };
     const tool = resolved.tool;
     // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`
     // in this loop. `args` is what the call runs with: `tool_start`, the
