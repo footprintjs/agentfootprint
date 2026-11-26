@@ -7,6 +7,7 @@ import {
 } from '../../../scripts/executionEvidence.js';
 import type { RouteBranch } from '../../../stages/route.js';
 import type { AgentState } from '../../../types.js';
+import { MAX_EXECUTION_CLAIM_PROSE_CHARS } from './check/bounds.js';
 import { assessExecutionClaims, type ExecutionClaimAssessment } from './check/check.js';
 
 type Scope = TypedScope<AgentState>;
@@ -30,7 +31,9 @@ export function withExecutionClaimAssessment(
   function observe(scope: Scope, branch: RouteBranch): RouteBranch {
     if (branch !== 'final' || options.isHumanTurn?.() === false) return branch;
     const reply = options.structured ? undefined : scope.llmLatestContent;
-    const couldClaimExecution = typeof reply === 'string' && /\bcode\b/iu.test(reply);
+    const couldClaimExecution =
+      typeof reply === 'string' &&
+      (reply.length > MAX_EXECUTION_CLAIM_PROSE_CHARS || /\bcode\b/iu.test(reply));
     if (!couldClaimExecution && !('codeExecutionReceipt' in scope)) return branch;
     if (
       scope.messageDeniedReason !== undefined ||

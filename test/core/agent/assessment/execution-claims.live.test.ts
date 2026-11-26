@@ -3,7 +3,11 @@ import type { RedactionPolicy } from 'footprintjs';
 import { Agent, allow, codeRunnerTool, defineTool } from '../../../../src/index.js';
 import { assessAnswer, recordRun } from '../../../../src/observe.js';
 import { mock } from '../../../../src/providers.js';
-import type { CodeResult, LLMProvider } from '../../../../src/provider-contract/types.js';
+import type {
+  CodeResult,
+  LLMProvider,
+  PermissionChecker,
+} from '../../../../src/provider-contract/types.js';
 
 const program = 'print("unshared program text", 2 + 2)';
 const runCode = {
@@ -21,11 +25,15 @@ function build(
     commitValues?: 'full' | 'delta';
     redact?: RedactionPolicy;
     provider?: LLMProvider;
+    permissionChecker?: PermissionChecker;
   } = {},
 ) {
   return Agent.create({
     provider: options.provider ?? mock({ replies: [...replies] as never }),
     model: 'mock',
+    ...(options.permissionChecker !== undefined && {
+      permissionChecker: options.permissionChecker,
+    }),
     commitValues: options.commitValues ?? 'delta',
     ...(options.redact !== undefined && { redact: options.redact }),
   }).tool(
@@ -87,6 +95,19 @@ describe('receipt check on a native recorded answer', () => {
     expect((await agent.assessment())?.reasons.map((row) => row.reason)).toContain(
       'unsupported-claim',
     );
+  });
+
+  it('keeps a pre-entry denial distinct from an unconfirmed execution', async () => {
+    const agent = build([runCode, claimedRun], {
+      permissionChecker: {
+        name: 'deny code',
+        check: async () => ({ result: 'deny', rationale: 'No execution allowed.' }),
+      },
+    }).build();
+    await agent.run({ message: 'Did you run code?' });
+    expect(facts(agent)).toMatchObject({
+      findings: [{ claim: 'ran-code', target: 'current', outcome: 'contradicted' }],
+    });
   });
 
   it('accepts an exclusive estimate claim for the complete no-execution case', async () => {
