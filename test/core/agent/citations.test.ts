@@ -130,12 +130,14 @@ async function runColumnCase(
     redact?: RedactionPolicy;
     reactMode?: 'dynamic' | 'dynamic-grouped';
     commitValues?: 'full' | 'delta';
+    includeColumnInBody?: true;
   } = {},
 ) {
   const { provider } = fixture(
     undefined,
     (marker) => 'North recorded 12 mm ' + marker + '. The model also mentioned discount.',
   );
+  const { includeColumnInBody, ...agentOptions } = options;
   const agent = Agent.create({
     provider,
     model: 'claude-sonnet-4-6',
@@ -147,9 +149,27 @@ async function runColumnCase(
         )?.[1],
       completeColumns: () => completeColumns,
     },
-    ...options,
+    ...agentOptions,
   })
-    .tool(tool)
+    .tool(
+      includeColumnInBody === true
+        ? defineTool({
+            name: 'measure',
+            description: 'Read one fixture row.',
+            inputSchema: {
+              type: 'object',
+              properties: { unit: { type: 'string' } },
+              required: ['unit'],
+            },
+            execute: () =>
+              describedResult({
+                facts: [{ entity: 'North', amount: 12, [completeColumns[0]]: 'schema-column' }],
+                provenance: { measuredAt: '2026-11-23T00:00:00Z', source: 'fixture' },
+                coverage: { checked: ['amount'] },
+              }),
+          })
+        : tool,
+    )
     .answerLayer({ standingLine: true })
     .build();
   const recorder = recordRun(agent);
@@ -164,6 +184,9 @@ async function runColumnCase(
       reasons: live?.reasons,
       standing: live?.standing,
       report: recording.snapshot?.sharedState?.answerCitations,
+      ...(includeColumnInBody === true && {
+        toolContent: recording.snapshot?.sharedState?.history?.[2]?.content,
+      }),
     };
   } finally {
     recorder.stop();
@@ -223,6 +246,39 @@ it.each([
     );
     expect(missing).toEqual(present);
     expect(missing.report).toMatchObject({
+      findings: [{ kind: 'citation', outcome: 'supported' }],
+    });
+  },
+);
+
+it.each([
+  { fields: { history: ['2.content'] } },
+  { keys: ['resultIdentities'] },
+  { fields: { resultIdentities: ['evidence.results.0.identity.ordinal'] } },
+  { keys: ['acceptedCitationOffer'] },
+  { fields: { citationSources: ['0.bodyDigest'] } },
+] satisfies RedactionPolicy[])(
+  'keeps a column pair equal when governing evidence is masked under %o',
+  async (redact) => {
+    const options = { redact, includeColumnInBody: true } as const;
+    const missing = await runColumnCase(
+      'Average discount per region.',
+      ['discounter', 'amount'],
+      options,
+    );
+    const present = await runColumnCase(
+      'Average discount per region.',
+      ['discount', 'amount'],
+      options,
+    );
+    if (redact.fields && 'history' in redact.fields) {
+      expect(missing.toolContent).toBe('REDACTED');
+      expect(present.toolContent).toBe('REDACTED');
+    }
+    const { toolContent: _missing, ...missingPublic } = missing;
+    const { toolContent: _present, ...presentPublic } = present;
+    expect(missingPublic).toEqual(presentPublic);
+    expect(missingPublic.report).toMatchObject({
       findings: [{ kind: 'citation', outcome: 'supported' }],
     });
   },
