@@ -519,9 +519,7 @@ describe('12. role-hidden skills under listed (security)', () => {
       "Tool 'vault_wipe' did not run: the skill it belongs to was not loaded on that call.",
     );
     expect(results.listed!.result!.toLowerCase()).not.toContain("'vault'");
-    // Today's path (`declared`) RUNS the hidden skill's scoped tool off the wire: the hole `listed` closes.
-    expect(results.declared!.ran).toEqual(['vault_wipe']);
-    expect(results.declared!.result).toMatch(/^vault_wipe ran/);
+    expect(results.declared).toEqual(results.listed);
   });
 
   it('two roles on one agent: each run lists what its own role may see', async () => {

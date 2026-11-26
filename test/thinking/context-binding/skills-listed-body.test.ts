@@ -358,14 +358,17 @@ describe('P2-1: a tool every declaring skill of which is hidden never runs under
     expect(JSON.stringify(events).toLowerCase()).not.toContain('vault');
   });
 
-  it('R9: under declared the role filter stays off — the hidden skill’s unscoped tool is listed, as before', async () => {
+  it('under declared, a hidden skill’s unscoped tool is omitted from the request', async () => {
     const bodies: Body[] = [];
     const agent = agentOn(BOUND, bodies, [DONE], (a) => a.skill(smb()).skill(vault()), {
       permissionChecker: hideVault,
       skillContext: 'declared',
     });
-    await settle(agent.run({ message: 'go' }));
-    expect((bodies[0]!.tools ?? []).map((t) => t.name)).toContain('wipe_all');
+    const { error } = await settle(agent.run({ message: 'go' }));
+    expect(error).toBeUndefined();
+    expect(bodies).toHaveLength(1);
+    expect((bodies[0]!.tools ?? []).map((t) => t.name)).not.toContain('wipe_all');
+    expect(JSON.stringify(bodies[0]).toLowerCase()).not.toContain('vault');
   });
 });
 
