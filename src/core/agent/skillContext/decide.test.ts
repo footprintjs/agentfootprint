@@ -10,6 +10,7 @@ import { defineSkill } from '../../../injection-engine/factories/defineSkill.js'
 import type { Injection } from '../../../injection-engine/types.js';
 import { decideSkillContext } from './decide.js';
 import { listedInjections } from './apply.js';
+import { servedSurfaceMode } from '../../../injection-engine/skillContext.js';
 import { notLoadedFor, notLoadedRefusal } from './gate.js';
 import { readSkillOfferFor } from '../runtime/skills/owner.js';
 
@@ -48,15 +49,33 @@ describe('decideSkillContext', () => {
   });
 });
 
-describe('listedInjections', () => {
-  it('serves a read-activated body through the read_skill result and leaves the rest alone', () => {
+describe('listedInjections and the served surface mode', () => {
+  it('stamps every skill listed and leaves its own declarations as they were', () => {
     const graphSkill = { ...skill, id: 'routed', trigger: { kind: 'always' } } as Injection;
     const [read, routed] = listedInjections([skill, graphSkill]);
-    expect((read!.metadata as { surfaceMode?: string }).surfaceMode).toBe('tool-only');
-    expect((routed!.metadata as { surfaceMode?: string }).surfaceMode).toBe(
-      (graphSkill.metadata as { surfaceMode?: string }).surfaceMode,
+    for (const [after, before] of [
+      [read!, skill],
+      [routed!, graphSkill],
+    ] as const) {
+      expect(after.metadata?.skillContext).toBe('listed');
+      expect((after.metadata as { surfaceMode?: string }).surfaceMode).toBe(
+        (before.metadata as { surfaceMode?: string }).surfaceMode,
+      );
+    }
+  });
+
+  it('is tool-only exactly while the read_skill result is the body; otherwise the declaration', () => {
+    const listed = { surfaceMode: 'auto', skillContext: 'listed' };
+    const result = { role: 'tool', content: 'Confirm identity.', toolName: 'read_skill' };
+    expect(servedSurfaceMode(listed, 'Confirm identity.', [result])).toBe('tool-only');
+    expect(servedSurfaceMode(listed, 'Confirm identity.', [])).toBe('auto');
+    expect(
+      servedSurfaceMode(listed, 'Confirm identity.', [{ ...result, toolName: 'lookup' }]),
+    ).toBe('auto');
+    expect(servedSurfaceMode(listed, 'Confirm identity.', [{ ...result, content: 'other' }])).toBe(
+      'auto',
     );
-    expect(routed!.metadata?.skillContext).toBe('listed');
+    expect(servedSurfaceMode({ surfaceMode: 'auto' }, 'Confirm identity.', [result])).toBe('auto');
   });
 });
 
@@ -66,22 +85,26 @@ describe('notLoadedFor', () => {
   const skillParty = { channel: 'skill' as const, id: 'billing' };
 
   it('refuses until a declaring skill loads, naming a visible one', () => {
-    expect(notLoadedFor(listed, 'refund', skillParty, [], ['billing'])).toBe(
+    expect(notLoadedFor(listed, undefined, 'refund', skillParty, [], ['billing'])).toBe(
       notLoadedRefusal('refund', 'support'),
     );
   });
 
   it('names no skill when every declaring skill is hidden', () => {
-    expect(notLoadedFor(listed, 'refund', skillParty, [], ['billing', 'support'])).toBe(
+    expect(notLoadedFor(listed, undefined, 'refund', skillParty, [], ['billing', 'support'])).toBe(
       "Tool 'refund' did not run: the skill it belongs to was not loaded on that call.",
     );
   });
 
   it('lets the call run once a declaring skill loads, or when another party serves the name', () => {
-    expect(notLoadedFor(listed, 'refund', skillParty, active('support'), [])).toBeUndefined();
-    expect(notLoadedFor(listed, 'refund', { channel: 'provider' }, [], [])).toBeUndefined();
-    expect(notLoadedFor(listed, 'lookup', skillParty, [], [])).toBeUndefined();
-    expect(notLoadedFor(undefined, 'refund', skillParty, [], [])).toBeUndefined();
+    expect(
+      notLoadedFor(listed, undefined, 'refund', skillParty, active('support'), []),
+    ).toBeUndefined();
+    expect(
+      notLoadedFor(listed, undefined, 'refund', { channel: 'provider' }, [], []),
+    ).toBeUndefined();
+    expect(notLoadedFor(listed, undefined, 'lookup', skillParty, [], [])).toBeUndefined();
+    expect(notLoadedFor(undefined, undefined, 'refund', skillParty, [], [])).toBeUndefined();
   });
 });
 

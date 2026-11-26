@@ -116,7 +116,8 @@ export function decideSkillContext(inputs: SkillContextInputs): SkillContextDeci
       tools: plain<SkillContextStrategy>(tools),
       body: {
         ...plain<'tool-result' | 'declared'>(body),
-        measurement: { ...SKILL_BODY_MEASUREMENT },
+        // The measurement chose the channel only when the body table's rule did.
+        ...(body.by === 'rule' && { measurement: { ...SKILL_BODY_MEASUREMENT } }),
       },
       binding,
     },

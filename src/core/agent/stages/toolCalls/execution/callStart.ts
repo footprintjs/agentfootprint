@@ -29,7 +29,10 @@ interface CallStartLinks {
 
 /** Start one call with its original proposal, frozen views, records and clock. */
 export function buildCallStart(
-  deps: Pick<ToolCallsHandlerDeps, 'findings' | 'toolMiddleware' | 'listedScopedTools'>,
+  deps: Pick<
+    ToolCallsHandlerDeps,
+    'findings' | 'toolMiddleware' | 'listedScopedTools' | 'toolDeclaringSkills'
+  >,
   links: CallStartLinks,
 ) {
   const beginDispatchCall = (
@@ -58,6 +61,7 @@ export function buildCallStart(
         ? undefined
         : notLoadedFor(
             deps.listedScopedTools,
+            deps.toolDeclaringSkills,
             tc.name,
             served.party,
             scope.activeInjections as readonly ActiveInjection[] | undefined,

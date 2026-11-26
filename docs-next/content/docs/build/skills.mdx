@@ -594,41 +594,55 @@ it cannot place) the agent's default `skillContext` is `'listed'`:
 
 - every skill tool is on the tool list from the first request, with its own
   description, and `read_skill`'s description is the catalog for the whole run;
-- the body of a skill `read_skill` loads is that call's result, never the system
-  prompt, and it is not cut by `maxToolResultChars` or placed by reference;
+- the body of any skill `read_skill` loads, a graph route or step target
+  included, is that call's result. The system prompt leaves it out while that
+  result is in the history the request sends, so each request carries the body
+  once, and a window never drops that result while the skill is active;
+- the body is not cut by `maxToolResultChars` or placed by reference, and the
+  evidence gate and the answer account read it as your own text, as they read a
+  system-prompt body;
 - a call to a scoped skill's tool (`autoActivate: 'currentSkill'`, `scopeTools`,
   `.toolsFromActiveSkill()`) before its skill is loaded is refused with a
   sentence that names the skill and the `read_skill` call that loads it, and
   the tool does not run;
-- a tool whose declaring skills are all hidden from the caller's role is not
-  listed, and a call to it is refused without naming the skill (a tool a visible
-  skill also declares stays listed, with its own description).
+- a tool whose declaring skills are all hidden from the caller's role, scoped or
+  not, is not listed, and a call to it is refused without naming the skill (a
+  tool a visible skill also declares stays listed, with its own description).
 
 <CodeFile path="examples/features/skills-listed.ts" region="listed" title="examples/features/skills-listed.ts (region: listed)" />
 
 The first `agentfootprint.stream.llm_start` of each run says what was chosen
 and why, as `skillContext`: the tool strategy and the body channel, each in the
 shared decision-record shape (`strategy`, `by`, `rule`, `label`, `reads`), and
-the binding answer that decided them. On every other model the default is
-`'declared'`, each skill's own `autoActivate` and `surfaceMode`, and nothing
-about those runs changes, the event included.
+the binding answer that decided them. On every model the adapter places as
+unbound the default is `'declared'`, each skill's own `autoActivate` and
+`surfaceMode`, and nothing about those runs changes, the event included.
 
 <CodeFile path="examples/features/skills-listed.ts" region="early" title="examples/features/skills-listed.ts (region: early)" />
 
 State it to choose for yourself: `Agent.create({ ..., skillContext: 'declared' })`
 keeps each skill's declarations on a bound model (a load inside a signed tool
 turn is then refused by name, `ContextChangedError`), and `'listed'` lists them
-on any model. Either is recorded with `by: 'fixed'`.
+on any model. Either is recorded with `by: 'fixed'`. For an inference profile,
+gateway alias or deployment name you know to be unbound, say so with the
+adapter's `thinkingBinding` option instead, and the default is `'declared'`.
 
 Gotchas:
 
-- A skill the graph activates (an entry, a route target, a tree leaf) has no
-  `read_skill` result, so its body still goes into the system prompt from the
-  first request it is active on. A graph whose cursor moves inside a signed tool
-  turn is still refused by name.
-- Step narrowing (`steps`), an instruction whose `activeWhen` reads a tool
-  result, and a tool provider whose list moves between calls still change the
-  turn, and are still refused by name inside a signed tool turn.
+- A skill the graph activates without a `read_skill` call (an entry, a tree
+  leaf, a declared edge) has no result to carry its body, so its body goes into
+  the system prompt from the first request it is active on. A cursor moved by a
+  declared edge inside a signed tool turn is still refused by name.
+- When the `read_skill` result is gone from the history (a summary folded it, a
+  conversation paused before this option existed is resumed), the body is served
+  in the system prompt as under `'declared'`. Inside a signed tool turn on a
+  bound model that change is refused by name before the request is sent.
+- A window that drops other turns inside a signed tool turn, step narrowing
+  (`steps`), an instruction whose `activeWhen` reads a tool result, and a tool
+  provider whose list moves between calls still change the turn, and are still
+  refused by name inside a signed tool turn.
+- Listing every skill tool from the first request makes every request's tool
+  list longer; with many scoped skills the tools slot can pass its budget.
 - A `withFallback` pair answers the binding question for its primary: an
   unbound primary with a bound fallback stays `'declared'` unless you state
   `'listed'`.

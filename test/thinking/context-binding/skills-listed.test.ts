@@ -296,6 +296,10 @@ describe('the case table, request by request (stream)', () => {
     expect((r.starts[0]!.skillContext as { tools: unknown }).tools).toEqual(
       fixedRecord('declared', undefined, 'app'),
     );
+    // The body table took its default, so no measurement chose the channel.
+    const body = (r.starts[0]!.skillContext as { body: Record<string, unknown> }).body;
+    expect(body.by).toBe('default');
+    expect(body.measurement).toBeUndefined();
   });
 
   it('11. the app states listed on an unbound model: listed, recorded as fixed by the app', async () => {

@@ -12,8 +12,10 @@ load change nothing instead.
 | File | Job |
 |---|---|
 | `decide.ts` | `decideSkillContext`: the strictest binding over every provider and model the agent's own calls reach (the agent, each skill brain, the escalation), then the two tables of `injection-engine/skillContext.ts` evaluated with footprintjs `decideFromFacts`; `decisionRecord` / `fixedRecord` make the records. Evaluated ONCE, by `runtime/configuration/configure.ts` · `configureAgent`. |
-| `apply.ts` | Keeps the decision on the configuration. Under `listed`, a skill `read_skill` activates gets `surfaceMode: 'tool-only'` and every skill gets `metadata.skillContext: 'listed'` (the `read_skill` description reads it to say where a body goes). |
-| `gate.ts` | `notLoadedFor`: a call to a scoped skill tool, served under a skill's claim, while none of the skills that declare it is active, is refused with fixed words. |
+| `apply.ts` | Keeps the decision on the configuration. Under `listed` every skill gets `metadata.skillContext: 'listed'`, and the evidence gate gets the registered bodies. |
+| `bodies.ts` | `skillBodyOf`: a `read_skill` result whose text IS a registered body. The one reading the window pin, the messages slot, the honesty view and the gate's no-name rule agree on. |
+| `honestyView.ts` | `honestyHistory`: the history the evidence gate's two moments read under `listed`, where a body result reads as the `declared` confirmation and the body is exempt app text. |
+| `gate.ts` | `notLoadedFor`: a skill-served call whose declaring skills are all hidden, or a scoped tool none of whose skills is active, is refused with fixed words. |
 
 ## The rule tables
 
@@ -28,32 +30,40 @@ the body table still runs.
 
 - `buildToolRegistry` · `listedScopedTools`: scoped tools join the static list; no skill-scope
   omission is reported; `listedScopedTools` names them for the gate.
-- `core/slots/composeSkillCatalog.ts` (handed the claimants by `buildToolsSlot` only under `listed`):
-  the static list drops every tool whose declaring skills are ALL hidden from this iteration's role,
-  by the one sole-owner rule (`lib/spokenIds.ts` · `visibleToRole`, which the dispatch roster asks
-  too). A tool a visible skill also declares stays, with its own description, which names no skill.
+- `core/slots/composeSkillCatalog.ts`: the static list drops every tool whose declaring skills are
+  ALL hidden from this iteration's role, by the one sole-owner rule (`lib/spokenIds.ts` ·
+  `visibleToRole`, which the dispatch roster and the gate ask too).
+- `injection-engine/skillToolDescriptors.ts`: `read_skill` returns the body of ANY skill it loads,
+  a graph route or step target included.
+- `injection-engine/skillContext.ts` · `servedSurfaceMode`, asked by `projectActiveInjection`: the
+  body is `tool-only` exactly while its `read_skill` result is in the history this request sends;
+  otherwise the skill's own declaration (the system prompt by default), so a body is never lost.
+- `stages/window.ts` + `window/turns.ts`: a turn holding the body result of a still-active skill
+  refuses to leave (`'active-skill-body'`).
+- `core/slots/buildMessagesSlot.ts`: a body result is credited to its skill (`source: 'skill'`), so
+  the answer account (`answer-account/facts/understood.ts`) records the skill as delivered.
+- `stages/route.ts` and `stages/toolCalls/evidence/towers.ts`: the gate reads `honestyHistory`.
 - `runtime/skills/owner.ts` · `readSkillOfferFor`: the description leaves out the cursor, the
   menu and the reachable set (a tree's grantable set is its open skills, which do not move).
-- `stages/toolCalls/execution/callStart.ts`: the gate.
-- `stages/toolCalls/execution/finalizeCallResult.ts`: a result from the library's own
-  `read_skill` (`skillTools.ts` · `isLibrarySkillReader`, provenance, never the name) is neither
-  placed nor capped.
+- `stages/toolCalls/execution/callStart.ts`: the gate. `finalizeCallResult.ts`: a result from the
+  library's own `read_skill` (`skillTools.ts` · `isLibrarySkillReader`) is neither placed nor capped.
 - `stages/callLLM/prepareCall.ts`: `skillContext` on the `llm_start` of iteration 1, absent when
   the default chose `declared`.
 
 ## Known limits
 
+- A skill the graph activates without a `read_skill` call (an entry, a tree leaf, a declared
+  edge) has no result: its body is in the system prompt from the first request it is active on,
+  so a cursor moved by a declared edge inside a signed tool turn is still refused by name.
+- A body result removed from the history (a summary, a custom window) puts the body back in the
+  system prompt; inside a signed tool turn on a bound model that is slice 1's named refusal.
+- Body equality is by text: a templated body renders differently from the text `read_skill`
+  returns, so it is served in both channels.
 - The role is asked once per iteration, as before (`hiddenSkillIdsOf`). A role changed between
-  turns re-lists on the next turn's first request (slice 1 records it); a role revoked inside a
-  signed tool turn changes the list under the signed reasoning and is slice 1's named refusal.
-- Under `declared` nothing here runs: an UNSCOPED tool of a hidden skill stays on the wire, and a
-  hidden skill's scoped tool called by name runs off the wire, as before this folder existed.
-
-- A skill the graph activates has no `read_skill` result: its body stays in the system prompt from
-  the first request it is active on, so a cursor move inside a signed tool turn is still refused
-  by name. The measured append channel (a library line after the tool results) is the follow-up.
-- The evidence gate still reads a body in a `read_skill` result as tool output, not as the app's
-  text (`stages/turnExempt.ts` does not add it).
+  turns re-lists on the next turn's first request; a role revoked inside a signed tool turn is
+  slice 1's named refusal.
+- Under `declared` nothing here runs: an UNSCOPED tool of a hidden skill stays on the wire and
+  runs when called by name, as before this folder existed (its own card).
 - A `withFallback` pair answers for its primary, so a bound fallback behind an unbound primary
   stays `declared` unless the app states `listed`.
 - Decided at build from the build-time provider; a `.configure()` that swaps the provider per run

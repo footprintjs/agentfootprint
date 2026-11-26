@@ -103,3 +103,43 @@ export function stricterBinding(
 ): SkillToolFacts['binding'] {
   return STRICTNESS[b] > STRICTNESS[a] ? b : a;
 }
+
+/** The fields of one history message the body rule reads (`LLMMessage` and the engine's view both have them). */
+export interface SkillBodyHistoryMessage {
+  readonly role: string;
+  readonly content: string;
+  readonly toolName?: string;
+}
+
+/**
+ * Is a skill's body already in front of the model: a `read_skill` result in
+ * the history this request sends whose text IS the registered body? Content
+ * equality with the app's own text, under the library tool's name; a result
+ * a window dropped, a summary folded or a checkpoint from before `listed`
+ * carried as the old confirmation is not.
+ */
+export function bodyInHistory(
+  body: string | undefined,
+  history: readonly SkillBodyHistoryMessage[] | undefined,
+): boolean {
+  if (body === undefined || body.length === 0 || history === undefined) return false;
+  return history.some(
+    (m) => m.role === 'tool' && m.toolName === 'read_skill' && m.content === body,
+  );
+}
+
+/**
+ * The surface mode a skill is served with on THIS iteration. Under `listed` a
+ * body whose `read_skill` result is in the history is `tool-only` (the system
+ * prompt leaves it out, so it is in the request exactly once); otherwise the
+ * skill's own declaration, as under `declared`: a body nothing else carries
+ * goes into the system prompt rather than nowhere.
+ */
+export function servedSurfaceMode(
+  meta: { readonly surfaceMode?: string; readonly skillContext?: unknown } | undefined,
+  body: string | undefined,
+  history: readonly SkillBodyHistoryMessage[] | undefined,
+): string | undefined {
+  if (meta?.skillContext === 'listed' && bodyInHistory(body, history)) return 'tool-only';
+  return meta?.surfaceMode;
+}

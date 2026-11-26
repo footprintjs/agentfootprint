@@ -180,7 +180,6 @@ export function configureAgent(
   config.skillGraphIsTree = skillGraphIsTree ?? false;
   config.skillGraphCascade = skillGraphCascade;
   config.skillBrains = skillBrains;
-  applySkillContext(config, opts.provider, opts.model, opts.skillContext, skillBrains);
   // Under an enforcing answer validation the gate's revision calls no tools
   // (`ResolvedEvidenceGate.toolsOffAfterRevision`): one fact on the one gate
   // every reader is already handed.
@@ -190,6 +189,7 @@ export function configureAgent(
     (answerValidationConfig?.mode === 'enforce' || config.typedNegativeClaimsConfig !== undefined)
       ? { ...evidenceGate, toolsOffAfterRevision: true }
       : evidenceGate;
+  applySkillContext(config, opts.provider, opts.model, opts.skillContext, skillBrains);
   config.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
   config.scriptTravel = scriptTravel;
   config.appliedRecipes = recipes;

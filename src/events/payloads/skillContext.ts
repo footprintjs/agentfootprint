@@ -24,9 +24,9 @@ export interface SkillContextChoice<S extends string = string> {
 export interface SkillContextRecord {
   /** The tool strategy: `listed` (every skill tool from request 1) or `declared`. */
   readonly tools: SkillContextChoice<'listed' | 'declared'>;
-  /** Where a body `read_skill` loads travels: `tool-result` or `declared`, and the measurement behind it. */
+  /** Where a body `read_skill` loads travels: `tool-result` or `declared`; the measurement only when a rule chose it. */
   readonly body: SkillContextChoice<'tool-result' | 'declared'> & {
-    readonly measurement: { readonly script: string; readonly run: string };
+    readonly measurement?: { readonly script: string; readonly run: string };
   };
   /** The strictest binding answer over the providers the agent's calls reach, and who stated it. */
   readonly binding: {
