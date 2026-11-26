@@ -22,6 +22,8 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| naming the final rule that rewrote a tool result, from the existing occurrence-linked decision ledger | `ToolCallFact` + `rewrittenBy` | `src/answer-account/facts/calls.ts` | 19.1.0 |
+| keeping original read limits when an after-tool rule replaces a result, with independently attributed replacement declarations | `declarationsForResult` | `src/core/agent/assessment/results/coverage/declarations.ts` | 19.1.0 |
 | choose how much an agent's snapshot keeps of each write: a short marker by default, the full written value, or nothing | `AgentObservationOptions` + `writeTracking` | `src/core/agent/types/observation.ts` | 19.0.0 |
 | read a sub-flow step's input and output from its own invocation part when a run was saved in parts, so the root stays small and a whole read still gets them back | `SavedInvocationPayloads` | `src/recorders/observability/recordingParts/partReader.ts` | 19.0.0 |
 | a tool turn that changes its system prompt, tools or earlier messages on a model that binds its reasoning to them is refused by name before sending | `ContextChangedError` | `src/thinking/contextChange.ts` | 18.3.0 |
