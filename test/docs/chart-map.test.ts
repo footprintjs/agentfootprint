@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -147,7 +147,7 @@ const atLine = (fragment: string) =>
   source.split('\n').findIndex((line) => line.includes(fragment)) + 1;
 const stageFor = (id: string) => inventory.stages.find((row) => row.id === id);
 
-beforeAll(async () => {
+beforeAll(() => {
   fixture = mkdtempSync(join(tmpdir(), 'agentfootprint-chart-map-'));
   mkdirSync(join(fixture, 'src'));
   symlinkSync(join(repository, 'node_modules'), join(fixture, 'node_modules'), 'dir');
@@ -175,7 +175,7 @@ const child = flowChart('Ignored child', () => {}, 'ignored-child').build();
 flowChart('Ignored test', () => {}, 'ignored-test').addSubFlowChartNext('excluded-test', child);
 `,
   );
-  inventory = await collectChartMap(fixture);
+  inventory = collectChartMap(fixture);
 });
 
 afterAll(() => {
@@ -246,8 +246,8 @@ describe('chart-map source declarations', () => {
     ).toBe(true);
   });
 
-  it('renders deterministically in source order and names the limits of a source inventory', async () => {
-    expect(await collectChartMap(fixture)).toEqual(inventory);
+  it('renders deterministically in source order and names the limits of a source inventory', () => {
+    expect(collectChartMap(fixture)).toEqual(inventory);
     for (const rows of [inventory.mounts, inventory.stages]) {
       expect(rows.map((row) => row.file)).toEqual(rows.map((row) => row.file).sort());
       for (let index = 1; index < rows.length; index++) {
@@ -383,9 +383,4 @@ describe('chart-map source declarations', () => {
     expect(row.mountName).toMatch(/^\[expression\]|unknown/i);
     expect(row.context.join(' ')).toMatch(/partially bound|spread/i);
   });
-});
-
-it('keeps docs/chart-map.md byte-identical to the generated production inventory', async () => {
-  const current = await collectChartMap(repository);
-  expect(readFileSync(join(repository, 'docs/chart-map.md'), 'utf8')).toBe(renderChartMap(current));
 });

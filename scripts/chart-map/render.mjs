@@ -1,3 +1,4 @@
+import { sourceOrder } from './methods.mjs';
 const cell = (value) =>
   String(value)
     .replace(/[\\`*_[\]~|]/g, '\\$&')
@@ -5,20 +6,21 @@ const cell = (value) =>
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replace(/\r?\n/g, '<br>');
-const literal = cell;
 const source = (row) =>
   `[${cell(row.file)}:${row.line}](../${row.file.split('/').map(encodeURIComponent).join('/')}#L${
     row.line
   })`;
 const condition = (row) =>
   row.context.length
-    ? row.context.map(literal).join('; ')
-    : 'No enclosing condition/loop; execution is not inferred.';
+    ? row.context.map(cell).join('; ')
+    : 'No recorded enclosing source control; caller execution is not inferred.';
 const description = (row) =>
-  row.description.state === 'absent'
+  !row.description
+    ? 'Source description not recorded'
+    : row.description.state === 'absent'
     ? 'Not supplied at this declaration'
     : row.description.state === 'expression'
-    ? `Expression: ${literal(row.description.text)}`
+    ? `Expression: ${cell(row.description.text)}`
     : row.description.text.trim() === ''
     ? 'Empty literal'
     : cell(row.description.text);
@@ -26,10 +28,8 @@ const description = (row) =>
 export function renderChartMap(inventory) {
   const mounts = [...inventory.mounts];
   const stages = [...inventory.stages];
-  const order = (a, b) =>
-    a.file < b.file ? -1 : a.file > b.file ? 1 : (a.offset ?? a.line) - (b.offset ?? b.line);
-  mounts.sort(order);
-  stages.sort(order);
+  mounts.sort(sourceOrder);
+  stages.sort(sourceOrder);
   const proven = mounts.filter((row) => row.certainty === 'engine').length;
   const absent = stages.filter((row) => row.description.state === 'absent');
   const empty = stages.filter(
@@ -57,14 +57,14 @@ export function renderChartMap(inventory) {
     '',
     '## Mount declarations',
     '',
-    '| Declaration | Builder/factory | Method | Declared ID | Child chart expression | Mount name | Enclosing control | Origin |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Declaration | Builder/factory | Method | Declared ID | Child chart expression | Mount name | Explicit description | Enclosing control | Origin |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const row of mounts) {
     lines.push(
-      `| ${source(row)} | ${literal(row.owner)} | ${literal(row.method)} | ${literal(
-        row.id,
-      )} | ${literal(row.target)} | ${literal(row.mountName)} | ${condition(row)} | ${cell(
+      `| ${source(row)} | ${cell(row.owner)} | ${cell(row.method)} | ${cell(row.id)} | ${cell(
+        row.target,
+      )} | ${cell(row.mountName)} | ${description(row)} | ${condition(row)} | ${cell(
         row.certainty,
       )} |`,
     );
@@ -75,14 +75,14 @@ export function renderChartMap(inventory) {
     '',
     `${absent.length} declarations have no explicit description argument/options property; ${empty.length} have an empty literal; ${dynamic.length} have a description expression whose runtime text is not inferred.`,
     '',
-    '| Declaration | Builder/factory | Method | Declared ID | Name | Explicit description | Origin |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| Declaration | Builder/factory | Method | Declared ID | Name | Explicit description | Enclosing control | Origin |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
   );
   for (const row of stages) {
     lines.push(
-      `| ${source(row)} | ${literal(row.owner)} | ${literal(row.method)} | ${literal(
-        row.id,
-      )} | ${literal(row.name)} | ${description(row)} | ${cell(row.certainty)} |`,
+      `| ${source(row)} | ${cell(row.owner)} | ${cell(row.method)} | ${cell(row.id)} | ${cell(
+        row.name,
+      )} | ${description(row)} | ${condition(row)} | ${cell(row.certainty)} |`,
     );
   }
   lines.push(
@@ -96,7 +96,7 @@ export function renderChartMap(inventory) {
   );
   for (const row of stages.filter((row) => absent.includes(row) || empty.includes(row))) {
     lines.push(
-      `| ${source(row)} | ${literal(row.owner)} | ${literal(row.method)} | ${literal(
+      `| ${source(row)} | ${cell(row.owner)} | ${cell(row.method)} | ${cell(
         row.id,
       )} | ${description(row)} |`,
     );
