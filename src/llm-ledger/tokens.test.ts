@@ -1,8 +1,9 @@
 /**
  * tokens — which tokens of a text are values, and what a receipt keeps (case table 5.1).
  *
- * Unit: rules 1–3 case by case, the JSON reading, the caps at 2,047 / 2,048 / 2,049 tokens and at
- * 1 MiB ± 1 byte, and a cut that never keeps a piece of a token. The generated properties live in
+ * Unit: rules 1–3 case by case, commas and numbers with thousands separators, JSON read as text,
+ * the caps at 2,047 / 2,048 / 2,049 tokens and at 1 MiB ± 1 byte, a cut that never keeps a piece of
+ * a token, and a reader that never looks past the cap. The generated properties live in
  * `test/llm-ledger/tokens-property.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
@@ -18,7 +19,6 @@ const distinct = (n: number, from = 0): string =>
 describe('tokensOf — rules 1–3', () => {
   it.each([
     ['a number of 4 digits', 'took 1234 ms', ['1234']],
-    ['thousands separators folded', 'served 41,200 requests', ['41200']],
     ['a decimal with 4 digits', 'ratio 12.34 and 1.5', ['12.34']],
     ['a signed number', 'delta -1234', ['-1234']],
     ['a leading plus is decoration', 'delta +1234', ['1234']],
@@ -41,17 +41,16 @@ describe('tokensOf — rules 1–3', () => {
     ['distinct, in first-seen order', '5678 1234 5678', ['5678', '1234']],
     ['brackets and quotes separate', '**1234** `abc123` "x9y8"', ['1234', 'abc123', 'x9y8']],
     ['non-ASCII separates', 'naïve1234 №5678', ['ve1234', '5678']],
+    [
+      'a backslash escape separates',
+      String.raw`pod-1234\npod-5678\tét1234`,
+      ['pod-1234', 'pod-5678', 't1234'],
+    ],
   ])('%s', (_name, text, tokens) => {
     expect(tokensOf(text)).toEqual(tokens);
   });
 
   it.each([
-    ['thousands grouping is folded', '41,200 and 1,234,567', ['41200', '1234567']],
-    [
-      'with a sign, a decimal, a currency or a unit',
-      '-1,234.5 $2,500 1,234ms',
-      ['-1234.5', '2500', '1234'],
-    ],
     ['CSV values are separated', 'host-a,1200,9750,ok', ['1200', '9750']],
     [
       'a digit comma that is not grouping separates',
@@ -63,36 +62,57 @@ describe('tokensOf — rules 1–3', () => {
       'esx01a,esx02b fc1/3,fc1/4',
       ['esx01a', 'esx02b', 'fc1/3', 'fc1/4'],
     ],
-    [
-      'a grouped run glued to a letter is not a number: its commas separate',
-      'host1,234 v2,500',
-      ['host1'],
-    ],
-    ['edge and doubled commas separate', ',41,200, 1,,234 5678,,', ['41200', '5678']],
+    ['edge and doubled commas separate', ',1200, 1,,234 5678,,', ['1200', '5678']],
     ['no token holds a comma', 'a1,b2,c3 1,2,3 10,20', []],
-  ])('commas: %s', (_name, text, tokens) => {
+  ])('commas always separate: %s', (_name, text, tokens) => {
     expect(tokensOf(text)).toEqual(tokens);
     for (const token of tokens) expect(token).not.toContain(',');
   });
 
-  it("a JSON key's colon is a separator in prose", () => {
-    expect(tokensOf('result {"total":1200, "host":"esx01a"} done')).toEqual(['1200', 'esx01a']);
-  });
+  it.each([
+    ['grouped numbers', '41,200 and 1,234,567', [], 2],
+    ['with a sign, a decimal, a currency or a unit', '-1,234.5 $2,500 1,234ms', [], 3],
+    ['the piece before the first comma is read as written', '10:00:00,123 ok', ['10:00:00'], 1],
+    [
+      'glued to a letter before it, a run is not one: its pieces are read',
+      'host1,234 v2,500',
+      ['host1'],
+      0,
+    ],
+    ['a run that does not match is read piece by piece', 'n 1,234,2026-11-25', ['2026-11-25'], 0],
+  ])(
+    'numbers with thousands separators are counted, never read: %s',
+    (_name, text, tokens, grouped) => {
+      expect(tokensOf(text)).toEqual(tokens);
+      expect(readTokens(text).groupedNumbers).toBe(grouped === 0 ? undefined : grouped);
+      expect(readTokens(text).cut).toBeUndefined();
+    },
+  );
 
-  it('one JSON value is read value by value', () => {
+  it('JSON, JSON Lines and a JSON the source cut short are read as text, like prose', () => {
+    expect(tokensOf('result {"total":1200, "host":"esx01a"} done')).toEqual(['1200', 'esx01a']);
     expect(tokensOf('[1200,9750]')).toEqual(['1200', '9750']);
-    expect(tokensOf('[5,100]')).toEqual([]);
+    expect(tokensOf('[1200,9750')).toEqual(['1200', '9750']);
     expect(tokensOf('{"rows":[{"id":"vm-0042","iops":41200}],"n1234":true}')).toEqual([
       'vm-0042',
       '41200',
       'n1234',
     ]);
     expect(tokensOf('  {"note":"took 1234 ms, see \\"run-77ab\\""}')).toEqual(['1234', 'run-77ab']);
+    expect(tokensOf('{1234}')).toEqual(['1234']);
   });
 
-  it('text that only looks like JSON is read as prose, where a comma separates values', () => {
-    expect(tokensOf('[1200,9750')).toEqual(['1200', '9750']);
-    expect(tokensOf('{1234}')).toEqual(['1234']);
+  it('JSON commas never join values (the review cases)', () => {
+    const jsonl = '{"ids":[1,234]}\n{"ids":[120,975]}\n';
+    expect(readTokens(jsonl)).toEqual({ tokens: [], bytes: 34, groupedNumbers: 2 });
+    expect(readTokens('[100,200,300')).toEqual({ tokens: [], bytes: 12, groupedNumbers: 1 });
+    expect(readTokens('[5,100]')).toEqual({ tokens: [], bytes: 7, groupedNumbers: 1 });
+    const many = '{"retries":[2,500],"p":[100,200,300]}\n'.repeat(30_000);
+    expect(many.length).toBeGreaterThan(MiB);
+    const reading = readTokens(many);
+    expect(reading.tokens).toEqual([]);
+    expect(reading.groupedNumbers).toBeGreaterThan(50_000);
+    expect(reading.cut?.bytesUnread).toBeGreaterThan(0);
   });
 
   it('every token it gives is exactly one token (the spelling is a fixed point)', () => {
@@ -165,12 +185,25 @@ describe('readTokens — the receipt caps', () => {
   });
 
   it('1 MiB + 1 byte: the byte past the cap is counted, never read', () => {
-    const text = `${'z'.repeat(MiB - 5)} 1234 `; // 1 MiB + 1: the last byte is a space
+    const text = `${'z'.repeat(MiB - 6)} 1234 y`; // 1 MiB + 1: the last byte, y, is past the cap
     expect(utf8Bytes(text)).toBe(MiB + 1);
     const reading = readTokens(text);
     expect(reading.bytes).toBe(MiB + 1);
     expect(reading.cut).toEqual({ tokensDropped: 0, bytesUnread: 1 });
     expect(reading.tokens).toEqual(['1234']);
+  });
+
+  it('a piece that ends at the cap is kept only when a separator follows it within the bytes read', () => {
+    expect(readTokensUpTo('1234 5678', 4)).toEqual({
+      tokens: [],
+      bytes: 9,
+      cut: { tokensDropped: 0, bytesUnread: 9 },
+    });
+    expect(readTokensUpTo('1234 5678', 5)).toEqual({
+      tokens: ['1234'],
+      bytes: 9,
+      cut: { tokensDropped: 0, bytesUnread: 4 },
+    });
   });
 
   it('a cap that falls inside a token leaves the whole token unread, never a piece', () => {
@@ -185,7 +218,7 @@ describe('readTokens — the receipt caps', () => {
   });
 
   it('a cap that falls inside a character counts that character as unread', () => {
-    const text = `${'z'.repeat(MiB - 1)}é`; // the 2-byte é crosses the cap
+    const text = `${'z'.repeat(MiB - 2)} é`; // the 2-byte é crosses the cap
     const reading = readTokens(text);
     expect(reading.bytes).toBe(MiB + 1);
     expect(reading.cut).toEqual({ tokensDropped: 0, bytesUnread: 2 });
@@ -209,55 +242,34 @@ describe('readTokens — the receipt caps', () => {
     });
   });
 
-  it('a cut never keeps a piece a later byte could change, and keeps every settled one', () => {
-    // Inside a run that may still be thousands-grouped: none of it is kept.
-    expect(readTokensUpTo('a 1,234,567 b', 8)).toEqual({
-      tokens: [],
-      bytes: 13,
-      cut: { tokensDropped: 0, bytesUnread: 11 },
-    });
-    expect(readTokensUpTo('a 1,234,567 b', 8).tokens).not.toContain('1234');
-    // A run that can no longer be grouping: every value before the last comma is settled.
+  it('a cut keeps every piece a separator ends within the bytes read, and no other', () => {
     expect(readTokensUpTo('a 1200,9750,4321 b', 13)).toEqual({
       tokens: ['1200', '9750'],
       bytes: 18,
       cut: { tokensDropped: 0, bytesUnread: 6 },
     });
-    // A run glued to a letter never folds, so its commas settle too.
     expect(readTokensUpTo('x host1,2345,678 y', 14).tokens).toEqual(['host1', '2345']);
-    expect(readTokensUpTo('host1,234,567 z', 11).tokens).toEqual(['host1']);
-    // A cap right after a separating comma keeps everything before it.
     expect(readTokensUpTo('9999,abcd5', 5)).toEqual({
       tokens: ['9999'],
       bytes: 10,
       cut: { tokensDropped: 0, bytesUnread: 5 },
     });
-  });
-
-  it('a cut JSON value is read as JSON up to its last whole literal; a cut string stays unread', () => {
-    // Read as prose, `567,890` would fold into the false value 567890.
+    // A grouped-looking run in the part read is counted there, and none of its groups is read.
+    expect(readTokensUpTo('a 1,234,567 b', 8)).toEqual({
+      tokens: [],
+      bytes: 13,
+      cut: { tokensDropped: 0, bytesUnread: 5 },
+      groupedNumbers: 1,
+    });
     expect(readTokensUpTo('[567,890,"xyz"]', 10)).toEqual({
       tokens: [],
       bytes: 15,
-      cut: { tokensDropped: 0, bytesUnread: 6 },
+      cut: { tokensDropped: 0, bytesUnread: 5 },
+      groupedNumbers: 1,
     });
-    expect(readTokensUpTo('["9999 x", "1234 5678"]', 18)).toEqual({
-      tokens: ['9999'],
-      bytes: 23,
-      cut: { tokensDropped: 0, bytesUnread: 12 },
-    });
-    // A cut prefix with a string JSON cannot decode is not JSON: read as prose, nothing kept from
-    // the JSON reading (`\u0031234` would decode to 1234).
-    const bad = String.raw`["\u0031234","bad\q", "more 5678"]`;
-    expect(readTokensUpTo(bad, 22).tokens).toEqual(['u0031234']);
-    // Prose that merely opens with a bracket is still prose.
-    expect(readTokensUpTo('[INFO] host esx01a took 1234 ms and more', 30).tokens).toEqual([
-      'esx01a',
-      '1234',
-    ]);
   });
 
-  it('prose that opens with a bracket is prose, also when it is cut (the review cases)', () => {
+  it('prose that opens with a bracket keeps its values when it is cut (the review cases)', () => {
     const lines = Array.from(
       { length: 30_000 },
       (_, i) =>
@@ -272,26 +284,48 @@ describe('readTokens — the receipt caps', () => {
     expect(reading.tokens).not.toContain('-5678');
     // The 2,048 kept, every other distinct token before the cap counted: nothing dropped uncounted.
     expect(reading.cut?.tokensDropped).toBeGreaterThan(20_000);
-    const numbers = `[${Array.from(
-      { length: 200_000 },
-      (_, i) => `1,${String(100 + (i % 900))} 5,678`,
-    ).join(' ')}`;
-    const counted = readTokens(numbers);
-    expect(counted.tokens.slice(0, 2)).toEqual(['1100', '5678']);
-    expect(counted.tokens).toHaveLength(901); // 1100…1999 and 5678: every value, none dropped
-    expect(counted.cut?.bytesUnread).toBeGreaterThan(0);
   });
 
-  it('a cut never keeps a number the grouping of its settled part would invent (the review cases)', () => {
+  it('a cut never keeps a number the whole text does not hold (the review cases)', () => {
     const date = 'n 1,234,2026-11-25';
-    for (let cap = 9; cap < date.length; cap++)
+    for (let cap = 0; cap <= date.length; cap++)
       expect(readTokensUpTo(date, cap).tokens, `cap ${cap}`).not.toContain('1234');
-    expect(tokensOf(date)).toEqual(['2026-11-25']);
     const row = 'row 120,975,300,1234-5 end';
-    expect(readTokensUpTo(row, 21).tokens).toEqual([]);
+    expect(readTokensUpTo(row, 21)).toEqual({
+      tokens: [],
+      bytes: 26,
+      cut: { tokensDropped: 0, bytesUnread: 10 },
+      groupedNumbers: 1,
+    });
     expect(tokensOf(row)).toEqual(['1234-5']);
-    // A run whose kept part cannot fold on its own still settles at its last comma.
-    expect(readTokensUpTo('x 1200,9750,4321', 14).tokens).toEqual(['1200', '9750']);
+  });
+
+  it('never looks past the cap: each character past it is counted once, and none is copied or read', () => {
+    // 36 MiB of nested JSON with grouped-looking runs: the shape that cost 954 MiB to check whole.
+    const real = '[{"id":"vm-0042","n":[1,234],"x":"y'.repeat(1_048_576);
+    let counted = 0;
+    let widest = 0;
+    // Only these three are offered: any other reach into the text fails the test.
+    const watched = {
+      get length() {
+        return real.length;
+      },
+      charCodeAt(i: number) {
+        counted++;
+        return real.charCodeAt(i);
+      },
+      slice(from: number, to: number) {
+        widest = Math.max(widest, to);
+        return real.slice(from, to);
+      },
+    };
+    const reading = readTokens(watched as unknown as string);
+    expect(counted).toBe(real.length); // each character's bytes counted, once
+    expect(widest).toBeLessThanOrEqual(MiB); // ASCII: a code unit is a byte
+    expect(reading.bytes).toBe(real.length);
+    expect(reading.cut?.bytesUnread).toBeGreaterThanOrEqual(real.length - MiB);
+    expect(reading.tokens).toEqual(['vm-0042']);
+    expect(reading.groupedNumbers).toBeGreaterThan(29_000);
   });
 
   it('readTokensUpTo takes a whole number', () => {

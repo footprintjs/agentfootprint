@@ -134,6 +134,7 @@ const SHAPES: Readonly<Record<LedgerKind, Shape>> = {
         count(v.tokensDropped) &&
         count(v.bytesUnread) &&
         ((v.tokensDropped as number) > 0 || (v.bytesUnread as number) > 0),
+      groupedNumbers: positive,
       hidden: positive,
       ref: (v) =>
         exactly(v, ['uri', 'digest']) && text(v.uri, L.maxRefUriChars, true) && isDigest(v.digest),
@@ -273,11 +274,15 @@ export function entryFault(value: unknown): string | undefined {
 
 // ── judgement helpers the later stages call ──────────────────────────────
 
-/** A receipt is incomplete when it was cut, when the host masked values, or when its row limit was hit. */
+/**
+ * A receipt is incomplete when it was cut, when it holds numbers written with thousands
+ * separators (values no token shows), when the host masked values, or when its row limit was hit.
+ */
 export function isIncomplete(receipt: LedgerReceipt): boolean {
   const cut = receipt.cut;
   return (
     (cut !== undefined && (cut.tokensDropped > 0 || cut.bytesUnread > 0)) ||
+    (receipt.groupedNumbers ?? 0) > 0 ||
     (receipt.hidden ?? 0) > 0 ||
     receipt.limit?.hit === true
   );

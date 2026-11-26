@@ -381,12 +381,20 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
           constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW | NONBLOCK,
           0o600,
         );
+        let stat: Stats | undefined;
         try {
+          stat = await handle.stat();
           // A token only this append knows: what makes the lock its own, whatever inode it gets.
           const token = randomBytes(16).toString('hex');
           await handle.write(token);
-          const stat = await handle.stat();
           return { dev: stat.dev, ino: stat.ino, token };
+        } catch (error) {
+          // A lock with no token would hold every append off until it looks stale: remove the
+          // one just made (same device and inode: too new to have been taken over).
+          const there = await lstatOrNone(path).catch(() => undefined);
+          if (stat !== undefined && there?.dev === stat.dev && there.ino === stat.ino)
+            await unlink(path).catch(() => undefined);
+          throw error;
         } finally {
           await handle.close();
         }

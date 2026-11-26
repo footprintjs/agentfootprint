@@ -17,7 +17,7 @@ import {
   suppliedEntry,
   withdrawalEntry,
 } from './build.js';
-import { entryFault } from './entries.js';
+import { entryFault, isIncomplete } from './entries.js';
 import type { LedgerEntry } from './types.js';
 
 const AT = '2026-11-25T10:00:00Z';
@@ -80,8 +80,10 @@ describe('receiptEntry — tokens at record time, never the text', () => {
       source: 'perf_query',
       bytes: new TextEncoder().encode(text).length,
       nothingFound: false,
-      tokens: ['esx01a', '41200'],
+      tokens: ['esx01a'], // `41,200` is no token: it is counted, and the receipt is incomplete
+      groupedNumbers: 1,
     });
+    expect(isIncomplete(e)).toBe(true);
     expect(e).not.toHaveProperty('hidden'); // 0 masked is written as nothing masked
     expect(e).not.toHaveProperty('cut');
     expect(JSON.stringify(e)).not.toContain('hunter');

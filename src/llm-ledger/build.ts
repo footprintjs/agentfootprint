@@ -244,6 +244,7 @@ export function receiptEntry(
     entry.nothingFound = f.nothingFound === true;
     entry.tokens = [...reading.tokens];
     if (reading.cut !== undefined) entry.cut = { ...reading.cut };
+    if (reading.groupedNumbers !== undefined) entry.groupedNumbers = reading.groupedNumbers;
     if ((f.hidden as number | undefined) !== undefined && (f.hidden as number) > 0)
       entry.hidden = f.hidden;
     if (f.ref !== undefined) {

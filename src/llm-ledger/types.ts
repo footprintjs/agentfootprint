@@ -122,6 +122,11 @@ export interface LedgerReceipt extends LedgerEntryBase<'receipt'> {
   readonly tokens: readonly string[];
   /** Present only when something was not kept: tokens past the cap, text past the byte cap. */
   readonly cut?: { readonly tokensDropped: number; readonly bytesUnread: number };
+  /**
+   * Present only when the part read holds numbers written with thousands separators
+   * (`1,234`): how many. Their values are not tokens, so the receipt is incomplete.
+   */
+  readonly groupedNumbers?: number;
   /** How many values the host's redactor masked before recording. */
   readonly hidden?: number;
   readonly ref?: { readonly uri: string; readonly digest: LedgerDigest };

@@ -21,9 +21,9 @@ Nothing outside this folder imports it yet, and no `package.json` door reaches i
 |---|---|
 | `types.ts` | the nine entry shapes and every closed word (`LedgerBy`, `LedgerHow`, `LedgerKind`, the dispositions, verdicts and refusals). Declarations only |
 | `limits.ts` | `LEDGER_LIMITS`, the one frozen table of the ledger's caps (sizes, counts, the key's length, the lock's waits); no other file restates one. Grammars (a rule name's length) and the canonical-JSON bounds of a line (`store.ts`) are not caps and live with their owners |
-| `entries.ts` | `entryFault`, the one check of an entry's shape (context-free: every reference is to an EARLIER seq); `isIncomplete`, the one answer to "was this receipt cut, masked or limited?"; `citeProblem`, the cite check a note is admitted with |
+| `entries.ts` | `entryFault`, the one check of an entry's shape (context-free: every reference is to an EARLIER seq); `isIncomplete`, the one answer to "was this receipt cut, holding numbers with thousands separators, masked or limited?"; `citeProblem`, the cite check a note is admitted with |
 | `build.ts` | the record-time builders, one per kind text enters through (`receiptEntry`, `suppliedEntry`, `noteEntry`, `withdrawalEntry`, `submitEntry`, `deliveredEntry`, `openedEntry`). Each drops the text it was handed once it has the tokens or the digest it keeps, and refuses with `bad-input`, `too-large` or `bad-window` |
-| `tokens.ts` | which tokens of a text are values (rules 1–3 of the evidence extractor's header, as a closed copy, with the comma rule below), the receipt's capped reading (`readTokens`, and `readTokensUpTo` under another cap) and `utf8Bytes` |
+| `tokens.ts` | which tokens of a text are values (rules 1–3 of the evidence extractor's header, as a closed copy; a token is a literal piece of the text, below), the receipt's capped reading (`readTokens`, and `readTokensUpTo` under another cap) and `utf8Bytes` |
 | `window.ts` | the ledger's one instant validator (`instantMs`) and the window on it (`readWindow`) |
 | `digest.ts` | the folder's one door to Web Crypto: `digestOf` (`sha256:<hex>`) and `randomBytes` |
 | `session.ts` | the session id (`ls_` + 26 Crockford base32 characters, 128 random bits): `isSessionId`, `sessionIdOf`, `mintSessionId` |
@@ -101,7 +101,9 @@ hand a freed inode number straight to the next file, so the inode alone cannot t
 one that replaced it). An append checks this right before its write: if the lock is not its own, it
 writes nothing and answers `locked-timeout`. After its fsync it checks again: if the lock was lost
 by then, it answers `lock-lost`, never a seq. Its release removes the lock only while it is still
-its own, and the stale takeover re-checks the lock it is about to remove, token included.
+its own, and the stale takeover re-checks the lock it is about to remove, token included. If the
+token cannot be written (a full disk), the append removes the lock it just made before it fails, so
+the next append does not wait for an empty lock to look stale.
 
 **What remains, and what it costs:** a takeover that lands between that last check and the write
 system call lets two batches reach one seq. That loses the SESSION: the next `load` refuses it
@@ -155,32 +157,39 @@ so the host passes its own `uid`.
 ## Tokens and windows
 
 A receipt keeps a capped token set and a pointer, never the result text. `readTokens` reads at most
-1 MiB of the host's text: past it, the bytes are counted in `cut.bytesUnread` and never read, and a
-piece of a value the cap falls inside — or one that what follows could still change, such as the
-digits of a thousands-grouped number, or a JSON string — is left unread too (never kept as a piece).
-It keeps the first 2,048 distinct tokens in first-seen order and counts the rest — and any token
-longer than 64 characters — in `cut.tokensDropped`. Nothing read is dropped uncounted. A receipt is
-incomplete when it is cut, when `hidden > 0` or when `limit.hit` (`isIncomplete`, the one predicate
-every rule asks).
+1 MiB of the host's text. Past it, each character is counted once — its UTF-8 bytes, for `bytes`
+and `cut.bytesUnread` — and never copied, split or looked at to decide anything: a 64 MiB text
+costs one counting pass and the 1 MiB it reads. The last piece before the cap is kept only when a
+separator follows it within the bytes read; otherwise it is left unread with the rest. It keeps the
+first 2,048 distinct tokens in first-seen order and counts the rest — and any token longer than 64
+characters — in `cut.tokensDropped`. Nothing read is dropped uncounted. A receipt is incomplete when
+it is cut, when it holds numbers written with thousands separators (`groupedNumbers`), when
+`hidden > 0` or when `limit.hit` (`isIncomplete`, the one predicate every rule asks).
 
 The token rule is a closed copy of rules 1–3 of the evidence extractor's header: a token contains a
 digit and is an identifier of at least 4 characters or a number of at least 4 digits; a number with
-a unit glued on is judged by its number. Two differences from that extractor, on purpose: numbers
-are not re-spelled (`98304.0` stays `98304.0`), and a comma separates values — logs and tools answer
-in CSV — except inside a thousands-grouped number (a run of digits and commas matching
-`\d{1,3}(,\d{3})+` exactly, not glued to a letter before it, whose commas are folded out: `41,200`
-is `41200`). So `1200,9750` gives `1200` and `9750`, and `host-a,1200,9750,ok` gives both values,
-where the extractor sees neither. The differential test against that extractor, planned for the
-plugin adapter, lists these as known differences. One JSON object or array is read value by value
-(numbers as literals). Which way a text is read is decided on the WHOLE text, by JSON's grammar in
-one pass (`isJsonValue`), also when the byte cap reads only its start: a cut JSON value is then read
-as JSON up to its last whole literal, and prose that merely opens with a bracket (a log line
-`[2026-11-25 10:00:00] …`) is prose. So a cut reading never keeps a token the whole text does not
-hold.
+a unit glued on is judged by its number. A token is always a literal piece of the text: a run of
+`A–Z a–z 0–9 : _ - / . % + @ # $` between separators. Every other character separates, and so does
+every comma and every backslash escape (`\n`, `\"`, `\u00e9`). A leading `$ # @ + :` and a
+trailing `. : %` are decoration, so `{"total":1200}` gives `1200`. Nothing is folded, joined or
+respelled but for lower case, so every token is a substring of the lower-cased text — for prose,
+CSV, JSON, JSON Lines and any part of one alike. No text is recognised as JSON first: one rule reads
+them all. `1200,9750` gives `1200` and `9750`, and `host-a,1200,9750,ok` gives both values.
+
+A run of digits and commas that matches `\d{1,3}(,\d{3})+` and is not glued to a letter before it
+(`41,200`, `$1,234.50`, `1,234ms`, `{"ids":[1,234]}`, `[100,200,300`) may be one number or a list
+of values, and no reading of its pieces can tell which. It is counted in `groupedNumbers`, and its
+groups — the pieces after its first comma — are never read (`1,234.5` gives no `234.5`; the piece
+before the first comma is read as written, so `10:00:00,123` gives `10:00:00`). A receipt that
+counted one is incomplete, so a claim value missing from it is `open` ("a value may be in a part of
+a receipt this rule cannot read"), never `unsupported`. The same reader reads a claim or a draft:
+there, such a number is no visible token either. Two differences from the extractor, on purpose:
+numbers are not respelled (`98304.0` stays `98304.0`), and nothing is folded — the extractor reads
+`5,100` as `5100` and one JSON value through its literals. The differential test against it,
+planned for the plugin adapter, lists both as known differences.
 
 What the rule cannot see: all-letter names; numbers under 4 digits; respellings (`1.2 s` against
-`1200ms`); and a CSV row whose values happen to look thousands-grouped (`x,1,234` reads `1234`, not
-`1` and `234`).
+`1200ms`); and numbers written with thousands separators.
 
 A window is `{ from, to }`, half-open, `from < to`, both RFC 3339 instants with an upper-case `T`,
 `Z` or `±hh:mm`, seconds required, 0–3 fraction digits and no leap second (`window.ts`). It is a
@@ -199,8 +208,9 @@ form and holds each file's bare-specifier allowance: every file may import `foot
 constructor, the network (`fetch`, `WebSocket`, `XMLHttpRequest`) and decorators appear nowhere,
 nor does a `.constructor` or `['constructor']` read (the Function constructor's two common reaches
 without its name) or a triple-slash `/// <reference …>` directive (a type-level edge out); no file
-runs code at module evaluation. A fence over source text cannot stop every call built at run time —
-a property name put together from pieces, a function a host hands in. What it stops: every import
+runs code at module evaluation. A fence over source text cannot stop every call built at run time:
+a property name put together from pieces, `Reflect.get(…, 'construc' + 'tor')`, a destructured
+`{ constructor } = []`, a function a host hands in; review is the boundary for those. What it stops: every import
 form, the Node and network globals and `eval` by name, the Function constructor by name and by those
 two reaches, `import.meta`, decorators, code at module evaluation, and Web Crypto outside its file. Tests beside the code import only the folder,
 `vitest`, `footprintjs`, `foottrace` and `node:` builtins; tests that need repository helpers live

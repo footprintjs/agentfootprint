@@ -1,21 +1,19 @@
 /**
- * TOKENS, GENERATED — the token reader against an independent oracle (case table 5.1, 8.4).
+ * TOKENS, GENERATED — the token reader against a plain-split oracle (case table 5.1, amendment 2).
  *
- * The oracle finds tokens by a CHARACTER SCAN, not by the reader's regular expressions: its own
- * splitter and comma rule (a comma separates values except inside a thousands-grouped run of
- * digits not glued to a letter), its own decoration rule, and a hand-written number parser for
- * rules 1–3. On many seeded texts built from the pieces that matter (digits, separators, commas, units,
- * quotes, JSON keys) the two must agree exactly. A JSON value is checked against a walk of its
- * parsed form in document order. Every token either side gives is a fixed point (`isToken`), and
- * a pathological input of the full 1 MiB is read in bounded time. A reading CUT by a byte cap, at
- * every cap, keeps only tokens the whole text holds (never a piece of a value), and keeps more as
- * the cap grows.
+ * The oracle is the rule written as plainly as it can be: blank the backslash escapes, blank the
+ * groups of every run shaped like a number with thousands separators (one regular expression),
+ * split at every comma and every character outside a piece, and read each piece by rules 1–3 (a
+ * hand-written number scan, not the reader's expressions). On seeded prose, CSV, JSON, JSON Lines,
+ * JSON the source cut short, and the shapes earlier comma rules got wrong, the two agree exactly:
+ * the tokens and the grouped count. A reading CUT by a byte cap, at every cap, is the oracle's
+ * reading of exactly the bytes it read — which end at a separator — so it keeps only substrings of
+ * the text, keeps more as the cap grows, and counts what it did not read.
  */
 import { describe, expect, it } from 'vitest';
 
 import { LEDGER_LIMITS } from '../../src/llm-ledger/limits.js';
 import {
-  isJsonValue,
   isToken,
   readTokens,
   readTokensUpTo,
@@ -26,8 +24,6 @@ import { seeded, seededTexts } from '../helpers/seededText.js';
 
 const isDigit = (c: string) => c >= '0' && c <= '9';
 const isLower = (c: string) => c >= 'a' && c <= 'z';
-const INSIDE = new Set([...':_-/.,%+@#$']);
-const inside = (c: string) => isDigit(c) || (c >= 'A' && c <= 'Z') || isLower(c) || INSIDE.has(c);
 
 /** `[-+]?\d+(\.\d+)?` from `i`: the index after it, or -1. */
 function numberEnd(s: string, i: number): number {
@@ -84,104 +80,45 @@ function oracleClassify(t: string): string | undefined {
 function oracleSpell(raw: string): string {
   const v = raw.toLowerCase();
   let a = 0;
-  while (a < v.length && '$#@+'.includes(v[a]!)) a++;
+  while (a < v.length && '$#@+:'.includes(v[a]!)) a++;
   let b = v.length;
-  while (b > a && '.,:%'.includes(v[b - 1]!)) b--;
+  while (b > a && '.:%'.includes(v[b - 1]!)) b--;
   return v.slice(a, b);
 }
 
-/** A rough token's pieces: split at every comma but those of a grouped run, which fold away. */
-function oraclePieces(rough: string): string[] {
-  const out: string[] = [];
-  let piece = '';
-  for (let i = 0; i < rough.length; ) {
-    const c = rough[i]!;
-    if (!isDigit(c)) {
-      if (c === ',') {
-        out.push(piece);
-        piece = '';
-      } else piece += c;
-      i++;
-      continue;
-    }
-    let j = i;
-    let run = '';
-    while (
-      j < rough.length &&
-      (isDigit(rough[j]!) ||
-        (rough[j] === ',' && isDigit(rough[j - 1] ?? '') && isDigit(rough[j + 1] ?? '')))
-    )
-      run += rough[j++];
-    const groups = run.split(',');
-    const glued = i > 0 && /[A-Za-z]/.test(rough[i - 1]!);
-    const grouped =
-      !glued &&
-      groups.length >= 2 &&
-      groups[0]!.length >= 1 &&
-      groups[0]!.length <= 3 &&
-      groups.slice(1).every((g) => g.length === 3);
-    if (grouped) piece += groups.join('');
-    else
-      groups.forEach((g, k) => {
-        if (k > 0) {
-          out.push(piece);
-          piece = '';
-        }
-        piece += g;
-      });
-    i = j;
-  }
-  out.push(piece);
-  return out;
-}
+const ESCAPES = /\\(?:u[0-9A-Fa-f]{4}|["\\/bfnrt])/g;
+/** A maximal run of digits and commas shaped `\d{1,3}(,\d{3})+`, not glued to a letter before it. */
+const GROUPED_RUN = /(?<![A-Za-z0-9]|\d,)\d{1,3}(?:,\d{3})+(?!\d|,\d)/g;
+const PIECE_CHAR = /[A-Za-z0-9:_\-/.%+@#$]/;
+const SEPARATOR = /[^A-Za-z0-9:_\-/.%+@#$]/;
 
-/** Prose: key colons blanked, rough tokens by character, list commas split, then rules 1–3. */
-function oracleProse(text: string, out: string[]): void {
-  const chars = [...text];
-  let open = false;
-  for (let i = 0; i < chars.length; i++) {
-    if (chars[i] !== '"') continue;
-    let slashes = 0;
-    for (let k = i - 1; k >= 0 && chars[k] === '\\'; k--) slashes++;
-    if (slashes % 2 === 1) continue;
-    open = !open;
-    if (open) continue;
-    let j = i + 1;
-    while (j < chars.length && /\s/.test(chars[j]!)) j++;
-    if (chars[j] === ':') chars[j] = ' ';
+/** The rule, plainly: its distinct tokens in first-seen order, and how many grouped runs it saw. */
+function oracle(text: string): { tokens: string[]; grouped: number } {
+  const plain = text.replace(ESCAPES, (e) => ' '.repeat(e.length));
+  const chars = plain.split('');
+  let grouped = 0;
+  for (const m of plain.matchAll(GROUPED_RUN)) {
+    grouped++;
+    // Its groups — from its first comma to the end of its last group's piece — are not read.
+    let j = m.index + m[0].indexOf(',');
+    for (; j < m.index + m[0].length; j++) chars[j] = ' ';
+    while (j < chars.length && PIECE_CHAR.test(chars[j]!)) chars[j++] = ' ';
   }
-  let rough = '';
-  const flush = () => {
-    for (const piece of oraclePieces(rough)) {
-      const token = oracleClassify(oracleSpell(piece));
-      if (token !== undefined && !out.includes(token)) out.push(token);
-    }
-    rough = '';
-  };
-  for (const c of chars) {
-    if (c.length === 1 && inside(c)) rough += c;
-    else flush();
+  const tokens: string[] = [];
+  for (const piece of chars.join('').split(SEPARATOR)) {
+    const token = oracleClassify(oracleSpell(piece));
+    if (token !== undefined && !tokens.includes(token)) tokens.push(token);
   }
-  flush();
-}
-
-/** A JSON value's tokens, by walking its parsed form in document order. */
-function oracleJson(value: unknown, out: string[]): void {
-  if (typeof value === 'string') oracleProse(value, out);
-  else if (typeof value === 'number') {
-    const token = oracleClassify(oracleSpell(JSON.stringify(value)));
-    if (token !== undefined && !out.includes(token)) out.push(token);
-  } else if (Array.isArray(value)) value.forEach((v) => oracleJson(v, out));
-  else if (typeof value === 'object' && value !== null)
-    for (const [k, v] of Object.entries(value)) {
-      oracleProse(k, out);
-      oracleJson(v, out);
-    }
+  return { tokens, grouped };
 }
 
 const PIECES = [
   '1234',
   '41,200',
+  '1,234.5',
+  '10:00:00,123',
+  '120,',
+  ',000',
   '1,2',
   '12',
   '9',
@@ -206,6 +143,10 @@ const PIECES = [
   'é',
   '"',
   '\\',
+  '\\n',
+  '\\"',
+  '\\u0031',
+  '\\u00e9',
   '"k":',
   '24/7',
   'ms',
@@ -217,6 +158,10 @@ const PIECES = [
   '...',
   '(',
   ')',
+  '[',
+  ']',
+  '{',
+  '}',
   '*',
   '`',
   'ok',
@@ -225,184 +170,105 @@ const PIECES = [
   '08:00',
 ];
 
-describe('tokensOf against the character-scan oracle', () => {
-  it('prose: the two agree on every seeded text', () => {
+/** Seeded CSV: cells, commas and line ends, some cells quoted. */
+const CSV_PIECES = [
+  '1200',
+  '9750',
+  '1',
+  '234',
+  '100',
+  '200',
+  'host-a',
+  'esx01a',
+  '2026-11-25',
+  '10:00:00',
+  '0.5',
+  '-7',
+  '"x,y"',
+  '"1,234"',
+  ',',
+  ',',
+  ',',
+  '\n',
+  '\r\n',
+];
+
+/** Seeded JSON values; strings drawn from `PIECES`, numbers of every size. */
+function jsonValue(next: () => number, depth = 0): unknown {
+  if (depth > 2 || next() < 0.35) {
+    const r = next();
+    if (r < 0.35) return Math.floor(next() * 10 ** Math.floor(next() * 8));
+    if (r < 0.45) return -Math.round(next() * 1e6) / 100;
+    if (r < 0.5) return [true, false, null][Math.floor(next() * 3)];
+    return seededTexts(Math.floor(next() * 1e9), PIECES, 1, 6)[0]!;
+  }
+  return next() < 0.5
+    ? Array.from({ length: Math.floor(next() * 4) }, () => jsonValue(next, depth + 1))
+    : Object.fromEntries(
+        Array.from({ length: Math.floor(next() * 4) }, () => [
+          seededTexts(Math.floor(next() * 1e9), PIECES, 1, 3)[0]!,
+          jsonValue(next, depth + 1),
+        ]),
+      );
+}
+
+/** Generated texts of each kind the rule reads alike: prose, CSV, JSON, JSON Lines, cut JSON. */
+function kinds(scale: number): Record<string, string[]> {
+  const next = seeded(4_040 + scale);
+  const json = () => JSON.stringify(jsonValue(next), null, next() < 0.2 ? 1 : undefined);
+  return {
+    prose: seededTexts(2026 + scale, PIECES, 30 * scale, 16).map((t) => `p ${t}`),
+    csv: seededTexts(77 + scale, CSV_PIECES, 10 * scale, 24),
+    json: Array.from({ length: 10 * scale }, json),
+    jsonLines: Array.from({ length: 5 * scale }, () =>
+      Array.from({ length: 1 + Math.floor(next() * 4) }, json).join('\n'),
+    ),
+    cutJson: Array.from({ length: 10 * scale }, () => {
+      const text = json();
+      return text.slice(0, Math.floor(next() * text.length));
+    }),
+  };
+}
+
+describe('tokensOf against the plain-split oracle', () => {
+  const generated = kinds(1_000);
+
+  it.each(Object.keys(generated))('%s: the same tokens and the same grouped count', (kind) => {
     let tokens = 0;
-    for (const body of seededTexts(2026, PIECES, 30_000, 16)) {
-      const text = `p ${body}`; // prose, never one JSON value
-      const expected: string[] = [];
-      oracleProse(text, expected);
-      expect(tokensOf(text), JSON.stringify(text)).toEqual(expected);
-      tokens += expected.length;
+    let grouped = 0;
+    for (const text of generated[kind]!) {
+      const expected = oracle(text);
+      expect(tokensOf(text), JSON.stringify(text)).toEqual(expected.tokens);
+      expect(readTokens(text).groupedNumbers ?? 0, JSON.stringify(text)).toBe(expected.grouped);
+      tokens += expected.tokens.length;
+      grouped += expected.grouped;
     }
-    expect(tokens).toBeGreaterThan(20_000);
+    expect(tokens).toBeGreaterThan(1_000);
+    expect(grouped).toBeGreaterThan(kind === 'json' || kind === 'cutJson' ? 100 : 500);
   });
 
-  it('JSON: one value is read as its parsed form, in document order', () => {
-    const next = seeded(11);
-    const leaf = () => {
-      const r = next();
-      if (r < 0.3) return Math.floor(next() * 10 ** Math.floor(next() * 8));
-      if (r < 0.4) return -Math.round(next() * 1e6) / 100;
-      return seededTexts(Math.floor(next() * 1e9), PIECES, 1, 6)[0]!;
-    };
-    const value = (depth: number): unknown => {
-      if (depth > 2 || next() < 0.4) return leaf();
-      return next() < 0.5
-        ? Array.from({ length: Math.floor(next() * 4) }, () => value(depth + 1))
-        : Object.fromEntries(
-            Array.from({ length: Math.floor(next() * 4) }, () => [
-              String(leaf()),
-              value(depth + 1),
-            ]),
-          );
-    };
-    let compared = 0;
-    for (let i = 0; i < 5_000; i++) {
-      const v = value(0);
-      if (typeof v !== 'object' || v === null) continue;
-      const expected: string[] = [];
-      oracleJson(v, expected);
-      expect(tokensOf(JSON.stringify(v)), JSON.stringify(v)).toEqual(expected);
-      compared++;
-    }
-    expect(compared).toBeGreaterThan(1_000);
-  });
-
-  it('every token is a fixed point, and distinct', () => {
-    for (const text of seededTexts(77, PIECES, 10_000, 20)) {
-      const tokens = tokensOf(text);
-      expect(new Set(tokens).size).toBe(tokens.length);
-      for (const token of tokens) {
-        expect(tokensOf(token)).toEqual([token]);
-        if (token.length <= LEDGER_LIMITS.maxTokenChars) expect(isToken(token)).toBe(true);
-      }
-    }
-  });
-});
-
-describe('isJsonValue against JSON.parse', () => {
-  it('decides exactly what JSON.parse decides, for every text that opens with a bracket', () => {
-    const JSONISH = [
-      '[',
-      ']',
-      '{',
-      '}',
-      ',',
-      ':',
-      ' ',
-      '\n',
-      '"',
-      '"a"',
-      '\\',
-      '\\u0031',
-      '\\q',
-      '\\n',
-      '0',
-      '01',
-      '-',
-      '12',
-      '1.5',
-      '1.',
-      '.5',
-      '1e5',
-      '1E+5',
-      '-0',
-      'true',
-      'false',
-      'null',
-      'tru',
-      'x',
-      '\t',
-      '\u0001',
-      '2026-11-25',
-      '"k":',
-      '[]',
-      '{}',
-      '1,234',
-    ];
-    let valid = 0;
-    for (const body of seededTexts(77_77, JSONISH, 60_000, 12)) {
-      const text = (body.trimStart()[0] === '{' ? '' : '[') + body;
-      let parses = true;
-      try {
-        JSON.parse(text);
-      } catch {
-        parses = false;
-      }
-      expect(isJsonValue(text), JSON.stringify(text)).toBe(parses);
-      if (parses) valid++;
-    }
-    for (const text of ['  [1, 2]  ', '{"a": [true, null, -0.5e+3]}', '[]', '{}', '["\\u00e9"]'])
-      expect(isJsonValue(text)).toBe(true);
-    for (const text of [
-      '',
-      '1',
-      '"x"',
-      '[1] [2]',
-      '[1,]',
-      '{"a"}',
-      '[01]',
-      '["\\x"]',
-      '["\u0001"]',
-    ])
-      expect(isJsonValue(text)).toBe(false);
-    expect(valid).toBeGreaterThan(300);
-    // Valid by construction, then one edit away from valid: both sides of the line, often.
-    const next = seeded(9_191);
-    const leaf = (): unknown => {
-      const r = next();
-      if (r < 0.2)
-        return (
-          Math.round((next() - 0.5) * 10 ** Math.floor(next() * 8)) / 10 ** Math.floor(next() * 3)
-        );
-      if (r < 0.3) return [true, false, null][Math.floor(next() * 3)];
-      return seededTexts(Math.floor(next() * 1e9), JSONISH, 1, 4)[0]!;
-    };
-    const value = (depth: number): unknown =>
-      depth > 2 || next() < 0.35
-        ? leaf()
-        : next() < 0.5
-        ? Array.from({ length: Math.floor(next() * 4) }, () => value(depth + 1))
-        : Object.fromEntries(
-            Array.from({ length: Math.floor(next() * 4) }, () => [
-              String(leaf()),
-              value(depth + 1),
-            ]),
-          );
-    let edited = 0;
-    for (let n = 0; n < 6_000; n++) {
-      const v = value(0);
-      if (typeof v !== 'object' || v === null) continue;
-      const text = JSON.stringify(v, null, next() < 0.3 ? 1 : undefined);
-      expect(isJsonValue(text), text).toBe(true);
-      const at = Math.floor(next() * text.length);
-      const piece = JSONISH[Math.floor(next() * JSONISH.length)]!;
-      for (const variant of [
-        text.slice(0, at) + text.slice(at + 1),
-        text.slice(0, at) + piece + text.slice(at),
-      ]) {
-        let parses = true;
-        try {
-          JSON.parse(variant);
-        } catch {
-          parses = false;
+  it('every token is a substring of the lower-cased text, a fixed point, and distinct', () => {
+    for (const texts of Object.values(kinds(300))) {
+      for (const text of texts) {
+        const lower = text.replace(/[A-Z]/g, (c) => c.toLowerCase());
+        const tokens = tokensOf(text);
+        expect(new Set(tokens).size).toBe(tokens.length);
+        for (const token of tokens) {
+          expect(lower.includes(token), `${JSON.stringify(text)}: ${token}`).toBe(true);
+          expect(tokensOf(token)).toEqual([token]);
+          if (token.length <= LEDGER_LIMITS.maxTokenChars) expect(isToken(token)).toBe(true);
         }
-        const opens = /^\s*[[{]/.test(variant);
-        expect(isJsonValue(variant), JSON.stringify(variant)).toBe(parses && opens);
-        edited++;
       }
     }
-    expect(edited).toBeGreaterThan(5_000);
   });
 });
 
 describe('a reading cut by a byte cap', () => {
   /**
-   * The shapes a cut gets wrong if any rule slips: comma runs that end in a date, a dash or a
-   * longer group (`1,234,2026-11-25`, `120,975,300,1234-5`), grouped runs glued to letters, and
-   * prose that opens with a bracket like a log line (`[2026-11-25 10:00:00] … 1234-5678`).
-   * `LEDGER_CUT_TEXTS` raises the count for a long local run (100,000 was run once).
+   * The shapes earlier comma rules got wrong: comma runs that end in a date, a dash or a longer
+   * group (`1,234,2026-11-25`, `120,975,300,1234-5`), grouped runs glued to letters, and prose
+   * that opens with a bracket like a log line. `LEDGER_CUT_TEXTS` raises their count for a long
+   * local run.
    */
   const SHAPE_PIECES = [
     '1,',
@@ -427,6 +293,7 @@ describe('a reading cut by a byte cap', () => {
     ']',
     '"',
     ':',
+    '\\n',
     '10:00:00',
     '.5',
     '$',
@@ -436,25 +303,10 @@ describe('a reading cut by a byte cap', () => {
   ];
   const shapeCount = Number(process.env.LEDGER_CUT_TEXTS ?? 1_500);
   const shapes = seededTexts(31, SHAPE_PIECES, shapeCount, 10);
-
-  /** Seeded texts of three kinds: prose, one JSON value (so a cut is a cut JSON prefix), shapes. */
-  const texts = (() => {
-    const next = seeded(404);
-    const prose = seededTexts(9, PIECES, 400, 14).map((t) => `p ${t}`);
-    const json = Array.from({ length: 200 }, () =>
-      JSON.stringify(
-        Array.from({ length: 1 + Math.floor(next() * 6) }, () =>
-          next() < 0.5
-            ? Math.floor(next() * 10 ** Math.floor(next() * 7))
-            : seededTexts(Math.floor(next() * 1e9), PIECES, 1, 5)[0]!,
-        ),
-      ),
-    );
-    return [...prose, ...json, ...shapes, ...shapes.map((t) => `[${t}`)];
-  })();
+  const texts = [...Object.values(kinds(20)).flat(), ...shapes, ...shapes.map((t) => `[${t}`)];
 
   it(
-    'at every cap, keeps only tokens the whole text holds, and more as the cap grows',
+    'at every cap, is the plain reading of exactly the bytes it read, and keeps more as the cap grows',
     { timeout: 600_000 },
     () => {
       let cuts = 0;
@@ -464,20 +316,29 @@ describe('a reading cut by a byte cap', () => {
         let before: readonly string[] = [];
         for (let cap = 0; cap <= bytes; cap++) {
           const reading = readTokensUpTo(text, cap);
-          for (const token of reading.tokens)
-            expect(whole.has(token), `${JSON.stringify(text)} @${cap}: ${token}`).toBe(true);
-          for (const token of before)
-            expect(reading.tokens, `${JSON.stringify(text)} @${cap}`).toContain(token);
+          const at = `${JSON.stringify(text)} @${cap}`;
           expect(reading.bytes).toBe(bytes);
-          if (reading.cut !== undefined) {
-            expect(reading.cut.bytesUnread).toBeGreaterThanOrEqual(bytes - cap);
-            cuts++;
-          }
+          for (const token of reading.tokens)
+            expect(whole.has(token), `${at}: ${token}`).toBe(true);
+          for (const token of before) expect(reading.tokens, at).toContain(token);
           before = reading.tokens;
+          // The bytes it read: a prefix of the text that ends at a separator unless it is all.
+          const readBytes = bytes - (reading.cut?.bytesUnread ?? 0);
+          expect(readBytes, at).toBeLessThanOrEqual(cap);
+          let units = 0;
+          while (units < text.length && utf8Bytes(text.slice(0, units + 1)) <= readBytes) units++;
+          while (utf8Bytes(text.slice(0, units)) < readBytes) units++; // a surrogate pair's second half
+          const read = text.slice(0, units);
+          expect(utf8Bytes(read), at).toBe(readBytes);
+          const plain = read.replace(ESCAPES, (e) => ' '.repeat(e.length));
+          if (read !== text && read !== '') expect(PIECE_CHAR.test(plain.at(-1)!), at).toBe(false);
+          const expected = oracle(read);
+          const kept = expected.tokens.filter((t) => t.length <= LEDGER_LIMITS.maxTokenChars);
+          expect(reading.tokens, at).toEqual(kept);
+          expect(reading.cut?.tokensDropped ?? 0, at).toBe(expected.tokens.length - kept.length);
+          expect(reading.groupedNumbers ?? 0, at).toBe(expected.grouped);
+          if (reading.cut !== undefined) cuts++;
         }
-        expect(readTokensUpTo(text, bytes).tokens).toEqual(
-          tokensOf(text).filter((t) => t.length <= LEDGER_LIMITS.maxTokenChars),
-        );
       }
       expect(cuts).toBeGreaterThan(5_000);
     },
@@ -502,6 +363,7 @@ describe('readTokens invariants', () => {
     // Each is read WHOLE (at most 1 MiB), so every pattern meets the one long token.
     ['a megabyte of digits', '1'.repeat(1_048_576)],
     ['a megabyte of quotes and backslashes', '\\"'.repeat(524_288)],
+    ['a megabyte of escapes', '\\u0031'.repeat(174_762)],
     ['a megabyte of commas between digits', '1,'.repeat(524_288)],
     ['thousands groups', `1${',000'.repeat(262_000)}`],
     ['unit tails', '1a'.repeat(524_288)],

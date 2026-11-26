@@ -319,6 +319,10 @@ describe('entryFault — the shapes', () => {
       'cut',
     );
     expect(entryFault(withField('receipt', 'hidden', 0))).toBe('hidden');
+    expect(entryFault(withField('receipt', 'groupedNumbers', 0))).toBe('groupedNumbers');
+    expect(entryFault(withField('receipt', 'groupedNumbers', 1.5))).toBe('groupedNumbers');
+    expect(entryFault(withField('receipt', 'groupedNumbers', '2'))).toBe('groupedNumbers');
+    expect(entryFault(withField('receipt', 'groupedNumbers', 3))).toBeUndefined();
     expect(entryFault(withField('receipt', 'limit', { rows: 0, hit: false }))).toBe('limit');
     expect(entryFault(withField('receipt', 'limit', { rows: 5, hit: false, extra: 1 }))).toBe(
       'limit',
@@ -378,8 +382,9 @@ const receipt = (fields: Partial<LedgerReceipt>): LedgerReceipt =>
   } as LedgerReceipt);
 
 describe('isIncomplete — one predicate', () => {
-  it('a receipt is incomplete when cut, masked or limited — and only then', () => {
+  it('a receipt is incomplete when cut, holding grouped numbers, masked or limited — and only then', () => {
     expect(isIncomplete(receipt({}))).toBe(false);
+    expect(isIncomplete(receipt({ groupedNumbers: 1 }))).toBe(true);
     expect(isIncomplete(receipt({ cut: { tokensDropped: 1, bytesUnread: 0 } }))).toBe(true);
     expect(isIncomplete(receipt({ cut: { tokensDropped: 0, bytesUnread: 9 } }))).toBe(true);
     expect(isIncomplete(receipt({ hidden: 1 }))).toBe(true);

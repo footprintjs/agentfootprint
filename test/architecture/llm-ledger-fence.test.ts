@@ -24,7 +24,8 @@
  *     name); no triple-slash `/// <reference …>` directive (a type-level edge out).
  *
  * WHAT A FENCE OVER SOURCE TEXT CANNOT DO: stop every call built at run time (a property name put
- * together from pieces, a function handed in by a host). What it does stop: every import form, the
+ * together from pieces, `Reflect.get(…, 'construc' + 'tor')`, a destructured `{ constructor } =
+ * []`, a function handed in by a host); review is the boundary there. What it does stop: every import form, the
  * Node and network globals by name, `eval` and the Function constructor by name and by its two
  * common reaches, `import.meta`, decorators, code at module evaluation, and Web Crypto outside its
  * one file.

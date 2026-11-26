@@ -5,8 +5,9 @@
  * still running, and two waiters on one dead lock can both take it. These are the reviewer's two
  * reproductions, with the interleaving forced by hooks on `node:fs/promises` (one hooked module
  * instance per writer): each ends with AT MOST ONE writer told its seq and a log that still
- * verifies. Also pinned: a writer never removes a lock that is no longer its own, and the stale
- * takeover re-checks the lock it is about to remove.
+ * verifies. Also pinned: a writer never removes a lock that is no longer its own, the stale
+ * takeover re-checks the lock it is about to remove, and a lock whose token could not be written
+ * is removed at once.
  */
 import { randomBytes } from 'node:crypto';
 import { constants, existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
@@ -35,7 +36,7 @@ function unwrap<E extends LedgerEntry>(built: { ok: boolean; entry?: E }): E {
 const note = (text: string) =>
   unwrap(noteEntry({ seq: 2, at: AT }, { kind: 'claim', text, cites: [] }));
 
-type Op = 'lstat' | 'lstat:after' | 'unlink' | 'opened' | 'created' | 'sync';
+type Op = 'lstat' | 'lstat:after' | 'unlink' | 'opened' | 'created' | 'write' | 'sync';
 /** The test's hook: runs around each call a hooked store makes, by writer, operation and path. */
 let hook: (writer: string, op: Op, path: string) => Promise<void> = async () => undefined;
 
@@ -75,6 +76,13 @@ async function hookedStore(
         await hook(writer, creating ? 'created' : 'opened', path);
         const stat = handle.stat.bind(handle);
         Object.defineProperty(handle, 'stat', { value: async () => reused(path, await stat()) });
+        const write = (handle.write as (...a: unknown[]) => Promise<unknown>).bind(handle);
+        Object.defineProperty(handle, 'write', {
+          value: async (...a: unknown[]) => {
+            await hook(writer, 'write', path);
+            return write(...a);
+          },
+        });
         const sync = handle.sync.bind(handle);
         Object.defineProperty(handle, 'sync', {
           value: async () => {
@@ -311,4 +319,22 @@ describe('a file system that reuses inode numbers', () => {
     expect(await answer(w.append(s, 1, [note('written by W 3333')]))).toBe('locked-timeout');
     expect(existsSync(lock)).toBe(true);
   }, 15_000);
+});
+
+describe('a lock whose token cannot be written', () => {
+  it('is removed at once, so the next append does not wait for it to look stale', async () => {
+    const { dir, key, plain, s, lock } = await session();
+    const a = await hookedStore('A', { dir, key });
+    hook = async (writer, op, path) => {
+      if (writer === 'A' && op === 'write' && path === lock)
+        throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    };
+    await expect(a.append(s, 1, [note('written by A 1111')])).rejects.toMatchObject({
+      code: 'ENOSPC',
+    });
+    expect(existsSync(lock)).toBe(false);
+    const started = performance.now();
+    expect(await answer(plain.append(s, 1, [note('written by B 2222')]))).toBe('2');
+    expect(performance.now() - started).toBeLessThan(1_000); // not the 2 s wait, nor 30 s stale
+  });
 });
