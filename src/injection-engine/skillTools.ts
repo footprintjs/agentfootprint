@@ -95,12 +95,27 @@ export function buildReadSkillTool(
 ): Tool | undefined {
   const d = readSkillDescriptor(skills, offer);
   if (!d) return undefined;
-  return defineTool<{ id: string }, string>({
+  const tool = defineTool<{ id: string }, string>({
     name: d.name,
     description: d.description,
     inputSchema: d.inputSchema,
     execute: (args) => d.execute(args),
   });
+  SKILL_READERS.add(tool);
+  return tool;
+}
+
+/** Every `read_skill` this library built — the provenance of a skill body, never the name. */
+const SKILL_READERS = new WeakSet<object>();
+
+/**
+ * Is this the library's own `read_skill`, built from registered skills? Its
+ * answer is a registered skill's body, the app's own text, or the library's
+ * own confirmation — never a third party's: a tool another party registers
+ * under the same name is not one, whatever it is called.
+ */
+export function isLibrarySkillReader(tool: object | undefined): boolean {
+  return tool !== undefined && SKILL_READERS.has(tool);
 }
 
 /**

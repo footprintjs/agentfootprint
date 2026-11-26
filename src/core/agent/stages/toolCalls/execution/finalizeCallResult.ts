@@ -9,6 +9,8 @@ import type { ToolCallOperations } from '../compose.js';
 import { sourceLanding } from '../../../sourceEvidence/landing.js';
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import { keepNegativeResultOut } from '../../../negativeClaims/capture.js';
+import { bodyInHistory } from '../../../../../injection-engine/skillContext.js';
+import { skillActivationConfirmation } from '../../../../../injection-engine/skillToolDescriptors.js';
 
 interface FinalizeCallFrame {
   readonly tool: Tool | undefined;
@@ -19,6 +21,13 @@ interface FinalizeCallFrame {
   readonly outcome: CallResultCell;
   readonly skillRejected: boolean;
   readonly sourceEvidenceArmed: boolean;
+  /**
+   * The skill context is `listed` and the library's own `read_skill` answered
+   * (`skillTools.ts` · `isLibrarySkillReader`, provenance, never the name): its
+   * result is a registered skill's body, the app's own text, so it is neither
+   * placed by reference nor cut by the result cap.
+   */
+  readonly libraryBody?: boolean;
 }
 
 /** Final governance, placement, cap and native result contracts precede every delivery. */
@@ -29,6 +38,20 @@ export async function finalizeCallResult(
 ) {
   const { tool, tc, batch, callArguments, execution, outcome } = frame;
   const occurrence = callOccurrenceField(tc.callOccurrenceKey);
+  // `listed`: a re-read of a skill whose body is already in the history this
+  // request sends answers the `declared` confirmation, never a second copy
+  // (`injection-engine/skillContext.ts` · `bodyInHistory`).
+  if (
+    frame.libraryBody === true &&
+    execution.executed &&
+    !outcome.error &&
+    !frame.skillRejected &&
+    typeof outcome.result === 'string' &&
+    bodyInHistory(outcome.result, batch.newHistory)
+  ) {
+    const id = (callArguments.callArgs as { id?: unknown }).id;
+    if (typeof id === 'string') outcome.result = skillActivationConfirmation(id);
+  }
   // ── The after-tool moment ────────────────────────────────────────
   // Last thing before the result becomes history, and only for a call
   // that ran. `modelResult` is what the model reads; `result` stays the
@@ -70,11 +93,21 @@ export async function finalizeCallResult(
   // measures the ticket. A refused/denied/errored call is never
   // placed: a refusal is already short, and 'tool-result/<name>' must
   // never claim an error is the tool's result.
+  const libraryBody =
+    frame.libraryBody === true &&
+    execution.executed &&
+    !outcome.error &&
+    !execution.denied &&
+    !frame.skillRejected;
   const placedValues = await operations.placeResults(
     scope,
     { toolName: tc.name, toolCallId: tc.id, iteration: batch.iteration, ...occurrence },
     { result: outcome.result, modelResult: rawModelResult },
-    execution.executed && !outcome.error && !execution.denied && !execution.ceilingRefused,
+    execution.executed &&
+      !outcome.error &&
+      !execution.denied &&
+      !execution.ceilingRefused &&
+      !libraryBody,
   );
   // The write seam (9.77.0) — judged on `result`, the tool's own answer,
   // and on `newHistory`, which at this point holds every earlier tool
@@ -92,7 +125,9 @@ export async function finalizeCallResult(
   // The ceiling, last — after the tool, after the chain. A rule that
   // already summarized a huge result is measured on what it produced, so
   // the cap composes with governance rather than pre-empting it.
-  let capped = operations.capResults(tc.name, placedValues);
+  let capped: ReturnType<ToolCallOperations['capResults']> = libraryBody
+    ? placedValues
+    : operations.capResults(tc.name, placedValues);
   const modelResultCapped = !Object.is(capped.modelResult, placedValues.modelResult);
   const uncapped = capped.modelResult === placedValues.modelResult;
   const refusal =

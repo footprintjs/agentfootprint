@@ -197,15 +197,19 @@ redescribed, or the earlier message that moved. It never quotes their content.
 The same names are on `error.changes`, one `ContextChange` each: the `slot`, the
 kind of `change`, and the `source` and `id`, `tool` and `party`, or `position`
 and `role` that apply to that slot.
-Loading a skill whose body goes into the system prompt is the common case:
+A skill whose body goes into the system prompt, loaded under
+`skillContext: 'declared'`, is the common case:
 
 <CodeFile path="examples/features/context-changed-in-tool-turn.ts" region="refused" title="examples/features/context-changed-in-tool-turn.ts (region: refused)" />
 
 The same refusal names an instruction or fact whose `activeWhen` reads the
 tool result, a tool provider whose list moves between calls, and a skill graph
 whose cursor moves. Until the agent can deliver such changes as appended
-messages, keep them out of a tool turn. For a skill, list its tools from the
-first request and deliver its body only in the `read_skill` result:
+messages, keep them out of a tool turn. For skills the agent does this by
+default on such a model (`skillContext: 'listed'`, see
+[Skills on a model that binds its reasoning](/docs/build/skills#skills-on-a-model-that-binds-its-reasoning)):
+every skill tool is listed from the first request and the body is the
+`read_skill` result:
 
 <CodeFile path="examples/features/context-changed-in-tool-turn.ts" region="passes" title="examples/features/context-changed-in-tool-turn.ts (region: passes)" />
 

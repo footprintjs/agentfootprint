@@ -1,5 +1,7 @@
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { menuOutstanding, type TurnRoute } from '../../injection-engine/routingPolicy.js';
+import { visibleToRole } from '../../lib/spokenIds.js';
+import type { ToolClaim } from '../agent/buildToolRegistry.js';
 
 /**
  * `undefined` means the OFFER is withheld for this iteration: the schema
@@ -24,13 +26,35 @@ export type ReadSkillFor = (
   treeWithheld?: (ids: readonly string[]) => void,
 ) => LLMToolSchema | undefined;
 
+/**
+ * The skills that declare a static-list name, or `undefined` when any other
+ * party (a `.tool()`, the framework) claims it too: then it is not a skill's.
+ */
+function skillOwners(claims: readonly ToolClaim[] | undefined): readonly string[] | undefined {
+  if (claims === undefined || claims.some((claim) => claim.channel !== 'skill')) return undefined;
+  return claims.flatMap((claim) => (claim.id === undefined ? [] : [claim.id]));
+}
+
+/**
+ * `listedClaims` is present only under the `listed` skill context
+ * (`core/agent/skillContext/`): every skill tool rides the static list there,
+ * so the static list drops each tool EVERY declaring skill of which is hidden
+ * from this caller's role — the dispatch roster's sole-owner rule
+ * (`lib/spokenIds.ts` · `visibleToRole`), asked of the hidden set resolved for
+ * THIS iteration. Absent, and the list is the one it always was.
+ */
 export function composeSkillCatalog(
   tools: readonly LLMToolSchema[],
   readSkillFor: ReadSkillFor | undefined,
   resolvedHidden: readonly string[] | undefined,
   currentSkillId: string | undefined,
   turnRoute: TurnRoute | undefined,
+  listedClaims?: ReadonlyMap<string, readonly ToolClaim[]>,
 ) {
+  if (listedClaims !== undefined && resolvedHidden !== undefined && resolvedHidden.length > 0) {
+    const hidden = new Set(resolvedHidden);
+    tools = tools.filter((tool) => visibleToRole(skillOwners(listedClaims.get(tool.name)), hidden));
+  }
   // The turn-start MENU (SG-C) — composed from the SAME verdict the record
   // carries (`scope.turnRoute`, threaded by the mount mappers), and only
   // while it is OUTSTANDING: once an accepted pick moves the cursor, the

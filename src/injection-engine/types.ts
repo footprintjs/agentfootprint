@@ -18,6 +18,7 @@
  */
 
 import type { ContextRole, ContextSource } from '../events/types.js';
+import { servedSurfaceMode } from './skillContext.js';
 import type { SkillCachePolicy, SkillTool, SkillToolSchema } from './hostContract.js';
 import type { ToolResultStatus } from '../semantics/toolOutcome.js';
 import { isSaidByPerson } from '../lib/saidByPerson.js';
@@ -636,15 +637,12 @@ export interface ActiveInjection {
  */
 export function projectActiveInjection(
   inj: Injection,
-  ctx?: Pick<InjectionContext, 'iteration' | 'maxIterations'>,
+  ctx?: Pick<InjectionContext, 'iteration' | 'maxIterations'> & Partial<InjectionContext>,
 ): ActiveInjection {
-  // Project per-skill metadata that slot subflows need to dispatch on.
-  // `surfaceMode` drives the system-prompt-suppression decision.
-  // `autoActivate` drives runtime tool gating: it tells the tools slot that
-  // this skill's tools are not in the static registry and must be readmitted
-  // while it is active.
+  // Per-skill metadata the slots dispatch on: `surfaceMode` (suppression), `autoActivate` (the
+  // tools slot readmits a scoped skill's tools while it is active).
   const meta = inj.metadata as
-    | { surfaceMode?: string; autoActivate?: string; cache?: unknown }
+    | { surfaceMode?: string; autoActivate?: string; cache?: unknown; skillContext?: unknown }
     | undefined;
   // Rendered HERE, once, so the projection every reader shares is already
   // plain text. `undefined` = a template whose facts this ctx cannot supply,
@@ -655,11 +653,13 @@ export function projectActiveInjection(
         ? undefined
         : renderTemplate(inj.inject.systemPrompt, ctx)
       : inj.inject.systemPrompt;
+  const surfaceMode = servedSurfaceMode(meta, systemPrompt, ctx?.history);
   const out: ActiveInjection = {
     id: inj.id,
     flavor: inj.flavor,
     ...(inj.description && { description: inj.description }),
-    ...(meta?.surfaceMode && { surfaceMode: meta.surfaceMode as ActiveInjection['surfaceMode'] }),
+    // `listed` (`injection-engine/skillContext.ts`): `tool-only` exactly while the read_skill result is in history.
+    ...(surfaceMode && { surfaceMode: surfaceMode as ActiveInjection['surfaceMode'] }),
     ...(meta?.autoActivate && {
       autoActivate: meta.autoActivate as ActiveInjection['autoActivate'],
     }),

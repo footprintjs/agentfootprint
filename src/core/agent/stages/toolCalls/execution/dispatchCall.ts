@@ -1,3 +1,4 @@
+import { isLibrarySkillReader } from '../../../../../injection-engine/skillTools.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
@@ -454,6 +455,7 @@ export function buildCallDispatch(
           outcome,
           skillRejected: skillRoute.skillRejected,
           sourceEvidenceArmed: deps.sourceEvidenceConfig !== undefined,
+          libraryBody: deps.listedScopedTools !== undefined && isLibrarySkillReader(tool),
         });
 
       const durationMs = Date.now() - startMs;

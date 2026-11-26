@@ -8,7 +8,7 @@ Defined in: [src/core/agent/types.ts:51](https://github.com/footprintjs/agentfoo
 
 ## Extends
 
-- `AgentObservationOptions`
+- `AgentObservationOptions`.`AgentSkillContextOptions`
 
 ## Properties
 
@@ -1287,6 +1287,44 @@ declare a `period` only on their results — without the layer those
 periods are recorded but no verdict is filed (one dev warning per tool
 says so). Prefer the builder's `.resultsLayer()`. Absent → the chart is
 byte-identical.
+
+***
+
+### skillContext?
+
+> `readonly` `optional` **skillContext?**: `"listed"` \| `"declared"`
+
+Defined in: [src/core/agent/types/skillContext.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/skillContext.ts#L31)
+
+How a skill's tools and body reach the model.
+
+- `'listed'`: every skill tool is on the tool list from the first request,
+  with a description that does not change; `read_skill`'s description is
+  the catalog, frozen for the run; a body `read_skill` loads is that call's
+  result, never the system prompt. A call to a scoped skill's tool before
+  its skill is loaded is refused and the tool does not run. Loading a skill
+  then changes nothing a signed thinking block was written under.
+- `'declared'`: each skill's own declarations (`autoActivate`,
+  `surfaceMode`), as before this option existed.
+
+Absent (the default): `'listed'` when any provider the agent's calls reach
+binds its reasoning to its context, or cannot tell (`thinkingBinding`
+answers `bound` or `unknown`: the newest Claude models, an opaque inference
+profile); `'declared'` otherwise, which keeps every other provider's
+requests byte for byte. The choice is recorded as `skillContext` on the
+first `agentfootprint.stream.llm_start` of each run, unless the default
+chose `'declared'`.
+
+#### Example
+
+```ts
+Agent.create({ provider, model: 'claude-haiku-5-5' }); // listed, by rule
+  Agent.create({ provider, model, skillContext: 'declared' }); // stated by the app
+```
+
+#### Inherited from
+
+`AgentSkillContextOptions.skillContext`
 
 ***
 

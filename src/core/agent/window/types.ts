@@ -66,6 +66,13 @@ export type WindowRefusalReason =
   | 'paused-tool'
   /** The turn holds a tool call waiting on a human check-in decision. */
   | 'pending-check-in'
+  /**
+   * The turn holds the `read_skill` result that carries the body of a skill
+   * that is still active, under the `listed` skill context: that result is
+   * the only place the body is, so dropping it would leave the skill's tools
+   * running with no procedure (`core/agent/skillContext/`).
+   */
+  | 'active-skill-body'
   /** Inside `keepRecentTurns` — the recent window is never a candidate. */
   | 'inside-keep-window'
   /**

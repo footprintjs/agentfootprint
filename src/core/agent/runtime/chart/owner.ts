@@ -1,5 +1,6 @@
 import { buildCatalog } from '../catalog/buildCatalog.js';
 import { buildSlots } from '../slots/buildSlots.js';
+import { skillBodiesOf } from '../../skillContext/bodies.js';
 import { routeFactory } from '../routing/routeFactory.js';
 import { chartDependencies } from '../chart/chartDependencies.js';
 import { seedFactory } from '../seed/factory.js';
@@ -188,6 +189,7 @@ export function buildChart(
     toolDeclaringSkills,
     toolClaimants,
     scopedSkillTools,
+    listedScopedTools,
     inputsArmed,
     argumentSources,
     resultsArmed,
@@ -410,6 +412,10 @@ export function buildChart(
               ...(this.configuration.keepLastToolResults !== undefined && {
                 keepLastToolResults: this.configuration.keepLastToolResults,
               }),
+              // The `listed` skill context: an active skill's body result stays.
+              ...(this.configuration.skillContext?.strategy === 'listed' && {
+                skillBodies: skillBodiesOf(this.configuration.injections),
+              }),
               // The findings ledger (9.102.0): the arm and the RESOLVED
               // ledger-fact ceiling, together or not at all. `keepLedgerFacts`
               // is set exactly when `.findings()` is on, so an unarmed agent
@@ -482,6 +488,7 @@ export function buildChart(
     runner: this.runner,
     registryByName,
     toolDeclaringSkills,
+    listedScopedTools,
     scriptRecordArmed,
     inputsArmed,
     argumentSources,
