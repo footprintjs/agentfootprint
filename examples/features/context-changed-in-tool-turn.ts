@@ -25,7 +25,7 @@ export const meta: ExampleMeta = {
   title: 'A changed tool turn, refused by name',
   group: 'features',
   description:
-    'A skill loaded mid-turn on Claude Haiku 5.5 is refused before sending with ContextChangedError naming the skill and its tool; the same skill with its tools always listed and its body in the read_skill result passes.',
+    "A skill loaded mid-turn on Claude Haiku 5.5 under skillContext: 'declared' is refused before sending with ContextChangedError naming the skill and its tool; under the default, listed, the same skill passes.",
   defaultInput: 'Why is the finance share slow?',
   providerSlots: [],
   tags: ['features', 'provider', 'anthropic', 'thinking', 'skills'],
@@ -73,8 +73,15 @@ const shareReport = defineTool<{ share: string }, string>({
 async function ask(
   input: string,
   skill: ReturnType<typeof defineSkill>,
-  model = 'claude-haiku-5-5',
-  thinkingBinding?: (id: string) => 'bound' | 'unbound' | undefined,
+  {
+    model = 'claude-haiku-5-5',
+    thinkingBinding,
+    skillContext,
+  }: {
+    readonly model?: string;
+    readonly thinkingBinding?: (id: string) => 'bound' | 'unbound' | undefined;
+    readonly skillContext?: 'listed' | 'declared';
+  } = {},
 ) {
   const bodies: Body[] = [];
   // The stand-in has no `stream`, so the agent calls `complete`.
@@ -82,7 +89,11 @@ async function ask(
     _client: recordingClient(bodies),
     ...(thinkingBinding !== undefined && { thinkingBinding }),
   });
-  const agent = Agent.create({ provider, model })
+  const agent = Agent.create({
+    provider,
+    model,
+    ...(skillContext !== undefined && { skillContext }),
+  })
     .system('You diagnose file-share problems.')
     .skill(skill)
     .thinking({ budget: 2000 })
@@ -99,7 +110,8 @@ export async function run(input: string): Promise<unknown> {
     tools: [shareReport],
     autoActivate: 'currentSkill', // its tools appear only once it is loaded
   });
-  const refused = await ask(input, scoped);
+  // The app keeps each skill's own declarations (the default lists them instead).
+  const refused = await ask(input, scoped, { skillContext: 'declared' });
   if (refused.outcome instanceof ContextChangedError) {
     console.log(refused.outcome.message);
     // Refused before sending: claude-haiku-5-5 binds its reasoning to the context it was
@@ -112,16 +124,9 @@ export async function run(input: string): Promise<unknown> {
   assert.equal(refused.bodies.length, 1); // the changed request was never sent
 
   // #region passes
-  // Until the agent can append these changes itself: list the tools from the
-  // first request and deliver the body only in the read_skill result.
-  const listed = defineSkill({
-    id: 'smb-triage',
-    description: 'Diagnose slow SMB shares.',
-    body: 'Check the share report first, then latency.',
-    tools: [shareReport], // no autoActivate: listed from the first request
-    surfaceMode: 'tool-only', // the body travels in the read_skill result
-  });
-  const passed = await ask(input, listed);
+  // The default on this model (`skillContext: 'listed'`): every skill tool is
+  // listed from the first request and the body is the read_skill result.
+  const passed = await ask(input, scoped);
   // #endregion passes
   assert.ok(!(passed.outcome instanceof Error));
   assert.equal(passed.bodies.length, 2);
@@ -132,10 +137,12 @@ export async function run(input: string): Promise<unknown> {
   // unknown, so the changed turn is sent and recorded, not refused. Say what
   // the profile serves, and the same turn gets the named refusal.
   const profile = 'arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/team-haiku';
-  const unknown = await ask(input, scoped, profile);
-  const declared = await ask(input, scoped, profile, (id) =>
-    id === profile ? 'bound' : undefined,
-  );
+  const unknown = await ask(input, scoped, { model: profile, skillContext: 'declared' });
+  const declared = await ask(input, scoped, {
+    model: profile,
+    skillContext: 'declared',
+    thinkingBinding: (id) => (id === profile ? 'bound' : undefined),
+  });
   // #endregion declare
   assert.equal(unknown.bodies.length, 2); // sent; llm_start records binding: 'unknown'
   assert.ok(declared.outcome instanceof ContextChangedError);

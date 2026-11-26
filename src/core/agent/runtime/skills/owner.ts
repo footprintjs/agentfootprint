@@ -77,11 +77,20 @@ export function readSkillOfferFor(
   // construction (9.86.0). The descriptor withholds the tool entirely when
   // nothing is left to open, and explains the tree when something is.
   const treeRouted = reachable !== undefined && this.configuration.skillGraphIsTree;
+  // Under the `listed` skill context (`skillContext/decide.ts`) the description is
+  // frozen for the run: no cursor, no menu and no reachable set that moves with
+  // them. A tree's grantable set is its open skills, which do not move. A refused
+  // pick's result still names where the graph can go (`readSkillRefusal.ts`).
+  const frozen = this.configuration.skillContext?.strategy === 'listed';
   return (args, treeWithheld) => {
     if (filtersByRole && args.hiddenSkillIds === undefined) return undefined;
-    const grantable = reachable
-      ? [...new Set([...reachable(args.currentSkillId), ...open])]
-      : undefined;
+    const grantable = !reachable
+      ? undefined
+      : frozen
+      ? treeRouted
+        ? [...open]
+        : undefined
+      : [...new Set([...reachable(args.currentSkillId), ...open])];
     // An empty visible catalog or a tree without an open skill withholds the door.
     const descriptor = resolveReadSkillDescriptor(
       skills,
@@ -90,10 +99,10 @@ export function readSkillOfferFor(
         ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
         // WHERE THE MODEL STANDS (9.84.0) — unconditional, unlike the menu below.
         // The description names it, and stops listing it as unreachable.
-        ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
+        ...(!frozen && args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
         // The turn-start menu (SG-C) — the tools slot passes it only while the
         // verdict is outstanding; describeOffer leads with it.
-        ...(args.menu !== undefined && { menu: args.menu }),
+        ...(!frozen && args.menu !== undefined && { menu: args.menu }),
         ...(treeRouted && { treeRouted: true }),
       },
       treeWithheld,

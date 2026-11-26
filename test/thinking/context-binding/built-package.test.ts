@@ -80,7 +80,13 @@ for (const { format, root } of FORMATS) {
           inputSchema: { type: 'object', properties: { share: { type: 'string' } } },
           execute: async () => 'report',
         });
-        const agent = main.Agent.create({ provider, model: 'claude-haiku-5-5', maxIterations: 4 })
+        const agent = main.Agent.create({
+          provider,
+          model: 'claude-haiku-5-5',
+          maxIterations: 4,
+          // The refusal needs the skill context that still edits the turn.
+          skillContext: 'declared',
+        })
           .system('You diagnose file-share problems.')
           .skill(
             context.defineSkill({

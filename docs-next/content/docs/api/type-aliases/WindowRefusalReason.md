@@ -4,7 +4,7 @@ title: WindowRefusalReason
 
 # Type Alias: WindowRefusalReason
 
-> **WindowRefusalReason** = `"system-envelope"` \| `"current-request"` \| `"unresolved-tool-call"` \| `"paused-tool"` \| `"pending-check-in"` \| `"inside-keep-window"` \| `"last-tool-result"` \| `"ledger-fact"` \| `"only-existing-summary"` \| `"summarizer-failed"` \| `"replacement-not-smaller"`
+> **WindowRefusalReason** = `"system-envelope"` \| `"current-request"` \| `"unresolved-tool-call"` \| `"paused-tool"` \| `"pending-check-in"` \| `"active-skill-body"` \| `"inside-keep-window"` \| `"last-tool-result"` \| `"ledger-fact"` \| `"only-existing-summary"` \| `"summarizer-failed"` \| `"replacement-not-smaller"`
 
 Defined in: [src/core/agent/window/types.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/types.ts#L44)
 

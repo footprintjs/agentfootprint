@@ -241,9 +241,13 @@ function describeOffer(
   fullCatalog: string,
   offer?: ReadSkillOffer,
 ): string {
-  const tail =
-    `Pass the skill's id. The skill's body becomes part of the system prompt and any ` +
-    `gated tools become available on the next call.`;
+  // Under the `listed` skill context (`injection-engine/skillContext.ts`) the body is this call's result.
+  const listed = allSkills.some((s) => s.metadata?.skillContext === 'listed');
+  const tail = listed
+    ? `Pass the skill's id. A skill's body is returned as this call's result, unless the ` +
+      `skill graph routes to it; its tools run after it loads.`
+    : `Pass the skill's id. The skill's body becomes part of the system prompt and any ` +
+      `gated tools become available on the next call.`;
   if (!offer) {
     return `Activate a skill for the next iteration. Available skills:\n${fullCatalog}\n\n${tail}`;
   }
@@ -523,10 +527,11 @@ export function resolveReadSkillDescriptor(
   type SkillEntry = { body: string; surfaceMode: string };
   const byId = new Map<string, SkillEntry>();
   for (const s of visible) {
-    const meta = s.metadata as { surfaceMode?: string } | undefined;
+    const meta = s.metadata as { surfaceMode?: string; skillContext?: unknown } | undefined;
     byId.set(s.id, {
       body: s.inject.systemPrompt ?? '',
-      surfaceMode: meta?.surfaceMode ?? 'auto',
+      // `listed`: every body read_skill loads is its result, a graph target's included.
+      surfaceMode: meta?.skillContext === 'listed' ? 'both' : meta?.surfaceMode ?? 'auto',
     });
   }
 

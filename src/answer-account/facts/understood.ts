@@ -183,16 +183,16 @@ export function routingVerdictOf(ctx: ReadContext): RoutingVerdict | undefined {
   }
   return heldVerdict(ctx);
 }
-
 interface Delivered {
   readonly ids: readonly string[];
   readonly firstRow: ReadonlyMap<string, ViewEvent>;
 }
-
+/** A body is delivered by the system prompt, or (`listed`) as its read_skill result the messages slot credits. */
 function deliveredSkills(view: RecordingView): Delivered {
   const firstRow = new Map<string, ViewEvent>();
   for (const e of view.ofType('context.injected')) {
-    if (e.payload.slot !== 'system-prompt' || e.payload.source !== 'skill') continue;
+    const byResult = e.payload.slot === 'messages' && e.payload.asRole === 'tool';
+    if ((e.payload.slot !== 'system-prompt' && !byResult) || e.payload.source !== 'skill') continue;
     const id = str(e.payload.sourceId);
     if (id !== undefined && !firstRow.has(id)) firstRow.set(id, e);
   }

@@ -1,5 +1,6 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import { honestyHistory } from '../../../skillContext/honestyView.js';
 import type { ResolvedEvidenceGate } from '../../../evidence/types.js';
 import { type EvidenceCorpus, evidenceFromHistory } from '../../../evidence/evidenceIndex.js';
 import type { InputsRouteArm, TimeLineage } from '../../route.js';
@@ -34,7 +35,10 @@ export function towersFor(
   const rows = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
   const { standingOf } = foldLedger(rows);
   if (!hasSetAsideStanding(standingOf)) return undefined;
-  const history = [...((scope.history as readonly LLMMessage[] | undefined) ?? [])];
+  // Under `listed`, a skill body result is the app's text (`skillContext/honestyView.ts`).
+  const history = [
+    ...honestyHistory((scope.history as readonly LLMMessage[] | undefined) ?? [], gate.skillBodies),
+  ];
   // The same corpus the answer moment builds: one gate, one fold.
   const corpus = evidenceFromHistory(history, gate);
   // The index hit its ceiling: a result past the cut carried nothing into
