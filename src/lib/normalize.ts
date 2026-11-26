@@ -42,8 +42,8 @@ const INTRA_TOKEN = /[^A-Za-z0-9:_\-/.,%+@#$]+/g;
 const RANGE_TOKEN = /[A-Za-z0-9:_\-/.,%+@#$–]+/g;
 
 /**
- * A comma that is NOT flanked by digits on both sides — i.e. a list comma
- * (`fc1/3,fc1/4`) rather than a thousands separator (`41,200`).
+ * Commas outside digit pairs separate ordinary list items. Numeric comma runs
+ * are classified as a whole below, since both lists and thousands can be digit pairs.
  */
 const LIST_COMMA = /,(?!\d)|(?<!\d),/;
 
@@ -115,6 +115,16 @@ const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
 
 /** A plain decimal or integer, optionally signed. */
 const PLAIN_NUMBER = /^[-+]?\d+(\.\d+)?$/;
+const COMPACT_NUMERIC_LIST = /^-?\d+(?:\.\d+)?(?:,\d+(?:\.\d+)?)+%?$/;
+
+/** Break an ungrouped numeric comma run while preserving grouped numbers. */
+export function numericCommaItems(spelling: string): readonly string[] | undefined {
+  if (!spelling.includes(',')) return undefined;
+  const number = trimTrailing(spelling, TRAILING_DECORATION);
+  return COMPACT_NUMERIC_LIST.test(spelling) && !THOUSANDS.test(number)
+    ? spelling.split(',')
+    : undefined;
+}
 
 /**
  * Above this many digits, `Number()` silently rounds — `9007199254740993`
@@ -177,13 +187,27 @@ export function countDigits(v: string): number {
  * only as a SUBSTRING of an unrelated field must not read as grounded, so
  * matching is always token-exact and never substring.
  */
-export function tokenize(text: string): string[] {
+export function tokenize(
+  text: string,
+  declaredShapes: readonly { readonly match: RegExp }[] = [],
+): string[] {
   const out: string[] = [];
   for (const rough of withoutKeyColons(text).replace(INTRA_TOKEN, ' ').split(/\s+/)) {
     if (rough === '') continue;
     // A comma inside a token is either a thousands separator (keep the token
     // whole) or a list separator that had no space after it (split).
     for (const piece of rough.split(LIST_COMMA)) {
+      if (piece.includes(',')) {
+        const spelling = tokenSpelling(piece, true);
+        const items = numericCommaItems(spelling);
+        if (
+          items !== undefined &&
+          !declaredShapes.some(({ match }) => match.test(normalizeToken(spelling)))
+        ) {
+          for (const item of items) out.push(normalizeToken(item));
+          continue;
+        }
+      }
       const norm = normalizeToken(piece);
       if (norm !== '') out.push(norm);
     }

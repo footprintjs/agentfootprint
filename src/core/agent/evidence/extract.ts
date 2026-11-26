@@ -50,6 +50,7 @@ import {
   countDigits,
   lookupForms,
   normalizeToken,
+  numericCommaItems,
   tokenize,
 } from '../../../lib/normalize.js';
 import { splitNumericRange } from './numericRanges.js';
@@ -449,6 +450,16 @@ export function readAnswer(
       // Test app-owned ID declarations on the intact token before heuristics.
       if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
         add(spelling, undefined, span);
+        continue;
+      }
+      const items = numericCommaItems(spelling);
+      if (items !== undefined) {
+        let start = span?.[0];
+        for (const item of items) {
+          const end = start === undefined ? undefined : start + item.length;
+          add(item, undefined, start === undefined || end === undefined ? undefined : [start, end]);
+          start = end === undefined ? undefined : end + 1;
+        }
         continue;
       }
       const range = splitNumericRange(spelling, spellings[index + 1]);

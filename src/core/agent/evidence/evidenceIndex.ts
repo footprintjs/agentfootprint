@@ -192,12 +192,12 @@ interface Sink extends CarrierSink {
   readonly values: Map<string, number>;
   budget: number;
   /**
-   * Under `decimalRounding` only: the declared ID shapes, present as the sign
-   * that a standalone scientific token in a result's TEXT also files the
-   * exact decimal it states ({@link addDecimalOf}). Absent → the index it
-   * always was; the exempt corpus never sets it.
+   * Declared ID shapes preserve comma-bearing identifiers. Under
+   * `decimalRounding`, a standalone scientific token also files its exact
+   * decimal unless it matches a declared shape ({@link addDecimalOf}).
+   * The exempt corpus has no evidence gate.
    */
-  readonly decimalShapes?: readonly EvidenceShape[];
+  readonly gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>;
 }
 
 function add(sink: Sink, raw: string): void {
@@ -220,10 +220,10 @@ function add(sink: Sink, raw: string): void {
 }
 
 function addText(sink: Sink, text: string): void {
-  for (const token of tokenize(text)) {
+  for (const token of tokenize(text, sink.gate?.shapes)) {
     if (sink.budget <= 0) return;
     add(sink, token);
-    if (sink.decimalShapes !== undefined) addDecimalOf(sink, token, sink.decimalShapes);
+    if (sink.gate?.decimalRounding === true) addDecimalOf(sink, token, sink.gate.shapes);
   }
 }
 
@@ -372,7 +372,7 @@ export function evidenceFromHistory(
    * The gate this corpus is judged by. Under its `decimalRounding`, a
    * standalone scientific token in a result's text also files the exact
    * decimal it states, unless it matches one of its declared `shapes`.
-   * Absent, or the dial off → the corpus it always was.
+   * The shapes also preserve whole comma-bearing identifiers.
    */
   gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>,
   captureOccurrences?: true,
@@ -383,7 +383,7 @@ export function evidenceFromHistory(
     budget: MAX_INDEX_TOKENS,
     turn: 0,
     toolCallId: undefined,
-    ...(gate?.decimalRounding === true && { decimalShapes: gate.shapes }),
+    ...(gate !== undefined && { gate }),
     ...(captureOccurrences === true && { occurrences: new Map() }),
   };
   let toolResultsThisTurn = 0;
