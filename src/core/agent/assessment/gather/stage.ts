@@ -123,7 +123,7 @@ export function gatherWarning(
     state.coverageDeclared,
     (row) => callIndexOf(row, resolveCurrent),
     declarationAddresses,
-    admission.nativeResult,
+    admission.declaredResult,
   );
   const reads = readResults(
     results.filter((result) => admission.returned(result.index)),

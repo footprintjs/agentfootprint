@@ -19,3 +19,9 @@ The result-disposition reader binds host denials and rewrites to the committed
 tool message. An older record can supply the same proof through its after-tool
 decision. A native row that could have come from a governed occurrence cannot
 establish what was delivered.
+The result-rewrite reader builds one transient occurrence index per account or
+trace read. It copies only descriptor-safe rule names and original ledger positions;
+an unreadable final changer blocks an earlier name and its pointer. A potentially
+owning decision with no usable address clears earlier candidates; a later
+positively bound changer can establish its own attribution. Known unchanged or
+non-after-tool decisions do not clear ownership. No index is persisted.

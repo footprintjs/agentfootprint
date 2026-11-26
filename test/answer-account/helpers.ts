@@ -299,6 +299,12 @@ export function deniedLeaves(
   recording: Recording,
   declarations: AnswerAccountDeclarations = {},
 ): string[] {
+  // Exact closed metadata words only: do not extend allowedValues' substring rule.
+  const deliveries = { native: true, rewritten: true, withheld: true } satisfies Record<
+    NonNullable<import('../../src/core/agent/recordedCalls.js').RecordedToolSettlement['delivery']>,
+    true
+  >;
+  const deliveryWords = new Set(Object.keys(deliveries));
   const denied: string[] = [];
   const events = recording.events as unknown as {
     type: string;
@@ -328,7 +334,7 @@ export function deniedLeaves(
   // question) is not a leak when the showable value prints it.
   const allowed = [...allowedValues(recording, declarations)];
   return [...new Set(denied)].filter(
-    (s) => s.trim().length >= 8 && !allowed.some((a) => a.includes(s)),
+    (s) => s.trim().length >= 8 && !deliveryWords.has(s) && !allowed.some((a) => a.includes(s)),
   );
 }
 

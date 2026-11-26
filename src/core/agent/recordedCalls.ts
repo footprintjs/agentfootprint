@@ -21,6 +21,10 @@ export {
   readResultDispositionMark,
   resultDispositions,
 } from './recordedCalls/resultDispositions.js';
+export {
+  indexResultRewrites,
+  type ResultRewriteIndex,
+} from './recordedCalls/resultRewriteIndex.js';
 export { readRewrittenToolResult } from './recordedCalls/rewrittenResult.js';
 export { readToolSettlements, type RecordedToolSettlement } from './recordedCalls/settlement.js';
 export {

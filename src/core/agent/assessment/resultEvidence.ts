@@ -1,4 +1,4 @@
-import { declaredByValue, readEmptiness, type ValueDeclaration } from '../emptiness.js';
+import { readEmptiness, type ValueDeclaration } from '../emptiness.js';
 import type { IssuedPairs } from '../placedTickets.js';
 import { groupOccurrenceEvidence } from '../recordedCalls.js';
 import type { CoverageRow } from './coverageRows.js';
@@ -6,6 +6,7 @@ import { fire, type Gathered } from './gathered.js';
 import { historyPointer, statePointer } from './pointer.js';
 import type { TurnResult } from './turnResults.js';
 import type { AssessmentDeclarations, AssessmentPointer } from './types.js';
+import { declarationsForResult } from './results/coverage/declarations.js';
 
 /** Layer 3, the tools' own declarations: every absence and every declared gap. */
 export function readCoverageRows(coverage: readonly CoverageRow[], g: Gathered): void {
@@ -25,6 +26,7 @@ export interface ResultRead {
   readonly result: TurnResult;
   readonly at: AssessmentPointer;
   readonly rows: readonly CoverageRow[];
+  readonly declared: boolean;
   /**
    * The result's OWN envelope, read when its call has no committed row: the run
    * filed none (an envelope it never recognized, such as JSON text), or the row
@@ -40,9 +42,11 @@ export function readResults(
 ): readonly ResultRead[] {
   const { byOccurrence } = groupOccurrenceEvidence(coverage, (row) => row.historyIndex);
   return results.map((result) => {
-    const rows = byOccurrence.get(result.index) ?? [];
-    const own = rows.length === 0 ? declaredByValue(result.content) : undefined;
-    return { result, at: historyPointer(result), rows, ...(own !== undefined && { own }) };
+    return {
+      result,
+      at: historyPointer(result),
+      ...declarationsForResult(result, byOccurrence.get(result.index) ?? []),
+    };
   });
 }
 
@@ -111,8 +115,8 @@ export function readTurnCalls(
     .filter((row) => row.historyIndex !== undefined)
     .map((c) => statePointer('coverageDeclared', c.index, 'kind'));
   let declared = 0;
-  for (const { at, rows, own } of reads) {
-    if (rows.length > 0 || own !== undefined) declared += 1;
+  for (const { at, declared: hasDeclaration, own } of reads) {
+    if (hasDeclaration) declared += 1;
     if (own !== undefined) witness.push(at);
   }
   const of = opportunities;

@@ -411,8 +411,14 @@ describe('UNIT — which rows the fold reads', () => {
           .map(readCallOccurrenceKey),
       );
       const saved = assessAnswer({ snapshot });
-      expect(saved.reasons.map(({ reason }) => reason)).not.toContain('period-not-held');
-      expect(periodChecks(saved)).toEqual([]);
+      // A rewrite retains the native declaration without claiming that its bytes were served.
+      if (outcome === 'rewritten') {
+        expect(saved.reasons.map(({ reason }) => reason)).toContain('period-not-held');
+        expect(periodChecks(saved)).toMatchObject([{ ran: 1, of: 1 }]);
+      } else {
+        expect(saved.reasons.map(({ reason }) => reason)).not.toContain('period-not-held');
+        expect(periodChecks(saved)).toEqual([]);
+      }
     },
   );
 
