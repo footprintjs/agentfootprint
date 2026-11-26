@@ -96,6 +96,14 @@ describe('declaration evidence has its own admission and delivered-value door', 
     });
   });
 
+  it('a plain-text replacement of a declared result still counts the native declaration', () => {
+    // The tool-coverage check counts a result as declared from its NATIVE rows; the
+    // replacement's delivered door (no rows, no own envelope) does not undo that.
+    expect(
+      declarationsForResult({ index: 2, content: 'summary', rewritten: true }, nativeRows),
+    ).toEqual({ rows: [], declared: true });
+  });
+
   it('a replacement is another declaration witness, while a native settlement repeats its row', () => {
     expect(hasOwnDeclarationWitness('rewritten', true)).toBe(true);
     expect(hasOwnDeclarationWitness('native', true)).toBe(false);

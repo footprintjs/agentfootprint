@@ -1,24 +1,13 @@
 ---
 title: Middleware
-description: A typed chain around every tool dispatch and around the message boundary. Three verbs — allow, deny, ask — and no way to return a result, so the answer the model reads is always the real tool's or a refusal.
+description: A typed chain around every tool dispatch and around the message boundary. Three verbs — allow, deny, ask — and no way to return a result, so the answer the model reads is always the real tool's, as it came back or as a named rule rewrote it, or a refusal.
 ---
 
 > Every agent framework lets you wrap a tool call. Most of them let the wrapper *answer* — return a canned string, a cached value, a "simulated" result — and the moment one does, the trace is fiction. The model was told a tool ran. Nothing ran.
 >
-> Here the wrapper cannot answer. **The outcome union has no arm for a result**, so whatever a chain decides, what the model finally reads is the real tool's output or a refusal.
+> Here the wrapper cannot answer. **The outcome union has no arm for a result**, so whatever a chain decides, what the model finally reads is the real tool's output — as it came back, or as a named after-tool rule rewrote it, with both versions in the record — or a refusal.
 
 ## Where they go
-
-An allowed `afterTool` replacement keeps the original read's declared coverage,
-absence and period limits. Declarations on the replacement add their own evidence;
-they do not overwrite those limits. The model reads the replacement's bytes.
-`accountForAnswer(recording).facts.calls` optionally names the final changing rule
-as `rewrittenBy`; its original value and reason are not part of that field.
-
-```ts
-const rewritten = accountForAnswer(recording).facts.calls.find(call => call.rewrittenBy);
-rewritten?.rewrittenBy; // the final named after-tool rule, when recorded and admitted
-```
 
 Middleware is written into [`.act()`](doc:loop-moments), the one block that says what an agent does at each moment of its loop:
 
@@ -158,6 +147,14 @@ const rows = agent.getLastSnapshot()?.sharedState.middlewareDecisions;
 `allow(value, why)` **requires** the `why`. A transform that does not say why is exactly the thing this key exists to prevent.
 
 Every decision files a row, including the pass-throughs — "the rule looked and was fine with it" and "the rule never ran" are different facts about a run.
+
+### A rewritten result keeps the read's limits
+
+An allowed `afterTool` replacement changes what the model reads, not what the read declared. The original result's coverage gaps, declared absences and period limits stay answer evidence. Declarations on the replacement add their own evidence beside them; they do not overwrite those limits. The answer account names the final rule that changed each result as `rewrittenBy`, read from this ledger by the call's occurrence. That field carries neither the original value nor the rule's `why`. When the record cannot say which rule changed a result last, the name and its pointer are left out rather than guessed.
+
+<CodeFile path="examples/features/37-middleware.ts" region="rewritten-by" title="examples/features/37-middleware.ts (region: rewritten-by)" />
+
+After a scrub, the native result's declared words (what it did not check, what it found absent) reach the answer's standing line as they do on a native turn. Only redacting `coverageDeclared`, or `conversationRedaction()`, hides them.
 
 ### Refused inputs do not create conversations
 

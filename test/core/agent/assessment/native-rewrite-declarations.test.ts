@@ -147,6 +147,17 @@ describe('native declarations remain evidence after an allowed replacement', () 
     },
   );
 
+  it('a plain-text replacement keeps the call counted for tool coverage', () => {
+    // `declarationsForResult · declared` reads the native rows, not the replacement's door.
+    const { toolResultDisposition: _rewritten, ...native } = result();
+    for (const message of [result(), native as LLMMessage])
+      expect(
+        assess(record(message, [nativeCoverage()])).checked.find(
+          ({ check }) => check === 'tool-coverage',
+        ),
+      ).toMatchObject({ ran: 1, of: 1 });
+  });
+
   it('adds an undeclared empty replacement beside the original declarations', () => {
     expect(kinds(record(result([]), [nativeCoverage('absence')], [nativePeriod()]))).toEqual([
       'coverage-gap',

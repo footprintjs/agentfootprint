@@ -188,10 +188,12 @@ export function standingAdmission(
       return kind === 'input'
         ? !(keyed && argument.occurrenceKey === undefined) &&
             entered(argument.historyIndex, argument.occurrenceKey)
-        : returned(
+        : // A period declaration reaches an argument row only through the period join,
+          // which reads `inputs/stage.ts · readInputs`' entered arguments: a keyless
+          // argument of a keyed record never joins, so it needs no second refusal here.
+          returned(
             argument.historyIndex,
-            !isDeclarationWitness(pointer.key, row.kind, reason) ||
-              (keyed && argument.occurrenceKey === undefined),
+            !isDeclarationWitness(pointer.key, row.kind, reason),
             argument.occurrenceKey,
           );
     }
