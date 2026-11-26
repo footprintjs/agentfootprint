@@ -21,6 +21,7 @@
  * common 3–8 s thinking + 30–80 ms per word streaming preset.
  */
 
+import { markNativeToolExecution } from '../../provider-contract/nativeToolExecution.js';
 import { isSaidByPerson } from '../../lib/saidByPerson.js';
 import { sleep } from '../../lib/sleep.js';
 import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
@@ -172,6 +173,7 @@ export class MockProvider implements LLMProvider {
     this.chunkDelayMs = options.chunkDelayMs ?? 30;
     this.stopReason = options.stopReason ?? 'stop';
     this.usageOverride = options.usage;
+    if (new.target === MockProvider && options.respond === undefined) markNativeToolExecution(this);
   }
 
   /**

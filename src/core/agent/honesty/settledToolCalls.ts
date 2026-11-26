@@ -1,3 +1,4 @@
+import { seedExecutionEvidence } from '../scripts/executionEvidence.js';
 import type { TypedScope } from 'footprintjs';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
@@ -111,10 +112,22 @@ export function seedToolSettlements(
 
 export function seedToolEvidence(
   scope: TypedScope<AgentState>,
-  deps: { readonly honestyLayers?: HonestyLayers; readonly findings?: boolean },
+  deps: {
+    readonly honestyLayers?: HonestyLayers;
+    readonly findings?: boolean;
+    readonly observesCodeExecution?: boolean;
+  },
   resume?: PendingResumeHistory,
+  mounted = false,
 ): void {
   const continuing = resume !== undefined && !resume.appendsUserTurn;
+  seedExecutionEvidence(
+    scope,
+    deps.observesCodeExecution === true && !mounted && !continuing,
+    resume?.previousCodeExecutionReceipt,
+  );
+  if (deps.honestyLayers?.sourceNotConsulted === true && continuing)
+    scope.sourceConsultationInterrupted = true;
   const recovered = continuing ? resume.toolTurnEvidence : undefined;
   if (recovered?.libraryResultLimits !== undefined) {
     scope.libraryResultLimits = [...recovered.libraryResultLimits];

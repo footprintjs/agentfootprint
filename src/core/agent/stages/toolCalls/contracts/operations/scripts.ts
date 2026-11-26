@@ -51,6 +51,11 @@ export interface ToolScriptsOperations {
     scope: TypedScope<AgentState>,
     tool: Tool,
     slot: CodeRunSlot,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly takeListed: boolean },
+    call: {
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly takeListed: boolean;
+      readonly callOccurrenceKey?: CallOccurrenceKey | undefined;
+    },
   ) => CodeRunFacts | undefined;
 }

@@ -1,4 +1,10 @@
 export interface HonestyState {
+  /** Dispatch-owned evidence about this native turn's program execution. */
+  codeExecutionReceipt?: import('../../scripts/executionEvidence.js').CodeExecutionReceipt;
+  /** Evidence from the admitted checkpoint of the immediately previous answer. */
+  previousCodeExecutionReceipt?: import('../../scripts/executionEvidence.js').CompletedCodeExecutionReceipt;
+  /** The accepted prose's method claims checked against the owned turn. */
+  answerExecutionClaims?: import('../../assessment/answer/receipt/observe.js').RecordedExecutionClaimAssessment;
   /** Admitted offers and attempts for this turn's declared-source check. */
   sourceConsultation?: import('../../honesty/sourceConsultation.js').SourceConsultationRecord;
   /** The failed turn was recovered without its private choice identity bank. */
