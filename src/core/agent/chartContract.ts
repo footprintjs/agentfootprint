@@ -237,6 +237,8 @@ export interface AgentChartDeps {
   readonly hasAnswerValidation?: boolean;
   /** Output middleware owns delivery: publish only the final captured answer. */
   readonly releaseOutputTokens?: true;
+  /** `hostEndedTurns: true`: the final stage records a settled reply's origin (`assistantReplay.ts`). */
+  readonly hostEndedTurns?: true;
   /** The evidence gate's `'rails'` posture: a refused answer is recorded flagged and ends the branch (`prepareFinalFor`). */
   readonly evidenceRails?: true;
   /**

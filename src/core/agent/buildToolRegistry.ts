@@ -276,6 +276,12 @@ export interface ToolRegistryArtifacts {
    * decides, per epoch, in `buildToolsSlot`.
    */
   readonly toolClaimants: ReadonlyMap<string, readonly ToolClaim[]>;
+  /**
+   * Under `listedScopedTools` only: each scoped tool name → the scoped skills
+   * that declare it. The call gate refuses such a call while none of them is
+   * active. Empty otherwise, and empty for a name an unscoped skill declares too.
+   */
+  readonly listedScopedTools: ReadonlyMap<string, readonly string[]>;
 }
 
 /** The build facts that gate auto-attached tools beyond skills (9.22.0). */
@@ -306,6 +312,13 @@ export interface BuildToolRegistryOptions {
    * one line runs.
    */
   readonly argumentSources?: true;
+  /**
+   * The skill context is `listed` (`skillContext/decide.ts`): a scoped skill's
+   * tools join the static list from the first request, nothing is reported as
+   * held out for skill scope, and `listedScopedTools` names them for the call
+   * gate. Absent — `declared` — and not one line here changes.
+   */
+  readonly listedScopedTools?: true;
 }
 
 /**
@@ -346,7 +359,7 @@ export function buildToolRegistry(
     const meta = skill.metadata as { autoActivate?: string } | undefined;
     const isAutoActivate = meta?.autoActivate === 'currentSkill';
     const toolsFromSkill = skill.inject.tools ?? [];
-    if (isAutoActivate && toolsFromSkill.length)
+    if (isAutoActivate && toolsFromSkill.length && options.listedScopedTools !== true)
       scopedSkillTools.set(skill, [...toolsFromSkill] as readonly Tool[]);
     for (const tool of toolsFromSkill) {
       const name = tool.schema.name;
@@ -384,7 +397,7 @@ export function buildToolRegistry(
       // (`.toolsFromActiveSkill()`, 9.36.0, which stamps the same field on
       // every tool-carrying skill at build). All three write `autoActivate`
       // and this reads it, so there is one gate here, not three.
-      if (isAutoActivate) continue;
+      if (isAutoActivate && options.listedScopedTools !== true) continue;
       skillToolEntries.push({ name, tool });
     }
   }
@@ -551,5 +564,22 @@ export function buildToolRegistry(
     toolDeclaringSkills: declaringSkills,
     toolClaimants: claims,
     scopedSkillTools,
+    listedScopedTools: options.listedScopedTools === true ? scopedNames(skills) : new Map(),
   };
+}
+
+/** Each tool name every declaring skill of which scoped it → those skills' ids. */
+function scopedNames(skills: readonly Injection[]): ReadonlyMap<string, readonly string[]> {
+  const scoped = new Map<string, string[]>();
+  const unscoped = new Set<string>();
+  for (const skill of skills) {
+    const auto = (skill.metadata as { autoActivate?: string } | undefined)?.autoActivate;
+    for (const tool of skill.inject.tools ?? []) {
+      const name = tool.schema.name;
+      if (auto !== 'currentSkill') unscoped.add(name);
+      else scoped.set(name, [...(scoped.get(name) ?? []), skill.id]);
+    }
+  }
+  for (const name of unscoped) scoped.delete(name);
+  return scoped;
 }

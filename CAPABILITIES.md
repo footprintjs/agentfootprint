@@ -22,6 +22,7 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| skills that keep a signed thinking turn intact: every skill tool listed from the first request, the body delivered as the read_skill result, the choice recorded | `AgentSkillContextOptions` | `src/core/agent/types/skillContext.ts` | 20.0.0 |
 | naming the final rule that rewrote a tool result, from the existing occurrence-linked decision ledger | `ToolCallFact` + `rewrittenBy` | `src/answer-account/facts/calls.ts` | 19.1.0 |
 | keeping original read limits when an after-tool rule replaces a result, with independently attributed replacement declarations | `declarationsForResult` | `src/core/agent/assessment/results/coverage/declarations.ts` | 19.1.0 |
 | choose how much an agent's snapshot keeps of each write: a short marker by default, the full written value, or nothing | `AgentObservationOptions` + `writeTracking` | `src/core/agent/types/observation.ts` | 19.0.0 |

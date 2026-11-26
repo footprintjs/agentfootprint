@@ -60,6 +60,7 @@ const skillFor = (variant: Variant) =>
 
 type Build = (agent: ReturnType<typeof Agent.create>) => ReturnType<typeof Agent.create>;
 
+// Slice 1's refusal is exercised on the skill context that still edits the turn: the app's `declared`.
 async function run(
   mode: 'stream' | 'complete',
   script: readonly Step[],
@@ -84,6 +85,7 @@ async function run(
       provider,
       model,
       maxIterations: 5,
+      skillContext: 'declared',
       ...(options.reactMode !== undefined && { reactMode: options.reactMode }),
     }).system('You diagnose file-share problems.'),
   );

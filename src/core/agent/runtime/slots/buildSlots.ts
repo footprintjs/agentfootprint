@@ -1,5 +1,6 @@
 import { type AgentRunValues } from '../../runValues.js';
 import { readDisplayName } from '../../../../lib/displayName.js';
+import { skillBodiesOf } from '../../skillContext/bodies.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import {
   buildSystemPromptSlot,
@@ -72,6 +73,10 @@ export function buildSlots(
   });
   const messagesSubflow = buildMessagesSlot({
     ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
+    // The `listed` skill context: a body result is credited to its skill.
+    ...(this.configuration.skillContext?.strategy === 'listed' && {
+      skillBodies: skillBodiesOf(this.configuration.injections),
+    }),
   });
   // Every reader binds the same native component's private catalog.
   const resolverForValues = (values: AgentRunValues) =>
@@ -220,6 +225,10 @@ export function buildSlots(
     }),
     toolClaimants: environment.toolClaimants,
     ...(readSkillFor && { readSkillFor }),
+    // The `listed` skill context: hidden skills' tools leave the static list per role.
+    ...(this.configuration.skillContext?.strategy === 'listed' && {
+      listedSkillTools: true as const,
+    }),
     ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
     // Steps (9.18.0): per-step narrowing + banner + the skip_step offer.
     ...(environment.stepPlanFor !== undefined && { stepPlanFor: environment.stepPlanFor }),

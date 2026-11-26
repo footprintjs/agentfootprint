@@ -2,7 +2,6 @@
  * Agent type definitions — both PUBLIC types (AgentOptions, AgentInput,
  * AgentOutput) consumed by `Agent.create({...}).run({...})` callers AND
  * the INTERNAL `AgentState` shape used by stage functions.
- *
  */
 
 import type { ReadTrackingMode, RedactionPolicy, StructureRecorder } from 'footprintjs';
@@ -25,6 +24,7 @@ import type { AnswerLayerOptions } from './assessment/answerLayerOptions.js';
 import type { AgentObservationOptions, WriteProvenanceMode } from './types/observation.js';
 import type { ExternalGroundsProvider } from './types/grounds.js';
 import type { AgentArtifactsOptions } from './types/artifacts.js';
+import type { AgentSkillContextOptions } from './types/skillContext.js';
 import type { InvocationState } from './types/state/invocation.js';
 import type { PauseState } from './types/state/pause.js';
 import type { MiddlewareState } from './types/state/middleware.js';
@@ -48,7 +48,7 @@ export type { AgentArtifactsOptions, AgentRecordingsOptions } from './types/arti
 export type { RunConfig, RunConfigContext, RunConfigFn } from './types/configuration.js';
 export type { AgentInput, AgentOutput } from './types/input.js';
 
-export interface AgentOptions extends AgentObservationOptions {
+export interface AgentOptions extends AgentObservationOptions, AgentSkillContextOptions {
   /** Enable host-ended turns and record reply authorship. Defaults to false. */
   readonly hostEndedTurns?: boolean;
   readonly provider: LLMProvider;
