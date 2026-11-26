@@ -1,0 +1,4 @@
+---
+type: internal
+---
+**The LLM ledger's calls: rules, the report, one chart per call, and the facade, inside the closed folder.** `src/llm-ledger/` gains the checks port and its three built-in rules (`cited@1`, `traceable-values@1`, `time-window@1`), each a `decide()` table run by the engine's `decideFromFacts` whose stored decision is `decisionRecord(evidence)`; a fold that reads the last submit's checks as AgentFootprint's standing; one funnel for everything served (receipt tokens, queries and supplied content are never served); and `createLedger`, whose every call is one short FootprintJS run with input `{ call }`, queued per session, retried at most 3 times on a conflict, never re-appending on `lock-lost`, with one pause for a person when a session asks for it. Nothing imports the folder yet and no package door reaches it.
