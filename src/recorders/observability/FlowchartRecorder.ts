@@ -38,6 +38,12 @@
  *   loop.iteration       → loop-iteration StepEdge
  *   context.injected     → attached to NEXT user→llm / tool→llm StepNode
  *
+ * A sub-flow event's `payload` becomes `entryPayload` / `exitPayload` (on the
+ * subflow node, or the slot boundary of the next model call). An event read
+ * from a recording saved in parts may carry `payloadWith: 'invocation'`
+ * instead (the payload lives with that invocation): it becomes
+ * `entryPayloadWith` / `exitPayloadWith: 'invocation'`, never an empty value.
+ *
  * Result: a one-to-one correspondence between visible scrubbable steps
  * and DomainEvents. Adding a new event type adds one mapping line here
  * (or in the pure projection); no state machine, no merging.
@@ -106,6 +112,12 @@ export interface StepNode {
   /** Subflow shared state at exit. Subflow nodes only.
    *  Undefined for in-progress / paused subflows. */
   readonly exitPayload?: unknown;
+  /** Set instead of `entryPayload` when the recording keeps that payload with
+   *  the invocation (a recording saved in parts, index format 2): ask for the
+   *  invocation `runtimeStageId` names. Neither field = none was recorded. */
+  readonly entryPayloadWith?: 'invocation';
+  /** The same, instead of `exitPayload`. */
+  readonly exitPayloadWith?: 'invocation';
   /** LLM's text content. Set on `llm->tool` (the reasoning emitted with the
    *  tool_use blocks) and on `llm->user` (the terminal answer). */
   readonly assistantText?: string;
@@ -152,6 +164,11 @@ export interface SlotBoundary {
   /** Subflow shared state at exit — the rendered slot content
    *  (system prompt string, messages array, tools array). */
   readonly exitPayload?: unknown;
+  /** Set instead of `entryPayload` when the recording keeps that payload with
+   *  the slot invocation `runtimeStageId` names (index format 2). */
+  readonly entryPayloadWith?: 'invocation';
+  /** The same, instead of `exitPayload`. */
+  readonly exitPayloadWith?: 'invocation';
 }
 
 /** Consumer-facing context injection (5 axes of context engineering). */
@@ -453,6 +470,7 @@ export function buildStepGraphFromEvents(events: readonly DomainEvent[]): StepGr
           pendingSlotBoundaries[slotPropName(e.slotKind)] = {
             runtimeStageId: e.runtimeStageId,
             ...(e.payload !== undefined ? { entryPayload: e.payload } : {}),
+            ...(movedPayload(e) ? { entryPayloadWith: 'invocation' as const } : {}),
           };
           break;
         }
@@ -475,6 +493,7 @@ export function buildStepGraphFromEvents(events: readonly DomainEvent[]): StepGr
             pendingSlotBoundaries[key] = {
               ...existing,
               ...(e.payload !== undefined ? { exitPayload: e.payload } : {}),
+              ...(movedPayload(e) ? { exitPayloadWith: 'invocation' as const } : {}),
             };
           }
           break;
@@ -485,6 +504,9 @@ export function buildStepGraphFromEvents(events: readonly DomainEvent[]): StepGr
           (open as { endOffsetMs?: number }).endOffsetMs = t;
           if (e.payload !== undefined) {
             (open as { exitPayload?: unknown }).exitPayload = e.payload;
+          }
+          if (movedPayload(e)) {
+            (open as { exitPayloadWith?: 'invocation' }).exitPayloadWith = 'invocation';
           }
           openSubflowsByRuntimeId.delete(e.runtimeStageId);
         }
@@ -709,8 +731,14 @@ function subflowToStepNode(e: DomainSubflowEvent, t: number): StepNode {
     isPrimitiveBoundary,
     ...(e.primitiveKind ? { primitiveKind: e.primitiveKind } : {}),
     ...(e.payload !== undefined ? { entryPayload: e.payload } : {}),
+    ...(movedPayload(e) ? { entryPayloadWith: 'invocation' as const } : {}),
     runtimeStageId: e.runtimeStageId,
   };
+}
+
+/** Whether a sub-flow event's payload lives with its invocation (a format-2 base part's mark). */
+function movedPayload(e: DomainSubflowEvent): boolean {
+  return e.payloadWith === 'invocation' && e.payload === undefined;
 }
 
 /** Append a `next` edge between the previous and current node IF both

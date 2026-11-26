@@ -22,7 +22,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { mockClassifier } from '../../src/classify/mock.js';
 import { defineOntology } from '../../src/ontology/index.js';
-import { recordRun } from '../../src/observe.js';
+import { openSavedRecording, recordRun } from '../../src/observe.js';
+import { bindArtifacts } from '../../src/artifacts/capability.js';
 import {
   Agent,
   defineTool,
@@ -443,6 +444,26 @@ describe.each(STORES)('answer-account over a recording in parts — %s', (_name,
       });
       const got = await explain(host, refs.index);
       expect(got.code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
+      expect(view.gets).toEqual([refs.index]);
+    } finally {
+      close();
+    }
+  });
+
+  it('stored parts within the ceiling, the payloads a whole read restores past it: the same 413, from the index', async () => {
+    const { store, close } = create();
+    try {
+      const refs = await fileBoth(store, real);
+      const saved = await openSavedRecording(bindArtifacts(store, SCOPE), refs.index);
+      if (saved.status !== 'ready') throw new Error(saved.reason);
+      const stored = saved.sizes.storedBytes - (saved.sizes.index ?? 0);
+      // Index format 2: the `same` sub-flow payloads are stored once, in their results.
+      expect(saved.sizes.restoredBytes).toBeGreaterThan(saved.sizes.storedBytes);
+      const view = watching(store);
+      const { host } = await served(storeAgent(view.store), {
+        extra: { answerAccounts: { maxRecordingBytes: stored } },
+      });
+      expect((await explain(host, refs.index)).code).toBe('ERR_RECORDING_TOO_LARGE_FOR_ACCOUNT');
       expect(view.gets).toEqual([refs.index]);
     } finally {
       close();

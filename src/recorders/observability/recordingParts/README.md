@@ -14,9 +14,9 @@ All artifacts are JSON text, in the run's own scope.
 
 | Artifact | Kind | Holds |
 | --- | --- | --- |
-| index (the receipt names it) | `recording/run-index` | refs, byte counts and SHA-256 of every part; every invocation's address and its part; aliases. No recorded value. |
-| base part | `recording/run-part` | the recording without `snapshot.subflowResults` (the key itself is removed) |
-| invocation parts | `recording/run-part` | whole subflow results, about 1 MiB per part; a bigger result is a part of its own |
+| index (the receipt names it) | `recording/run-index` | refs, byte counts and SHA-256 of every part; every invocation's address and its part; where its sub-flow payloads are; aliases; counts. No recorded value. |
+| base part | `recording/run-part` | the recording without `snapshot.subflowResults` (the key itself is removed), and without the sub-flow payloads that moved |
+| invocation parts | `recording/run-part` | whole subflow results, about 1 MiB per part, each with its stored sub-flow payloads beside it; a bigger unit is a part of its own |
 
 A path alias of `subflowResults` whose JSON text equals one stored result is
 stored only as `{ name, key }` in the index. Any other alias is stored in a part,
@@ -26,6 +26,53 @@ so reading the whole back restores everything the whole recording held.
 result, a result no mount reaches, a result in a shape the lazy viewer refuses).
 Every result is still stored. A lazy viewer refuses such a recording whole, so a
 host answers the same refusal.
+
+## Sub-flow payloads live with the invocation (index format 2)
+
+What an invocation was handed (`subflow.entry`'s `payload`) and what it handed
+back (`subflow.exit`'s) belong to its part, not to the base: in a long agent
+run they were almost all of the base, and a second copy of what the part
+already holds. `payloads.ts` owns the rule.
+
+- **Moved only on proof.** The BoundaryEvents rows (`name: 'BoundaryEvents'`,
+  `meta.mode: 'full'`) hold exactly one `subflow.entry` and at most one
+  `subflow.exit` with that `runtimeStageId`, all with the index's `subflowId`
+  for it; `payload` is the event's last key; the invocation has a part. A
+  recorder shared by a second executor writes one id twice, so an id alone does
+  not name the invocation. Everything else stays whole in the base, counted by
+  why (`subflowPayloads.kept`: `ambiguous`, `notLast`, `noPart`). A paused mount
+  has no part, and such a recording is `complete: false`, so this never helps a
+  paused run.
+- **Kept two ways.** `'same'`: equal JSON text to the result's own value
+  (`treeContext.history[0].overwrite` for an entry, `treeContext.globalContext`
+  for an exit); nothing is stored. `'stored'`: the texts differ (a policy that
+  selects a seeded key spells its placeholder differently on the two sides; a
+  nested name rule; an empty seed; a resumed mount); the payload is stored in
+  the part's `payloads` member, BESIDE the result, never inside it (the alias
+  proof compares result text). A result and its stored payloads are one unit
+  for the 1 MiB grouping.
+- **The base says so.** A moved event carries `payloadWith: 'invocation'` as
+  its last key in place of `payload`; its row's `meta` gains
+  `subflowPayloads: 'with-invocation'` (`mode` stays `'full'`).
+  `buildStepGraphFromEvents` turns the mark into `entryPayloadWith` /
+  `exitPayloadWith` on the step or slot, so a viewer can say "not loaded"
+  rather than "none recorded".
+- **Reads.** `readRoot` returns the base as stored. `readInvocation` returns
+  `payloads: { entry?, exit? }` beside the result (a `'same'` value is the
+  result's own object). `readWhole` restores every payload (the row is the same
+  JSON text) and charges the restored bytes against `maxBytes`, decided from
+  the index (`subflowPayloads.restoredBytes`); `sizes.restoredBytes` reports
+  stored plus restored.
+- **Formats.** The writer writes index format 2 with part format 2. The reader
+  admits format 1 (filed by 18.2 and 18.3: payloads in the row) and format 2,
+  each with its own parts, never a mix; an index spelled
+  `agentfootprint.recording.index.v<N>` for another N is `unsupported-format`.
+  An 18.2 or 18.3 reader refuses a format-2 index at open as `invalid-index`.
+  A whole recording's in-memory cut is format 1, so its reads are unchanged.
+- **Counts are admitted.** `readRecordingIndex` checks `same`, `stored` and
+  `restoredBytes` against the invocations' places and each part's `payloads`
+  count; the part reader checks the part's `payloads` member against the same
+  places, and `readWhole` checks the base's marks against them.
 
 With `packed`, each part is packed on its own (`recordingParts/packing.ts ·
 packPart`), so any part reads alone. The index is never packed.
@@ -37,6 +84,7 @@ packPart`), so any part reads alone. The index is never packed.
 | `format.ts` | formats, limits, and `readRecordingIndex`: the one admission of an untrusted index |
 | `invocations.ts` | the walk: which invocations a snapshot holds, in the viewer's order |
 | `split.ts` | the cut: base part, invocation parts, the index without refs, every digest |
+| `payloads.ts` | which sub-flow payloads leave the base row and how they are kept; putting them back |
 | `source.ts` | where a part comes from (a store, or memory), checked against its index entry |
 | `partReader.ts` | one part's bytes become values: caps, unpacking, exact key sets |
 | `open.ts` | `openSavedRecording`: open either layout, then `readRoot`, `readInvocation`, `readWhole` |

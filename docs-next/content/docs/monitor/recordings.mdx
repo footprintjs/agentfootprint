@@ -180,7 +180,8 @@ recording by its ref through a store already bound to one scope (a tool's
 `ctx.artifacts`, or a host's per-request binding from `bindArtifacts`), so a ref
 from any other scope is `not-found`. It answers a `SavedRecording` or a
 `SavedRecordingUnavailable` with a fixed `reason`: `not-found`,
-`not-a-recording`, `too-large`, `invalid-index` or `invalid-recording`.
+`not-a-recording`, `too-large`, `invalid-index`, `invalid-recording` or
+`unsupported-format` (an index of a format this reader does not know).
 
 <CodeFile path="examples/features/132-saved-recording.ts" region="open" title="Open a saved recording and read one invocation" />
 
@@ -191,7 +192,9 @@ its `path` of mount keys from the root, its `subflowId`, whether it was
 `SavedRecordingReadOptions` (a `signal`):
 
 - `readRoot()` returns the recording without its subflow results.
-- `readInvocation(key)` returns one invocation's result.
+- `readInvocation(key)` returns one invocation's result and, for a recording
+  saved in parts, its `payloads`: what the sub-flow was handed (`entry`) and
+  handed back (`exit`), when they live with the invocation (see below).
 - `readWhole()` returns the whole recording back, all or nothing, within
   `SavedRecordingWholeOptions.maxBytes` of plain JSON (64 MiB by default). It
   equals the saved recording value for value, though not byte for byte.
@@ -217,6 +220,21 @@ agent chooses with `layout` on its recordings option: `'whole'` (the default) or
   `readInvocation` reads the one part that holds the invocation. A part that is
   missing, changed or over its cap is unavailable for exactly the invocations it
   held. The rest of the run still reads.
+
+In the parts layout, a sub-flow's input and output live with the sub-flow. The
+`payload` of a `subflow.entry` or `subflow.exit` boundary event moves to its
+invocation's part whenever the recording proves which invocation it belongs to.
+The base then marks the event `payloadWith: 'invocation'` in place of `payload`,
+and the row's `meta.subflowPayloads` is `'with-invocation'`.
+`buildStepGraphFromEvents` turns the mark into `entryPayloadWith` or
+`exitPayloadWith: 'invocation'` on the step or slot, and the step's
+`runtimeStageId` is the key `readInvocation` takes. Its reply's `payloads` is a
+`SavedInvocationPayloads`: an `entry` and an `exit`, each present only when that
+payload moved, and each a `SavedPayloadSlot` (`{ status: 'ready', value }` or
+`{ status: 'unavailable', reason }`). A step with neither a value nor a mark
+recorded none. `readWhole` puts every payload back and charges the
+bytes it restores against `maxBytes`. `sizes.restoredBytes` reports them, beside
+`sizes.storedBytes`.
 
 `OpenSavedRecordingOptions` caps what a read may take: `maxIndexBytes` (2 MiB),
 `maxRootBytes` (16 MiB) and `maxPartBytes` (16 MiB). Each cap is checked against
@@ -271,6 +289,12 @@ its case in parentheses, for example `(would-not-fit)` or `(store-refused)`.
   against the scope until retention removes them.
 - A busy or revoked store, or an aborted signal, rejects the read with the
   original error. It is never reported as a missing part.
+- A reader from before index format 2 (18.3 or older) refuses a recording this
+  release saves in parts as `invalid-index`. Upgrade readers first. This release
+  still reads recordings the older releases saved.
+- A viewer that shows a sub-flow's input from the root must load the invocation
+  for a marked step, or say the value is not loaded. Showing the step as having
+  no input would be wrong.
 - `complete: false` means the run's tree and its results disagree. Every result
   is still stored, but the Lens's lazy reader refuses such a recording whole.
 - The parts layout costs artifacts. A small run takes three (the index, the base

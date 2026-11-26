@@ -20,6 +20,12 @@
  *   • A path alias whose JSON text equals one stored result's text is stored
  *     only as `{ name, key }`: byte equality is the proof, so nothing the
  *     whole recording held is lost.
+ *   • Format 2 (what the writer writes): a sub-flow invocation's entry and
+ *     exit payloads leave the base row for the invocation's part, on proof
+ *     only (`payloads.ts`). A stored payload is grouped WITH its result: the
+ *     two are one unit for the target, never split across parts. A reader
+ *     of a whole recording cuts format 1 (`subflowPayloads: 'in-row'`), so
+ *     every read of a whole recording is what it was before format 2.
  *
  * ── Determinism ─────────────────────────────────────────────────────────────
  * Every part's text is a function of the recording, the run id and `packed`
@@ -33,21 +39,24 @@ import { utf8Length } from '../../../lib/utf8.js';
 import { toWireJson } from '../../../lib/wireJson.js';
 import {
   RECORDING_INDEX_FORMAT,
+  RECORDING_INDEX_FORMAT_V1,
   RECORDING_PARTS_LIMITS,
-  RECORDING_PART_FORMAT,
   RECORDING_PART_TARGET_BYTES,
   assign,
   isName,
   isPlainObject,
   ownValue,
+  partFormatOf,
   type IndexAlias,
   type IndexDraft,
   type IndexInvocation,
+  type IndexInvocationPayloads,
   type IndexUnmounted,
   type RecordingIndex,
 } from './format.js';
 import { walkRecordedInvocations } from './invocations.js';
 import { packPart } from './packing.js';
+import { cutPayloads, type MovedPayloads, type PayloadCut } from './payloads.js';
 import { RecordingSplitError } from './splitError.js';
 
 /** One part, ready to store. */
@@ -74,6 +83,13 @@ export interface SplitRecordingOptions {
   readonly packed?: boolean;
   /** The part size target. Default {@link RECORDING_PART_TARGET_BYTES}. */
   readonly targetBytes?: number;
+  /**
+   * Where sub-flow boundary payloads go. `'with-invocation'` (the default, and
+   * all the writer writes) cuts format 2; `'in-row'` cuts format 1, every
+   * payload in the base row: what a reader of a WHOLE recording uses, so its
+   * reads stay what they were.
+   */
+  readonly subflowPayloads?: 'with-invocation' | 'in-row';
 }
 
 interface Entry {
@@ -82,6 +98,25 @@ interface Entry {
   readonly value: unknown;
   readonly text: string;
   readonly bytes: number;
+  /** Format 2: this result's stored payloads, grouped with it. */
+  readonly stored?: { readonly entry?: string; readonly exit?: string };
+}
+
+/** The stored (not `'same'`) payloads of one invocation, as JSON text. */
+function storedOf(moved: MovedPayloads | undefined): Entry['stored'] {
+  if (moved === undefined) return undefined;
+  const entry = moved.entry?.place === 'stored' ? moved.entry.text : undefined;
+  const exit = moved.exit?.place === 'stored' ? moved.exit.text : undefined;
+  if (entry === undefined && exit === undefined) return undefined;
+  return { ...(entry !== undefined && { entry }), ...(exit !== undefined && { exit }) };
+}
+
+/** The JSON text of one invocation's stored payloads member: `{"entry":…,"exit":…}`. */
+function storedText(stored: NonNullable<Entry['stored']>): string {
+  const members: string[] = [];
+  if (stored.entry !== undefined) members.push(`"entry":${stored.entry}`);
+  if (stored.exit !== undefined) members.push(`"exit":${stored.exit}`);
+  return `{${members.join(',')}}`;
 }
 
 /** A placeholder ref of the minted length, to measure an index before refs exist. */
@@ -136,14 +171,26 @@ export async function splitRecordingData(
   }
   const snapshot = ownValue(data, 'snapshot');
   const walk = walkRecordedInvocations(snapshot);
+  const v2 = options.subflowPayloads !== 'in-row';
+  const format = v2 ? RECORDING_INDEX_FORMAT : RECORDING_INDEX_FORMAT_V1;
+  const partFormat = partFormatOf(format);
+  const cut: PayloadCut | undefined = v2 ? cutPayloads(snapshot, walk.invocations) : undefined;
 
-  const entry = (slot: Entry['slot'], key: string, value: unknown): Entry => {
+  const entry = (
+    slot: Entry['slot'],
+    key: string,
+    value: unknown,
+    stored?: Entry['stored'],
+  ): Entry => {
     const text = serialize(() => toWireJson(value));
-    return { slot, key, value, text, bytes: utf8Length(text) };
+    return { slot, key, value, text, bytes: utf8Length(text), ...(stored && { stored }) };
   };
   const results: Entry[] = [];
   for (const invocation of walk.invocations) {
-    if ('result' in invocation) results.push(entry('results', invocation.key, invocation.result));
+    if ('result' in invocation) {
+      const stored = storedOf(cut?.moved.get(invocation.key));
+      results.push(entry('results', invocation.key, invocation.result, stored));
+    }
   }
   for (const { key, result } of walk.unmounted) results.push(entry('results', key, result));
   const byText = new Map<string, string>();
@@ -163,7 +210,12 @@ export async function splitRecordingData(
   let current: Entry[] = [];
   let size = 0;
   for (const item of stored) {
-    const cost = utf8Length(toWireJson(item.key)) + item.bytes + 2;
+    // A result and its stored payloads are one unit: they share a part.
+    const beside =
+      item.stored === undefined
+        ? 0
+        : utf8Length(toWireJson(item.key)) + utf8Length(storedText(item.stored)) + 2;
+    const cost = utf8Length(toWireJson(item.key)) + item.bytes + 2 + beside;
     if (current.length > 0 && size + cost > target) {
       groups.push(current);
       current = [];
@@ -188,42 +240,62 @@ export async function splitRecordingData(
   const resultBytes = new Map(results.map((item) => [item.key, item.bytes]));
 
   const head = (part: number | 'base'): string =>
-    `{"format":${toWireJson(RECORDING_PART_FORMAT)}` +
+    `{"format":${toWireJson(partFormat)}` +
     (runId !== undefined ? `,"runId":${toWireJson(runId)}` : '') +
     `,"part":${toWireJson(part)}`;
 
   const partTexts: string[] = groups.map((group, at) => {
     const slot = (name: Entry['slot']): Entry[] => group.filter((item) => item.slot === name);
+    const withStored = group.filter((item) => item.stored !== undefined);
     if (packed) {
       const fold = (items: Entry[]): Record<string, unknown> => {
         const out: Record<string, unknown> = {};
         for (const item of items) assign(out, item.key, item.value);
         return out;
       };
+      const storedFold = (): Record<string, unknown> => {
+        const out: Record<string, unknown> = {};
+        for (const item of withStored) {
+          const moved = cut?.moved.get(item.key);
+          const member: Record<string, unknown> = {};
+          if (moved?.entry?.place === 'stored') assign(member, 'entry', moved.entry.value);
+          if (moved?.exit?.place === 'stored') assign(member, 'exit', moved.exit.value);
+          assign(out, item.key, member);
+        }
+        return out;
+      };
       return serialize(() =>
         toWireJson(
           packPart({
-            format: RECORDING_PART_FORMAT,
+            format: partFormat,
             ...(runId !== undefined && { runId }),
             part: at,
             results: fold(slot('results')),
             aliases: fold(slot('aliases')),
+            ...(v2 && { payloads: storedFold() }),
           }),
         ),
       );
     }
     const members = (items: Entry[]): string =>
       items.map((item) => `${toWireJson(item.key)}:${item.text}`).join(',');
-    return `${head(at)},"results":{${members(slot('results'))}},"aliases":{${members(
-      slot('aliases'),
-    )}}}`;
+    const payloads = withStored
+      .map((item) =>
+        item.stored === undefined ? '' : `${toWireJson(item.key)}:${storedText(item.stored)}`,
+      )
+      .join(',');
+    return (
+      `${head(at)},"results":{${members(slot('results'))}},"aliases":{${members(
+        slot('aliases'),
+      )}}` + (v2 ? `,"payloads":{${payloads}}}` : '}')
+    );
   });
 
   const basePayload = {
-    format: RECORDING_PART_FORMAT,
+    format: partFormat,
     ...(runId !== undefined && { runId }),
     part: 'base',
-    recording: withoutResults(data, snapshot),
+    recording: withoutResults(data, snapshot, cut?.recorders),
   };
   const baseText = serialize(() => toWireJson(packed ? packPart(basePayload) : basePayload));
 
@@ -238,15 +310,36 @@ export async function splitRecordingData(
 
   const invocations: IndexInvocation[] = walk.invocations.map((invocation) => {
     const part = partOf.get(invocation.key);
-    return part === undefined
-      ? { key: invocation.key, path: invocation.path, subflowId: invocation.subflowId, part: null }
-      : {
-          key: invocation.key,
-          path: invocation.path,
-          subflowId: invocation.subflowId,
-          part,
-          bytes: resultBytes.get(invocation.key) as number,
-        };
+    if (part === undefined) {
+      return {
+        key: invocation.key,
+        path: invocation.path,
+        subflowId: invocation.subflowId,
+        part: null,
+      };
+    }
+    const moved = cut?.moved.get(invocation.key);
+    const places: IndexInvocationPayloads | undefined =
+      moved === undefined
+        ? undefined
+        : {
+            ...(moved.entry !== undefined && { entry: moved.entry.place }),
+            ...(moved.exit !== undefined && { exit: moved.exit.place }),
+          };
+    const restored = [moved?.entry, moved?.exit].reduce(
+      (sum, one) => (one?.place === 'same' ? sum + one.bytes : sum),
+      0,
+    );
+    const hasSame = moved?.entry?.place === 'same' || moved?.exit?.place === 'same';
+    return {
+      key: invocation.key,
+      path: invocation.path,
+      subflowId: invocation.subflowId,
+      part,
+      bytes: resultBytes.get(invocation.key) as number,
+      ...(places !== undefined && { payloads: places }),
+      ...(hasSame && { restoredBytes: restored }),
+    };
   });
   const unmounted: IndexUnmounted[] = walk.unmounted.map(({ key }) => ({
     key,
@@ -258,20 +351,30 @@ export async function splitRecordingData(
   });
 
   const draft: IndexDraft = {
+    format,
     ...(runId !== undefined && { runId }),
     ...(walk.snapshotRunId !== undefined && { snapshotRunId: walk.snapshotRunId }),
     packed,
     complete: walk.complete,
     hasSubflowResults: walk.hasSubflowResults,
     base: { bytes: base.bytes, digest: base.digest },
-    parts: parts.map((part, at) => ({
-      bytes: part.bytes,
-      digest: part.digest,
-      results: (groups[at] as Entry[]).filter((item) => item.slot === 'results').length,
-    })),
+    parts: parts.map((part, at) => {
+      const group = groups[at] as Entry[];
+      const results = group.filter((item) => item.slot === 'results').length;
+      if (!v2) return { bytes: part.bytes, digest: part.digest, results };
+      const payloads = group.reduce(
+        (sum, item) =>
+          sum +
+          (item.stored?.entry !== undefined ? 1 : 0) +
+          (item.stored?.exit !== undefined ? 1 : 0),
+        0,
+      );
+      return { bytes: part.bytes, digest: part.digest, results, payloads };
+    }),
     invocations,
     aliases,
     unmounted,
+    ...(cut !== undefined && { subflowPayloads: cut.counts }),
   };
   const measured = recordingIndexText(draft, {
     base: PLACEHOLDER_REF,
@@ -295,7 +398,7 @@ export function recordingIndexText(
     throw new TypeError('recordingIndexText: one ref per part is required.');
   }
   const index: RecordingIndex = {
-    format: RECORDING_INDEX_FORMAT,
+    format: draft.format,
     ...(draft.runId !== undefined && { runId: draft.runId }),
     ...(draft.snapshotRunId !== undefined && { snapshotRunId: draft.snapshotRunId }),
     packed: draft.packed,
@@ -307,6 +410,7 @@ export function recordingIndexText(
       bytes: part.bytes,
       digest: part.digest,
       results: part.results,
+      ...(part.payloads !== undefined && { payloads: part.payloads }),
     })),
     invocations: draft.invocations.map((invocation) =>
       invocation.part === null
@@ -322,6 +426,17 @@ export function recordingIndexText(
             subflowId: invocation.subflowId,
             part: invocation.part,
             bytes: invocation.bytes as number,
+            ...(invocation.payloads !== undefined && {
+              payloads: {
+                ...(invocation.payloads.entry !== undefined && {
+                  entry: invocation.payloads.entry,
+                }),
+                ...(invocation.payloads.exit !== undefined && { exit: invocation.payloads.exit }),
+              },
+            }),
+            ...(invocation.restoredBytes !== undefined && {
+              restoredBytes: invocation.restoredBytes,
+            }),
           },
     ),
     aliases: draft.aliases.map((alias) =>
@@ -330,19 +445,41 @@ export function recordingIndexText(
         : { name: alias.name, part: alias.part },
     ),
     unmounted: draft.unmounted.map(({ key, part }) => ({ key, part })),
+    ...(draft.subflowPayloads !== undefined && {
+      subflowPayloads: {
+        same: draft.subflowPayloads.same,
+        stored: draft.subflowPayloads.stored,
+        restoredBytes: draft.subflowPayloads.restoredBytes,
+        kept: {
+          ambiguous: draft.subflowPayloads.kept.ambiguous,
+          notLast: draft.subflowPayloads.kept.notLast,
+          noPart: draft.subflowPayloads.kept.noPart,
+        },
+      },
+    }),
   };
   return toWireJson(index);
 }
 
-/** The recording with the snapshot's `subflowResults` key removed; every other key in place. */
-function withoutResults(data: Record<string, unknown>, snapshot: unknown): Record<string, unknown> {
+/**
+ * The recording with the snapshot's `subflowResults` key removed and, when
+ * payloads moved, `recorders` replaced by the cut's marked rows; every other
+ * key in place.
+ */
+function withoutResults(
+  data: Record<string, unknown>,
+  snapshot: unknown,
+  recorders: readonly unknown[] | undefined,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(data)) {
     const value = ownValue(data, key);
     if (key === 'snapshot' && isPlainObject(snapshot)) {
       const stripped: Record<string, unknown> = {};
       for (const field of Object.keys(snapshot)) {
-        if (field !== 'subflowResults') assign(stripped, field, ownValue(snapshot, field));
+        if (field === 'subflowResults') continue;
+        const kept = field === 'recorders' && recorders !== undefined ? recorders : undefined;
+        assign(stripped, field, kept ?? ownValue(snapshot, field));
       }
       assign(out, key, stripped);
     } else assign(out, key, value);

@@ -1,0 +1,1306 @@
+{
+ "note": "Filed by agentfootprint 18.3.0 (index format 1). Do not regenerate.",
+ "runId": "run-v1-fixture",
+ "index": "art_d39QgrjDsuYNF1shISfNPs",
+ "recording": {
+  "snapshot": {
+   "sharedState": {
+    "input": "hi",
+    "i": 2,
+    "o": "hi",
+    "aOut": "hi1!a"
+   },
+   "executionTree": {
+    "id": "root",
+    "runtimeStageId": "root#0",
+    "name": "Root",
+    "isDecider": false,
+    "isFork": false,
+    "logs": {},
+    "errors": {},
+    "metrics": {},
+    "evals": {},
+    "stageWrites": {
+     "input": "hi",
+     "i": 0
+    },
+    "flowMessages": [
+     {
+      "type": "next",
+      "description": "Moving to Outer stage",
+      "timestamp": 1795665211838,
+      "targetStage": "Outer"
+     }
+    ],
+    "next": {
+     "id": "sf-outer",
+     "runtimeStageId": "sf-outer#1",
+     "name": "Outer",
+     "isDecider": false,
+     "isFork": false,
+     "logs": {},
+     "errors": {},
+     "metrics": {},
+     "evals": {},
+     "stageReads": {
+      "input": "hi"
+     },
+     "subflowId": "sf-outer",
+     "flowMessages": [
+      {
+       "type": "subflow",
+       "description": "Entering Outer subflow",
+       "timestamp": 1795665211839,
+       "targetStage": "sf-outer"
+      },
+      {
+       "type": "subflow",
+       "description": "Exiting Outer subflow",
+       "timestamp": 1795665211841,
+       "targetStage": "sf-outer"
+      }
+     ],
+     "next": {
+      "id": "sf-a",
+      "runtimeStageId": "sf-a#5",
+      "name": "A",
+      "isDecider": false,
+      "isFork": false,
+      "logs": {},
+      "errors": {},
+      "metrics": {},
+      "evals": {},
+      "stageReads": {
+       "input": "hi",
+       "i": 0
+      },
+      "subflowId": "sf-a",
+      "flowMessages": [
+       {
+        "type": "subflow",
+        "description": "Entering A subflow",
+        "timestamp": 1795665211841,
+        "targetStage": "sf-a"
+       },
+       {
+        "type": "subflow",
+        "description": "Exiting A subflow",
+        "timestamp": 1795665211842,
+        "targetStage": "sf-a"
+       }
+      ],
+      "next": {
+       "id": "decide",
+       "runtimeStageId": "decide#7",
+       "name": "Again",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "i": 1
+       },
+       "stageReads": {
+        "i": 1
+       },
+       "flowMessages": [
+        {
+         "type": "branch",
+         "description": "Evaluated scope and returned 'again' → chose Loop path.",
+         "timestamp": 1795665211842,
+         "targetStage": "Loop",
+         "rationale": "returned branchId: again"
+        }
+       ],
+       "children": [
+        {
+         "id": "again",
+         "runtimeStageId": "again#8",
+         "name": "Loop",
+         "isDecider": false,
+         "isFork": false,
+         "logs": {
+          "dynamicNextTarget": "sf-a",
+          "dynamicNextIteration": 0
+         },
+         "errors": {},
+         "metrics": {},
+         "evals": {},
+         "flowMessages": [
+          {
+           "type": "loop",
+           "description": "Looping back to A (iteration 1)",
+           "timestamp": 1795665211843,
+           "targetStage": "A",
+           "iteration": 1
+          }
+         ],
+         "next": {
+          "id": "sf-a",
+          "runtimeStageId": "sf-a#9",
+          "name": "A",
+          "isDecider": false,
+          "isFork": false,
+          "logs": {},
+          "errors": {},
+          "metrics": {},
+          "evals": {},
+          "stageReads": {
+           "input": "hi",
+           "i": 1
+          },
+          "subflowId": "sf-a",
+          "flowMessages": [
+           {
+            "type": "subflow",
+            "description": "Entering A subflow",
+            "timestamp": 1795665211843,
+            "targetStage": "sf-a"
+           },
+           {
+            "type": "subflow",
+            "description": "Exiting A subflow",
+            "timestamp": 1795665211844,
+            "targetStage": "sf-a"
+           }
+          ],
+          "next": {
+           "id": "decide",
+           "runtimeStageId": "decide#11",
+           "name": "Again",
+           "isDecider": false,
+           "isFork": false,
+           "logs": {},
+           "errors": {},
+           "metrics": {},
+           "evals": {},
+           "stageWrites": {
+            "i": 2
+           },
+           "stageReads": {
+            "i": 2
+           },
+           "flowMessages": [
+            {
+             "type": "branch",
+             "description": "Evaluated scope and returned 'stop' → chose Stop path.",
+             "timestamp": 1795665211844,
+             "targetStage": "Stop",
+             "rationale": "returned branchId: stop"
+            }
+           ],
+           "children": [
+            {
+             "id": "stop",
+             "runtimeStageId": "stop#12",
+             "name": "Stop",
+             "isDecider": false,
+             "isFork": false,
+             "logs": {},
+             "errors": {},
+             "metrics": {},
+             "evals": {}
+            }
+           ]
+          }
+         }
+        }
+       ]
+      }
+     }
+    }
+   },
+   "initialState": {},
+   "commitLog": [
+    {
+     "overwrite": {
+      "input": "hi",
+      "i": 0
+     },
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [
+      {
+       "path": "input",
+       "verb": "set"
+      },
+      {
+       "path": "i",
+       "verb": "set"
+      }
+     ],
+     "stage": "Root",
+     "stageId": "root",
+     "runtimeStageId": "root#0",
+     "idx": 0
+    },
+    {
+     "overwrite": {
+      "o": "hi"
+     },
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [
+      {
+       "path": "o",
+       "verb": "set"
+      }
+     ],
+     "stage": "Outer",
+     "stageId": "sf-outer",
+     "runtimeStageId": "sf-outer#1",
+     "idx": 1
+    },
+    {
+     "overwrite": {},
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [],
+     "stage": "Outer",
+     "stageId": "sf-outer",
+     "runtimeStageId": "sf-outer#1",
+     "phase": "exit",
+     "idx": 2
+    },
+    {
+     "overwrite": {
+      "aOut": "hi0!a"
+     },
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [
+      {
+       "path": "aOut",
+       "verb": "set"
+      }
+     ],
+     "stage": "A",
+     "stageId": "sf-a",
+     "runtimeStageId": "sf-a#5",
+     "idx": 3
+    },
+    {
+     "overwrite": {},
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [],
+     "stage": "A",
+     "stageId": "sf-a",
+     "runtimeStageId": "sf-a#5",
+     "phase": "exit",
+     "idx": 4
+    },
+    {
+     "overwrite": {
+      "i": 1
+     },
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [
+      {
+       "path": "i",
+       "verb": "set"
+      }
+     ],
+     "stage": "Again",
+     "stageId": "decide",
+     "runtimeStageId": "decide#7",
+     "idx": 5
+    },
+    {
+     "overwrite": {},
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [],
+     "stage": "Loop",
+     "stageId": "again",
+     "runtimeStageId": "again#8",
+     "idx": 6
+    },
+    {
+     "overwrite": {
+      "aOut": "hi1!a"
+     },
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [
+      {
+       "path": "aOut",
+       "verb": "set"
+      }
+     ],
+     "stage": "A",
+     "stageId": "sf-a",
+     "runtimeStageId": "sf-a#9",
+     "idx": 7
+    },
+    {
+     "overwrite": {},
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [],
+     "stage": "A",
+     "stageId": "sf-a",
+     "runtimeStageId": "sf-a#9",
+     "phase": "exit",
+     "idx": 8
+    },
+    {
+     "overwrite": {
+      "i": 2
+     },
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [
+      {
+       "path": "i",
+       "verb": "set"
+      }
+     ],
+     "stage": "Again",
+     "stageId": "decide",
+     "runtimeStageId": "decide#11",
+     "idx": 9
+    },
+    {
+     "overwrite": {},
+     "updates": {},
+     "redactedPaths": [],
+     "trace": [],
+     "stage": "Stop",
+     "stageId": "stop",
+     "runtimeStageId": "stop#12",
+     "idx": 10
+    }
+   ],
+   "logAddress": {
+    "logRunId": "1795665211834-0000000001",
+    "drillPath": []
+   },
+   "commitValues": "delta",
+   "writeProvenance": "off",
+   "runId": "1795665211834-0000000001",
+   "subflowResults": {
+    "sf-outer/sf-inner": {
+     "subflowId": "sf-outer/sf-inner",
+     "subflowName": "Inner",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi",
+       "out": "hi!inner"
+      },
+      "stageContexts": {
+       "id": "sf-outer/sf-inner/c-inner",
+       "runtimeStageId": "sf-outer/sf-inner/c-inner#4",
+       "name": "sf-outer/sf-inner/C-inner",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "out": "hi!inner"
+       },
+       "stageReads": {
+        "input": "hi"
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/Inner",
+        "stageId": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "out": "hi!inner"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "out",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/sf-inner/C-inner",
+        "stageId": "sf-outer/sf-inner/c-inner",
+        "runtimeStageId": "sf-outer/sf-inner/c-inner#4",
+        "idx": 1
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-outer#1",
+        "sf-outer/sf-inner#3"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "sf-outer/Inner"
+    },
+    "sf-outer/sf-inner#3": {
+     "subflowId": "sf-outer/sf-inner",
+     "subflowName": "Inner",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi",
+       "out": "hi!inner"
+      },
+      "stageContexts": {
+       "id": "sf-outer/sf-inner/c-inner",
+       "runtimeStageId": "sf-outer/sf-inner/c-inner#4",
+       "name": "sf-outer/sf-inner/C-inner",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "out": "hi!inner"
+       },
+       "stageReads": {
+        "input": "hi"
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/Inner",
+        "stageId": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "out": "hi!inner"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "out",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/sf-inner/C-inner",
+        "stageId": "sf-outer/sf-inner/c-inner",
+        "runtimeStageId": "sf-outer/sf-inner/c-inner#4",
+        "idx": 1
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-outer#1",
+        "sf-outer/sf-inner#3"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "sf-outer/Inner"
+    },
+    "sf-outer": {
+     "subflowId": "sf-outer",
+     "subflowName": "Outer",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi",
+       "outerSeen": "hi",
+       "innerOut": "hi!inner"
+      },
+      "stageContexts": {
+       "id": "sf-outer/outer",
+       "runtimeStageId": "sf-outer/outer#2",
+       "name": "sf-outer/Outer",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "outerSeen": "hi"
+       },
+       "stageReads": {
+        "input": "hi"
+       },
+       "flowMessages": [
+        {
+         "type": "next",
+         "description": "Moving to sf-outer/Inner stage",
+         "timestamp": 1795665211840,
+         "targetStage": "sf-outer/Inner"
+        }
+       ],
+       "next": {
+        "id": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "name": "sf-outer/Inner",
+        "isDecider": false,
+        "isFork": false,
+        "logs": {},
+        "errors": {},
+        "metrics": {},
+        "evals": {},
+        "stageReads": {
+         "input": "hi"
+        },
+        "subflowId": "sf-outer/sf-inner",
+        "flowMessages": [
+         {
+          "type": "subflow",
+          "description": "Entering Inner subflow",
+          "timestamp": 1795665211840,
+          "targetStage": "sf-outer/sf-inner"
+         },
+         {
+          "type": "subflow",
+          "description": "Exiting Inner subflow",
+          "timestamp": 1795665211841,
+          "targetStage": "sf-outer/sf-inner"
+         }
+        ]
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "Outer",
+        "stageId": "sf-outer",
+        "runtimeStageId": "sf-outer#1",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "outerSeen": "hi"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "outerSeen",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/Outer",
+        "stageId": "sf-outer/outer",
+        "runtimeStageId": "sf-outer/outer#2",
+        "idx": 1
+       },
+       {
+        "overwrite": {
+         "innerOut": "hi!inner"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "innerOut",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/Inner",
+        "stageId": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "idx": 2
+       },
+       {
+        "overwrite": {},
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [],
+        "stage": "sf-outer/Inner",
+        "stageId": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "phase": "exit",
+        "idx": 3
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-outer#1"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "Outer"
+    },
+    "sf-outer#1": {
+     "subflowId": "sf-outer",
+     "subflowName": "Outer",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi",
+       "outerSeen": "hi",
+       "innerOut": "hi!inner"
+      },
+      "stageContexts": {
+       "id": "sf-outer/outer",
+       "runtimeStageId": "sf-outer/outer#2",
+       "name": "sf-outer/Outer",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "outerSeen": "hi"
+       },
+       "stageReads": {
+        "input": "hi"
+       },
+       "flowMessages": [
+        {
+         "type": "next",
+         "description": "Moving to sf-outer/Inner stage",
+         "timestamp": 1795665211840,
+         "targetStage": "sf-outer/Inner"
+        }
+       ],
+       "next": {
+        "id": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "name": "sf-outer/Inner",
+        "isDecider": false,
+        "isFork": false,
+        "logs": {},
+        "errors": {},
+        "metrics": {},
+        "evals": {},
+        "stageReads": {
+         "input": "hi"
+        },
+        "subflowId": "sf-outer/sf-inner",
+        "flowMessages": [
+         {
+          "type": "subflow",
+          "description": "Entering Inner subflow",
+          "timestamp": 1795665211840,
+          "targetStage": "sf-outer/sf-inner"
+         },
+         {
+          "type": "subflow",
+          "description": "Exiting Inner subflow",
+          "timestamp": 1795665211841,
+          "targetStage": "sf-outer/sf-inner"
+         }
+        ]
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "Outer",
+        "stageId": "sf-outer",
+        "runtimeStageId": "sf-outer#1",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "outerSeen": "hi"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "outerSeen",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/Outer",
+        "stageId": "sf-outer/outer",
+        "runtimeStageId": "sf-outer/outer#2",
+        "idx": 1
+       },
+       {
+        "overwrite": {
+         "innerOut": "hi!inner"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "innerOut",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-outer/Inner",
+        "stageId": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "idx": 2
+       },
+       {
+        "overwrite": {},
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [],
+        "stage": "sf-outer/Inner",
+        "stageId": "sf-outer/sf-inner",
+        "runtimeStageId": "sf-outer/sf-inner#3",
+        "phase": "exit",
+        "idx": 3
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-outer#1"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "Outer"
+    },
+    "sf-a": {
+     "subflowId": "sf-a",
+     "subflowName": "A",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi1",
+       "out": "hi1!a"
+      },
+      "stageContexts": {
+       "id": "sf-a/c-a",
+       "runtimeStageId": "sf-a/c-a#10",
+       "name": "sf-a/C-a",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "out": "hi1!a"
+       },
+       "stageReads": {
+        "input": "hi1"
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi1"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "A",
+        "stageId": "sf-a",
+        "runtimeStageId": "sf-a#9",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "out": "hi1!a"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "out",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-a/C-a",
+        "stageId": "sf-a/c-a",
+        "runtimeStageId": "sf-a/c-a#10",
+        "idx": 1
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-a#9"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "A"
+    },
+    "sf-a#5": {
+     "subflowId": "sf-a",
+     "subflowName": "A",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi0",
+       "out": "hi0!a"
+      },
+      "stageContexts": {
+       "id": "sf-a/c-a",
+       "runtimeStageId": "sf-a/c-a#6",
+       "name": "sf-a/C-a",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "out": "hi0!a"
+       },
+       "stageReads": {
+        "input": "hi0"
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi0"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "A",
+        "stageId": "sf-a",
+        "runtimeStageId": "sf-a#5",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "out": "hi0!a"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "out",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-a/C-a",
+        "stageId": "sf-a/c-a",
+        "runtimeStageId": "sf-a/c-a#6",
+        "idx": 1
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-a#5"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "A"
+    },
+    "sf-a#9": {
+     "subflowId": "sf-a",
+     "subflowName": "A",
+     "treeContext": {
+      "globalContext": {
+       "input": "hi1",
+       "out": "hi1!a"
+      },
+      "stageContexts": {
+       "id": "sf-a/c-a",
+       "runtimeStageId": "sf-a/c-a#10",
+       "name": "sf-a/C-a",
+       "isDecider": false,
+       "isFork": false,
+       "logs": {},
+       "errors": {},
+       "metrics": {},
+       "evals": {},
+       "stageWrites": {
+        "out": "hi1!a"
+       },
+       "stageReads": {
+        "input": "hi1"
+       }
+      },
+      "history": [
+       {
+        "overwrite": {
+         "input": "hi1"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "input",
+          "verb": "set"
+         }
+        ],
+        "stage": "A",
+        "stageId": "sf-a",
+        "runtimeStageId": "sf-a#9",
+        "idx": 0
+       },
+       {
+        "overwrite": {
+         "out": "hi1!a"
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+         {
+          "path": "out",
+          "verb": "set"
+         }
+        ],
+        "stage": "sf-a/C-a",
+        "stageId": "sf-a/c-a",
+        "runtimeStageId": "sf-a/c-a#10",
+        "idx": 1
+       }
+      ],
+      "logAddress": {
+       "logRunId": "1795665211834-0000000001",
+       "drillPath": [
+        "sf-a#9"
+       ]
+      },
+      "initialState": {}
+     },
+     "parentStageId": "A"
+    }
+   },
+   "recorders": [
+    {
+     "id": "boundary-1",
+     "name": "BoundaryEvents",
+     "description": "Unified domain event log — run/subflow boundaries + LLM/tool/context events",
+     "preferredOperation": "translate",
+     "data": [
+      {
+       "type": "run.entry",
+       "runtimeStageId": "__root__#0",
+       "subflowPath": [
+        "__root__"
+       ],
+       "depth": 0,
+       "ts": 1795665211835,
+       "commitIdxBefore": 0,
+       "commitIdxAfter": 0,
+       "isRoot": true
+      },
+      {
+       "type": "subflow.entry",
+       "runtimeStageId": "sf-outer#1",
+       "subflowPath": [
+        "__root__",
+        "sf-outer"
+       ],
+       "depth": 1,
+       "ts": 1795665211839,
+       "commitIdxBefore": 1,
+       "commitIdxAfter": 1,
+       "subflowId": "sf-outer",
+       "localSubflowId": "sf-outer",
+       "subflowName": "Outer",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi"
+       }
+      },
+      {
+       "type": "subflow.entry",
+       "runtimeStageId": "sf-outer/sf-inner#3",
+       "subflowPath": [
+        "__root__",
+        "sf-outer",
+        "sf-inner"
+       ],
+       "depth": 2,
+       "ts": 1795665211840,
+       "commitIdxBefore": 2,
+       "commitIdxAfter": 2,
+       "subflowId": "sf-outer/sf-inner",
+       "localSubflowId": "sf-inner",
+       "subflowName": "Inner",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi"
+       }
+      },
+      {
+       "type": "subflow.exit",
+       "runtimeStageId": "sf-outer/sf-inner#3",
+       "subflowPath": [
+        "__root__",
+        "sf-outer",
+        "sf-inner"
+       ],
+       "depth": 2,
+       "ts": 1795665211841,
+       "commitIdxBefore": 3,
+       "commitIdxAfter": 3,
+       "subflowId": "sf-outer/sf-inner",
+       "localSubflowId": "sf-inner",
+       "subflowName": "Inner",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi",
+        "out": "hi!inner"
+       }
+      },
+      {
+       "type": "subflow.exit",
+       "runtimeStageId": "sf-outer#1",
+       "subflowPath": [
+        "__root__",
+        "sf-outer"
+       ],
+       "depth": 1,
+       "ts": 1795665211841,
+       "commitIdxBefore": 4,
+       "commitIdxAfter": 4,
+       "subflowId": "sf-outer",
+       "localSubflowId": "sf-outer",
+       "subflowName": "Outer",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi",
+        "outerSeen": "hi",
+        "innerOut": "hi!inner"
+       }
+      },
+      {
+       "type": "subflow.entry",
+       "runtimeStageId": "sf-a#5",
+       "subflowPath": [
+        "__root__",
+        "sf-a"
+       ],
+       "depth": 1,
+       "ts": 1795665211842,
+       "commitIdxBefore": 5,
+       "commitIdxAfter": 5,
+       "subflowId": "sf-a",
+       "localSubflowId": "sf-a",
+       "subflowName": "A",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi0"
+       }
+      },
+      {
+       "type": "subflow.exit",
+       "runtimeStageId": "sf-a#5",
+       "subflowPath": [
+        "__root__",
+        "sf-a"
+       ],
+       "depth": 1,
+       "ts": 1795665211842,
+       "commitIdxBefore": 6,
+       "commitIdxAfter": 6,
+       "subflowId": "sf-a",
+       "localSubflowId": "sf-a",
+       "subflowName": "A",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi0",
+        "out": "hi0!a"
+       }
+      },
+      {
+       "type": "decision.branch",
+       "runtimeStageId": "decide#7",
+       "subflowPath": [
+        "__root__"
+       ],
+       "depth": 0,
+       "ts": 1795665211843,
+       "commitIdxBefore": 7,
+       "commitIdxAfter": 7,
+       "decider": "Again",
+       "chosen": "Loop",
+       "isAgentInternal": false
+      },
+      {
+       "type": "loop.iteration",
+       "runtimeStageId": "again#8",
+       "subflowPath": [
+        "__root__"
+       ],
+       "depth": 0,
+       "ts": 1795665211843,
+       "commitIdxBefore": 8,
+       "commitIdxAfter": 8,
+       "target": "A",
+       "iteration": 1
+      },
+      {
+       "type": "subflow.entry",
+       "runtimeStageId": "sf-a#9",
+       "subflowPath": [
+        "__root__",
+        "sf-a"
+       ],
+       "depth": 1,
+       "ts": 1795665211843,
+       "commitIdxBefore": 9,
+       "commitIdxAfter": 9,
+       "subflowId": "sf-a",
+       "localSubflowId": "sf-a",
+       "subflowName": "A",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi1"
+       }
+      },
+      {
+       "type": "subflow.exit",
+       "runtimeStageId": "sf-a#9",
+       "subflowPath": [
+        "__root__",
+        "sf-a"
+       ],
+       "depth": 1,
+       "ts": 1795665211844,
+       "commitIdxBefore": 10,
+       "commitIdxAfter": 10,
+       "subflowId": "sf-a",
+       "localSubflowId": "sf-a",
+       "subflowName": "A",
+       "isAgentInternal": false,
+       "payload": {
+        "input": "hi1",
+        "out": "hi1!a"
+       }
+      },
+      {
+       "type": "decision.branch",
+       "runtimeStageId": "decide#11",
+       "subflowPath": [
+        "__root__"
+       ],
+       "depth": 0,
+       "ts": 1795665211844,
+       "commitIdxBefore": 11,
+       "commitIdxAfter": 11,
+       "decider": "Again",
+       "chosen": "Stop",
+       "isAgentInternal": false
+      },
+      {
+       "type": "run.exit",
+       "runtimeStageId": "__root__#0",
+       "subflowPath": [
+        "__root__"
+       ],
+       "depth": 0,
+       "ts": 1795665211844,
+       "commitIdxBefore": 12,
+       "commitIdxAfter": 12,
+       "isRoot": true
+      }
+     ],
+     "meta": {
+      "mode": "full"
+     }
+    }
+   ]
+  },
+  "events": [],
+  "structure": null
+ },
+ "artifacts": [
+  {
+   "meta": {
+    "ref": "art_d39QgrjDsuYNF1shISfNPs",
+    "kind": "recording/run-index",
+    "mediaType": "application/json",
+    "bytes": 1002,
+    "createdAt": 1795665211901,
+    "label": "run run-v1-fixture",
+    "digest": "sha-256:81f68d501e6d4e8d5854f6258488075add9d576e26dd19fe9831724417c272b6",
+    "origin": {
+     "runId": "run-v1-fixture"
+    }
+   },
+   "text": "{\"format\":\"agentfootprint.recording.index.v1\",\"runId\":\"run-v1-fixture\",\"snapshotRunId\":\"1795665211834-0000000001\",\"packed\":false,\"complete\":true,\"hasSubflowResults\":true,\"base\":{\"ref\":\"art_UP4qt2PZOoBhmCmy8WXdV6\",\"bytes\":8346,\"digest\":\"sha-256:e56d453d411bbbdfe8cbf2dd5d61e693c96d494cb37d5fd554bd4357b010cbbb\"},\"parts\":[{\"ref\":\"art_6xCvYoqxtTmOjK2ggTBmEK\",\"bytes\":4637,\"digest\":\"sha-256:596cbee84a513f0275e9aa9327c580cb3af58798402c03c55223292f7a377cc1\",\"results\":4}],\"invocations\":[{\"key\":\"sf-outer#1\",\"path\":[\"sf-outer#1\"],\"subflowId\":\"sf-outer\",\"part\":0,\"bytes\":1904},{\"key\":\"sf-outer/sf-inner#3\",\"path\":[\"sf-outer#1\",\"sf-outer/sf-inner#3\"],\"subflowId\":\"sf-outer/sf-inner\",\"part\":0,\"bytes\":992},{\"key\":\"sf-a#5\",\"path\":[\"sf-a#5\"],\"subflowId\":\"sf-a\",\"part\":0,\"bytes\":789},{\"key\":\"sf-a#9\",\"path\":[\"sf-a#9\"],\"subflowId\":\"sf-a\",\"part\":0,\"bytes\":791}],\"aliases\":[{\"name\":\"sf-outer/sf-inner\",\"key\":\"sf-outer/sf-inner#3\"},{\"name\":\"sf-outer\",\"key\":\"sf-outer#1\"},{\"name\":\"sf-a\",\"key\":\"sf-a#9\"}],\"unmounted\":[]}"
+  },
+  {
+   "meta": {
+    "ref": "art_UP4qt2PZOoBhmCmy8WXdV6",
+    "kind": "recording/run-part",
+    "mediaType": "application/json",
+    "bytes": 8346,
+    "createdAt": 1795665211884,
+    "label": "run run-v1-fixture",
+    "digest": "sha-256:e56d453d411bbbdfe8cbf2dd5d61e693c96d494cb37d5fd554bd4357b010cbbb",
+    "origin": {
+     "runId": "run-v1-fixture"
+    }
+   },
+   "text": "{\"format\":\"agentfootprint.recording.part.v1\",\"runId\":\"run-v1-fixture\",\"part\":\"base\",\"recording\":{\"snapshot\":{\"sharedState\":{\"input\":\"hi\",\"i\":2,\"o\":\"hi\",\"aOut\":\"hi1!a\"},\"executionTree\":{\"id\":\"root\",\"runtimeStageId\":\"root#0\",\"name\":\"Root\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"input\":\"hi\",\"i\":0},\"flowMessages\":[{\"type\":\"next\",\"description\":\"Moving to Outer stage\",\"timestamp\":1795665211838,\"targetStage\":\"Outer\"}],\"next\":{\"id\":\"sf-outer\",\"runtimeStageId\":\"sf-outer#1\",\"name\":\"Outer\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageReads\":{\"input\":\"hi\"},\"subflowId\":\"sf-outer\",\"flowMessages\":[{\"type\":\"subflow\",\"description\":\"Entering Outer subflow\",\"timestamp\":1795665211839,\"targetStage\":\"sf-outer\"},{\"type\":\"subflow\",\"description\":\"Exiting Outer subflow\",\"timestamp\":1795665211841,\"targetStage\":\"sf-outer\"}],\"next\":{\"id\":\"sf-a\",\"runtimeStageId\":\"sf-a#5\",\"name\":\"A\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageReads\":{\"input\":\"hi\",\"i\":0},\"subflowId\":\"sf-a\",\"flowMessages\":[{\"type\":\"subflow\",\"description\":\"Entering A subflow\",\"timestamp\":1795665211841,\"targetStage\":\"sf-a\"},{\"type\":\"subflow\",\"description\":\"Exiting A subflow\",\"timestamp\":1795665211842,\"targetStage\":\"sf-a\"}],\"next\":{\"id\":\"decide\",\"runtimeStageId\":\"decide#7\",\"name\":\"Again\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"i\":1},\"stageReads\":{\"i\":1},\"flowMessages\":[{\"type\":\"branch\",\"description\":\"Evaluated scope and returned 'again' → chose Loop path.\",\"timestamp\":1795665211842,\"targetStage\":\"Loop\",\"rationale\":\"returned branchId: again\"}],\"children\":[{\"id\":\"again\",\"runtimeStageId\":\"again#8\",\"name\":\"Loop\",\"isDecider\":false,\"isFork\":false,\"logs\":{\"dynamicNextTarget\":\"sf-a\",\"dynamicNextIteration\":0},\"errors\":{},\"metrics\":{},\"evals\":{},\"flowMessages\":[{\"type\":\"loop\",\"description\":\"Looping back to A (iteration 1)\",\"timestamp\":1795665211843,\"targetStage\":\"A\",\"iteration\":1}],\"next\":{\"id\":\"sf-a\",\"runtimeStageId\":\"sf-a#9\",\"name\":\"A\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageReads\":{\"input\":\"hi\",\"i\":1},\"subflowId\":\"sf-a\",\"flowMessages\":[{\"type\":\"subflow\",\"description\":\"Entering A subflow\",\"timestamp\":1795665211843,\"targetStage\":\"sf-a\"},{\"type\":\"subflow\",\"description\":\"Exiting A subflow\",\"timestamp\":1795665211844,\"targetStage\":\"sf-a\"}],\"next\":{\"id\":\"decide\",\"runtimeStageId\":\"decide#11\",\"name\":\"Again\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"i\":2},\"stageReads\":{\"i\":2},\"flowMessages\":[{\"type\":\"branch\",\"description\":\"Evaluated scope and returned 'stop' → chose Stop path.\",\"timestamp\":1795665211844,\"targetStage\":\"Stop\",\"rationale\":\"returned branchId: stop\"}],\"children\":[{\"id\":\"stop\",\"runtimeStageId\":\"stop#12\",\"name\":\"Stop\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{}}]}}}]}}}},\"initialState\":{},\"commitLog\":[{\"overwrite\":{\"input\":\"hi\",\"i\":0},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"input\",\"verb\":\"set\"},{\"path\":\"i\",\"verb\":\"set\"}],\"stage\":\"Root\",\"stageId\":\"root\",\"runtimeStageId\":\"root#0\",\"idx\":0},{\"overwrite\":{\"o\":\"hi\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"o\",\"verb\":\"set\"}],\"stage\":\"Outer\",\"stageId\":\"sf-outer\",\"runtimeStageId\":\"sf-outer#1\",\"idx\":1},{\"overwrite\":{},\"updates\":{},\"redactedPaths\":[],\"trace\":[],\"stage\":\"Outer\",\"stageId\":\"sf-outer\",\"runtimeStageId\":\"sf-outer#1\",\"phase\":\"exit\",\"idx\":2},{\"overwrite\":{\"aOut\":\"hi0!a\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"aOut\",\"verb\":\"set\"}],\"stage\":\"A\",\"stageId\":\"sf-a\",\"runtimeStageId\":\"sf-a#5\",\"idx\":3},{\"overwrite\":{},\"updates\":{},\"redactedPaths\":[],\"trace\":[],\"stage\":\"A\",\"stageId\":\"sf-a\",\"runtimeStageId\":\"sf-a#5\",\"phase\":\"exit\",\"idx\":4},{\"overwrite\":{\"i\":1},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"i\",\"verb\":\"set\"}],\"stage\":\"Again\",\"stageId\":\"decide\",\"runtimeStageId\":\"decide#7\",\"idx\":5},{\"overwrite\":{},\"updates\":{},\"redactedPaths\":[],\"trace\":[],\"stage\":\"Loop\",\"stageId\":\"again\",\"runtimeStageId\":\"again#8\",\"idx\":6},{\"overwrite\":{\"aOut\":\"hi1!a\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"aOut\",\"verb\":\"set\"}],\"stage\":\"A\",\"stageId\":\"sf-a\",\"runtimeStageId\":\"sf-a#9\",\"idx\":7},{\"overwrite\":{},\"updates\":{},\"redactedPaths\":[],\"trace\":[],\"stage\":\"A\",\"stageId\":\"sf-a\",\"runtimeStageId\":\"sf-a#9\",\"phase\":\"exit\",\"idx\":8},{\"overwrite\":{\"i\":2},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"i\",\"verb\":\"set\"}],\"stage\":\"Again\",\"stageId\":\"decide\",\"runtimeStageId\":\"decide#11\",\"idx\":9},{\"overwrite\":{},\"updates\":{},\"redactedPaths\":[],\"trace\":[],\"stage\":\"Stop\",\"stageId\":\"stop\",\"runtimeStageId\":\"stop#12\",\"idx\":10}],\"logAddress\":{\"logRunId\":\"1795665211834-0000000001\",\"drillPath\":[]},\"commitValues\":\"delta\",\"writeProvenance\":\"off\",\"runId\":\"1795665211834-0000000001\",\"recorders\":[{\"id\":\"boundary-1\",\"name\":\"BoundaryEvents\",\"description\":\"Unified domain event log — run/subflow boundaries + LLM/tool/context events\",\"preferredOperation\":\"translate\",\"data\":[{\"type\":\"run.entry\",\"runtimeStageId\":\"__root__#0\",\"subflowPath\":[\"__root__\"],\"depth\":0,\"ts\":1795665211835,\"commitIdxBefore\":0,\"commitIdxAfter\":0,\"isRoot\":true},{\"type\":\"subflow.entry\",\"runtimeStageId\":\"sf-outer#1\",\"subflowPath\":[\"__root__\",\"sf-outer\"],\"depth\":1,\"ts\":1795665211839,\"commitIdxBefore\":1,\"commitIdxAfter\":1,\"subflowId\":\"sf-outer\",\"localSubflowId\":\"sf-outer\",\"subflowName\":\"Outer\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi\"}},{\"type\":\"subflow.entry\",\"runtimeStageId\":\"sf-outer/sf-inner#3\",\"subflowPath\":[\"__root__\",\"sf-outer\",\"sf-inner\"],\"depth\":2,\"ts\":1795665211840,\"commitIdxBefore\":2,\"commitIdxAfter\":2,\"subflowId\":\"sf-outer/sf-inner\",\"localSubflowId\":\"sf-inner\",\"subflowName\":\"Inner\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi\"}},{\"type\":\"subflow.exit\",\"runtimeStageId\":\"sf-outer/sf-inner#3\",\"subflowPath\":[\"__root__\",\"sf-outer\",\"sf-inner\"],\"depth\":2,\"ts\":1795665211841,\"commitIdxBefore\":3,\"commitIdxAfter\":3,\"subflowId\":\"sf-outer/sf-inner\",\"localSubflowId\":\"sf-inner\",\"subflowName\":\"Inner\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi\",\"out\":\"hi!inner\"}},{\"type\":\"subflow.exit\",\"runtimeStageId\":\"sf-outer#1\",\"subflowPath\":[\"__root__\",\"sf-outer\"],\"depth\":1,\"ts\":1795665211841,\"commitIdxBefore\":4,\"commitIdxAfter\":4,\"subflowId\":\"sf-outer\",\"localSubflowId\":\"sf-outer\",\"subflowName\":\"Outer\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi\",\"outerSeen\":\"hi\",\"innerOut\":\"hi!inner\"}},{\"type\":\"subflow.entry\",\"runtimeStageId\":\"sf-a#5\",\"subflowPath\":[\"__root__\",\"sf-a\"],\"depth\":1,\"ts\":1795665211842,\"commitIdxBefore\":5,\"commitIdxAfter\":5,\"subflowId\":\"sf-a\",\"localSubflowId\":\"sf-a\",\"subflowName\":\"A\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi0\"}},{\"type\":\"subflow.exit\",\"runtimeStageId\":\"sf-a#5\",\"subflowPath\":[\"__root__\",\"sf-a\"],\"depth\":1,\"ts\":1795665211842,\"commitIdxBefore\":6,\"commitIdxAfter\":6,\"subflowId\":\"sf-a\",\"localSubflowId\":\"sf-a\",\"subflowName\":\"A\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi0\",\"out\":\"hi0!a\"}},{\"type\":\"decision.branch\",\"runtimeStageId\":\"decide#7\",\"subflowPath\":[\"__root__\"],\"depth\":0,\"ts\":1795665211843,\"commitIdxBefore\":7,\"commitIdxAfter\":7,\"decider\":\"Again\",\"chosen\":\"Loop\",\"isAgentInternal\":false},{\"type\":\"loop.iteration\",\"runtimeStageId\":\"again#8\",\"subflowPath\":[\"__root__\"],\"depth\":0,\"ts\":1795665211843,\"commitIdxBefore\":8,\"commitIdxAfter\":8,\"target\":\"A\",\"iteration\":1},{\"type\":\"subflow.entry\",\"runtimeStageId\":\"sf-a#9\",\"subflowPath\":[\"__root__\",\"sf-a\"],\"depth\":1,\"ts\":1795665211843,\"commitIdxBefore\":9,\"commitIdxAfter\":9,\"subflowId\":\"sf-a\",\"localSubflowId\":\"sf-a\",\"subflowName\":\"A\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi1\"}},{\"type\":\"subflow.exit\",\"runtimeStageId\":\"sf-a#9\",\"subflowPath\":[\"__root__\",\"sf-a\"],\"depth\":1,\"ts\":1795665211844,\"commitIdxBefore\":10,\"commitIdxAfter\":10,\"subflowId\":\"sf-a\",\"localSubflowId\":\"sf-a\",\"subflowName\":\"A\",\"isAgentInternal\":false,\"payload\":{\"input\":\"hi1\",\"out\":\"hi1!a\"}},{\"type\":\"decision.branch\",\"runtimeStageId\":\"decide#11\",\"subflowPath\":[\"__root__\"],\"depth\":0,\"ts\":1795665211844,\"commitIdxBefore\":11,\"commitIdxAfter\":11,\"decider\":\"Again\",\"chosen\":\"Stop\",\"isAgentInternal\":false},{\"type\":\"run.exit\",\"runtimeStageId\":\"__root__#0\",\"subflowPath\":[\"__root__\"],\"depth\":0,\"ts\":1795665211844,\"commitIdxBefore\":12,\"commitIdxAfter\":12,\"isRoot\":true}],\"meta\":{\"mode\":\"full\"}}]},\"events\":[],\"structure\":null}}"
+  },
+  {
+   "meta": {
+    "ref": "art_6xCvYoqxtTmOjK2ggTBmEK",
+    "kind": "recording/run-part",
+    "mediaType": "application/json",
+    "bytes": 4637,
+    "createdAt": 1795665211894,
+    "label": "run run-v1-fixture",
+    "digest": "sha-256:596cbee84a513f0275e9aa9327c580cb3af58798402c03c55223292f7a377cc1",
+    "origin": {
+     "runId": "run-v1-fixture"
+    }
+   },
+   "text": "{\"format\":\"agentfootprint.recording.part.v1\",\"runId\":\"run-v1-fixture\",\"part\":0,\"results\":{\"sf-outer#1\":{\"subflowId\":\"sf-outer\",\"subflowName\":\"Outer\",\"treeContext\":{\"globalContext\":{\"input\":\"hi\",\"outerSeen\":\"hi\",\"innerOut\":\"hi!inner\"},\"stageContexts\":{\"id\":\"sf-outer/outer\",\"runtimeStageId\":\"sf-outer/outer#2\",\"name\":\"sf-outer/Outer\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"outerSeen\":\"hi\"},\"stageReads\":{\"input\":\"hi\"},\"flowMessages\":[{\"type\":\"next\",\"description\":\"Moving to sf-outer/Inner stage\",\"timestamp\":1795665211840,\"targetStage\":\"sf-outer/Inner\"}],\"next\":{\"id\":\"sf-outer/sf-inner\",\"runtimeStageId\":\"sf-outer/sf-inner#3\",\"name\":\"sf-outer/Inner\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageReads\":{\"input\":\"hi\"},\"subflowId\":\"sf-outer/sf-inner\",\"flowMessages\":[{\"type\":\"subflow\",\"description\":\"Entering Inner subflow\",\"timestamp\":1795665211840,\"targetStage\":\"sf-outer/sf-inner\"},{\"type\":\"subflow\",\"description\":\"Exiting Inner subflow\",\"timestamp\":1795665211841,\"targetStage\":\"sf-outer/sf-inner\"}]}},\"history\":[{\"overwrite\":{\"input\":\"hi\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"input\",\"verb\":\"set\"}],\"stage\":\"Outer\",\"stageId\":\"sf-outer\",\"runtimeStageId\":\"sf-outer#1\",\"idx\":0},{\"overwrite\":{\"outerSeen\":\"hi\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"outerSeen\",\"verb\":\"set\"}],\"stage\":\"sf-outer/Outer\",\"stageId\":\"sf-outer/outer\",\"runtimeStageId\":\"sf-outer/outer#2\",\"idx\":1},{\"overwrite\":{\"innerOut\":\"hi!inner\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"innerOut\",\"verb\":\"set\"}],\"stage\":\"sf-outer/Inner\",\"stageId\":\"sf-outer/sf-inner\",\"runtimeStageId\":\"sf-outer/sf-inner#3\",\"idx\":2},{\"overwrite\":{},\"updates\":{},\"redactedPaths\":[],\"trace\":[],\"stage\":\"sf-outer/Inner\",\"stageId\":\"sf-outer/sf-inner\",\"runtimeStageId\":\"sf-outer/sf-inner#3\",\"phase\":\"exit\",\"idx\":3}],\"logAddress\":{\"logRunId\":\"1795665211834-0000000001\",\"drillPath\":[\"sf-outer#1\"]},\"initialState\":{}},\"parentStageId\":\"Outer\"},\"sf-outer/sf-inner#3\":{\"subflowId\":\"sf-outer/sf-inner\",\"subflowName\":\"Inner\",\"treeContext\":{\"globalContext\":{\"input\":\"hi\",\"out\":\"hi!inner\"},\"stageContexts\":{\"id\":\"sf-outer/sf-inner/c-inner\",\"runtimeStageId\":\"sf-outer/sf-inner/c-inner#4\",\"name\":\"sf-outer/sf-inner/C-inner\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"out\":\"hi!inner\"},\"stageReads\":{\"input\":\"hi\"}},\"history\":[{\"overwrite\":{\"input\":\"hi\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"input\",\"verb\":\"set\"}],\"stage\":\"sf-outer/Inner\",\"stageId\":\"sf-outer/sf-inner\",\"runtimeStageId\":\"sf-outer/sf-inner#3\",\"idx\":0},{\"overwrite\":{\"out\":\"hi!inner\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"out\",\"verb\":\"set\"}],\"stage\":\"sf-outer/sf-inner/C-inner\",\"stageId\":\"sf-outer/sf-inner/c-inner\",\"runtimeStageId\":\"sf-outer/sf-inner/c-inner#4\",\"idx\":1}],\"logAddress\":{\"logRunId\":\"1795665211834-0000000001\",\"drillPath\":[\"sf-outer#1\",\"sf-outer/sf-inner#3\"]},\"initialState\":{}},\"parentStageId\":\"sf-outer/Inner\"},\"sf-a#5\":{\"subflowId\":\"sf-a\",\"subflowName\":\"A\",\"treeContext\":{\"globalContext\":{\"input\":\"hi0\",\"out\":\"hi0!a\"},\"stageContexts\":{\"id\":\"sf-a/c-a\",\"runtimeStageId\":\"sf-a/c-a#6\",\"name\":\"sf-a/C-a\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"out\":\"hi0!a\"},\"stageReads\":{\"input\":\"hi0\"}},\"history\":[{\"overwrite\":{\"input\":\"hi0\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"input\",\"verb\":\"set\"}],\"stage\":\"A\",\"stageId\":\"sf-a\",\"runtimeStageId\":\"sf-a#5\",\"idx\":0},{\"overwrite\":{\"out\":\"hi0!a\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"out\",\"verb\":\"set\"}],\"stage\":\"sf-a/C-a\",\"stageId\":\"sf-a/c-a\",\"runtimeStageId\":\"sf-a/c-a#6\",\"idx\":1}],\"logAddress\":{\"logRunId\":\"1795665211834-0000000001\",\"drillPath\":[\"sf-a#5\"]},\"initialState\":{}},\"parentStageId\":\"A\"},\"sf-a#9\":{\"subflowId\":\"sf-a\",\"subflowName\":\"A\",\"treeContext\":{\"globalContext\":{\"input\":\"hi1\",\"out\":\"hi1!a\"},\"stageContexts\":{\"id\":\"sf-a/c-a\",\"runtimeStageId\":\"sf-a/c-a#10\",\"name\":\"sf-a/C-a\",\"isDecider\":false,\"isFork\":false,\"logs\":{},\"errors\":{},\"metrics\":{},\"evals\":{},\"stageWrites\":{\"out\":\"hi1!a\"},\"stageReads\":{\"input\":\"hi1\"}},\"history\":[{\"overwrite\":{\"input\":\"hi1\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"input\",\"verb\":\"set\"}],\"stage\":\"A\",\"stageId\":\"sf-a\",\"runtimeStageId\":\"sf-a#9\",\"idx\":0},{\"overwrite\":{\"out\":\"hi1!a\"},\"updates\":{},\"redactedPaths\":[],\"trace\":[{\"path\":\"out\",\"verb\":\"set\"}],\"stage\":\"sf-a/C-a\",\"stageId\":\"sf-a/c-a\",\"runtimeStageId\":\"sf-a/c-a#10\",\"idx\":1}],\"logAddress\":{\"logRunId\":\"1795665211834-0000000001\",\"drillPath\":[\"sf-a#9\"]},\"initialState\":{}},\"parentStageId\":\"A\"}},\"aliases\":{}}"
+  }
+ ]
+}
