@@ -1,18 +1,64 @@
 import type { TypedScope } from 'footprintjs';
+import { RedactionRule } from 'footprintjs/advanced';
+import {
+  coverageInForce,
+  policyInForce,
+  retainedStateValue,
+} from '../../../redaction/runRedaction.js';
+import { ruleShowsPath } from '../../../redaction/sourceLinkPolicy.js';
 import { assessCitedAnswer } from '../assessment/answer/citations/assessCitedAnswer.js';
 import type { RouteBranch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
-import { acceptedAnswerDigest } from './accepted.js';
+import { citationRecordForWarning } from '../assessment/answer/citations/record.js';
+import { acceptedAnswerDigest, type RetainedCitationReport } from './accepted.js';
+import type { StoredCitationSource } from './capture.js';
 import type { ResolvedProseCitations } from './config.js';
 
 function requestedColumn(scope: TypedScope<AgentState>, options: ResolvedProseCitations) {
   if (scope.userMessageFrom !== undefined || options.requestedColumn === undefined)
     return undefined;
   try {
-    return options.requestedColumn(scope.userMessage);
+    const message = scope.userMessage;
+    return retainedStateValue(scope, 'userMessage', message) === message
+      ? options.requestedColumn(message)
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+/** The locator stays private. Only its declared names can supply a public verdict. */
+function visibleColumnsOf(
+  scope: TypedScope<AgentState>,
+  sources: readonly StoredCitationSource[],
+  resultId: string,
+): readonly string[] | undefined {
+  const index = sources.findIndex((source) => source.resultId === resultId);
+  const source = sources[index];
+  const columns = source?.completeColumns;
+  if (columns === undefined || coverageInForce(scope).state === 'unknown') return undefined;
+
+  // Apply caller selectors to the already-authorized schema. The native
+  // private-root mask keeps the whole locator out of public recordings.
+  const policy = policyInForce(scope);
+  if (policy === undefined) return columns;
+  const rule = new RedactionRule(policy);
+  const root = ['citationSources', String(index)];
+  const requiredFields = ['resultId', 'bodyDigest', 'callOccurrenceKey', 'completeColumns'];
+  if (
+    requiredFields.some(
+      (field) => rule.isKeyRedacted(field) || !ruleShowsPath(rule, [...root, field]),
+    )
+  )
+    return undefined;
+
+  const occurrenceVisible = source.callOccurrenceKey.every((_word, position) =>
+    ruleShowsPath(rule, [...root, 'callOccurrenceKey', String(position)]),
+  );
+  const allColumnsVisible = columns.every((_name, position) =>
+    ruleShowsPath(rule, [...root, 'completeColumns', String(position)]),
+  );
+  return occurrenceVisible && allColumnsVisible ? columns : undefined;
 }
 
 /** Observe only the terminal prose after delivery gates have settled the Route decision. */
@@ -20,6 +66,7 @@ export function withCitationAssessment(
   decide: (scope: TypedScope<AgentState>) => RouteBranch | Promise<RouteBranch>,
   options: ResolvedProseCitations,
   hasOutstandingConsent: () => boolean,
+  retainForFinal?: (report: RetainedCitationReport) => void,
 ) {
   return async (scope: TypedScope<AgentState>): Promise<RouteBranch> => {
     const branch = await decide(scope);
@@ -38,7 +85,7 @@ export function withCitationAssessment(
         ? recorded.submitted
         : undefined;
     const sources = scope.citationSources ?? [];
-    scope.answerCitations = assessCitedAnswer({
+    const report = assessCitedAnswer({
       answer,
       offer,
       evidence: scope.resultIdentities?.evidence,
@@ -46,8 +93,17 @@ export function withCitationAssessment(
       comparisonGroups: options.comparisonGroups,
       extractClaim: options.extractClaim,
       requestedColumn: requestedColumn(scope, options),
-      visibleColumnsFor: (id) => sources.find((source) => source.resultId === id)?.completeColumns,
+      visibleColumnsFor: (id) => visibleColumnsOf(scope, sources, id),
     });
+    scope.answerCitations = report;
+    if (retainForFinal !== undefined) {
+      retainForFinal({
+        record: citationRecordForWarning(
+          report,
+          retainedStateValue(scope, 'answerCitations', report),
+        ),
+      });
+    }
     return branch;
   };
 }

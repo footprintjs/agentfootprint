@@ -10,6 +10,11 @@ export interface AcceptedCitationOffer {
 
 export type AnswerCitationRecord = ReturnType<typeof assessCitedAnswer>;
 
+/** The report projected under its writing stage's native recording rule. */
+export interface RetainedCitationReport {
+  readonly record: unknown;
+}
+
 /** Identity of exact text, including distinct escaped surrogate code units. */
 export function citationTextDigest(text: string): string {
   return sha256Hex(JSON.stringify(text));

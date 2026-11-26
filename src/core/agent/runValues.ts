@@ -24,6 +24,7 @@ import type { SourceEvidenceIndex } from '../../artifacts/sourceEvidence/types.j
 import type { HostedRecording } from '../runnerLive.js';
 import type { SourceConsultation } from './honesty/sourceConsultation.js';
 import type { ContextBaselineHolder } from './contextBinding/check.js';
+import type { RetainedCitationReport } from './citations/accepted.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
 export interface AgentRunValues extends RunnerCoreValues {
@@ -32,6 +33,8 @@ export interface AgentRunValues extends RunnerCoreValues {
   identity?: MemoryIdentity;
   request?: RequestContext;
   answer?: string;
+  /** The accepted caller-visible citation report for this run's Final fold. */
+  retainedCitations?: RetainedCitationReport;
   recording?: HostedRecording;
   checkpointTracker?: RunCheckpointTracker;
   checkpointObservationFailed?: true;

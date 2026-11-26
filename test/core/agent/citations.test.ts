@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
 import { Agent, defineTool, describedResult } from '../../../src/index.js';
 import { anthropic } from '../../../src/providers.js';
-import { recordRun } from '../../../src/observe.js';
+import { assessAnswer, recordRun } from '../../../src/observe.js';
+import type { RedactionPolicy } from 'footprintjs';
 import { withFallback } from '../../../src/resilience/withFallback.js';
 import { withRetry } from '../../../src/resilience/withRetry.js';
 import type { ProseCitationOptions } from '../../../src/core/agent/citations/config.js';
@@ -118,6 +119,111 @@ it.each(['dynamic', 'dynamic-grouped'] as const)(
           nearestName: 'amount',
         },
       ],
+    });
+  },
+);
+
+async function runColumnCase(
+  message: string,
+  completeColumns: readonly string[],
+  options: {
+    redact?: RedactionPolicy;
+    reactMode?: 'dynamic' | 'dynamic-grouped';
+    commitValues?: 'full' | 'delta';
+  } = {},
+) {
+  const { provider } = fixture(
+    undefined,
+    (marker) => 'North recorded 12 mm ' + marker + '. The model also mentioned discount.',
+  );
+  const agent = Agent.create({
+    provider,
+    model: 'claude-sonnet-4-6',
+    citations: {
+      ...measurementCitations,
+      requestedColumn: (humanMessage) =>
+        /^(?:Read|Average) (discount|amount|rebate) (?:in mm|per region)\.$/u.exec(
+          humanMessage,
+        )?.[1],
+      completeColumns: () => completeColumns,
+    },
+    ...options,
+  })
+    .tool(tool)
+    .answerLayer({ standingLine: true })
+    .build();
+  const recorder = recordRun(agent);
+  try {
+    const answer = await agent.run({ message });
+    const recording = JSON.parse(JSON.stringify(recorder.toRecording()));
+    const live = await agent.assessment();
+    const reopened = assessAnswer(recording);
+    expect(live).toEqual(reopened);
+    return {
+      answer: answer.replace(/\[c:[A-Za-z0-9_-]+:1\]/gu, '[citation]'),
+      reasons: live?.reasons,
+      standing: live?.standing,
+      report: recording.snapshot?.sharedState?.answerCitations,
+    };
+  } finally {
+    recorder.stop();
+    await agent.shutdown();
+  }
+}
+
+it.each([
+  { reactMode: 'dynamic', commitValues: 'full' },
+  { reactMode: 'dynamic-grouped', commitValues: 'delta' },
+] as const)('reports the missing requested column in $reactMode/$commitValues', async (options) => {
+  const outcome = await runColumnCase(
+    'Average discount per region.',
+    ['region', 'amount'],
+    options,
+  );
+  expect(outcome.standing).toBe('not-sure');
+  expect(outcome.answer).toContain('requested column `discount`');
+  expect(outcome.answer).toContain('closest visible name: `amount`');
+  expect(outcome.report).toMatchObject({
+    findings: [
+      { kind: 'citation', outcome: 'supported' },
+      { kind: 'column', reason: 'ungrounded-entity', name: 'discount', nearestName: 'amount' },
+    ],
+  });
+  const present = await runColumnCase('Average amount per region.', ['region', 'amount'], options);
+  expect(present.report).toMatchObject({ findings: [{ kind: 'citation', outcome: 'supported' }] });
+});
+
+it('does not derive a public column finding from a kept-out user message', async () => {
+  const options = { redact: { keys: ['userMessage'] } };
+  const first = await runColumnCase('Average discount per region.', ['region', 'amount'], options);
+  const second = await runColumnCase('Average rebate per region.', ['region', 'amount'], options);
+  expect(first).toEqual(second);
+  expect(first.report).toMatchObject({ findings: [{ kind: 'citation', outcome: 'unverified' }] });
+});
+
+it.each([
+  { keys: ['citationSources'] },
+  { keys: ['completeColumns'] },
+  { fields: { citationSources: ['0.completeColumns.0'] } },
+  { keys: ['citationSources.0.completeColumns.0'] },
+  { fields: { citationSources: ['0.callOccurrenceKey.0'] } },
+] satisfies RedactionPolicy[])(
+  'does not use a kept-out schema or occurrence under %o',
+  async (redact) => {
+    const options = { redact };
+    const missing = await runColumnCase(
+      'Average discount per region.',
+      ['discounter', 'amount'],
+      options,
+    );
+    const present = await runColumnCase(
+      'Average discount per region.',
+      ['discount', 'amount'],
+      options,
+    );
+    expect(missing).toEqual(present);
+    expect(missing.report).toMatchObject({
+      findings: [{ kind: 'citation', outcome: 'supported' }],
     });
   },
 );

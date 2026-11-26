@@ -14,3 +14,5 @@ limited to 128 names of 128 UTF-16 code units each. For an absent name it
 returns the requested name and a unique nearest visible name when there is
 one. Distance uses Unicode code points. An equally close name suppresses the
 suggestion. The output includes neither row values nor the schema list.
+
+The terminal observer passes the complete declared column list only when the caller's recording policy allows the schema and its provenance. The final fold reads the report projected under the terminal writer's recording rule. This keeps the same reason and authorized names used in replay even when unrelated private values cross the Final mapper.
