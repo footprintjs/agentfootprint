@@ -3,6 +3,12 @@
 import type { ResolvedScriptTravel } from '../scripts/types.js';
 // ─── The answer layer (honesty layer 4) ─────────────────────────────────
 
+/**
+ * What a final stage's capture is bound with: whether output middleware owns delivery, and
+ * whether a settled reply's origin may be asked for — only in an agent built with `hostEndedTurns`.
+ */
+export type FinalTurn = { readonly releaseTokens: boolean; readonly asksOrigin: boolean };
+
 /** Which PrepareFinal body the final branch mounts — the arms both chart builders read. */
 export interface FinalStageArms {
   readonly hasAnswerValidation?: boolean;

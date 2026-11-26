@@ -37,42 +37,18 @@ export function assistantReplayFields(
   });
 }
 
-/**
- * The final stages of an agent built with `hostEndedTurns: true`
- * (`stages/prepareFinal.ts` · `prepareFinalFor` marks them through `hostEndedFinal`). Only there is
- * `modelReplyRunId` ever written, so only there is it asked for: asking is a
- * read the stage records, even of an unset key, and an ordinary turn's record
- * keeps no trace of host-end machinery.
- */
-const HOST_ENDED_SCOPES = new WeakSet<object>();
-
-/** `stage` as a host-ended agent's final stage (`on`): its scope is marked first, so its settled reply records its origin. */
-export function hostEndedFinal<S extends object, R>(
-  on: true | undefined,
-  stage: (scope: S) => R,
-): (scope: S) => R {
-  if (on !== true) return stage;
-  return (scope) => {
-    HOST_ENDED_SCOPES.add(scope);
-    return stage(scope);
-  };
-}
-
-/** A stage's scope (its methods answer without a read), not a plain state object. */
-const isScope = (state: object): boolean =>
-  typeof (state as { readonly $getValue?: unknown }).$getValue === 'function';
-
 /** Capture the settled text with its own provider evidence. Legacy and local
  * replies carry no origin. A memory writer also keeps its unsigned thinking.
- * On a stage's scope the origin is asked for only in a host-ended agent;
- * a plain saved state is asked as it is. */
+ * `asksOrigin` is the caller's answer to "may `modelReplyRunId` be asked for?":
+ * on a stage's scope asking is a recorded read even of an unset key, so only
+ * an agent built with `hostEndedTurns: true` (the one writer of the key) asks. */
 export function settledModelReply(
   state: Parameters<typeof assistantReplayFields>[0] & Pick<Partial<AgentState>, 'modelReplyRunId'>,
   content: string,
+  asksOrigin: boolean,
   thinkingBlocks?: LLMMessage['thinkingBlocks'],
 ): LLMMessage {
-  const asks = !isScope(state) || HOST_ENDED_SCOPES.has(state);
-  const runId = asks && 'modelReplyRunId' in state ? state.modelReplyRunId : undefined;
+  const runId = asksOrigin && 'modelReplyRunId' in state ? state.modelReplyRunId : undefined;
   return {
     role: 'assistant',
     content,
@@ -98,8 +74,9 @@ export function acceptedTurnMessages(input: string | undefined, reply: LLMMessag
   return input === undefined ? [reply] : [{ role: 'user', content: input }, reply];
 }
 
-/** Collect the settled model turn in native recording order for memory writers. */
-export function modelTurnMessages(scope: AgentState): LLMMessage[] {
+/** Collect the settled model turn in native recording order for memory writers;
+ * `asksOrigin` as `settledModelReply` takes it, from the final stage's arms. */
+export function modelTurnMessages(scope: AgentState, asksOrigin: boolean): LLMMessage[] {
   // v2.14 — attach thinking blocks to the assistant final message
   // (if any). For non-Anthropic providers this is informational; for
   // Anthropic + extended-thinking-with-tool-use, signature round-trip
@@ -112,6 +89,6 @@ export function modelTurnMessages(scope: AgentState): LLMMessage[] {
   const memoryThinking = thinkingBlocks?.length ? thinkingBlocks : undefined;
   return acceptedTurnMessages(
     scope.userMessage,
-    settledModelReply(scope, scope.finalContent, memoryThinking),
+    settledModelReply(scope, scope.finalContent, asksOrigin, memoryThinking),
   );
 }
