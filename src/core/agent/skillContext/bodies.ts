@@ -17,20 +17,25 @@ export function skillBodyOf(
   return undefined;
 }
 
-/** The call ids of the body results of the skills in `active` (a still-active skill's only copy). */
+/**
+ * The call id of the NEWEST body result of each skill in `active`: one pin per
+ * skill (the `last-tool-result` rule). Older copies of the same body are
+ * ordinary history a window may drop; the newest one keeps the body in front
+ * of the model.
+ */
 export function activeSkillBodyCallIds(
   history: readonly LLMMessage[],
   bodies: ReadonlyMap<string, string>,
   active: readonly string[],
 ): ReadonlySet<string> {
   const live = new Set(active);
-  const ids = new Set<string>();
+  const newest = new Map<string, string>();
   for (const message of history) {
     const id = skillBodyOf(message, bodies);
     if (id !== undefined && live.has(id) && message.toolCallId !== undefined)
-      ids.add(message.toolCallId);
+      newest.set(id, message.toolCallId);
   }
-  return ids;
+  return new Set(newest.values());
 }
 
 /** Every skill's registered body, by id: what a `read_skill` result is compared with. */

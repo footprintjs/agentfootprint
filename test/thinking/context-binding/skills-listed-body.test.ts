@@ -413,3 +413,118 @@ describe('the review’s uncaught mutations', () => {
     expect(await placedUnder('declared')).not.toBe(big);
   });
 });
+
+describe('P1-2: a re-read never adds a copy, and the window keeps only the newest', () => {
+  const windowed = (a: Builder) =>
+    (a as Builder & { window: (w: unknown) => Builder }).window(
+      slidingWindow({ keepRecentTurns: 1 }),
+    );
+  const rereads = (n: number, id = 'smb-triage') => {
+    const steps: Step[] = [];
+    for (let i = 0; i < n; i++)
+      steps.push({ tool: 'read_skill', input: { id } }, { tool: 't1', input: {} });
+    return [...steps, DONE];
+  };
+  const results = (b: Body) =>
+    b.messages.flatMap((m) =>
+      typeof m.content === 'string'
+        ? []
+        : (m.content as Block[])
+            .filter((x) => x.type === 'tool_result')
+            .map((x) => JSON.stringify(x.content)),
+    );
+
+  it('ten re-reads in one turn under a window: bounded requests, the body once in each (as written)', async () => {
+    const bodies: Body[] = [];
+    const agent = agentOn(ALIAS, bodies, unsigned(rereads(10)), (a) => windowed(a.skill(smb())), {
+      maxIterations: 30,
+    });
+    const { error } = await settle(agent.run({ message: 'go' }));
+    expect(error).toBeUndefined();
+    expect(bodies).toHaveLength(21);
+    // "each request carries the body once"
+    expect(bodies.slice(1).every((b) => copies(b) === 1)).toBe(true);
+    // Bounded: the window keeps dropping old turns. One turn more than on main (6), the pinned
+    // read that carries the body where main's system prompt does; the size stops growing.
+    const sizes = bodies.map((b) => b.messages.length);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(7);
+    expect(new Set(sizes.slice(6)).size).toBe(1);
+    // Every re-read after the first answered the confirmation.
+    const last = results(bodies.at(-1)!).join(' ');
+    expect(last).toContain("Skill 'smb-triage' activated for the next iteration.");
+  });
+
+  it('on a bound model ten re-reads in a signed turn change no context: one body, the prefix holds', async () => {
+    const bodies: Body[] = [];
+    const agent = agentOn(
+      BOUND,
+      bodies,
+      rereads(10),
+      (a) => a.skill(smb()).thinking({ budget: 1500 }),
+      {
+        maxIterations: 30,
+      },
+    );
+    const { error } = await settle(agent.run({ message: 'go' }));
+    expect(error).toBeUndefined();
+    expect(bodies.slice(1).every((b) => copies(b) === 1)).toBe(true);
+    expect(prefixHeld(bodies)).toBe(true);
+  });
+
+  it('two skills re-read alternately: each body once in each request', async () => {
+    const nfs = defineSkill({
+      id: 'nfs',
+      description: 'NFS.',
+      body: 'NFS PROCEDURE 9090 ms.',
+      tools: [tool('nfs_report')],
+      autoActivate: 'currentSkill',
+    });
+    const script: Step[] = [];
+    for (let i = 0; i < 3; i++)
+      script.push(
+        { tool: 'read_skill', input: { id: 'smb-triage' } },
+        { tool: 'read_skill', input: { id: 'nfs' } },
+      );
+    script.push(DONE);
+    for (const [model, build, steps] of [
+      [ALIAS, (a: Builder) => windowed(a.skill(smb()).skill(nfs)), unsigned(script)],
+      [BOUND, (a: Builder) => a.skill(smb()).skill(nfs).thinking({ budget: 1500 }), script],
+    ] as const) {
+      const bodies: Body[] = [];
+      const agent = agentOn(model, bodies, steps, build);
+      const { error } = await settle(agent.run({ message: 'go' }));
+      expect(error, model).toBeUndefined();
+      for (const b of bodies.slice(2)) {
+        expect(copies(b), model).toBe(1);
+        expect(JSON.stringify(b).split('9090 ms').length - 1, model).toBe(1);
+      }
+      if (model === BOUND) expect(prefixHeld(bodies)).toBe(true);
+    }
+  });
+
+  it('a re-read on the next turn, after the window dropped the old result: the body comes back once, as the result', async () => {
+    const bodies: Body[] = [];
+    const script = unsigned([
+      READ,
+      { tool: 't1', input: {} },
+      DONE,
+      READ,
+      { tool: 't1', input: {} },
+      DONE,
+    ]);
+    const agent = agentOn(ALIAS, bodies, script, (a) => windowed(a.skill(smb())));
+    await settle(agent.run({ message: 'first question' }));
+    const { error } = await settle(
+      (agent as unknown as { followUp: (m: string) => Promise<unknown> }).followUp(
+        'second question',
+      ),
+    );
+    expect(error).toBeUndefined();
+    const second = bodies.slice(3);
+    expect(second.length).toBeGreaterThan(1);
+    // The old copy left with its turn (the skill was not active yet on this turn), so the
+    // re-read is the body again, and every later request carries it once.
+    expect(resultOf(second[1], 'toolu_4')).toBe(BODY);
+    for (const b of second.slice(1)) expect(copies(b)).toBe(1);
+  });
+});

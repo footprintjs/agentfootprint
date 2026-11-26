@@ -10,6 +10,7 @@ import { defineSkill } from '../../../injection-engine/factories/defineSkill.js'
 import type { Injection } from '../../../injection-engine/types.js';
 import { decideSkillContext } from './decide.js';
 import { listedInjections } from './apply.js';
+import { activeSkillBodyCallIds } from './bodies.js';
 import { servedSurfaceMode } from '../../../injection-engine/skillContext.js';
 import { notLoadedFor, notLoadedRefusal } from './gate.js';
 import { readSkillOfferFor } from '../runtime/skills/owner.js';
@@ -135,5 +136,25 @@ describe('the read_skill description under listed', () => {
     expect(declared({ currentSkillId: 'alpha' })?.description).not.toBe(
       declared({ currentSkillId: 'beta' })?.description,
     );
+  });
+});
+
+describe('activeSkillBodyCallIds (the window pin)', () => {
+  it('a restored 40-turn history with a body result per turn pins only the newest', () => {
+    const body = 'Confirm identity.';
+    const history = Array.from({ length: 40 }, (_, i) => [
+      { role: 'user', content: `question ${i}` },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [{ id: `c${i}`, name: 'read_skill', args: { id: 'billing' } }],
+      },
+      { role: 'tool', content: body, toolCallId: `c${i}`, toolName: 'read_skill' },
+      { role: 'assistant', content: `answer ${i}` },
+    ]).flat();
+    const bodies = new Map([['billing', body]]);
+    expect([...activeSkillBodyCallIds(history as never, bodies, ['billing'])]).toEqual(['c39']);
+    // An inactive skill's results are ordinary history: nothing is pinned.
+    expect(activeSkillBodyCallIds(history as never, bodies, []).size).toBe(0);
   });
 });

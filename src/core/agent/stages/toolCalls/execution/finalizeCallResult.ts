@@ -9,6 +9,8 @@ import type { ToolCallOperations } from '../compose.js';
 import { sourceLanding } from '../../../sourceEvidence/landing.js';
 import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import { keepNegativeResultOut } from '../../../negativeClaims/capture.js';
+import { bodyInHistory } from '../../../../../injection-engine/skillContext.js';
+import { skillActivationConfirmation } from '../../../../../injection-engine/skillToolDescriptors.js';
 
 interface FinalizeCallFrame {
   readonly tool: Tool | undefined;
@@ -36,6 +38,20 @@ export async function finalizeCallResult(
 ) {
   const { tool, tc, batch, callArguments, execution, outcome } = frame;
   const occurrence = callOccurrenceField(tc.callOccurrenceKey);
+  // `listed`: a re-read of a skill whose body is already in the history this
+  // request sends answers the `declared` confirmation, never a second copy
+  // (`injection-engine/skillContext.ts` · `bodyInHistory`).
+  if (
+    frame.libraryBody === true &&
+    execution.executed &&
+    !outcome.error &&
+    !frame.skillRejected &&
+    typeof outcome.result === 'string' &&
+    bodyInHistory(outcome.result, batch.newHistory)
+  ) {
+    const id = (callArguments.callArgs as { id?: unknown }).id;
+    if (typeof id === 'string') outcome.result = skillActivationConfirmation(id);
+  }
   // ── The after-tool moment ────────────────────────────────────────
   // Last thing before the result becomes history, and only for a call
   // that ran. `modelResult` is what the model reads; `result` stays the

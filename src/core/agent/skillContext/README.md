@@ -38,11 +38,17 @@ the body table still runs.
 - `injection-engine/skillContext.ts` · `servedSurfaceMode`, asked by `projectActiveInjection`: the
   body is `tool-only` exactly while its `read_skill` result is in the history this request sends;
   otherwise the skill's own declaration (the system prompt by default), so a body is never lost.
-- `stages/window.ts` + `window/turns.ts`: a turn holding the body result of a still-active skill
-  refuses to leave (`'active-skill-body'`).
+- `stages/window.ts` + `window/turns.ts`: a turn holding the NEWEST body result of a still-active
+  skill refuses to leave (`'active-skill-body'`); older copies are ordinary history.
+- `stages/toolCalls/execution/finalizeCallResult.ts`: a re-read whose body is already in the history
+  this request sends answers the `declared` confirmation, never a second copy.
 - `core/slots/buildMessagesSlot.ts`: a body result is credited to its skill (`source: 'skill'`), so
   the answer account (`answer-account/facts/understood.ts`) records the skill as delivered.
-- `stages/route.ts` and `stages/toolCalls/evidence/towers.ts`: the gate reads `honestyHistory`.
+- `stages/route.ts` and `stages/toolCalls/evidence/towers.ts`: the evidence gate's two moments read
+  `honestyHistory`. The other readers of tool messages (`figures.ts` is handed the view by
+  `judgeEvidence`; `groundedText.ts` grounds on the system prompt under `declared` too;
+  `settledToolCalls.ts` is a call ledger, not a value corpus) put no body value anywhere a person
+  reads as tool evidence.
 - `runtime/skills/owner.ts` · `readSkillOfferFor`: the description leaves out the cursor, the
   menu and the reachable set (a tree's grantable set is its open skills, which do not move).
 - `stages/toolCalls/execution/callStart.ts`: the gate. `finalizeCallResult.ts`: a result from the
@@ -57,8 +63,12 @@ the body table still runs.
   so a cursor moved by a declared edge inside a signed tool turn is still refused by name.
 - A body result removed from the history (a summary, a custom window) puts the body back in the
   system prompt; inside a signed tool turn on a bound model that is slice 1's named refusal.
-- Body equality is by text: a templated body renders differently from the text `read_skill`
-  returns, so it is served in both channels.
+- Body equality is by exact text (`bodies.ts` · `skillBodyOf`). A tool-result middleware that
+  rewrites a `read_skill` result makes it an ordinary tool result: neither pinned nor exempt, and
+  the body is then also served in the system prompt. A hand-built templated body (`templated:
+  true`; `defineSkill` never sets it) renders differently from the text `read_skill` returns, so it
+  is served in both channels. Matching by the producing call's id would close both; it needs a
+  recorded state key carried through the engine mount, so it is not done here.
 - The role is asked once per iteration, as before (`hiddenSkillIdsOf`). A role changed between
   turns re-lists on the next turn's first request; a role revoked inside a signed tool turn is
   slice 1's named refusal.

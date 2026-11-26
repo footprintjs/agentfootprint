@@ -13,6 +13,9 @@ import { anthropic } from '../../../src/adapters/llm/AnthropicProvider.js';
 import { defineSkill } from '../../../src/injection-engine.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../../src/observe.js';
 import { scriptedClient, type Body, type Step } from './harness.js';
+import { towersFor } from '../../../src/core/agent/stages/toolCalls/evidence/towers.js';
+import { groundedArgumentValues } from '../../../src/core/agent/findings/contingent.js';
+import { resolveEvidenceGate } from '../../../src/core/agent/evidence/gate.js';
 
 const BODY = 'SMB TRIAGE: check the share report first. The latency threshold is 4711 ms.';
 const lookup = defineTool<Record<string, never>, string>({
@@ -113,4 +116,91 @@ describe('a listed body is the app’s text for every honesty reader', () => {
       expect(listed.answer).toEqual(declared.answer);
     });
   }
+});
+
+describe('the dispatch moment (findings towers) reads a body as the app’s text too', () => {
+  const read = {
+    role: 'assistant',
+    content: '',
+    toolCalls: [{ id: 'r1', name: 'read_skill', args: { id: 'smb-triage' } }],
+  };
+  const lookupCall = {
+    role: 'assistant',
+    content: '',
+    toolCalls: [{ id: 'tc-1', name: 'lookup', args: {} }],
+  };
+  const lookupResult = {
+    role: 'tool',
+    toolCallId: 'tc-1',
+    toolName: 'lookup',
+    content: 'finance share: latency 5200 ms',
+  };
+  const ledger = [
+    {
+      kind: 'standing',
+      toolCallId: 'tc-1',
+      standing: 'open',
+      assertions: [],
+      declaredOn: 'answer',
+      iteration: 1,
+    },
+  ];
+  /** A value the call carries: 4711 is only in the body, 5200 only in the set-aside lookup. */
+  const grounded = (scope: unknown, gate: ReturnType<typeof resolveEvidenceGate>) => {
+    const towers = towersFor(scope as never, true, gate);
+    if (towers === undefined) throw new Error('expected towers');
+    return groundedArgumentValues(
+      { threshold: '4711 ms', latency: '5200 ms' },
+      gate,
+      towers.corpus,
+      towers.exempt,
+    ).map((row) => row.value);
+  };
+
+  it('listed (the body is the read_skill result) grounds exactly what declared (the body in the system prompt) grounds', () => {
+    const gate = resolveEvidenceGate({});
+    const listed = {
+      turnNumber: 1,
+      userMessage: 'Why is the finance share slow?',
+      history: [
+        { role: 'user', content: 'Why is the finance share slow?' },
+        read,
+        { role: 'tool', toolCallId: 'r1', toolName: 'read_skill', content: BODY },
+        lookupCall,
+        lookupResult,
+      ],
+      findingsLedger: ledger,
+    };
+    const declared = {
+      ...listed,
+      history: [
+        listed.history[0],
+        read,
+        {
+          role: 'tool',
+          toolCallId: 'r1',
+          toolName: 'read_skill',
+          content: "Skill 'smb-triage' activated for the next iteration.",
+        },
+        lookupCall,
+        lookupResult,
+      ],
+      systemPromptInjections: [
+        {
+          slot: 'system-prompt',
+          source: 'skill',
+          sourceId: 'smb-triage',
+          rawContent: BODY,
+          contentSummary: '',
+          contentHash: '',
+          reason: '',
+        },
+      ],
+    };
+    const listedGate = { ...gate, skillBodies: new Map([['smb-triage', BODY]]) };
+    expect(grounded(listed, listedGate)).toEqual(grounded(declared, gate));
+    // The body's own number is exempt app text, never a value a tool returned.
+    expect(grounded(listed, listedGate).join(' ')).not.toContain('4711');
+    expect(grounded(listed, listedGate).join(' ')).toContain('5200');
+  });
 });
