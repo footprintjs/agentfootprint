@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-157 exported from `agentfootprint`.
+158 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -150,6 +150,7 @@ title: Functions
 - [`tokenBudget`](/docs/api/functions/tokenBudget)
 - [`toolContractCheckup`](/docs/api/functions/toolContractCheckup)
 - [`toolDigestInput`](/docs/api/functions/toolDigestInput)
+- [`toolFailure`](/docs/api/functions/toolFailure)
 - [`toolSessionKey`](/docs/api/functions/toolSessionKey)
 - [`toolSessionsOf`](/docs/api/functions/toolSessionsOf)
 - [`topK`](/docs/api/functions/topK)

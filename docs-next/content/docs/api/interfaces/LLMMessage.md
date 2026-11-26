@@ -248,7 +248,7 @@ Replay layout and local consistency evidence (including known loss); JSON/checkp
 
 > `readonly` `optional` **replyOrigin?**: `object`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L51)
+Defined in: [src/provider-contract/toolResultRecord.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L60)
 
 Who supplied the accepted reply, including after an output-policy rewrite.
 A mark from a checkpoint is its writer's declaration. Only the run's own
@@ -394,11 +394,23 @@ exactly what it always did.
 
 ***
 
+### toolDeclaredFailure?
+
+> `readonly` `optional` **toolDeclaredFailure?**: `DeclaredToolFailureRecord`
+
+Defined in: [src/provider-contract/toolResultRecord.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L52)
+
+#### Inherited from
+
+`MessageRecord.toolDeclaredFailure`
+
+***
+
 ### toolFailureCategory?
 
 > `readonly` `optional` **toolFailureCategory?**: `ToolFailureCategory`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L43)
+Defined in: [src/provider-contract/toolResultRecord.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L51)
 
 The engine category of a thrown tool failure, without the error text.
 
@@ -422,7 +434,7 @@ For `role: 'tool'` — the tool name this result corresponds to.
 
 > `readonly` `optional` **toolOutputCounts?**: `ToolOutputCounts`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L41)
+Defined in: [src/provider-contract/toolResultRecord.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L49)
 
 Printed output counts from an admitted native return. Kept off the provider wire.
 
@@ -436,7 +448,7 @@ Printed output counts from an admitted native return. Kept off the provider wire
 
 > `readonly` `optional` **toolResultDisposition?**: `"rewritten"` \| `"withheld"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L33)
+Defined in: [src/provider-contract/toolResultRecord.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L41)
 
 A host's after-tool rule withheld or replaced this result. Kept off the provider wire.
 
@@ -450,7 +462,7 @@ A host's after-tool rule withheld or replaced this result. Kept off the provider
 
 > `readonly` `optional` **toolResultExecution?**: `"returned"` \| `"not-entered"` \| `"threw"` \| `"returned-unserved"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L39)
+Defined in: [src/provider-contract/toolResultRecord.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L47)
 
 Whether the tool was entered and returned. `returned-unserved` means a
 framework refusal or cap replaced its return. Host rules are recorded
@@ -466,7 +478,7 @@ separately by `toolResultDisposition`. Artifact tickets carry the result.
 
 > `readonly` `optional` **toolResultOrigin?**: `"outcome-unknown"` \| `"not-entered"` \| `"input-cancelled"`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L31)
+Defined in: [src/provider-contract/toolResultRecord.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L39)
 
 Producer-owned notice origin, recorded only under findings admission.
 `not-entered` means the producer refused before tool.execute; an error

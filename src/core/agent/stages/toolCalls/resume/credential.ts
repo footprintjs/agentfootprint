@@ -1,3 +1,4 @@
+import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
@@ -224,32 +225,40 @@ export function buildResumeCredential(
       const consentSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
-          {
-            role: 'tool',
-            content: consentResultStr,
-            ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
-            toolCallId,
-            toolName,
-            ...occurrence,
-            ...(deps.findings === true &&
-              dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
-            ...toolResultExecutionField(
-              deps.answerLayer,
-              scriptSeen.toolResultExecution,
-              !consentSettled.clean || resultReplaced,
-              { scope, counts: consentEnvelope?.outputCounts, disposition: toolResultDisposition },
-            ),
-            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
-            ...toolFailureCategoryField(
-              scriptSeen,
-              consentSettled,
-              resultReplaced || toolResultDisposition !== undefined,
-            ),
-            ...innerCallsFieldOf(scope, toolCallId, iteration),
-            // A blocked credential ran nothing → 'refused'; read by the check-in trail.
-            ...outcomeField(consentSettled),
-            ...reportedStatusField(consentSettled),
-          },
+          admitDeclaredToolFailure(
+            scope,
+            {
+              role: 'tool',
+              content: consentResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
+              toolCallId,
+              toolName,
+              ...occurrence,
+              ...(deps.findings === true &&
+                dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+              ...toolResultExecutionField(
+                deps.answerLayer,
+                scriptSeen.toolResultExecution,
+                !consentSettled.clean || resultReplaced,
+                {
+                  scope,
+                  counts: consentEnvelope?.outputCounts,
+                  disposition: toolResultDisposition,
+                },
+              ),
+              ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+              ...toolFailureCategoryField(
+                scriptSeen,
+                consentSettled,
+                resultReplaced || toolResultDisposition !== undefined,
+              ),
+              ...innerCallsFieldOf(scope, toolCallId, iteration),
+              // A blocked credential ran nothing → 'refused'; read by the check-in trail.
+              ...outcomeField(consentSettled),
+              ...reportedStatusField(consentSettled),
+            },
+            consentEnvelope?.declaredFailure,
+          ),
         ],
         { toolName, toolCallId, ...occurrence },
       );

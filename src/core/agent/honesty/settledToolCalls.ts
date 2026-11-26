@@ -1,3 +1,5 @@
+import { stageDeclaredToolHistory } from './declaredToolDispatch.js';
+import { recordedDeclaredToolFailure } from '../recordedCalls/declaredFailure.js';
 import { seedExecutionEvidence } from '../scripts/executionEvidence.js';
 import type { TypedScope } from 'footprintjs';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
@@ -61,6 +63,7 @@ export function toolSettlementOf(
   };
   if (execution !== 'returned') return settlement;
 
+  const declaredFailure = recordedDeclaredToolFailure(message);
   const reportedStatus = rewrite !== undefined ? rewrite.reportedStatus : message.reportedStatus;
   const outputCounts =
     rewrite === undefined && (outcome === 'failed' || reportedStatus === 'partial')
@@ -90,6 +93,7 @@ export function toolSettlementOf(
   return {
     ...settlement,
     delivery: rewrite === undefined ? 'native' : 'rewritten',
+    ...(declaredFailure !== undefined && { declaredFailure }),
     ...((reportedStatus === 'partial' || reportedStatus === 'pending') && { reportedStatus }),
     ...(outputCounts !== undefined && { outputCounts }),
     ...(empty !== undefined && { empty }),
@@ -159,7 +163,7 @@ export function commitSettledToolHistory(
     }
     if (added.length > 0) scope.settledToolCalls = [...prior, ...added];
   }
-  scope.history = history;
+  stageDeclaredToolHistory(scope, history);
 }
 
 /** Append evidence of this turn's visible results removed by the applied window. */

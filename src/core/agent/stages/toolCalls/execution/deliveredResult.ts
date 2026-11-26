@@ -1,3 +1,4 @@
+import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import type { buildCallStart } from './callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type {
@@ -240,50 +241,56 @@ export function landCallResult(
       : '';
   if (layerNote !== '') frame.delivery.resultStr += layerNote;
   const occurrence = callOccurrenceField(frame.tc.callOccurrenceKey);
-  frame.newHistory.push({
-    role: 'tool',
-    content: frame.delivery.resultStr,
-    toolCallId: frame.tc.id,
-    toolName: frame.tc.name,
-    ...occurrence,
-    ...(deps.findings === true &&
-      !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
-    ...toolResultExecutionField(
-      deps.answerLayer,
-      frame.execution.toolResultExecution,
-      frame.outcome.error === true ||
-        frame.execution.denied ||
-        frame.execution.ceilingRefused ||
-        frame.execution.haltContext !== undefined ||
-        frame.skillRoute.skillRejected ||
-        frame.delivery.modelResultCapped,
+  frame.newHistory.push(
+    admitDeclaredToolFailure(
+      scope,
       {
-        scope,
-        counts: frame.outcome.toolEnvelope?.outputCounts,
-        disposition: frame.delivery.toolResultDisposition,
+        role: 'tool',
+        content: frame.delivery.resultStr,
+        toolCallId: frame.tc.id,
+        toolName: frame.tc.name,
+        ...occurrence,
+        ...(deps.findings === true &&
+          !frame.execution.executed && { toolResultOrigin: 'not-entered' as const }),
+        ...toolResultExecutionField(
+          deps.answerLayer,
+          frame.execution.toolResultExecution,
+          frame.outcome.error === true ||
+            frame.execution.denied ||
+            frame.execution.ceilingRefused ||
+            frame.execution.haltContext !== undefined ||
+            frame.skillRoute.skillRejected ||
+            frame.delivery.modelResultCapped,
+          {
+            scope,
+            counts: frame.outcome.toolEnvelope?.outputCounts,
+            disposition: frame.delivery.toolResultDisposition,
+          },
+        ),
+        ...(frame.delivery.toolResultDisposition !== undefined && {
+          toolResultDisposition: frame.delivery.toolResultDisposition,
+        }),
+        ...toolFailureCategoryField(
+          frame.execution,
+          settled,
+          frame.delivery.toolResultDisposition !== undefined ||
+            frame.execution.haltContext !== undefined ||
+            frame.execution.ceilingRefused ||
+            frame.skillRoute.skillRejected ||
+            frame.delivery.modelResultCapped,
+        ),
+        ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
+        ...(frame.tc.argumentsFailure !== undefined && {
+          toolArgumentsFailure: { ...frame.tc.argumentsFailure },
+        }),
+        // The inner calls its tool made that ran — read by `extractSequence`.
+        ...innerCallsFieldOf(scope, frame.tc.id, frame.iteration),
+        ...outcomeField(settled),
+        ...reportedStatusField(settled),
       },
+      frame.outcome.toolEnvelope?.declaredFailure,
     ),
-    ...(frame.delivery.toolResultDisposition !== undefined && {
-      toolResultDisposition: frame.delivery.toolResultDisposition,
-    }),
-    ...toolFailureCategoryField(
-      frame.execution,
-      settled,
-      frame.delivery.toolResultDisposition !== undefined ||
-        frame.execution.haltContext !== undefined ||
-        frame.execution.ceilingRefused ||
-        frame.skillRoute.skillRejected ||
-        frame.delivery.modelResultCapped,
-    ),
-    ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
-    ...(frame.tc.argumentsFailure !== undefined && {
-      toolArgumentsFailure: { ...frame.tc.argumentsFailure },
-    }),
-    // The inner calls its tool made that ran — read by `extractSequence`.
-    ...innerCallsFieldOf(scope, frame.tc.id, frame.iteration),
-    ...outcomeField(settled),
-    ...reportedStatusField(settled),
-  });
+  );
 
   // ── Dynamic ReAct wiring ───────────────────────────────
   //
