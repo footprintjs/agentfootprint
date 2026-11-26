@@ -17,6 +17,7 @@ import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
 import type { ActiveInjection } from '../../../../../injection-engine/types.js';
+import { checkerGoverns } from '../../../../../provider-contract/types.js';
 import { notLoadedFor } from '../../../skillContext/gate.js';
 
 interface CallStartLinks {
@@ -31,10 +32,15 @@ interface CallStartLinks {
 export function buildCallStart(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'findings' | 'toolMiddleware' | 'listedScopedTools' | 'toolDeclaringSkills'
+    | 'findings'
+    | 'toolMiddleware'
+    | 'listedScopedTools'
+    | 'toolDeclaringSkills'
+    | 'permissionChecker'
   >,
   links: CallStartLinks,
 ) {
+  const rolePolicy = checkerGoverns(deps.permissionChecker, 'skill_read');
   const beginDispatchCall = (
     scope: TypedScope<AgentState>,
     tc: DispatchCall,
@@ -55,16 +61,23 @@ export function buildCallStart(
     };
     const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
     const served = resolveTool(tc.name);
-    // Role visibility applies in either strategy. Only `listed` supplies
-    // the additional loaded-skill gate for its static scoped tools.
-    const notLoaded = notLoadedFor(
-      deps.listedScopedTools,
-      deps.toolDeclaringSkills,
-      tc.name,
-      served.party,
-      scope.activeInjections as readonly ActiveInjection[] | undefined,
-      scope.hiddenSkillIds as readonly string[] | undefined,
-    );
+    // Only read role state for a declared skill call governed by a role policy.
+    // Listed calls retain their existing loaded-skill check and recorded reads.
+    const listed = deps.listedScopedTools;
+    const needsSkillGate =
+      listed !== undefined || (rolePolicy && served.party?.channel === 'skill');
+    const notLoaded = needsSkillGate
+      ? notLoadedFor(
+          listed,
+          deps.toolDeclaringSkills,
+          tc.name,
+          served.party,
+          listed === undefined
+            ? undefined
+            : (scope.activeInjections as readonly ActiveInjection[] | undefined),
+          scope.hiddenSkillIds as readonly string[] | undefined,
+        )
+      : undefined;
     const resolved = notLoaded === undefined ? served : { refusal: notLoaded };
     const tool = resolved.tool;
     // ── THE PEEL (9.101.0, `.findings()`) — the FIRST read of `tc.args`

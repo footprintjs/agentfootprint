@@ -1,4 +1,5 @@
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
+import { checkerGoverns } from '../../../../../provider-contract/types.js';
 import { notLoadedFor } from '../../../skillContext/gate.js';
 import { batchAddress } from '../../../arguments/batchAddress.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
@@ -68,6 +69,7 @@ export function buildResumedInvocation(
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
+  const rolePolicy = checkerGoverns(deps.permissionChecker, 'skill_read');
   // Resolve a tool's declared credential (declare-and-push) and execute it,
   // emitting the same credential.* events as the main loop. Used by the
   // check-in RESUME path when a human APPROVES — the tool never ran at pause
@@ -93,14 +95,17 @@ export function buildResumedInvocation(
     heldTo: PausedGatePolicy['gate'],
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
-    const roleRefusal = notLoadedFor(
-      undefined,
-      deps.toolDeclaringSkills,
-      toolName,
-      candidate.party,
-      undefined,
-      scope.hiddenSkillIds as readonly string[] | undefined,
-    );
+    const roleRefusal =
+      rolePolicy && candidate.party?.channel === 'skill'
+        ? notLoadedFor(
+            undefined,
+            deps.toolDeclaringSkills,
+            toolName,
+            candidate.party,
+            undefined,
+            scope.hiddenSkillIds as readonly string[] | undefined,
+          )
+        : undefined;
     const resolved = roleRefusal === undefined ? candidate : { refusal: roleRefusal };
     const tool = resolved.tool;
     const occurrence = callOccurrenceField(seen?.callOccurrenceKey);
