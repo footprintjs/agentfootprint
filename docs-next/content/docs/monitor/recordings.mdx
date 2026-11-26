@@ -128,6 +128,21 @@ byte limit first. The report refuses more than 64 MiB of plain JSON, nesting pas
 units. It returns structural names, counts and sizes. Review application-defined
 keys and mount IDs before sharing a report.
 
+An agent's `snapshot.executionTree` keeps one write view per stage
+(`stageWrites`). By default it holds a `WriteSummaryMarker` for each written key
+(its type, a size and sometimes a short preview), not the written value, because
+each pass of the loop rewrites growing arrays and full values made the tree grow
+with the square of the run's length. The agent option `writeTracking`, a
+`WriteTrackingMode`, chooses: `'summary'` (the default), `'full'` to keep the
+written values, or `'off'` for no write view. The commit log keeps every value
+in every mode; read one back with `commitValueAt`. The same dial shapes a scope
+recorder's `onCommit`: its mutation values are markers under `'summary'`, and
+there are no mutations under `'off'`. `onWrite` carries the written value in
+every mode. Known limit: the option reaches the agent's own executor only. An
+agent mounted inside a composition such as `Sequence` or `Parallel` runs under
+that composition's executor, which keeps full written values, as it keeps
+`readTracking` and `commitValues` at the engine's defaults.
+
 ## Save a long run: pack it
 
 A plain recording repeats the conversation once per place that saw it, so its

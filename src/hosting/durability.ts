@@ -28,6 +28,16 @@
  * "this commit wrote `history`", which is not an optimisation but the honest
  * reading of the question: the conversation moved iff `history` moved.
  *
+ * "This commit wrote `history`" is learned from the WRITES, not from the commit
+ * event's `mutations`: every `onWrite` of `history` marks its stage (by
+ * `runtimeStageId`), and that stage's `onCommit` acts on the mark. `mutations`
+ * is the snapshot's write view, which the run's `writeTracking` dial governs:
+ * under `'off'` it is empty, and a durability promise must not depend on an
+ * observability dial. `onWrite` fires for every write in every mode. A
+ * retried stage's discarded attempt drops its mark (`onStageRetry`), as the
+ * engine drops its staged writes, so the commits that trigger are exactly the
+ * ones whose write view holds `history` under `'full'` or `'summary'`.
+ *
  * ── What a commit boundary actually guarantees, and what it does not ─────────
  * It guarantees the whole stage. The agent dispatches ALL of one iteration's
  * tool calls inside one stage body, so a crash part-way through that body stores
@@ -44,7 +54,7 @@
  * composer keeps its promise, not a second way to write to a store.
  */
 
-import type { CombinedRecorder, CommitEvent } from 'footprintjs';
+import type { CombinedRecorder, CommitEvent, FlowStageRetryEvent, WriteEvent } from 'footprintjs';
 
 import { installDurabilityBarrier } from '../core/durabilityBarrier.js';
 import { SessionNotFoundError, SessionOwnershipConflictError } from './errors.js';
@@ -197,40 +207,52 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
     pump();
   }
 
-  const capture = ({ sessionId, runId, identity, state }: DurableInvocation): CombinedRecorder => ({
-    id: 'af-hosting-durability',
-    // INLINE, always. A write delivered one beat behind is a write that can be
-    // lost by the very crash it exists to survive — and under `'sync'` the
-    // barrier would be waiting on a snapshot the queue had not handed over yet.
-    // The causal-evidence bridge and the compaction meter are inline for the
-    // same class of reason.
-    delivery: 'inline',
+  const capture = ({ sessionId, runId, identity, state }: DurableInvocation): CombinedRecorder => {
+    /** The stages (by `runtimeStageId`) that wrote `history` and have not committed yet. */
+    const wroteHistory = new Set<string>();
+    return {
+      id: 'af-hosting-durability',
+      // INLINE, always. A write delivered one beat behind is a write that can be
+      // lost by the very crash it exists to survive — and under `'sync'` the
+      // barrier would be waiting on a snapshot the queue had not handed over yet.
+      // The causal-evidence bridge and the compaction meter are inline for the
+      // same class of reason.
+      delivery: 'inline',
 
-    // The conversation moved iff this commit wrote `history`. The commit event
-    // says WHICH keys moved — a key's NAME is never redacted — and the run's
-    // live state says what they now hold: real values, the conversation the
-    // next turn resumes from. The event's own values are the record's form,
-    // which an agent's `redact` may have turned into placeholders.
-    onCommit(event: CommitEvent): void {
-      if (!event.mutations.some((mutation) => mutation.key === 'history')) return;
-      if (sessionId === undefined) return;
-      const origin = runId();
-      if (origin === undefined) return;
-      const live = state();
-      const history = live?.['history'];
-      if (!Array.isArray(history)) return;
-      const userMessage = live?.['userMessage'];
-      const iteration = live?.['iteration'];
-      enqueue(
-        sessionId,
-        origin,
-        history as readonly LLMMessage[],
-        typeof userMessage === 'string' ? userMessage : '',
-        typeof iteration === 'number' ? iteration : 0,
-        identity(),
-      );
-    },
-  });
+      // The conversation moved iff this stage wrote `history`. The write says
+      // WHICH key moved — a key's NAME is never redacted — and the run's live
+      // state, read at the commit, says what it now holds: real values, the
+      // conversation the next turn resumes from. A write's own value is the
+      // record's form, which an agent's `redact` may have turned into a placeholder.
+      onWrite(event: WriteEvent): void {
+        if (event.key === 'history') wroteHistory.add(event.runtimeStageId);
+      },
+      // A failed attempt's writes are discarded before the next one runs.
+      onStageRetry(event: FlowStageRetryEvent): void {
+        const stage = event.traversalContext?.runtimeStageId;
+        if (stage !== undefined) wroteHistory.delete(stage);
+      },
+      onCommit(event: CommitEvent): void {
+        if (!wroteHistory.delete(event.runtimeStageId)) return;
+        if (sessionId === undefined) return;
+        const origin = runId();
+        if (origin === undefined) return;
+        const live = state();
+        const history = live?.['history'];
+        if (!Array.isArray(history)) return;
+        const userMessage = live?.['userMessage'];
+        const iteration = live?.['iteration'];
+        enqueue(
+          sessionId,
+          origin,
+          history as readonly LLMMessage[],
+          typeof userMessage === 'string' ? userMessage : '',
+          typeof iteration === 'number' ? iteration : 0,
+          identity(),
+        );
+      },
+    };
+  };
 
   const settle = async (): Promise<void> => {
     // Loop rather than await once: a write that completes may release a queued

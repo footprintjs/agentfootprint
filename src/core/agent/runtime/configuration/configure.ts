@@ -337,6 +337,12 @@ export function configureAgent(
   // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
   // data per 200 iterations. Consumers opt into 'full' explicitly.
   config.readTracking = opts.readTracking ?? 'summary';
+  // Default 'summary' — the write view's full values have no reader that needs
+  // them (the stored-cause reader checks the view is a plain object; durability
+  // reads commit mutation keys; explainable-ui treats markers as atomic), and
+  // they grew the recorded tree with the square of the run length because each
+  // pass rewrites growing arrays. Consumers opt into 'full' explicitly.
+  config.writeTracking = opts.writeTracking ?? 'summary';
   // Default 'delta' — the accepted #13c-B design: agentfootprint opts in
   // immediately (the agent's history-append workload is exactly the case
   // the verb exists for; reconstruction stays lossless via commitValueAt).

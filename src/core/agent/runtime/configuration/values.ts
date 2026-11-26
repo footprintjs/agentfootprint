@@ -52,6 +52,7 @@ export class AgentConfigurationValues implements AgentConfiguration {
   declare messageMiddleware: AgentConfiguration['messageMiddleware'];
   declare aroundTurnPort: AgentConfiguration['aroundTurnPort'];
   declare readTracking: AgentConfiguration['readTracking'];
+  declare writeTracking: AgentConfiguration['writeTracking'];
   declare commitValues: AgentConfiguration['commitValues'];
   declare writeProvenance: AgentConfiguration['writeProvenance'];
   declare credentialProvider?: AgentConfiguration['credentialProvider'];

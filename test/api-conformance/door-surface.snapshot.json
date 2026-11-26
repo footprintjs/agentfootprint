@@ -859,6 +859,8 @@
       "WorkflowOptions",
       "WriteEvent",
       "WriteProvenanceMode",
+      "WriteSummaryMarker",
+      "WriteTrackingMode",
       "ZoneAbbreviation",
       "ZoneArgument"
     ]

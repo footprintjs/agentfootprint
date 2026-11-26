@@ -473,6 +473,7 @@ title: agentfootprint
 - [WireToolManifest](/docs/api/interfaces/WireToolManifest)
 - [WorkflowOptions](/docs/api/interfaces/WorkflowOptions)
 - [WriteEvent](/docs/api/interfaces/scope-events#interface-writeevent)
+- [WriteSummaryMarker](/docs/api/interfaces/WriteSummaryMarker)
 - [ZoneAbbreviation](/docs/api/interfaces/ZoneAbbreviation)
 - [ZoneArgument](/docs/api/interfaces/ZoneArgument)
 
@@ -639,6 +640,7 @@ title: agentfootprint
 - [WindowRefusalReason](/docs/api/type-aliases/WindowRefusalReason)
 - [WireRole](/docs/api/type-aliases/WireRole)
 - [WriteProvenanceMode](/docs/api/type-aliases/WriteProvenanceMode)
+- [WriteTrackingMode](/docs/api/type-aliases/WriteTrackingMode)
 
 ## Variables
 
