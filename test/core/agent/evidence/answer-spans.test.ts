@@ -17,6 +17,25 @@ describe('answer candidate spans', () => {
     expect(Object.hasOwn(readAnswer(answer, gate), 'candidateSpans')).toBe(false);
   });
 
+  it('locates numeric columns between text fields and keeps the grouped column whole', () => {
+    const answer = '📊 **host1,1200,9750,9ms** and **host2,41,200,4ms**.';
+    const reading = readAnswer(answer, gate, { captureSpans: true });
+    expect(reading.candidates.map(({ value }) => value)).toEqual([
+      'host1',
+      '1200',
+      '9750',
+      'host2',
+      '41200',
+    ]);
+    expect(reading.candidateSpans?.map((span) => span && answer.slice(...span))).toEqual([
+      'host1',
+      '1200',
+      '9750',
+      'host2',
+      '41,200',
+    ]);
+  });
+
   it('uses the spelled endpoints rather than the unit synthesized for lookup', () => {
     const answer = 'The range is 4200–5700ms.';
     const split = readAnswer(answer, gate, { captureSpans: true });

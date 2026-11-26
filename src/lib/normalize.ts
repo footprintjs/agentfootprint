@@ -115,6 +115,7 @@ const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
 
 /** A plain decimal or integer, optionally signed. */
 const PLAIN_NUMBER = /^[-+]?\d+(\.\d+)?$/;
+const GROUP_WITH_UNIT = /^(\d{3}(?:\.\d+)?)[a-z]+$/;
 const COMPACT_NUMERIC_LIST = /^-?\d+(?:\.\d+)?(?:,\d+(?:\.\d+)?)+%?$/;
 
 /** Break an ungrouped numeric comma run while preserving grouped numbers. */
@@ -173,9 +174,8 @@ export function normalizeToken(raw: string): string {
 }
 
 /**
- * Keep a numeric comma run intact for the thousands/list decision, even
- * when the field before it ends in a digit (e.g. `host1,41,200`).
- * Declared tokens keep their existing boundaries.
+ * Separate numeric runs from text on either side, then let the thousands/list
+ * rule read each numeric run whole. Declared tokens keep their boundaries.
  */
 function* commaFields(
   rough: string,
@@ -189,12 +189,20 @@ function* commaFields(
 
     let start = 0;
     let offset = 0;
-    let previousWasNumber = true;
+    let previousWasNumber: boolean | undefined;
     for (const field of piece.split(',')) {
-      const isNumber = PLAIN_NUMBER.test(tokenSpelling(field));
-      if (!previousWasNumber && isNumber) {
-        yield piece.slice(start, offset - 1);
-        start = offset;
+      const spelling = tokenSpelling(field);
+      const isNumber = PLAIN_NUMBER.test(spelling);
+      if (previousWasNumber !== undefined && previousWasNumber !== isNumber) {
+        // Keep the legacy glued spelling of a valid group such as 41,200ms.
+        const groupedTail = previousWasNumber ? GROUP_WITH_UNIT.exec(spelling)?.[1] : undefined;
+        const continuesGroup =
+          groupedTail !== undefined &&
+          THOUSANDS.test(piece.slice(start, offset).replace(LEADING_DECORATION, '') + groupedTail);
+        if (!continuesGroup) {
+          yield piece.slice(start, offset - 1);
+          start = offset;
+        }
       }
       previousWasNumber = isNumber;
       offset += field.length + 1;
