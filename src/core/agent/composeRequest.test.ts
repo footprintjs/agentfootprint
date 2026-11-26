@@ -70,7 +70,7 @@ describe('stripFrameworkFields keeps call occurrence keys on the record', () => 
       ...result,
       toolDeclaredFailure: {
         origin: 'declared',
-        category: 'timeout',
+        declaredCategory: 'timeout',
         tryInstead: 'Private advice.',
       },
     };

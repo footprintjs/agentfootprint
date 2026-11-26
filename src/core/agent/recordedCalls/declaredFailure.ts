@@ -16,13 +16,13 @@ function advice(value: unknown): DeclaredToolFailureRecord['tryInstead'] {
 /** Validate the closed declaration vocabulary and keep only the served advice. */
 export function readDeclaredToolFailure(value: unknown): DeclaredToolFailureRecord | undefined {
   if (!isRecord(value) || ownValue(value, 'origin') !== 'declared') return undefined;
-  const category = readToolFailureCategory(ownValue(value, 'category'));
+  const category = readToolFailureCategory(ownValue(value, 'declaredCategory'));
   if (category === undefined) return undefined;
   const notChecked = advice(ownValue(value, 'notChecked'));
   const tryInstead = advice(ownValue(value, 'tryInstead'));
   return {
     origin: 'declared',
-    category,
+    declaredCategory: category,
     ...(notChecked !== undefined && { notChecked }),
     ...(tryInstead !== undefined && { tryInstead }),
   };

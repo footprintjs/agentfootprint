@@ -16,12 +16,13 @@ export function retainedDeclaredFailure(
   admitted: DeclaredToolFailureRecord | undefined,
   retained: DeclaredToolFailureRecord | undefined,
 ): DeclaredToolFailureRecord | undefined {
-  if (admitted === undefined || retained?.category !== admitted.category) return undefined;
+  if (admitted === undefined || retained?.declaredCategory !== admitted.declaredCategory)
+    return undefined;
   const notChecked = matchingAdvice(admitted.notChecked, retained.notChecked);
   const tryInstead = matchingAdvice(admitted.tryInstead, retained.tryInstead);
   return {
     origin: 'declared',
-    category: admitted.category,
+    declaredCategory: admitted.declaredCategory,
     ...(notChecked !== undefined && { notChecked }),
     ...(tryInstead !== undefined && { tryInstead }),
   };
@@ -35,7 +36,7 @@ const KIND = {
   auth: 'an access failure',
   permanent: 'a non-retryable failure',
   unknown: 'a failure without a known category',
-} satisfies Record<DeclaredToolFailureRecord['category'], string>;
+} satisfies Record<DeclaredToolFailureRecord['declaredCategory'], string>;
 
 function adviceText(advice: Advice): string | undefined {
   if (typeof advice !== 'string' || isPlaceholder(advice)) return undefined;
@@ -53,8 +54,8 @@ export function declaredFailureClauses(
   const clauses: string[] = [];
   let adviceUsed = false;
   for (const category of Object.keys(KIND) as (keyof typeof KIND)[]) {
-    const named = calls.filter((call) => call.declaredFailure?.category === category);
-    const unplaced = evicted.filter((fact) => fact.category === category);
+    const named = calls.filter((call) => call.declaredFailure?.declaredCategory === category);
+    const unplaced = evicted.filter((fact) => fact.declaredCategory === category);
     if (named.length + unplaced.length === 0) continue;
     const who =
       namedCalls(named, unplaced.length, nameOf) ??

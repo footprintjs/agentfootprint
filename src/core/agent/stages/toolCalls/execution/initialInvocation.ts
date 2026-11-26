@@ -256,7 +256,9 @@ export async function invokeInitialTool(
       const dispatch = beginDeclaredToolDispatch(scope, frame.tc.name);
       const startedAt = Date.now();
       const startedMonotonic = performance.now();
-      const native = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
+      const { callArgs } = frame.callArguments;
+      let native: unknown;
+      native = await frame.tool.execute(callArgs, executionContext);
       returned = true;
       const captured = captureToolReturn(native, startedAt, startedMonotonic, dispatch);
       frame.outcome.result = captured.result;

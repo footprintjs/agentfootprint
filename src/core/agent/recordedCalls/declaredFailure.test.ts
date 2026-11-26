@@ -6,7 +6,7 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 
 const declaration = {
   origin: 'declared',
-  category: 'timeout',
+  declaredCategory: 'timeout',
   tryInstead: 'Use the replica.',
 } as const;
 const result: LLMMessage = {

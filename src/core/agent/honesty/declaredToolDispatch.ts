@@ -54,7 +54,7 @@ export function admitDeclaredToolFailure(
   const { category, notChecked, tryInstead, dispatch, startedAt, durationMs } = measured;
   const candidate: DeclaredToolFailureRecord = {
     origin: 'declared',
-    category,
+    declaredCategory: category,
     notChecked,
     tryInstead,
   };
@@ -63,7 +63,7 @@ export function admitDeclaredToolFailure(
   ]);
   const historyFailure = Array.isArray(retained) ? retained[0]?.toolDeclaredFailure : undefined;
   const admitted = readDeclaredToolFailure(historyFailure);
-  if (admitted?.category !== category) return message;
+  if (admitted?.declaredCategory !== category) return message;
   const policy = policyInForce(scope);
   const adviceIsSelected = (key: 'notChecked' | 'tryInstead') =>
     ['history', 'settledToolCalls'].some((root) =>
@@ -88,7 +88,7 @@ export function admitDeclaredToolFailure(
   const next = keptAdvice('tryInstead');
   const declaration: DeclaredToolFailureRecord = Object.freeze({
     origin: 'declared',
-    category,
+    declaredCategory: category,
     ...(checked !== undefined && { notChecked: checked }),
     ...(next !== undefined && { tryInstead: next }),
   });
@@ -116,7 +116,7 @@ export function stageDeclaredToolHistory(
     if (
       pending?.scope !== scope ||
       pending.occurrence !== readCallOccurrenceKey(message) ||
-      recordedDeclaredToolFailure(message)?.category !== pending.category
+      recordedDeclaredToolFailure(message)?.declaredCategory !== pending.category
     )
       continue;
     seen.add(declaration);
@@ -126,7 +126,7 @@ export function stageDeclaredToolHistory(
       category,
       startedAt,
       durationMs,
-      at: [String(index), 'toolDeclaredFailure', 'category'],
+      at: [String(index), 'toolDeclaredFailure', 'declaredCategory'],
     });
   }
   if (settlements.length === 0) {

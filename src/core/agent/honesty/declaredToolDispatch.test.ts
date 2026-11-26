@@ -81,7 +81,10 @@ describe('declared attempt uses the native settlement commit', () => {
     'records a retained declaration after dispatch (%s)',
     async (checkIn) => {
       const { message, attempts } = await run(checkIn);
-      expect(message?.toolDeclaredFailure).toEqual({ origin: 'declared', category: 'timeout' });
+      expect(message?.toolDeclaredFailure).toEqual({
+        origin: 'declared',
+        declaredCategory: 'timeout',
+      });
       expect(attempts).toBe(1);
     },
   );
@@ -90,7 +93,7 @@ describe('declared attempt uses the native settlement commit', () => {
     const { message, payload, attempts } = await run(undefined, undefined, true);
     expect(message?.toolDeclaredFailure).toEqual({
       origin: 'declared',
-      category: 'timeout',
+      declaredCategory: 'timeout',
       notChecked: 'primary',
     });
     expect(payload).not.toContain('secret-replica');
@@ -168,7 +171,10 @@ describe('the live and saved warning', () => {
       ).toMatchObject({
         kind: 'calls',
         calls: [
-          { toolCallId: 'declared', declaredFailure: { category: 'timeout', origin: 'declared' } },
+          {
+            toolCallId: 'declared',
+            declaredFailure: { declaredCategory: 'timeout', origin: 'declared' },
+          },
           { toolCallId: 'classified', category: 'timeout' },
         ],
       });
@@ -212,7 +218,7 @@ describe('the delivery boundary does not report a discarded declaration', () => 
               },
               { dispatch, category: 'timeout', startedAt: 100, durationMs: 5 },
             );
-            expect(message.toolDeclaredFailure?.category).toBe('timeout');
+            expect(message.toolDeclaredFailure?.declaredCategory).toBe('timeout');
             stageDeclaredToolHistory(scope, [message]);
             if (fail) raw.invalid = () => 0;
             staged = true;

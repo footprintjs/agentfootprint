@@ -18,7 +18,7 @@ export type ToolFailureCategory =
 /** An admitted declaration with advice that has passed the result's serving policy. */
 export interface DeclaredToolFailureRecord {
   readonly origin: 'declared';
-  readonly category: ToolFailureCategory;
+  readonly declaredCategory: ToolFailureCategory;
   readonly notChecked?: string | { readonly omitted: true };
   readonly tryInstead?: string | { readonly omitted: true };
 }

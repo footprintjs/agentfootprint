@@ -322,9 +322,9 @@ export function buildResumedInvocation(
         const dispatch = beginDeclaredToolDispatch(scope, toolName);
         const startedAt = Date.now();
         const startedMonotonic = performance.now();
-        const native = await tool.execute(args, executionContext);
+        result = await tool.execute(args, executionContext);
         returned = true;
-        const captured = captureToolReturn(native, startedAt, startedMonotonic, dispatch);
+        const captured = captureToolReturn(result, startedAt, startedMonotonic, dispatch);
         result = captured.result;
         declaredFailure = captured.declaredFailure;
         seen?.resultFinalizer?.captureReturned?.(result);
