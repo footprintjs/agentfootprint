@@ -3,11 +3,9 @@ import { BINDING_LIMITS } from '../../../../integrity/claim-binding/scope.js';
 import { readCallOccurrenceKey } from '../../../../lib/callOccurrence.js';
 import { toolBytesOf } from '../../../../lib/toolBytes.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
-import { citationTextDigest } from '../../citations/accepted.js';
+import { MAX_CITATION_HISTORY_ROWS, matchesCitationBody } from '../../citations/accepted.js';
 import type { AgentState } from '../../types.js';
 import { citationOfferForCall, type CitationSource } from './citationOffer.js';
-
-const MAX_PROJECTED_ROWS = 4096;
 
 /** Pair the retained occurrence with the row in our own position-preserving clone. */
 export function prepareCitationProjection(
@@ -17,7 +15,11 @@ export function prepareCitationProjection(
   prepared: readonly LLMMessage[],
   detached: readonly LLMMessage[],
 ) {
-  if (!enabled || committed.length > MAX_PROJECTED_ROWS || prepared.length !== detached.length)
+  if (
+    !enabled ||
+    committed.length > MAX_CITATION_HISTORY_ROWS ||
+    prepared.length !== detached.length
+  )
     return undefined;
   const admitted = scope.citationSources;
   if (admitted === undefined || admitted.length === 0 || admitted.length > BINDING_LIMITS.results)
@@ -38,13 +40,7 @@ export function prepareCitationProjection(
     const key = readCallOccurrenceKey(original);
     const source = typeof key === 'string' ? byOccurrence.get(key) : undefined;
     if (source === undefined || original.content !== projected.content) continue;
-    const text = toolBytesOf(original);
-    if (
-      typeof text !== 'string' ||
-      text.length > BINDING_LIMITS.resultBytes ||
-      citationTextDigest(text) !== source.bodyDigest
-    )
-      continue;
+    if (!matchesCitationBody(toolBytesOf(original), source.bodyDigest)) continue;
     sources.set(copy, {
       callOccurrenceKey: source.callOccurrenceKey,
       resultId: source.resultId,

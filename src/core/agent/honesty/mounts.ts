@@ -466,6 +466,9 @@ export const RESULTS_LOOP_TARGET: string = SUBFLOW_IDS.RESULTS;
 
 /** What an agent with the answer layer armed hands the final branch — build-time facts, never scope. */
 export interface AnswerMountDeps {
+  readonly retainedCitationsFor?: (
+    scope: object,
+  ) => import('../citations/accepted.js').RetainedCitationReport | undefined;
   readonly omissionCheckFor?: (
     scope: object,
   ) => import('./sourceOmission.js').OmissionCheck | undefined;
@@ -522,7 +525,8 @@ export function startFinalBranch(
     });
   }
   const assess = async (scope: TypedScope<AgentState>): Promise<void> => {
-    const { displayNameOfFor, omissionCheckFor, ...declarations } = answer;
+    const { displayNameOfFor, omissionCheckFor, retainedCitationsFor, ...declarations } = answer;
+    const retainedCitations = retainedCitationsFor?.(scope);
     const checkOmission = omissionCheckFor?.(scope);
     const displayNameOf = displayNameOfFor?.(scope);
     await (
@@ -530,6 +534,7 @@ export function startFinalBranch(
     ).assessAnswerStage(scope, {
       ...declarations,
       ...(checkOmission && { checkOmission }),
+      ...(retainedCitations !== undefined && { retainedCitations }),
       ...(displayNameOf !== undefined && { displayNameOf }),
     });
   };
