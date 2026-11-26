@@ -4,6 +4,7 @@ import { isRecord, str } from '../recordValues.js';
 import type { AssessmentPointer } from '../types.js';
 import { witnessRows } from '../answerWitnesses.js';
 import { answerCompletionReasons } from './completion/completion.js';
+import { readCitationRows } from './citations/record.js';
 
 /**
  * Layer 4, the answer's own rows: the evidence gate's verdict (a flag —
@@ -14,7 +15,12 @@ import { answerCompletionReasons } from './completion/completion.js';
  * the tools' results — so it files the check as having run and supports
  * nothing: "known" needs a tie check.
  */
-export function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): void {
+export function readAnswerRows(
+  state: Readonly<Record<string, unknown>>,
+  g: Gathered,
+  served: boolean,
+): void {
+  readCitationRows(state, g, served);
   const witnesses = witnessRows(state);
   const unsupported = state.unsupportedValues;
   if (isRecord(unsupported)) {

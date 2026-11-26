@@ -1,0 +1,225 @@
+import type { ContextRole, ContextSource, ToolCallEventIdentity } from '../../events/types.js';
+import type { ReportedToolStatus } from '../../semantics/toolOutcome.js';
+import type { ThinkingBlock } from '../../thinking/types.js';
+import type { MessageRecord } from '../toolResultRecord.js';
+import type { LLMResponse } from './response.js';
+
+export interface LLMMessage extends MessageRecord {
+  readonly role: ContextRole;
+  readonly content: string;
+  /** For `role: 'tool'` — the tool_use id this result corresponds to. */
+  readonly toolCallId?: string;
+  /** Recording-only address of a library-observed tool call. Omitted from provider requests. */
+  readonly callOccurrenceKey?: NonNullable<ToolCallEventIdentity['callOccurrenceKey']>;
+  /** For `role: 'tool'` — the tool name this result corresponds to. */
+  readonly toolName?: string;
+  /**
+   * For a refused `role: 'tool'` result only: the same finite argument failure
+   * carried by its attempted call. Anthropic projects this pair as recovery
+   * text, never as a successful parse of substituted empty input.
+   */
+  readonly toolArgumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
+  /**
+   * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
+   * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
+   * Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
+   */
+  readonly outcome?: 'refused' | 'failed';
+  /** Tool-only status of an admitted return. Never derived from `content` or sent to a provider. */
+  readonly reportedStatus?: ReportedToolStatus;
+  /**
+   * For `role: 'assistant'` only — the tool calls the LLM requested in this
+   * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
+   * tool_use blocks across iterations: when the next `complete()` includes
+   * a `role: 'tool'` message, the provider reconstructs the matching
+   * `tool_use` block on the previous assistant turn from this field.
+   * Empty array on text-only turns; undefined for non-assistant roles.
+   *
+   * `providerMeta` (9.29.0) rides back UNCHANGED — it is the same bag the
+   * response put there, and for Gemini it holds the `thoughtSignature` without
+   * which the model refuses the turn after a tool call. See
+   * {@link LLMResponse}'s `toolCalls[].providerMeta`, sent unchanged. The recording
+   * address survives native pause and resume and is stripped before transport.
+   */
+  readonly toolCalls?: readonly (Omit<LLMResponse['toolCalls'][number], 'argumentsFailure'> &
+    Pick<LLMMessage, 'callOccurrenceKey'> & {
+      readonly argumentsFailure?: LLMResponse['toolCalls'][number]['argumentsFailure'];
+    })[];
+  /**
+   * v2.14 — Thinking blocks emitted by the LLM on assistant turns.
+   *
+   * Required for Anthropic extended-thinking + tool-use flows: signed
+   * blocks MUST be echoed BYTE-EXACT in subsequent assistant turns or
+   * Anthropic's API rejects with 400. The framework persists blocks
+   * here so the AnthropicProvider's serializer (Phase 4b) can restore
+   * them on the next request.
+   *
+   * **Persistence model — DIFFERENT from `ephemeral`:**
+   *   - `ephemeral` messages: NOT persisted to scope.history
+   *   - `thinkingBlocks`: PERSISTED (required for signature round-trip)
+   *
+   * Visible to recorders + audit by default. Use
+   * `RedactionPolicy.thinkingPatterns` (Phase 3) to scrub sensitive
+   * reasoning content before audit-log adapters fire.
+   *
+   * Empty array OR undefined when no thinking is present (most calls).
+   */
+  readonly thinkingBlocks?: readonly ThinkingBlock[];
+  /** Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe. */
+  readonly replay?: import('../../thinking/replay.js').MessageReplay;
+  /**
+   * v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
+   *   • The message IS sent to the LLM as part of the next request
+   *     (visible to the model, counts toward its context window).
+   *   • The message is OBSERVABLE via narrative/recorders/audit log
+   *     (visible to humans for debugging + forensics).
+   *   • The message is NOT persisted to `scope.history` after the gate
+   *     loop that produced it completes — long-term memory writes,
+   *     `getNarrative()` snapshots, and downstream consumers see only
+   *     non-ephemeral messages.
+   *
+   * Use case: Instructor-style schema retry. The reliability gate
+   * appends `{ role: 'user', content: feedbackForLLM, ephemeral: true }`
+   * before retry — the LLM sees the validation feedback for the next
+   * call, but the conversation history (and any memory persistence
+   * downstream) sees only the final accepted exchange.
+   *
+   * Audit-trail safety: ephemeral DOES NOT mean invisible to security
+   * review. `getNarrative()`, recorders, and the typed-event stream all
+   * see ephemeral messages; only the persistent conversation log filters
+   * them out. An attacker cannot use the ephemeral marker to construct
+   * audit-invisible prompts.
+   */
+  readonly ephemeral?: boolean;
+  /**
+   * v7.21 — WHO let this message into the window.
+   *
+   * Stamped by the agent's `Deliver` stage on a message that came from a
+   * `slot: 'messages'` Injection rather than from the conversation. It is the
+   * stable marker the messages slot reads to attribute the message to its
+   * injection (source / sourceId / reason) instead of inferring a baseline
+   * source from the role — so one wire message produces exactly one
+   * `context.injected` record, naming whoever put it there.
+   *
+   * **Never reaches a provider.** `callLLM` strips this field from every
+   * message before the request is handed to `provider.complete()` / `stream()`,
+   * so no adapter — first-party or consumer-authored — can leak framework
+   * metadata onto a wire, even one that serializes a message wholesale.
+   * Stripping removes a field, never a message, so wire indices are unchanged
+   * (which is what lets a `CacheMarker{field:'messages'}` name a real position).
+   *
+   * Absent on every message that came from the conversation itself.
+   */
+  readonly injectedBy?: {
+    /** The `Injection.id` that produced this message. */
+    readonly injectionId: string;
+    /** The injection's flavor — the `source` the slot records. */
+    readonly flavor: ContextSource;
+    /** The injection's description, when it had one. */
+    readonly reason?: string;
+    /** The ReAct iteration whose boundary delivered it. */
+    readonly iteration: number;
+  };
+  /**
+   * 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
+   * DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
+   *
+   * Stamped by the batch settlement (`core/agent/stages/toolCalls/batch/settlementOperations.ts` ·
+   * `settleBatch`, which takes each copy from `notDispatchedMarker`). The
+   * model proposed several calls in one turn, one of them paused the run, and
+   * the resume answered each call after it with a fixed sentence
+   * (`notDispatchedResult`) instead of running it. The sentence is what the
+   * MODEL reads. This field is the same fact as data, for the readers that ask
+   * "did this call run?" or "is this message a tool's result?":
+   * `security/extractSequence.ts` · `extractSequence`, which builds the
+   * `sequence` a permission policy judges (pairing each marker with the ONE
+   * proposal it answers, by position — a provider may reuse an id); the
+   * empty-lookup check's producer corpus (`toolCalls/evidence/producerCorpus.ts` ·
+   * `producerCorpusOf`); the check-in evidence trail
+   * (`core/checkin.ts` · `CheckInTrail` — its `toolCalls` are the calls
+   * already completed); the window's result naming
+   * (`core/agent/window/toolNames.ts` · `toolNameOfMessage` — the
+   * last-tool-result pin, the drop notice, the dangling-reference check); and
+   * the trace toolpack's `inspect_tool_call`
+   * (`trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`); and, under
+   * `.findings()`, the offer, the identity source, the findings DATA's `undeclaredResultIds`
+   * (and the replay-only piece's `undeclared:` line), the collapse, the window's
+   * `droppedStandings` and a turn's standing (`core/agent/findings/offer.ts`,
+   * `findings/context.ts` · `findingsContext`, `findings/serve.ts` · `collapseJudged`,
+   * `stages/window.ts`, `core/agent/window/ledgerFactPins.ts` · `turnStandingOf` — the
+   * `'ledger-fact'` pin and `WindowStrategyInput.standingOf`) — a settled message is not a
+   * result to judge. None of them parses the sentence.
+   *
+   * **One definition, two carriers.** The settled call's two brackets on the
+   * event stream carry the same fact under the same name, typed off THIS field
+   * (`events/payloads/stream.ts` · `ToolStartPayload.notDispatched`,
+   * `ToolEndPayload.notDispatched`), so a reader of the stream alone never has
+   * to guess from a `durationMs: 0` bracket whether the call ran.
+   *
+   * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
+   * `stripFrameworkFields` removes it with `injectedBy` before a request
+   * exists, so the wire carries the sentence and nothing else.
+   *
+   * Absent on every other message.
+   */
+  readonly notDispatched?: {
+    /** The call in the same batch the run paused on — the one the sentence names. */
+    readonly pausedCall: { readonly toolCallId: string; readonly toolName: string };
+  };
+  /**
+   * THE TOOL-BYTES BOUNDARY (honesty layer 2) — on a `role: 'tool'` message
+   * whose `content` the library annotated with a note that carries a VALUE
+   * (the inputs layer's "the call ran with "2h", the value the tool's rule
+   * assumes"), the length of the tool's OWN delivered text: `content` up to
+   * this index is the tool's; everything after it is the library's.
+   *
+   * Every reader that treats a result's content as the TOOL's words reads
+   * through the cut, and through ONE owner of it (`lib/toolBytes.ts` ·
+   * `toolBytesOf`): the evidence index (`core/agent/evidence/evidenceIndex.ts`
+   * · `evidenceFromHistory`), so a value that sits only in the note grounds no
+   * answer — without it, the next call could cite this result as the source of
+   * "2h" and an assumption would become an observed value; the answer's
+   * standing (`core/agent/assessment/assess.ts` · `assessAnswer`) and the
+   * answer account's in-view results (`answer-account/facts/inView.ts`),
+   * so the note never breaks the one emptiness reader's parse and hides an
+   * empty or absent result; the unsupported-argument seam's grounded corpus
+   * (`core/agent/stages/callLLM/prepareCall.ts`, cut on the committed twin — the wire copy
+   * has lost this field) and the empty-lookup seam's producer corpus
+   * (`core/agent/stages/toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf`), so the note never
+   * vouches for an argument. The model still reads the whole `content`: it
+   * needs the value to reason about what ran.
+   *
+   * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
+   * `stripFrameworkFields` removes it with `injectedBy` and `notDispatched`.
+   * Present only on a message the layer annotated, so every other run indexes
+   * exactly what it always did.
+   */
+  readonly toolChars?: number;
+  /**
+   * THE EXEMPTION LINEAGE OF A FOLD — on a compaction summary frame
+   * (`core/agent/window/summarize.ts` · `buildSummaryMessage`), the lookup
+   * forms the EXEMPT corpus held for the messages this summary folded away:
+   * the person's and the app's user/system turns (and the lineage of any
+   * earlier summary inside the span), taken from those ORIGINAL messages at
+   * fold time by `core/agent/evidence/evidenceIndex.ts` · `exemptLineageOf`.
+   *
+   * The summary's own TEXT is a model's claim, so it exempts nothing
+   * (`evidenceIndex.ts` · `exemptFromRun` skips the frame's content and reads
+   * this field instead). Without the field a value the person gave in a
+   * folded turn would lose its exemption; without skipping the text, a value
+   * the summarizer invented would gain one.
+   *
+   * Rides the summary wherever the history goes (the conversation checkpoint
+   * included), so a restored summary keeps the lineage it was folded with; a
+   * summary frame WITHOUT it (hand-built, or folded before this field
+   * existed) exempts nothing. Absent when the fold carried no exempt value.
+   *
+   * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
+   * `stripFrameworkFields` removes it with the other framework fields.
+   */
+  readonly foldedExempt?: readonly string[];
+  /** The library's mark on a person's typed answer: see {@link TypedAnswerMark}. */
+  readonly answersAsk?: import('../typedAnswerMark.js').TypedAnswerMark;
+  /** On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent. */
+  readonly calls?: readonly import('../innerCalls.js').InnerCallRan[];
+}

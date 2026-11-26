@@ -1,4 +1,6 @@
+import type { OmissionCheck } from '../honesty/sourceOmission.js';
 import { readAnswerRows } from './answer/stage.js';
+import { readSourceConsultation } from './choose/sourceConsultation.js';
 import { readIntegrityFindings } from './choose/stage.js';
 import { composeWarning } from './compose/stage.js';
 import { gatherWarning, prepareWarning, readPause } from './gather/stage.js';
@@ -19,6 +21,7 @@ export function foldState(
   declarationAddresses?: ReadonlyMap<number, number>,
   legacyEvents?: unknown,
   retain: RetainedReasonState = (_key, value) => value,
+  checkOmission?: OmissionCheck,
 ): AnswerAssessment {
   const prepared = prepareWarning(recorded, served, declarationAddresses, legacyEvents);
   readInitialResults(prepared);
@@ -30,7 +33,11 @@ export function foldState(
   readResultsCoverage(gathered);
   readContingentRows(state, places, g);
   readResultEvidence(gathered, declarations, enteredArguments, retainedHistory);
-  readAnswerRows(state, g);
+  readAnswerRows(state, g, served);
   const integrity = readIntegrityFindings(state, g);
-  return composeWarning(gathered, integrity, declarationAddresses, retain);
+  const consultation =
+    g.fired.has('asked') || g.fired.has('argument-asked')
+      ? undefined
+      : readSourceConsultation(recorded, g, retain, checkOmission);
+  return composeWarning(gathered, integrity, declarationAddresses, retain, consultation);
 }

@@ -1,3 +1,5 @@
+import { captureProviderResponse } from '../../provider-contract/responseAdmission.js';
+import { requireUsableProviderResponse, admitInterventionError } from '../providerIntervention.js';
 import { recordModelContext } from '../../recorders/core/recordModelContext.js';
 /**
  * buildMessageApiChart — PROOF of the locked "messageAPI merge-tree" shape
@@ -24,8 +26,8 @@ import { recordModelContext } from '../../recorders/core/recordModelContext.js';
  * selector picks BOTH slots (a one-shot call engineers everything once).
  *
  * WHY messageAPI is a REAL stage: it assembles the LLM request bulk that the
- * agent's `callLLM` builds invisibly today (`buildCallLLMStage`,
- * callLLM.ts · buildCallLLMStage) — `systemPrompt`
+ * agent's `callLLM` builds invisibly today (`prepareCall`,
+ * callLLM/prepareCall.ts · prepareCall) — `systemPrompt`
  * (separate field) + `messages` (the conversation, incl. tool-results) → the
  * message-API payload. Making it a stage makes that assembly visible +
  * inspectable in Lens/Trace. (Tools is a separate field added at Call-LLM —
@@ -222,22 +224,28 @@ export function buildMessageApiChart(deps: MessageApiChartDeps): FlowChart {
     // The run's signal (its deadline included) rides the request and bounds
     // the wait; an answer that lands after it is refused before `llm_end`
     // could count it (lib/abort.ts · callUnder).
-    const response = await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
-      provider.complete(
-        wired,
-        // Resilience-report channel — see buildAgentMessageApiChart.
-        resilienceHooks(scope, receipt !== undefined),
-      ),
+    const response = captureProviderResponse(
+      await callUnder(request, scope.$getEnv?.()?.signal, (wired) =>
+        provider.complete(
+          wired,
+          // Resilience-report channel — see buildAgentMessageApiChart.
+          resilienceHooks(scope, receipt !== undefined),
+        ),
+      ).catch((error: unknown) => admitInterventionError(scope, error)),
     );
+    const notifyCompleted = (contentWithheld?: true) =>
+      typedEmit(scope, 'agentfootprint.stream.llm_end', {
+        iteration: scope.iteration,
+        content: response.content,
+        ...(contentWithheld === true && { contentWithheld }),
+        toolCallCount: response.toolCalls.length,
+        usage: response.usage,
+        stopReason: response.stopReason,
+        durationMs: Date.now() - startMs,
+      });
+    requireUsableProviderResponse(scope, response, () => notifyCompleted(true));
     scope.answer = response.content;
-    typedEmit(scope, 'agentfootprint.stream.llm_end', {
-      iteration: scope.iteration,
-      content: response.content,
-      toolCallCount: response.toolCalls.length,
-      usage: response.usage,
-      stopReason: response.stopReason,
-      durationMs: Date.now() - startMs,
-    });
+    notifyCompleted();
   };
 
   // ── Build the tree — Context is the ROOT selector (no seed stage). ──

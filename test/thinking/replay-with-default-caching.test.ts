@@ -38,10 +38,11 @@ import { describe, expect, it } from 'vitest';
 import { Agent, checkInApproved, defineTool, isCheckInPause } from '../../src/index.js';
 import { anthropic } from '../../src/adapters/llm/AnthropicProvider.js';
 import { prepareAnthropicReplay } from '../../src/adapters/llm/anthropicThinkingReplay.js';
-import type { CacheStrategy } from '../../src/cache/types.js';
+import type { CacheMarker, CacheStrategy } from '../../src/cache/types.js';
 import { RunCheckpointError, type AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
 import type { LLMMessage, LLMProvider, LLMRequest } from '../../src/provider-contract/types.js';
 import { recordRun } from '../../src/doors/observe.js';
+import { defineFact } from '../../src/injection-engine.js';
 import { receiptAt, servedAt } from '../../src/time-travel/servedView.js';
 
 /** The models whose table row sets `thinkingPrefixBinding` (anthropicModels.ts). */
@@ -286,9 +287,16 @@ describe('signed tool turns with native context features', () => {
       try {
         const run = agent.run({ message: 'How many objects did the lookup find?' });
         if (end === 'unknown end') {
+          // The draft that stopped at max_tokens is kept off the wire, so the
+          // newest signed reasoning on it is the first response's, still in its
+          // open tool turn. Its own baseline names what the revision changed,
+          // where the adapter's guard used to say only `prefix-changed`.
           await expect(run).rejects.toMatchObject({
-            code: 'UNSAFE_THINKING_REPLAY',
-            reason: 'prefix-changed',
+            code: 'CONTEXT_CHANGED_IN_TURN',
+            changes: [
+              { slot: 'system-prompt', change: 'added', source: 'evidence-recovery' },
+              { slot: 'tools', change: 'removed', tool: 'lookup' },
+            ],
           });
           expect(bodies).toHaveLength(2);
           expect(lookups).toEqual(['k1']);
@@ -398,6 +406,73 @@ describe('signed tool turns with native context features', () => {
     }
   });
 
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    'remaps the cache marker after restoring request-only lines in %s',
+    async (reactMode) => {
+      const bodies: Body[] = [];
+      const candidates: Array<{
+        messages: readonly LLMMessage[];
+        markers: readonly CacheMarker[];
+      }> = [];
+      const fact = 'A cacheable fixture delivery.';
+      const provider = anthropic({
+        _client: scriptedClient(model, bodies, [
+          { toolInput: { key: 'k1', _findings: { basis: 'direct' } } },
+          { toolInput: { key: 'k2', _findings: { basis: 'direct' } } },
+          'text',
+        ]) as never,
+      });
+      const cacheStrategy: CacheStrategy = {
+        name: 'observe-fixture',
+        async prepareRequest(request, markers) {
+          candidates.push({ messages: request.messages, markers });
+          return { request, markersApplied: [] };
+        },
+        extractMetrics: () => ({ kind: 'notApplicable', reason: 'fixture' }),
+      };
+      const agent = Agent.create({ provider, model, cacheStrategy, reactMode, maxIterations: 5 })
+        .system('Use the lookup tool to answer.', { cache: 'always' })
+        .tool(lookup)
+        .fact(
+          defineFact({
+            id: 'cache-fixture',
+            data: fact,
+            slot: 'messages',
+            role: 'assistant',
+            activeWhen: ({ iteration }) => iteration >= 3,
+          }),
+        )
+        .inputsLayer()
+        .findings({ answerAsk: 'quote-facts', argumentSources: true })
+        .thinking({ budget: 2048 })
+        .build();
+      const recorder = recordRun(agent, { boundaryDetail: 'full' });
+      try {
+        expect(await agent.run({ message: 'What are k1 and k2?' })).toBe('answer 3');
+        expect(replayedSignatures(bodies[2]!)).toEqual(['sig-1', 'sig-2']);
+        expect(candidates).toHaveLength(3);
+        const cache = recorder.boundary
+          .getBoundaries()
+          .filter((event) => event.type === 'subflow.exit' && event.localSubflowId === 'sf-cache')
+          .at(-1);
+        const payload = cache?.payload as { cacheMarkers?: readonly CacheMarker[] } | undefined;
+        const raw = payload?.cacheMarkers?.find(({ field }) => field === 'messages');
+        const { messages, markers } = candidates[2]!;
+        const wirePosition = messages.findIndex(({ content }) => content === fact);
+        expect(wirePosition).toBeGreaterThan(0);
+        expect(raw).toBeDefined();
+        expect(wirePosition).toBeGreaterThan(raw!.boundaryIndex);
+        expect(markers.find(({ field }) => field === 'messages')).toEqual({
+          ...raw,
+          boundaryIndex: wirePosition,
+        });
+      } finally {
+        recorder.stop();
+        await agent.shutdown();
+      }
+    },
+  );
+
   it('refuses to reconstruct a signed prefix after a host changes request messages', async () => {
     const bodies: Body[] = [];
     const provider = anthropic({
@@ -425,9 +500,12 @@ describe('signed tool turns with native context features', () => {
       .thinking({ budget: 2048 })
       .build();
     try {
+      // The agent's own check names the edit before the adapter's guard: the
+      // library's request-only line can no longer be restored ahead of the
+      // signed turn, so the signed request's second message is not where it was.
       await expect(agent.run({ message: 'What is k1?' })).rejects.toMatchObject({
-        code: 'UNSAFE_THINKING_REPLAY',
-        reason: 'prefix-changed',
+        code: 'CONTEXT_CHANGED_IN_TURN',
+        changes: [{ slot: 'messages', change: 'changed', position: 1 }],
       });
       expect(bodies).toHaveLength(1);
       expect(bodies[0]!.messages[0]!.content).toBe(rewritten);

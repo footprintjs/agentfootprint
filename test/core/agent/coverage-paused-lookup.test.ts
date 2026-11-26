@@ -807,7 +807,13 @@ const REFERENCE = resolve(__dirname, 'reference/paused-lookup-no-absence.json');
 
 /** Expected-side recorded metadata; historical behavior, payload and order stay exact. */
 const recordedMetadataKeys = (legacy: readonly string[], savedPause = false): string[] => {
-  const added = ['runIdentitySource', 'runSessionId', 'sourceLinkServedRows', 'toolResourceOwner'];
+  const added = [
+    'runIdentitySource',
+    'runSessionId',
+    'sourceLinkConsumer',
+    'sourceLinkServedRows',
+    'toolResourceOwner',
+  ];
   if (savedPause) added.push('servedToolParties');
   for (const key of added) expect(legacy).not.toContain(key);
   return [...legacy, ...added].sort();

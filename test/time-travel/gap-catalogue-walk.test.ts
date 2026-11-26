@@ -27,8 +27,8 @@
  *   • STATICALLY, from the declarations. The TypeScript parser reads `Receipt`
  *     and `ServedView` out of `receipt.ts` and `servedView.ts` and expands them
  *     to leaf paths (`system.chars`, `messages.count`, `params.maxTokens`, …),
- *     descending into any interface DECLARED IN THOSE TWO FILES and stopping at
- *     anything else — an `LLMMessage` is somebody else's shape, and the
+ *     descending into interfaces owned by the receipt, its omissions module and the view,
+ *     and stopping at anything else — an `LLMMessage` is somebody else's shape, and the
  *     catalogue names the container that holds it. This half would see a
  *     field no run produces: `omittedForAttention` was that field until 9.93.0,
  *     when the window stage started supplying it.
@@ -113,7 +113,7 @@
  *
  *   no-fold-base                 7 of 11 named fields move
  *   no-conversation-on-record    3 of 3
- *   no-receipt-on-chart          3 of 12
+ *   no-receipt-on-chart          3 of 13
  *   no-run-log                   1 of 4
  *
  * `no-conversation-on-record` is the only row that reaches every field its gap
@@ -162,7 +162,7 @@
  *     and calls outside the one declared producer;
  *   • a gap is checked for EXISTENCE, never for firing on the right run. That
  *     is `receipt-conformance.test.ts`'s job, per condition;
- *   • the static half follows type references by NAME within the two files. A
+ *   • the static half follows type references by NAME within the local declaration files. A
  *     field reached through a type alias, a mapped type or an intersection is
  *     not expanded, and would be enumerated only if a real run produced it;
  *   • the runtime half can only produce what its five scenarios reach. A new
@@ -263,10 +263,14 @@ interface StaticField {
   readonly dynamicKeys: boolean;
 }
 
-/** Every `interface` declared in the two files, by name. */
+/** Receipt, its omission annotations and ServedView own the local field shapes. */
 function localInterfaces(): ReadonlyMap<string, ts.InterfaceDeclaration> {
   const out = new Map<string, ts.InterfaceDeclaration>();
-  for (const file of [RECEIPT_FILE, TYPE_FILE]) {
+  for (const file of [
+    RECEIPT_FILE,
+    resolve(__dirname, '../../src/core/agent/receipt/omissions.ts'),
+    TYPE_FILE,
+  ]) {
     const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
     sf.forEachChild((node) => {
       if (ts.isInterfaceDeclaration(node)) out.set(node.name.text, node);
@@ -628,7 +632,7 @@ const ALL_NODES: ReadonlySet<string> = new Set(
   }),
 );
 
-/** The walk parses two files and drives five real agents; its budget is
+/** The walk parses the local declarations and drives five real agents; its budget is
  *  stated, not the default. */
 const WALK_BUDGET = { timeout: 60_000 };
 
@@ -647,6 +651,17 @@ describe('the field list is derived, not written down', () => {
     expect(paths).toContain('omittedForAttention.hashes');
     expect(paths).toContain('basis.epoch');
     expect(paths).toContain('replayPreparations.omittedBlocks');
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        'toolSelection.consumer',
+        'toolSelection.absent.name',
+        'toolSelection.absent.reason',
+        'toolSelection.shadowed.name',
+        'toolSelection.shadowed.wonBy',
+        'toolSelection.shadowed.lostBy',
+        'toolSelection.bounded',
+      ]),
+    );
     // And that it STOPS where the shape stops being ours.
     expect(VIEW_FIELDS.map((f) => f.path)).toContain('messages.asSent');
     expect(VIEW_FIELDS.map((f) => f.path).some((p) => p.startsWith('messages.asSent.'))).toBe(
@@ -1722,7 +1737,7 @@ describe('each gap names the fields its own damage actually moves', () => {
       expect(measured).toEqual({
         'no-fold-base': '7 of 11',
         'no-conversation-on-record': '3 of 3',
-        'no-receipt-on-chart': '3 of 12',
+        'no-receipt-on-chart': '3 of 13',
         'no-run-log': '1 of 4',
       });
     },

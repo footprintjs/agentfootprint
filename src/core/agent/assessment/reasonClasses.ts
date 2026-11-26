@@ -42,6 +42,7 @@ type ReasonClass = 'input' | 'result' | 'settlement' | 'turn';
 const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   asked: 'turn',
   'argument-asked': 'turn',
+  'source-not-consulted': 'turn',
   'argument-assumed': 'input',
   'argument-unverified': 'input',
   'argument-read': 'input',
@@ -68,6 +69,7 @@ const CLASSES: Readonly<Record<AssessmentReason, ReasonClass>> = {
   'sources-conflict': 'result',
   'column-type-mismatch': 'result',
   'missing-column': 'result',
+  'ungrounded-entity': 'turn',
   'value-unsupported': 'turn',
   'value-survived-revision': 'turn',
   'derived-from-reading': 'turn',

@@ -75,6 +75,7 @@ import {
   type HistoryCall,
 } from '../recordedCalls.js';
 import { resolveArgumentHistory, waitingArgumentIteration } from './argumentRows.js';
+import { citationConflictIndex } from './pointer.js';
 import { unfinishedCallStatus } from './recordValues.js';
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
 
@@ -339,7 +340,21 @@ export function reasonSourceOf(
   const seen = new Set<number | string>();
   const unplaced: AssessmentPointer[] = [];
   let unnamed = 0;
+  const anonymousCitationSlots = new Set<number>();
   for (const w of witness) {
+    const citationIndex = reason === 'sources-conflict' ? citationConflictIndex(w) : undefined;
+    if (citationIndex !== undefined) {
+      // The admitted pair contains offer slots only, never identities that could join to history.
+      const citationRecord = read.state.answerCitations;
+      const conflicts = isRecord(citationRecord)
+        ? Object.getOwnPropertyDescriptor(citationRecord, 'conflicts')?.value
+        : undefined;
+      const pair = readOwnList(arrayEntry(conflicts, citationIndex), 2);
+      for (const slot of pair?.entries ?? []) {
+        if (typeof slot === 'number') anonymousCitationSlots.add(slot);
+      }
+      continue;
+    }
     const refs = callsOfWitness(reason, w, read, callAt);
     const declaration = w.kind === 'state' && w.key === 'coverageDeclared';
     if (declaration && refs.length === 0) {
@@ -421,6 +436,7 @@ export function reasonSourceOf(
       });
     }
   }
+  unnamed += anonymousCitationSlots.size;
   return {
     kind: 'calls',
     calls,

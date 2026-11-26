@@ -1,0 +1,275 @@
+/**
+ * Shared fixtures for the recording-parts tests: real engine runs, a test-only
+ * filer (parts first, index last — the writer itself is a later change), and
+ * a counting, tamperable view of a store.
+ */
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { Agent, defineTool, inMemoryArtifacts, sqliteArtifacts } from '../../../../src/index.js';
+import type {
+  ArtifactMeta,
+  ArtifactRecord,
+  ArtifactScope,
+  ArtifactStore,
+} from '../../../../src/artifacts/types.js';
+import { bindArtifacts } from '../../../../src/artifacts/capability.js';
+import { computeArtifactDigest } from '../../../../src/artifacts/payload.js';
+import { utf8Length } from '../../../../src/lib/utf8.js';
+import {
+  RECORDING_INDEX_ARTIFACT_KIND,
+  RECORDING_PART_ARTIFACT_KIND,
+  recordingPutInput,
+} from '../../../../src/artifacts/recordingArtifact.js';
+import { recordRun, type Recording } from '../../../../src/observe.js';
+import { mock } from '../../../../src/providers.js';
+import { conversationRedaction } from '../../../../src/doors/security.js';
+import { fileRecordingParts } from '../../../../src/recorders/observability/recordingParts/file.js';
+import {
+  recordingIndexText,
+  splitRecording,
+  type SplitRecording,
+  type SplitRecordingOptions,
+} from '../../../../src/recorders/observability/recordingParts/split.js';
+
+export const SCOPE: ArtifactScope = { conversationId: 'recording-parts' };
+export const RUN_ID = 'run-parts-1';
+
+/** `node:sqlite` is missing on older Node; the sqlite rows skip visibly there. */
+export const sqliteAvailable = await (async (): Promise<boolean> => {
+  try {
+    const mod = (await import('node:sqlite')) as { DatabaseSync?: unknown };
+    return typeof mod.DatabaseSync === 'function';
+  } catch {
+    return false;
+  }
+})();
+
+export interface StoreCase {
+  readonly name: string;
+  create(): { store: ArtifactStore; close(): void };
+}
+
+export const STORES: readonly StoreCase[] = [
+  { name: 'inMemoryArtifacts', create: () => ({ store: inMemoryArtifacts(), close: () => {} }) },
+  ...(sqliteAvailable
+    ? [
+        {
+          name: 'sqliteArtifacts',
+          create: () => {
+            const dir = mkdtempSync(join(tmpdir(), 'af-recording-parts-'));
+            const store = sqliteArtifacts({ file: join(dir, 'artifacts.sqlite') });
+            return {
+              store,
+              close: () => {
+                store.close();
+                rmSync(dir, { recursive: true, force: true });
+              },
+            };
+          },
+        },
+      ]
+    : []),
+];
+
+/**
+ * A real agent run: grouped ReAct mode mounts one call subflow per iteration,
+ * each with nested slot subflows, loops re-mount them (path aliases), and the
+ * tool returns `rows` rows so results have weight.
+ */
+export async function realRecording(
+  options: { readonly rows?: number; readonly redact?: boolean; readonly marker?: string } = {},
+): Promise<Recording> {
+  const { rows = 40, marker = 'PLANTED-SECRET-7f3a' } = options;
+  const lookup = defineTool<{ page: number }, unknown>({
+    name: 'lookup',
+    description: 'Returns one page of rows.',
+    inputSchema: { type: 'object', properties: { page: { type: 'number' } } },
+    execute: ({ page }) =>
+      Array.from({ length: rows }, (_, i) => ({ id: i, page, note: `row ${i} ${marker}` })),
+  });
+  const runner = Agent.create({
+    provider: mock({
+      replies: [
+        { toolCalls: [{ id: 'a', name: 'lookup', args: { page: 1 } }] },
+        { toolCalls: [{ id: 'b', name: 'lookup', args: { page: 2 } }] },
+        { content: `Done. ${marker}` },
+      ],
+    }),
+    model: 'mock',
+    reactMode: 'dynamic-grouped',
+    ...(options.redact === true && {
+      redact: conversationRedaction({ patterns: [/note/] }),
+    }),
+  })
+    .tool(lookup)
+    .build();
+  const recorder = recordRun(runner);
+  try {
+    await runner.run({ message: `Read two pages. ${marker}` });
+    return recorder.toRecording();
+  } finally {
+    recorder.stop();
+    await runner.shutdown();
+  }
+}
+
+/** The text a whole recording is stored as. */
+export function wholeText(recording: Recording): string {
+  return recordingPutInput(recording).data as string;
+}
+
+/** Store a whole recording; returns its ref. */
+export async function fileWhole(
+  store: ArtifactStore,
+  recording: Recording,
+  runId = RUN_ID,
+): Promise<string> {
+  const input = recordingPutInput(recording, { runId });
+  return (await store.put(SCOPE, { ...input, digest: 'sha-256' })).meta.ref;
+}
+
+export interface FiledParts {
+  readonly index: string;
+  readonly base: string;
+  readonly parts: readonly string[];
+  readonly split: SplitRecording;
+  readonly indexText: string;
+}
+
+/**
+ * Store a recording in parts through the REAL writer (`fileRecordingParts`),
+ * and recompute the same deterministic cut beside it, so a test can forge one
+ * part of exactly what was stored.
+ */
+export async function fileParts(
+  store: ArtifactStore,
+  recording: Recording,
+  options: SplitRecordingOptions = {},
+): Promise<FiledParts> {
+  const runId = options.runId ?? RUN_ID;
+  const filed = await fileRecordingParts(store, SCOPE, recording, {
+    runId,
+    packed: options.packed === true,
+    ...(options.targetBytes !== undefined && { targetBytes: options.targetBytes }),
+  });
+  if (filed.status !== 'filed') throw new Error(`not filed: ${filed.detail}`);
+  const split = await splitRecording(recording, { ...options, runId });
+  const [base, ...parts] = filed.parts.map((meta) => meta.ref);
+  const index = filed.index.ref;
+  const indexText = (await store.get(SCOPE, index))!.data as string;
+  return { index, base: base!, parts, split, indexText };
+}
+
+export interface Counted {
+  readonly artifacts: {
+    head(ref: string): Promise<ArtifactMeta | null>;
+    get(ref: string): Promise<ArtifactRecord | null>;
+  };
+  readonly calls: { head: string[]; get: string[] };
+}
+
+/**
+ * A scope-bound view of `store` that counts every call, and lets a test change
+ * what a ref answers: its meta (as `head` and `get` report it), its data, or a
+ * thrown error.
+ */
+export function counted(
+  store: ArtifactStore,
+  tamper: {
+    readonly meta?: (meta: ArtifactMeta) => ArtifactMeta;
+    readonly data?: (record: ArtifactRecord) => unknown;
+    readonly fail?: (ref: string, verb: 'head' | 'get') => Error | undefined;
+  } = {},
+  scope: ArtifactScope = SCOPE,
+): Counted {
+  const bound = bindArtifacts(store, scope);
+  const calls = { head: [] as string[], get: [] as string[] };
+  return {
+    calls,
+    artifacts: {
+      async head(ref) {
+        calls.head.push(ref);
+        const error = tamper.fail?.(ref, 'head');
+        if (error !== undefined) throw error;
+        const meta = await bound.head(ref);
+        return meta === null || tamper.meta === undefined ? meta : tamper.meta(meta);
+      },
+      async get(ref) {
+        calls.get.push(ref);
+        const error = tamper.fail?.(ref, 'get');
+        if (error !== undefined) throw error;
+        const record = await bound.get(ref);
+        if (record === null) return null;
+        const meta = tamper.meta === undefined ? record.meta : tamper.meta(record.meta);
+        const data = tamper.data === undefined ? record.data : tamper.data(record);
+        return { meta, data };
+      },
+    },
+  };
+}
+
+/** Parse the whole text a recording is stored as. */
+export function parsedWhole(recording: Recording): Record<string, unknown> {
+  return JSON.parse(wholeText(recording)) as Record<string, unknown>;
+}
+
+/** The execution keys of a parsed whole recording's subflow results. */
+export function executionKeys(whole: Record<string, unknown>): string[] {
+  const snapshot = whole.snapshot as { subflowResults?: Record<string, unknown> };
+  return Object.keys(snapshot.subflowResults ?? {}).filter((key) => key.includes('#'));
+}
+
+/**
+ * Store a replacement for one part of `filed` (`at` = an ordinal, or `'base'`)
+ * holding `text`, and an index that names it with ITS byte count and digest:
+ * consistent on the digest, so only the reader's other checks can refuse it.
+ * Returns the new index's ref.
+ */
+export async function forgePart(
+  store: ArtifactStore,
+  filed: FiledParts,
+  at: number | 'base',
+  text: string,
+  origin: { runId?: string } = { runId: RUN_ID },
+): Promise<string> {
+  const ref = (
+    await store.put(SCOPE, {
+      kind: RECORDING_PART_ARTIFACT_KIND,
+      mediaType: 'application/json',
+      data: text,
+      digest: 'sha-256',
+      origin,
+    })
+  ).meta.ref;
+  const entry = { bytes: utf8Length(text), digest: await computeArtifactDigest(text) };
+  const draft = filed.split.draft;
+  const forged = {
+    ...draft,
+    base: at === 'base' ? entry : draft.base,
+    parts: draft.parts.map((part, i) => (i === at ? { ...part, ...entry } : part)),
+  };
+  const refs = {
+    base: at === 'base' ? ref : filed.base,
+    parts: filed.parts.map((part, i) => (i === at ? ref : part)),
+  };
+  return (
+    await store.put(SCOPE, {
+      kind: RECORDING_INDEX_ARTIFACT_KIND,
+      mediaType: 'application/json',
+      data: recordingIndexText(forged, refs),
+      digest: 'sha-256',
+      origin: { runId: RUN_ID },
+    })
+  ).meta.ref;
+}
+
+/** `text` with the character after the first `marker` replaced by another of the same byte length. */
+export function alterSameLength(text: string, marker: string): string {
+  const at = text.indexOf(marker);
+  if (at < 0) throw new Error(`marker not found: ${marker}`);
+  const i = at + marker.length;
+  const swap = text[i] === 'Q' ? 'R' : 'Q';
+  return text.slice(0, i) + swap + text.slice(i + 1);
+}

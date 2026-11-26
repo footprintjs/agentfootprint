@@ -20,7 +20,11 @@ import type { MemoryStore } from '../../../../memory/store/index.js';
 
 import { foldStepPlans } from '../../../../injection-engine/skillSteps.js';
 
-import { buildInjectionEngineSubflow } from '../../../../injection-engine/buildInjectionEngineSubflow.js';
+import { evaluateForToolSelection } from '../../../slots/nativeSkillSelection.js';
+import {
+  buildObservedInjectionEngine,
+  type InjectionEngineConfig,
+} from '../../../../injection-engine/buildInjectionEngineSubflow.js';
 import { makePickEntryStage } from '../../stages/pickEntry.js';
 import { makeRouteTurnStage } from '../../stages/routeTurn.js';
 
@@ -183,6 +187,7 @@ export function buildChart(
     toolSchemas,
     toolDeclaringSkills,
     toolClaimants,
+    scopedSkillTools,
     inputsArmed,
     argumentSources,
     resultsArmed,
@@ -230,7 +235,7 @@ export function buildChart(
   // evaluator refuse a hidden skill on every activation path; the mount
   // publishes them on scope for every model-facing composer after it.
   const hiddenSkillIdsForEngine = this.hiddenSkillIdsNow();
-  const injectionEngineSubflow = buildInjectionEngineSubflow({
+  const injectionConfig: InjectionEngineConfig = {
     injections: this.configuration.injections,
     ...(hiddenSkillIdsForEngine && { hiddenSkillIds: hiddenSkillIdsForEngine }),
     ...(this.configuration.skillGraphNextSkill && {
@@ -256,7 +261,21 @@ export function buildChart(
     // The maps kernel (9.58.0): the Evaluate stage owns the engagement
     // advance, with the same ctx the triggers gate on.
     ...(this.configuration.mapsPlan !== undefined && { engagement: this.configuration.mapsPlan }),
-  });
+  };
+  const injectionEngineSubflow = buildObservedInjectionEngine(
+    injectionConfig,
+    scopedSkillTools.size === 0
+      ? undefined
+      : (scope, injections, ctx, hidden) =>
+          evaluateForToolSelection(
+            this.native.runExecution().forScope(scope).value.servedTools,
+            injections,
+            ctx,
+            scopedSkillTools,
+            toolClaimants,
+            hiddenSkillIdsForEngine ? hidden : [],
+          ),
+  );
   // The turn-start slot's occupant (SG-C). RouteTurn — the cascade — mounts
   // ONLY when the graph runs it: a classifier is configured, or the mount
   // declared `continuity: 'conversation'`. Every other graph keeps exactly
@@ -335,6 +354,7 @@ export function buildChart(
   // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
   // late-binding pattern as seed for toolSchemas (computed below).
   const callLLMFor = requestFactory({
+    registrations: { registryByName, toolClaimants },
     configuration: this.configuration,
     argumentSources,
     governsOutput,
@@ -354,6 +374,7 @@ export function buildChart(
     toolColumns,
     toolRowsets,
     rowsetDeclaringToolsForValues,
+    resolverForValues,
     revisionWithholdsTools: () => this.revisionWithholdsTools(),
   });
 

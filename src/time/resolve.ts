@@ -35,12 +35,9 @@
  * | any mention that names no zone, while the clock's zone is unknown (`zoneSource: 'unknown'`, G15) | none — the person's zone is asked first (`needsZone`) |
  * | an abbreviation in the app's map (`PST`) | its zone's reading AND its literal offset's, when they name different windows — tagged `abbreviation`, noted `zone-read` |
  *
- * The fixed laws: a time is read to the END OF ITS GRAIN ("to 8:40" is
- * `[08:00, 08:41)`, a lone "9 AM" is `[09:00, 10:00)`, a day ends at the next
- * midnight — each noted `end-of-grain`) EXCEPT a range end said as an
- * o'clock hour, which is a boundary on the clock face and ends AT that
- * instant ("8 AM to 9 AM" is `[08:00, 09:00)`, no note — `endOf`); whether
- * an end was widened is asked of `widenedGrain`, never of `grain`. A day
+ * Clock ranges end at the stated cutoff. Standalone times and calendar
+ * ranges still include their last named grain, recorded as `end-of-grain`.
+ * Whether an older end was widened is asked of `widenedGrain`. A day
  * starts at its first instant (Temporal's `startOfDay`: a midnight the
  * clocks skip starts the day at the first wall time that exists); a zone the
  * person did not say is the clock's; a zone they said is an IANA name, a
@@ -80,6 +77,7 @@
 
 import { instantOf, spellInstant, type InstantText } from './instant.js';
 import { isTimeRange } from './range.js';
+import { windowEndpointOf } from './windowEndpoint.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import type { Grain } from './present.js';
 import type { TimeParts, TimeWall } from './reader.js';
@@ -228,13 +226,11 @@ function agrees(a: ReadingTags, b: ReadingTags): boolean {
 }
 
 /**
- * Where a range's END side ends (§ 3.3): an o'clock hour ("to 9 AM") is a
- * boundary on the clock face and ends AT that instant; any other end — a
- * minute ("to 8:40" → `08:41`), a second, a whole day — runs to the end of
- * its grain. `widened` says which, for the `end-of-grain` note.
+ * A clock cutoff is exact. A named calendar period still includes its last grain.
  */
 function endOf(r: Point): { readonly ms: number; readonly widened: boolean } {
-  return r.grain === 'hour' ? { ms: r.fromMs, widened: false } : { ms: r.toMs, widened: true };
+  const cutoff = r.grain === 'hour' || r.grain === 'minute' || r.grain === 'second';
+  return cutoff ? { ms: r.fromMs, widened: false } : { ms: r.toMs, widened: true };
 }
 
 function fromSides(l: Point, r: Point, clock: ResolveClock): Built | undefined {
@@ -244,6 +240,7 @@ function fromSides(l: Point, r: Point, clock: ResolveClock): Built | undefined {
   const to = spell(end.ms, r.zone);
   if (from === undefined || to === undefined) return undefined;
   const range = { from, to };
+  const endpoint = end.widened ? undefined : windowEndpointOf(to, 'exclusive', r.grain);
   const tags: ReadingTags = {
     ...((l.tags.dateOrder ?? r.tags.dateOrder) !== undefined && {
       dateOrder: l.tags.dateOrder ?? r.tags.dateOrder,
@@ -260,6 +257,7 @@ function fromSides(l: Point, r: Point, clock: ResolveClock): Built | undefined {
     candidate: {
       window: { kind: 'range', range },
       range,
+      ...(endpoint !== undefined && { endpoint }),
       zone: windowZone(l.zone, clock),
       grain: finer(l.grain, r.grain),
       implied: partsIn([...l.implied, ...r.implied]),

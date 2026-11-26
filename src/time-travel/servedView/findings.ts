@@ -16,7 +16,7 @@ import { readAtCall, readRunConstant } from './recordReads.js';
  * The serve mode `seed` put on the record (`findingsServe`), narrowed the way
  * every run constant is: only the one non-default literal changes anything,
  * and an absent or unrecognised value is the default the wire itself falls
- * back to (`callLLM.ts · buildCallLLMStage`, `deps.findingsServe ?? …`) — so
+ * back to (`callLLM/prepareCall.ts · prepareCall`, `deps.findingsServe ?? …`) — so
  * an unarmed run, which never wrote the key, collapses nothing.
  */
 function servedModeOf(value: unknown): FindingsServeMode {
@@ -49,7 +49,7 @@ export function findingsAt(
 ] {
   // ── the findings ledger, served (9.101.0, step 3) ──────────────────────
   // The SAME two pure functions the stage used, over the SAME committed
-  // inputs, in the SAME order (`callLLM.ts · buildCallLLMStage`): the piece
+  // inputs, in the SAME order (`callLLM/prepareCall.ts · prepareCall`): the piece
   // from the ledger at the call and the wire's tool ids (nothing else — no
   // call number, so a re-ask rebuilds the same bytes it served) — derived
   // here as the stage derived them, from the COMMITTED conversation BEFORE

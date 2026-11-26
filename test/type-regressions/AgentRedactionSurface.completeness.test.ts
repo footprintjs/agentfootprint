@@ -56,6 +56,7 @@ export const AGENT_PUBLIC_SURFACE: { readonly [K in keyof Agent]-?: SurfaceKind 
   canExplain: 'structure',
   // ── The caller's own, in-process: never served ─────────────────────────
   run: 'callers-own',
+  endTurn: 'callers-own',
   runTyped: 'callers-own',
   followUp: 'callers-own',
   resume: 'callers-own',

@@ -40,10 +40,12 @@ import { isTimeReplyEvidence, type TimeReplyEvidence } from './replyRecord.js';
 import { isCorrectedMeaning } from './rows/meaning.js';
 import { instantOf } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
+import { isCallDrift, widenedOk } from './rows/shapes.js';
 import { isZoneName, type ZoneName } from './zone.js';
 import { isTimeParts, type TimeParts } from './reader.js';
 import { TIME_REFUSALS, type TimeRefusal } from './periodForm.js';
 import { candidateIsWellFormed, choiceIsWellFormed } from './resolveRecord.js';
+import { isRecordedWindow, type WindowEndpoint } from './windowEndpoint.js';
 import type {
   CallRow,
   CallWindowRow,
@@ -133,6 +135,7 @@ export function timeAnswerRow(
     readonly range: TimeRange;
     readonly zone: ZoneName;
     readonly how: 'confirmed' | 'edited';
+    readonly endpoint?: WindowEndpoint;
     readonly corrected?: TimeAnswerRow['corrected'];
   },
   at: { readonly turn: number; readonly iteration: number },
@@ -146,6 +149,7 @@ export function timeAnswerRow(
     to: answer.range.to,
     zone: answer.zone,
     how: answer.how,
+    ...(answer.endpoint !== undefined && { endpoint: { ...answer.endpoint } }),
     ...(answer.corrected !== undefined && { corrected: { ...answer.corrected } }),
   };
 }
@@ -306,7 +310,7 @@ function isKept(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const k = value as Record<string, unknown>;
   return (
-    isInstant(k.now) && isZoneName(k.zone) && (k.window === undefined || isTimeRange(k.window))
+    isInstant(k.now) && isZoneName(k.zone) && (k.window === undefined || isRecordedWindow(k.window))
   );
 }
 
@@ -319,14 +323,14 @@ function isPassed(value: unknown): boolean {
     keys.every((k) => k === 'now' || k === 'zone' || k === 'window') &&
     (p.now === undefined || isInstant(p.now)) &&
     (p.zone === undefined || isZoneName(p.zone)) &&
-    (p.window === undefined || isTimeRange(p.window))
+    (p.window === undefined || isRecordedWindow(p.window))
   );
 }
 
 function isControlWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const { source, ...range } = value as Record<string, unknown>;
-  return source === 'control' && isTimeRange(range);
+  return source === 'control' && isRecordedWindow(range);
 }
 
 const nonEmpty = (value: unknown): boolean => typeof value === 'string' && value.length > 0;
@@ -374,7 +378,7 @@ const WHYS = ['no-window', 'several-mentions', 'open-reading', 'no-exact-form'];
 
 function isPersonWindow(value: unknown): boolean {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const { source, mention, ...range } = value as Record<string, unknown>;
+  const { source, mention, frozenLookback, ...range } = value as Record<string, unknown>;
   return (
     (source === 'said' ||
       source === 'derived-from-reading' ||
@@ -382,24 +386,9 @@ function isPersonWindow(value: unknown): boolean {
       source === 'control') &&
     (mention === undefined || isCount(mention)) &&
     (source === 'control') === (mention === undefined) &&
-    isTimeRange(range)
+    (frozenLookback === undefined || (frozenLookback === true && range.endpoint !== undefined)) &&
+    isRecordedWindow(range)
   );
-}
-
-function isRangeList(value: unknown): boolean {
-  return Array.isArray(value) && value.length >= 1 && value.length <= 2 && value.every(isTimeRange);
-}
-
-/** A widened fill's fields: `sent` with exactly one of `differs` / `trimmedByTool`, or none of the three. */
-function widenedOk(row: Readonly<Record<string, unknown>>): boolean {
-  if (row.sent === undefined) return row.differs === undefined && row.trimmedByTool === undefined;
-  if (!isTimeRange(row.sent)) return false;
-  if (row.trimmedByTool !== undefined)
-    return row.trimmedByTool === true && row.differs === undefined;
-  const differs = row.differs;
-  if (differs === null || typeof differs !== 'object' || Array.isArray(differs)) return false;
-  const d = differs as Record<string, unknown>;
-  return Object.keys(d).length === 1 && isRangeList(d.extra);
 }
 
 function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
@@ -417,6 +406,7 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
       'sent',
       'differs',
       'trimmedByTool',
+      'coversAtDispatch',
       'partlyBeyondRetention',
       'refused',
       'argument',
@@ -435,6 +425,7 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
           'sent',
           'differs',
           'trimmedByTool',
+          'coversAtDispatch',
           'partlyBeyondRetention',
         ) &&
         formOk &&
@@ -487,14 +478,6 @@ function isCallWindowRow(row: Readonly<Record<string, unknown>>): boolean {
   }
 }
 
-function isCallDrift(value: unknown): boolean {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const d = value as Record<string, unknown>;
-  if (typeof d.byMs !== 'number' || !Number.isSafeInteger(d.byMs) || d.byMs === 0) return false;
-  if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);
-  return d.outcome === 'shifted' && Object.keys(d).length === 2;
-}
-
 /** A `time-answer` row: its mention, range, zone, how and optional canonical correction. */
 function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
   const { kind: _k, turn: _t, iteration: _i, mention, zone, how, corrected, ...range } = row;
@@ -505,7 +488,7 @@ function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
     isCount(mention) &&
     isZoneName(zone) &&
     (how === 'confirmed' || how === 'edited') &&
-    isTimeRange(range) &&
+    isRecordedWindow(range) &&
     (corrected === undefined || isCorrectedMeaning(corrected, range))
   );
 }

@@ -48,6 +48,25 @@ export const RECORDING_ARTIFACT_KIND = 'recording/run';
  */
 export const CHART_WALK_ARTIFACT_KIND = 'recording/chart-walk';
 
+/**
+ * The kind of a recording saved IN PARTS: the index that names every part.
+ *
+ * A saved recording takes one of two layouts. The whole layout is one artifact
+ * of kind {@link RECORDING_ARTIFACT_KIND}. The parts layout is one index of
+ * this kind, one base part and a few invocation parts, all of kind
+ * {@link RECORDING_PART_ARTIFACT_KIND} and all in the same scope. The receipt
+ * names the index. Its own kind keeps every reader that expects a whole
+ * recording from reading an index as one. `openSavedRecording` (from
+ * `agentfootprint/observe`) opens either layout. An agent saves in parts with
+ * `artifacts: { recordings: { layout: 'parts' } }`.
+ */
+export const RECORDING_INDEX_ARTIFACT_KIND = 'recording/run-index';
+
+/** The kind of one part of a recording saved in parts: the base part (the
+ *  recording without its subflow results) or a group of invocation results.
+ *  Only its index says which recording it belongs to. */
+export const RECORDING_PART_ARTIFACT_KIND = 'recording/run-part';
+
 /** The media type a recording is minted with. */
 export const RECORDING_MEDIA_TYPE = 'application/json';
 

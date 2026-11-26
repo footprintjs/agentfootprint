@@ -42,6 +42,26 @@ import type { LLMMessage } from '../provider-contract/types.js';
 import type { ActiveInjection, Injection } from '../injection-engine/types.js';
 import { iterationsRemainingOf } from '../lib/iterationBudget.js';
 
+interface CacheHistory {
+  readonly length: number;
+  readonly deliveries: readonly {
+    readonly index: number;
+    readonly injectionId: string;
+    readonly flavor: NonNullable<LLMMessage['injectedBy']>['flavor'];
+  }[];
+}
+
+/** Carry post-window positions across the cache mount without copying the conversation. */
+export function cacheHistoryFor(history: readonly LLMMessage[]): CacheHistory {
+  const deliveries: CacheHistory['deliveries'][number][] = [];
+  for (const [index, message] of history.entries()) {
+    const by = message.injectedBy;
+    if (by !== undefined)
+      deliveries.push({ index, injectionId: by.injectionId, flavor: by.flavor });
+  }
+  return { length: history.length, deliveries };
+}
+
 /**
  * Subflow scope state. Set via inputMapper from the agent's parent
  * scope; produces `cacheMarkers` consumed by the BuildLLMRequest stage.
@@ -69,16 +89,8 @@ export interface CacheDecisionState {
   readonly systemPromptCachePolicy: CachePolicy;
   /** Global kill switch. When `true`, subflow emits zero markers. */
   readonly cachingDisabled: boolean;
-  /**
-   * The window as the request will carry it (7.21) — post-window-strategy,
-   * post-delivery. Only the `messages` marker needs it, and it needs it for
-   * one reason: that marker's `boundaryIndex` is read by providers as an
-   * index INTO THIS ARRAY, so it has to be computed here from the array
-   * itself. Optional so the standalone/unit uses of `computeCacheMarkers`
-   * that predate delivery keep working; absent means no messages marker —
-   * neither a delivered-message one nor the conversation tail.
-   */
-  readonly history?: readonly LLMMessage[];
+  /** Post-window conversation length and delivered positions, before request-only lines are restored. */
+  readonly cacheHistory?: CacheHistory;
   /**
    * `true` when the tool schemas are re-decorated on every call — the
    * findings offer (`.findings()`) binds the served result ids into every
@@ -226,7 +238,8 @@ export function computeCacheMarkers(
     }
   }
 
-  const history = state.history ?? [];
+  const history = state.cacheHistory;
+  if (history === undefined) return markers;
   const messagesMarker = messagesMarkerFor(history, cacheableById);
   if (messagesMarker) markers.push(messagesMarker);
 
@@ -259,14 +272,13 @@ export function computeCacheMarkers(
  * read. Fail-closed, like every other unknown in this file.
  */
 function conversationTailMarker(
-  history: readonly LLMMessage[],
+  history: CacheHistory,
   cacheableById: ReadonlyMap<string, boolean>,
   prefixCacheable: boolean,
 ): CacheMarker | undefined {
   if (!prefixCacheable || history.length === 0) return undefined;
-  for (const m of history) {
-    const by = m.injectedBy;
-    if (by !== undefined && cacheableById.get(by.injectionId) !== true) return undefined;
+  for (const { injectionId } of history.deliveries) {
+    if (cacheableById.get(injectionId) !== true) return undefined;
   }
   const boundary = history.length - 1;
   return {
@@ -299,18 +311,16 @@ function conversationTailMarker(
  * decision does not invent one for it.
  */
 function messagesMarkerFor(
-  history: readonly LLMMessage[],
+  history: CacheHistory,
   cacheableById: ReadonlyMap<string, boolean>,
 ): CacheMarker | undefined {
   let boundary = -1;
   let lastReason = '';
   let count = 0;
-  for (let i = 0; i < history.length; i++) {
-    const by = history[i]!.injectedBy;
-    if (by === undefined) continue;
-    if (cacheableById.get(by.injectionId) !== true) break;
-    boundary = i;
-    lastReason = `${by.flavor}:${by.injectionId}`;
+  for (const { index, injectionId, flavor } of history.deliveries) {
+    if (cacheableById.get(injectionId) !== true) break;
+    boundary = index;
+    lastReason = `${flavor}:${injectionId}`;
     count++;
   }
   if (boundary < 0) return undefined;
@@ -361,7 +371,7 @@ export function cacheDecisionStage(
       cumulativeInputTokens: scope.cumulativeInputTokens,
       systemPromptCachePolicy: scope.systemPromptCachePolicy,
       cachingDisabled: scope.cachingDisabled,
-      ...(scope.history !== undefined && { history: scope.history }),
+      cacheHistory: scope.cacheHistory,
       ...(toolsVaryPerCall && { toolsVaryPerCall: true }),
     });
   };

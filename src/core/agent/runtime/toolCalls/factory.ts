@@ -66,6 +66,11 @@ function evidenceExemptOf(
 export function toolCallsFactory(environment: ToolCallsEnvironment) {
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildToolCallsHandler({
+      ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
+        get sourceConsultation() {
+          return run.value.sourceConsultation;
+        },
+      }),
       registryByName: environment.registryByName,
       // WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — read by the unknown-tool
       // roster so a role that may not see a skill is not told the names of the
@@ -184,6 +189,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       ...(environment.artifactStore && { artifactStore: environment.artifactStore }),
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceConfig: environment.configuration.sourceEvidenceConfig,
+      }),
+      ...(environment.configuration.citationOptions !== undefined && {
+        citationOptions: environment.configuration.citationOptions,
       }),
       // The placement threshold (9.22.0) — only ever set beside a store (the
       // option's own shape enforces it). Absent → results are never measured

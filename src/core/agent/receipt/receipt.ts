@@ -108,6 +108,8 @@ import { stableJson } from '../../../lib/stableJson.js';
 import { measureRequest, type RequestMeasurement } from './requestMeasurement.js';
 import type { ReceiptDigests, RunDigests } from './receiptDigests.js';
 
+import type { ReceiptAttentionOmission, ReceiptToolSelection } from './omissions.js';
+export type { ReceiptAttentionOmission } from './omissions.js';
 export type { RequestMeasurement, RequestJsonSize } from './requestMeasurement.js';
 
 /** What {@link receiptPieces} needs from one committed injection record — the
@@ -160,8 +162,8 @@ export const UNSERIALIZABLE = '\u001F<unserializable>';
  * ── THE MECHANISM, WHICH THE PRINTED SENTENCE NO LONGER NAMES (9.88.0) ─────
  * `buildReceipt` is called with the request about to be passed to
  * `LLMProvider.complete` — the PORT, this library's last sight of it. Four
- * stages call it since 9.91.0: the agent charts' (`stages/callLLM.ts`),
- * `LLMCall.ts` · `callLLM`, and the two message-API charts' through
+ * stages call it since 9.91.0: the agent charts' (`stages/callLLM/prepareCall.ts`),
+ * `LLMCall/chart.ts` · `callLLM`, and the two message-API charts' through
  * `messageApiReceipt.ts`. Three things sit downstream of that call and none of them is on the
  * record: a provider decorated by the consumer (`complete()` wrapping
  * `complete()`), a vendor adapter's own serializer, and the vendor's
@@ -307,16 +309,6 @@ export interface ReceiptParams {
   readonly outputFormat?: { readonly type: string; readonly schemaHash: string };
 }
 
-/** What a budget dropped before the request was composed — the window's
- *  evictions at this iteration's head. */
-export interface ReceiptAttentionOmission {
-  readonly count: number;
-  /** One hash per dropped turn — the turn's own `messages.entries[].hash`, so
-   *  it pairs with the receipt that last served it. See the first law for why
-   *  not the text. */
-  readonly hashes: readonly string[];
-}
-
 /**
  * THE RECEIPT. One per composed request, committed at the call-llm stop.
  *
@@ -332,6 +324,8 @@ export interface ReceiptAttentionOmission {
  * ```
  */
 export interface Receipt {
+  /** Visible tool exclusions and competing claims proved on this accepted request. */
+  readonly toolSelection?: ReceiptToolSelection;
   /**
    * Actual leaf-provider preparation omitted thinking after this port receipt
    * was minted. Original hashes/measurement/cache verdict remain port-level;

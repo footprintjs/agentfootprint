@@ -1,6 +1,6 @@
-import type { LLMToolSchema } from '../../../../provider-contract/types.js';
+import type { ReadSkillFor } from '../../../slots/composeSkillCatalog.js';
 import { isDevMode } from 'footprintjs';
-import { buildReadSkillTool } from '../../../../injection-engine/skillTools.js';
+import { resolveReadSkillDescriptor } from '../../../../injection-engine/skillToolDescriptors.js';
 import { checkerGoverns } from '../../../../provider-contract/types.js';
 import { readPermissionDecision } from '../../../../provider-contract/permissionDecision.js';
 import { skillTarget } from '../../../../security/skillTarget.js';
@@ -51,17 +51,7 @@ export function openSkillIds(this: Pick<AgentContext, 'configuration'>): readonl
  */
 export function readSkillOfferFor(
   this: Pick<AgentContext, 'configuration' | 'governsSkillVisibility' | 'openSkillIds'>,
-):
-  | ((args: {
-      readonly currentSkillId?: string;
-      readonly hiddenSkillIds?: readonly string[];
-      readonly menu?: {
-        readonly candidates: ReadonlyArray<{ readonly id: string; readonly relevance?: number }>;
-        readonly cursorId?: string;
-        readonly stay?: boolean;
-      };
-    }) => LLMToolSchema | undefined)
-  | undefined {
+): ReadSkillFor | undefined {
   const skills = this.configuration.injections.filter((i) => i.flavor === 'skill');
   if (skills.length === 0) return undefined;
   const filtersByRole = this.governsSkillVisibility();
@@ -87,24 +77,30 @@ export function readSkillOfferFor(
   // construction (9.86.0). The descriptor withholds the tool entirely when
   // nothing is left to open, and explains the tree when something is.
   const treeRouted = reachable !== undefined && this.configuration.skillGraphIsTree;
-  return (args) => {
+  return (args, treeWithheld) => {
+    if (filtersByRole && args.hiddenSkillIds === undefined) return undefined;
     const grantable = reachable
       ? [...new Set([...reachable(args.currentSkillId), ...open])]
       : undefined;
-    // `undefined` when the offer is WITHHELD — the tools slot then drops the
-    // schema from the request. (`skills` is non-empty, so an empty catalog is
-    // not one of the ways this can be undefined.)
-    return buildReadSkillTool(skills, {
-      ...(grantable !== undefined && { grantable }),
-      ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
-      // WHERE THE MODEL STANDS (9.84.0) — unconditional, unlike the menu below.
-      // The description names it, and stops listing it as unreachable.
-      ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
-      // The turn-start menu (SG-C) — the tools slot passes it only while the
-      // verdict is outstanding; describeOffer leads with it.
-      ...(args.menu !== undefined && { menu: args.menu }),
-      ...(treeRouted && { treeRouted: true }),
-    })?.schema;
+    // An empty visible catalog or a tree without an open skill withholds the door.
+    const descriptor = resolveReadSkillDescriptor(
+      skills,
+      {
+        ...(grantable !== undefined && { grantable }),
+        ...(args.hiddenSkillIds !== undefined && { hiddenIds: args.hiddenSkillIds }),
+        // WHERE THE MODEL STANDS (9.84.0) — unconditional, unlike the menu below.
+        // The description names it, and stops listing it as unreachable.
+        ...(args.currentSkillId !== undefined && { cursorId: args.currentSkillId }),
+        // The turn-start menu (SG-C) — the tools slot passes it only while the
+        // verdict is outstanding; describeOffer leads with it.
+        ...(args.menu !== undefined && { menu: args.menu }),
+        ...(treeRouted && { treeRouted: true }),
+      },
+      treeWithheld,
+    );
+    if (!descriptor) return undefined;
+    const { name, description, inputSchema } = descriptor;
+    return { name, description, inputSchema };
   };
 }
 

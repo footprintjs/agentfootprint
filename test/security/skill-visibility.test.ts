@@ -3,7 +3,7 @@
  * with the skill catalog.
  *
  *   P1 Unit         — `hiddenIds` removes a row from the menu the model reads,
- *                     and NEVER narrows the enum
+ *                     and supplies the same visible IDs to the enum
  *   P2 Boundary     — no checker, or a checker that does not govern
  *                     `'skill_read'`, is byte-identical to today
  *   P3 Scenario     — a role sees a filtered catalog; the other role sees the
@@ -22,8 +22,8 @@
  *   P7 ROI          — one policy object drives both halves: the menu and the
  *                     activation, so they cannot disagree
  *
- * Why the enum stays whole: `toolArgValidation` defaults to `'enforce'` and runs
- * BEFORE the gate. Narrowing the enum would turn a policy refusal into a generic
+ * Why visible off-route IDs stay in the enum: `toolArgValidation` defaults to `'enforce'` and runs
+ * BEFORE the gate. Narrowing by route would turn a routing refusal into a generic
  * schema error, and the model would never read the policy's own message — the
  * same reasoning 8.5.0 recorded for the skill-graph offer.
  */
@@ -123,16 +123,15 @@ describe('buildReadSkillTool — hiddenIds', () => {
     expect(d).not.toContain('payroll');
   });
 
-  it('never narrows the ENUM — a policy refusal must reach the model, not a schema error', () => {
+  it('offers the complete role-visible enum, including visible off-route skills', () => {
     const tool = buildReadSkillTool(skills, { hiddenIds: ['payroll'] })!;
     const ids = (tool.schema.inputSchema as { properties: { id: { enum?: string[] } } }).properties
       .id.enum;
-    expect(ids).toEqual(['refunds', 'payroll', 'lookup']);
+    expect(ids).toEqual(['refunds', 'lookup']);
   });
 
   it('says so plainly when a role has nothing left', () => {
-    const d = buildReadSkillTool(skills, { hiddenIds: [...SKILLS] })!.schema.description;
-    expect(d).toContain('No skills are available to you');
+    expect(buildReadSkillTool(skills, { hiddenIds: [...SKILLS] })).toBeUndefined();
   });
 
   it('composes with the graph offer — hidden ids appear in NEITHER section', () => {
@@ -783,7 +782,7 @@ describe('fail closed, and never leak the body', () => {
       },
     };
     const menus = await menusFor(checker);
-    expect(menus[0]).toContain('No skills are available to you');
+    expect(menus).toEqual(['(no read_skill)']);
   });
 
   it('an answer it does not recognise still hides the skill, as before the shared reader', async () => {
@@ -797,7 +796,7 @@ describe('fail closed, and never leak the body', () => {
         check: () => ({ result }),
       } as unknown as PermissionChecker;
       const menus = await menusFor(checker);
-      expect(menus[0]).toContain('No skills are available to you');
+      expect(menus).toEqual(['(no read_skill)']);
     }
     const open: PermissionChecker = {
       name: 'open',

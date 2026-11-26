@@ -1,6 +1,7 @@
 import type { FindingsLedger } from '../../findings/types.js';
 import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { NegativeCheckpoint } from '../../negativeClaims/checkpoint.js';
+import type { CitationCheckpoint } from '../../citations/checkpoint.js';
 import type { AgentState } from '../../types.js';
 import type { TypedScope } from 'footprintjs';
 import type { MemoryStore } from '../../../../memory/store/index.js';
@@ -66,6 +67,7 @@ export interface PendingResumeHistory {
   readonly toolTurnEvidence?: ToolTurnEvidence;
   readonly requestReplay?: RequestReplayValue;
   readonly negatives?: NegativeCheckpoint;
+  readonly citations?: CitationCheckpoint;
   readonly innerCallPolicyArgs?: import('../../../../redaction/innerCallPolicyCarrier.js').InnerCallPolicyCarrier;
   /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */
   readonly placedTickets?: readonly import('../../placedTickets.js').PlacedTicket[];
@@ -103,12 +105,17 @@ function historyForTurn(
 export function seedHistoryForTurn(
   scope: TypedScope<AgentState>,
   resume: PendingResumeHistory | undefined,
-  message: string,
+  message: string | undefined,
 ): readonly LLMMessage[] {
-  const history = historyForTurn(resume, message);
+  const history =
+    message === undefined ? [...(resume?.history ?? [])] : historyForTurn(resume, message);
   scope.history = history;
   if (resume?.appendsUserTurn === false && resume.requestReplay !== undefined)
     writeRequestReplay(scope, resume.requestReplay);
+  if (resume?.appendsUserTurn === false && resume.citations !== undefined) {
+    scope.resultIdentities = resume.citations.claimVerification;
+    scope.citationSources = resume.citations.citationSources;
+  }
   return history;
 }
 

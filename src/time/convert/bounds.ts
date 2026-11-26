@@ -1,6 +1,7 @@
 import { instantOf, spellInstant } from '../instant.js';
 import { dateOf, epochFromText, wallOf, type BoundAs, type PeriodForm } from '../periodForm.js';
-import type { Edge } from '../range.js';
+import type { Edge, TimeRange } from '../range.js';
+import { readControlWindow } from '../windowEndpoint.js';
 import { isZoneName, wallAt, type ZoneName } from '../zone.js';
 import {
   midnightOf,
@@ -10,7 +11,7 @@ import {
   spellWall,
   uniqueInstant,
 } from './calendar.js';
-import type { Ms } from './instants.js';
+import { spanRange, type Ms } from './instants.js';
 
 /** The zone a wall or date form is written in: its zone argument's (the window's), else the app's under `wallZone`. */
 function formZone(
@@ -103,6 +104,47 @@ function readBound(
   }
 }
 
+/** The half-open end an inclusive ISO bound names on its written grid; none when it is written past the millisecond. */
+function gridEnd(value: unknown): number | undefined {
+  const at = instantOf(value, 'strict');
+  if (at === undefined || at.nanos !== 0) return undefined;
+  return at.ms + (at.precision === 'minute' ? 60_000 : at.precision === 'second' ? 1_000 : 1);
+}
+
+/** Read each bound on its own declared grid, with ISO cutoffs as exact points when confirmed. */
+function readPeriodBounds(
+  lower: { readonly value: unknown; readonly as: BoundAs },
+  upper: { readonly value: unknown; readonly as: BoundAs },
+  edge: Edge,
+  zone: ZoneName | undefined,
+  precise: true | undefined,
+): TimeRange | undefined {
+  if (precise === true && (lower.as === 'iso' || upper.as === 'iso')) {
+    const atUtc = (ms: number | undefined) =>
+      ms === undefined ? undefined : spellInstant({ ms, nanos: 0 }, 0);
+    const from =
+      lower.as === 'iso'
+        ? lower.value
+        : atUtc(readBound(lower.value, 'from', lower.as, 'inclusive', zone));
+    // An inclusive ISO end a TOOL FORM carries is the last instant inside on the grid it was
+    // written at (minute, second, millisecond — the pre-18 wire law, which tool parsers were
+    // built against); only one written past the millisecond is an exact point.
+    const onGrid = upper.as === 'iso' && edge === 'inclusive' ? gridEnd(upper.value) : undefined;
+    const to =
+      onGrid !== undefined
+        ? atUtc(onGrid)
+        : upper.as === 'iso'
+        ? upper.value
+        : atUtc(readBound(upper.value, 'to', upper.as, edge, zone));
+    const end = upper.as === 'iso' && onGrid === undefined ? edge : 'exclusive';
+    const window = readControlWindow({ from, to, end });
+    return window === undefined ? undefined : { from: window.from, to: window.to };
+  }
+  const from = readBound(lower.value, 'from', lower.as, 'inclusive', zone);
+  const to = readBound(upper.value, 'to', upper.as, edge, zone);
+  return from === undefined || to === undefined ? undefined : spanRange(from, to);
+}
+
 const epochOrText = (as: BoundAs, text: string): unknown =>
   as === 'epoch-ms' || as === 'epoch-s' ? epochFromText(text) : text;
 
@@ -119,4 +161,4 @@ function readZone(
   });
 }
 
-export { formZone, writeBound, readBound, epochOrText, readZone };
+export { formZone, writeBound, readBound, readPeriodBounds, epochOrText, readZone };

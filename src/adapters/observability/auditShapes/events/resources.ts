@@ -46,6 +46,11 @@ export function resourcesShapes() {
       actor: str,
     }),
 
+    'agentfootprint.memory.write_outcome': eventShape<'agentfootprint.memory.write_outcome'>({
+      memoryId: str,
+      outcome: oneOf('acknowledged', 'unknown'),
+    }),
+
     'agentfootprint.tools.offered': eventShape<'agentfootprint.tools.offered'>({
       availableIds: listOf(str),
       withheldIds: listOf(str),

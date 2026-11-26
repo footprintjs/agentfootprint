@@ -1,9 +1,27 @@
+import type { CommitValuesMode } from 'foottrace';
 import type { AttachRecorderOptions, FlowChartExecutorOptions } from 'footprintjs';
+import type { ProseCitationOptions } from '../citations/config.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
 /** Options for the events an Agent serves to live observers. */
 export interface AgentObservationOptions {
+  /** Offer citations in prose on adapters that can prove which tool bodies were submitted. */
+  readonly citations?: ProseCitationOptions;
+  /**
+   * Commit-log value encoding (#13c-B) — forwarded to the internal
+   * executor as `{ commitValues }`. Agent default is **`'delta'`**: a
+   * stage whose net change to a tracked array is "the old array plus a
+   * tail" (the agent's `history` every iteration) records ONLY the tail
+   * (`append` verb); key removals record a `delete` verb. LOSSLESS — any
+   * step's full value reconstructs by replay (`commitValueAt` from
+   * `foottrace`), which is why this is safe for audit trails.
+   * Retained commit-log memory becomes linear instead of quadratic.
+   * Set `'full'` for footprintjs's default encoding (every changed key
+   * stores its full final value) if a downstream consumer reads
+   * `bundle.overwrite[key]` as the complete value.
+   */
+  readonly commitValues?: CommitValuesMode;
   /**
    * Observer delivery tier (RFC-001 Block 10). Default `'inline'` —
    * byte-identical to every prior release: the Agent's bridge recorders

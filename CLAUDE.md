@@ -6,7 +6,8 @@ engine handlers belong upstream; they are closed extension seams here. Trust cur
 
 ## Before changing anything
 
-- Search [CAPABILITIES.md](CAPABILITIES.md), rather than reading the whole index; then
+- Search [CAPABILITIES.md](CAPABILITIES.md) and [.capabilities/](.capabilities/README.md) (rows
+  waiting for a release), rather than reading the whole index; then
   check the nearest export in `src/index.ts`.
 - Read the relevant README and scoped rule below before choosing an extension point.
 - Keep identifiers injective: use `encodeIdentityField`, with a collision check in the
@@ -19,11 +20,12 @@ engine handlers belong upstream; they are closed extension seams here. Trust cur
    before completion; send heavy suites, coverage, builds and installs to hosted CI first.
 2. Anything touching `src/` needs a fragment in [.changes/](.changes/README.md).
    Never edit `CHANGELOG.md`, bump the package version, or write version numbers; release computes them.
-3. A new public capability gets a CAPABILITIES row with Since `unreleased`.
+3. A new public capability gets one file in [.capabilities/](.capabilities/README.md) holding its
+   CAPABILITIES row with Since `unreleased`. Do not edit the `CAPABILITIES.md` table by hand.
 4. A user-visible feature gets a published how-to page and a runnable `examples/` program.
    Feature pages use `<CodeFile region>` to include example code rather than duplicate it.
 5. Regenerate with `npm run docs:regen` and commit its output. The `generated` job checks
-   the API mirror, docs-truth report, examples index, instruction copies and canonical notes.
+   the API mirror, examples index, instruction copies and canonical notes.
 6. Fast checks: `npm run lint`, `npm run format`, and `npx tsc --noEmit`.
 7. Keep docs separate: API reference is generated from export TSDoc; feature pages explain
    use, one example and gotchas; READMEs, scoped rules, designs and proposals hold internals.

@@ -16,7 +16,7 @@ import type {
 } from './types.js';
 
 export type RetainedReasonState = (
-  key: 'coverageDeclared' | 'findingsLedger' | 'settledToolCalls',
+  key: 'coverageDeclared' | 'findingsLedger' | 'settledToolCalls' | 'sourceConsultation',
   value: unknown,
 ) => unknown;
 
@@ -25,6 +25,7 @@ export function reasonUsesToolWords(reason: AssessmentReason): boolean {
 }
 
 interface DetailRead extends ReturnType<typeof outcomeDetailReader> {
+  readonly ungroundedEntity?: AssessmentReasonDetail['ungroundedEntity'];
   readonly wordsFor: (
     reason: AssessmentReason,
     witness: readonly AssessmentPointer[],
@@ -50,8 +51,16 @@ export function readReasonDetails(
   const periodOccurrence = periodWordsOccurrenceReader(() =>
     retain('findingsLedger', state.findingsLedger),
   );
+  const column = g.citations?.findings.find((finding) => finding.kind === 'column');
   return {
     ...outcomes,
+    ...(g.fired.has('ungrounded-entity') &&
+      column?.kind === 'column' && {
+        ungroundedEntity: {
+          name: column.name,
+          ...(column.nearestName !== undefined && { nearestName: column.nearestName }),
+        },
+      }),
     wordsFor: (reason, witness) =>
       readWords(reason, witness, periodUsesToolWords(reason) ? periodOccurrence : undefined),
   };
@@ -62,6 +71,11 @@ function detailOf(
   witness: readonly AssessmentPointer[],
   read: DetailRead,
 ): AssessmentReasonDetail | undefined {
+  if (reason === 'ungrounded-entity') {
+    return read.ungroundedEntity === undefined
+      ? undefined
+      : { ungroundedEntity: read.ungroundedEntity };
+  }
   if (reasonUsesToolWords(reason)) {
     const toolSays = read.wordsFor(reason, witness);
     return toolSays === undefined ? undefined : { toolSays };
@@ -81,6 +95,7 @@ export function assessmentValueOf(
   g: Gathered,
   sourceRead: SourceRead,
   detailRead: DetailRead,
+  consultation: AssessmentReasonDetail | undefined,
 ): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
   const reasons = REASONS.flatMap((entry) => {
     const witness = g.fired.get(entry.reason);
@@ -90,7 +105,10 @@ export function assessmentValueOf(
       witness.some((w) => w.kind === 'state' && w.path.endsWith('/declaredOn'))
         ? 'answer'
         : entry.source;
-    const detail = detailOf(entry.reason, witness, detailRead);
+    const detail =
+      entry.reason === 'source-not-consulted'
+        ? consultation
+        : detailOf(entry.reason, witness, detailRead);
     return [
       {
         reason: entry.reason,

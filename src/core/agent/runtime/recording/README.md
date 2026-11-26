@@ -9,3 +9,9 @@ An unfinished or paused turn files nothing. A store refusal emits the existing
 artifact refusal and preserves the answer. The saved recording precedes its
 own mint event. `recording.test.ts` keeps the existing resource-finalization
 scenario beside this owner; broader artifact-store tests remain in `test/artifacts`.
+
+With `recordings: { layout: 'parts' }` the same finalizer files the recording in
+parts (`recordingParts/file.ts · fileRecordingParts`): every part first, the
+index last, the receipt naming the index. A filing that cannot finish deletes
+what it wrote and emits one artifact refusal; real retention sweeps are still
+reported. The default `'whole'` path is unchanged.

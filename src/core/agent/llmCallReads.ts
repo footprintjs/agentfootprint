@@ -1,4 +1,5 @@
 import { readRequestReplay, type RequestReplayValue } from './requestTurn/state.js';
+import { responseStopFields } from './honesty/responseStop.js';
 
 /**
  * core/agent/llmCallReads — the run records CallLLM reads, READ-ONLY, inside
@@ -37,9 +38,21 @@ export function llmCallReadsInto(p: Readonly<Record<string, unknown>>): Record<s
     ...(p.compactions !== undefined && { compactions: p.compactions }),
     ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
     ...(p.placedTickets !== undefined && { placedTickets: p.placedTickets }),
+    ...(p.citationSources !== undefined && { citationSources: p.citationSources }),
     ...(replay !== undefined &&
       readRequestReplay(replay).closing !== undefined && {
         priorReplayThinking: p.thinkingBlocks,
       }),
+  };
+}
+
+/** A succeeding grouped call replaces response-owned facts, including an absent citation offer. */
+export function llmCallResponseFields(
+  state: Readonly<Record<string, unknown>>,
+  citations: boolean,
+) {
+  return {
+    ...responseStopFields(state),
+    ...(citations && { acceptedCitationOffer: state.acceptedCitationOffer }),
   };
 }

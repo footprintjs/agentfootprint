@@ -120,7 +120,42 @@ segment, a throwing resolver. The scope is read once into a frozen
 copy, so the value checked is the value sent. An empty batch stays
 a no-op, options or not (the port's law).
 
+## AgentCore conversational event payloads
+
+`AgentCoreStoreOptions.eventPayload` is a synchronous choice per entry: keep the
+default `{ kind: 'blob' }`, or return `{ kind: 'conversational', role, text }`
+with an explicitly selected `user`, `assistant`, `tool` or `other` role. The
+conversational path keeps the canonical JSON entry blob and adds one separate
+conversational item in the same CreateEvent body. Entry reads and versions still
+come from the blob. The selector receives detached entry data and is evaluated
+once per actual non-expired write; empty batches and unapplied CAS do not call it.
+An injected client must declare `forwardsEventPayload: true` to forward a
+conversation, and the built-in SDK path checks its serializer's modeled fields.
+Unsupported projection is refused rather than silently stored as blob only.
+
+Conversation text must contain 1–100,000 Unicode scalar values and at most
+100,000 UTF-8 bytes. The generated mixed event body has a 10,000,000 UTF-8-byte
+library ceiling. Invalid Unicode and excess data are refused, never truncated;
+the default blob path retains its existing behavior. Extraction skip and
+namespace scope use their existing write-option path.
+
+One admitted entry makes one adapter `client.createEvent` invocation and, on the
+built-in path, one `sdk.send` invocation. SDK or injected-transport wire retries
+remain governed by their existing policy; these invocation counts do not prove
+one physical request or exactly-once effects. A stored-event acknowledgement
+does not prove that asynchronous extraction finished.
+
+`delete` removes matching source events, and `forget` removes session events.
+Entry TTL hides entries from `get`/`list` and skips expired writes; it does not
+call DeleteEvent. None erases already-derived long-term records, which use
+their separate service retention and can remain searchable. `extraction: 'skip'`
+only skips extraction for the current event; it does not delete older records
+or cancel prior extraction. The offline
+`examples/memory/14-agentcore-conversational-events.ts` shows both payload choices.
+
 ## Files
 - `pgVector.ts`, `redis.ts`, `sqliteVector.ts`, `s3Vectors.ts` — durable stores.
 - `agentcore.ts`, `bedrockAgentMemory.ts`, `memoryBank.ts` — hosted memory
   services behind the same port.
+- `agentcore/` — AgentCore event projection, SDK translation, entry decoding and
+  identity/namespace rules behind the `agentcore.ts` facade.

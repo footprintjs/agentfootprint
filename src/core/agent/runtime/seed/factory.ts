@@ -1,3 +1,4 @@
+import { MAX_SELECTION_ROWS } from '../../../slots/providerOmissions.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
@@ -9,6 +10,8 @@ import type { AgentInput, RunConfig, RunConfigContext } from '../../types.js';
 import { buildSeedStage } from '../../stages/seed.js';
 import { type HonestyLayers } from '../../honesty/armed.js';
 import type { AgentConfiguration } from '../configuration/types.js';
+import { CITATION_PRIVATE_FIELDS } from '../../../../redaction/privateFields.js';
+import { canStorePrivateFields, markPrivateFields } from '../../../../redaction/runRedaction.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
@@ -39,7 +42,9 @@ export function seedFactory(environment: SeedEnvironment) {
       run.value.pendingResumeFindingsLedger = undefined;
       return l;
     };
-    return buildSeedStage({
+    const seed = buildSeedStage({
+      hostDecision: run.value.hostTurn !== undefined,
+      hostOnly: run.value.hostTurn?.hasInput === false,
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceMaxReceipts:
           environment.configuration.sourceEvidenceConfig.limits.maxReceipts,
@@ -110,6 +115,8 @@ export function seedFactory(environment: SeedEnvironment) {
       },
       consumePendingResumeHistory: () => {
         const h = run.value.pendingResumeHistory;
+        run.value.servedTools.remainingToolOmissions =
+          !h || h.appendsUserTurn ? MAX_SELECTION_ROWS : undefined;
         run.value.pendingResumeHistory = undefined;
         return h;
       },
@@ -207,9 +214,10 @@ export function seedFactory(environment: SeedEnvironment) {
       }),
       // The `'input'` half of the message chain, run BEFORE `userMessage` and
       // `history` are committed — see SeedStageDeps.messageMiddleware.
-      ...(environment.configuration.messageMiddleware.length > 0 && {
-        messageMiddleware: environment.configuration.messageMiddleware,
-      }),
+      ...(run.value.hostTurn?.hasInput !== false &&
+        environment.configuration.messageMiddleware.length > 0 && {
+          messageMiddleware: environment.configuration.messageMiddleware,
+        }),
       // `.configure()` — seed is where run-level facts are decided and
       // committed, so the resolver rides that commit. The closure supplies
       // the build-time defaults so a resolver can decide RELATIVE to them
@@ -227,5 +235,10 @@ export function seedFactory(environment: SeedEnvironment) {
         },
       }),
     });
+    if (environment.configuration.citationOptions === undefined) return seed;
+    return (scope: Parameters<typeof seed>[0]) => {
+      if (canStorePrivateFields(scope)) markPrivateFields(scope, CITATION_PRIVATE_FIELDS);
+      return seed(scope);
+    };
   };
 }

@@ -111,6 +111,16 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   'argument-asked': {
     state: { argumentAsk: { waiting: { requestId: 'question' }, iteration: 2 } },
   },
+  'source-not-consulted': {
+    state: {
+      sourceConsultation: {
+        complete: true,
+        offers: [{ group: '0', callable: 0 }],
+        attempted: [],
+        groups: [{ group: '0', callables: [0] }],
+      },
+    },
+  },
   'argument-assumed': argument({ source: 'default' }),
   'argument-unverified': argument({ source: 'model' }),
   'argument-read': argument({ source: 'said', reading: true }),
@@ -192,6 +202,31 @@ const SEEDS: Readonly<Record<AssessmentReason, Seed>> = {
   },
   'column-type-mismatch': integrity('column-type-mismatch'),
   'missing-column': integrity('missing-column'),
+  'ungrounded-entity': {
+    state: {
+      answerCitations: {
+        complete: true,
+        findings: [
+          {
+            kind: 'citation',
+            start: 0,
+            end: 4,
+            slot: 1,
+            outcome: 'unverified',
+            reason: 'scope-unresolved',
+          },
+          {
+            kind: 'column',
+            start: 0,
+            end: 4,
+            slot: 1,
+            reason: 'ungrounded-entity',
+            name: 'discount',
+          },
+        ],
+      },
+    },
+  },
   'value-unsupported': { state: { unsupportedValues: { candidates: [{ value: '3322' }] } } },
   'value-survived-revision': {
     state: { unsupportedValues: { candidates: [{ value: '3322' }], revised: true } },

@@ -54,6 +54,7 @@ import { isLibraryLimit } from './results/library-did/stage.js';
 import { isRetrievalReason } from './results/retrieval/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
+import { citationRecordForWarning } from './answer/citations/record.js';
 import type { AnswerAssessment } from './types.js';
 import {
   assessmentDataOf,
@@ -67,6 +68,7 @@ import {
 
 /** What the mount hands the stage — build-time facts, never scope. */
 export interface AnswerStageDeps extends AnswerLayerArm {
+  readonly checkOmission?: import('../honesty/sourceOmission.js').OmissionCheck;
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
@@ -93,7 +95,8 @@ function committedRecordOf(
   const record: Record<string, unknown> = {};
   for (const key of reads) {
     // An absent prose cutoff contributes no reason and must leave no read in the record.
-    if (key === 'llmLatestStopReason' && !(key in scope)) continue;
+    if ((key === 'llmLatestStopReason' || key === 'sourceConsultation') && !(key in scope))
+      continue;
     const value = scope.$getValue(key);
     if (value !== undefined) record[key] = value;
   }
@@ -135,11 +138,19 @@ export async function assessAnswerStage(
   ) {
     return;
   }
+  const citations = record.answerCitations;
+  if (citations !== undefined) {
+    record.answerCitations = citationRecordForWarning(
+      citations,
+      retainedStateValue(scope, 'answerCitations', citations),
+    );
+  }
   const assessed = assessLive(
     { sharedState: record },
     undefined,
     (history) => retainedStateValue(scope, 'history', history),
     (key, value) => retainedStateValue(scope, key, value),
+    deps.checkOmission,
   );
   // Filed for PrepareFinal (`turn_end.answerAssessment`), one stage later.
   scope.answerAssessment = assessmentDataOf(assessed);

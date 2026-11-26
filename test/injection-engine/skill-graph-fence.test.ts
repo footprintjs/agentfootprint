@@ -183,6 +183,36 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'without naming a provider.',
   ],
   [
+    'src/provider-contract/types/message.ts',
+    'The whole LLMMessage declaration moved behind the stable provider-port facade. ' +
+      'Its imports name only the same closed record/thinking vocabularies already reached here.',
+  ],
+  [
+    'src/provider-contract/types/request.ts',
+    'The whole LLMRequest declaration moved behind the stable provider-port facade. ' +
+      'It names the same message, tool-schema, caching and thinking contracts as before.',
+  ],
+  [
+    'src/provider-contract/types/response.ts',
+    'The whole LLMResponse, WireToolManifest and LLMChunk declarations moved behind the ' +
+      'stable provider-port facade; only the closed response vocabulary belongs here.',
+  ],
+  [
+    'src/provider-contract/intervention.ts',
+    'The response port names safe intervention evidence and its typed terminal refusals. ' +
+      'Its bounded projection and error classes have no imports, vendor, recorder or engine dependency.',
+  ],
+  [
+    'src/provider-contract/types/provider.ts',
+    'The whole LLMProvider, resilience-report and per-call hook declarations moved behind ' +
+      'the stable facade, with the same provider request/response and capability types.',
+  ],
+  [
+    'src/provider-contract/types/code.ts',
+    'The whole code/browser ports and their three member feature detectors moved from the ' +
+      'same already-allowed provider facade. They have no imports or vendor/engine dependency.',
+  ],
+  [
     'src/thinking/types.ts',
     'reached by `provider-contract/types.ts` for `ThinkingBlock`. No imports.',
   ],
@@ -250,6 +280,10 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
 const HOST_ZONE = [
   `${IE}/SkillRegistry.ts`,
   `${IE}/buildInjectionEngineSubflow.ts`,
+  // The native Evaluate stage projects its recorder payload here. Neither
+  // module is part of the standalone skill-graph host contract.
+  `${IE}/evaluationCatalog.ts`,
+  `${IE}/routingEntries.ts`,
   `${IE}/devWarnHost.ts`,
   `${IE}/index.ts`,
   `${IE}/leases.ts`,

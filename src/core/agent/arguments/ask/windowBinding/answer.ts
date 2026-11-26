@@ -1,6 +1,8 @@
 /** Walker: bind an admitted window answer without changing conversion or question policy. */
 import type { InputValue } from '../../../../../tools/inputRequest.js';
-import { parseRange } from '../../../../../time/range.js';
+import { parseRange, sameRange } from '../../../../../time/range.js';
+import { windowEndpointOf } from '../../../../../time/windowEndpoint.js';
+import { offeredLookback, type TurnWindow } from '../../../../../time/windows.js';
 import { chooseReading, resolveMention, withZoneAnswered } from '../../../../../time/resolve.js';
 import type { TimeAnswerRow } from '../../../../../time/rows.js';
 import { isZoneName } from '../../../../../time/zone.js';
@@ -68,6 +70,22 @@ export function bindWindowAnswer(
   const zone =
     at >= 0 ? window.zones?.[at] ?? time.zone : editedZone(range, window.zones, time.zone);
   if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
+  const reading = window.reading ?? time.reading?.row;
+  const candidate = reading?.candidates?.find(
+    (item) => item.zone === zone && sameRange(item.range, range),
+  );
+  const endpoint = at >= 0 ? candidate?.endpoint : windowEndpointOf(range.to);
+  const lookback = answerKind === 'edited' ? undefined : offeredLookback(reading, range);
+  const how = at >= 0 ? 'confirmed' : 'edited';
+  const answered = { range, zone, how, ...(endpoint !== undefined && { endpoint }) } as const;
+  const turnWindow: TurnWindow = {
+    source: 'answered',
+    mention: window.mention,
+    range,
+    zone,
+    ...(endpoint !== undefined && { endpoint }),
+    ...(lookback !== undefined && { lookback }),
+  };
   if (window.role === 'confirm-meaning') {
     const fills: Record<string, WindowFill> = Object.create(null);
     const filled: Record<string, WindowFilled> = Object.create(null);
@@ -87,15 +105,7 @@ export function bindWindowAnswer(
           },
         ];
       });
-      const one = windowFills(
-        { ...field, members },
-        range,
-        zone,
-        byAddress,
-        toolOf,
-        time,
-        answerKind !== 'edited',
-      );
+      const one = windowFills({ ...field, members }, turnWindow, byAddress, toolOf, time);
       if ('expected' in one) refused[windowAddressKey(field, address)] = one.expected;
       else {
         Object.assign(fills, one.fills);
@@ -106,14 +116,14 @@ export function bindWindowAnswer(
       fills,
       filled,
       refused,
-      answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' },
+      answered,
     };
   }
-  const bound = windowFills(field, range, zone, byAddress, toolOf, time, answerKind !== 'edited');
+  const bound = windowFills(field, turnWindow, byAddress, toolOf, time);
   if (!('fills' in bound)) return bound;
   return {
     fills: bound.fills,
     filled: bound.filled,
-    answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' },
+    answered,
   };
 }

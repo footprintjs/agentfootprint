@@ -76,20 +76,23 @@ async function runReadSkill(args: Record<string, unknown>, options: RunOptions =
 
 describe('public readSkillDescriptor — owned argument closure', () => {
   it.each([
-    ['plain', undefined],
-    ['scoped offer', { grantable: ['billing'], cursorId: 'alpha' }],
-    ['hidden skill', { grantable: ['billing'], hiddenIds: ['delta'] }],
-  ] as const)('%s closes arguments while retaining the complete id catalog', (_label, offer) => {
-    const descriptor = readSkillDescriptor(catalog(), offer)!;
-    expect(descriptor.name).toBe('read_skill');
-    expect(descriptor.inputSchema).toMatchObject({
-      type: 'object',
-      properties: { id: { type: 'string', enum: ['alpha', 'billing', 'delta'] } },
-      required: ['id'],
-      additionalProperties: false,
-    });
-    expect(Object.keys(descriptor.inputSchema.properties as object)).toEqual(['id']);
-  });
+    ['plain', undefined, ['alpha', 'billing', 'delta']],
+    ['scoped offer', { grantable: ['billing'], cursorId: 'alpha' }, ['alpha', 'billing', 'delta']],
+    ['hidden skill', { grantable: ['billing'], hiddenIds: ['delta'] }, ['alpha', 'billing']],
+  ] as const)(
+    '%s closes arguments while retaining the complete visible catalog',
+    (_label, offer, ids) => {
+      const descriptor = readSkillDescriptor(catalog(), offer)!;
+      expect(descriptor.name).toBe('read_skill');
+      expect(descriptor.inputSchema).toMatchObject({
+        type: 'object',
+        properties: { id: { type: 'string', enum: ids } },
+        required: ['id'],
+        additionalProperties: false,
+      });
+      expect(Object.keys(descriptor.inputSchema.properties as object)).toEqual(['id']);
+    },
+  );
 
   it.each(['extra', 'constructor', '__proto__'])('refuses an undeclared own %s argument', (key) => {
     const descriptor = readSkillDescriptor(catalog())!;

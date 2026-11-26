@@ -236,7 +236,11 @@ export async function invokeInitialTool(
             context: executionContext,
           })
         : undefined;
-    frame.execution.resultFinalizer?.entered(executionContext);
+    frame.execution.resultFinalizer?.entered(
+      executionContext,
+      frame.callArguments.callArgs,
+      frame.execution.negativeDispatch?.resultId ?? searchDispatch?.resultId,
+    );
     frame.execution.executed = true;
     frame.execution.submittedProgram = frame.programOfCall(
       frame.tool,
@@ -252,6 +256,7 @@ export async function invokeInitialTool(
         executionContext,
       );
       returned = true;
+      frame.execution.resultFinalizer?.captureReturned?.(frame.outcome.result);
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
       await binding.close(frame.env.signal);

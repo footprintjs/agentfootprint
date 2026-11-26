@@ -2,6 +2,7 @@
 and references, folded once from the request the call composed.
 
 ## What it reads / what it writes
+
 - Reads its arguments only: the composed request, its pieces and the run's
   digest memo. Nothing here reads scope, executes or emits.
 - Writes nothing itself. The call-llm stage and the message-API charts commit
@@ -9,8 +10,9 @@ and references, folded once from the request the call composed.
   the mint is `receipt.ts` · `buildReceipt`.
 
 ## Why it lives in core
-The receipt is minted by the call (`core/agent/stages/callLLM.ts`,
-`core/LLMCall.ts`, `core/agent/messageApiReceipt.ts`), so the mint sits with
+
+The receipt is minted by the call (`core/agent/stages/callLLM/prepareCall.ts`,
+`core/LLMCall/chart.ts`, `core/agent/messageApiReceipt.ts`), so the mint sits with
 the code that calls it. The readers stay in `time-travel/`:
 `time-travel/servedView.ts` · `servedAt` rebuilds the request from the
 record and `time-travel/servedView.ts` · `receiptAt` reads the receipt
@@ -29,6 +31,7 @@ evidence for comparing recorded request pieces within a run. Both the input enco
 and the truncated digest can be ambiguous.
 
 ## Files
+
 - `receipt.ts` — the receipt's shape, the salted hash (`receiptHash`), the
   digest inputs (`messageDigestInput`, `toolDigestInput`), the chained
   fingerprint (`transformHashOf`) and the mint (`buildReceipt`).
@@ -38,3 +41,24 @@ and the truncated digest can be ambiguous.
 - `servedRow.ts` — the value-free ranges of whole retained history entries
   offered at the provider port. The call stage writes at most one row next to
   its receipt. The row's consumer is the native attempt series.
+
+## Tools left out of a call
+
+An accepted request can add `toolSelection` to its receipt. The attempt's
+`consumer` identifies the call. Each `absent` row contains a visible tool name
+and the selection decision that excluded it. A `shadowed` row identifies a visible
+competing implementation by its position in this request’s list, in merge order.
+`name` was offered, `wonBy` identifies the winning channel and `lostBy` the losing
+channel. Two distinct implementations from the same channel can have identical rows.
+When a decision tree withholds its read_skill menu, `skillCatalog` contains the
+visible names left out of that menu, their retained count and the reason
+`tree-routed`. A routed skill may still contribute instructions. A visible
+off-route ID offered in the enum has no catalog omission. The skill rows
+share the same turn budget and accepted-request witness as the tool rows.
+These positions apply to one request. A `bounded` flag means the saved
+list is incomplete. An absent field leaves the tool selection unknown.
+
+The recorder retains up to 1,024 omission rows per user turn. A new question
+starts a fresh allowance. When restoring an interrupted turn on another executor, the
+checkpoint does not prove how many rows remain. The recorder leaves selection
+evidence out of subsequent receipts while that allowance is unknown.

@@ -1,18 +1,18 @@
 **Mixed** — two slot builders resolve what the model is served; the third is a
 record of it.
 Lens: `buildSystemPromptSlot.ts` (joined into the prompt by
-`../agent/stages/callLLM.ts` · `systemPrompt`) and `buildToolsSlot.ts` (the
+`../agent/stages/callLLM/prepareCall.ts` · `systemPrompt`) and `buildToolsSlot.ts` (the
 served tool list, the `read_skill` offer and the step narrowing; it reads
 `hiddenSkillIds` from its mount, resolved by the Injection Engine —
 `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`).
 Trace: `buildMessagesSlot.ts` — its own header says it is not the wire but the
 observability projection of the conversation.
 Correction to the text below: the three slots are not the whole wire. The
-request is assembled in `../agent/stages/callLLM.ts` · `buildCallLLMStage` —
-messages come from `scope.history` (`callLLM.ts` · `messages`), the tool list is
-EMPTIED on the wrap-up (`callLLM.ts` · `registeredToolSchemas`, the
+request is assembled in `../agent/stages/callLLM/prepareCall.ts` · `prepareCall` —
+messages come from `scope.history` (`callLLM/prepareCall.ts` · `messages`), the tool list is
+EMPTIED on the wrap-up (`callLLM/prepareCall.ts` · `registeredToolSchemas`, the
 `scope.wrapUpAsked` arm that yields `EMPTY_TOOL_SCHEMAS`; the other arm is the
-`scope.dynamicToolSchemas` fallback), and `callLLM.ts` appends request-only
+`scope.dynamicToolSchemas` fallback), and `callLLM/prepareCall.ts` appends request-only
 lines to `wireMessages` without passing through any slot (each one is sent on
 this request only and written to no history; its reason is the `requestOnly`
 entry the receipt keeps):
@@ -49,7 +49,7 @@ the conversation for observability. CallLLM assembles the request's messages fro
 | **Messages** | The conversation history | User message, assistant responses, tool results |
 | **Tools** | Which tools the LLM can call | Static registry, dynamic per-iteration filtering |
 
-The slots are the abstraction the library is built on, but they are not the whole wire: the wrap-up empties the tool list and `callLLM.ts` adds the request-only lines listed in the correction at the top of this page, outside every slot.
+The slots are the abstraction the library is built on, but they are not the whole wire: the wrap-up empties the tool list and `callLLM/prepareCall.ts` adds the request-only lines listed in the correction at the top of this page, outside every slot.
 
 ## Architectural decisions
 
@@ -223,3 +223,13 @@ name collision commits byte-identical logs and served views
 a shared-reference pair among them).
 
 `discoverTools.ts` acquires the actual catalogue once and refuses newly discovered private argument views before model offering when the native run has no private-record capability. The guard reads no scope for tools without a view mapper.
+
+Tool discovery can retain the ledger's original demotion in the native component's private catalog. For skill-owned names it checks the same implementation's visible ownership before counting or retaining a row. A repeated decision uses one position. At most 1,024 distinct decisions survive a listing, and exceeding that bound marks its evidence incomplete. A failed listing clears the previous discovery. These rows describe selection inside the provider. The final offer and any answer warning need separate evidence from the accepted model request.
+
+A built-in `skillScopedTools` listing can also retain which registered implementation it withheld when the most recent `read_skill` activation targeted a different skill, or none. Graph activation alone does not open that listing. Discovery needs the resolved role filter and an unambiguous registration of the same implementation on that exact skill. It keeps the registered name in provider order without reading schemas that the listing left closed. An opaque outer gate suppresses these decisions too.
+
+When a classifier actually narrows the list, its pick partitions the merged names in their original order. The slot matches each exclusion to the winning party and implementation from that merge. It shares the 1,024-row space with eligible discovery evidence. A hidden skill or an unresolved skill claim uses no position. The next discovery clears the slot selection even if its provider fails. Acceptance and later wire rewrites still need a separate request witness.
+
+When two implementations compete for the same tool name, Compose keeps the exact losing and winning tool references in the component's private selection. Identical schemas alone do not identify the same implementation. Repeated visible references use one position. A registered but inactive claim did not compete for the wire. Its collision event requires visibility, and it produces no competing-loser row. A later top-N pick can also remove the winning name. These are two distinct decisions.
+
+For a skill registered with `autoActivate: 'currentSkill'`, the injection evaluator can record that the model has yet to open it. Compose joins that decision to the same iteration's tool menu. Once the skill opens, the earlier receipt keeps its reason and the new menu shows the tool. Ordinary skill tools are available before activation. A custom activation predicate supplies no such evidence.

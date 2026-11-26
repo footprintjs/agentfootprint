@@ -104,6 +104,8 @@ export interface AnswerAccounts {
   keyFor(scope: ArtifactScope, ref: string): string;
   /** A cached answer, marked most recently used — or `undefined`. */
   cached(key: string): AnswerAccountWireBody | undefined;
+  /** Forget a cached answer whose recording is no longer whole in the store. */
+  drop(key: string): void;
   /**
    * Compute (or join the computation of) the answer for `key`. `load` runs at
    * most once per concurrent key and returns `null` when the record is not
@@ -171,6 +173,9 @@ export function answerAccounts(options: AnswerAccountsOptions | true): AnswerAcc
         scope.conversationId,
         ref,
       ])}${suffix}`;
+    },
+    drop(key) {
+      forget(key);
     },
     cached(key) {
       const held = cache.get(key);

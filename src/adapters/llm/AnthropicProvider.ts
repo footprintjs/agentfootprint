@@ -35,12 +35,16 @@ import {
   anthropicModelFacts,
   anthropicTakesForcedToolChoice,
   anthropicTakesNativeOutputSchema,
+  anthropicThinkingBinding,
+  type StatedThinkingBinding,
 } from './anthropicModels.js';
+import type { ThinkingBinding } from '../../provider-contract/thinkingBinding.js';
 import { prepareAnthropicReplay, thinkingReplayBinding } from './anthropicThinkingReplay.js';
 import { toolManifestOf } from './wireManifest.js';
 import { AnthropicToolArguments } from './anthropicToolArguments.js';
 import { anthropicThinkingHandler } from '../../thinking/AnthropicThinkingHandler.js';
 import type { ThinkingMode } from '../../thinking/types.js';
+import { anthropicCitationProjection } from './anthropicCitationOffer.js';
 // The request body has ONE owner, shared with browserAnthropic() and
 // invokeModelGateway() — a private copy here once drifted from it, and a
 // second copy of the thinking rule would drift the same way.
@@ -157,6 +161,19 @@ export interface AnthropicProviderOptions {
    *   anthropic({ thinkingMode: (id) => (id.startsWith('claude-opus-4-6') ? 'adaptive' : undefined) })
    */
   readonly thinkingMode?: (model: string) => ThinkingMode | undefined;
+  /**
+   * Whether a model's thinking is bound to the context it was written under,
+   * for an id the built-in table cannot place: an application inference
+   * profile, a proxy's alias, a model newer than the table. The table answers
+   * such an id `unknown`, and the agent records a context change there without
+   * refusing it. Say `'bound'` for an id that serves a preserved-thinking model
+   * so the agent refuses a changed tool turn by name; `'unbound'` for one that
+   * serves an older model. Return `undefined` to use the table.
+   *
+   * @example
+   *   anthropic({ thinkingBinding: (id) => (id === 'team-haiku' ? 'bound' : undefined) })
+   */
+  readonly thinkingBinding?: StatedThinkingBinding;
   /** @internal Pre-built client for testing. Skips SDK import. */
   readonly _client?: AnthropicClient;
 }
@@ -195,9 +212,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
   const modelOf = (model: string): string => (model === 'anthropic' ? defaultModel : model);
   /** The ONE mode function: declared below and used for every body. */
   const modeOf = thinkingModeWith(options.thinkingMode);
-  const buildParams = (req: LLMRequest): AnthropicCreateParams => {
+  const buildParams = (req: LLMRequest, hooks: LLMCallHooks | undefined) => {
     const model = modelOf(req.model);
-    return {
+    const citations = anthropicCitationProjection(req, hooks);
+    const params: AnthropicCreateParams = {
       model,
       ...buildMessagesBody(req, {
         model,
@@ -206,8 +224,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         maxTokensDefault: defaultMaxTokens,
         ...(parallelToolCalls !== undefined && { parallelToolCalls }),
         nativeOutputSchema: anthropicTakesNativeOutputSchema,
+        ...(citations !== undefined && { observeToolResult: citations.observeToolResult }),
       }),
     };
+    return { params, offer: citations?.prepare(params) };
   };
 
   const provider: LLMProvider = {
@@ -215,6 +235,8 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     carriesInMessages: CARRIES_IN_MESSAGES,
     carriesForcedToolChoice: true,
     supportsForcedToolChoice: (model) => anthropicTakesForcedToolChoice(modelOf(model)),
+    // Preserved thinking's prefix check, per model; an unknown id is bound.
+    thinkingBinding: (model) => anthropicThinkingBinding(modelOf(model), options.thinkingBinding),
     // `output_config.format` — the `'native'` output strategy — on the models
     // the structured-outputs page lists (anthropicModels.ts).
     carriesNativeOutputSchema: true,
@@ -234,7 +256,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       // A cancelled call sends nothing (lib/abort.ts, law 1).
       throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
-      const params = buildParams(preparation.request);
+      const { params, offer } = buildParams(preparation.request, hooks);
       const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       try {
@@ -249,11 +271,13 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
         // Manifest read from the FINAL params — after tool mapping and cache
         // markers — because the whole point is catching what the body says,
         // not what the request intended (wireManifest.ts).
-        return {
+        const response: LLMResponse = {
           ...fromAnthropicResponse(message, message.id ? bindingFactory(message.id) : undefined),
           wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
+        if (offer !== undefined && !req.signal?.aborted) offer.accept(response);
+        return response;
       } catch (err) {
         throw wrapError(err, req.signal);
       }
@@ -261,7 +285,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     async *stream(req: LLMRequest, hooks?: LLMCallHooks): AsyncIterable<LLMChunk> {
       throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
-      const params = buildParams(preparation.request);
+      const { params, offer } = buildParams(preparation.request, hooks);
       const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
       // Classify the actual request before passing its parameters to the SDK.
       const thinking = params.thinking;
@@ -340,6 +364,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
           wireManifest: toolManifestOf(params.tools, params.output_config),
           ...(preparation.omissions.length > 0 && { replayOmissions: preparation.omissions }),
         };
+        if (offer !== undefined && !req.signal?.aborted) offer.accept(response);
         yield { tokenIndex, content: '', done: true, response };
       } catch (err) {
         throw wrapError(err, req.signal);
@@ -368,11 +393,13 @@ export class AnthropicProvider implements LLMProvider {
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
   readonly thinkingMode: (model: string) => ThinkingMode;
+  readonly thinkingBinding: (model: string) => ThinkingBinding;
   private readonly inner: LLMProvider;
 
   constructor(options: AnthropicProviderOptions = {}) {
     this.inner = anthropic(options);
     this.thinkingMode = this.inner.thinkingMode!;
+    this.thinkingBinding = this.inner.thinkingBinding!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
     this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
     this.supportsAutoNativeOutputSchema =

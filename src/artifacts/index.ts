@@ -22,6 +22,7 @@ export {
   type ArtifactRecord,
   type ArtifactRef,
   type ArtifactScope,
+  type ArtifactScopeBudget,
   type ArtifactStore,
   type ArtifactStreamPutInput,
   type ArtifactStreamRecord,
@@ -90,6 +91,8 @@ export {
 export {
   recordingPutInput,
   RECORDING_ARTIFACT_KIND,
+  RECORDING_INDEX_ARTIFACT_KIND,
+  RECORDING_PART_ARTIFACT_KIND,
   RECORDING_MEDIA_TYPE,
   CHART_WALK_ARTIFACT_KIND,
   chartWalkPutInput,

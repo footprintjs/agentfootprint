@@ -1,3 +1,4 @@
+import { deliverHostReply } from '../../hostEnd/delivery.js';
 import { startRunRecording } from '../recording/recording.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import {
@@ -24,7 +25,9 @@ import {
   type RunCheckpointTracker,
 } from '../../../runCheckpoint.js';
 import { InvalidRunInputError, normalizeRunInput } from '../../../runInput.js';
+import { composedInput } from '../../../messageFrom.js';
 import type { AgentInput, AgentOutput, AgentState } from '../../types.js';
+import { citationCheckpointFromState } from '../../citations/checkpoint.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
 import { requestOf } from '../../../requestOfRun.js';
 import { AROUND_TURN_STAGE_ID } from '../../run/eventStageIds.js';
@@ -116,7 +119,10 @@ export async function runLeg(
   // Normalize or refuse BEFORE anything is created. A bare string is the
   // message; anything that is not a message is named and refused here
   // rather than becoming `content: undefined` inside the messages slot.
-  const runInput = normalizeRunInput<AgentInput>(input, 'Agent.run');
+  const runInput =
+    invocation.value.hostTurn?.hasInput === false && typeof input === 'object'
+      ? input
+      : normalizeRunInput<AgentInput>(input, 'Agent.run');
   // Who wrote the message (declared sources' one reader): one of two words,
   // or nothing — a typo would read as the person's words, so it is refused.
   const messageFrom = (runInput as { readonly messageFrom?: unknown }).messageFrom;
@@ -208,24 +214,17 @@ export async function runLeg(
   invocation.value.clockDraft = clockDraft;
 
   try {
+    const seedInput = {
+      ...(invocation.value.hostTurn?.hasInput === false ? {} : { message: runInput.message }),
+      ...(invocation.value.identity !== undefined && { identity: invocation.value.identity }),
+    };
     const result = await invocation.execute(
       {
         kind: 'run',
         options: {
-          input: {
-            message: runInput.message,
-            ...(invocation.value.identity !== undefined && {
-              identity: invocation.value.identity,
-            }),
-            // A composed message reaches seed only on an agent that reads it
-            // (declared sources, or the time layer's reader) — every other run's
-            // input is the bytes it was.
-            ...(messageFrom === 'composed' &&
-              (this.configuration.argumentSourcesArmed === true ||
-                this.configuration.timeOptions?.reader !== undefined) && {
-                messageFrom: 'composed',
-              }),
-          },
+          // Use the composition's reader registration here too. A composed
+          // message reaches seed only for features that read its provenance.
+          input: messageFrom === 'composed' ? composedInput(this.runner, seedInput) : seedInput,
           // Co-engineered boundary (#16): the engine's loop-iteration limit
           // (footprintjs 9 default 1000) must never fire BELOW the agent's own
           // budget — give it headroom (×2 + 10 covers double-hop loop shapes).
@@ -237,8 +236,15 @@ export async function runLeg(
       prepared.setup,
       prepared.binding,
     );
-    const finalized = this.finalizeResult(invocation, result);
-    if (typeof finalized === 'string') invocation.value.answer = finalized;
+    // The host branch returns control without putting a deliverable string in
+    // the traversal record. Give the terminal checks the admitted wording.
+    const admitted = invocation.value.hostAdmission;
+    const finalized = this.finalizeResult(
+      invocation,
+      admitted && typeof result === 'string' ? admitted.reply.content : result,
+    );
+    if (!invocation.value.hostTurn && typeof finalized === 'string')
+      invocation.value.answer = finalized;
     this.recordPendingQuestion(invocation.value, finalized);
     // The answer is FINISHED before this line and cannot be changed by it.
     // The liveness theorems (9.60.0, dev posture only) — a run that would
@@ -249,6 +255,13 @@ export async function runLeg(
     this.assertIntegrityAlive(invocation);
     // See `runtime/recording/recording.ts · fileRunRecording` for why the write is awaited rather than left
     // in flight, and why it can never fail the run.
+    if (invocation.value.hostTurn && typeof finalized === 'string') {
+      if (!admitted || finalized !== admitted.reply.content)
+        throw new Error('Host turn finished without its admitted reply');
+      options?.signal?.throwIfAborted();
+      options?.env?.signal?.throwIfAborted();
+      return await deliverHostReply(invocation, admitted, this.native.getDispatcher(), recording);
+    }
     recording?.complete(finalized);
     return finalized;
   } catch (cause) {
@@ -265,6 +278,11 @@ export async function runLeg(
       // when nothing was — a failure between brackets, where the error's own
       // text really is the best evidence available (8.14.0).
       const observed = tracker.inFlightPhase;
+      const state = this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined;
+      const citations =
+        this.configuration.citationOptions === undefined
+          ? undefined
+          : citationCheckpointFromState(state);
       const checkpoint = buildCheckpoint(
         tracker,
         {
@@ -277,7 +295,7 @@ export async function runLeg(
         // are committed state. A crash checkpoint that carried the summary
         // in its history but not the span behind it would resume into a
         // conversation whose evidence the crash had quietly eaten.
-        foldedSpansOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        foldedSpansOf(state),
         // A crash checkpoint is the same conversation carrier as
         // `checkpoint()`, so it carries the same two owner facts — otherwise
         // resuming after a crash would be the one path that still lost the
@@ -286,28 +304,24 @@ export async function runLeg(
         this.conversationOwner(invocation.value),
         // …and the same graph cursor (SG-C), from the same snapshot reader —
         // one reader, two carriers, so neither can lose what the other keeps.
-        this.continuityCursorOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
-        evidenceRecoveryOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        this.continuityCursorOf(state),
+        evidenceRecoveryOf(state),
         // …and the findings ledger (9.101.0), from the same snapshot reader
         // `checkpoint()` uses — one reader, two carriers.
-        findingsLedgerOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
+        findingsLedgerOf(state),
         // …and the turn the failing run was on (honesty layers), so the
         // retry is stamped the same turn — one reader, two carriers.
-        this.turnNumberOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
-        undefined,
+        this.turnNumberOf(state),
+        citations?.claimVerification,
         this.configuration.negativeClaimsConfig === undefined
           ? undefined
-          : negativeCheckpointOf(this.native.liveSnapshot()?.sharedState ?? {}),
-        this.configuration.sourceEvidenceConfig === undefined
-          ? undefined
-          : sourceEvidenceOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
-        sourceDeclarationCorrectionOf(
-          this.native.liveSnapshot()?.sharedState as Partial<AgentState>,
-          'sourceDeclarationCorrectionSpent',
-        ),
+          : negativeCheckpointOf(state ?? {}),
+        this.configuration.sourceEvidenceConfig === undefined ? undefined : sourceEvidenceOf(state),
+        sourceDeclarationCorrectionOf(state, 'sourceDeclarationCorrectionSpent'),
         // …and the receipt of the tickets the library placed, as `checkpoint()` keeps it.
-        (this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)?.placedTickets,
-        this.native.liveSnapshot()?.sharedState,
+        state?.placedTickets,
+        state,
+        citations?.citationSources,
       );
       throw new RunCheckpointError(cause, checkpoint);
     }
@@ -317,6 +331,7 @@ export async function runLeg(
     // The time layer's per-run inputs end with the run: a stale draft would
     // be stamped by the next seed this agent did not start (a composition
     // mounting its chart) as if the app had declared it.
+    invocation.value.hostAdmission = undefined;
     invocation.value.clockDraft = undefined;
     invocation.value.resumePassedTime = undefined;
     // The run's disposition rows, on EVERY path — success, failure, pause —

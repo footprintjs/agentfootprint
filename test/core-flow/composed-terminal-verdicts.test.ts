@@ -47,6 +47,28 @@ const lookup = defineTool({
 
 /** Every way an agent's run can end on a record its boundary raises. */
 const VERDICTS: Readonly<Record<string, (mode: Mode) => Agent>> = {
+  ...Object.fromEntries(
+    (['blocked', 'unknown'] as const).map((outcome) => [
+      `provider intervention ${outcome}`,
+      (mode: Mode) =>
+        Agent.create({
+          provider: mock({
+            replies: [
+              {
+                content: 'UNUSABLE_RESPONSE',
+                intervention: {
+                  outcome,
+                  code: 'guardrail_intervened',
+                  filters: [],
+                },
+              },
+            ],
+          }),
+          model: 'mock',
+          reactMode: mode,
+        }).build(),
+    ]),
+  ),
   'reliability fail-fast': (mode) =>
     Agent.create({
       provider: {

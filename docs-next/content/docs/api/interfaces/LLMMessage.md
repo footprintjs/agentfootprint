@@ -4,11 +4,11 @@ title: LLMMessage
 
 # Interface: LLMMessage
 
-Defined in: [src/provider-contract/types.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L25)
+Defined in: [src/provider-contract/types/message.ts:7](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L7)
 
 ## Extends
 
-- `ToolResultRecord`
+- `MessageRecord`
 
 ## Properties
 
@@ -16,7 +16,7 @@ Defined in: [src/provider-contract/types.ts:25](https://github.com/footprintjs/a
 
 > `readonly` `optional` **answersAsk?**: [`TypedAnswerMark`](/docs/api/interfaces/TypedAnswerMark)
 
-Defined in: [src/provider-contract/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L240)
+Defined in: [src/provider-contract/types/message.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L222)
 
 The library's mark on a person's typed answer: see [TypedAnswerMark](/docs/api/interfaces/TypedAnswerMark).
 
@@ -26,7 +26,7 @@ The library's mark on a person's typed answer: see [TypedAnswerMark](/docs/api/i
 
 > `readonly` `optional` **callOccurrenceKey?**: `CallOccurrenceKey`
 
-Defined in: [src/provider-contract/types.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L31)
+Defined in: [src/provider-contract/types/message.ts:13](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L13)
 
 Recording-only address of a library-observed tool call. Omitted from provider requests.
 
@@ -36,7 +36,7 @@ Recording-only address of a library-observed tool call. Omitted from provider re
 
 > `readonly` `optional` **calls?**: readonly `InnerCallRan`[]
 
-Defined in: [src/provider-contract/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L242)
+Defined in: [src/provider-contract/types/message.ts:224](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L224)
 
 On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent.
 
@@ -46,7 +46,7 @@ On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ra
 
 > `readonly` **content**: `string`
 
-Defined in: [src/provider-contract/types.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L27)
+Defined in: [src/provider-contract/types/message.ts:9](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L9)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/provider-contract/types.ts:27](https://github.com/footprintjs/a
 
 > `readonly` `optional` **ephemeral?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L111)
+Defined in: [src/provider-contract/types/message.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L93)
 
 v2.13 — PERSISTENCE flag (NOT a visibility flag). When `true`:
   • The message IS sent to the LLM as part of the next request
@@ -84,7 +84,7 @@ audit-invisible prompts.
 
 > `readonly` `optional` **foldedExempt?**: readonly `string`[]
 
-Defined in: [src/provider-contract/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L238)
+Defined in: [src/provider-contract/types/message.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L220)
 
 THE EXEMPTION LINEAGE OF A FOLD — on a compaction summary frame
 (`core/agent/window/summarize.ts` · `buildSummaryMessage`), the lookup
@@ -113,7 +113,7 @@ existed) exempts nothing. Absent when the fold carried no exempt value.
 
 > `readonly` `optional` **injectedBy?**: `object`
 
-Defined in: [src/provider-contract/types.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L131)
+Defined in: [src/provider-contract/types/message.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L113)
 
 v7.21 — WHO let this message into the window.
 
@@ -163,7 +163,7 @@ The injection's description, when it had one.
 
 > `readonly` `optional` **notDispatched?**: `object`
 
-Defined in: [src/provider-contract/types.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L183)
+Defined in: [src/provider-contract/types/message.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L165)
 
 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
 DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
@@ -226,7 +226,7 @@ The call in the same batch the run paused on — the one the sentence names.
 
 > `readonly` `optional` **outcome?**: `"refused"` \| `"failed"`
 
-Defined in: [src/provider-contract/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L45)
+Defined in: [src/provider-contract/types/message.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L27)
 
 `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
 `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
@@ -238,9 +238,33 @@ Not whether `execute` was entered. Never derived from `content`; read by `checki
 
 > `readonly` `optional` **replay?**: `MessageReplay`
 
-Defined in: [src/provider-contract/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L87)
+Defined in: [src/provider-contract/types/message.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L69)
 
 Replay layout and local consistency evidence (including known loss); JSON/checkpoint safe.
+
+***
+
+### replyOrigin?
+
+> `readonly` `optional` **replyOrigin?**: `object`
+
+Defined in: [src/provider-contract/toolResultRecord.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L51)
+
+Who supplied the accepted reply, including after an output-policy rewrite.
+A mark from a checkpoint is its writer's declaration. Only the run's own
+request and usage receipts can establish a provider call or its cost.
+
+#### kind
+
+> `readonly` **kind**: `"model"` \| `"host"`
+
+#### runId
+
+> `readonly` **runId**: `string`
+
+#### Inherited from
+
+`MessageRecord.replyOrigin`
 
 ***
 
@@ -248,7 +272,7 @@ Replay layout and local consistency evidence (including known loss); JSON/checkp
 
 > `readonly` `optional` **reportedStatus?**: `ReportedToolStatus`
 
-Defined in: [src/provider-contract/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L47)
+Defined in: [src/provider-contract/types/message.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L29)
 
 Tool-only status of an admitted return. Never derived from `content` or sent to a provider.
 
@@ -258,7 +282,7 @@ Tool-only status of an admitted return. Never derived from `content` or sent to 
 
 > `readonly` **role**: `ContextRole`
 
-Defined in: [src/provider-contract/types.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L26)
+Defined in: [src/provider-contract/types/message.ts:8](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L8)
 
 ***
 
@@ -266,7 +290,7 @@ Defined in: [src/provider-contract/types.ts:26](https://github.com/footprintjs/a
 
 > `readonly` `optional` **thinkingBlocks?**: readonly `ThinkingBlock`[]
 
-Defined in: [src/provider-contract/types.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L85)
+Defined in: [src/provider-contract/types/message.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L67)
 
 v2.14 — Thinking blocks emitted by the LLM on assistant turns.
 
@@ -292,7 +316,7 @@ Empty array OR undefined when no thinking is present (most calls).
 
 > `readonly` `optional` **toolArgumentsFailure?**: `object`
 
-Defined in: [src/provider-contract/types.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L39)
+Defined in: [src/provider-contract/types/message.ts:21](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L21)
 
 For a refused `role: 'tool'` result only: the same finite argument failure
 carried by its attempted call. Anthropic projects this pair as recovery
@@ -308,7 +332,7 @@ text, never as a successful parse of substituted empty input.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L29)
+Defined in: [src/provider-contract/types/message.ts:11](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L11)
 
 For `role: 'tool'` — the tool_use id this result corresponds to.
 
@@ -318,7 +342,7 @@ For `role: 'tool'` — the tool_use id this result corresponds to.
 
 > `readonly` `optional` **toolCalls?**: readonly `Omit`\<\{ `args`: `Readonly`\<`Record`\<`string`, `unknown`\>\>; `argumentsFailure?`: \{ `reason`: `"invalid-json"` \| `"invalid-argument-shape"` \| `"incomplete-stream"`; \}; `id`: `string`; `name`: `string`; `providerMeta?`: `Readonly`\<`Record`\<`string`, `unknown`\>\>; \}, `"argumentsFailure"`\> & `Pick`\<`LLMMessage`, `"callOccurrenceKey"`\> & `object`[]
 
-Defined in: [src/provider-contract/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L62)
+Defined in: [src/provider-contract/types/message.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L44)
 
 For `role: 'assistant'` only — the tool calls the LLM requested in this
 turn. Required for providers (Anthropic, OpenAI) that need to round-trip
@@ -339,7 +363,7 @@ address survives native pause and resume and is stripped before transport.
 
 > `readonly` `optional` **toolChars?**: `number`
 
-Defined in: [src/provider-contract/types.ts:215](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L215)
+Defined in: [src/provider-contract/types/message.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L197)
 
 THE TOOL-BYTES BOUNDARY (honesty layer 2) — on a `role: 'tool'` message
 whose `content` the library annotated with a note that carries a VALUE
@@ -357,7 +381,7 @@ standing (`core/agent/assessment/assess.ts` · `assessAnswer`) and the
 answer account's in-view results (`answer-account/facts/inView.ts`),
 so the note never breaks the one emptiness reader's parse and hides an
 empty or absent result; the unsupported-argument seam's grounded corpus
-(`core/agent/stages/callLLM.ts`, cut on the committed twin — the wire copy
+(`core/agent/stages/callLLM/prepareCall.ts`, cut on the committed twin — the wire copy
 has lost this field) and the empty-lookup seam's producer corpus
 (`core/agent/stages/toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf`), so the note never
 vouches for an argument. The model still reads the whole `content`: it
@@ -380,7 +404,7 @@ The engine category of a thrown tool failure, without the error text.
 
 #### Inherited from
 
-`ToolResultRecord.toolFailureCategory`
+`MessageRecord.toolFailureCategory`
 
 ***
 
@@ -388,7 +412,7 @@ The engine category of a thrown tool failure, without the error text.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/provider-contract/types.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L33)
+Defined in: [src/provider-contract/types/message.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L15)
 
 For `role: 'tool'` — the tool name this result corresponds to.
 
@@ -404,13 +428,13 @@ Printed output counts from an admitted native return. Kept off the provider wire
 
 #### Inherited from
 
-`ToolResultRecord.toolOutputCounts`
+`MessageRecord.toolOutputCounts`
 
 ***
 
 ### toolResultDisposition?
 
-> `readonly` `optional` **toolResultDisposition?**: `"withheld"` \| `"rewritten"`
+> `readonly` `optional` **toolResultDisposition?**: `"rewritten"` \| `"withheld"`
 
 Defined in: [src/provider-contract/toolResultRecord.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L33)
 
@@ -418,13 +442,13 @@ A host's after-tool rule withheld or replaced this result. Kept off the provider
 
 #### Inherited from
 
-`ToolResultRecord.toolResultDisposition`
+`MessageRecord.toolResultDisposition`
 
 ***
 
 ### toolResultExecution?
 
-> `readonly` `optional` **toolResultExecution?**: `"not-entered"` \| `"threw"` \| `"returned"` \| `"returned-unserved"`
+> `readonly` `optional` **toolResultExecution?**: `"returned"` \| `"not-entered"` \| `"threw"` \| `"returned-unserved"`
 
 Defined in: [src/provider-contract/toolResultRecord.ts:39](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L39)
 
@@ -434,13 +458,13 @@ separately by `toolResultDisposition`. Artifact tickets carry the result.
 
 #### Inherited from
 
-`ToolResultRecord.toolResultExecution`
+`MessageRecord.toolResultExecution`
 
 ***
 
 ### toolResultOrigin?
 
-> `readonly` `optional` **toolResultOrigin?**: `"not-entered"` \| `"input-cancelled"` \| `"outcome-unknown"`
+> `readonly` `optional` **toolResultOrigin?**: `"outcome-unknown"` \| `"not-entered"` \| `"input-cancelled"`
 
 Defined in: [src/provider-contract/toolResultRecord.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L31)
 
@@ -456,4 +480,4 @@ JSON/checkpoint safe; stripFrameworkFields removes it before transport.
 
 #### Inherited from
 
-`ToolResultRecord.toolResultOrigin`
+`MessageRecord.toolResultOrigin`

@@ -58,9 +58,11 @@
  * and never repaired.
  */
 
+import { widerOf } from './wider.js';
 import type { InputValue } from '../../../tools/inputRequest.js';
 import {
   callWindowOf,
+  selectedFormOf,
   type CallWindow,
   type TurnWindows,
   type WindowSource,
@@ -240,7 +242,7 @@ export type ArgumentFill =
       /** The value was written by the library from the WINDOW the person chose (the lazy word-driven ask). */
       readonly window?: true;
       /** …and no form held that window exactly, so it reads a wider one (as a `window` fill's `wider`). */
-      readonly wider?: 'reads-more' | 'tool-trims';
+      readonly wider?: 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims';
     }
   | {
       readonly argument: string;
@@ -250,9 +252,12 @@ export type ArgumentFill =
       /**
        * No form holds the window exactly, so the value reads a WIDER one (step
        * T5b): `reads-more` — the call reads parts nobody asked for;
-       * `tool-trims` — the tool declares `filtersToAsked` and drops them.
+       * `tool-trims` — the tool declares `filtersToAsked` and drops them;
+       * `source-clock` — a confirmed look-back in a length-only form, which
+       * the library lengthens at dispatch (`time/drift.ts` · `coverAtDispatch`);
+       * `source-clock-trims` — the same, to a tool that drops the rows outside.
        */
-      readonly wider?: 'reads-more' | 'tool-trims';
+      readonly wider?: 'reads-more' | 'tool-trims' | 'source-clock' | 'source-clock-trims';
     };
 
 /**
@@ -268,6 +273,7 @@ export interface ArgumentResolution {
   readonly callOccurrenceKey?: CallOccurrenceKey;
   readonly iteration: number;
   readonly fills?: readonly ArgumentFill[];
+  readonly removePeriodArguments?: readonly string[];
   readonly refused?: string;
   /**
    * The `ask`-ruled arguments to ask the person for, in the rule's declared
@@ -530,24 +536,16 @@ function formArgumentsOf(toolOf: ToolOf, toolName: string): ReadonlySet<string> 
   return new Set(forms.flatMap((f) => formArguments(f).map((a) => a.argument)));
 }
 
-/**
- * The arguments of every form OTHER than the one a present window was read
- * back from (`bound`, `model-chosen`, `model`) that the read form does not
- * also name — an alternative the call did not take. Empty for any other
- * decision; a ruled argument outside every form is never in it.
- */
+/** Alternatives that the selected period form does not also name. */
 function untakenFormArgumentsOf(
   toolOf: ToolOf,
   toolName: string,
   decision: CallWindow | undefined,
 ): ReadonlySet<string> {
-  if (
-    decision === undefined ||
-    (decision.how !== 'bound' && decision.how !== 'model-chosen' && decision.how !== 'model')
-  ) {
-    return new Set();
-  }
-  return untakenBesides(periodFormsOf(readableRules(toolOf, toolName)?.period), decision.form);
+  const form = selectedFormOf(decision);
+  return form === undefined
+    ? new Set()
+    : untakenBesides(periodFormsOf(readableRules(toolOf, toolName)?.period), form);
 }
 
 /**
@@ -712,7 +710,7 @@ export function verifyPlan(
         continue;
       }
       if (alternatives.has(p.argument)) continue;
-      if (p.missing && untaken.has(p.argument)) continue;
+      if (untaken.has(p.argument) && (p.missing || decision?.how === 'filled')) continue;
       const rule = rules?.ruled.find((r) => r.argument === p.argument);
       const check = p.missing ? undefined : sourceCheckOf(sources, toolOf, call, p.argument, rule);
       if (check !== undefined) {
@@ -878,12 +876,7 @@ export function resolutionsOf(
     // Under `.time()`: every argument the turn's one window fills — the ruled ones filed above,
     // and an `object` form's (a ruled argument is a flat value, so an object carries no rule).
     if (decision?.how === 'filled') {
-      const wider =
-        'sent' in decision.conversion
-          ? decision.trimmedByTool === true
-            ? ('tool-trims' as const)
-            : ('reads-more' as const)
-          : undefined;
+      const wider = widerOf(decision.conversion, decision.trimmedByTool === true);
       for (const [argument, value] of Object.entries(decision.conversion.values)) {
         fills.push({
           argument,
@@ -905,6 +898,10 @@ export function resolutionsOf(
       resolutions.push({
         ...owner,
         ...(fills.length > 0 && { fills }),
+        ...(decision?.how === 'filled' &&
+          decision.replacedForm === true && {
+            removePeriodArguments: [...untakenFormArgumentsOf(toolOf, planned.toolName, decision)],
+          }),
         ...(ask.length > 0 && { ask }),
         ...(quoted.length > 0 && { quoted }),
         ...(window && { window: true as const }),

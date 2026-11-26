@@ -35,7 +35,7 @@ It defaults to `'tokens'` — every shipped strategy compares against a
 
 #### planAction
 
-> `readonly` **planAction**: `"none"` \| `"evict"` \| `"summarize"`
+> `readonly` **planAction**: `"evict"` \| `"summarize"` \| `"none"`
 
 #### projectedTokens
 

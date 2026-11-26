@@ -14,6 +14,7 @@ import {
   entryEvidenceOf,
   legacyEntryKeys,
 } from './entryEvidence.js';
+import { citationConflictIndex } from './pointer.js';
 import { reasonClassOf, isDeclarationWitness, type ReasonWitnessKind } from './reasonClasses.js';
 import { isRecord } from './recordValues.js';
 import { windowDropWitnesses } from './results/window/stage.js';
@@ -156,6 +157,7 @@ export function standingAdmission(
     declaredResultAdmitted(row, address, declarationProof);
 
   const admit = (reason: AssessmentReason, pointer: AssessmentPointer): boolean => {
+    if (reason === 'sources-conflict' && citationConflictIndex(pointer) !== undefined) return true;
     const row = rowOf(state, pointer);
     const kind = reasonClassOf(reason, witnessKind(row));
     if (kind === 'turn' || kind === 'settlement') return true;

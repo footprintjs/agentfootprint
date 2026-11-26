@@ -1,0 +1,12 @@
+# `time/` — outside rules this layer follows
+
+Rules this layer did not invent, with the source checked on 24 November 2026. Each line says
+which of our laws rests on it. Design history stays in `docs/design/time/`.
+
+| Rule | Source | Where it lives here |
+|---|---|---|
+| Prefer an absolute argument to a relative one, and change a tool's arguments so a mistake is harder to make. | Anthropic, [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents), appendix on tools: "the model would make mistakes with tools using relative filepaths after the agent had moved out of the root directory"; "we changed the tool to always require absolute filepaths"; "Poka-yoke your tools." | A confirmed look-back is frozen to absolute bounds on the run's clock (`convert.ts`, `frozenDispatch.ts`). |
+| Code supplies what code already knows. | OpenAI, [Function calling](https://developers.openai.com/api/docs/guides/function-calling), best practices: "Don't make the model fill arguments you already know."; "Use enums and object structure to prevent invalid states." | The fill: the person's one window goes into a call that left its period out (`bind.ts`). |
+| A range includes its start and excludes its end; an inclusive end only where everyday speech has one, and always documented. | Google, [AIP-145: Ranges](https://google.aip.dev/145): "use inclusive start values and exclusive end values (half-closed intervals) in most situations". | `range.ts` · `TimeRange` is `[from, to)`; a calendar period keeps its grain (the edge law). |
+| A source that takes a length reads it against its own clock, start included and stop excluded, unless its "now" is pinned. | InfluxDB Flux, [`range()`](https://docs.influxdata.com/flux/v0/stdlib/universe/range/) and the [`now` option](https://docs.influxdata.com/flux/v0/spec/options/) (as summarised from those pages; not quoted). | The drift law and the covering look-back (`drift.ts`, `convert/covering.ts`): a length is lengthened at dispatch, and the record says the source's clock decided the bounds. |
+| State a reading back instead of asking, unless a mistake is costly. | Google, [Conversation design: confirmations](https://developers.google.com/assistant/conversation-design/confirmations): explicit confirmation of parameters — "Use sparingly, only when the cost of misunderstanding the user is high,". | Not adopted yet: every reading is confirmed today (the owner's decision "Always confirm"). Recorded here as the practice a later change is measured against. |

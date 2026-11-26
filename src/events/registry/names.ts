@@ -52,6 +52,7 @@ export const EVENT_NAMES = {
     retrieved: 'agentfootprint.memory.retrieved',
     detached: 'agentfootprint.memory.detached',
     written: 'agentfootprint.memory.written',
+    writeOutcome: 'agentfootprint.memory.write_outcome',
   },
   tools: {
     offered: 'agentfootprint.tools.offered',

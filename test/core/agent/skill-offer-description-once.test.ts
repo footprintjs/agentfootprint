@@ -90,8 +90,8 @@ function assertCatalog(request: LLMRequest, current?: SkillId, hidden: readonly 
   const tool = request.tools?.find((candidate) => candidate.name === 'read_skill');
   expect(tool).toBeDefined();
   const schema = tool!.inputSchema as { properties: { id: { enum: string[] } } };
-  // The unchanged full enum lets off-menu IDs reach the native admission gate.
-  expect(schema.properties.id.enum).toEqual(ids);
+  // The visible enum lets off-menu IDs reach the native admission gate.
+  expect(schema.properties.id.enum).toEqual(ids.filter((id) => !hidden.includes(id)));
   const allContent = JSON.stringify(request);
   for (const id of ids) {
     // The current cursor already has its body and scoped tools. The existing
@@ -167,7 +167,7 @@ describe('native skill offer description identity', () => {
     );
   });
 
-  it('omits role-hidden descriptions without shrinking the schema enum or bypassing permission checks', async () => {
+  it('uses the same visible IDs for the description and schema while retaining permission checks', async () => {
     const checked: string[] = [];
     const permissionChecker: PermissionChecker = {
       name: 'hide-shipping',

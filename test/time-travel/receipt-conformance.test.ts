@@ -673,7 +673,7 @@ describe('a run that paused and resumed', () => {
       expect(findingsFrame(last.messages).data.undeclaredResultIds).toEqual(['c1', 'c2']);
       // And no request the provider received carried the marker: the ones
       // after the resume were built on the collapse path (x1 judged noise),
-      // which strips after it collapses (`callLLM.ts` · `buildCallLLMStage`).
+      // which strips after it collapses (`callLLM/prepareCall.ts` · `prepareCall`).
       for (const sent of wire) {
         expect(sent.messages.some((m) => 'notDispatched' in m)).toBe(false);
       }
@@ -1418,7 +1418,7 @@ describe('a cache strategy that rewrites the request', () => {
   });
 
   it('a strategy that drops the forced answer tool leaves `tools.forced` describing the decision — and the gap names it (9.93.0, entry 7)', async () => {
-    // `callLLM.ts` writes `tools.forced` from `deps.schemaTool?.name` and
+    // `callLLM/prepareCall.ts` writes `tools.forced` from `deps.schemaTool?.name` and
     // `tools.withheld` from `scope.wrapUpAsked` — assembly's own decisions —
     // never from `preparedRequest`. A strategy holds the whole request, so it
     // can take the synthetic tool off `tools` and the forcing off `toolChoice`,

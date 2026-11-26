@@ -205,6 +205,9 @@ const LOCATIONS = new WeakMap<object, readonly EpochLocation[]>();
  * `source`, `runSource` are the caller's own recording, and this file does not
  * get to lock down an object it was merely handed.
  *
+ * A recording saved in parts is read whole first, with `openSavedRecording(…)`
+ * then `readWhole()` (bounded, all or nothing): epochs live in its subflow results.
+ *
  * @example
  * ```ts
  * import { epochLocations } from 'agentfootprint';

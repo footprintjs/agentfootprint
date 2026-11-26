@@ -47,7 +47,9 @@ export const WITNESSED_REASONS: ReadonlySet<AssessmentReason> = new Set([
   'result-dropped-from-window',
   'memory-retrieval-timeout',
   'memory-retrieval-excluded',
+  'source-not-consulted',
   'step-skipped',
+  'ungrounded-entity',
 ]);
 
 /** The recorded display names, or null if the record cannot supply them in full. */
@@ -82,6 +84,8 @@ export function recordedStandingWitnesses(
     undefined,
     undefined,
     view.events,
+    undefined,
+    view.checkOmission,
   );
   if (assessed.keptOut !== undefined) return undefined;
   const complete = reasons.every(
@@ -181,8 +185,10 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'negative-prose-unverified': 'howSure.reason.negativeProseUnverified',
   'invariant-violation': 'howSure.reason.invariantViolation',
   'unsupported-argument': 'howSure.reason.unsupportedArgument',
+  'source-not-consulted': 'howSure.reason.sourceNotConsulted',
   'column-type-mismatch': 'howSure.reason.columnTypeMismatch',
   'missing-column': 'howSure.reason.missingColumn',
+  'ungrounded-entity': 'howSure.reason.claimUnsettled',
   'unsupported-claim': 'howSure.reason.unsupportedClaim',
   'claim-unsettled': 'howSure.reason.claimUnsettled',
   'claim-exceeds-search': 'howSure.reason.claimExceedsSearch',
@@ -359,6 +365,8 @@ export function standingLines(
     undefined,
     declarationAddresses,
     ctx.view.events,
+    undefined,
+    ctx.view.checkOmission,
   );
   if (a.keptOut !== undefined) return noStanding(ctx, 'howSure.standing.keptOut');
   if (a.standing !== 'ask' && ctx.view.last('agent.turn_end') === undefined) {

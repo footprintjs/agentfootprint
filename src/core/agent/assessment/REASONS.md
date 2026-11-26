@@ -11,6 +11,7 @@ complete witness table in `reasonClasses.ts`.
 |---|---|---|
 | `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
 | `argument-asked` | 2 | `argumentAsk`: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; this turn's current `asked` rows on `findingsLedger` name the values; never the pause event |
+| `source-not-consulted` | 1 | `sourceConsultation`: a declared holder had a witnessed offer or an accepted tool-selection omission, and the turn records no attempt through an eligible holder. A typed absence also requires a served native result. |
 | `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
 | `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
 | `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
@@ -51,5 +52,6 @@ complete witness table in `reasonClasses.ts`.
 | `unsupported-argument` | 2 | `findingsLedger`: an `integrity-finding` row of this turn — a call chose an argument value nothing served it; the row names the tool, never the value |
 | `column-type-mismatch` | 3 | `findingsLedger`: an `integrity-finding` row of this turn — a column holds something other than the type its tool declares |
 | `missing-column` | 3 | `findingsLedger`: an `integrity-finding` row of this turn — a column its tool declares is in none of the rows |
-| `unsupported-claim` | 4 | `findingsLedger`: an `integrity-finding` row of this turn — a `.claims()` field disagrees with the fact the run's tools settled, or declines to state it (the row's `advisory`) |
+| `ungrounded-entity` | 4 | `answerCitations.findings`: an explicitly requested column is absent from the complete schema of the one accepted cited source |
+| `unsupported-claim` | 4 | `findingsLedger`: an `integrity-finding` row of this turn — a `.claims()` field disagrees with the fact the run's tools settled, or declines to state it (the row's `advisory`). `answerCitations.findings`: a scoped claim contradicts the result it cites |
 | `claim-unsettled` | 4 | `findingsLedger`: a `claim-unsettled` row of this turn — the answer states a `.claims()` field whose fact no tool settled, or no value could be read from the answer at all, so nothing could compare it |

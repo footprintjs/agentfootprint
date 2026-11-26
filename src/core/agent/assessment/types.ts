@@ -55,6 +55,8 @@ export type AssessmentPointer =
  *   input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent
  *   gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent —
  *   read from the committed state the pause leaves (`pausedToolCallId`);
+ * - `source-not-consulted` — this turn's record shows a declared source was
+ *   offered or left out by a recorded tool selection, and the run attempted no eligible path to it;
  * - `declared-absent` — a tool declared that nothing matched: an `absent()`,
  *   or an empty rowset inside a declared `coverage()` boundary;
  * - `coverage-gap` — a tool declared ground it did not check or can never
@@ -159,6 +161,7 @@ export type AssessmentPointer =
 export type AssessmentReason =
   | 'asked'
   | 'argument-asked'
+  | 'source-not-consulted'
   | 'argument-assumed'
   | 'argument-unverified'
   | 'argument-read'
@@ -195,6 +198,7 @@ export type AssessmentReason =
   | 'unsupported-argument'
   | 'column-type-mismatch'
   | 'missing-column'
+  | 'ungrounded-entity'
   | 'unsupported-claim'
   | 'claim-unsettled'
   | 'claim-exceeds-search'
@@ -264,6 +268,12 @@ export interface AssessmentReasonDetail {
   /** The one engine category represented by the classified failures for this reason. */
   readonly category?: import('footprintjs').AttemptCategory;
   readonly toolSays?: AssessmentToolWords;
+  /** The requested column missing from the complete visible schema of its citation. */
+  readonly ungroundedEntity?: { readonly name: string; readonly nearestName?: string };
+  /** App-declared display names of visible tools offered for an unchecked source. */
+  readonly unusedTools?: readonly string[];
+  /** Display names of declared holders left out of an accepted request. */
+  readonly unavailableTools?: readonly string[];
   /** A kept count with its unit, or a missing count out of a known whole. */
   readonly counts?:
     | { readonly kept: number; readonly total?: number; readonly unit: string }
@@ -363,6 +373,8 @@ export interface AnswerAssessment {
     /** The rows behind `ran`. */
     readonly witness: readonly AssessmentPointer[];
   }[];
+  /** Public, span-level citation findings. A supported span cannot establish overall standing. */
+  readonly citations?: import('../citations/accepted.js').AnswerCitationRecord;
   /**
    * Where the turn this fold read begins: `person` — after the last message a
    * person said (`lib/saidByPerson.ts` · `isSaidByPerson`), the one owner of

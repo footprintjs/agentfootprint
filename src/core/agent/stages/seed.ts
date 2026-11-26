@@ -1,6 +1,7 @@
-import { sourceSchemasOnWire } from '../sourceContract.js';
+import { fileTime } from './seedTime.js';
 import { withoutEarlierScriptText } from '../scripts/rows.js';
 import { seedStagedRefs } from './stagedRefsNudge.js';
+import { loadRuleDecoration, seedToolSchemas, type RuleDecoration } from './seedToolSchemas.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 /**
@@ -33,7 +34,6 @@ import type { FoldedSpan } from '../window/types.js';
 import type { MessageMiddleware } from '../middleware/types.js';
 import { runMessageChain } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
-import { withFindingsArgument, withSourcesArgument } from '../findings/reserved.js';
 import type { HonestyLayers } from '../honesty/armed.js';
 import { seedToolEvidence } from '../honesty/settledToolCalls.js';
 import type { FindingsLedger } from '../findings/types.js';
@@ -58,6 +58,8 @@ import { restoreInnerCallPolicyArgs } from '../innerCallPolicyArgs.js';
 export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
 export interface SeedStageDeps {
+  readonly hostOnly?: boolean;
+  readonly hostDecision?: boolean;
   readonly sourceEvidenceMaxReceipts?: number;
   readonly consumePendingResumeSourceEvidence?: () => SourceEvidenceIndex | undefined;
   readonly negativeClaimsArmed?: boolean;
@@ -342,21 +344,6 @@ export interface SeedStageDeps {
   readonly toolWantsByName?: Readonly<Record<string, readonly string[]>>;
 }
 
-/** The inputs layer's schema decoration (`arguments/serve/schema.ts` · `withArgumentRules`). */
-type RuleDecoration = typeof import('../arguments/serve.js').withArgumentRules;
-
-/**
- * The inputs layer's schema decoration for THIS run's seed — loaded through
- * `import()` only when a registered tool is ruled (`deps.ruledTools`), the
- * optional-family law of docs-next's site budget; `undefined` otherwise, so
- * an agent without the layer seeds with no new await and no new microtask.
- */
-function loadRuleDecoration(deps: SeedStageDeps): Promise<RuleDecoration> | undefined {
-  return deps.ruledTools === undefined
-    ? undefined
-    : import('../arguments/serve.js').then((m) => m.withArgumentRules);
-}
-
 /**
  * Build the seed stage function for an Agent instance. Captures both
  * the chart-build-time constants and the per-run mutable accessors
@@ -451,21 +438,6 @@ function buildSeedBody(
 }
 
 /**
- * The time layer's half of seed — the turn's clock stamp, then the person's
- * words read for time (`./timeLayer.ts` · `stampClock`, `readTimeWords`),
- * filed LAST, after the turn number is final. Loaded through `import()` only
- * when `.time()` armed the agent — the optional-family law of docs-next's
- * site budget — so a plain seed never loads it and stays synchronous.
- */
-function fileTime(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Promise<void> {
-  if (deps.timeClock === undefined && deps.timeReader === undefined) return;
-  return import('./timeLayer.js').then((time) => {
-    time.stampClock(scope, deps);
-    return time.readTimeWords(scope, deps);
-  });
-}
-
-/**
  * Initialise every mutable field of `AgentState` from `message` + the run
  * args. Split out so the message the run proceeds with can come either
  * straight from the caller or from the `'input'` middleware chain — one
@@ -482,7 +454,7 @@ function seedFrom(
   decorate: RuleDecoration | undefined,
 ): void {
   const args = scope.$getArgs<AgentInput>();
-  scope.userMessage = message;
+  if (!deps.hostOnly) scope.userMessage = message;
 
   // A MEMBER — this chart run by another runner's executor — is decided FIRST:
   // every hand-off below that lives on the instance (`continueFrom`,
@@ -506,8 +478,10 @@ function seedFrom(
     correction?.spent === true
   )
     scope.sourceDeclarationCorrectionSpent = true;
-  const history = seedHistoryForTurn(scope, resume, message);
+  const history = seedHistoryForTurn(scope, resume, deps.hostOnly ? undefined : message);
   seedToolEvidence(scope, deps, resume);
+  if (deps.honestyLayers?.sourceNotConsulted === true && resume?.appendsUserTurn === false)
+    scope.sourceConsultationInterrupted = true;
   restoreInnerCallPolicyArgs(scope, resume?.innerCallPolicyArgs);
   seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means
@@ -686,42 +660,16 @@ function seedFrom(
   if (deps.costBudgetOnExceed !== undefined) scope.costBudgetOnExceed = deps.costBudgetOnExceed;
   scope.activeInjections = [];
   scope.activatedInjectionIds = [];
-  // The static fallback shares the slot's ONE decorator (9.101.0): armed, the
-  // first call serves decorated schemas exactly as every later call will;
-  // unarmed, the registry list by reference, byte for byte. NO OFFER here
-  // (9.102.0): at seed there is no served history and nothing to name, so the
-  // base decoration — an explicit lambda, because passed point-free `.map`
-  // would hand the index in as the offer (`reserved.ts · withFindingsArgument`).
-  // The inputs layer's rules decorate FIRST (honesty layer 2) — the slot's
-  // order: rules, then `_findings`. Only when a registered tool is ruled. One
-  // options value for every schema here, where the slot decides per schema
-  // (`ownsReservedArgument`): the seed serves REGISTERED tools only, and under
-  // declared sources a registered ruled tool whose author owns `_findings` is
-  // refused at build (`buildToolRegistry` · `assertReservedArgument`) — so
-  // every ruled schema here carries the `_findings.from` its sentence names.
-  const ruledTools = deps.ruledTools;
-  const ruleOptions = deps.argumentSources === true ? { sources: true } : undefined;
-  const ruled =
-    ruledTools === undefined || decorate === undefined
-      ? deps.toolSchemas
-      : deps.toolSchemas.map((s) => decorate(s, ruledTools.get(s.name), ruleOptions));
-  // Declared sources (honesty layer 2): a ruled tool's decoration carries `from` —
-  // inside the ledger's `_findings` under `.findings()`, or as the reserved
-  // argument's only property without it (the slot's `sourcesOnWire` twin).
-  scope.dynamicToolSchemas = sourceSchemasOnWire(
-    ruled,
-    ruledTools,
-    deps.findings === true,
-    deps.argumentSources === true,
-    withFindingsArgument,
-    withSourcesArgument,
-  );
+  seedToolSchemas(scope, deps, decorate);
   // The honesty layers' run constant (`honesty/armed.ts`) — written once, and
   // only when a layer is armed.
   if (deps.honestyLayers !== undefined) scope.honestyLayers = deps.honestyLayers;
   // WHO WROTE THE MESSAGE, when it was not a person (declared sources' one
   // reader): written only under the arm, and only for a composed message.
-  if (deps.argumentSources === true && args.messageFrom === 'composed') {
+  if (
+    (deps.argumentSources === true || deps.honestyLayers?.sourceNotConsulted === true) &&
+    args.messageFrom === 'composed'
+  ) {
     scope.userMessageFrom = 'composed';
   }
   // The forced-output tool's NAME (9.88.0) — the one fact about it that lands

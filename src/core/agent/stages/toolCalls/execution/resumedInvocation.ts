@@ -56,6 +56,7 @@ export function buildResumedInvocation(
     | 'time'
     | 'negativeClaimsArmed'
     | 'sourceEvidenceConfig'
+    | 'citationOptions'
     | 'columnCheckMode'
     | 'resultRowsetsFor'
     | 'integrityLedger'
@@ -159,20 +160,6 @@ export function buildResumedInvocation(
     /** What the run ended with, when it ended before the call could run. */
     let ended: Error | undefined;
     try {
-      // The time layer's dispatch moment — a resumed call is dispatched NOW,
-      // so its `dispatchedAt` is the resume's, not the pause's.
-      const dispatched =
-        deps.time !== undefined
-          ? (await import('../../timeLayer.js')).timeAtDispatch(
-              scope,
-              { toolCallId, toolName, ...occurrence },
-              iteration,
-              tool,
-              prepared,
-              deps.time.appZone,
-            )
-          : undefined;
-      const callTime = dispatched?.context;
       const access = await recheckResumedCall(scope, deps, {
         ...occurrence,
         gate: heldTo,
@@ -180,13 +167,13 @@ export function buildResumedInvocation(
         toolName,
         toolCallId,
         iteration,
-        args: dispatched?.args ?? prepared,
+        args: prepared,
         env,
         parkedNow: links.parkedNow,
         historyForCheckIn: links.historyForCheckIn,
       });
       if (!access.allowed) return access.refusal;
-      const { args } = access;
+      const gatedArgs = access.args;
       const credentials = await awaitUnder(env.signal, () =>
         resumedCredential(
           scope,
@@ -200,6 +187,25 @@ export function buildResumedInvocation(
       );
       if (!credentials.ok) return { result: credentials.result, error: true };
       const resolvedCredential = credentials.credential;
+      // The time layer's dispatch moment — a resumed call is dispatched NOW, so its
+      // `dispatchedAt` is the resume's, not the pause's. Read AFTER the access and credential
+      // gates: a refused call files no `call` row, and a length the library measures from this
+      // moment (a covering look-back) is not made short by a gate that took time. The one
+      // value this may change after approval is the library's OWN look-back fill, lengthened to
+      // still reach the window the person confirmed; the `call` row records it (`covered`).
+      const dispatched =
+        deps.time !== undefined
+          ? (await import('../../timeLayer.js')).timeAtDispatch(
+              scope,
+              { toolCallId, toolName, ...occurrence },
+              iteration,
+              tool,
+              gatedArgs,
+              deps.time.appZone,
+            )
+          : undefined;
+      const callTime = dispatched?.context;
+      const args = (dispatched?.args ?? gatedArgs) as typeof gatedArgs;
       // Keep runner facts on this dispatch even when another call reuses its provider ID.
       const codeRunSlot: CodeRunSlot = {};
       const executionContext = {
@@ -256,7 +262,7 @@ export function buildResumedInvocation(
       const approvalChanged =
         heldTo !== 'credential' &&
         !runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved);
-      if (approvalChanged || !access.matchesPrepared(args)) {
+      if (approvalChanged || !access.matchesPrepared(gatedArgs)) {
         // Nothing ran. Release the sessions as for a run that ended here.
         await links.endCall(scope).catch(() => undefined);
         recordResumedRefusal(
@@ -289,7 +295,11 @@ export function buildResumedInvocation(
               context: executionContext,
             })
           : undefined;
-      seen?.resultFinalizer?.entered(executionContext);
+      seen?.resultFinalizer?.entered(
+        executionContext,
+        args,
+        negativeDispatch?.resultId ?? searchDispatch?.resultId,
+      );
       executed = true;
       if (seen !== undefined) {
         // Read now, before any tool code runs: what the call proposed and
@@ -309,6 +319,7 @@ export function buildResumedInvocation(
         toolInvoked = true;
         result = await tool.execute(args, executionContext);
         returned = true;
+        seen?.resultFinalizer?.captureReturned?.(result);
       } finally {
         await binding.close(env.signal);
         if (seen !== undefined) seen.toolResultExecution = returned ? 'returned' : 'threw';
