@@ -755,7 +755,10 @@ describe('3 · structure — absence and coverage: kinds and counts, never a sen
     );
     const [ev] = eventsNamed(cap.spans, 'agentfootprint.tools.absent');
     expect(ev?.attributes['agentfootprint.coverage.try_instead.unregistered']).toBe(true);
-    expect(allEmittedText(cap.spans)).not.toContain('99887766');
+    // The account whole, and its number as a number of its own (span ids and nanosecond times hold digit runs).
+    const emitted = allEmittedText(cap.spans);
+    expect(emitted).not.toContain('acct 99887766');
+    expect(emitted).not.toMatch(/(?<!\d)99887766(?!\d)/);
   });
 
   it('INTEGRATION: a real absent() naming a registered tool the agent has not RUN says only that it exists', async () => {

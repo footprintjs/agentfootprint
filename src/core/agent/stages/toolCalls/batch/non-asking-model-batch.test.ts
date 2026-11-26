@@ -30,9 +30,14 @@ const cases = [
   ['null name', [call('bad', null)], 0, incomplete, incomplete],
 ] as const;
 
+// The 1025-call batch takes about 0.8 s alone under coverage and past the 5 s default when the
+// machine is loaded; the assertions themselves are unchanged.
+const BATCH_TIMEOUT_MS = 60_000;
+
 for (const armed of [false, true]) {
   it.each(cases)(
     `a non-asking %s batch keeps ordinary dispatch when inputs=${armed}`,
+    { timeout: BATCH_TIMEOUT_MS },
     async (_shape, calls, expected, unruledWarning, ruledWarning) => {
       const requests: LLMRequest[] = [];
       let ran = 0;

@@ -231,7 +231,9 @@ describe('the landing door marks a real typed answer, and the mark never reaches
     const landed = historyOf(agent).filter((m) => m.role === 'tool');
     expect(landed).toHaveLength(1);
     expect(landed[0]!.answersAsk).toEqual({ requestId: paused.awaitingInput.requestId });
-    expect(landed[0]!.content).not.toContain('2031');
+    // The typed date, whole, and its year as a number of its own (digits inside a hash do not count).
+    expect(landed[0]!.content).not.toContain('2031-05-05');
+    expect(landed[0]!.content).not.toMatch(/(?<!\d)2031(?!\d)/);
     // The answer repeats a value the person typed but the rules hid: not exempt.
     expect(flaggedOf(agent)).toEqual(['2031']);
   });
