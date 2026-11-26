@@ -1,1 +1,0 @@
-| choose how much an agent's snapshot keeps of each write: a short marker by default, the full written value, or nothing | `AgentObservationOptions` + `writeTracking` | `src/core/agent/types/observation.ts` | unreleased |

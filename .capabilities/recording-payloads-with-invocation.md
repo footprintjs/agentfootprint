@@ -1,1 +1,0 @@
-| read a sub-flow step's input and output from its own invocation part when a run was saved in parts, so the root stays small and a whole read still gets them back | `SavedInvocationPayloads` | `src/recorders/observability/recordingParts/partReader.ts` | unreleased |

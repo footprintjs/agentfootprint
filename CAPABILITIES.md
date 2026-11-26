@@ -22,6 +22,8 @@ not in this table, search `src/index.ts` for the nearest noun before writing cod
 
 | If you are about to build… | It is | Where | Since |
 |---|---|---|---|
+| choose how much an agent's snapshot keeps of each write: a short marker by default, the full written value, or nothing | `AgentObservationOptions` + `writeTracking` | `src/core/agent/types/observation.ts` | 19.0.0 |
+| read a sub-flow step's input and output from its own invocation part when a run was saved in parts, so the root stays small and a whole read still gets them back | `SavedInvocationPayloads` | `src/recorders/observability/recordingParts/partReader.ts` | 19.0.0 |
 | a tool turn that changes its system prompt, tools or earlier messages on a model that binds its reasoning to them is refused by name before sending | `ContextChangedError` | `src/thinking/contextChange.ts` | 18.3.0 |
 | saving each run's recording in parts (an index, a base part and parts of about 1 MiB) so a reader opens one invocation without reading the whole run, via `artifacts: { recordings: { layout: 'parts' } }` | `AgentRecordingsOptions` + `layout` | `src/core/agent/types/artifacts.ts` | 18.2.0 |
 | open a saved run recording by ref and read its root or one invocation without the whole run, from a whole recording or one saved in parts | `openSavedRecording` | `src/recorders/observability/recordingParts/open.ts` | 18.2.0 |
