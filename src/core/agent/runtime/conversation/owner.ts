@@ -108,7 +108,8 @@ export function checkpointFor(
     selected!.value.answer !== undefined &&
     (selected!.value.answer.length > 0 || state?.llmLatestReplay !== undefined)
   ) {
-    history.push(settledModelReply(state ?? {}, selected!.value.answer));
+    // A plain saved state, not a stage's scope: asking it for the origin records no read.
+    history.push(settledModelReply(state ?? {}, selected!.value.answer, true));
   }
   const folded = foldedSpansOf(state);
   const owner = this.conversationOwner(selected!.value);
