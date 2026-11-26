@@ -24,6 +24,7 @@ import {
   receiptEntry,
   submitEntry,
   suppliedEntry,
+  withdrawalEntry,
 } from '../../src/llm-ledger/build.js';
 import { fileLedgerStore } from '../../src/llm-ledger/fileStore.js';
 import { memoryLedgerStore } from '../../src/llm-ledger/memoryStore.js';
@@ -51,7 +52,10 @@ function stringsOf(value: unknown, path: string, out: Array<[string, string]>): 
     for (const [k, v] of Object.entries(value)) stringsOf(v, `${path}.${k}`, out);
 }
 
+/** Where text read from a result may be kept: the agent's own note, which quotes it. Nowhere else. */
 const MAY_HOLD_ANY = new Set(['note.text', 'note.values[]']);
+/** Where the other free text is stored BY DESIGN: a withdrawal's reason and the host's query. */
+const MAY_HOLD_ASKED = new Set(['withdrawal.why', 'receipt.query']);
 const MAY_HOLD_TOKEN = new Set([...MAY_HOLD_ANY, 'receipt.tokens[]', 'supplied.tokens[]']);
 
 async function sessionWithMarkers(next: () => number) {
@@ -59,6 +63,8 @@ async function sessionWithMarkers(next: () => number) {
     Array.from({ length: n }, () => LETTERS[Math.floor(next() * 26)]).join('');
   // A marker no rule can see (letters only) and one that is a token (digit-bearing, ≥ 4 chars).
   const hidden = `zq${word(10)}`;
+  // A third marker, for the two other free-text fields: it may live there and nowhere else.
+  const asked = `xk${word(10)}`;
   const token = `mk${word(4)}${Math.floor(next() * 9000) + 1000}`;
   const prose = (n: number) =>
     Array.from({ length: n }, () =>
@@ -74,6 +80,7 @@ async function sessionWithMarkers(next: () => number) {
       receiptEntry(at(2), {
         source: 'search_logs',
         text: surround(200),
+        query: `errors near ${asked}`,
         hidden: Math.floor(next() * 3),
       }),
     ),
@@ -98,15 +105,16 @@ async function sessionWithMarkers(next: () => number) {
     unwrap(
       await deliveredEntry(at(8), { text: draft }, { seq: 6, draftDigest: submit.draftDigest }),
     ),
+    unwrap(withdrawalEntry(at(9), { note: 4, why: `misread ${asked} as a value` })),
   ];
-  return { hidden, token, entries, dirName: `ledger-${hidden}` };
+  return { hidden, token, asked, entries, dirName: `ledger-${hidden}` };
 }
 
 describe('never stored: markers land only in note text, note values and token sets', () => {
   it('holds for seeded sessions, in the entries and in the bytes of the file', async () => {
     const next = seeded(55);
     for (let run = 0; run < 40; run++) {
-      const { hidden, token, entries, dirName } = await sessionWithMarkers(next);
+      const { hidden, token, asked, entries, dirName } = await sessionWithMarkers(next);
       const root = mkdtempSync(join(tmpdir(), 'af-llm-ledger-markers-'));
       made.push(root);
       const dir = join(root, dirName);
@@ -130,6 +138,8 @@ describe('never stored: markers land only in note text, note values and token se
           }
           if (value.includes(token))
             expect(MAY_HOLD_TOKEN.has(path), `${token} at ${path}`).toBe(true);
+          if (value.includes(asked))
+            expect(MAY_HOLD_ASKED.has(path), `${asked} at ${path}`).toBe(true);
         }
       }
       // The token marker is kept where the design keeps it: the read's tokens, the supplied tokens, the note.

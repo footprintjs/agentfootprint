@@ -2,16 +2,25 @@
  * TOKENS, GENERATED — the token reader against an independent oracle (case table 5.1, 8.4).
  *
  * The oracle finds tokens by a CHARACTER SCAN, not by the reader's regular expressions: its own
- * splitter, its own decoration and thousands rules, and a hand-written number parser for rules
- * 1–3. On many seeded texts built from the pieces that matter (digits, separators, commas, units,
+ * splitter and comma rule (a comma separates values except inside a thousands-grouped run of
+ * digits not glued to a letter), its own decoration rule, and a hand-written number parser for
+ * rules 1–3. On many seeded texts built from the pieces that matter (digits, separators, commas, units,
  * quotes, JSON keys) the two must agree exactly. A JSON value is checked against a walk of its
  * parsed form in document order. Every token either side gives is a fixed point (`isToken`), and
- * a pathological input of the full 1 MiB is read in bounded time.
+ * a pathological input of the full 1 MiB is read in bounded time. A reading CUT by a byte cap, at
+ * every cap, keeps only tokens the whole text holds (never a piece of a value), and keeps more as
+ * the cap grows.
  */
 import { describe, expect, it } from 'vitest';
 
 import { LEDGER_LIMITS } from '../../src/llm-ledger/limits.js';
-import { isToken, readTokens, tokensOf, utf8Bytes } from '../../src/llm-ledger/tokens.js';
+import {
+  isToken,
+  readTokens,
+  readTokensUpTo,
+  tokensOf,
+  utf8Bytes,
+} from '../../src/llm-ledger/tokens.js';
 import { seeded, seededTexts } from '../helpers/seededText.js';
 
 const isDigit = (c: string) => c >= '0' && c <= '9';
@@ -71,28 +80,58 @@ function oracleClassify(t: string): string | undefined {
   return [...t].some((c) => isLower(c) || ':_-/.'.includes(c)) ? t : undefined;
 }
 
-/** `-?\d{1,3}(,\d{3})+(\.\d+)?`, by scanning. */
-function isThousands(t: string): boolean {
-  const body = t.startsWith('-') ? t.slice(1) : t;
-  const [whole, ...fraction] = body.split('.');
-  if (fraction.length > 1 || (fraction.length === 1 && !/^\d+$/.test(fraction[0]!))) return false;
-  const groups = whole!.split(',');
-  return (
-    groups.length >= 2 &&
-    groups[0]!.length >= 1 &&
-    groups[0]!.length <= 3 &&
-    groups.every((g, i) => [...g].every(isDigit) && (i === 0 || g.length === 3))
-  );
-}
-
 function oracleSpell(raw: string): string {
-  let v = raw.toLowerCase();
+  const v = raw.toLowerCase();
   let a = 0;
   while (a < v.length && '$#@+'.includes(v[a]!)) a++;
   let b = v.length;
   while (b > a && '.,:%'.includes(v[b - 1]!)) b--;
-  v = v.slice(a, b);
-  return isThousands(v) ? v.split(',').join('') : v;
+  return v.slice(a, b);
+}
+
+/** A rough token's pieces: split at every comma but those of a grouped run, which fold away. */
+function oraclePieces(rough: string): string[] {
+  const out: string[] = [];
+  let piece = '';
+  for (let i = 0; i < rough.length; ) {
+    const c = rough[i]!;
+    if (!isDigit(c)) {
+      if (c === ',') {
+        out.push(piece);
+        piece = '';
+      } else piece += c;
+      i++;
+      continue;
+    }
+    let j = i;
+    let run = '';
+    while (
+      j < rough.length &&
+      (isDigit(rough[j]!) ||
+        (rough[j] === ',' && isDigit(rough[j - 1] ?? '') && isDigit(rough[j + 1] ?? '')))
+    )
+      run += rough[j++];
+    const groups = run.split(',');
+    const glued = i > 0 && /[A-Za-z]/.test(rough[i - 1]!);
+    const grouped =
+      !glued &&
+      groups.length >= 2 &&
+      groups[0]!.length >= 1 &&
+      groups[0]!.length <= 3 &&
+      groups.slice(1).every((g) => g.length === 3);
+    if (grouped) piece += groups.join('');
+    else
+      groups.forEach((g, k) => {
+        if (k > 0) {
+          out.push(piece);
+          piece = '';
+        }
+        piece += g;
+      });
+    i = j;
+  }
+  out.push(piece);
+  return out;
 }
 
 /** Prose: key colons blanked, rough tokens by character, list commas split, then rules 1–3. */
@@ -112,15 +151,9 @@ function oracleProse(text: string, out: string[]): void {
   }
   let rough = '';
   const flush = () => {
-    let piece = '';
-    for (let i = 0; i <= rough.length; i++) {
-      const c = rough[i];
-      const listComma = c === ',' && !(isDigit(rough[i - 1] ?? '') && isDigit(rough[i + 1] ?? ''));
-      if (c === undefined || listComma) {
-        const token = oracleClassify(oracleSpell(piece));
-        if (token !== undefined && !out.includes(token)) out.push(token);
-        piece = '';
-      } else piece += c;
+    for (const piece of oraclePieces(rough)) {
+      const token = oracleClassify(oracleSpell(piece));
+      if (token !== undefined && !out.includes(token)) out.push(token);
     }
     rough = '';
   };
@@ -244,6 +277,50 @@ describe('tokensOf against the character-scan oracle', () => {
         if (token.length <= LEDGER_LIMITS.maxTokenChars) expect(isToken(token)).toBe(true);
       }
     }
+  });
+});
+
+describe('a reading cut by a byte cap', () => {
+  /** Seeded texts of two kinds: prose, and one JSON value (so a cut is a cut JSON prefix). */
+  const texts = (() => {
+    const next = seeded(404);
+    const prose = seededTexts(9, PIECES, 400, 14).map((t) => `p ${t}`);
+    const json = Array.from({ length: 200 }, () =>
+      JSON.stringify(
+        Array.from({ length: 1 + Math.floor(next() * 6) }, () =>
+          next() < 0.5
+            ? Math.floor(next() * 10 ** Math.floor(next() * 7))
+            : seededTexts(Math.floor(next() * 1e9), PIECES, 1, 5)[0]!,
+        ),
+      ),
+    );
+    return [...prose, ...json];
+  })();
+
+  it('at every cap, keeps only tokens the whole text holds, and more as the cap grows', () => {
+    let cuts = 0;
+    for (const text of texts) {
+      const whole = new Set(tokensOf(text));
+      const bytes = utf8Bytes(text);
+      let before: readonly string[] = [];
+      for (let cap = 0; cap <= bytes; cap++) {
+        const reading = readTokensUpTo(text, cap);
+        for (const token of reading.tokens)
+          expect(whole.has(token), `${JSON.stringify(text)} @${cap}: ${token}`).toBe(true);
+        for (const token of before)
+          expect(reading.tokens, `${JSON.stringify(text)} @${cap}`).toContain(token);
+        expect(reading.bytes).toBe(bytes);
+        if (reading.cut !== undefined) {
+          expect(reading.cut.bytesUnread).toBeGreaterThanOrEqual(bytes - cap);
+          cuts++;
+        }
+        before = reading.tokens;
+      }
+      expect(readTokensUpTo(text, bytes).tokens).toEqual(
+        tokensOf(text).filter((t) => t.length <= LEDGER_LIMITS.maxTokenChars),
+      );
+    }
+    expect(cuts).toBeGreaterThan(5_000);
   });
 });
 

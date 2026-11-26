@@ -241,7 +241,7 @@ describe('the session file', () => {
     expect(await refusal(store.load(asFifo))).toEqual({ code: 'unsafe-file', field: 'file' });
   });
 
-  it('a file the store creates is 0600, whatever the umask leaves', async () => {
+  it('a file the store creates is 0600 (the umask this run has; a worker cannot change it)', async () => {
     const { file } = await withSession();
     expect(statSync(file).mode & 0o777).toBe(0o600);
   });

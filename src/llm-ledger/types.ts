@@ -3,7 +3,7 @@
  *
  * Pattern: declarations only. Every entry kind is one interface over one
  *          shared base; `entries.ts` is the one check that a value has one of
- *          these shapes, and the one set of builders that make them.
+ *          these shapes, and `build.ts` holds the builders that make them.
  * Role:    the closed leaf's vocabulary. Every exported name carries the
  *          `Ledger` prefix, because `receipt` already names what the model was
  *          handed elsewhere in this package.

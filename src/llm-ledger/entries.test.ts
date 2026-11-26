@@ -158,6 +158,23 @@ describe('entryFault — the shapes', () => {
     expect(entryFault({ ...clone(VALID.note), at: '2026-11-25T11:00:00+01:00' })).toBe('at');
   });
 
+  it('kind, by and how are strings: an array spelling is refused before any lookup', () => {
+    expect(entryFault({ ...clone(VALID.note), kind: ['note'] })).toBe('kind');
+    expect(entryFault({ ...clone(VALID.opened), seq: 2, kind: ['opened'] })).toBe('kind');
+    expect(entryFault({ ...clone(VALID.note), kind: { toString: () => 'note' } })).toBe('kind');
+    expect(entryFault({ ...clone(VALID.note), by: ['agent'] })).toBe('by');
+    expect(entryFault({ ...clone(VALID.note), how: ['observed'] })).toBe('by');
+    expect(entryFault({ ...clone(VALID.note), by: 'agent', how: 7 })).toBe('by');
+    // Every other closed word is checked as a string too.
+    expect(entryFault(withField('note', 'noteKind', ['claim']))).toBe('noteKind');
+    expect(entryFault(withField('supplied', 'from', ['person']))).toBe('from');
+    expect(entryFault(withField('check', 'disposition', ['checked-pass']))).toBe('disposition');
+    expect(entryFault(withField('check', 'verdict', ['verified']))).toBe('disposition');
+    expect(entryFault(withField('check', 'rule', ['cited@1']))).toBe('rule');
+    expect(entryFault(withField('released', 'answer', ['withhold']))).toBe('answer');
+    expect(entryFault(withField('opened', 'rules', [['cited@1']]))).toBe('rules');
+  });
+
   it.each([
     ['opened', 'agent', 'observed'],
     ['receipt', 'agent', 'observed'],
@@ -303,6 +320,13 @@ describe('entryFault — the shapes', () => {
     );
     expect(entryFault(withField('receipt', 'hidden', 0))).toBe('hidden');
     expect(entryFault(withField('receipt', 'limit', { rows: 0, hit: false }))).toBe('limit');
+    expect(entryFault(withField('receipt', 'limit', { rows: 5, hit: false, extra: 1 }))).toBe(
+      'limit',
+    );
+    expect(
+      entryFault(withField('receipt', 'cut', { tokensDropped: 1, bytesUnread: 0, x: 0 })),
+    ).toBe('cut');
+    expect(entryFault(withField('receipt', 'ref', { uri: 'u', digest: DIGEST, x: 1 }))).toBe('ref');
     expect(entryFault(withField('receipt', 'window', { from: AT, to: AT }))).toBe('window');
     expect(entryFault(withField('receipt', 'ref', { uri: 'x', digest: 'md5:00' }))).toBe('ref');
     expect(entryFault(withField('receipt', 'externalId', 'e'.repeat(257)))).toBe('externalId');

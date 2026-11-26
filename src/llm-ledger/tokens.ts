@@ -30,23 +30,36 @@
  * ## How a text is split
  *
  * The characters `A–Z a–z 0–9 : _ - / . , % + @ # $` live inside a token;
- * everything else separates. A comma not between two digits splits a list.
- * Leading `$ # @ +` and trailing `. , ; : ! ? %` are decoration. A JSON key's
- * colon is a separator (`{"total":1200}` gives `1200`, never `:1200`).
+ * everything else separates. Leading `$ # @ +` and trailing `. , ; : ! ? %`
+ * are decoration. A JSON key's colon is a separator (`{"total":1200}` gives
+ * `1200`, never `:1200`).
+ *
+ * A comma separates values — logs and tools answer in CSV — except inside a
+ * THOUSANDS-GROUPED number: a run of digits and commas that matches
+ * `\d{1,3}(,\d{3})+` exactly and is not glued to a letter before it. There the
+ * commas are folded out: `41,200` is `41200`, and so are `$41,200`,
+ * `41,200ms` and `-41,200.5`'s number. Every other comma separates:
+ * `1200,9750` is `1200` and `9750`, `host-a,1200,ok` is three pieces, and so
+ * are identifiers joined by commas (`esx01a,esx02b`, `host1,234`). This
+ * departs on purpose from the agent's own extractor, which keeps `1200,9750`
+ * as one piece and so sees neither value; the differential against it lists
+ * this as a known difference.
  *
  * A text that is ONE JSON object or array is read value by value instead:
- * every string literal and key as text, every number literal as written. Read
- * as prose, compact JSON glues its punctuation onto the values (`[1200,9750]`
- * would give no token at all).
+ * every string literal and key as text, every number literal as written. A
+ * receipt's text cut by the byte cap is read the same way up to its last
+ * whole literal, when what was read can be the start of one JSON value.
  *
  * ## The caps (`limits.ts`)
  *
  * `readTokens` reads at most `maxTextBytes` UTF-8 bytes; the rest is counted in
- * `cut.bytesUnread`, never read. A cut never splits a token: the token the
- * byte cap falls in is left unread with the rest. It keeps the first
- * `maxTokens` distinct tokens in first-seen order; every other distinct token —
- * past the cap, or longer than `maxTokenChars` — is counted in
- * `cut.tokensDropped`. A reading that kept everything has no `cut`.
+ * `cut.bytesUnread`, never read. A cut never keeps a piece of a value: a piece
+ * the byte cap falls in — or one that what follows could still change, such as
+ * the digits of a thousands-grouped number — is left unread with the rest, and
+ * so is a JSON string the cap falls inside. It keeps the first `maxTokens`
+ * distinct tokens in first-seen order; every other distinct token — past the
+ * cap, or longer than `maxTokenChars` — is counted in `cut.tokensDropped`. A
+ * reading that kept everything has no `cut`. Nothing read is dropped uncounted.
  */
 import { LEDGER_LIMITS } from './limits.js';
 
@@ -59,10 +72,9 @@ export interface LedgerTokenReading {
 }
 
 const ROUGH = /[A-Za-z0-9:_\-/.,%+@#$]+/g;
-const LIST_COMMA = /,(?!\d)|(?<!\d),/;
 const LEADING = /^[$#@+'"`([{<]+/;
 const TRAILING = '.,;:!?%\'"`)]}>';
-const THOUSANDS = /^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/;
+const THOUSANDS_RUN = /^\d{1,3}(?:,\d{3})+$/;
 const RATIO = /^\d{1,2}\/\d{1,2}$/;
 const WITH_TAIL = /^([-+]?\d+(?:\.\d+)?)[-/]?[a-z]{1,5}(?:\/[a-z]{1,5})?$/;
 const NUMBER = /^[-+]?\d+(?:\.\d+)?$/;
@@ -70,6 +82,22 @@ const STRUCTURAL = /[:_\-/.]/;
 const LETTER = /[a-z]/;
 const DIGIT = /\d/;
 const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+const JSON_WORDS = ['true', 'false', 'null'];
+const COMMA = 0x2c;
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+
+const isDigitAt = (s: string, i: number): boolean => {
+  const c = s.charCodeAt(i);
+  return c >= 0x30 && c <= 0x39;
+};
+const isLetterAt = (s: string, i: number): boolean => {
+  const c = s.charCodeAt(i);
+  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a);
+};
+/** A comma at `i` with a digit on both sides: inside a run of digits and commas. */
+const runCommaAt = (s: string, i: number): boolean =>
+  s.charCodeAt(i) === COMMA && isDigitAt(s, i - 1) && isDigitAt(s, i + 1);
 
 /** Whether the code unit `c` may live inside a token. */
 function intra(c: number): boolean {
@@ -93,11 +121,34 @@ function intra(c: number): boolean {
 
 /** One raw piece in the form every side compares on; `''` for pure decoration. */
 function spelling(raw: string): string {
-  let v = raw.toLowerCase().replace(LEADING, '');
+  const v = raw.toLowerCase().replace(LEADING, '');
   let end = v.length;
   while (end > 0 && TRAILING.includes(v[end - 1] as string)) end--;
-  v = v.slice(0, end);
-  return THOUSANDS.test(v) ? v.replace(/,/g, '') : v;
+  return v.slice(0, end);
+}
+
+/**
+ * One rough token's pieces, split at every comma but those of a thousands-grouped number — a
+ * run of digits and commas matching `\d{1,3}(,\d{3})+` exactly, not glued to a letter — whose
+ * commas are folded out. No piece holds a comma.
+ */
+function piecesOf(rough: string): string[] {
+  if (!rough.includes(',')) return [rough];
+  let out = '';
+  for (let i = 0; i < rough.length; ) {
+    if (!isDigitAt(rough, i)) {
+      out += rough.charCodeAt(i) === COMMA ? ' ' : rough[i];
+      i++;
+      continue;
+    }
+    let end = i;
+    while (end < rough.length && (isDigitAt(rough, end) || runCommaAt(rough, end))) end++;
+    const run = rough.slice(i, end);
+    const glued = i > 0 && isLetterAt(rough, i - 1);
+    out += !glued && THOUSANDS_RUN.test(run) ? run.replace(/,/g, '') : run.replace(/,/g, ' ');
+    i = end;
+  }
+  return out.split(' ');
 }
 
 /** Rules 1–3: the token a spelled piece is, or `undefined` for prose. */
@@ -140,7 +191,7 @@ function withoutKeyColons(text: string): string {
 /** Every token of prose, in first-seen order, duplicates kept. */
 function proseTokens(text: string, into: (token: string) => void): void {
   for (const [rough] of withoutKeyColons(text).matchAll(ROUGH)) {
-    for (const piece of rough.split(LIST_COMMA)) {
+    for (const piece of piecesOf(rough)) {
       const token = classify(spelling(piece));
       if (token !== undefined) into(token);
     }
@@ -148,41 +199,95 @@ function proseTokens(text: string, into: (token: string) => void): void {
 }
 
 /**
- * Every token of one JSON object or array, value by value — or `false` when
- * `text` is not one. String literals and keys are read as prose, number
- * literals as written.
+ * Whether `text` can be the START of one JSON object or array: outside its
+ * strings, only JSON's own punctuation, number literals and words. A cut
+ * prefix of one JSON value always is; prose that merely opens with a bracket
+ * (`[INFO] host esx01a`) is not.
  */
-function jsonTokens(text: string, into: (token: string) => void): boolean {
-  const first = text.trimStart()[0];
-  if (first !== '{' && first !== '[') return false;
-  try {
-    JSON.parse(text); // the grammar check; the values are read from the text below
-  } catch {
-    return false;
-  }
+function jsonShaped(text: string): boolean {
   for (let i = 0; i < text.length; ) {
     const c = text.charCodeAt(i);
-    if (c === 0x22) {
+    if (c === QUOTE) {
       let end = i + 1;
-      while (text.charCodeAt(end) !== 0x22) end += text.charCodeAt(end) === 0x5c ? 2 : 1;
-      proseTokens(JSON.parse(text.slice(i, end + 1)) as string, into);
+      while (end < text.length && text.charCodeAt(end) !== QUOTE)
+        end += text.charCodeAt(end) === BACKSLASH ? 2 : 1;
       i = end + 1;
-    } else if (c === 0x2d || (c >= 0x30 && c <= 0x39)) {
+    } else if (c === 0x2d || isDigitAt(text, i)) {
       JSON_NUMBER.lastIndex = i;
-      const literal = (JSON_NUMBER.exec(text) as RegExpExecArray)[0];
+      const literal = JSON_NUMBER.exec(text);
+      if (literal === null) return i === text.length - 1; // a lone '-' only where the cut fell
+      i += literal[0].length;
+    } else if (isLetterAt(text, i)) {
+      let end = i;
+      while (end < text.length && isLetterAt(text, end)) end++;
+      const word = text.slice(i, end);
+      const open = end === text.length; // a word the cut fell inside may be a prefix of one
+      if (!JSON_WORDS.some((w) => w === word || (open && w.startsWith(word)))) return false;
+      i = end;
+    } else if (/[\s{}[\],:]/.test(text[i] as string)) i++;
+    else return false;
+  }
+  return true;
+}
+
+/**
+ * Read one JSON object or array value by value: string literals and keys as
+ * prose, number literals as written. `complete`: `text` must be one JSON value
+ * (`JSON.parse` is the check). Otherwise it is the start of one, cut by the
+ * byte cap, and is read up to its last whole literal: a string the cut fell
+ * inside is left unread. Returns how many code units were read, or -1 when the
+ * text is not (the start of) one JSON value.
+ */
+function jsonValues(text: string, into: (token: string) => void, complete: boolean): number {
+  const first = text.trimStart()[0];
+  if (first !== '{' && first !== '[') return -1;
+  if (complete) {
+    try {
+      JSON.parse(text); // the grammar check; the values are read from the text below
+    } catch {
+      return -1;
+    }
+  } else if (!jsonShaped(text)) return -1;
+  // Collected first: a prefix nothing validated may hold a string JSON cannot decode, and then it
+  // is not JSON after all — read as prose, with nothing taken from this reading.
+  const found: string[] = [];
+  const keep = (token: string): void => void found.push(token);
+  let read = text.length;
+  for (let i = 0; i < text.length; ) {
+    const c = text.charCodeAt(i);
+    if (c === QUOTE) {
+      let end = i + 1;
+      while (end < text.length && text.charCodeAt(end) !== QUOTE)
+        end += text.charCodeAt(end) === BACKSLASH ? 2 : 1;
+      if (end >= text.length) {
+        read = i; // the cut fell inside this string
+        break;
+      }
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(text.slice(i, end + 1));
+      } catch {
+        return -1;
+      }
+      proseTokens(decoded as string, keep);
+      i = end + 1;
+    } else if (c === 0x2d || isDigitAt(text, i)) {
+      JSON_NUMBER.lastIndex = i;
+      const literal = JSON_NUMBER.exec(text)?.[0] ?? text.slice(i, i + 1);
       const token = classify(spelling(literal));
-      if (token !== undefined) into(token);
+      if (token !== undefined) keep(token);
       i += literal.length;
     } else i++;
   }
-  return true;
+  for (const token of found) into(token);
+  return read;
 }
 
 /** Every distinct token of `text`, in first-seen order, with no cap. */
 export function tokensOf(text: string): string[] {
   const seen = new Set<string>();
   const add = (token: string): void => void seen.add(token);
-  if (!jsonTokens(text, add)) proseTokens(text, add);
+  if (jsonValues(text, add, true) === -1) proseTokens(text, add);
   return [...seen];
 }
 
@@ -223,10 +328,74 @@ export function utf8Bytes(text: string): number {
 }
 
 /**
+ * Whether a run of digits and commas could still turn out a thousands-grouped
+ * number: never when it is glued to a letter; when it ends before the cap,
+ * exactly when it is one; when the cap cut it, while what is visible can still
+ * be the start of one.
+ */
+function mayFold(run: string, glued: boolean, open: boolean): boolean {
+  if (glued) return false;
+  if (!open) return THOUSANDS_RUN.test(run);
+  const groups = run.split(',');
+  const first = groups[0] as string;
+  const last = groups[groups.length - 1] as string;
+  return (
+    first.length >= 1 &&
+    first.length <= 3 &&
+    groups.slice(1, -1).every((g) => g.length === 3) &&
+    last.length <= 3
+  );
+}
+
+/**
+ * How much of `p` — the part of a token run before the cap — is settled:
+ * every piece before it reads the same whatever follows the cap. A comma
+ * settles what is before it when it separates values whatever comes next: one
+ * not inside a run of digits, or one inside a run that cannot fold. One pass.
+ */
+function settledLength(p: string): number {
+  let settled = 0;
+  for (let i = 0; i < p.length; ) {
+    if (!isDigitAt(p, i)) {
+      if (p.charCodeAt(i) === COMMA) settled = i + 1;
+      i++;
+      continue;
+    }
+    // A run of digits and the commas between them; a comma right at the cap may yet be one.
+    const start = i;
+    let lastComma = -1;
+    while (i < p.length) {
+      if (isDigitAt(p, i)) i++;
+      else if (
+        p.charCodeAt(i) === COMMA &&
+        isDigitAt(p, i - 1) &&
+        (i + 1 === p.length || isDigitAt(p, i + 1))
+      )
+        lastComma = i++;
+      else break;
+    }
+    const glued = start > 0 && isLetterAt(p, start - 1);
+    if (lastComma !== -1 && !mayFold(p.slice(start, i), glued, i === p.length))
+      settled = lastComma + 1;
+  }
+  return settled;
+}
+
+/**
  * The tokens a receipt keeps of the host's `text`, and what it did not keep.
  * The text itself is never kept: only its byte count and its capped tokens.
  */
 export function readTokens(text: string): LedgerTokenReading {
+  return readTokensUpTo(text, LEDGER_LIMITS.maxTextBytes);
+}
+
+/**
+ * `readTokens` under another byte cap, `maxBytes` (a whole number). The
+ * receipt's cap is `maxTextBytes`; a smaller one reads less, by the same law.
+ */
+export function readTokensUpTo(text: string, maxBytes: number): LedgerTokenReading {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
+    throw new RangeError('readTokensUpTo: maxBytes must be a whole number');
   let readUnits = 0;
   let readBytes = 0;
   let bytes = 0;
@@ -234,20 +403,34 @@ export function readTokens(text: string): LedgerTokenReading {
     const step = bytesAt(text, i);
     const units = step === 4 ? 2 : 1;
     bytes += step;
-    if (bytes <= LEDGER_LIMITS.maxTextBytes) {
+    if (bytes <= maxBytes) {
       readUnits = i + units;
       readBytes = bytes;
     }
     i += units;
   }
-  // The cap fell inside a token: leave the whole token unread rather than keep a piece of it.
+  // The cap fell inside a token run: keep only the pieces of it nothing after the cap can change.
   if (readUnits < text.length && intra(text.charCodeAt(readUnits))) {
-    while (readUnits > 0 && intra(text.charCodeAt(readUnits - 1))) {
-      readUnits--;
-      readBytes--; // a token character is ASCII: one byte
+    let start = readUnits;
+    while (start > 0 && intra(text.charCodeAt(start - 1))) start--;
+    const settled = start + settledLength(text.slice(start, readUnits));
+    readBytes -= readUnits - settled; // a token character is ASCII: one byte
+    readUnits = settled;
+  }
+  const seen = new Set<string>();
+  const add = (token: string): void => void seen.add(token);
+  const prefix = text.slice(0, readUnits);
+  if (readUnits === text.length) {
+    if (jsonValues(prefix, add, true) === -1) proseTokens(prefix, add);
+  } else {
+    const read = jsonValues(prefix, add, false);
+    if (read === -1) proseTokens(prefix, add);
+    else if (read < prefix.length) {
+      readBytes -= utf8Bytes(prefix.slice(read)); // a JSON string the cut fell inside: unread
+      readUnits = read;
     }
   }
-  const all = tokensOf(text.slice(0, readUnits));
+  const all = [...seen];
   const tokens: string[] = [];
   for (const token of all) {
     if (tokens.length === LEDGER_LIMITS.maxTokens) break;

@@ -52,20 +52,41 @@ const ENTRIES: LedgerEntry[] = [
   unwrap(noteEntry(at(5), { kind: 'question', text: 'which window?', cites: [] })),
 ];
 
-/** The independent MAC: HMAC-SHA-256 over canonical `{ session, seq, prev, entry }`. */
-const macOf = (key: Uint8Array, session: string, seq: number, prev: string, entry: unknown) =>
+/** The independent MAC: HMAC-SHA-256 over canonical `{ session, seq, prev, end, entry }`. */
+const macOf = (
+  key: Uint8Array,
+  session: string,
+  seq: number,
+  prev: string,
+  end: number,
+  entry: unknown,
+) =>
   createHmac('sha256', key)
-    .update(canonicalizeJson({ session, seq, prev, entry }, { maxBytes: 300_000 }), 'utf8')
+    .update(canonicalizeJson({ session, seq, prev, end, entry }, { maxBytes: 300_000 }), 'utf8')
     .digest('hex');
 
-/** The lines an honest writer with `key` would write for `entries` in `session`. */
-function linesFor(key: Uint8Array, session: string, entries: readonly unknown[]): string {
+/**
+ * The lines an honest writer with `key` would write for `entries` in `session`, appended in
+ * batches of the given sizes (one batch by default): each line `{ end, entry, mac }`.
+ */
+function linesFor(
+  key: Uint8Array,
+  session: string,
+  entries: readonly unknown[],
+  batches: readonly number[] = [entries.length],
+): string {
+  const ends: number[] = [];
+  batches.reduce((sum, size) => {
+    for (let k = 0; k < size; k++) ends[sum + k] = sum + size;
+    return sum + size;
+  }, 0);
   let prev = '';
   return entries
     .map((entry, i) => {
-      const mac = macOf(key, session, i + 1, prev, entry);
+      const end = ends[i] ?? i + 1;
+      const mac = macOf(key, session, i + 1, prev, end, entry);
       prev = mac;
-      return `${canonicalizeJson({ entry, mac }, { maxBytes: 300_000 })}\n`;
+      return `${canonicalizeJson({ end, entry, mac }, { maxBytes: 300_000 })}\n`;
     })
     .join('');
 }
@@ -95,25 +116,31 @@ describe('fileStore — the bytes on disk', () => {
     const lines = bytes.toString('utf8').split('\n').slice(0, -1);
     expect(lines).toHaveLength(5);
     lines.forEach((line, i) => {
-      expect(Buffer.byteLength(line) + 1).toBe(lineBytesOf(canonicalizeJson(ENTRIES[i])));
-      expect(line).toMatch(/^\{"entry":\{.*\},"mac":"[0-9a-f]{64}"\}$/);
+      expect(Buffer.byteLength(line) + 1).toBe(lineBytesOf(canonicalizeJson(ENTRIES[i]), 5));
+      expect(line).toMatch(/^\{"end":5,"entry":\{.*\},"mac":"[0-9a-f]{64}"\}$/);
     });
     expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(statSync(dir).mode & 0o777).toBe(0o700);
   });
 
-  it('splitting appends across reopened stores writes the same bytes', async () => {
+  it('splitting appends across reopened stores writes the same bytes as one store', async () => {
     const key = randomBytes(32);
-    const one = fresh(key);
     const session = mintSessionId();
-    await one.store.append(session, 0, ENTRIES);
+    const cuts = [1, 2, 2];
+    const one = fresh(key);
     const split = fresh(key);
-    for (let i = 0; i < ENTRIES.length; i++) {
+    let at = 0;
+    for (const size of cuts) {
+      const batch = ENTRIES.slice(at, at + size);
+      expect(await one.store.append(session, at, batch)).toBe(at + size);
       const reopened = fileLedgerStore({ dir: split.dir, key, uid: UID });
-      expect(await reopened.append(session, i, [ENTRIES[i]!])).toBe(i + 1);
+      expect(await reopened.append(session, at, batch)).toBe(at + size);
+      at += size;
     }
     const file = (dir: string) => readFileSync(join(dir, `${session}.jsonl`));
     expect(file(split.dir).equals(file(one.dir))).toBe(true);
+    expect(file(one.dir).toString('utf8')).toBe(linesFor(key, session, ENTRIES, cuts));
+    // Other splits mark other batches, and load the same entries.
     expect(
       (await fileLedgerStore({ dir: split.dir, key, uid: UID }).load(session)).entries,
     ).toEqual(ENTRIES);
@@ -211,7 +238,7 @@ describe('fileStore — tamper: every change is mac-mismatch, nothing loads in p
 
   it('a line that is not canonical is refused even with its own MAC', async () => {
     const { store, session, file, bytes } = await written();
-    writeFileSync(file, bytes.toString('utf8').replace('{"entry":{', '{"entry": {'));
+    writeFileSync(file, bytes.toString('utf8').replace('"entry":{', '"entry": {'));
     expect(await codeOf(store.load(session))).toBe('mac-mismatch');
     writeFileSync(
       file,
@@ -227,7 +254,7 @@ describe('fileStore — tamper: every change is mac-mismatch, nothing loads in p
     const lines = bytes.toString('utf8').split('\n');
     for (let nodes = 98_990; nodes <= 99_010; nodes++) {
       const entry = `[${new Array(nodes).fill(0).join(',')}]`;
-      lines[2] = `{"entry":${entry},"mac":"${'0'.repeat(64)}"}`;
+      lines[2] = `{"end":5,"entry":${entry},"mac":"${'0'.repeat(64)}"}`;
       writeFileSync(file, lines.join('\n'));
       expect(await codeOf(store.load(session)), `${nodes} nodes`).toBe('mac-mismatch');
     }
@@ -270,14 +297,22 @@ describe('fileStore — a torn tail is refused, never repaired', () => {
     }
   }, 60_000);
 
-  it('a cut exactly at a line boundary is an earlier log: only the high-water mark can see it', async () => {
-    const { store, session, file, bytes, dir, key } = await written();
+  it('a cut at a BATCH boundary is an earlier log, which only the high-water mark sees; one inside a batch is torn', async () => {
+    const { store, dir, key } = fresh();
+    const session = mintSessionId();
+    await store.append(session, 0, ENTRIES.slice(0, 1));
+    await store.append(session, 1, ENTRIES.slice(1, 3));
+    await store.append(session, 3, ENTRIES.slice(3));
+    const file = join(dir, `${session}.jsonl`);
+    const bytes = readFileSync(file);
     const guarded = withHighWater(store);
     expect((await guarded.load(session)).seq).toBe(5);
-    const lastStart = bytes.lastIndexOf(0x0a, bytes.length - 2) + 1;
-    writeFileSync(file, bytes.subarray(0, lastStart));
+    const breaks = [...bytes.entries()].filter(([, b]) => b === 0x0a).map(([i]) => i + 1);
+    writeFileSync(file, bytes.subarray(0, breaks[2])); // after seq 3: the end of the second batch
     expect(await codeOf(guarded.load(session))).toBe('rolled-back');
-    expect((await fileLedgerStore({ dir, key, uid: UID }).load(session)).seq).toBe(4);
+    expect((await fileLedgerStore({ dir, key, uid: UID }).load(session)).seq).toBe(3);
+    writeFileSync(file, bytes.subarray(0, breaks[3])); // after seq 4: inside the third batch
+    expect(await codeOf(fileLedgerStore({ dir, key, uid: UID }).load(session))).toBe('torn-line');
   });
 
   it('an empty file, a last line that is not JSON, and a middle line that is not JSON', async () => {
@@ -383,13 +418,13 @@ describe('fileStore — the canonical bounds nest: an entry at an edge still rea
   it('an entry admitted at the SORT-WORK edge is appended and reads back', async () => {
     const n = edge(100, 8_000, (k) => admits(checkWith(sortHeavy(k, 1))));
     const pad = edge(1, 5_000, (p) => admits(checkWith(sortHeavy(n, p))));
-    expect(refusedFor(checkWith(sortHeavy(n, pad + 1)), entryCanonical())).toBe('sort-work');
+    expect(refusedFor(checkWith(sortHeavy(n, pad + 1)), entryCanonical(2))).toBe('sort-work');
     await appendsAndReadsBack(checkWith(sortHeavy(n, pad)));
   }, 30_000);
 
   it('an entry admitted at the NODE edge is appended and reads back', async () => {
     const m = edge(1_000, 99_900, (k) => admits(checkWith({ list: new Array(k).fill(0) })));
-    expect(refusedFor(checkWith({ list: new Array(m + 1).fill(0) }), entryCanonical())).toBe(
+    expect(refusedFor(checkWith({ list: new Array(m + 1).fill(0) }), entryCanonical(2))).toBe(
       'nodes',
     );
     await appendsAndReadsBack(checkWith({ list: new Array(m).fill(0) }));
@@ -398,19 +433,22 @@ describe('fileStore — the canonical bounds nest: an entry at an edge still rea
   it('an entry admitted at the DEPTH edge is appended and reads back', async () => {
     const nested = (depth: number): unknown => (depth === 0 ? 0 : { d: nested(depth - 1) });
     const d = edge(1, 120, (k) => admits(checkWith(nested(k))));
-    expect(refusedFor(checkWith(nested(d + 1)), entryCanonical())).toBe('depth');
+    expect(refusedFor(checkWith(nested(d + 1)), entryCanonical(2))).toBe('depth');
     await appendsAndReadsBack(checkWith(nested(d)));
   }, 30_000);
 
   it("a forged line at the LINE's sort-work edge is mac-mismatch, never a raw error", async () => {
     const wraps = (e: unknown) =>
-      refusedFor({ entry: e, mac: '0'.repeat(64) }, LINE_CANONICAL) === 'ok';
+      refusedFor({ end: 5, entry: e, mac: '0'.repeat(64) }, LINE_CANONICAL) === 'ok';
     const n = edge(100, 8_000, (k) => wraps(sortHeavy(k, 1)));
     const pad = edge(1, 5_000, (p) => wraps(sortHeavy(n, p)));
     expect(wraps(sortHeavy(n, pad + 1))).toBe(false);
     const { store, session, file, bytes } = await written();
     const lines = bytes.toString('utf8').split('\n');
-    lines[2] = canonicalizeJson({ entry: sortHeavy(n, pad), mac: '0'.repeat(64) }, LINE_CANONICAL);
+    lines[2] = canonicalizeJson(
+      { end: 5, entry: sortHeavy(n, pad), mac: '0'.repeat(64) },
+      LINE_CANONICAL,
+    );
     writeFileSync(file, lines.join('\n'));
     expect(await codeOf(store.load(session))).toBe('mac-mismatch');
   }, 30_000);

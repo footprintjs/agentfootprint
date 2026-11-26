@@ -28,8 +28,9 @@
  * `withHighWater(store)` remembers, per session, the highest seq this instance
  * has seen, and refuses a load below it (`rolled-back`). It cannot see a saved
  * earlier copy restored between two processes: that needs a trusted counter,
- * which this release does not have. The map it keeps grows by one number per
- * session the instance touches.
+ * which this release does not have. It remembers at most `maxHighWaterSessions`
+ * sessions; past that the least recently used one is forgotten, and a rollback
+ * of a forgotten session is no more visible to this instance than to a fresh one.
  */
 import { canonicalizeJson, CanonicalJsonError } from 'foottrace/canonical-json';
 import type { CanonicalJsonOptions } from 'foottrace/canonical-json';
@@ -59,7 +60,10 @@ export interface LedgerStore {
 
 /**
  * Why a store refused. `rolled-back` comes only from `withHighWater`; every
- * other code from an adapter.
+ * other code from an adapter. `lock-lost` is the one code that says nothing
+ * about the log: the append wrote its batch, but another writer took the lock
+ * before it finished, so the batch may or may not stand — the caller must
+ * reload, never assume either.
  */
 export type LedgerStoreCode =
   | 'mac-mismatch'
@@ -68,6 +72,7 @@ export type LedgerStoreCode =
   | 'unsafe-file'
   | 'too-large'
   | 'locked-timeout'
+  | 'lock-lost'
   | 'rolled-back';
 
 /** A store's refusal: a closed code, and for `malformed` the field — a fixed word, never a value. */
@@ -85,13 +90,16 @@ export class LedgerStoreError extends Error {
 }
 
 /**
- * Bytes a line adds around its entry's canonical JSON:
- * `{"entry":` (9) + `,"mac":"` (8) + 64 hex + `"}` (2) + the newline (1).
+ * Bytes a line adds around its entry's canonical JSON, for a batch ending at seq `end`:
+ * `{"end":` (7) + the digits of `end` + `,"entry":` (9) + `,"mac":"` (8) + 64 hex + `"}` (2) +
+ * the newline (1).
  */
-export const LINE_OVERHEAD_BYTES = 84;
+export function lineOverheadBytes(end: number): number {
+  return 91 + String(end).length;
+}
 
 /**
- * The canonical-JSON bounds of one stored LINE, `{ entry, mac }`. Every bound is stated, because
+ * The canonical-JSON bounds of one stored LINE, `{ end, entry, mac }`. Every bound is stated, because
  * three canonicalisations nest and each must hold what the one inside it held:
  *
  *   ENTRY (admission, `entryCanonical`)  ⊂  LINE (this)  ⊂  MAC INPUT (`fileStore.ts`).
@@ -109,10 +117,13 @@ export const LINE_CANONICAL = Object.freeze({
   maxSortWork: 200_000,
 });
 
-/** An entry's own bounds: each a little inside its line's (the line adds one object and the MAC). */
-export function entryCanonical(): CanonicalJsonOptions {
+/**
+ * An entry's own bounds, in a batch ending at `end`: each a little inside its line's (the line
+ * adds one object, the batch's end and the MAC).
+ */
+export function entryCanonical(end: number): CanonicalJsonOptions {
   return {
-    maxBytes: LINE_CANONICAL.maxBytes - LINE_OVERHEAD_BYTES,
+    maxBytes: LINE_CANONICAL.maxBytes - lineOverheadBytes(end),
     maxNodes: LINE_CANONICAL.maxNodes - 10,
     maxFields: LINE_CANONICAL.maxFields - 10,
     maxDepth: LINE_CANONICAL.maxDepth - 1,
@@ -120,9 +131,9 @@ export function entryCanonical(): CanonicalJsonOptions {
   };
 }
 
-/** Bytes of the line an entry is stored as, given its canonical JSON. */
-export function lineBytesOf(entryText: string): number {
-  return utf8Bytes(entryText) + LINE_OVERHEAD_BYTES;
+/** Bytes of the line an entry is stored as, given its canonical JSON and its batch's end. */
+export function lineBytesOf(entryText: string, end: number): number {
+  return utf8Bytes(entryText) + lineOverheadBytes(end);
 }
 
 /** An admitted entry: its frozen copy, its canonical JSON and its line's size. */
@@ -146,27 +157,30 @@ export function checkEntryAt(entry: unknown, seq: number): LedgerEntry {
 }
 
 /**
- * Admit one entry for position `seq`: its canonical JSON (own data only — a
- * getter is never called), a fresh copy parsed from it, its shape, its size.
+ * Admit one entry for position `seq` of a batch ending at `end`: its canonical
+ * JSON (own data only — a getter is never called), a fresh copy parsed from it,
+ * its shape, its line's size.
  */
-export function admitEntry(value: unknown, seq: number): LedgerAdmitted {
+export function admitEntry(value: unknown, seq: number, end: number = seq): LedgerAdmitted {
   let text: string;
   try {
-    text = canonicalizeJson(value, entryCanonical());
+    text = canonicalizeJson(value, entryCanonical(end));
   } catch (error) {
     if (error instanceof CanonicalJsonError && error.code === 'output-bytes')
       throw new LedgerStoreError('too-large');
     throw new LedgerStoreError('malformed', 'entry');
   }
   const entry = checkEntryAt(JSON.parse(text), seq);
-  return { entry: deepFreeze(entry), text, lineBytes: lineBytesOf(text) };
+  return { entry: deepFreeze(entry), text, lineBytes: lineBytesOf(text, end) };
 }
 
-/** A batch ready to append: entries, their canonical JSON, and the bytes its lines take. */
+/** A batch ready to append: entries, their canonical JSON, the bytes its lines take, its last seq. */
 export interface LedgerBatch {
   readonly entries: readonly LedgerEntry[];
   readonly texts: readonly string[];
   readonly bytes: number;
+  /** The batch's last seq: every one of its lines carries it, so a reader knows the batch is whole. */
+  readonly end: number;
 }
 
 /**
@@ -181,17 +195,20 @@ export function admitBatch(session: unknown, expectedSeq: unknown, entries: unkn
   if (!Array.isArray(entries) || entries.length === 0)
     throw new LedgerStoreError('malformed', 'entries');
   if (entries.length > LEDGER_LIMITS.maxEntries) throw new LedgerStoreError('too-large');
+  const count = entries.length; // read once: a growing array does not change the batch
+  const end = (expectedSeq as number) + count;
   const admitted: LedgerAdmitted[] = [];
-  for (let i = 0; i < entries.length; i++) {
+  for (let i = 0; i < count; i++) {
     const item = Object.getOwnPropertyDescriptor(entries, i);
     if (item === undefined || !('value' in item))
       throw new LedgerStoreError('malformed', 'entries');
-    admitted.push(admitEntry(item.value, (expectedSeq as number) + i + 1));
+    admitted.push(admitEntry(item.value, (expectedSeq as number) + i + 1, end));
   }
   return Object.freeze({
     entries: Object.freeze(admitted.map((a) => a.entry)),
     texts: Object.freeze(admitted.map((a) => a.text)),
     bytes: admitted.reduce((sum, a) => sum + a.lineBytes, 0),
+    end,
   });
 }
 
@@ -204,24 +221,44 @@ export function checkRoom(storedSeq: number, storedBytes: number, batch: LedgerB
     throw new LedgerStoreError('too-large');
 }
 
-/** `store`, refusing a load below the highest seq this instance has seen for that session. */
-export function withHighWater(store: LedgerStore): LedgerStore {
-  const seen = new Map<string, number>();
+/**
+ * `store`, refusing a load below the highest seq this instance has seen for that session. An
+ * append is admitted first (a malformed batch is `malformed` here as on the store itself), then
+ * compared with the mark. At most `maxSessions` marks are kept, least recently used out.
+ */
+export function withHighWater(
+  store: LedgerStore,
+  maxSessions: number = LEDGER_LIMITS.maxHighWaterSessions,
+): LedgerStore {
+  if (!Number.isSafeInteger(maxSessions) || maxSessions < 1)
+    throw new RangeError('withHighWater: maxSessions must be a whole number, at least 1');
+  const seen = new Map<string, number>(); // insertion order = least recently used first
+  const markOf = (session: string): number => {
+    const mark = seen.get(session);
+    if (mark !== undefined) {
+      seen.delete(session); // touched: now the most recently used
+      seen.set(session, mark);
+    }
+    return mark ?? 0;
+  };
   const raise = (session: string, seq: number): void => {
-    if (seq > (seen.get(session) ?? 0)) seen.set(session, seq);
+    const prior = seen.get(session) ?? 0;
+    seen.delete(session);
+    seen.set(session, Math.max(seq, prior));
+    if (seen.size > maxSessions) seen.delete(seen.keys().next().value as string);
   };
   return {
     async load(session) {
       const log = await store.load(session);
-      if (log.seq < (seen.get(session) ?? 0)) throw new LedgerStoreError('rolled-back');
+      if (log.seq < markOf(session)) throw new LedgerStoreError('rolled-back');
       raise(session, log.seq);
       return log;
     },
     async append(session, expectedSeq, entries) {
+      admitBatch(session, expectedSeq, entries);
       // A caller behind what this instance has seen gets the answer an honest store gives —
       // without asking a store that may have been rolled back to exactly that seq.
-      if (typeof expectedSeq === 'number' && expectedSeq < (seen.get(session) ?? 0))
-        return 'conflict';
+      if (expectedSeq < markOf(session)) return 'conflict';
       const result = await store.append(session, expectedSeq, entries);
       if (result !== 'conflict') raise(session, result);
       return result;

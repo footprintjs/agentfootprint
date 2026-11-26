@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LEDGER_LIMITS } from './limits.js';
-import { isToken, readTokens, tokensOf, utf8Bytes } from './tokens.js';
+import { isToken, readTokens, readTokensUpTo, tokensOf, utf8Bytes } from './tokens.js';
 
 const MiB = LEDGER_LIMITS.maxTextBytes;
 /** `n` distinct tokens of 8 characters, space-separated: `t0000001 t0000002 …`. */
@@ -45,6 +45,36 @@ describe('tokensOf — rules 1–3', () => {
     expect(tokensOf(text)).toEqual(tokens);
   });
 
+  it.each([
+    ['thousands grouping is folded', '41,200 and 1,234,567', ['41200', '1234567']],
+    [
+      'with a sign, a decimal, a currency or a unit',
+      '-1,234.5 $2,500 1,234ms',
+      ['-1234.5', '2500', '1234'],
+    ],
+    ['CSV values are separated', 'host-a,1200,9750,ok', ['1200', '9750']],
+    [
+      'a digit comma that is not grouping separates',
+      '1200,9750 12,345,6789 1,0000',
+      ['1200', '9750', '6789', '0000'],
+    ],
+    [
+      'identifiers joined by commas are separated',
+      'esx01a,esx02b fc1/3,fc1/4',
+      ['esx01a', 'esx02b', 'fc1/3', 'fc1/4'],
+    ],
+    [
+      'a grouped run glued to a letter is not a number: its commas separate',
+      'host1,234 v2,500',
+      ['host1'],
+    ],
+    ['edge and doubled commas separate', ',41,200, 1,,234 5678,,', ['41200', '5678']],
+    ['no token holds a comma', 'a1,b2,c3 1,2,3 10,20', []],
+  ])('commas: %s', (_name, text, tokens) => {
+    expect(tokensOf(text)).toEqual(tokens);
+    for (const token of tokens) expect(token).not.toContain(',');
+  });
+
   it("a JSON key's colon is a separator in prose", () => {
     expect(tokensOf('result {"total":1200, "host":"esx01a"} done')).toEqual(['1200', 'esx01a']);
   });
@@ -60,8 +90,8 @@ describe('tokensOf — rules 1–3', () => {
     expect(tokensOf('  {"note":"took 1234 ms, see \\"run-77ab\\""}')).toEqual(['1234', 'run-77ab']);
   });
 
-  it('text that only looks like JSON is read as prose', () => {
-    expect(tokensOf('[1200,9750')).toEqual([]);
+  it('text that only looks like JSON is read as prose, where a comma separates values', () => {
+    expect(tokensOf('[1200,9750')).toEqual(['1200', '9750']);
     expect(tokensOf('{1234}')).toEqual(['1234']);
   });
 
@@ -159,6 +189,82 @@ describe('readTokens — the receipt caps', () => {
     const reading = readTokens(text);
     expect(reading.bytes).toBe(MiB + 1);
     expect(reading.cut).toEqual({ tokensDropped: 0, bytesUnread: 2 });
+  });
+
+  it('a CSV receipt keeps its values (the review case)', () => {
+    expect(readTokens('host-a,1200,9750,ok')).toEqual({ tokens: ['1200', '9750'], bytes: 19 });
+  });
+
+  it('a JSON number array past 1 MiB keeps what it read and counts the rest (the review case)', () => {
+    const text = `[${Array.from({ length: 200_000 }, (_, i) => 100_000 + i).join(',')}]`;
+    expect(text.length).toBeGreaterThan(MiB);
+    const reading = readTokens(text);
+    expect(reading.tokens).toHaveLength(2_048);
+    expect(reading.tokens[0]).toBe('100000');
+    // Every whole value before the cap was read: 7 bytes each after the bracket.
+    const read = Math.floor((MiB - 1) / 7);
+    expect(reading.cut).toEqual({
+      tokensDropped: read - 2_048,
+      bytesUnread: text.length - (1 + 7 * read),
+    });
+  });
+
+  it('a cut never keeps a piece a later byte could change, and keeps every settled one', () => {
+    // Inside a run that may still be thousands-grouped: none of it is kept.
+    expect(readTokensUpTo('a 1,234,567 b', 8)).toEqual({
+      tokens: [],
+      bytes: 13,
+      cut: { tokensDropped: 0, bytesUnread: 11 },
+    });
+    expect(readTokensUpTo('a 1,234,567 b', 8).tokens).not.toContain('1234');
+    // A run that can no longer be grouping: every value before the last comma is settled.
+    expect(readTokensUpTo('a 1200,9750,4321 b', 13)).toEqual({
+      tokens: ['1200', '9750'],
+      bytes: 18,
+      cut: { tokensDropped: 0, bytesUnread: 6 },
+    });
+    // A run glued to a letter never folds, so its commas settle too.
+    expect(readTokensUpTo('x host1,2345,678 y', 14).tokens).toEqual(['host1', '2345']);
+    expect(readTokensUpTo('host1,234,567 z', 11).tokens).toEqual(['host1']);
+    // A cap right after a separating comma keeps everything before it.
+    expect(readTokensUpTo('9999,abcd5', 5)).toEqual({
+      tokens: ['9999'],
+      bytes: 10,
+      cut: { tokensDropped: 0, bytesUnread: 5 },
+    });
+  });
+
+  it('a cut JSON value is read as JSON up to its last whole literal; a cut string stays unread', () => {
+    // Read as prose, `567,890` would fold into the false value 567890.
+    expect(readTokensUpTo('[567,890,"xyz"]', 10)).toEqual({
+      tokens: [],
+      bytes: 15,
+      cut: { tokensDropped: 0, bytesUnread: 6 },
+    });
+    expect(readTokensUpTo('["9999 x", "1234 5678"]', 18)).toEqual({
+      tokens: ['9999'],
+      bytes: 23,
+      cut: { tokensDropped: 0, bytesUnread: 12 },
+    });
+    // A cut prefix with a string JSON cannot decode is not JSON: read as prose, nothing kept from
+    // the JSON reading (`\u0031234` would decode to 1234).
+    const bad = String.raw`["\u0031234","bad\q", "more 5678"]`;
+    expect(readTokensUpTo(bad, 22).tokens).toEqual(['u0031234']);
+    // Prose that merely opens with a bracket is still prose.
+    expect(readTokensUpTo('[INFO] host esx01a took 1234 ms and more', 30).tokens).toEqual([
+      'esx01a',
+      '1234',
+    ]);
+  });
+
+  it('readTokensUpTo takes a whole number', () => {
+    expect(() => readTokensUpTo('x', -1)).toThrow(RangeError);
+    expect(() => readTokensUpTo('x', 1.5)).toThrow(RangeError);
+    expect(readTokensUpTo('1234', 0)).toEqual({
+      tokens: [],
+      bytes: 4,
+      cut: { tokensDropped: 0, bytesUnread: 4 },
+    });
   });
 
   it('the reading is frozen and holds no text', () => {

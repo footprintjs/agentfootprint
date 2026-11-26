@@ -247,11 +247,12 @@ export function entryFault(value: unknown): string | undefined {
   if (value.v !== 1) return 'v';
   if (!positive(value.seq)) return 'seq';
   const seq = value.seq as number;
-  const shape = Object.hasOwn(SHAPES, value.kind as string)
-    ? SHAPES[value.kind as LedgerKind]
-    : undefined;
-  if (shape === undefined) return 'kind';
-  if (!shape.writers.includes(`${String(value.by)}/${String(value.how)}`)) return 'by';
+  // Strings first, before any lookup: an array would pass `Object.hasOwn` and a template string
+  // (`['opened']` reads as `'opened'`), and so would let a second `opened` in.
+  if (typeof value.kind !== 'string' || !Object.hasOwn(SHAPES, value.kind)) return 'kind';
+  const shape = SHAPES[value.kind as LedgerKind];
+  if (typeof value.by !== 'string' || typeof value.how !== 'string') return 'by';
+  if (!shape.writers.includes(`${value.by}/${value.how}`)) return 'by';
   if (!isUtcInstant(value.at)) return 'at';
   for (const key of Object.keys(value)) {
     if (

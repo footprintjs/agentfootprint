@@ -61,6 +61,8 @@ export const LEDGER_LIMITS = Object.freeze({
   lockWaitMs: 2_000,
   /** A lock older than this was left by a writer that died; it is taken over. */
   lockStaleMs: 30_000,
+  /** Sessions one high-water mark remembers; the least recently used is forgotten past it. */
+  maxHighWaterSessions: 10_000,
 } as const);
 
 /** The cap table's type: every value a literal. */

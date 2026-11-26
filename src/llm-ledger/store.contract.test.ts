@@ -20,7 +20,7 @@ import { fileLedgerStore } from './fileStore.js';
 import { LEDGER_LIMITS } from './limits.js';
 import { memoryLedgerStore } from './memoryStore.js';
 import { mintSessionId } from './session.js';
-import { LINE_OVERHEAD_BYTES, LedgerStoreError, withHighWater } from './store.js';
+import { LedgerStoreError, lineOverheadBytes, withHighWater } from './store.js';
 import type { LedgerStore } from './store.js';
 import type { LedgerEntry } from './types.js';
 
@@ -55,8 +55,8 @@ const note = (seq: number, text = `note ${seq} 1234`): LedgerEntry =>
 const notes = (from: number, count: number): LedgerEntry[] =>
   Array.from({ length: count }, (_, i) => note(from + i));
 
-/** A check entry whose stored line is exactly `lineBytes` bytes. */
-function lineOf(seq: number, lineBytes: number): LedgerEntry {
+/** A check entry whose stored line, in a batch ending at `end`, is exactly `lineBytes` bytes. */
+function lineOf(seq: number, lineBytes: number, end: number = seq): LedgerEntry {
   const make = (label: string) => ({
     v: 1,
     seq,
@@ -72,7 +72,7 @@ function lineOf(seq: number, lineBytes: number): LedgerEntry {
     decision: { label },
     counts: { visible: 0, missing: 0, supplied: 0, incomplete: 0 },
   });
-  const base = new TextEncoder().encode(canonicalizeJson(make(''))).length + LINE_OVERHEAD_BYTES;
+  const base = new TextEncoder().encode(canonicalizeJson(make(''))).length + lineOverheadBytes(end);
   return make('x'.repeat(lineBytes - base)) as unknown as LedgerEntry;
 }
 
@@ -274,8 +274,10 @@ for (const [name, makeStore] of ADAPTERS) {
       const s = mintSessionId();
       await store.append(s, 0, [opened()]);
       const openedBytes =
-        new TextEncoder().encode(canonicalizeJson(opened())).length + LINE_OVERHEAD_BYTES;
-      const full = Array.from({ length: 127 }, (_, i) => lineOf(i + 2, LEDGER_LIMITS.maxLineBytes));
+        new TextEncoder().encode(canonicalizeJson(opened())).length + lineOverheadBytes(1);
+      const full = Array.from({ length: 127 }, (_, i) =>
+        lineOf(i + 2, LEDGER_LIMITS.maxLineBytes, 128),
+      );
       expect(await store.append(s, 1, full)).toBe(128);
       const left = LEDGER_LIMITS.maxLogBytes - openedBytes - 127 * LEDGER_LIMITS.maxLineBytes;
       expect(await refusedWith(store.append(s, 128, [lineOf(129, left + 1)]))).toEqual({
@@ -315,6 +317,29 @@ for (const [name, makeStore] of ADAPTERS) {
       expect(results.filter((r) => r === 2)).toHaveLength(1);
       expect(results.filter((r) => r === 'conflict')).toHaveLength(2);
       expect((await store.load(s)).seq).toBe(2);
+    });
+
+    it('a second opened is refused by any spelling, and a kind, by or how must be a string', async () => {
+      const store = makeStore();
+      const s = mintSessionId();
+      await store.append(s, 0, [opened()]);
+      const spelled = (fields: Record<string, unknown>) =>
+        refusedWith(store.append(s, 1, [{ ...opened(2), ...fields } as unknown as LedgerEntry]));
+      expect(await spelled({})).toEqual({ code: 'malformed', field: 'kind' });
+      expect(await spelled({ kind: ['opened'] })).toEqual({ code: 'malformed', field: 'kind' });
+      expect(await spelled({ kind: ['note'] })).toEqual({ code: 'malformed', field: 'kind' });
+      const asNote = { ...note(2) } as Record<string, unknown>;
+      for (const [field, value] of [
+        ['kind', ['note']],
+        ['by', ['agent']],
+        ['how', ['observed']],
+      ] as const)
+        expect(
+          await refusedWith(
+            store.append(s, 1, [{ ...asNote, [field]: value } as unknown as LedgerEntry]),
+          ),
+        ).toEqual({ code: 'malformed', field: field === 'kind' ? 'kind' : 'by' });
+      expect((await store.load(s)).entries.map((e) => e.kind)).toEqual(['opened']);
     });
 
     it('withHighWater passes an honest store through unchanged', async () => {
@@ -368,6 +393,64 @@ describe('withHighWater — a load below what this instance has seen is rolled-b
     // The rewound store would accept an append at 2 — the mark refuses to ask it.
     expect(await store.append(s, 2, [note(3)])).toBe(3);
     expect(await guarded.append(s, 2, [note(3)])).toBe('conflict');
+  });
+
+  it('a malformed batch is malformed behind the mark too, never conflict', async () => {
+    const { store, rewind } = rewindable();
+    const guarded = withHighWater(store);
+    const s = mintSessionId();
+    await guarded.append(s, 0, [opened()]);
+    await guarded.append(s, 1, notes(2, 3));
+    rewind(2);
+    expect(await refusedWith(guarded.append(s, 0, ['garbage' as unknown as LedgerEntry]))).toEqual({
+      code: 'malformed',
+      field: 'entry',
+    });
+    expect(await refusedWith(guarded.append(s, 0.5, [note(2)]))).toEqual({
+      code: 'malformed',
+      field: 'expectedSeq',
+    });
+    expect(await refusedWith(guarded.append(s, 1, [note(3)]))).toEqual({
+      code: 'malformed',
+      field: 'seq',
+    });
+  });
+
+  it('remembers at most maxSessions sessions, least recently used out', async () => {
+    const { store, rewind } = rewindable();
+    const guarded = withHighWater(store, 2);
+    const [a, b, c] = [mintSessionId(), mintSessionId(), mintSessionId()];
+    for (const s of [a, b, c]) {
+      await store.append(s, 0, [opened()]);
+      await store.append(s, 1, notes(2, 3));
+    }
+    for (const s of [a, b]) await guarded.load(s); // marks: a, b
+    await guarded.load(a); // a is now the most recently used
+    await guarded.load(c); // a third mark: b, the least recently used, is forgotten
+    rewind(2);
+    expect(await refusedWith(guarded.load(a))).toEqual({ code: 'rolled-back' });
+    expect(await refusedWith(guarded.load(c))).toEqual({ code: 'rolled-back' });
+    expect((await guarded.load(b)).seq).toBe(2); // forgotten: as unguarded as a fresh instance
+    expect(() => withHighWater(store, 0)).toThrow(RangeError);
+  });
+
+  it('a session refused as rolled-back counts as used: it is the last one forgotten', async () => {
+    const { store, rewind } = rewindable();
+    const guarded = withHighWater(store, 2);
+    const [a, b, c] = [mintSessionId(), mintSessionId(), mintSessionId()];
+    for (const s of [a, b, c]) {
+      await store.append(s, 0, [opened()]);
+      await store.append(s, 1, notes(2, 3));
+    }
+    await guarded.load(a);
+    await guarded.load(b); // marks: a (oldest), b
+    rewind(2);
+    expect(await refusedWith(guarded.load(a))).toEqual({ code: 'rolled-back' }); // a is used now
+    rewind(4);
+    await guarded.load(c); // a third mark: b, not a, is forgotten
+    rewind(2);
+    expect(await refusedWith(guarded.load(a))).toEqual({ code: 'rolled-back' });
+    expect((await guarded.load(b)).seq).toBe(2);
   });
 
   it('the mark is per session and per instance', async () => {

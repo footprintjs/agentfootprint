@@ -10,9 +10,9 @@
  * The children run the folder's own source, bundled once with esbuild (the precedent is
  * `test/time/partial-window-resume.test.ts`); the key reaches them through a 0600 file, never argv.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
@@ -21,6 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { noteEntry, openedEntry } from '../../src/llm-ledger/build.js';
 import { fileLedgerStore } from '../../src/llm-ledger/fileStore.js';
 import { mintSessionId } from '../../src/llm-ledger/session.js';
+import { LedgerStoreError } from '../../src/llm-ledger/store.js';
 import type { LedgerEntry } from '../../src/llm-ledger/types.js';
 
 const ROOT = resolve(__dirname, '../..');
@@ -41,8 +42,33 @@ const wait = () => (Date.now() >= Number(startAt) ? go() : setTimeout(wait, 1));
 wait();
 `;
 
+/** A writer killed (SIGKILL) after its write reached the disk with only the FIRST line of its batch. */
+const KILLED = String.raw`
+const fsp = require('node:fs/promises');
+const { readFileSync } = require('node:fs');
+const realOpen = fsp.open;
+fsp.open = async (...args) => {
+  const handle = await realOpen(...args);
+  if (String(args[0]).endsWith('.jsonl')) {
+    const write = handle.write.bind(handle);
+    handle.write = async (data, offset) => {
+      await write(data, offset, data.indexOf(10, offset) + 1 - offset);
+      process.kill(process.pid, 'SIGKILL');
+      return new Promise(() => undefined);
+    };
+  }
+  return handle;
+};
+const [api, dir, keyFile, session, expectedSeq, entriesFile] = process.argv.slice(2);
+const { fileLedgerStore } = require(api);
+const store = fileLedgerStore({ dir, key: new Uint8Array(readFileSync(keyFile)), uid: process.getuid() });
+store.append(session, Number(expectedSeq), JSON.parse(readFileSync(entriesFile, 'utf8')));
+`;
+const killed = join(folder, 'killed.cjs');
+
 beforeAll(async () => {
   writeFileSync(worker, WORKER);
+  writeFileSync(killed, KILLED);
   await build({
     entryPoints: [join(ROOT, 'src/llm-ledger/fileStore.ts')],
     outfile: api,
@@ -146,4 +172,48 @@ describe('two real processes append at one seq', () => {
     },
     60_000,
   );
+});
+
+describe('a writer killed in the middle of a batch', () => {
+  it('leaves an unfinished batch, which is refused whole and can never be extended', async () => {
+    const dir = join(folder, 'store-killed');
+    const key = randomBytes(32);
+    const keyFile = join(folder, 'key-killed');
+    writeFileSync(keyFile, key, { mode: 0o600 });
+    const session = mintSessionId();
+    const store = fileLedgerStore({ dir, key, uid: process.getuid!() });
+    await store.append(session, 0, [unwrap(openedEntry({ seq: 1, at: AT }, {}))]);
+    const entriesFile = join(folder, 'entries-killed.json');
+    writeFileSync(
+      entriesFile,
+      JSON.stringify([note(2, 'first of two 1111'), note(3, 'second of two 2222')]),
+    );
+    const run = spawnSync(
+      process.execPath,
+      [killed, api, dir, keyFile, session, '1', entriesFile],
+      {
+        env: { PATH: process.env.PATH, NODE_PATH: join(ROOT, 'node_modules') },
+        encoding: 'utf8',
+        timeout: 20_000,
+      },
+    );
+    expect(run.signal, run.stderr).toBe('SIGKILL');
+    const file = join(dir, `${session}.jsonl`);
+    const left = readFileSync(file);
+    expect(left.toString('utf8').split('\n')).toHaveLength(3); // opened, one line of two, the end
+    const code = (work: Promise<unknown>) =>
+      work.then(
+        (v) => String(v),
+        (e: unknown) => (e instanceof LedgerStoreError ? e.code : Promise.reject(e)),
+      );
+    expect(await code(store.load(session))).toBe('torn-line'); // waits out the dead writer's lock first
+    const lock = join(dir, `${session}.lock`);
+    const then = Date.now() / 1000 - 31;
+    utimesSync(lock, then, then); // the dead writer's lock, gone stale
+    expect(await code(store.append(session, 1, [note(2, 'a retry 3333')]))).toBe('torn-line');
+    expect(await code(store.append(session, 2, [note(3, 'after the half 4444')]))).toBe(
+      'torn-line',
+    );
+    expect(readFileSync(file).equals(left)).toBe(true);
+  }, 30_000);
 });

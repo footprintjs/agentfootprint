@@ -14,8 +14,13 @@
  *   - every production file may import `footprintjs` and `foottrace/canonical-json`, and relative
  *     files inside the folder; `fileStore.ts` also `node:fs`, `node:fs/promises`, `node:path`,
  *     `node:crypto`. Nothing else, anywhere.
- *   - `import()` of anything, `require`, `process` and the other Node globals appear nowhere.
- *   - Web Crypto (`globalThis`, `crypto`) appears only in `digest.ts`.
+ *   - `import()` of anything, `require`, `process` and the other Node globals appear nowhere; nor
+ *     do `eval`, the `Function` constructor, `import.meta`, or the network (`fetch`, `WebSocket`,
+ *     `XMLHttpRequest`: a receipt's `ref.uri` is never fetched).
+ *   - Web Crypto appears only in `digest.ts`, and only as `globalThis.crypto`: no other
+ *     `globalThis.` access anywhere, and no bare `crypto`.
+ *   - no decorator anywhere, and no computed class member name: both run code when a class is
+ *     defined.
  *   - no file runs code at module evaluation: the top level holds imports, exports and declarations
  *     whose initializers are inert (literals, functions, `Object.freeze` of a literal).
  *   - a test beside the code imports only the folder, `vitest`, `footprintjs`, `foottrace` and
@@ -68,6 +73,9 @@ const NODE_GLOBALS = new Set([
   'module',
   'exports',
 ]);
+
+/** Globals that run code from text or reach the network: refused everywhere. */
+const RUNNERS = new Set(['eval', 'Function', 'fetch', 'WebSocket', 'XMLHttpRequest']);
 
 /** What a test beside the code may import (bare), beyond relative files inside the folder. */
 const TEST_BARE = (spec: string): boolean =>
@@ -248,11 +256,7 @@ function topLevelCode(source: ts.SourceFile): string[] {
         if (ts.isClassStaticBlockDeclaration(member)) say(member, 'a static block');
         else if (isStatic && ts.isPropertyDeclaration(member) && member.initializer !== undefined)
           if (!inert(member.initializer)) say(member, 'a static initializer that runs code');
-        if (
-          ts.isPropertyDeclaration(member) &&
-          member.name &&
-          ts.isComputedPropertyName(member.name)
-        )
+        if (member.name !== undefined && ts.isComputedPropertyName(member.name))
           say(member, 'a computed class member');
       }
       continue;
@@ -283,13 +287,27 @@ function productionFaults(file: string, text: string): string[] {
     } else if (!allowed.has(spec))
       faults.push(`${file}:${line} — '${spec}' is not on its allowance`);
   }
+  const say = (node: ts.Node, what: string): void => {
+    faults.push(`${file}:${lineOf(source, node)} — ${what}`);
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && readsGlobal(node)) {
-      if (NODE_GLOBALS.has(node.text))
-        faults.push(`${file}:${lineOf(source, node)} — the Node global '${node.text}'`);
-      if ((node.text === 'globalThis' || node.text === 'crypto') && file !== WEB_CRYPTO_FILE)
-        faults.push(`${file}:${lineOf(source, node)} — '${node.text}' outside ${WEB_CRYPTO_FILE}`);
+      if (NODE_GLOBALS.has(node.text)) say(node, `the Node global '${node.text}'`);
+      if (RUNNERS.has(node.text))
+        say(node, `'${node.text}' runs text as code or reaches the network`);
+      if (node.text === 'crypto') say(node, "a bare 'crypto': Web Crypto is `globalThis.crypto`");
+      if (node.text === 'globalThis') {
+        const access = node.parent;
+        const webCrypto =
+          ts.isPropertyAccessExpression(access) &&
+          access.expression === node &&
+          access.name.text === 'crypto';
+        if (!webCrypto || file !== WEB_CRYPTO_FILE)
+          say(node, `'globalThis' other than \`globalThis.crypto\` in ${WEB_CRYPTO_FILE}`);
+      }
     }
+    if (ts.isMetaProperty(node)) say(node, '`import.meta`');
+    if (ts.isDecorator(node)) say(node, 'a decorator: it runs code when its class is defined');
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -366,6 +384,26 @@ describe('llm-ledger fence — the scanner flags every refused shape', () => {
     ['arithmetic over a binding (its valueOf can run)', PLAIN, 'const twice = size * 2;'],
     ['a template with a substitution', PLAIN, 'const s = `${name()}`;'],
     ['an allowance used outside its file', PLAIN, "import { createHmac } from 'node:crypto';"],
+    ['eval', PLAIN, 'export const run = (code: string) => eval(code);'],
+    ['the Function constructor', PLAIN, 'export const run = (code: string) => new Function(code);'],
+    ['fetch', PLAIN, 'export const get = (uri: string) => fetch(uri);'],
+    ['a WebSocket', PLAIN, 'export const open = (uri: string) => new WebSocket(uri);'],
+    ['XMLHttpRequest', PLAIN, 'export const x = () => new XMLHttpRequest();'],
+    ['import.meta', PLAIN, 'export const where = () => import.meta.url;'],
+    ['a class decorator', PLAIN, '@register\nexport class A {}'],
+    ['a member decorator', PLAIN, 'export class A { @track m() {} }'],
+    ['a computed method name', PLAIN, 'export class A { [key()]() {} }'],
+    [
+      'globalThis.process even in digest.ts',
+      WEB_CRYPTO_FILE,
+      'export const p = () => globalThis.process;',
+    ],
+    [
+      'globalThis passed on whole in digest.ts',
+      WEB_CRYPTO_FILE,
+      'export const g = () => globalThis;',
+    ],
+    ['a bare crypto in digest.ts', WEB_CRYPTO_FILE, 'export const r = () => crypto.randomUUID();'],
   ];
   for (const [name, file, source] of REFUSED) {
     it(`flags ${name}`, () => {

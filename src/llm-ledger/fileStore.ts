@@ -3,13 +3,15 @@
  *
  * Pattern: the port's file adapter; the one file of this folder (with the
  *          command line's, later) that imports Node. Every line is
- *          `{"entry":…,"mac":"<64 hex>"}` in canonical JSON, where the MAC is
+ *          `{"end":<n>,"entry":…,"mac":"<64 hex>"}` in canonical JSON. `end`
+ *          is the last seq of the batch the line was appended in; the MAC is
  *          HMAC-SHA-256 under the host's key over
- *          `canonicalizeJson({ session, seq, prev, entry })` and `prev` is the
- *          previous line's MAC (`''` for seq 1).
+ *          `canonicalizeJson({ session, seq, prev, end, entry })`, and `prev`
+ *          is the previous line's MAC (`''` for seq 1).
  * Role:    the crash-safe, tamper-evident log on a host. `session` in the MAC
  *          refuses a line or a whole file copied from another session; `prev`
- *          refuses a removed or reordered line; `seq` refuses a renumbering.
+ *          refuses a removed or reordered line; `seq` refuses a renumbering;
+ *          `end` refuses a batch that was never finished.
  * Emits:   N/A.
  *
  * ## What is refused, and how (thrown `LedgerStoreError` codes)
@@ -19,10 +21,13 @@
  *     line that is not canonical, or one that is not JSON before the last.
  *     ONE bad line refuses the whole session; nothing is loaded in part.
  *   - `torn-line` — the file does not end with a newline, its last line is not
- *     JSON, or it is empty. It is never truncated and there is no repair: the
- *     host inspects the file and opens a new session.
+ *     JSON, it is empty, or its last batch is unfinished (the file ends before
+ *     the seq its last lines name as their `end`). So a loaded log is always
+ *     whole batches. It is never truncated and there is no repair: the host
+ *     inspects the file and opens a new session.
  *   - `malformed` — a line whose MAC verifies but whose entry is not one of
- *     the shapes (`entries.ts`), or an append the shapes refuse.
+ *     the shapes (`entries.ts`) or whose `end` breaks its batch, or an append
+ *     the shapes refuse.
  *   - `unsafe-file` — the directory is a symbolic link, another user's, or
  *     writable by group or others; a session file or a lock is a symbolic
  *     link (`O_NOFOLLOW`), not a regular file, has another hard link, another
@@ -30,7 +35,11 @@
  *     0700 and files 0600 — the rule `footprintjs/sinks` follows for its file.
  *   - `too-large` — past a cap of `limits.ts`; a file larger than the log cap
  *     is refused before it is read.
- *   - `locked-timeout` — another writer held the lock for the whole wait.
+ *   - `locked-timeout` — another writer held the lock for the whole wait, or
+ *     took it from this append before it wrote: nothing was written.
+ *   - `lock-lost` — this append wrote and synced its batch, but its lock was
+ *     no longer its own afterwards. The batch may or may not stand; the caller
+ *     reloads and never assumes either.
  *
  * Any other operating-system error (a full disk, an I/O error) propagates as
  * it is: it is not a statement about the log's integrity.
@@ -45,11 +54,22 @@
  * the TAIL only — the whole chain is verified by `load`, which every attempt
  * makes first.
  *
+ * The stale rule reads the wall clock, so a writer that is still running can
+ * look dead (a machine asleep in the middle of an append, a stopped process, a
+ * clock stepped forward, a slow fsync), and two waiters on one dead lock can
+ * both take it. So an append checks, right before its write, that the lock is
+ * still the one it took (same device and inode) and writes nothing if not
+ * (`locked-timeout`); and checks again after its fsync (`lock-lost`). What is
+ * left: a lock taken over between that last check and the write itself lets
+ * two batches land at one seq, and the next `load` refuses the session
+ * (`mac-mismatch`) — refused, never forged. Closing that needs a lock the
+ * kernel holds, which this release does not take.
+ *
  * `load` takes no lock, so it can meet another process's append half-written:
- * a tail without its newline (or a file just created and still empty). Only
- * then does it look at the lock: it waits while a writer holds it (at most
- * `lockWaitMs`) and reads once more. A tail still torn after that is
- * `torn-line`. A load never takes part of a line for a whole one.
+ * a torn tail, an unfinished batch, or a file just created and still empty.
+ * Only then does it look at the lock: it waits while a writer holds it (at
+ * most `lockWaitMs`) and reads once more. A tail still torn after that is
+ * `torn-line`. A load never takes part of a batch for a whole one.
  *
  * ## The key, and what the MAC does not do
  *
@@ -58,7 +78,8 @@
  * INTEGRITY, not secrecy: the log is kept on the host unencrypted. A saved
  * earlier copy of the file, restored, verifies (see `store.ts` ·
  * `withHighWater`). The owner check compares with `uid`, which the host
- * passes (this folder never reads `process`); a wrong `uid` can only refuse.
+ * passes (this folder never reads `process`); a wrong `uid` can only refuse
+ * (for a process that cannot read other users' files).
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -68,12 +89,12 @@ import type { FileHandle } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { canonicalizeJson } from 'foottrace/canonical-json';
 
+import { deepFreeze } from './entries.js';
 import { LEDGER_LIMITS as L } from './limits.js';
 import { isSessionId } from './session.js';
 import { LINE_CANONICAL, LedgerStoreError, admitBatch, checkEntryAt, checkRoom } from './store.js';
 import type { LedgerBatch, LedgerLog, LedgerStore } from './store.js';
 import type { LedgerEntry } from './types.js';
-import { deepFreeze } from './entries.js';
 
 /** What a file store needs: where, the host's key, and the host's own user id. */
 export interface FileLedgerStoreOptions {
@@ -85,6 +106,19 @@ export interface FileLedgerStoreOptions {
   readonly uid: number;
 }
 
+/** The lock an append took: its device and inode, which no other lock file can share. */
+interface LockIdentity {
+  readonly dev: number;
+  readonly ino: number;
+}
+
+/** One stored line, read: its batch's end, its entry, its MAC. */
+interface StoredLine {
+  readonly end: number;
+  readonly entry: unknown;
+  readonly mac: string;
+}
+
 const MAC = /^[0-9a-f]{64}$/;
 /** How often a waiting append looks at the lock again. */
 const LOOK_MS = 10;
@@ -92,7 +126,11 @@ const LOOK_MS = 10;
 const codeOf = (error: unknown): unknown =>
   typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
 
-/** The timer decides when to LOOK; the clock (`lockWaitMs` from the first try) decides whether the wait is over. */
+/**
+ * A poll, not a sleep: the timer decides when to LOOK again, and the clock (`lockWaitMs` from the
+ * first try, read from `performance.now()`) decides whether the wait is over. Waking early only
+ * looks early; nothing relies on a minimum.
+ */
 const nextLook = (ms: number): Promise<'look'> =>
   new Promise((resolveLook) => setTimeout(() => resolveLook('look'), ms));
 
@@ -119,9 +157,9 @@ const STRICT_UTF8 = (): TextDecoder => new TextDecoder('utf-8', { fatal: true, i
 
 /**
  * One line's wrapper: `'not-json'` when it is not JSON at all, `'not-ours'`
- * when it is JSON but not exactly a canonical `{ entry, mac }`.
+ * when it is JSON but not exactly a canonical `{ end, entry, mac }`.
  */
-function parseLine(bytes: Uint8Array): { entry: unknown; mac: string } | 'not-json' | 'not-ours' {
+function parseLine(bytes: Uint8Array): StoredLine | 'not-json' | 'not-ours' {
   let text: string;
   let value: unknown;
   try {
@@ -131,17 +169,16 @@ function parseLine(bytes: Uint8Array): { entry: unknown; mac: string } | 'not-js
     return 'not-json';
   }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'not-ours';
-  const wrapper = value as Record<string, unknown>;
-  const keys = Object.keys(wrapper);
-  if (keys.length !== 2 || !Object.hasOwn(wrapper, 'entry') || typeof wrapper.mac !== 'string')
-    return 'not-ours';
-  if (!MAC.test(wrapper.mac)) return 'not-ours';
+  const w = value as Record<string, unknown>;
+  if (Object.keys(w).length !== 3 || !Object.hasOwn(w, 'entry')) return 'not-ours';
+  if (!Number.isSafeInteger(w.end) || (w.end as number) < 1) return 'not-ours';
+  if (typeof w.mac !== 'string' || !MAC.test(w.mac)) return 'not-ours';
   try {
-    if (canonicalizeJson(wrapper, LINE_CANONICAL) !== text) return 'not-ours';
+    if (canonicalizeJson(w, LINE_CANONICAL) !== text) return 'not-ours';
   } catch {
     return 'not-ours';
   }
-  return { entry: wrapper.entry, mac: wrapper.mac };
+  return { end: w.end as number, entry: w.entry, mac: w.mac };
 }
 
 /** 32 bytes of a MAC's hex. */
@@ -174,8 +211,8 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
   const fileOf = (session: string): string => join(dir, `${session}.jsonl`);
   const lockOf = (session: string): string => join(dir, `${session}.lock`);
 
-  // The MAC input is the entry plus its session, seq and `prev`: each bound a little OUTSIDE the
-  // line's (`store.ts` · `LINE_CANONICAL`), so every line that reads back has a MAC to compute.
+  // The MAC input is the entry plus its session, seq, `prev` and `end`: each bound a little OUTSIDE
+  // the line's (`store.ts` · `LINE_CANONICAL`), so every line that reads back has a MAC to compute.
   const macInputBounds = {
     maxBytes: LINE_CANONICAL.maxBytes + 1_024,
     maxNodes: LINE_CANONICAL.maxNodes + 16,
@@ -183,13 +220,13 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
     maxDepth: LINE_CANONICAL.maxDepth + 1,
     maxSortWork: LINE_CANONICAL.maxSortWork + 10_000,
   };
-  const macOf = (session: string, seq: number, prev: string, entry: unknown): string =>
+  const macOf = (session: string, seq: number, prev: string, end: number, entry: unknown) =>
     createHmac('sha256', key)
-      .update(canonicalizeJson({ session, seq, prev, entry }, macInputBounds), 'utf8')
+      .update(canonicalizeJson({ session, seq, prev, end, entry }, macInputBounds), 'utf8')
       .digest('hex');
 
-  const macMatches = (session: string, seq: number, prev: string, entry: unknown, mac: string) =>
-    timingSafeEqual(macBytes(macOf(session, seq, prev, entry)), macBytes(mac));
+  const macMatches = (session: string, seq: number, prev: string, line: StoredLine): boolean =>
+    timingSafeEqual(macBytes(macOf(session, seq, prev, line.end, line.entry)), macBytes(line.mac));
 
   /** A file the store reads or writes: a regular file, one link, ours, no group or other bit. */
   const refuseUnsafe = (stat: Stats, what: string): void => {
@@ -221,6 +258,18 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
     }
   };
 
+  const lstatOrNone = (path: string): Promise<Stats | undefined> =>
+    lstat(path).catch((error: unknown) => {
+      if (codeOf(error) === 'ENOENT') return undefined;
+      throw error;
+    });
+
+  /** Whether the lock at `path` is still the one this append took. */
+  const holds = async (path: string, ours: LockIdentity): Promise<boolean> => {
+    const stat = await lstatOrNone(path);
+    return stat !== undefined && stat.dev === ours.dev && stat.ino === ours.ino;
+  };
+
   const readAt = async (
     handle: FileHandle,
     position: number,
@@ -236,7 +285,7 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
     return out.subarray(0, read);
   };
 
-  /** Verify a whole log: every line's MAC in order, then its entry's shape. */
+  /** Verify a whole log: every line's MAC in order, its batch, then its entry's shape. */
   const verify = (session: string, bytes: Uint8Array): LedgerLog => {
     if (bytes.length === 0 || bytes[bytes.length - 1] !== 0x0a)
       throw new LedgerStoreError('torn-line');
@@ -244,23 +293,31 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
     if (lines.length > L.maxEntries) throw new LedgerStoreError('too-large');
     const entries: LedgerEntry[] = [];
     let prev = '';
+    let batchEnd = 0; // the end of the batch the lines are inside of; 0 between batches
     for (let i = 0; i < lines.length; i++) {
+      const seq = i + 1;
       const line = lines[i] as Uint8Array;
       if (line.length + 1 > L.maxLineBytes) throw new LedgerStoreError('too-large');
       const parsed = parseLine(line);
       if (parsed === 'not-json' && i === lines.length - 1) throw new LedgerStoreError('torn-line');
-      if (typeof parsed === 'string' || !macMatches(session, i + 1, prev, parsed.entry, parsed.mac))
+      if (typeof parsed === 'string' || !macMatches(session, seq, prev, parsed))
         throw new LedgerStoreError('mac-mismatch');
-      entries.push(deepFreeze(checkEntryAt(parsed.entry, i + 1)));
+      // A batch starts where the last one ended, and every one of its lines names the same end.
+      if (batchEnd === 0 ? parsed.end < seq : parsed.end !== batchEnd)
+        throw new LedgerStoreError('malformed', 'end');
+      batchEnd = parsed.end === seq ? 0 : parsed.end;
+      entries.push(deepFreeze(checkEntryAt(parsed.entry, seq)));
       prev = parsed.mac;
     }
+    // The file ends inside a batch: an append that never finished.
+    if (batchEnd !== 0) throw new LedgerStoreError('torn-line');
     return Object.freeze({ seq: entries.length, entries: Object.freeze(entries) });
   };
 
   /**
    * What an append needs from the file it extends: the last line, verified
    * against the MAC field of the line before it (that line itself is
-   * verified by `load`).
+   * verified by `load`), and its batch finished.
    */
   const readTail = async (
     handle: FileHandle,
@@ -293,17 +350,17 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       prev = previous.mac;
     }
     // seq 1 has no line before it, and every later line has one.
-    if (
-      (seq === 1) !== (lastBreak === -1) ||
-      !macMatches(session, seq, prev, parsed.entry, parsed.mac)
-    )
+    if ((seq === 1) !== (lastBreak === -1) || !macMatches(session, seq, prev, parsed))
       throw new LedgerStoreError('mac-mismatch');
+    if (parsed.end < seq) throw new LedgerStoreError('malformed', 'end');
+    // The last batch never finished: nothing may be appended after it.
+    if (parsed.end > seq) throw new LedgerStoreError('torn-line');
     checkEntryAt(parsed.entry, seq);
     return { seq, prev: parsed.mac };
   };
 
   /** Take the session's lock with `wx`, waiting at most `lockWaitMs`; a stale one is taken over. */
-  const takeLock = async (path: string): Promise<{ dev: number; ino: number }> => {
+  const takeLock = async (path: string): Promise<LockIdentity> => {
     const deadline = performance.now() + L.lockWaitMs;
     for (;;) {
       try {
@@ -321,10 +378,7 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       } catch (error) {
         if (codeOf(error) !== 'EEXIST') throw error;
       }
-      const held = await lstat(path).catch((error: unknown) => {
-        if (codeOf(error) === 'ENOENT') return undefined; // released between the two calls
-        throw error;
-      });
+      const held = await lstatOrNone(path); // undefined: released between the two calls
       if (held !== undefined) {
         refuseUnsafe(held, 'lock');
         if (Date.now() - held.mtimeMs > L.lockStaleMs) {
@@ -344,12 +398,8 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
   };
 
   /** Remove the lock — only if it is still ours (a writer that outlived the stale rule lost it). */
-  const releaseLock = async (path: string, ours: { dev: number; ino: number }): Promise<void> => {
-    const stat = await lstat(path).catch((error: unknown) => {
-      if (codeOf(error) === 'ENOENT') return undefined;
-      throw error;
-    });
-    if (stat !== undefined && stat.dev === ours.dev && stat.ino === ours.ino) await unlink(path);
+  const releaseLock = async (path: string, ours: LockIdentity): Promise<void> => {
+    if (await holds(path, ours)) await unlink(path);
   };
 
   /** fsync the directory, so a file just created survives a power loss. */
@@ -362,11 +412,13 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
     }
   };
 
-  /** Under the lock: compare, then write the batch as one append and fsync it. */
+  /** Under the lock: compare, then — still holding it — write the batch as one append and fsync it. */
   const appendLocked = async (
     session: string,
     expectedSeq: number,
     batch: LedgerBatch,
+    lockPath: string,
+    lock: LockIdentity,
   ): Promise<number | 'conflict'> => {
     const path = fileOf(session);
     let handle = await openFile(path, constants.O_RDWR | constants.O_APPEND);
@@ -393,8 +445,9 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
     let lines = '';
     let prev = stored.prev;
     for (let i = 0; i < batch.entries.length; i++) {
-      const mac = macOf(session, expectedSeq + i + 1, prev, batch.entries[i]);
-      lines += `${canonicalizeJson({ entry: batch.entries[i], mac }, LINE_CANONICAL)}\n`;
+      const entry = batch.entries[i];
+      const mac = macOf(session, expectedSeq + i + 1, prev, batch.end, entry);
+      lines += `${canonicalizeJson({ end: batch.end, entry, mac }, LINE_CANONICAL)}\n`;
       prev = mac;
     }
     const created = handle === undefined;
@@ -419,6 +472,11 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       }
     }
     try {
+      // The last moment before the write: a writer whose lock was taken over writes nothing.
+      if (!(await holds(lockPath, lock))) {
+        if (created && (await handle.stat()).size === 0) await unlink(path);
+        throw new LedgerStoreError('locked-timeout');
+      }
       const data = new TextEncoder().encode(lines);
       for (let written = 0; written < data.length; ) {
         const { bytesWritten } = await handle.write(data, written, data.length - written);
@@ -430,6 +488,8 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       await handle.close();
     }
     if (created) await syncDir();
+    // Written and synced — but a seq is an answer only while the lock was ours throughout.
+    if (!(await holds(lockPath, lock))) throw new LedgerStoreError('lock-lost');
     return expectedSeq + batch.entries.length;
   };
 
@@ -451,30 +511,34 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
   const waitForWriter = async (session: string): Promise<void> => {
     const deadline = performance.now() + L.lockWaitMs;
     for (;;) {
-      const lock = await lstat(lockOf(session)).catch((error: unknown) => {
-        if (codeOf(error) === 'ENOENT') return undefined;
-        throw error;
-      });
+      const lock = await lstatOrNone(lockOf(session));
       const left = deadline - performance.now();
       if (lock === undefined || left <= 0) return;
       await nextLook(Math.min(LOOK_MS, left));
     }
   };
 
+  const readLog = async (session: string): Promise<LedgerLog> => {
+    const bytes = await snapshot(session);
+    return bytes === undefined
+      ? Object.freeze({ seq: 0, entries: Object.freeze([]) })
+      : verify(session, bytes);
+  };
+
   return {
     async load(session: string): Promise<LedgerLog> {
       if (!isSessionId(session)) throw new LedgerStoreError('malformed', 'session');
       await checkDir();
-      let bytes = await snapshot(session);
-      // Loads take no lock, so a tail without its newline may be an append still being written by
-      // another process. Wait while a writer holds the lock, then read once more — always, since
-      // the writer may have finished between the two reads; a tail still torn is refused.
-      if (bytes !== undefined && (bytes.length === 0 || bytes[bytes.length - 1] !== 0x0a)) {
+      try {
+        return await readLog(session);
+      } catch (error) {
+        // Loads take no lock, so a torn tail or an unfinished batch may be an append another
+        // process is still writing. Wait while a writer holds the lock, then read once more —
+        // always, since the writer may have finished between the two; still torn is refused.
+        if (!(error instanceof LedgerStoreError) || error.code !== 'torn-line') throw error;
         await waitForWriter(session);
-        bytes = await snapshot(session);
+        return readLog(session);
       }
-      if (bytes === undefined) return Object.freeze({ seq: 0, entries: Object.freeze([]) });
-      return verify(session, bytes);
     },
     async append(session, expectedSeq, entries) {
       const batch = admitBatch(session, expectedSeq, entries);
@@ -483,7 +547,10 @@ export function fileLedgerStore(options: FileLedgerStoreOptions): LedgerStore {
       const lock = await takeLock(lockPath);
       let outcome: { ok: true; value: number | 'conflict' } | { ok: false; error: unknown };
       try {
-        outcome = { ok: true, value: await appendLocked(session, expectedSeq, batch) };
+        outcome = {
+          ok: true,
+          value: await appendLocked(session, expectedSeq, batch, lockPath, lock),
+        };
       } catch (error) {
         outcome = { ok: false, error };
       }
