@@ -634,7 +634,9 @@ Gotchas:
 - A skill the graph activates without a `read_skill` call (an entry, a tree
   leaf, a declared edge) has no result to carry its body, so its body goes into
   the system prompt from the first request it is active on. A cursor moved by a
-  declared edge inside a signed tool turn is still refused by name.
+  declared edge inside a signed tool turn is still refused by name. So is a
+  `read_skill` pick that moves the cursor off such a skill when the graph then
+  stops activating it (a conditional entry): its body leaves the system prompt.
 - When the `read_skill` result is gone from the history (a summary folded it, a
   conversation paused before this option existed is resumed), the body is served
   in the system prompt as under `'declared'`. Inside a signed tool turn on a

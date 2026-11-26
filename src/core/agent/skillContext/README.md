@@ -61,6 +61,10 @@ the body table still runs.
 - A skill the graph activates without a `read_skill` call (an entry, a tree leaf, a declared
   edge) has no result: its body is in the system prompt from the first request it is active on,
   so a cursor moved by a declared edge inside a signed tool turn is still refused by name.
+  The same holds when a `read_skill` pick moves the cursor OFF such a skill and the graph then
+  stops activating it (a conditional entry): its body leaves the system prompt mid-turn, which
+  is the named refusal (`ContextChangedError`, "was removed from the system prompt"), as on
+  `declared`. Keeping a body already sent this turn until the turn ends is the open follow-up.
 - A body result removed from the history (a summary, a custom window) puts the body back in the
   system prompt; inside a signed tool turn on a bound model that is slice 1's named refusal.
 - Body equality is by exact text (`bodies.ts` · `skillBodyOf`). A tool-result middleware that
