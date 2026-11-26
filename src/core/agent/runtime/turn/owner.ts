@@ -13,6 +13,7 @@ import { isTerminalRunError } from '../../run/terminalRunError.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation } from '../../../runnerExecution.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
+import { identityNamespace } from '../../../../memory/identity/types.js';
 import { assertRedactionPolicy } from '../../../../redaction/policy.js';
 import { buildEventMeta } from '../../../../bridge/eventMeta.js';
 import { assertIdentityShape } from '../../callerIdentity.js';
@@ -172,6 +173,18 @@ export async function runLeg(
   // so a continued turn stays in the namespace it started in.
   invocation.value.identity =
     runInput.identity ?? options?.identity ?? (continued ? continued.identity : undefined);
+  const restored = invocation.value.pendingResumeHistory;
+  const identity = invocation.value.identity;
+  if (
+    restored?.previousCodeExecutionReceipt &&
+    identity !== continued?.identity &&
+    (identity === undefined ||
+      continued?.identity === undefined ||
+      identityNamespace(identity) !== identityNamespace(continued.identity))
+  ) {
+    const { previousCodeExecutionReceipt: _foreign, ...history } = restored;
+    invocation.value.pendingResumeHistory = history;
+  }
   // Recordings-as-artifacts (9.26.0). BEFORE `createExecutor`, because
   // `attach()` collects recorders for the executor that has not been built
   // yet — a recording started one line later would be missing its
@@ -207,6 +220,7 @@ export async function runLeg(
   // keeps it. Cleared here so a failed or paused run cannot hand back the
   // previous run's answer.
   invocation.value.answer = undefined;
+  invocation.value.executionClaimComposed = messageFrom === 'composed';
   // One run can never raise on another run's consent block.
   invocation.value.consentOutstanding.clear();
   // Set here, beside the `try` whose `finally` clears it, so no exit path

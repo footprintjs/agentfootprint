@@ -475,6 +475,9 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
     throw new TypeError('[resumeOnError] checkpoint is not an object.');
   }
   const c = value as Partial<AgentRunCheckpoint>;
+  const execution = Object.getOwnPropertyDescriptor(c, 'completedCodeExecution');
+  if (execution !== undefined && !Object.hasOwn(execution, 'value'))
+    throw new TypeError('[resumeOnError] checkpoint completedCodeExecution must be data.');
   if (c.version !== 1) {
     throw new TypeError(
       `[resumeOnError] unsupported checkpoint version: ${c.version}. ` +

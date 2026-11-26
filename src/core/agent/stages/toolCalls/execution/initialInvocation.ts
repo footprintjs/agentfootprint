@@ -20,6 +20,7 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { commitSettledToolHistory } from '../../../honesty/settledToolCalls.js';
 import { markWantedResultsRead } from '../../../honesty/libraryResultLimits.js';
+import { noteExecutionEntry } from '../../../scripts/executionEvidence.js';
 import { recordToolEntry } from '../../../honesty/enteredToolCalls.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -50,7 +51,8 @@ import {
   repeatOf,
 } from '../../../../../tools/inputRequest.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
-import { readExecutedResult } from './readExecutedResult.js';
+import { captureToolReturn, readExecutedResult } from './readExecutedResult.js';
+import { beginDeclaredToolDispatch } from '../../../honesty/declaredToolDispatch.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -247,15 +249,22 @@ export async function invokeInitialTool(
       frame.callArguments.callArgs,
     );
     let returned = false;
+    let declaredFailure: ReturnType<typeof captureToolReturn>['declaredFailure'];
     try {
       markWantedResultsRead(scope, frame.wanted.wantedMeta);
       recordToolEntry(scope, frame.tc.callOccurrenceKey);
+      noteExecutionEntry(scope);
       toolInvoked = true;
-      frame.outcome.result = await frame.tool.execute(
-        frame.callArguments.callArgs,
-        executionContext,
-      );
+      const dispatch = beginDeclaredToolDispatch(scope, frame.tc.name);
+      const startedAt = Date.now();
+      const startedMonotonic = performance.now();
+      const { callArgs } = frame.callArguments;
+      const { outcome } = frame;
+      outcome.result = await frame.tool.execute(callArgs, executionContext);
       returned = true;
+      const captured = captureToolReturn(outcome.result, startedAt, startedMonotonic, dispatch);
+      frame.outcome.result = captured.result;
+      declaredFailure = captured.declaredFailure;
       frame.execution.resultFinalizer?.captureReturned?.(frame.outcome.result);
     } finally {
       // Keep the verdict of an admission already in flight before landing a result or pause.
@@ -285,6 +294,7 @@ export async function invokeInitialTool(
       toolName: frame.tc.name,
       toolCallId: frame.tc.id,
       takeListed: true,
+      callOccurrenceKey: frame.tc.callOccurrenceKey,
     });
     // The typed effects channel (9.19.0): a recognized envelope is
     // unwrapped HERE, at the one boundary the raw return crosses —
@@ -292,7 +302,12 @@ export async function invokeInitialTool(
     // `tool_end`) sees the CONTENT, exactly what a bare return
     // would have shown. The effects are judged below, after the
     // gates, in call order.
-    const envelope = readExecutedResult(frame.tool, frame.outcome.result, codeRunSlot);
+    const envelope = readExecutedResult(
+      frame.tool,
+      frame.outcome.result,
+      codeRunSlot,
+      declaredFailure,
+    );
     if (envelope !== undefined) {
       frame.outcome.toolEnvelope = envelope;
       frame.outcome.result = envelope.content;

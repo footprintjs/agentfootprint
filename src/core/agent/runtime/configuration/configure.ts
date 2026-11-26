@@ -53,6 +53,7 @@ import type { Runner } from '../../../runner.js';
 import type { AgentConfigurationValues } from './values.js';
 import { resolveSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
 import { resolveProseCitations } from '../../citations/config.js';
+import { applySkillContext } from '../../skillContext/apply.js';
 
 /** Public identity remains on the original runner, at its existing construction points. */
 interface AgentIdentity {
@@ -188,6 +189,7 @@ export function configureAgent(
     (answerValidationConfig?.mode === 'enforce' || config.typedNegativeClaimsConfig !== undefined)
       ? { ...evidenceGate, toolsOffAfterRevision: true }
       : evidenceGate;
+  applySkillContext(config, opts.provider, opts.model, opts.skillContext, skillBrains);
   config.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
   config.scriptTravel = scriptTravel;
   config.appliedRecipes = recipes;

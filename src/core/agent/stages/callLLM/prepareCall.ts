@@ -297,6 +297,8 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     }),
     ...(deps.temperature !== undefined && { temperature: deps.temperature }),
     ...(contextCheck?.outcome.note !== undefined && { contextChange: contextCheck.outcome.note }),
+    // Where the skill-context decision takes effect: the run's first request.
+    ...(deps.skillContext !== undefined && iteration === 1 && { skillContext: deps.skillContext }),
   });
 
   const startMs = Date.now();

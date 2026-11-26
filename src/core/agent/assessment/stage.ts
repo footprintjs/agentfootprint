@@ -55,6 +55,7 @@ import { isRetrievalReason } from './results/retrieval/stage.js';
 import { assessLive } from './assess.js';
 import { assumedValuesSourceOf } from './assumedValues.js';
 import { citationRecordForWarning } from './answer/citations/record.js';
+import { isExecutionClaimWitness } from './answer/receipt/record.js';
 import type { AnswerAssessment } from './types.js';
 import {
   assessmentDataOf,
@@ -68,6 +69,7 @@ import {
 
 /** What the mount hands the stage — build-time facts, never scope. */
 export interface AnswerStageDeps extends AnswerLayerArm {
+  readonly retainedCitations?: import('../citations/accepted.js').RetainedCitationReport;
   readonly checkOmission?: import('../honesty/sourceOmission.js').OmissionCheck;
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
@@ -94,8 +96,13 @@ function committedRecordOf(
 ): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const key of reads) {
-    // An absent prose cutoff contributes no reason and must leave no read in the record.
-    if ((key === 'llmLatestStopReason' || key === 'sourceConsultation') && !(key in scope))
+    // An absent optional report contributes no reason and must leave no read in the record.
+    if (
+      (key === 'llmLatestStopReason' ||
+        key === 'sourceConsultation' ||
+        key === 'answerExecutionClaims') &&
+      !(key in scope)
+    )
       continue;
     const value = scope.$getValue(key);
     if (value !== undefined) record[key] = value;
@@ -139,7 +146,11 @@ export async function assessAnswerStage(
     return;
   }
   const citations = record.answerCitations;
-  if (citations !== undefined) {
+  if (deps.retainedCitations !== undefined) {
+    // The writer retains the report before private mapper inputs can mask
+    // unrelated equal values in its public offsets or citation slots.
+    record.answerCitations = deps.retainedCitations.record;
+  } else if (citations !== undefined) {
     record.answerCitations = citationRecordForWarning(
       citations,
       retainedStateValue(scope, 'answerCitations', citations),
@@ -179,7 +190,9 @@ export async function assessAnswerStage(
     assumed,
     rewrittenBehind(assessed),
     displayNames.size > 0 ||
-      assessed.reasons.some((reason) => reason.detail !== undefined) ||
+      assessed.reasons.some(
+        ({ detail, witness }) => detail !== undefined || witness.some(isExecutionClaimWitness),
+      ) ||
       data.reasons.some(
         (reason) =>
           isLibraryLimit(reason) ||

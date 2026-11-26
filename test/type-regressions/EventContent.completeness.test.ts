@@ -693,6 +693,38 @@ const CANARY_PAYLOAD: {
       ],
       omittedChanges: 1,
     },
+    // The skill-context decision (`core/agent/skillContext/decide.ts`): names, strategies and the
+    // table author's fixed labels only, so no leaf is content. `DeepRequired` asks for every field,
+    // so `rule` and `voucher` are both filled here; a real record has `rule` only when `by` is
+    // `'rule'` and `voucher` only when it is `'fixed'`.
+    skillContext: {
+      tools: {
+        strategy: 'listed',
+        by: 'rule',
+        rule: 0,
+        label: 'The model binds its reasoning to the context it was written under',
+        reads: ['binding'],
+        voucher: 'app',
+      },
+      body: {
+        strategy: 'tool-result',
+        by: 'rule',
+        rule: 0,
+        label: 'With every skill tool listed, a body loaded by read_skill travels in its result',
+        reads: ['tools'],
+        voucher: 'app',
+        measurement: {
+          script: 'skill-body-measure-20261125/measure.mjs',
+          run: '2026-11-25T22-14-20-690Z',
+        },
+      },
+      binding: {
+        binding: 'bound',
+        by: 'provider',
+        provider: 'anthropic',
+        model: 'claude-haiku-5-5',
+      },
+    },
   }),
   'agentfootprint.stream.tool_progress': (c) => ({
     toolCallId: 'call-1',

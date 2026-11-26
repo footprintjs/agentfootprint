@@ -644,7 +644,11 @@ import {
   assertNativeReadWindowMetadata,
   type NativeWindowAddition,
 } from './native-cohort-metadata.js';
-import { standingEvidenceCases, withStandingEvidence } from './standing-evidence-reference.js';
+import {
+  standingEvidenceCases,
+  withStandingEvidence,
+  withoutExecutionReceipt,
+} from './standing-evidence-reference.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
   codeRunnerTool,
@@ -1872,7 +1876,11 @@ describe('byte-identity — exact whole-record contract for native component own
       if (fingerprint === undefined) {
         expect(currentProjection).toEqual(expected);
       } else {
-        const currentText = `${JSON.stringify(withoutServedRows(currentProjection), null, 2)}\n`;
+        const currentText = `${JSON.stringify(
+          withoutExecutionReceipt(withoutServedRows(currentProjection), name),
+          null,
+          2,
+        )}\n`;
         expect(createHash('sha256').update(currentText).digest('hex')).toBe(fingerprint);
       }
 

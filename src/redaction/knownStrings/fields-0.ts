@@ -69,6 +69,7 @@ export const fields0 = {
   blockCount: true,
   blockIndex: true,
   blocks: true,
+  body: true,
   bold: true,
   brain: true,
   branch: true,
@@ -157,6 +158,7 @@ export const fields0 = {
   custom: true,
   decider: true,
   decisive: true,
+  declaredCategory: true,
   declaredOn: true,
   declaredStatus: true,
   declinedOffer: true,
@@ -298,6 +300,4 @@ export const fields0 = {
   label: true,
   language: true,
   lastError: true,
-  lastFiredAt: true,
-  lastIndexOf: true,
 } as const;

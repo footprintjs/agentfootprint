@@ -1489,6 +1489,7 @@
   "[emit] agentfootprint.agent.route_decided: {turnIndex, iterIndex, chosen, rationale}",
   "Step 8: Read wrapUpAsked = undefined",
   "Step 9: Write answerGuarantee = \"none\"",
+  "Step 10: Read llmLatestContent = \"done\"",
   "[Condition]: It ReAct routing and chose Final.",
   "Entering Final: Capture turn payload (finalContent + newMessages).",
   "Input: toolResourceOwner = {version, birth, nextDispatch}",
