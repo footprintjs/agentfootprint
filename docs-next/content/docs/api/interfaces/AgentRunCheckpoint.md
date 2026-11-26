@@ -19,7 +19,7 @@ resume hours / days / deploys later via `agent.resumeOnError(...)`.
 
 > `readonly` `optional` **agent?**: `object`
 
-Defined in: [src/core/runCheckpointTypes.ts:212](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L212)
+Defined in: [src/core/runCheckpointTypes.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L214)
 
 WHICH agent recorded this conversation — present only when that agent was
 given an explicit `Agent.create({ id })` (9.2.0).
@@ -49,7 +49,7 @@ Version 1 still, for the same reason as the two fields above.
 
 > `readonly` **checkpointedAt**: `number`
 
-Defined in: [src/core/runCheckpointTypes.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L59)
+Defined in: [src/core/runCheckpointTypes.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L61)
 
 Wall-clock when the checkpoint was captured. Diagnostic only.
 
@@ -59,7 +59,7 @@ Wall-clock when the checkpoint was captured. Diagnostic only.
 
 > `readonly` `optional` **citationSources?**: readonly `StoredCitationSource`[]
 
-Defined in: [src/core/runCheckpointTypes.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L124)
+Defined in: [src/core/runCheckpointTypes.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L126)
 
 Private bounded locators beside the canonical receipt carrier.
 
@@ -69,7 +69,7 @@ Private bounded locators beside the canonical receipt carrier.
 
 > `readonly` `optional` **claimVerification?**: `ClaimVerificationState`
 
-Defined in: [src/core/runCheckpointTypes.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L122)
+Defined in: [src/core/runCheckpointTypes.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L124)
 
 Private, opt-in exact evidence and reservation counters. Unlike historical
 observations, this carrier can support later checks on the same request
@@ -78,11 +78,21 @@ Storage ownership/authenticity remains the checkpoint caller's obligation.
 
 ***
 
+### completedCodeExecution?
+
+> `readonly` `optional` **completedCodeExecution?**: `CompletedCodeExecutionReceipt`
+
+Defined in: [src/core/runCheckpointTypes.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L43)
+
+Method evidence bound to this checkpoint's completed answer.
+
+***
+
 ### evidenceRecovery?
 
 > `readonly` `optional` **evidenceRecovery?**: `EvidenceRecoveryCheckpoint`
 
-Defined in: [src/core/runCheckpointTypes.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L66)
+Defined in: [src/core/runCheckpointTypes.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L68)
 
 The same request's bounded evidence repair. `resumeOnError` restores this
 budget and any unsent feedback; `run({ continueFrom })` adds a new human
@@ -95,7 +105,7 @@ Absent for checkpoints written before request-scoped recovery.
 
 > `readonly` `optional` **failurePoint?**: `object`
 
-Defined in: [src/core/runCheckpointTypes.ts:216](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L216)
+Defined in: [src/core/runCheckpointTypes.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L218)
 
 Where the failure happened. Diagnostic — surfaces in oncall
  triage so you can tell "LLM 500 mid-iteration" from "tool
@@ -131,7 +141,7 @@ whoever is on call; nothing that could carry a secret goes in it. Do not
 
 > `readonly` `optional` **findingsLedger?**: [`FindingsLedger`](/docs/api/type-aliases/FindingsLedger)
 
-Defined in: [src/core/runCheckpointTypes.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L115)
+Defined in: [src/core/runCheckpointTypes.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L117)
 
 The model's standings on its tool results (9.101.0) — the committed
 `AgentState.findingsLedger`, carried so a continued conversation keeps
@@ -155,7 +165,7 @@ they round-trip through JSON and `structuredClone` unchanged.
 
 > `readonly` `optional` **folded?**: readonly [`FoldedSpan`](/docs/api/interfaces/FoldedSpan)[]
 
-Defined in: [src/core/runCheckpointTypes.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L97)
+Defined in: [src/core/runCheckpointTypes.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L99)
 
 Every span this conversation folded into a summary, oldest first — what
 makes a compacted conversation still a provable one after the process
@@ -184,7 +194,7 @@ the opposite of what the version field is for.
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/runCheckpointTypes.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L49)
+Defined in: [src/core/runCheckpointTypes.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L51)
 
 Conversation history at the LAST completed iteration boundary
  (LLM messages). The next iteration retries from here.
@@ -195,7 +205,7 @@ Conversation history at the LAST completed iteration boundary
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/runCheckpointTypes.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L173)
+Defined in: [src/core/runCheckpointTypes.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L175)
 
 WHO this conversation belongs to — the `identity` the stored run was
 given, carried so that continuing it lands in the same namespace it
@@ -234,7 +244,7 @@ checkpoint and out of logs and served records. History holds the shown arguments
 
 > `readonly` **lastCompletedIteration**: `number`
 
-Defined in: [src/core/runCheckpointTypes.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L54)
+Defined in: [src/core/runCheckpointTypes.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L56)
 
 Index of the last completed iteration in the FAILING run
  (diagnostic — not consumed on resume). The resumed run restores
@@ -257,7 +267,7 @@ Private admitted negative evidence; keep checkpoints on the trusted host.
 
 > `readonly` **originalInput**: `object`
 
-Defined in: [src/core/runCheckpointTypes.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L57)
+Defined in: [src/core/runCheckpointTypes.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L59)
 
 Original input message. Surfaces in observability + lets the
  consumer correlate checkpoint to the user's request.
@@ -272,7 +282,7 @@ Original input message. Surfaces in observability + lets the
 
 > `readonly` `optional` **placedTickets?**: readonly `PlacedTicket`[]
 
-Defined in: [src/core/runCheckpointTypes.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L151)
+Defined in: [src/core/runCheckpointTypes.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L153)
 
 The placement tickets the library issued whose `role: 'tool'` messages the
 stored `history` still holds — so a continued conversation still knows
@@ -285,7 +295,7 @@ Absent when there are none. Version 1 still, by the [folded](/docs/api/interface
 
 > `readonly` `optional` **requestReplay?**: `RequestReplayValue`
 
-Defined in: [src/core/runCheckpointTypes.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L74)
+Defined in: [src/core/runCheckpointTypes.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L76)
 
 Private request context for a signed, unfinished tool turn. It belongs in
 trusted checkpoint storage and is used only to retry the same request.
@@ -304,7 +314,7 @@ Defined in: [src/core/runCheckpointTypes.ts:39](https://github.com/footprintjs/a
 
 > `readonly` **runId**: `string`
 
-Defined in: [src/core/runCheckpointTypes.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L46)
+Defined in: [src/core/runCheckpointTypes.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L48)
 
 `runId` of the FAILING run — lets the consumer correlate a
  persisted checkpoint back to the original run's observability.
@@ -317,7 +327,7 @@ Defined in: [src/core/runCheckpointTypes.ts:46](https://github.com/footprintjs/a
 
 > `readonly` `optional` **skillCursor?**: `string`
 
-Defined in: [src/core/runCheckpointTypes.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L192)
+Defined in: [src/core/runCheckpointTypes.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L194)
 
 WHERE the conversation's skill graph stood when the stored turn ended —
 the graph cursor, carried so a continued conversation can default its
@@ -342,7 +352,7 @@ change — an older runtime ignores it and continues correctly.
 
 > `readonly` `optional` **sourceDeclarationCorrection?**: `object`
 
-Defined in: [src/core/runCheckpointTypes.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L69)
+Defined in: [src/core/runCheckpointTypes.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L71)
 
 One source-declaration correction was spent on this request. Same-request
 recovery retains it; a new human turn resets it. Contains no source values.
@@ -367,7 +377,7 @@ Host-kept native source index. It contains refs only and does not authenticate a
 
 > `readonly` `optional` **toolTurnEvidence?**: `ToolTurnEvidence`
 
-Defined in: [src/core/runCheckpointTypes.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L71)
+Defined in: [src/core/runCheckpointTypes.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L73)
 
 Bounded, private tool proof from the failed request, used only by `resumeOnError`.
 
@@ -377,7 +387,7 @@ Bounded, private tool proof from the failed request, used only by `resumeOnError
 
 > `readonly` `optional` **turnNumber?**: `number`
 
-Defined in: [src/core/runCheckpointTypes.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L144)
+Defined in: [src/core/runCheckpointTypes.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpointTypes.ts#L146)
 
 The conversation TURN the stored history ends on — the stored run's
 `AgentState.turnNumber` — carried while an honesty layer is armed.

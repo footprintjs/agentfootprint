@@ -39,6 +39,8 @@ export interface AgentRunCheckpoint {
   readonly resultIdentities?: NegativeCheckpoint['resultIdentities'];
   /** Schema version. v1 = conversation-history-based. */
   readonly version: 1;
+  /** Method evidence bound to this checkpoint's completed answer. */
+  readonly completedCodeExecution?: import('./agent/scripts/executionEvidence.js').CompletedCodeExecutionReceipt;
   /** `runId` of the FAILING run — lets the consumer correlate a
    *  persisted checkpoint back to the original run's observability.
    *  NOT reused on resume: `resumeOnError` starts a fresh run with a

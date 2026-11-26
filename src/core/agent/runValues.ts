@@ -27,6 +27,8 @@ import type { ContextBaselineHolder } from './contextBinding/check.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
 export interface AgentRunValues extends RunnerCoreValues {
+  /** Direct caller marked the request as another component's output. */
+  executionClaimComposed?: boolean;
   identity?: MemoryIdentity;
   request?: RequestContext;
   answer?: string;

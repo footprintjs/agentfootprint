@@ -6,6 +6,10 @@ import {
   sourceEvidenceOf,
   sourceDeclarationCorrectionOf,
 } from './checkpointParts.js';
+import {
+  admitCompletedCodeExecution,
+  completedCodeExecutionFrom,
+} from '../../scripts/executionEvidence.js';
 import { ticketsStillServed } from '../../placedTickets.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
@@ -130,10 +134,19 @@ export function checkpointFor(
   );
   const placedTickets = ticketsStillServed(state?.placedTickets, stored);
   const innerCallPolicyArgs = innerCallPolicyFor(state, stored);
+  const completedCodeExecution =
+    state !== undefined &&
+    selected!.view.phase === 'settled' &&
+    !selected!.view.isPaused() &&
+    selected!.value.hostTurn === undefined &&
+    selected!.value.answer !== undefined
+      ? completedCodeExecutionFrom(state, selected!.context.runId)
+      : undefined;
   return {
     version: 1,
     runId: selected!.context.runId,
     history: stored,
+    ...(completedCodeExecution !== undefined && { completedCodeExecution }),
     ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
     originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
@@ -340,7 +353,14 @@ export function applyContinuation(
       { root: INNER_CALL_POLICY_KEY, path: '' },
     ]);
   }
+  const previousCodeExecutionReceipt = appendsUserTurn
+    ? admitCompletedCodeExecution(
+        Object.getOwnPropertyDescriptor(cp, 'completedCodeExecution')?.value,
+        cp.runId,
+      )
+    : undefined;
   values.pendingResumeHistory = {
+    ...(previousCodeExecutionReceipt !== undefined && { previousCodeExecutionReceipt }),
     history,
     ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
     appendsUserTurn,

@@ -17,6 +17,7 @@
  *   — consumers can pass schema instructions via `systemPrompt`.
  */
 
+import { markNativeToolExecution } from '../../provider-contract/nativeToolExecution.js';
 import type {
   LLMCallHooks,
   LLMChunk,
@@ -372,6 +373,10 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     },
   };
 
+  // We know the native Messages request sends client tool definitions.
+  // An injected client or alternate endpoint can have its own execution path.
+  if (options._client === undefined && !process.env.ANTHROPIC_BASE_URL)
+    markNativeToolExecution(provider);
   return provider;
 }
 
