@@ -42,9 +42,9 @@ describe('tokensOf — rules 1–3', () => {
     ['brackets and quotes separate', '**1234** `abc123` "x9y8"', ['1234', 'abc123', 'x9y8']],
     ['non-ASCII separates', 'naïve1234 №5678', ['ve1234', '5678']],
     [
-      'a backslash escape separates',
-      String.raw`pod-1234\npod-5678\tét1234`,
-      ['pod-1234', 'pod-5678', 't1234'],
+      'a backslash separates, and a piece after an escape letter is not read',
+      String.raw`pod-1234\npod-5678\tx-9999 é5678`,
+      ['pod-1234', '5678'],
     ],
   ])('%s', (_name, text, tokens) => {
     expect(tokensOf(text)).toEqual(tokens);
@@ -100,6 +100,93 @@ describe('tokensOf — rules 1–3', () => {
     ]);
     expect(tokensOf('  {"note":"took 1234 ms, see \\"run-77ab\\""}')).toEqual(['1234', 'run-77ab']);
     expect(tokensOf('{1234}')).toEqual(['1234']);
+  });
+
+  describe('a backslash — a piece that reads two ways is counted, never read', () => {
+    it.each([
+      // [text, kept, escapedPieces]
+      [
+        'a path whose name opens with n (the review case)',
+        String.raw`opened D:\logs\node1234.log`,
+        [],
+        1,
+      ],
+      ['a path whose name opens with f, after one with t', String.raw`C:\temp\file2026.txt`, [], 1],
+      ['a name that opens with b', String.raw`\build4521`, [], 1],
+      ['a tab and digits', String.raw`tab\t5678`, [], 1],
+      [
+        'names after other letters are read as written',
+        String.raw`C:\data\host2026.txt`,
+        ['host2026.txt'],
+        0,
+      ],
+      ['a Windows path', String.raw`E:\Srv\Archive\report-2026.pdf v1.2.3`, ['v1.2.3'], 1],
+      [
+        'an escaped backslash is a plain separator',
+        String.raw`C:\\new1234 \\\node5678`,
+        ['new1234'],
+        1,
+      ],
+      [
+        'JSON escapes before a token',
+        String.raw`{"out":"pod-1234\npod-5678\tx-9999 \"run-77ab\" \\srv-0042 \u00e9t1234"}`,
+        ['pod-1234', 'run-77ab', 'srv-0042'],
+        3,
+      ],
+      ['a regex', String.raw`^\b(2026|2027)-\d{2}\b`, ['2026', '2027'], 0],
+      [
+        'after \\/, and right before it',
+        String.raw`"u":"https:\/\/x.io\/v2\/item-1234" ab12\/cd`,
+        [],
+        3,
+      ],
+      ['no digit, nothing counted', String.raw`line one\nline two\ttab`, [], 0],
+    ])('%s', (_name, text, kept, escaped) => {
+      expect(tokensOf(text)).toEqual(kept);
+      const reading = readTokens(text);
+      expect(reading.tokens).toEqual(kept);
+      expect(reading.escapedPieces).toBe(escaped === 0 ? undefined : escaped);
+      expect(reading.cut).toBeUndefined();
+    });
+
+    it("an escape's own letters neither start nor glue a grouped run", () => {
+      // Read raw, `n1,234.5` is glued; read as JSON, a newline and `1,234.5`: counted, `234.5` not kept.
+      expect(readTokens(String.raw`x\n1,234.5`)).toEqual({
+        tokens: [],
+        bytes: 10,
+        groupedNumbers: 1,
+        escapedPieces: 1, // `n1` holds a digit: it could be part of a value either way
+      });
+      expect(readTokens(String.raw`x\u00e91,234.5`)).toEqual({
+        tokens: [],
+        bytes: 14,
+        groupedNumbers: 1,
+        escapedPieces: 1,
+      });
+      expect(readTokens(String.raw`x\n1200,9750`)).toEqual({
+        tokens: ['9750'],
+        bytes: 12,
+        escapedPieces: 1,
+      });
+    });
+
+    it('a backslash right at the cap is left unread with the piece before it', () => {
+      const text = String.raw`id-1234 ab12\/cd z`; // 18 bytes; the backslash is the 13th
+      // The cap at the backslash, at `/`, and inside `/cd`: `ab12` is left unread with them.
+      for (const cap of [13, 14, 15, 16])
+        expect(readTokensUpTo(text, cap), `cap ${cap}`).toEqual({
+          tokens: ['id-1234'],
+          bytes: 18,
+          cut: { tokensDropped: 0, bytesUnread: 10 },
+        });
+      // With `\/cd ` read whole, the piece before `\/` is counted, never read.
+      expect(readTokensUpTo(text, 17)).toEqual({
+        tokens: ['id-1234'],
+        bytes: 18,
+        cut: { tokensDropped: 0, bytesUnread: 1 },
+        escapedPieces: 1,
+      });
+    });
   });
 
   it('JSON commas never join values (the review cases)', () => {

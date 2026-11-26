@@ -21,7 +21,7 @@ Nothing outside this folder imports it yet, and no `package.json` door reaches i
 |---|---|
 | `types.ts` | the nine entry shapes and every closed word (`LedgerBy`, `LedgerHow`, `LedgerKind`, the dispositions, verdicts and refusals). Declarations only |
 | `limits.ts` | `LEDGER_LIMITS`, the one frozen table of the ledger's caps (sizes, counts, the key's length, the lock's waits); no other file restates one. Grammars (a rule name's length) and the canonical-JSON bounds of a line (`store.ts`) are not caps and live with their owners |
-| `entries.ts` | `entryFault`, the one check of an entry's shape (context-free: every reference is to an EARLIER seq); `isIncomplete`, the one answer to "was this receipt cut, holding numbers with thousands separators, masked or limited?"; `citeProblem`, the cite check a note is admitted with |
+| `entries.ts` | `entryFault`, the one check of an entry's shape (context-free: every reference is to an EARLIER seq); `isIncomplete`, the one answer to "was this receipt cut, holding numbers with thousands separators or pieces that read two ways, masked or limited?"; `citeProblem`, the cite check a note is admitted with |
 | `build.ts` | the record-time builders, one per kind text enters through (`receiptEntry`, `suppliedEntry`, `noteEntry`, `withdrawalEntry`, `submitEntry`, `deliveredEntry`, `openedEntry`). Each drops the text it was handed once it has the tokens or the digest it keeps, and refuses with `bad-input`, `too-large` or `bad-window` |
 | `tokens.ts` | which tokens of a text are values (rules 1–3 of the evidence extractor's header, as a closed copy; a token is a literal piece of the text, below), the receipt's capped reading (`readTokens`, and `readTokensUpTo` under another cap) and `utf8Bytes` |
 | `window.ts` | the ledger's one instant validator (`instantMs`) and the window on it (`readWindow`) |
@@ -160,20 +160,22 @@ A receipt keeps a capped token set and a pointer, never the result text. `readTo
 1 MiB of the host's text. Past it, each character is counted once — its UTF-8 bytes, for `bytes`
 and `cut.bytesUnread` — and never copied, split or looked at to decide anything: a 64 MiB text
 costs one counting pass and the 1 MiB it reads. The last piece before the cap is kept only when a
-separator follows it within the bytes read; otherwise it is left unread with the rest. It keeps the
-first 2,048 distinct tokens in first-seen order and counts the rest — and any token longer than 64
-characters — in `cut.tokensDropped`. Nothing read is dropped uncounted. A receipt is incomplete when
-it is cut, when it holds numbers written with thousands separators (`groupedNumbers`), when
-`hidden > 0` or when `limit.hit` (`isIncomplete`, the one predicate every rule asks).
+separator follows it within the bytes read, and a backslash right at the cap (its meaning is the
+character after it) is left unread with the piece before it. It keeps the first 2,048 distinct
+tokens in first-seen order and counts the rest — and any token longer than 64 characters — in
+`cut.tokensDropped`. Nothing read is dropped uncounted. A receipt is incomplete when it is cut, when
+it holds numbers written with thousands separators (`groupedNumbers`) or pieces next to a backslash
+that read two ways (`escapedPieces`), when `hidden > 0` or when `limit.hit` (`isIncomplete`, the one
+predicate every rule asks).
 
 The token rule is a closed copy of rules 1–3 of the evidence extractor's header: a token contains a
 digit and is an identifier of at least 4 characters or a number of at least 4 digits; a number with
 a unit glued on is judged by its number. A token is always a literal piece of the text: a run of
-`A–Z a–z 0–9 : _ - / . % + @ # $` between separators. Every other character separates, and so does
-every comma and every backslash escape (`\n`, `\"`, `\u00e9`). A leading `$ # @ + :` and a
-trailing `. : %` are decoration, so `{"total":1200}` gives `1200`. Nothing is folded, joined or
-respelled but for lower case, so every token is a substring of the lower-cased text — for prose,
-CSV, JSON, JSON Lines and any part of one alike. No text is recognised as JSON first: one rule reads
+`A–Z a–z 0–9 : _ - / . % + @ # $` between separators. Every other character separates — a
+backslash too — and so does every comma. A leading `$ # @ + :` and a trailing `. : %` are
+decoration, so `{"total":1200}` gives `1200`. Nothing is folded, joined, decoded or respelled but
+for lower case, so every token is a whole piece of the lower-cased text — for prose, CSV, JSON,
+JSON Lines, a path and any part of one alike. No text is recognised as JSON first: one rule reads
 them all. `1200,9750` gives `1200` and `9750`, and `host-a,1200,9750,ok` gives both values.
 
 A run of digits and commas that matches `\d{1,3}(,\d{3})+` and is not glued to a letter before it
@@ -188,8 +190,20 @@ numbers are not respelled (`98304.0` stays `98304.0`), and nothing is folded —
 `5,100` as `5100` and one JSON value through its literals. The differential test against it,
 planned for the plugin adapter, lists both as known differences.
 
+A backslash raises the same question. After it, a piece that opens with `b f n r t u` or `/` is a
+JSON escape's letter and what follows, or a path's next name: `D:\logs\node1234.log` holds
+`node1234.log`, or a newline and `ode1234.log`. The reader never decodes, and keeps neither: it
+counts such a piece in `escapedPieces` when it holds a digit (a piece without one is no value either
+way), so a receipt that counted one is incomplete. So is the piece right before `\/`, which JSON
+joins to the next one with `/`. An escape's own characters (`n`, `u00e9`) neither start nor glue a
+grouped run. Backslashes pair from the left: `\\` and `\"` are an escaped backslash and an
+escaped quote, plain separators with nothing ambiguous after them, and a piece after any other
+character is read as written (`\logs`, `C:\\new1234`). JSON with many escapes before values is
+therefore often incomplete: a claim value missing from it is `open`, never `unsupported`.
+
 What the rule cannot see: all-letter names; numbers under 4 digits; respellings (`1.2 s` against
-`1200ms`); and numbers written with thousands separators.
+`1200ms`); numbers written with thousands separators; and a piece right after a backslash that may
+open an escape (`\node1234.log`, `\t5678`), or right before `\/`.
 
 A window is `{ from, to }`, half-open, `from < to`, both RFC 3339 instants with an upper-case `T`,
 `Z` or `±hh:mm`, seconds required, 0–3 fraction digits and no leap second (`window.ts`). It is a

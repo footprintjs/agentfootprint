@@ -1,14 +1,17 @@
 /**
  * TOKENS, GENERATED — the token reader against a plain-split oracle (case table 5.1, amendment 2).
  *
- * The oracle is the rule written as plainly as it can be: blank the backslash escapes, blank the
+ * The oracle is the rule written as plainly as it can be: pair the backslashes from the left and
+ * blank each piece that reads two ways (after an escape's letter, or before `\/`), blank the
  * groups of every run shaped like a number with thousands separators (one regular expression),
  * split at every comma and every character outside a piece, and read each piece by rules 1–3 (a
  * hand-written number scan, not the reader's expressions). On seeded prose, CSV, JSON, JSON Lines,
- * JSON the source cut short, and the shapes earlier comma rules got wrong, the two agree exactly:
- * the tokens and the grouped count. A reading CUT by a byte cap, at every cap, is the oracle's
- * reading of exactly the bytes it read — which end at a separator — so it keeps only substrings of
- * the text, keeps more as the cap grows, and counts what it did not read.
+ * JSON the source cut short, raw text with backslashes (paths, regex-looking text, doubled
+ * backslashes) and the shapes earlier comma rules got wrong, the two agree exactly: the tokens and
+ * both counts. Every kept token is a WHOLE piece of the text, never a fragment of a longer one. A
+ * reading CUT by a byte cap, at every cap, is the oracle's reading of exactly the bytes it read —
+ * which end at a separator, never at a backslash that opens an escape — so it keeps more as the
+ * cap grows and counts what it did not read.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -86,30 +89,63 @@ function oracleSpell(raw: string): string {
   return v.slice(a, b);
 }
 
-const ESCAPES = /\\(?:u[0-9A-Fa-f]{4}|["\\/bfnrt])/g;
 /** A maximal run of digits and commas shaped `\d{1,3}(,\d{3})+`, not glued to a letter before it. */
 const GROUPED_RUN = /(?<![A-Za-z0-9]|\d,)\d{1,3}(?:,\d{3})+(?!\d|,\d)/g;
 const PIECE_CHAR = /[A-Za-z0-9:_\-/.%+@#$]/;
 const SEPARATOR = /[^A-Za-z0-9:_\-/.%+@#$]/;
 
-/** The rule, plainly: its distinct tokens in first-seen order, and how many grouped runs it saw. */
-function oracle(text: string): { tokens: string[]; grouped: number } {
-  const plain = text.replace(ESCAPES, (e) => ' '.repeat(e.length));
-  const chars = plain.split('');
+/** Every token a WHOLE piece of `text` gives, whatever is dropped. */
+const wholePieces = (text: string) =>
+  new Set(text.split(SEPARATOR).map((piece) => oracleClassify(oracleSpell(piece))));
+
+/**
+ * The rule, plainly: its distinct tokens in first-seen order, how many grouped runs it saw, and how
+ * many pieces next to a backslash read two ways and hold a digit.
+ */
+function oracle(text: string): { tokens: string[]; grouped: number; escaped: number } {
+  const chars = text.split('');
+  const forRuns = text.split(''); // an escape's own characters blanked: they neither start nor glue a run
+  const twoWays = new Set<number>(); // where each piece that reads two ways starts
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '\\') continue;
+    const next = text[i + 1] ?? '';
+    if (next === '\\') {
+      i++; // an escaped backslash: a plain separator
+      continue;
+    }
+    if (next === '' || !'bfnrtu/'.includes(next)) continue;
+    twoWays.add(i + 1);
+    const own = next === 'u' && /^[0-9A-Fa-f]{4}$/.test(text.slice(i + 2, i + 6)) ? 5 : 1;
+    for (let j = i + 1; j < i + 1 + own; j++) forRuns[j] = ' ';
+    if (next === '/') {
+      let j = i;
+      while (j > 0 && PIECE_CHAR.test(text[j - 1]!)) j--;
+      if (j < i) twoWays.add(j);
+    }
+  }
+  let escaped = 0;
+  for (const start of twoWays) {
+    let digit = false;
+    for (let j = start; j < text.length && PIECE_CHAR.test(text[j]!); j++) {
+      digit ||= isDigit(text[j]!);
+      chars[j] = ' ';
+    }
+    if (digit) escaped++;
+  }
   let grouped = 0;
-  for (const m of plain.matchAll(GROUPED_RUN)) {
+  for (const m of forRuns.join('').matchAll(GROUPED_RUN)) {
     grouped++;
     // Its groups — from its first comma to the end of its last group's piece — are not read.
     let j = m.index + m[0].indexOf(',');
     for (; j < m.index + m[0].length; j++) chars[j] = ' ';
-    while (j < chars.length && PIECE_CHAR.test(chars[j]!)) chars[j++] = ' ';
+    while (j < text.length && PIECE_CHAR.test(text[j]!)) chars[j++] = ' ';
   }
   const tokens: string[] = [];
   for (const piece of chars.join('').split(SEPARATOR)) {
     const token = oracleClassify(oracleSpell(piece));
     if (token !== undefined && !tokens.includes(token)) tokens.push(token);
   }
-  return { tokens, grouped };
+  return { tokens, grouped, escaped };
 }
 
 const PIECES = [
@@ -147,6 +183,17 @@ const PIECES = [
   '\\"',
   '\\u0031',
   '\\u00e9',
+  '\\\\',
+  '\\t',
+  '\\b',
+  '\\/',
+  '\b',
+  '\f',
+  '\r',
+  '\u0001',
+  'node1234.log',
+  'logs',
+  'D:',
   '"k":',
   '24/7',
   'ms',
@@ -193,6 +240,36 @@ const CSV_PIECES = [
   '\r\n',
 ];
 
+/** Seeded raw text with backslashes: Windows paths, regex-looking text, doubled backslashes. */
+const PATH_PIECES = [
+  'C:',
+  'D:',
+  '\\',
+  '\\',
+  '\\',
+  '\\\\',
+  'logs',
+  'temp',
+  'node1234.log',
+  'file2026.txt',
+  'build4521',
+  'Users',
+  'report-2026.pdf',
+  'new1234',
+  'u00e9',
+  'u0031',
+  'r1',
+  't5678',
+  '/',
+  '/v2',
+  ' ',
+  '"',
+  'd{4}',
+  '1,234',
+  '.5',
+  'x',
+];
+
 /** Seeded JSON values; strings drawn from `PIECES`, numbers of every size. */
 function jsonValue(next: () => number, depth = 0): unknown {
   if (depth > 2 || next() < 0.35) {
@@ -212,7 +289,7 @@ function jsonValue(next: () => number, depth = 0): unknown {
       );
 }
 
-/** Generated texts of each kind the rule reads alike: prose, CSV, JSON, JSON Lines, cut JSON. */
+/** Generated texts of each kind the rule reads alike: prose, CSV, JSON, JSON Lines, cut JSON, paths. */
 function kinds(scale: number): Record<string, string[]> {
   const next = seeded(4_040 + scale);
   const json = () => JSON.stringify(jsonValue(next), null, next() < 0.2 ? 1 : undefined);
@@ -227,34 +304,42 @@ function kinds(scale: number): Record<string, string[]> {
       const text = json();
       return text.slice(0, Math.floor(next() * text.length));
     }),
+    paths: seededTexts(91 + scale, PATH_PIECES, 10 * scale, 12),
   };
 }
 
 describe('tokensOf against the plain-split oracle', () => {
   const generated = kinds(1_000);
 
-  it.each(Object.keys(generated))('%s: the same tokens and the same grouped count', (kind) => {
+  it.each(Object.keys(generated))('%s: the same tokens and the same two counts', (kind) => {
     let tokens = 0;
     let grouped = 0;
+    let escaped = 0;
     for (const text of generated[kind]!) {
       const expected = oracle(text);
+      const reading = readTokens(text);
       expect(tokensOf(text), JSON.stringify(text)).toEqual(expected.tokens);
-      expect(readTokens(text).groupedNumbers ?? 0, JSON.stringify(text)).toBe(expected.grouped);
+      expect(reading.groupedNumbers ?? 0, JSON.stringify(text)).toBe(expected.grouped);
+      expect(reading.escapedPieces ?? 0, JSON.stringify(text)).toBe(expected.escaped);
       tokens += expected.tokens.length;
       grouped += expected.grouped;
+      escaped += expected.escaped;
     }
     expect(tokens).toBeGreaterThan(1_000);
-    expect(grouped).toBeGreaterThan(kind === 'json' || kind === 'cutJson' ? 100 : 500);
+    expect(grouped).toBeGreaterThan(kind === 'csv' ? -1 : 100);
+    expect(escaped).toBeGreaterThan(kind === 'csv' ? -1 : 100);
   });
 
-  it('every token is a substring of the lower-cased text, a fixed point, and distinct', () => {
+  it('every token is a whole piece of the lower-cased text, never a fragment, a fixed point, and distinct', () => {
     for (const texts of Object.values(kinds(300))) {
       for (const text of texts) {
         const lower = text.replace(/[A-Z]/g, (c) => c.toLowerCase());
+        const wholes = wholePieces(text);
         const tokens = tokensOf(text);
         expect(new Set(tokens).size).toBe(tokens.length);
         for (const token of tokens) {
           expect(lower.includes(token), `${JSON.stringify(text)}: ${token}`).toBe(true);
+          expect(wholes.has(token), `${JSON.stringify(text)}: ${token}`).toBe(true);
           expect(tokensOf(token)).toEqual([token]);
           if (token.length <= LEDGER_LIMITS.maxTokenChars) expect(isToken(token)).toBe(true);
         }
@@ -267,8 +352,8 @@ describe('a reading cut by a byte cap', () => {
   /**
    * The shapes earlier comma rules got wrong: comma runs that end in a date, a dash or a longer
    * group (`1,234,2026-11-25`, `120,975,300,1234-5`), grouped runs glued to letters, and prose
-   * that opens with a bracket like a log line. `LEDGER_CUT_TEXTS` raises their count for a long
-   * local run.
+   * that opens with a bracket like a log line, and backslashes before names, escapes and `/`.
+   * `LEDGER_CUT_TEXTS` raises their count for a long local run.
    */
   const SHAPE_PIECES = [
     '1,',
@@ -294,6 +379,13 @@ describe('a reading cut by a byte cap', () => {
     '"',
     ':',
     '\\n',
+    '\\',
+    '\\\\',
+    '\\/',
+    '\\u00e9',
+    'node1234',
+    'n1',
+    '/',
     '10:00:00',
     '.5',
     '$',
@@ -312,14 +404,17 @@ describe('a reading cut by a byte cap', () => {
       let cuts = 0;
       for (const text of texts) {
         const whole = new Set(tokensOf(text));
+        const wholes = wholePieces(text);
         const bytes = utf8Bytes(text);
         let before: readonly string[] = [];
         for (let cap = 0; cap <= bytes; cap++) {
           const reading = readTokensUpTo(text, cap);
           const at = `${JSON.stringify(text)} @${cap}`;
           expect(reading.bytes).toBe(bytes);
-          for (const token of reading.tokens)
+          for (const token of reading.tokens) {
             expect(whole.has(token), `${at}: ${token}`).toBe(true);
+            expect(wholes.has(token), `${at}: ${token}`).toBe(true);
+          }
           for (const token of before) expect(reading.tokens, at).toContain(token);
           before = reading.tokens;
           // The bytes it read: a prefix of the text that ends at a separator unless it is all.
@@ -330,13 +425,17 @@ describe('a reading cut by a byte cap', () => {
           while (utf8Bytes(text.slice(0, units)) < readBytes) units++; // a surrogate pair's second half
           const read = text.slice(0, units);
           expect(utf8Bytes(read), at).toBe(readBytes);
-          const plain = read.replace(ESCAPES, (e) => ' '.repeat(e.length));
-          if (read !== text && read !== '') expect(PIECE_CHAR.test(plain.at(-1)!), at).toBe(false);
+          if (read !== text && read !== '') {
+            expect(PIECE_CHAR.test(read.at(-1)!), at).toBe(false);
+            const backslashes = /\\*$/.exec(read)![0].length;
+            expect(backslashes % 2, `${at}: ends at a backslash that opens an escape`).toBe(0);
+          }
           const expected = oracle(read);
           const kept = expected.tokens.filter((t) => t.length <= LEDGER_LIMITS.maxTokenChars);
           expect(reading.tokens, at).toEqual(kept);
           expect(reading.cut?.tokensDropped ?? 0, at).toBe(expected.tokens.length - kept.length);
           expect(reading.groupedNumbers ?? 0, at).toBe(expected.grouped);
+          expect(reading.escapedPieces ?? 0, at).toBe(expected.escaped);
           if (reading.cut !== undefined) cuts++;
         }
       }

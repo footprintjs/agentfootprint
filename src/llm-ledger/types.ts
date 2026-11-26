@@ -127,6 +127,11 @@ export interface LedgerReceipt extends LedgerEntryBase<'receipt'> {
    * (`1,234`): how many. Their values are not tokens, so the receipt is incomplete.
    */
   readonly groupedNumbers?: number;
+  /**
+   * Present only when the part read holds pieces next to a backslash that read two ways
+   * (`\node1234`: a path's name, or a newline and `ode1234`): how many. Neither is a token.
+   */
+  readonly escapedPieces?: number;
   /** How many values the host's redactor masked before recording. */
   readonly hidden?: number;
   readonly ref?: { readonly uri: string; readonly digest: LedgerDigest };

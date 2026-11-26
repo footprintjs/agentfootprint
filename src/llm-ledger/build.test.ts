@@ -84,10 +84,21 @@ describe('receiptEntry — tokens at record time, never the text', () => {
       groupedNumbers: 1,
     });
     expect(isIncomplete(e)).toBe(true);
+    expect(e).not.toHaveProperty('escapedPieces');
     expect(e).not.toHaveProperty('hidden'); // 0 masked is written as nothing masked
     expect(e).not.toHaveProperty('cut');
     expect(JSON.stringify(e)).not.toContain('hunter');
     expect(JSON.stringify(e)).not.toContain('zebrafinch');
+  });
+
+  it('a path whose name may open an escape is counted, and the receipt is incomplete (the review case)', () => {
+    const e = entryOf(
+      receiptEntry(at(2), { source: 'fs', text: String.raw`opened D:\logs\node1234.log` }),
+    );
+    expect(e.tokens).toEqual([]);
+    expect(e.escapedPieces).toBe(1);
+    expect(isIncomplete(e)).toBe(true);
+    expect(entryFault(e)).toBeUndefined();
   });
 
   it('how is the host statement; reported when the host says so', () => {
