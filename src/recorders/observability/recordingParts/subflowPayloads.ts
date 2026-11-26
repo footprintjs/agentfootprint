@@ -1,5 +1,5 @@
 /**
- * recordingParts/payloads — what a sub-flow invocation was handed and what it
+ * recordingParts/subflowPayloads — what a sub-flow invocation was handed and what it
  * handed back belong to that invocation's part, not to the base part.
  *
  * Role:  Codec. Pure. `cutPayloads` decides, at the cut, which `payload` of a

@@ -2310,6 +2310,8 @@
       "RunStepRecorderOptions",
       "RunStepTransition",
       "SavedInvocation",
+      "SavedInvocationPayloads",
+      "SavedPayloadSlot",
       "SavedRecording",
       "SavedRecordingArtifacts",
       "SavedRecordingPartUnavailable",

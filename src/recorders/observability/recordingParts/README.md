@@ -32,7 +32,7 @@ host answers the same refusal.
 What an invocation was handed (`subflow.entry`'s `payload`) and what it handed
 back (`subflow.exit`'s) belong to its part, not to the base: in a long agent
 run they were almost all of the base, and a second copy of what the part
-already holds. `payloads.ts` owns the rule.
+already holds. `subflowPayloads.ts` owns the rule.
 
 - **Moved only on proof.** The BoundaryEvents rows (`name: 'BoundaryEvents'`,
   `meta.mode: 'full'`) hold exactly one `subflow.entry` and at most one
@@ -93,7 +93,7 @@ packPart`), so any part reads alone. The index is never packed.
 | `format.ts` | formats, limits, and `readRecordingIndex`: the one admission of an untrusted index |
 | `invocations.ts` | the walk: which invocations a snapshot holds, in the viewer's order |
 | `split.ts` | the cut: base part, invocation parts, the index without refs, every digest |
-| `payloads.ts` | which sub-flow payloads leave the base row and how they are kept; putting them back |
+| `subflowPayloads.ts` | which sub-flow payloads leave the base row and how they are kept; putting them back |
 | `source.ts` | where a part comes from (a store, or memory), checked against its index entry |
 | `partReader.ts` | one part's bytes become values: caps, unpacking, exact key sets |
 | `open.ts` | `openSavedRecording`: open either layout, then `readRoot`, `readInvocation`, `readWhole` |

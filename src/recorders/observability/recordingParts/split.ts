@@ -22,7 +22,7 @@
  *     whole recording held is lost.
  *   • Format 2 (what the writer writes): a sub-flow invocation's entry and
  *     exit payloads leave the base row for the invocation's part, on proof
- *     only (`payloads.ts`). A stored payload is grouped WITH its result: the
+ *     only (`subflowPayloads.ts`). A stored payload is grouped WITH its result: the
  *     two are one unit for the target, never split across parts. A reader
  *     of a whole recording cuts format 1 (`subflowPayloads: 'in-row'`), so
  *     every read of a whole recording is what it was before format 2.
@@ -56,7 +56,7 @@ import {
 } from './format.js';
 import { walkRecordedInvocations } from './invocations.js';
 import { packPart } from './packing.js';
-import { cutPayloads, type MovedPayloads, type PayloadCut } from './payloads.js';
+import { cutPayloads, type MovedPayloads, type PayloadCut } from './subflowPayloads.js';
 import { RecordingSplitError } from './splitError.js';
 
 /** One part, ready to store. */

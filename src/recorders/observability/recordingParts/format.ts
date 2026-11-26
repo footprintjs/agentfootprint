@@ -20,7 +20,7 @@ import { isArtifactRef } from '../../../artifacts/naming.js';
 /**
  * The format marker of an index the writer writes: format 2, where an
  * invocation's sub-flow entry and exit payloads live with the invocation
- * (`recordingParts/payloads.ts`). A v2 index names v2 parts.
+ * (`recordingParts/subflowPayloads.ts`). A v2 index names v2 parts.
  */
 export const RECORDING_INDEX_FORMAT = 'agentfootprint.recording.index.v2';
 

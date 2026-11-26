@@ -18,7 +18,7 @@
  *
  * ── Two index formats ───────────────────────────────────────────────────────
  * Format 2 (what the writer writes) keeps a sub-flow invocation's entry and
- * exit payloads with the invocation (`payloads.ts`): `readRoot` serves the
+ * exit payloads with the invocation (`subflowPayloads.ts`): `readRoot` serves the
  * base as stored (marked, without them), `readInvocation` serves them beside
  * the result, `readWhole` puts them back. Format 1 (filed by 18.2 and 18.3)
  * keeps them in the base row and reads as it always did; so does a whole

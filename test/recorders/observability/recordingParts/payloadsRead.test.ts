@@ -23,7 +23,7 @@ import {
   type SavedRecording,
 } from '../../../../src/observe.js';
 import { unpackPart } from '../../../../src/recorders/observability/recordingParts/packing.js';
-import { restorePayloads } from '../../../../src/recorders/observability/recordingParts/payloads.js';
+import { restorePayloads } from '../../../../src/recorders/observability/recordingParts/subflowPayloads.js';
 import { boundaryEvents, engineRecording } from './engineRuns.js';
 import {
   SCOPE,

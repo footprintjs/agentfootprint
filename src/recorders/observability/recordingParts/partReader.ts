@@ -31,7 +31,12 @@ import {
   type StoredPartEntry,
 } from './format.js';
 import { unpackPart } from './packing.js';
-import { payloadClaims, restorePayloads, resultValueFor, type PayloadKind } from './payloads.js';
+import {
+  payloadClaims,
+  restorePayloads,
+  resultValueFor,
+  type PayloadKind,
+} from './subflowPayloads.js';
 import type { PartSource } from './source.js';
 
 /** Why one read from an opened recording returned nothing. */
