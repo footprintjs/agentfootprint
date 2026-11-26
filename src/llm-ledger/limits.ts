@@ -63,6 +63,19 @@ export const LEDGER_LIMITS = Object.freeze({
   lockStaleMs: 30_000,
   /** Sessions one high-water mark remembers; the least recently used is forgotten past it. */
   maxHighWaterSessions: 10_000,
+
+  /** Rules one ledger registers, built-ins included. */
+  maxRegisteredRules: 16,
+  /** Distinct fact names one rule's table may read. */
+  maxRuleFacts: 32,
+  /** How long a rule may run before its check is `unreachable` (`rule-timeout`). */
+  ruleTimeoutMs: 1_000,
+  /** Attempts one call makes when another writer appended first; then `busy`. */
+  maxAttempts: 3,
+  /** Calls one session may have waiting in a ledger's queue; then `busy`. */
+  maxQueued: 8,
+  /** Receipts `ask` lists, newest first. */
+  askReceipts: 64,
 } as const);
 
 /** The cap table's type: every value a literal. */
