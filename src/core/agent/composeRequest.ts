@@ -201,6 +201,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
     toolResultOrigin: _resultOrigin,
     toolResultDisposition: _resultDisposition,
     toolSkillBody: _skillBody,
+    skillListing: _skillListing,
     toolResultExecution: _resultExecution,
     toolOutputCounts: _outputCounts,
     toolFailureCategory: _failureCategory,
@@ -220,6 +221,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
   void _resultOrigin;
   void _resultDisposition;
   void _skillBody;
+  void _skillListing;
   void _resultExecution;
   void _outputCounts;
   void _failureCategory;
@@ -252,6 +254,7 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.toolResultOrigin !== undefined ||
     message.toolResultDisposition !== undefined ||
     'toolSkillBody' in message ||
+    'skillListing' in message ||
     message.toolResultExecution !== undefined ||
     message.toolOutputCounts !== undefined ||
     'toolFailureCategory' in message ||

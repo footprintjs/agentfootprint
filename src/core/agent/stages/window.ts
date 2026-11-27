@@ -49,7 +49,12 @@
 
 import type { TypedScope } from 'footprintjs';
 import { activeSkillBodyOccurrences } from '../skillContext/bodies.js';
-import type { LLMMessage, PricingTable } from '../../../provider-contract/types.js';
+import type {
+  LLMMessage,
+  PermissionChecker,
+  PricingTable,
+} from '../../../provider-contract/types.js';
+import { projectSkillListingHistory } from '../../../security/skillListingHistory.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { fnv1a } from '../../slots/helpers.js';
@@ -82,6 +87,7 @@ import type {
 import type { AgentState } from '../types.js';
 
 export interface WindowStageDeps {
+  readonly skillListingChecker?: PermissionChecker;
   /** The agent's one window strategy. */
   readonly strategy: WindowStrategy;
   /** The meter this stage reads. Attached inline by `Agent.createExecutor`. */
@@ -239,7 +245,7 @@ function droppedStandingsOf(
 export function buildWindowStage(
   deps: WindowStageDeps,
 ): (scope: TypedScope<AgentState>) => Promise<void> {
-  const { strategy, meter } = deps;
+  const { strategy, meter, skillListingChecker } = deps;
   const now = deps.now ?? ((): number => Date.now());
   // Dedup latch for a strategy's warning: a summarizer that is down is down
   // for the whole run, and one warning is a warning while ten is noise.
@@ -371,6 +377,15 @@ export function buildWindowStage(
       agentModel: deps.agentModel,
       providerName: deps.providerName,
       signal: scope.$getEnv?.()?.signal,
+      ...(skillListingChecker !== undefined && {
+        projectSkillListings: (span) =>
+          projectSkillListingHistory(
+            span,
+            skillListingChecker,
+            scope.runIdentity,
+            scope.$getEnv?.()?.signal,
+          ),
+      }),
       now,
       // The refusal engine, bound. A strategy cannot skip it: it never
       // receives the guards, only the answer.

@@ -4,6 +4,7 @@ import type {
   LLMProvider,
   LLMRequest,
   LLMToolSchema,
+  PermissionChecker,
   PricingTable,
 } from '../../../../provider-contract/types.js';
 import type { CacheStrategy } from '../../../../cache/types.js';
@@ -20,6 +21,7 @@ import type { RecallRequestSummary } from '../../honesty/retrievalRequests.js';
 import type { AgentState } from '../../types.js';
 
 export interface CallLLMStageDeps {
+  readonly skillListingChecker?: PermissionChecker;
   readonly offerCitations?: true;
   readonly sourceConsultation?: SourceConsultation;
   readonly registrations?: import('../toolResolver.js').ToolRegistrations;

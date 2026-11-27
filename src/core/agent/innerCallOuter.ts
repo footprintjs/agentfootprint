@@ -27,6 +27,11 @@
 import type { InnerCallRan } from '../../provider-contract/innerCalls.js';
 import { untilAborted } from '../../lib/abort.js';
 import type { ToolArgs } from '../../tools/runChain.js';
+import type { MessageRecord } from '../../provider-contract/toolResultRecord.js';
+
+export interface ListingCapture {
+  skillListingFor?: (content: string) => Pick<MessageRecord, 'skillListing'>;
+}
 
 /** A checker's `'halt'` on an inner call, carried to its outer call. */
 export interface InnerCallHalt {
@@ -57,6 +62,8 @@ export interface OuterCallBinding {
   admit(call: InnerCallRan): void;
   /** Return a detached view of calls already admitted by this owner. */
   admitted(): readonly InnerCallRan[];
+  /** Keep the catalog origin at the point the built-in adapter returns it. */
+  recordSkillListing(ids: readonly string[], text: string, inner: boolean): void;
   /** Close to entry, then drain admission decisions while the run is live. */
   close(signal?: AbortSignal): Promise<void>;
   /** Keep the first halt before the drain ends. True if this halt was kept. */
@@ -64,7 +71,7 @@ export interface OuterCallBinding {
 }
 
 /** A fresh binding for one outer call. */
-export function bindOuterCall(): OuterCallBinding {
+export function bindOuterCall(capture?: ListingCapture): OuterCallBinding {
   let ended = false;
   let halt: InnerCallHalt | undefined;
   let closed = false;
@@ -72,6 +79,9 @@ export function bindOuterCall(): OuterCallBinding {
   let runSignal: AbortSignal | undefined;
   let tail: Promise<unknown> = Promise.resolve();
   const admitted: InnerCallRan[] = [];
+  const listedIds = new Set<string>();
+  let directListing: { readonly text: string; readonly ids: readonly string[] } | undefined;
+  let derivedListing = false;
   const controller = new AbortController();
   return {
     get ended() {
@@ -92,6 +102,18 @@ export function bindOuterCall(): OuterCallBinding {
     },
     admitted() {
       return structuredClone(admitted);
+    },
+    recordSkillListing(ids, text, inner) {
+      if (capture === undefined || ended) return;
+      for (const id of ids) listedIds.add(id);
+      derivedListing ||= inner || directListing !== undefined;
+      if (!inner) directListing = { text, ids: [...ids] };
+      capture.skillListingFor = (content) => ({
+        skillListing:
+          !derivedListing && directListing?.text === content
+            ? { kind: 'rows', ids: directListing.ids }
+            : { kind: 'derived', ids: [...listedIds] },
+      });
     },
     close(signal) {
       if (closing !== undefined) return closing;

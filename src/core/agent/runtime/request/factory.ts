@@ -38,7 +38,8 @@ export interface RequestEnvironment {
 
 /** Keep per-invocation stage creation inside the native component's existing memo. */
 export function requestFactory(environment: RequestEnvironment) {
-  const { memories, reactMode } = environment.configuration;
+  const { memories, reactMode, permissionChecker } = environment.configuration;
+  const governsSkillRead = checkerGoverns(permissionChecker, 'skill_read');
   const recallRequests =
     memories.length === 0
       ? undefined
@@ -48,6 +49,7 @@ export function requestFactory(environment: RequestEnvironment) {
         );
   return (run: RunnerScopeValues<AgentRunValues>) =>
     buildCallLLMStage({
+      ...(governsSkillRead && { skillListingChecker: permissionChecker }),
       ...(environment.configuration.citationOptions !== undefined && { offerCitations: true }),
       ...(environment.configuration.answerLayerOption?.sourceNotConsulted === true && {
         sourceConsultation: (run.value.sourceConsultation ??= buildSourceConsultation({
