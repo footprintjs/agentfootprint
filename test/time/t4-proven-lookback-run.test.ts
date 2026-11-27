@@ -163,18 +163,22 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
     },
   );
 
-  it('asks when the literal is a later turn after a prior conversation', async () => {
-    const { agent, calls } = fixture(true, false, 'full', false, true);
-    const first = await agent.run({ message: 'The outage began yesterday.', time: { now } });
-    expect(isPaused(first)).toBe(false);
-    const continueFrom = agent.checkpoint();
-    if (continueFrom === undefined) throw new Error('Expected the prior conversation.');
-    expect(
-      isInputPause(await agent.run({ message: 'last 2 hours', continueFrom, time: { now } })),
-    ).toBe(true);
-    expect(calls).toEqual([]);
-    expect(agent.findings().some((row) => 'qualifiedLookback' in row)).toBe(false);
-  });
+  it.each([false, true])(
+    'asks on a later turn, including empty retained history (%s)',
+    async (empty) => {
+      const { agent, calls } = fixture(true, false, 'full', false, true);
+      const first = await agent.run({ message: 'The outage began yesterday.', time: { now } });
+      expect(isPaused(first)).toBe(false);
+      const prior = agent.checkpoint();
+      if (prior === undefined) throw new Error('Expected the prior conversation.');
+      const continueFrom = empty ? { ...prior, history: [] } : prior;
+      expect(
+        isInputPause(await agent.run({ message: 'last 2 hours', continueFrom, time: { now } })),
+      ).toBe(true);
+      expect(calls).toEqual([]);
+      expect(agent.findings().some((row) => 'qualifiedLookback' in row)).toBe(false);
+    },
+  );
 
   it('asks when the accepted literal differs from the text the person sent', async () => {
     const { agent, calls } = fixture(true, false, 'full', false, false, () => 'last 2 hours');
