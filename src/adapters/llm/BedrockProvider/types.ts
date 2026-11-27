@@ -111,6 +111,12 @@ export interface BedrockStreamResponse {
 }
 
 export interface BedrockProviderOptions {
+  /** Exact application inference profile ID or ARN to its verified foundation
+   * model or system inference profile identity, for Converse prompt caching.
+   * Use the model or system profile AWS lists behind each application profile.
+   * The submitted route stays the model ID. No lookup or chain is performed.
+   */
+  readonly inferenceProfileModels?: Readonly<Record<string, string>>;
   /** Explicit guardrail declaration for both Converse operations. Raw trace is never exposed. */
   readonly guardrail?: BedrockGuardrailOptions;
   /** AWS region (e.g., 'us-east-1'). Defaults to AWS SDK auto-detect. */

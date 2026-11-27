@@ -24,12 +24,21 @@ class Command {
 class StreamCommand {
   constructor(readonly input: unknown) {}
 }
-function scriptedBedrock(): LLMProvider {
+function scriptedBedrock(model: string, backingProfile: string): LLMProvider {
   let calls = 0;
   return bedrock({
+    inferenceProfileModels: { [model]: backingProfile },
     _commands: { Converse: Command, ConverseStream: StreamCommand },
     _client: {
       send: async (command) => {
+        if (!(command instanceof Command || command instanceof StreamCommand))
+          throw new Error('Unexpected Bedrock command.');
+        const input = command.input as { modelId: string; system?: { cachePoint?: unknown }[] };
+        if (
+          input.modelId !== model ||
+          !input.system?.some((block) => block.cachePoint !== undefined)
+        )
+          throw new Error('The application profile or its system cache point was missing.');
         const first = calls++ === 0;
         const usage = {
           inputTokens: 20,
@@ -60,8 +69,9 @@ export async function run(
   // #region cache
   // In an application: bedrock({ region: 'us-east-1' }); the example's
   // injected SDK client below is entirely local and returns fixture counts.
-  const provider = scriptedBedrock();
-  const model = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+  const model = 'example-app-profile';
+  const backingProfile = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+  const provider = scriptedBedrock(model, backingProfile);
   const meter = cacheRecorder({ strategy: cacheStrategyFor(provider, model), model });
   const agent = Agent.create({ provider, model })
     .system('Stable instructions. '.repeat(100), { cache: 'always' })

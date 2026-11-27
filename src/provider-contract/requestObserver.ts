@@ -6,6 +6,29 @@ import type { LLMCallHooks, LLMChunk, LLMMessage, LLMRequest, LLMResponse } from
 const REQUEST_OBSERVER = Symbol.for('agentfootprint.requestObserver');
 const ATTEMPT_OBSERVER = Symbol.for('agentfootprint.requestAttemptObserver');
 const ACTIVE_ATTEMPT = Symbol.for('agentfootprint.activeRequestAttempt');
+const CACHE_COMMAND = Symbol.for('agentfootprint.cacheCommandObserver');
+
+export type CacheCommandReason =
+  | 'route-unresolved'
+  | 'no-markers'
+  | 'boundaries-rejected'
+  | 'prepared';
+
+export interface CacheCommandPreparation {
+  readonly operation: 'Converse' | 'ConverseStream';
+  readonly reason: CacheCommandReason;
+  readonly points: number;
+  readonly fallbackFrom?: symbol;
+}
+
+export interface CacheCommandTicket {
+  readonly id: symbol;
+  response(response: LLMResponse): void;
+}
+
+export type CacheCommandObserver = (
+  command: CacheCommandPreparation,
+) => CacheCommandTicket | undefined;
 
 export type RequestSettlement = 'response' | 'no-response' | 'failed' | 'not-dispatched';
 
@@ -48,6 +71,7 @@ type ObservedHooks = LLMCallHooks & {
   readonly [ATTEMPT_OBSERVER]?: (observation: RequestAttemptObservation) => void;
   readonly [ACTIVE_ATTEMPT]?: { readonly id: symbol; readonly refuse: () => void };
   readonly [CITATION_OFFER]?: CitationOfferObserver;
+  readonly [CACHE_COMMAND]?: CacheCommandObserver;
 };
 
 /** Attach a run-local observer without adding a public/model-facing hook. */
@@ -87,6 +111,23 @@ export function observeRequestAttempts(
   return { ...hooks, [ATTEMPT_OBSERVER]: observer } as ObservedHooks;
 }
 
+/** Observe prepared commands inside the existing provider attempt lifetime. */
+export function observeCacheCommands(
+  hooks: LLMCallHooks,
+  observer: CacheCommandObserver,
+): LLMCallHooks {
+  const observed: ObservedHooks = { ...hooks, [CACHE_COMMAND]: observer };
+  return observed;
+}
+
+/** A prepared command is local evidence; the SDK's eventual wire is unknown. */
+export function prepareCacheCommand(
+  hooks: LLMCallHooks | undefined,
+  command: CacheCommandPreparation,
+): CacheCommandTicket | undefined {
+  return (hooks as ObservedHooks | undefined)?.[CACHE_COMMAND]?.(command);
+}
+
 /** Only a boundary that refused before entering its provider can file this. */
 export function refuseObservedRequest(hooks: LLMCallHooks | undefined): void {
   (hooks as ObservedHooks | undefined)?.[ACTIVE_ATTEMPT]?.refuse();
@@ -105,8 +146,14 @@ export function requestAttempt(
   const observer = prior?.[REQUEST_OBSERVER];
   const attempts = prior?.[ATTEMPT_OBSERVER];
   const offers = prior?.[CITATION_OFFER];
+  const cacheCommands = prior?.[CACHE_COMMAND];
   // Off-mode keeps the original hook object and all its behavior unchanged.
-  if (observer === undefined && attempts === undefined && offers === undefined)
+  if (
+    observer === undefined &&
+    attempts === undefined &&
+    offers === undefined &&
+    cacheCommands === undefined
+  )
     return {
       hooks,
       close() {
@@ -123,6 +170,22 @@ export function requestAttempt(
   let effective = request;
   const scoped: ObservedHooks = {
     ...hooks,
+    ...(cacheCommands !== undefined && {
+      [CACHE_COMMAND]: (command: CacheCommandPreparation) => {
+        if (!active) return undefined;
+        const ticket = cacheCommands(command);
+        if (ticket === undefined) return undefined;
+        let observedResponse = false;
+        return {
+          id: ticket.id,
+          response(response: LLMResponse) {
+            if (!active || observedResponse) return;
+            observedResponse = true;
+            ticket.response(response);
+          },
+        };
+      },
+    }),
     ...(observer !== undefined && {
       [REQUEST_OBSERVER]: (next: LLMRequest) => {
         if (active) observer(next);

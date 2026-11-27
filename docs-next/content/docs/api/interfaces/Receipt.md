@@ -4,7 +4,7 @@ title: Receipt
 
 # Interface: Receipt
 
-Defined in: [src/core/agent/receipt/receipt.ts:326](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L326)
+Defined in: [src/core/agent/receipt/receipt.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L297)
 
 THE RECEIPT. One per composed request, committed at the call-llm stop.
 
@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:427](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L427)
+Defined in: [src/core/agent/receipt/receipt.ts:405](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L405)
 
 #### epoch
 
@@ -50,7 +50,26 @@ Defined in: [src/core/agent/receipt/receipt.ts:427](https://github.com/footprint
 
 > `readonly` **cache**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:360](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L360)
+Defined in: [src/core/agent/receipt/receipt.ts:331](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L331)
+
+#### acceptedCommand?
+
+> `readonly` `optional` **acceptedCommand?**: `number` \| `null`
+
+Ordinal that owns the accepted response and its metered usage.
+Null means a response arrived without a valid retained command link.
+
+#### commandOverflow?
+
+> `readonly` `optional` **commandOverflow?**: `true`
+
+True when another command was prepared beyond the retained rows.
+
+#### commandPreparations?
+
+> `readonly` `optional` **commandPreparations?**: readonly `ReceiptCacheCommand`[]
+
+Bounded prepared SDK inputs, separate from the strategy's markers.
 
 #### markersApplied
 
@@ -116,7 +135,7 @@ minted before the prefix existed, which verifies as
 
 > `readonly` **messages**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:347](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L347)
+Defined in: [src/core/agent/receipt/receipt.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L318)
 
 #### count
 
@@ -136,7 +155,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:347](https://github.com/footprint
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: [src/core/agent/receipt/receipt.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L426)
+Defined in: [src/core/agent/receipt/receipt.ts:404](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L404)
 
 What left the window for budget at this iteration's head, before this
 request was composed — one hash per evicted turn, each the turn's own
@@ -157,7 +176,7 @@ meant only that nobody had recorded a drop.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: [src/core/agent/receipt/receipt.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L411)
+Defined in: [src/core/agent/receipt/receipt.ts:389](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L389)
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
 
@@ -167,7 +186,7 @@ The sampling knobs the call went out with — see [ReceiptParams](/docs/api/inte
 
 > `readonly` `optional` **replayPreparations?**: readonly `object`[]
 
-Defined in: [src/core/agent/receipt/receipt.ts:334](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L334)
+Defined in: [src/core/agent/receipt/receipt.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L305)
 
 Actual leaf-provider preparation omitted thinking after this port receipt
 was minted. Original hashes/measurement/cache verdict remain port-level;
@@ -179,7 +198,7 @@ this is an explicit downstream gap, not proof of what a server accepted.
 
 > `readonly` `optional` **requestMeasurement?**: [`RequestMeasurement`](/docs/api/type-aliases/RequestMeasurement)
 
-Defined in: [src/core/agent/receipt/receipt.ts:341](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L341)
+Defined in: [src/core/agent/receipt/receipt.ts:312](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L312)
 
 Counts of the initial prepared canonical request, including full schemas.
 Older recordings have no measurement. No payload, tokens or retry totals.
@@ -190,7 +209,7 @@ Older recordings have no measurement. No payload, tokens or retry totals.
 
 > `readonly` **system**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:342](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L342)
+Defined in: [src/core/agent/receipt/receipt.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L313)
 
 #### chars
 
@@ -210,7 +229,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:342](https://github.com/footprint
 
 > `readonly` **tools**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:352](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L352)
+Defined in: [src/core/agent/receipt/receipt.ts:323](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L323)
 
 #### forced
 
@@ -238,6 +257,6 @@ Why the tool list is empty when it would not otherwise be.
 
 > `readonly` `optional` **toolSelection?**: `ReceiptToolSelection`
 
-Defined in: [src/core/agent/receipt/receipt.ts:328](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L328)
+Defined in: [src/core/agent/receipt/receipt.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L299)
 
 Visible tool exclusions and competing claims proved on this accepted request.

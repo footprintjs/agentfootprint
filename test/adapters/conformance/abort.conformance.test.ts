@@ -51,6 +51,7 @@ const HELPER_FILES: Readonly<Record<string, string>> = {
   'azureUrl.ts': 'Azure URL composition',
   'bedrockCacheWire.ts':
     'synchronous cache-marker projection, usage reading and capability lookup; no client, I/O or provider construction',
+  'bedrockModelArn.ts': 'shared synchronous Bedrock ARN parsing with no transport',
   'bedrockModels.ts':
     'frozen model facts and synchronous exact-ID lookup; no client, I/O or provider construction',
   'BedrockProvider/client.ts':
