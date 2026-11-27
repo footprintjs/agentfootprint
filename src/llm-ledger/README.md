@@ -33,7 +33,7 @@ this folder imports it yet, and no `package.json` door reaches it.
 | `fileStore.ts` | `fileLedgerStore({ dir, key, uid })`: one MAC-chained JSON-lines file per session, every line marked with its batch's end. The only file here that imports Node |
 | `rules/` | the checks port and the three built-in rules (`rules/README.md`) |
 | `reader.ts` | `readerOf`: one loaded log, indexed by seq and kind; held in a stage's closure, never in a run's scope |
-| `report.ts` | `foldReport`: the last submit's checks as AgentFootprint's standing (`ask`, `not-sure`, `consistent`, `not-assessed`) and its reasons. It never trusts that the value law ran: a subject with no `traceable-values@1` record reads at most `open`, and a submit with no value-law record for its draft reads `not-assessed` at best |
+| `report.ts` | `foldReport`: the last submit's checks as AgentFootprint's standing (`ask`, `not-sure`, `consistent`, `not-assessed`) and its reasons. It never trusts that the value law ran: a subject with no value-law record reads at most `open`, and a submit with no value-law record for its draft reads `not-assessed` at best |
 | `serve.ts` | the one funnel everything served passes through (`serveReport`, `serveReceipts`, `serveRefusal`); receipt tokens, queries and supplied content are never read by it |
 | `stages.ts` | the stage functions of a call's chart, over one `CallFrame` (the call's closure) |
 | `calls.ts` | `runCall`: the chart of one call, one fresh `FlowChartExecutor`, input `{ call }`, and the one pause |
@@ -140,7 +140,7 @@ so the host passes its own `uid`.
 `deliver` and `report`; the agent's calls `note`, `withdraw`, `ask` and `submit` are bound to one
 session and take no session argument. Every reply is `{ ok: true, … }` or
 `{ ok: false, refused: <word> }`, with `store` beside `store-refused`. A session opened without
-`rules` runs the three built-ins. Every session runs the value law, `traceable-values@1`, on every
+`rules` runs the three built-ins. Every session runs `traceable-values@2` for new checks and preserves earlier `@1` records. It runs on every
 claim and on the draft, whatever it pins: `open` adds it to `opened.rules` and its reply lists the rules.
 
 Each call is ONE short FootprintJS run: a fresh `FlowChartExecutor`, a chart built for the call, and

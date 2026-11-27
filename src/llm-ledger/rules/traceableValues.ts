@@ -1,5 +1,5 @@
 /**
- * llm-ledger/rules/traceableValues — `traceable-values@1`: every value a claim or the draft states
+ * llm-ledger/rules/traceableValues — `traceable-values@2`: every value a claim or the draft states
  * is in one of its receipts.
  *
  * Pattern: a table rule (`rules/port.ts`). Facts `visible`, `checkable`, `missing`, `incomplete`.
@@ -10,7 +10,9 @@
  * Tokens come from the note's text and `values`, or from the draft. A token found in a `supplied`
  * entry is exempt: neither missing nor support (only the host writes `supplied`). Every other token
  * rests on the first OBSERVED receipt that holds it, or else the first reported one; a token no
- * receipt holds is missing. A subject that states a value the token rule cannot read as one token
+ * receipt holds is missing. Complete timestamp spellings can match by instant. An unmatched
+ * ambiguous time remains open without weakening a definite missing value. A subject that states
+ * a value the token rule cannot read as one token
  * (a number with thousands separators, a piece after an escape) is at most `unreachable`, after its
  * visible tokens are checked: a missing visible token still fails it. With a missing token, an
  * incomplete receipt among the subject's
@@ -21,17 +23,28 @@
 import { isIncomplete } from '../entries.js';
 import { readTokens, tokensOf } from '../tokens.js';
 import type { LedgerTableRule } from './port.js';
+import { valueEvidence } from './valueEvidence.js';
 
 /** The value law's key. It runs in every session, whatever the session pins (`withValueLaw`). */
-export const VALUE_LAW = 'traceable-values@1';
+export const VALUE_LAW = 'traceable-values@2';
+const LEGACY_VALUE_LAW = 'traceable-values@1';
+
+/** Both versions can be present in one immutable ledger. */
+export const isValueLaw = (key: string): boolean => key === LEGACY_VALUE_LAW || key === VALUE_LAW;
 
 /** `keys` with the value law among them: pinning may add rules, never remove this one. */
-export const withValueLaw = (keys: readonly string[]): string[] =>
-  keys.includes(VALUE_LAW) ? [...keys] : [...keys, VALUE_LAW];
+export function withValueLaw(keys: readonly string[]): string[] {
+  const current = keys.filter((key) => key !== LEGACY_VALUE_LAW);
+  if (!current.includes(VALUE_LAW)) {
+    const pinned = keys.indexOf(LEGACY_VALUE_LAW);
+    current.splice(pinned === -1 ? current.length : pinned, 0, VALUE_LAW);
+  }
+  return current;
+}
 
 export const traceableValues: LedgerTableRule = {
   id: 'traceable-values',
-  version: 1,
+  version: 2,
   appliesTo: ['claim', 'ruled-out', 'draft'],
   facts: (input) => {
     const subject = input.subject;
@@ -48,20 +61,19 @@ export const traceableValues: LedgerTableRule = {
     )
       .map(readTokens)
       .reduce((n, r) => n + (r.groupedNumbers ?? 0) + (r.escapedPieces ?? 0), 0);
-    const exempt = new Set(input.supplied.flatMap((s) => s.tokens));
-    const holders = (token: string) => input.receipts.filter((r) => r.tokens.includes(token));
+    const evidenceFor = valueEvidence(stated, input.receipts, input.supplied);
     const restsOn: number[] = [];
     const missing: string[] = [];
     let supplied = 0;
+    let unsupported = 0;
     for (const token of stated) {
-      if (exempt.has(token)) {
-        supplied++;
-        continue;
+      const evidence = evidenceFor(token);
+      if (evidence.kind === 'supplied') supplied++;
+      else if (evidence.kind === 'receipt') restsOn.push(evidence.seq);
+      else {
+        missing.push(token);
+        if (evidence.kind === 'missing') unsupported++;
       }
-      const found = holders(token);
-      const first = found.find((r) => r.how === 'observed') ?? found[0];
-      if (first === undefined) missing.push(token);
-      else restsOn.push(first.seq);
     }
     const incomplete = input.receipts.filter(isIncomplete).length;
     const counts = { visible: stated.size, missing: missing.length, supplied, incomplete };
@@ -70,6 +82,7 @@ export const traceableValues: LedgerTableRule = {
         visible: stated.size,
         checkable: stated.size - supplied,
         missing: missing.length,
+        unsupported,
         incomplete,
         unreadable,
       },
@@ -90,9 +103,14 @@ export const traceableValues: LedgerTableRule = {
       label: 'every value it states was supplied',
     },
     {
-      when: { missing: { gt: 0 }, incomplete: { eq: 0 } },
+      when: { unsupported: { gt: 0 }, incomplete: { eq: 0 } },
       then: 'checked-fail',
       label: 'a value it states is in none of its receipts',
+    },
+    {
+      when: { missing: { gt: 0 }, incomplete: { eq: 0 } },
+      then: 'unreachable',
+      label: 'a time cannot be established from the date, offset and precision available',
     },
     {
       when: { missing: { gt: 0 } },

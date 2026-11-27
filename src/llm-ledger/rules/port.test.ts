@@ -63,7 +63,7 @@ describe('registration (§9.2)', () => {
     const rules = registerRules(BUILT, [host()]);
     expect([...rules.keys()]).toEqual([
       'cited@1',
-      'traceable-values@1',
+      'traceable-values@2',
       'time-window@1',
       'acme/rule@1',
     ]);

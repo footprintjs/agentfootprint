@@ -263,8 +263,8 @@ describe('edge cases (§14)', () => {
     expect(checks.map((c) => (c as { rule: string }).rule)).toEqual([
       'cited@1',
       'acme/thrower@1',
-      'traceable-values@1',
-      'traceable-values@1',
+      'traceable-values@2',
+      'traceable-values@2',
     ]);
     expect(checks[1]).toMatchObject({
       disposition: 'unreachable',
@@ -309,7 +309,7 @@ describe('the value law runs in every session (ruling 1)', () => {
     async (_n, options, rules) => {
       const t = await setup(options as Partial<LedgerOptions>, { rules: [...rules] });
       const opened = (await log(t.inner, t.session))[0] as { rules: string[] };
-      expect(opened.rules).toEqual([...rules, 'traceable-values@1']);
+      expect(opened.rules).toEqual([...rules, 'traceable-values@2']);
       await t.ledger.host.record(t.session, { source: 's', text: 'v4006k' });
       await t.agent.note({ kind: 'claim', text: 'v4002k', cites: [2] });
       const report = ((await t.agent.submit({ draft: 'v4002k', claims: [3] })) as Reply).report;
@@ -334,7 +334,7 @@ describe('the value law runs in every session (ruling 1)', () => {
     expect(report.claims[0].verdict).toBe('unsupported');
     expect(report.claims[0].checks.map((c: { rule: string }) => c.rule)).toEqual([
       'cited@1',
-      'traceable-values@1',
+      'traceable-values@2',
     ]);
   });
 
@@ -343,10 +343,10 @@ describe('the value law runs in every session (ruling 1)', () => {
     expect(await ledger.host.open({ rules: ['cited@1'] })).toMatchObject({
       ok: true,
       seq: 1,
-      rules: ['cited@1', 'traceable-values@1'],
+      rules: ['cited@1', 'traceable-values@2'],
     });
     expect(await ledger.host.open({})).toMatchObject({
-      rules: ['cited@1', 'traceable-values@1', 'time-window@1'],
+      rules: ['cited@1', 'traceable-values@2', 'time-window@1'],
     });
   });
 });
@@ -438,7 +438,7 @@ describe('the person answer is never lost (ruling 3)', () => {
 
 describe('the fold trusts no check record it finds (P3)', () => {
   type Check = Extract<LedgerEntry, { kind: 'check' }>;
-  const law = 'traceable-values@1';
+  const law = 'traceable-values@2';
   /**
    * A real session's log with the value law unpinned and `drop`'s checks left out, written by hand
    * through the store port to a fresh store: what a build without the value law would leave.

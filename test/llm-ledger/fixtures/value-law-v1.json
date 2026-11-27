@@ -1,0 +1,176 @@
+{
+  "entries": [
+    {
+      "askRunsRules": true,
+      "at": "2026-11-27T15:00:00Z",
+      "by": "host",
+      "confirm": false,
+      "how": "observed",
+      "kind": "opened",
+      "rules": ["traceable-values@1"],
+      "seq": 1,
+      "v": 1
+    },
+    {
+      "at": "2026-11-27T15:00:00Z",
+      "by": "host",
+      "bytes": 25,
+      "how": "observed",
+      "kind": "receipt",
+      "nothingFound": false,
+      "seq": 2,
+      "source": "fixture",
+      "tokens": ["2026-11-20t20:14:18-06:00"],
+      "v": 1
+    },
+    {
+      "at": "2026-11-27T15:00:00Z",
+      "by": "agent",
+      "cites": [2],
+      "how": "observed",
+      "kind": "note",
+      "noteKind": "claim",
+      "seq": 3,
+      "text": "2026-11-20T20:14:18-06:00",
+      "v": 1
+    },
+    {
+      "at": "2026-11-27T15:00:00Z",
+      "by": "agent",
+      "claims": [3],
+      "draftBytes": 25,
+      "draftDigest": "sha256:5c75bf6f093d425540857f62a451fe6777d7360fc222e6cb204bad75f818cf21",
+      "how": "observed",
+      "kind": "submit",
+      "seq": 4,
+      "v": 1
+    },
+    {
+      "at": "2026-11-27T15:00:00Z",
+      "by": "ledger",
+      "counts": {
+        "incomplete": 0,
+        "missing": 0,
+        "supplied": 0,
+        "visible": 1
+      },
+      "decision": {
+        "by": "default",
+        "label": "every value it states is in a receipt",
+        "reads": ["visible", "checkable", "missing", "incomplete", "unreadable"],
+        "strategy": "checked-pass"
+      },
+      "disposition": "checked-pass",
+      "how": "observed",
+      "kind": "check",
+      "restsOn": [2],
+      "rule": "traceable-values@1",
+      "seq": 5,
+      "subject": {
+        "note": 3
+      },
+      "submit": 4,
+      "v": 1,
+      "verdict": "verified"
+    },
+    {
+      "at": "2026-11-27T15:00:00Z",
+      "by": "ledger",
+      "counts": {
+        "incomplete": 0,
+        "missing": 0,
+        "supplied": 0,
+        "visible": 1
+      },
+      "decision": {
+        "by": "default",
+        "label": "every value it states is in a receipt",
+        "reads": ["visible", "checkable", "missing", "incomplete", "unreadable"],
+        "strategy": "checked-pass"
+      },
+      "disposition": "checked-pass",
+      "how": "observed",
+      "kind": "check",
+      "restsOn": [2],
+      "rule": "traceable-values@1",
+      "seq": 6,
+      "subject": {
+        "draft": true
+      },
+      "submit": 4,
+      "v": 1,
+      "verdict": "verified"
+    }
+  ],
+  "report": {
+    "standing": "consistent",
+    "reasons": [],
+    "submit": 4,
+    "draftDigest": "sha256:5c75bf6f093d425540857f62a451fe6777d7360fc222e6cb204bad75f818cf21",
+    "claims": [
+      {
+        "note": 3,
+        "kind": "claim",
+        "text": "2026-11-20T20:14:18-06:00",
+        "verdict": "verified",
+        "restsOn": "observed",
+        "missing": [],
+        "checks": [
+          {
+            "rule": "traceable-values@1",
+            "disposition": "checked-pass",
+            "verdict": "verified",
+            "restsOn": [2],
+            "counts": {
+              "visible": 1,
+              "missing": 0,
+              "supplied": 0,
+              "incomplete": 0
+            }
+          }
+        ]
+      }
+    ],
+    "draft": {
+      "verdict": "verified",
+      "restsOn": "observed",
+      "missing": [],
+      "checks": [
+        {
+          "rule": "traceable-values@1",
+          "disposition": "checked-pass",
+          "verdict": "verified",
+          "restsOn": [2],
+          "counts": {
+            "visible": 1,
+            "missing": 0,
+            "supplied": 0,
+            "incomplete": 0
+          }
+        }
+      ]
+    },
+    "counts": {
+      "verified": 1,
+      "consistentWithReported": 0,
+      "unsupported": 0,
+      "open": 0,
+      "notAssessed": 0
+    },
+    "receipts": {
+      "observed": 1,
+      "reported": 0,
+      "incomplete": []
+    },
+    "withdrawnAfterCheck": [],
+    "notChecked": [],
+    "openQuestions": [],
+    "delivery": "not-compared",
+    "release": "not-asked",
+    "full": false,
+    "sentences": [
+      "Traceable to what was read; not a proof that it is true.",
+      "Reads made outside this ledger are not visible to it."
+    ]
+  }
+}
