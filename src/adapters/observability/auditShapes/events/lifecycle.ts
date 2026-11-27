@@ -15,6 +15,8 @@ import { boundAnswerCoverage, boundAnswerNegatives } from '../pieces/coverage.js
 import { boundScripts } from '../pieces/scripts.js';
 import { eventShape } from '../vocabulary.js';
 
+type RouteDecisions = At<PayloadOf<'agentfootprint.agent.route_decided'>, 'routeDecisions'>;
+
 export function lifecycleShapes() {
   return {
     // ── Every other event: structure, and the fields bounded whole ─────
@@ -128,6 +130,13 @@ export function lifecycleShapes() {
       ),
       // A fixed sentence, or one the library composes (a count, a skill's name).
       rationale: str,
+      routeDecisions: shapeOf<RouteDecisions>({
+        provisional: shapeOf<At<RouteDecisions, 'provisional'>>({ chosen: oneOf('final') }),
+        override: shapeOf<At<RouteDecisions, 'override'>>({
+          chosen: oneOf('negative-recheck'),
+          reason: oneOf('citation-unresolved'),
+        }),
+      }),
     }),
 
     'agentfootprint.agent.output_contract_unmet':

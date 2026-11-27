@@ -77,7 +77,7 @@ import type { DispositionLedger } from '../../../integrity/disposition/ledger.js
 import type { Disposition } from '../../../integrity/disposition/types.js';
 import { runKeepsOut } from '../../../redaction/runRedaction.js';
 import type { FixedRouteRationale } from '../../../events/payloads.js';
-import { keptForWrapper } from './routeAnnouncement.js';
+import { emitRouteDecided } from './routeAnnouncement.js';
 
 export type RouteBranch =
   | 'tool-calls'
@@ -635,20 +635,6 @@ async function peelAnswerStandings(
  */
 function restoreEmission(scope: TypedScope<AgentState>, emission: string | undefined): void {
   if (emission !== undefined) scope.llmLatestContent = emission;
-}
-
-export function emitRouteDecided(
-  scope: TypedScope<AgentState>,
-  chosen: RouteBranch,
-  rationale: string,
-): void {
-  if (keptForWrapper(scope, chosen, rationale)) return; // a re-routing wrapper announces it
-  typedEmit(scope, 'agentfootprint.agent.route_decided', {
-    turnIndex: 0,
-    iterIndex: scope.iteration as number,
-    chosen,
-    rationale,
-  });
 }
 
 /**

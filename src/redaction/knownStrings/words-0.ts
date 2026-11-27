@@ -216,6 +216,7 @@ export const words0 = {
   'checked-pass': true,
   choice: true,
   chroma: true,
+  'citation-unresolved': true,
   claim: true,
   'claim-exceeds-search': true,
   'claim-unsettled': true,
@@ -301,5 +302,4 @@ export const words0 = {
   exploratory: true,
   external_net: true,
   extract: true,
-  fact: true,
 } as const;

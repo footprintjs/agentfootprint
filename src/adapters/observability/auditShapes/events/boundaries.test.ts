@@ -28,6 +28,18 @@ describe('event groups retain their audit boundaries', () => {
     expect(shapes[event](payload)).toEqual(expected);
   });
 
+  it('retains only the authorized words of a recorded route override', () => {
+    const shape = shapes['agentfootprint.agent.route_decided'];
+    const provisional = { chosen: 'final' };
+    const override = { chosen: 'negative-recheck', reason: 'citation-unresolved' };
+    expect(shape({ routeDecisions: { provisional, override } })).toEqual({
+      routeDecisions: { provisional, override },
+    });
+    expect(
+      shape({ routeDecisions: { provisional, override: { ...override, reason: 'private' } } }),
+    ).toEqual({ routeDecisions: { provisional, override: { ...override, reason: '[7 chars]' } } });
+  });
+
   it('retains the human approval and later policy verdict as separate bounded facts', () => {
     const order = { toolCallId: 'sample-1', iteration: 2 };
     const middleware = shapes['agentfootprint.middleware.decision'];
