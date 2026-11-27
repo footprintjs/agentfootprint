@@ -109,9 +109,9 @@ it('preserves caller cancellation by identity and releases the actual backoff ti
   expect(vi.getTimerCount()).toBe(1);
   controller.abort(reason);
   await rejected;
+  expect(vi.getTimerCount()).toBe(0);
   await vi.advanceTimersByTimeAsync(30);
   expect(trace.steps).toEqual([{ at: 0, action: 'primary.complete' }]);
-  expect(vi.getTimerCount()).toBe(0);
 });
 
 it.each([

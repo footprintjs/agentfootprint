@@ -1,3 +1,4 @@
+import { setImmediate } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { Agent } from '../../../src/index.js';
 import { withRetry, ReliabilityFailFastError } from '../../../src/doors/resilience.js';
@@ -207,6 +208,57 @@ it('records separate stream and complete entries when the terminal response is m
       'primary.complete',
     ]);
     expect(trace.requests[0]?.bytes).toBe(trace.requests[1]?.bytes);
+  } finally {
+    await agent.shutdown();
+  }
+});
+
+it('does not start the policy retry after the caller cancels', async () => {
+  const controller = new AbortController();
+  const reason = new Error('caller cancelled');
+  const trace = traceCall();
+  const primary = {
+    ...scriptedProvider('primary', trace, [answer('{"ok":false}')]),
+    carriesNativeOutputSchema: true,
+    supportsNativeOutputSchema() {
+      if (controller.signal.aborted) trace.mark('retry:prepare');
+      return true;
+    },
+  };
+  const agent = Agent.create({ provider: primary, model: 'fixture-model' })
+    .outputSchema(
+      { parse: (value: unknown) => value },
+      {
+        strategy: 'native',
+        jsonSchema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' } },
+          required: ['ok'],
+        },
+      },
+    )
+    .reliability({
+      postDecide: [
+        {
+          when: (scope) => scope.response?.content === '{"ok":false}',
+          then: 'retry',
+          kind: 'fixture-refusal',
+          feedbackForLLM() {
+            trace.mark('policy:retry');
+            controller.abort(reason);
+            return 'Try another answer.';
+          },
+        },
+      ],
+    })
+    .build();
+  try {
+    await expect(
+      agent.run({ message: 'What happened?' }, { env: { signal: controller.signal } }),
+    ).rejects.toBe(reason);
+    // The outer run can reject before the cancelled stage finishes unwinding.
+    await setImmediate();
+    expect(trace.steps.map(({ action }) => action)).toEqual(['primary.complete', 'policy:retry']);
   } finally {
     await agent.shutdown();
   }

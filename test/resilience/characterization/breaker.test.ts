@@ -94,3 +94,21 @@ it.each([chunk(''), chunk('partial')])(
     ]);
   },
 );
+
+it('does not count a cancelled call toward opening the breaker', async () => {
+  const controller = new AbortController();
+  const trace = traceCall();
+  const outage = failure('provider down');
+  const reply = answer('ok');
+  const primary = scriptedProvider('primary', trace, [
+    async () => {
+      controller.abort(new Error('caller left'));
+      throw outage;
+    },
+    reply,
+  ]);
+  const provider = withCircuitBreaker(primary, { failureThreshold: 1 });
+
+  await expect(provider.complete({ ...request, signal: controller.signal })).rejects.toBe(outage);
+  await expect(provider.complete(request)).resolves.toEqual(reply);
+});

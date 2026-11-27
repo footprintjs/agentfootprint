@@ -143,3 +143,31 @@ it.each([
   }
   expect(trace.steps.map(({ action }) => action)).toEqual(['primary.stream', 'primary.close']);
 });
+
+it.each(['complete', 'stream'] as const)(
+  'does not move a cancelled %s to the fallback',
+  async (operation) => {
+    const controller = new AbortController();
+    const reason = new Error('caller cancelled');
+    const trace = traceCall();
+    const abortAndFail = () => {
+      controller.abort(reason);
+      return failure('primary down');
+    };
+    const primary =
+      operation === 'complete'
+        ? scriptedProvider('primary', trace, [
+            async () => {
+              throw abortAndFail();
+            },
+          ])
+        : scriptedProvider('primary', trace, [], [[abortAndFail()]]);
+    const secondary = scriptedProvider('secondary', trace, [answer('must stay unused')], [[]]);
+    const provider = withFallback(primary, secondary);
+    const req = { ...request, signal: controller.signal };
+    const run = operation === 'complete' ? provider.complete(req) : drain(provider.stream!(req));
+
+    await expect(run).rejects.toBe(reason);
+    expect(trace.requests.map(({ provider }) => provider)).toEqual(['primary']);
+  },
+);
