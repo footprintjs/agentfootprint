@@ -6,6 +6,7 @@ import {
   type ReadTimeOptions,
 } from '../../../time/clock.js';
 import { clockOf } from '../../../time/rows.js';
+import { readTimeDisplay } from '../../../time/display.js';
 import type { TimeAnswerContext } from '../../../tools/inputRequest.js';
 import { InvalidRunInputError } from '../../runInput.js';
 import type { AgentState } from '../types.js';
@@ -100,4 +101,25 @@ export function agentTimeAnswerContext(
     ...(zone !== undefined && { zone }),
     ...(messages !== undefined && { messages }),
   };
+}
+
+/** Admit this question's display without changing or defaulting its semantic clock. */
+export function withTimeDisplay(
+  draft: ClockDraft | undefined,
+  input: object,
+): ClockDraft | undefined {
+  const field = Object.getOwnPropertyDescriptor(input, 'timeDisplay');
+  if (field === undefined || ('value' in field && field.value === undefined)) return draft;
+  const display = 'value' in field ? readTimeDisplay(field.value) : undefined;
+  if (draft === undefined || display === undefined) {
+    throw new InvalidRunInputError({
+      runner: 'Agent.run',
+      received: 'timeDisplay',
+      hint:
+        draft === undefined
+          ? 'arm .time() to pass a display-only viewer zone'
+          : 'timeDisplay must contain one own-data viewerZone IANA name; no abbreviations or accessors',
+    });
+  }
+  return { ...draft, display };
 }

@@ -33,6 +33,7 @@ import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
 import { requestOf } from '../../../requestOfRun.js';
 import { AROUND_TURN_STAGE_ID } from '../../run/eventStageIds.js';
 import { withoutTime } from '../../run/withoutTime.js';
+import { withTimeDisplay } from '../../run/clocks.js';
 import type { AgentContext } from '../contracts.js';
 
 export async function runTyped<T = unknown>(
@@ -148,7 +149,10 @@ export async function runLeg(
   // The run's clock (the time layer): read or refused HERE, before the turn
   // starts — a run with no zone anywhere runs with its zone UNKNOWN (G15),
   // never on the server's zone.
-  const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
+  const clockDraft = withTimeDisplay(
+    this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run'),
+    runInput,
+  );
   // The engine's options; the run's signal (and its deadline) is armed just
   // before native execution, whose lifecycle releases it.
   const engineOptions = withoutTime(options);

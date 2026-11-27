@@ -83,6 +83,7 @@ export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): 
       clock,
       { turn: scope.turnNumber as number, iteration: scope.iteration as number },
       draft.window,
+      draft.display,
     ),
   ]);
 }
