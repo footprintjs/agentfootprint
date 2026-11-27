@@ -4,7 +4,7 @@ title: PersonWindow
 
 # Interface: PersonWindow
 
-Defined in: [src/time/rows/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L155)
+Defined in: [src/time/rows/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L163)
 
 The person's window a `call-window` row names — its range, who gave it, and its mention.
 
@@ -42,7 +42,7 @@ Defined in: [src/time/range.ts:60](https://github.com/footprintjs/agentfootprint
 
 > `readonly` `optional` **frozenLookback?**: `true`
 
-Defined in: [src/time/rows/types.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L160)
+Defined in: [src/time/rows/types.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L168)
 
 This call admitted an absolute encoding of this look-back.
 
@@ -52,7 +52,7 @@ This call admitted an absolute encoding of this look-back.
 
 > `readonly` `optional` **mention?**: `number`
 
-Defined in: [src/time/rows/types.ts:158](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L158)
+Defined in: [src/time/rows/types.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L166)
 
 The `time-reading` row's mention index — absent on a `control` window.
 
@@ -62,7 +62,7 @@ The `time-reading` row's mention index — absent on a `control` window.
 
 > `readonly` **source**: `WindowSource`
 
-Defined in: [src/time/rows/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L156)
+Defined in: [src/time/rows/types.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L164)
 
 ***
 

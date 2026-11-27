@@ -51,6 +51,7 @@ import {
 } from '../scripts/attachment.js';
 import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
 import type { FinalStageArms, DisplayNameOf, FinalTurn } from './finalStageContract.js';
+import { capturedAnswerOf, emitCapturedAnswer } from './prepareFinal/capturedAnswer.js';
 import { finalStandingOf, type StandingLineEvidence } from './prepareFinal/standing.js';
 export type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
 
@@ -124,25 +125,16 @@ const captureTurnPayload = (
   standing?: StandingLineEvidence,
 ): void => {
   const iteration = scope.iteration;
-  scope.finalContent = answer;
+  const delivered = capturedAnswerOf(scope, answer, turn.stateProvenWindow === true);
+  scope.finalContent = delivered;
   scope.newMessages = modelTurnMessages(scope, turn.asksOrigin);
 
   if (commitValidated) {
     scope.answerValidationCommitted = true;
   }
   const refused = RAILS_REFUSED.has(scope);
-  if ((commitValidated || turn.releaseTokens) && !refused) {
-    // The stream carries exactly the captured candidate, including any
-    // earlier output transformation. Replaying provider chunks would undo it.
-    // A refused answer is never released.
-    if (answer.length > 0) {
-      typedEmit(scope, 'agentfootprint.stream.token', {
-        iteration,
-        tokenIndex: 0,
-        content: answer,
-      });
-    }
-  }
+  if ((commitValidated || turn.releaseTokens) && !refused)
+    emitCapturedAnswer(scope, iteration, delivered);
 
   typedEmit(scope, 'agentfootprint.agent.iteration_end', {
     turnIndex: 0,
@@ -559,7 +551,11 @@ function withScripts(
 /** Pick the existing composer; output admission wraps it without recomposing the answer. */
 function finalStageFor(arms: BoundFinalStageArms): FinalStage {
   const asksOrigin = arms.hostEndedTurns === true;
-  const turn: FinalTurn = { releaseTokens: arms.releaseOutputTokens === true, asksOrigin };
+  const turn: FinalTurn = {
+    releaseTokens: arms.releaseOutputTokens === true,
+    asksOrigin,
+    ...(arms.stateProvenWindow === true && { stateProvenWindow: true }),
+  };
   const bound = turn.releaseTokens || asksOrigin;
   const displayNameOf = arms.displayNameOf;
   // A stage's second argument is the engine's: bind policy here, never as a parameter it fills.

@@ -139,6 +139,12 @@ export interface TimeOptions {
    * the label on a reading to confirm. A key you leave out keeps the default.
    */
   readonly messages?: Partial<TimeAskMessages>;
+  /**
+   * Let a benchmark-qualified, standalone look-back use the library's reading
+   * without a separate confirmation. The default is false. Unproved readings
+   * still follow the usual time question.
+   */
+  readonly skipProvenConfirmation?: boolean;
 }
 
 /** {@link RunTime} as read: every value checked and kept as written, a `Date` spelled in UTC. */
@@ -155,6 +161,7 @@ export interface ReadTimeOptions {
   readonly policy?: TimePolicy;
   /** The app's catalog overrides — every key one the catalog has. */
   readonly messages?: Partial<TimeAskMessages>;
+  readonly skipProvenConfirmation?: true;
 }
 
 /** What a turn's clock is before seed knows the turn's start. */
@@ -172,7 +179,13 @@ export type Read<T> = { readonly value: T } | { readonly problem: string };
 // ─── Reading the two inputs ──────────────────────────────────────────────
 
 const RUN_KEYS: readonly string[] = ['now', 'zone', 'window'];
-const OPTION_KEYS: readonly string[] = ['zone', 'reader', 'policy', 'messages'];
+const OPTION_KEYS: readonly string[] = [
+  'zone',
+  'reader',
+  'policy',
+  'messages',
+  'skipProvenConfirmation',
+];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -269,12 +282,15 @@ export function readRunTime(value: unknown): Read<ReadRunTime | undefined> {
 export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
   if (value === undefined) return { value: {} };
   if (!isPlainObject(value)) {
-    return { problem: 'options must be an object — { zone?, reader?, policy?, messages? }' };
+    return {
+      problem:
+        'options must be an object — { zone?, reader?, policy?, messages?, skipProvenConfirmation? }',
+    };
   }
   const extra = unknownKeys(value, OPTION_KEYS);
   if (extra.length > 0) {
     return {
-      problem: `options take { zone?, reader?, policy?, messages? } — unknown key ${extra
+      problem: `options take { zone?, reader?, policy?, messages?, skipProvenConfirmation? } — unknown key ${extra
         .map((k) => `'${k}'`)
         .join(', ')}`,
     };
@@ -291,7 +307,14 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
     if ('problem' in read) return read;
     messages = read.value;
   }
+  const skipProvenConfirmation = value.skipProvenConfirmation;
+  if (skipProvenConfirmation !== undefined && typeof skipProvenConfirmation !== 'boolean') {
+    return { problem: 'skipProvenConfirmation must be a boolean' };
+  }
   if (value.reader === undefined) {
+    if (skipProvenConfirmation === true) {
+      return { problem: 'skipProvenConfirmation requires a time reader' };
+    }
     // A policy with no reader has nothing to choose among — it would look
     // configured and do nothing.
     if (value.policy !== undefined) {
@@ -310,6 +333,7 @@ export function readTimeOptions(value: unknown): Read<ReadTimeOptions> {
       ...(zone !== undefined && { zone }),
       reader: value.reader as TimeReader,
       policy,
+      ...(skipProvenConfirmation === true && { skipProvenConfirmation }),
       ...(messages !== undefined && { messages }),
     },
   };

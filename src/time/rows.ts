@@ -347,7 +347,16 @@ function isReaderStamp(value: unknown): boolean {
   );
 }
 
-const MENTION_FIELDS = ['mention', 'quote', 'parses', 'problem', 'refused', 'candidates', 'choice'];
+const MENTION_FIELDS = [
+  'mention',
+  'quote',
+  'parses',
+  'problem',
+  'refused',
+  'candidates',
+  'choice',
+  'qualifiedLookback',
+];
 
 function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (!isReaderStamp(row.reader) || !nonEmpty(row.tzdata) || !isCount(row.mentions)) return false;
@@ -357,7 +366,9 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
   if (row.refused !== undefined) {
     return (
       (row.refused === 'quote-not-in-text' || row.refused === 'malformed') &&
-      ['quote', 'parses', 'problem', 'candidates', 'choice'].every((k) => row[k] === undefined)
+      ['quote', 'parses', 'problem', 'candidates', 'choice', 'qualifiedLookback'].every(
+        (k) => row[k] === undefined,
+      )
     );
   }
   const parses = row.parses;
@@ -369,7 +380,8 @@ function isReadingRow(row: Readonly<Record<string, unknown>>): boolean {
     (row.problem === undefined || (row.problem === 'unreadable' && parses.length === 0)) &&
     Array.isArray(candidates) &&
     candidates.every(candidateIsWellFormed) &&
-    choiceIsWellFormed(row.choice, candidates.length)
+    choiceIsWellFormed(row.choice, candidates.length) &&
+    (row.qualifiedLookback === undefined || (row.choice as { by?: unknown }).by === 'open')
   );
 }
 
@@ -522,7 +534,8 @@ export function timeRowIsWellFormed(row: Readonly<Record<string, unknown>>): boo
           row.zoneSource === 'builder' ||
           row.zoneSource === 'answered' ||
           row.zoneSource === 'unknown') &&
-        (row.window === undefined || isControlWindow(row.window))
+        (row.window === undefined || isControlWindow(row.window)) &&
+        (row.provenInputPosition === undefined || isCount(row.provenInputPosition))
       );
     case 'clock-on-resume':
       return isPassed(row.passed) && isKept(row.kept);

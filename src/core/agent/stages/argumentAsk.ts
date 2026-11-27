@@ -95,13 +95,14 @@ import {
   type PartialOrigin,
 } from '../arguments/partialWindow.js';
 import { declaredSourcesOf } from '../honesty/sourceCorpus.js';
+import { activeTimeReadings } from '../honesty/timeInputs.js';
 import { periodFactsOf, rulesOf, isRefused } from '../../../tools/declare.js';
 import { callOccurrenceField } from '../../../lib/callOccurrence.js';
 import { timeRefusal, unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
-import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../time/rows.js';
+import { answersOf, clockOf, type TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
 import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
@@ -120,7 +121,7 @@ function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefine
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
   const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));
-  const open = readingsOf(ledger, turn).filter(
+  const open = activeTimeReadings(scope).filter(
     (row) => isOpenForPerson(row) && !answered.has(row.mention ?? 0),
   );
   return open.length === 1 ? (structuredClone(open[0]) as TimeReadingRow) : undefined;
@@ -297,7 +298,7 @@ export function askBeforeDispatch(
   };
   const time = askTimeOf(scope, deps);
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
-  const readings = readingsOf(ledger, turn);
+  const readings = activeTimeReadings(scope);
   const answers = answersOf(ledger, turn);
   const open = readings.filter(
     (row) => isOpenForPerson(row) && !answers.some((a) => a.mention === (row.mention ?? 0)),
@@ -506,7 +507,7 @@ export function askBeforeDispatch(
   if (partial && time !== undefined) {
     const currentLedger = scope.findingsLedger as FindingsLedger | undefined;
     const currentAnswers = answersOf(currentLedger, turn);
-    const currentReadings = readingsOf(currentLedger, turn);
+    const currentReadings = activeTimeReadings(scope);
     const clock = clockOf(currentLedger);
     const materialized = calls
       .filter((c) => settled.get(addressOf(c))?.refused === undefined)

@@ -7,7 +7,11 @@ import type { ResolvedScriptTravel } from '../scripts/types.js';
  * What a final stage's capture is bound with: whether output middleware owns delivery, and
  * whether a settled reply's origin may be asked for — only in an agent built with `hostEndedTurns`.
  */
-export type FinalTurn = { readonly releaseTokens: boolean; readonly asksOrigin: boolean };
+export type FinalTurn = {
+  readonly releaseTokens: boolean;
+  readonly asksOrigin: boolean;
+  readonly stateProvenWindow?: true;
+};
 
 /** Which PrepareFinal body the final branch mounts — the arms both chart builders read. */
 export interface FinalStageArms {
@@ -27,6 +31,8 @@ export interface FinalStageArms {
   };
   /** The time layer is armed — the limits block's `Period:` lines render in the clock's zone. */
   readonly timeLayer?: true;
+  /** State an admitted T4 interval in the delivered prose. */
+  readonly stateProvenWindow?: true;
   /** The evidence gate's `'rails'` posture — a refused answer is recorded flagged and ends the branch. */
   readonly evidenceRails?: true;
   /**

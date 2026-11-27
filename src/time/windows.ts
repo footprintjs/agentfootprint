@@ -98,6 +98,8 @@ export interface TurnWindows {
  */
 function readingCandidate(row: TimeReadingRow): TimeCandidate | undefined {
   const choice = row.choice;
+  if (choice?.by === 'only' && row.qualifiedLookback !== undefined)
+    return row.candidates?.[choice.candidate];
   if (row.reader.kind !== 'model' || choice?.by !== 'open') return undefined;
   if (choice.open.length !== 1 || choice.open[0] !== 'confirm') return undefined;
   return row.candidates?.[choice.remaining[0] as number];
@@ -433,11 +435,14 @@ function pendingZonesOf(
  * `pending`. The `control` window is no reading: it rides `control`, never
  * `windows`.
  */
-export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderWindows | undefined {
+export function readerWindowsOf(
+  ledger: readonly unknown[] | undefined,
+  activeReadings?: readonly TimeReadingRow[],
+): ReaderWindows | undefined {
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
   const turn = clock.turn;
-  const readings = readingsOf(ledger, turn);
+  const readings = activeReadings ?? readingsOf(ledger, turn);
   const answers = answersOf(ledger, turn);
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);

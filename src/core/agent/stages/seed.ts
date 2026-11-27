@@ -1,4 +1,4 @@
-import { fileTime } from './seedTime.js';
+import { fileTime, type SeedTimeReader } from './seedTime.js';
 import { withoutEarlierScriptText } from '../scripts/rows.js';
 import { seedStagedRefs } from './stagedRefsNudge.js';
 import { loadRuleDecoration, seedToolSchemas, type RuleDecoration } from './seedToolSchemas.js';
@@ -40,8 +40,6 @@ import type { FindingsLedger } from '../findings/types.js';
 import type { Ontology } from '../../../ontology/types.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ClockDraft } from '../../../time/clock.js';
-import type { TimeReader } from '../../../time/reader.js';
-import type { TimePolicy } from '../../../time/resolve.js';
 import { commitRunRedaction } from '../run/commitRunRedaction.js';
 import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
@@ -159,7 +157,7 @@ export interface SeedStageDeps {
    * · `isSaidByPerson`, and never a composed run's message); never again for
    * a turn that already has its rows (a retry). Absent → nothing is read.
    */
-  readonly timeReader?: { readonly reader: TimeReader; readonly policy: TimePolicy };
+  readonly timeReader?: SeedTimeReader;
   /**
    * DECLARED SOURCES ARE ARMED (honesty layer 2, `.findings({
    * argumentSources: true })` or `.inputsLayer({ argumentSources: true })`) —

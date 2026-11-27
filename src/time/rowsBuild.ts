@@ -43,6 +43,7 @@ export function clockRow(
   clock: TimeClock,
   at: { readonly turn: number; readonly iteration: number },
   window?: RecordedWindow,
+  provenInputPosition?: number,
 ): ClockRow {
   return {
     kind: 'clock',
@@ -52,6 +53,7 @@ export function clockRow(
     nowSource: clock.nowSource,
     zone: clock.zone,
     zoneSource: clock.zoneSource,
+    ...(provenInputPosition !== undefined && { provenInputPosition }),
     ...(window !== undefined && {
       window: { ...window, source: 'control' as const },
     }),

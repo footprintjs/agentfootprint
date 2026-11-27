@@ -4,7 +4,7 @@ title: TimeReadingRow
 
 # Interface: TimeReadingRow
 
-Defined in: [src/time/rows/types.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L98)
+Defined in: [src/time/rows/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L100)
 
 One mention the armed reader found in the person's message (time design
 § 5.2) — or, with `mentions: 0` and no mention fields, the record that the
@@ -17,7 +17,7 @@ retry of the same turn find these rows and do not call the reader.
 
 > `readonly` `optional` **candidates?**: readonly [`TimeCandidate`](/docs/api/interfaces/TimeCandidate)[]
 
-Defined in: [src/time/rows/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L116)
+Defined in: [src/time/rows/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L118)
 
 Every window `resolve.ts` made of the parts.
 
@@ -27,7 +27,7 @@ Every window `resolve.ts` made of the parts.
 
 > `readonly` `optional` **choice?**: [`ReadingChoice`](/docs/api/type-aliases/ReadingChoice)
 
-Defined in: [src/time/rows/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L118)
+Defined in: [src/time/rows/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L120)
 
 How the reading settled under the policy — `open` waits for the person.
 
@@ -37,7 +37,7 @@ How the reading settled under the policy — `open` waits for the person.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L101)
+Defined in: [src/time/rows/types.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L103)
 
 ***
 
@@ -45,7 +45,7 @@ Defined in: [src/time/rows/types.ts:101](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"time-reading"`
 
-Defined in: [src/time/rows/types.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L99)
+Defined in: [src/time/rows/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L101)
 
 ***
 
@@ -53,7 +53,7 @@ Defined in: [src/time/rows/types.ts:99](https://github.com/footprintjs/agentfoot
 
 > `readonly` `optional` **mention?**: `number`
 
-Defined in: [src/time/rows/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L108)
+Defined in: [src/time/rows/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L110)
 
 This row's mention, 0-based — absent on the `mentions: 0` row.
 
@@ -63,7 +63,7 @@ This row's mention, 0-based — absent on the `mentions: 0` row.
 
 > `readonly` **mentions**: `number`
 
-Defined in: [src/time/rows/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L106)
+Defined in: [src/time/rows/types.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L108)
 
 How many mentions the reading held.
 
@@ -73,7 +73,7 @@ How many mentions the reading held.
 
 > `readonly` `optional` **parses?**: readonly [`TimeParts`](/docs/api/interfaces/TimeParts)[]
 
-Defined in: [src/time/rows/types.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L111)
+Defined in: [src/time/rows/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L113)
 
 ***
 
@@ -81,7 +81,29 @@ Defined in: [src/time/rows/types.ts:111](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **problem?**: `"unreadable"`
 
-Defined in: [src/time/rows/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L112)
+Defined in: [src/time/rows/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L114)
+
+***
+
+### qualifiedLookback?
+
+> `readonly` `optional` **qualifiedLookback?**: `object`
+
+Defined in: [src/time/rows/types.ts:122](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L122)
+
+The proof and original input position recorded at native seed.
+
+#### clockNow
+
+> `readonly` **clockNow**: `string`
+
+#### inputPosition
+
+> `readonly` **inputPosition**: `number`
+
+#### receipt
+
+> `readonly` **receipt**: `string`
 
 ***
 
@@ -89,7 +111,7 @@ Defined in: [src/time/rows/types.ts:112](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **quote?**: `string`
 
-Defined in: [src/time/rows/types.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L110)
+Defined in: [src/time/rows/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L112)
 
 A verbatim substring of the person's message.
 
@@ -99,7 +121,7 @@ A verbatim substring of the person's message.
 
 > `readonly` **reader**: [`TimeReaderStamp`](/docs/api/interfaces/TimeReaderStamp)
 
-Defined in: [src/time/rows/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L102)
+Defined in: [src/time/rows/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L104)
 
 ***
 
@@ -107,7 +129,7 @@ Defined in: [src/time/rows/types.ts:102](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **refused?**: `MentionRefusal`
 
-Defined in: [src/time/rows/types.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L114)
+Defined in: [src/time/rows/types.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L116)
 
 Why the mention was refused — its quote was not in the message, or its parts were malformed. It keeps no text.
 
@@ -117,7 +139,7 @@ Why the mention was refused — its quote was not in the message, or its parts w
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L100)
+Defined in: [src/time/rows/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L102)
 
 ***
 
@@ -125,6 +147,6 @@ Defined in: [src/time/rows/types.ts:100](https://github.com/footprintjs/agentfoo
 
 > `readonly` **tzdata**: `string`
 
-Defined in: [src/time/rows/types.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L104)
+Defined in: [src/time/rows/types.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L106)
 
 The tz database the candidates were resolved with (`process.versions.tz`), else `'unknown'`.
