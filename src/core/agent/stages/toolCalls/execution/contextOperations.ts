@@ -87,11 +87,16 @@ export function buildToolContextOperations(
     inner: boolean,
   ) => {
     const checker = deps.permissionChecker;
-    const identity = scope.runIdentity as PermissionRequest['identity'];
     return bindSkillListingAccess({
       ...(governsSkillRole &&
         checker !== undefined && {
-          hiddenIdsFor: (ids, signal) => hiddenSkillIdsFor(checker, ids, identity, signal),
+          hiddenIdsFor: (ids, signal) =>
+            hiddenSkillIdsFor(
+              checker,
+              ids,
+              scope.runIdentity as PermissionRequest['identity'],
+              signal,
+            ),
         }),
       record: (ids, text) => binding.recordSkillListing(ids, text, inner),
     });
