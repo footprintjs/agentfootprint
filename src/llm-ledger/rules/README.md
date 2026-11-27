@@ -58,7 +58,9 @@ written zero offset. It can then match only when its cited receipts resolve it t
 precision. A bare clock is open by design. Unresolved zone names, floating wall times and non-zero
 offsets on dateless clocks stay open. In particular, a hyphen range does not establish an instant.
 The reader joins only adjacent parts of the statement; a separate zone elsewhere in a sentence or
-on another line cannot establish the clock's zone. Invalid times still fail. A duration written as
+on another line cannot establish the clock's zone. A numeric offset after a zone word leaves the
+time open. A dateless clock also stays open when its statement names a month, weekday, day ordinal
+or relative day. Invalid times still fail. A duration written as
 a bare clock also stays open. Receipts use the tokens they retained. Earlier `traceable-values@1`
 checks are read as recorded.
 

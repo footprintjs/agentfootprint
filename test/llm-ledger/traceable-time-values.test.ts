@@ -128,6 +128,8 @@ it.each([
   ['02:14+14:15', '2026-11-20T11:59:18Z', 'unreachable'],
   ['02:14+05:45', '2026-11-20T20:29:18Z', 'unreachable'],
   ['The check ran at 02:14 on Friday', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['2026-11-21T02:14Z on Sunday', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['At 02:14 UTC, Sunbird stopped', '2026-11-21T02:14:18Z', 'checked-pass'],
 ] as const)('compares %s with %s on each door', async (text, evidence, disposition) => {
   const checks = await inspect(text, evidence);
   expect(checks).toHaveLength(3);
@@ -152,6 +154,26 @@ it.each([
     for (const check of checks) expect(check?.disposition).toBe(disposition);
   },
 );
+
+it.each([
+  '02:14 UTC +5',
+  '02:14 UTC + 5',
+  '02:14 UTC -6',
+  '02:14Z +1',
+  '02:14 UTC (+5)',
+  '02:14 GMT +1',
+  '02:14 UTC on Nov 22',
+  '02:14 UTC on 22 November',
+  '02:14 UTC on the 22nd',
+  'the next day at 02:14 UTC',
+  'on Sunday at 02:14 UTC',
+  'yesterday at 02:14 UTC',
+  'tomorrow at 02:14+00:00',
+])('keeps an unresolved time open on every door: %s', async (text) => {
+  const checks = await inspect(text, 'deploy finished at 2026-11-21T02:14:18Z');
+  for (const check of checks)
+    expect(check).toMatchObject({ disposition: 'unreachable', restsOn: [] });
+});
 
 it.each([65, 110])(
   'keeps a zone with %i letters out of stored tokens on all doors',

@@ -5,9 +5,18 @@ const MINUTE_MS = 60_000;
 export const DAY_MINUTES = 24 * 60;
 const SECOND_NS = 1_000_000_000;
 const MINUTE_NS = 60_000_000_000;
-const BARE_CLOCK = /^(?:\d{4}-\d{2}-\d{2}t)?\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+const BARE_CLOCK = /^(\d{4}-\d{2}-\d{2}t)?\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 const ZONED_CLOCK =
   /^((?:\d{4}-\d{2}-\d{2}t)?\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(am|pm)?([a-z][a-z0-9/_+:.-]*)?$/;
+
+// The ledger does not interpret prose dates. This closed vocabulary only prevents a
+// clock from borrowing a date from its receipts when its own statement names a day.
+const WRITTEN_DAYS = [
+  /(?<![\p{L}\p{N}_])(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])(?:1st|2nd|3rd|(?:[4-9]|1\d|20|2[4-9]|30)th|21st|22nd|23rd|31st)(?![\p{L}\p{N}_])/iu,
+  /(?<![\p{L}\p{N}_])(?:yesterday|today|tomorrow|(?:next|previous)\s+day|the\s+day\s+(?:before|after))(?![\p{L}\p{N}_])/iu,
+];
 
 function writtenMeridiem(value: string): boolean {
   return value === 'am' || value === 'pm';
@@ -63,13 +72,18 @@ function normalizedClock(text: string): string {
   return colon === 1 ? '0' + text : text;
 }
 
-function clockSpelling(token: string): { clock: string; unresolvedZone: boolean } {
+function clockSpelling(token: string): {
+  clock: string;
+  utc: boolean;
+  unresolvedZone: boolean;
+} {
   const lexicalZone = ZONED_CLOCK.exec(token);
-  if (lexicalZone === null) return { clock: token, unresolvedZone: false };
+  if (lexicalZone === null) return { clock: token, utc: false, unresolvedZone: false };
   const zone = lexicalZone[3];
   const utc = writtenUtc(zone);
   return {
     clock: lexicalZone[1] + (lexicalZone[2] ?? '') + (utc ? 'z' : ''),
+    utc,
     unresolvedZone: zone !== undefined && !utc,
   };
 }
@@ -134,6 +148,8 @@ export function precisionOverlaps(subject: TimeParts, evidence: TimeParts): bool
 export function statementValues(text: string): readonly string[] {
   if (!text.includes(':')) return tokensOf(text);
   const occurrences = statementTokenPositions(text);
+  const writtenDay = WRITTEN_DAYS.some((day) => day.test(text));
+  const offsetAfterZone = /\s*(?:[([]\s*)?[+\-\u2212]\s*\d/uy;
   const values = new Set<string>();
   const joinsDate = (date: (typeof occurrences)[number], clock: (typeof occurrences)[number]) =>
     /^\d{4}-\d{2}-\d{2}$/.test(date.token) &&
@@ -151,6 +167,7 @@ export function statementValues(text: string): readonly string[] {
       values.add(attached.clock);
       continue;
     }
+    let zoneEnd = attached.utc ? entry.end : undefined;
     const attachedMeridiem = /(?:am|pm)$/.test(value);
     const base = attachedMeridiem ? value.slice(0, -2) : value;
     if (BARE_CLOCK.test(base) && text.slice(entry.start, entry.end).toLowerCase() === entry.token) {
@@ -159,7 +176,23 @@ export function statementValues(text: string): readonly string[] {
         value += suffix.word;
         suffix = timeSuffix(text, suffix.end);
       }
-      if (writtenUtc(suffix?.word)) value += 'z';
+      if (suffix !== undefined && writtenUtc(suffix.word)) {
+        value += 'z';
+        zoneEnd = suffix.end;
+      }
+    }
+    if (zoneEnd !== undefined) {
+      offsetAfterZone.lastIndex = zoneEnd;
+      // A numeric qualifier after the zone word makes this clock unresolved.
+      if (offsetAfterZone.test(text)) {
+        values.add(clockSpelling(value).clock.slice(0, -1));
+        continue;
+      }
+    }
+    if (writtenDay) {
+      const unzoned = clockSpelling(value).clock.replace(/z$|[+-]00:00$/, '');
+      const bare = BARE_CLOCK.exec(unzoned.replace(/(?:am|pm)$/, ''));
+      if (bare !== null && bare[1] === undefined) value = unzoned;
     }
     values.add(value);
   }
