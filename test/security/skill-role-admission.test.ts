@@ -215,6 +215,51 @@ it.each(['declared', 'listed'] as const)(
   },
 );
 
+it('keeps unavailable skill results and diagnostics identical at dispatch', async () => {
+  async function servedSelection(id: string) {
+    const agent = Agent.create({
+      provider: mock({
+        replies: [call('selection', 'read_skill', { id }), { content: 'done' }],
+      }),
+      model: 'mock',
+      permissionChecker: skillRole(() => false),
+    })
+      .skill(reportsSkill())
+      .skill(defineSkill({ id: 'summary', description: 'Prepare a summary.', body: 'Summarize.' }))
+      .build();
+    const recorder = recordRun(agent);
+    try {
+      await agent.run({ message: 'Prepare a summary.' });
+      const result = agent
+        .checkpoint()
+        ?.history.find((message) => message.role === 'tool')?.content;
+      const event = recorder
+        .toRecording()
+        .events.find((row) => row.type === 'agentfootprint.validation.args_invalid');
+      const diagnostic =
+        event === undefined
+          ? undefined
+          : {
+              issues: event.payload.issues,
+              enforced: event.payload.enforced,
+            };
+      return { result, diagnostic };
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  }
+
+  const hidden = await servedSelection(SKILL);
+  const unknown = await servedSelection('draft');
+  expect(hidden.result).toContain('an offered skill id');
+  expect(hidden.diagnostic).toMatchObject({
+    enforced: true,
+    issues: [{ path: 'id', expected: 'an offered skill id', got: 'string' }],
+  });
+  expect(JSON.stringify(unknown)).toBe(JSON.stringify(hidden));
+});
+
 it('a synthetic policy failure withholds the selection and the diagnostic stays generic', async () => {
   const agent = Agent.create({
     model: 'mock',
@@ -238,43 +283,63 @@ it('a synthetic policy failure withholds the selection and the diagnostic stays 
   expect(result).not.toContain('Fixture policy unavailable');
 });
 
-it('revalidates an approved selection against the role after a saved pause', async () => {
-  let allowed = true;
-  const agent = Agent.create({
-    provider: mock({
-      replies: [call('selection', 'read_skill', { id: SKILL }), { content: 'done' }],
-    }),
-    model: 'mock',
-    permissionChecker: skillRole(() => allowed),
-  })
-    .skill(reportsSkill())
-    .toolMiddleware({
-      name: 'confirm-selection',
-      onToolCall: () => ask({ question: 'Confirm selection?' }),
+it.each([true, false])(
+  'revalidates an approved body-only skill after a pause (allowed=%s)',
+  async (allowedAfterPause) => {
+    let allowed = true;
+    const agent = Agent.create({
+      provider: mock({
+        replies: [call('selection', 'read_skill', { id: SKILL }), { content: 'done' }],
+      }),
+      model: 'mock',
+      permissionChecker: skillRole(() => allowed),
     })
-    .build();
-  const recorder = recordRun(agent);
-  try {
-    const pause = await agent.run({ message: 'Prepare a report.' });
-    if (!isAskPause(pause)) throw new Error('Expected the selection to pause.');
-    const checkpoint = JSON.parse(JSON.stringify(pause.checkpoint)) as typeof pause.checkpoint;
-    allowed = false;
-    await agent.resume(
-      checkpoint,
-      checkInApproved({ request: pausedRequest(pause), by: 'reader' }),
-    );
-    const selection = agent.checkpoint()?.history.find((m) => m.role === 'tool')?.content;
-    expect(selection).toContain('an offered skill id');
-    expect(selection).not.toContain(BODY);
-    const validation = recorder
-      .toRecording()
-      .events.find((row) => row.type === 'agentfootprint.validation.args_invalid');
-    expect(validation?.payload).toMatchObject({ toolCallId: 'selection', enforced: true });
-  } finally {
-    recorder.stop();
-    await agent.shutdown();
-  }
-});
+      .skill(reportsSkill())
+      .toolMiddleware({
+        name: 'confirm-selection',
+        onToolCall: () => ask({ question: 'Confirm selection?' }),
+      })
+      .build();
+    const recorder = recordRun(agent);
+    try {
+      const pause = await agent.run({ message: 'Prepare a report.' });
+      if (!isAskPause(pause)) throw new Error('Expected the selection to pause.');
+      const checkpoint = JSON.parse(JSON.stringify(pause.checkpoint)) as typeof pause.checkpoint;
+      allowed = allowedAfterPause;
+      await agent.resume(
+        checkpoint,
+        checkInApproved({ request: pausedRequest(pause), by: 'reader' }),
+      );
+      const selection = agent.checkpoint()?.history.find((m) => m.role === 'tool')?.content;
+      if (allowedAfterPause) {
+        expect(selection).toContain("Skill 'reports' activated");
+        return;
+      }
+      expect(selection).toContain('an offered skill id');
+      expect(selection).not.toContain(BODY);
+      const validation = recorder
+        .toRecording()
+        .events.find((row) => row.type === 'agentfootprint.validation.args_invalid');
+      expect(validation?.payload).toMatchObject({ toolCallId: 'selection', enforced: true });
+      const audit = recorder
+        .toRecording()
+        .events.find(
+          (row) =>
+            row.type === 'agentfootprint.permission.check' &&
+            row.payload.capability === 'skill_read' &&
+            row.payload.phase === 'resume',
+        );
+      expect(audit?.payload).toMatchObject({
+        toolCallId: 'selection',
+        target: `skill:${SKILL}`,
+        result: 'deny',
+      });
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  },
+);
 
 it('a composing tool gets the same role boundary before a skill result can be recorded', async () => {
   const relay = defineTool({

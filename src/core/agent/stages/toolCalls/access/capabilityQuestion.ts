@@ -38,7 +38,11 @@ export function buildCapabilityQuestion(bindings: CapabilityQuestionBindings) {
    *
    * Called only when BOTH sides declared the capability, so a checker
    * that never opted in is never asked and never has to answer a
-   * question it was not written for. `sequence` is deliberately absent —
+   * question it was not written for. Audit-only questions still record the
+   * checker's answer. The caller has already refused admission, so policy
+   * text and halt instructions cannot replace that refusal.
+   *
+   * `sequence` is deliberately absent —
    * the port says it is empty for non-`tool_call` capabilities, and the
    * in-flight tool sequence is not evidence about a capability.
    */
@@ -46,13 +50,14 @@ export function buildCapabilityQuestion(bindings: CapabilityQuestionBindings) {
     capability: PermissionCapability,
     target: string,
     genericHaltText: string,
+    auditOnly = false,
   ): Promise<void> => {
     if (!bindings.permissionChecker) return;
     // The ONE fail-closed refusal, shared by a checker that threw and one
     // whose answer is not recognised — the tool_call gate's rule, applied
     // to this capability. Only `rationale` differs.
     const refuseUnanswered = (rationale: string): void => {
-      bindings.execution.denied = true;
+      if (!auditOnly) bindings.execution.denied = true;
       bindings.emitSecurity('agentfootprint.permission.check', {
         capability,
         actor: 'agent',
@@ -60,6 +65,7 @@ export function buildCapabilityQuestion(bindings: CapabilityQuestionBindings) {
         result: 'deny',
         rationale,
       });
+      if (auditOnly) return;
       bindings.outcome.result =
         `[permission denied: Tool '${bindings.tc.name}' could not be authorized. This will not ` +
         `change during this run — do not call it again. Continue without it, or say ` +
@@ -93,6 +99,7 @@ export function buildCapabilityQuestion(bindings: CapabilityQuestionBindings) {
         ...(decision.rationale !== undefined && { rationale: decision.rationale }),
         ...(decision.reason !== undefined && { reason: decision.reason }),
       });
+      if (auditOnly) return;
       if (reading.kind === 'deny') {
         bindings.execution.denied = true;
         bindings.outcome.result =

@@ -16,6 +16,7 @@ import {
   unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
+import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
 import type { ArtifactMeta } from '../../../../../artifacts/types.js';
 import { reportingCredentials } from '../decorators/reportingCredentials.js';
@@ -147,7 +148,24 @@ export function buildResumedInvocation(
       iteration,
       ...(role === undefined ? {} : { role }),
     });
-    if (invalidArgs !== undefined) return { result: invalidArgs, error: true };
+    if (invalidArgs !== undefined) {
+      if (role !== undefined && isHiddenSkillRead(tool, approved, role)) {
+        await recheckResumedCall(scope, deps, {
+          ...occurrence,
+          gate: heldTo,
+          tool,
+          toolName,
+          toolCallId,
+          iteration,
+          args: approved,
+          env,
+          parkedNow: links.parkedNow,
+          historyForCheckIn: links.historyForCheckIn,
+          hiddenSelectionRefusal: invalidArgs,
+        });
+      }
+      return { result: invalidArgs, error: true };
+    }
     links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration, ...occurrence });
     // Declared artifact arguments (9.22.0) — the same resolution the batch
     // loop applies, at this door: a resumed call's refs are judged exactly

@@ -1,4 +1,4 @@
 ---
-type: fixed
+type: security
 ---
-Use the current skill view when validating skill selection in direct, resumed, and composed calls.
+With a checker governing `skill_read`, unavailable selections receive one generic refusal, even when `toolArgValidation` is `off` or `warn`. The operator’s permission record retains the denial.

@@ -121,7 +121,7 @@ export interface InnerCallGates {
   /** The before-tool middleware chain. */
   readonly middleware?: (call: InnerCallAsked) => Promise<InnerGateAnswer>;
   /** The checker's `skill_read` question, for an inner `read_skill`. */
-  readonly skillRead?: (call: InnerCallAsked) => Promise<InnerGateAnswer>;
+  readonly skillRead?: (call: InnerCallAsked, auditOnly?: true) => Promise<InnerGateAnswer>;
 }
 
 /** How the call settled. An entered call can remain unsettled when its owner stops waiting. */
@@ -285,11 +285,11 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
           ...(ended === 'refused' && { refusedBy }),
           ...(ended === 'refused' && halted && { halted: true as const }),
         });
-      const pass = async (gate: keyof InnerCallGates): Promise<void> => {
+      const pass = async (gate: keyof InnerCallGates, auditOnly?: true): Promise<void> => {
         assertOpen();
         const ask = deps.gates?.[gate];
         if (ask === undefined) return;
-        const answer = await askGate(ask, {
+        const answer = await askGate((call) => ask(call, auditOnly), {
           toolCallId,
           toolName: name,
           ...(tool !== undefined && { tool }),
@@ -336,7 +336,10 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
           await pass('middleware');
           if (tool === undefined) throw new Error(unknownNameRefusal(name));
           const roleIssue = deps.skillArgumentIssue?.(tool, ran);
-          if (roleIssue !== undefined) throw new Error(formatToolArgIssues(name, [roleIssue]));
+          if (roleIssue !== undefined) {
+            await pass('skillRead', true);
+            throw new Error(formatToolArgIssues(name, [roleIssue]));
+          }
           const validation = validateToolArgs(ran, tool.schema.inputSchema);
           if (!validation.ok) throw new Error(formatToolArgIssues(name, validation.issues));
           await pass('skillRead');

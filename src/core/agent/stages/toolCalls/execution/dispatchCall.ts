@@ -7,6 +7,7 @@ import { checkToolPermission } from '../access/toolPermission.js';
 import { policyArgsOf } from '../../../innerCallPolicyArgs.js';
 import { askDeclaredCapabilities, buildCapabilityQuestion } from '../access/capabilityQuestion.js';
 import { askSkillRead } from '../access/skillReadQuestion.js';
+import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
 import { prepareArgumentGate } from '../access/argumentGate.js';
 import { admitMiddlewareCall } from '../access/middlewareAdmission.js';
 import { changedArgKeys, shownArgsOf } from '../../../../toolShownArgs.js';
@@ -204,6 +205,19 @@ export function buildCallDispatch(
           argumentGate.argsRejected = true;
           outcome.error = true;
           outcome.result = invalidArgs;
+          if (
+            isHiddenSkillRead(tool, callArguments.callArgs, {
+              hiddenSkillIds: scope.hiddenSkillIds,
+            })
+          ) {
+            await askSkillRead(askCapability, operations.permissionChecker, {
+              toolName: tc.name,
+              args: callArguments.callArgs,
+              auditOnly: true,
+              currentSkillId: () => scope.currentSkillId,
+              parked: () => operations.parkedNow(scope),
+            });
+          }
         }
       }
       // ── Skill-activation gate (9.11.0) — `access/skillReadQuestion.ts` ──

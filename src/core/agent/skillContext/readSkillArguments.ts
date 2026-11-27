@@ -11,6 +11,21 @@ function skillIds(schema: LLMToolSchema): readonly unknown[] {
   return Array.isArray(values) ? values : [];
 }
 
+/** A hidden selection has a positive role witness. An unknown selection has none. */
+export function isHiddenSkillRead(
+  tool: Tool,
+  args: Readonly<Record<string, unknown>>,
+  role: SkillRoleView,
+): boolean {
+  return (
+    isLibrarySkillReader(tool) &&
+    Object.hasOwn(args, 'id') &&
+    typeof args.id === 'string' &&
+    role.hiddenSkillIds !== undefined &&
+    !skillVisibleToRole(args.id, role.hiddenSkillIds)
+  );
+}
+
 /** Check a library skill read against its role view before ordinary schema validation. */
 export function skillReadArgumentIssue(
   tool: Tool,

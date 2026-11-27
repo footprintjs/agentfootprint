@@ -315,12 +315,18 @@ export function buildToolContextOperations(
         skillArgumentIssue: (tool, args) =>
           skillReadArgumentIssue(tool, args, liveRole ?? { hiddenSkillIds: scope.hiddenSkillIds }),
       }),
-      gates: buildInnerCallGates(scope, deps, links.parkedNow, {
-        toolCallId: call.toolCallId,
-        iteration: call.iteration,
-        history: call.history,
-        binding: call.binding,
-      }),
+      gates: buildInnerCallGates(
+        scope,
+        deps,
+        links.parkedNow,
+        {
+          toolCallId: call.toolCallId,
+          iteration: call.iteration,
+          history: call.history,
+          binding: call.binding,
+        },
+        liveRole,
+      ),
       record: (facts) => {
         recordInnerToolCall(scope, call, facts);
         if (facts.entered && facts.tool !== undefined && !deps.isRunRetired()) {

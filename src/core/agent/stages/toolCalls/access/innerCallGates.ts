@@ -62,6 +62,8 @@ import { recordDecisions } from '../../../middleware/ledger.js';
 import { checkToolPermission } from './toolPermission.js';
 import { askDeclaredCapabilities, buildCapabilityQuestion } from './capabilityQuestion.js';
 import { askSkillRead } from './skillReadQuestion.js';
+import { isHiddenSkillRead } from '../../../skillContext/readSkillArguments.js';
+import type { SkillRoleView } from '../../../skillContext/toolVisibility.js';
 import { prepareCallState } from './callState.js';
 
 /** The outer call an inner call belongs to — what every gate is handed besides the call itself. */
@@ -86,6 +88,7 @@ export function buildInnerCallGates(
   deps: Pick<ToolCallsHandlerDeps, 'permissionChecker' | 'toolMiddleware'>,
   parkedNow: ToolCatalogOperations['parkedNow'],
   outer: InnerCallOuter,
+  liveRole?: SkillRoleView,
 ): InnerCallGates {
   const permissionChecker = deps.permissionChecker;
   const chain = deps.toolMiddleware;
@@ -99,8 +102,19 @@ export function buildInnerCallGates(
       }),
     ...(permissionChecker !== undefined &&
       checkerGoverns(permissionChecker, 'skill_read') && {
-        skillRead: (call: InnerCallAsked) =>
-          askSkill(scope, permissionChecker, parkedNow, outer, call),
+        skillRead: (call: InnerCallAsked, auditOnly?: true) => {
+          if (
+            auditOnly === true &&
+            (call.tool === undefined ||
+              !isHiddenSkillRead(
+                call.tool,
+                call.args,
+                liveRole ?? { hiddenSkillIds: scope.hiddenSkillIds },
+              ))
+          )
+            return Promise.resolve({ kind: 'allow' });
+          return askSkill(scope, permissionChecker, parkedNow, outer, call, auditOnly);
+        },
       }),
   };
 }
@@ -209,11 +223,13 @@ async function askSkill(
   parkedNow: ToolCatalogOperations['parkedNow'],
   outer: InnerCallOuter,
   call: InnerCallAsked,
+  auditOnly?: true,
 ): Promise<InnerGateAnswer> {
   const question = questionFor(scope, permissionChecker, outer, call);
   await askSkillRead(question.askCapability, permissionChecker, {
     toolName: call.toolName,
     args: call.args,
+    ...(auditOnly === true && { auditOnly }),
     currentSkillId: () => scope.currentSkillId,
     parked: () => parkedNow(scope),
   });
