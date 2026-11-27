@@ -62,7 +62,27 @@ export function spoken(all: readonly string[], mayName: (id: string) => boolean)
 /** A skill can be named only after a resolved role view permits that id. */
 export function skillVisibleToRole(
   id: string | undefined,
-  hidden: ReadonlySet<string> | undefined,
+  hidden: ReadonlySet<string> | readonly string[] | undefined,
 ): id is string {
-  return id !== undefined && hidden !== undefined && !hidden.has(id);
+  return (
+    id !== undefined &&
+    hidden !== undefined &&
+    !('has' in hidden ? hidden.has(id) : hidden.includes(id))
+  );
+}
+
+/**
+ * Is `id` a skill this caller's role may not see, on this pass?
+ *
+ * Hidden means hidden on EVERY activation path: model and user text are
+ * untrusted, so a keyword in the message, a declared route, a tool proposal,
+ * a lease or a `read_skill` pick must never surface a skill the caller's role
+ * may not read. Every place that decides whether a skill becomes active asks
+ * this function, with the set resolved once per pass on the context.
+ */
+export function isHiddenSkill(
+  ctx: { readonly hiddenSkillIds?: readonly string[] },
+  id: string,
+): boolean {
+  return ctx.hiddenSkillIds !== undefined && !skillVisibleToRole(id, ctx.hiddenSkillIds);
 }

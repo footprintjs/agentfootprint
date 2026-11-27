@@ -145,6 +145,7 @@ export function buildResumedInvocation(
       toolName,
       toolCallId,
       iteration,
+      ...(role === undefined ? {} : { role }),
     });
     if (invalidArgs !== undefined) return { result: invalidArgs, error: true };
     links.noteOffWire(scope, resolved, { toolName, toolCallId, iteration, ...occurrence });

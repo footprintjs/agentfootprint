@@ -25,6 +25,7 @@ import { agentToolDispatch } from '../../../toolDispatch.js';
 import { recordInnerToolCall } from '../../../innerToolCalls.js';
 import { prepareInnerCallRecord } from '../../../innerCallPolicyArgs.js';
 import { buildInnerCallGates } from '../access/innerCallGates.js';
+import { skillReadArgumentIssue } from '../../../skillContext/readSkillArguments.js';
 import { policyInForce } from '../../../../../redaction/runRedaction.js';
 import { reportingCredentials } from '../decorators/reportingCredentials.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
@@ -310,6 +311,10 @@ export function buildToolContextOperations(
     tools: agentToolDispatch({
       outerToolCallId: call.toolCallId,
       lookup: (name) => lookupInnerTool(scope, name, liveRole),
+      ...(governsSkillRole && {
+        skillArgumentIssue: (tool, args) =>
+          skillReadArgumentIssue(tool, args, liveRole ?? { hiddenSkillIds: scope.hiddenSkillIds }),
+      }),
       gates: buildInnerCallGates(scope, deps, links.parkedNow, {
         toolCallId: call.toolCallId,
         iteration: call.iteration,

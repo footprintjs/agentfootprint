@@ -355,18 +355,7 @@ export interface InjectionContext {
 // FOLD · the one rule for "may this skill activate for this caller" — role visibility
 // consumers read this and never re-derive it: the evaluator (activation), the skill-graph cursor
 // resolver (position) and the turn-start cascade's tier 1 (`skillIntent.ts` · firstRuleMatch).
-/**
- * Is `id` a skill this caller's role may not see, on this pass?
- *
- * Hidden means hidden on EVERY activation path: model and user text are
- * untrusted, so a keyword in the message, a declared route, a tool proposal,
- * a lease or a `read_skill` pick must never surface a skill the caller's role
- * may not read. Every place that decides whether a skill becomes active asks
- * this function, with the set resolved once per pass on the context.
- */
-export function isHiddenSkill(ctx: Pick<InjectionContext, 'hiddenSkillIds'>, id: string): boolean {
-  return ctx.hiddenSkillIds !== undefined && ctx.hiddenSkillIds.includes(id);
-}
+export { isHiddenSkill } from '../lib/spokenIds.js';
 
 /**
  * The iteration's tool-result batch, in call order — with the singular

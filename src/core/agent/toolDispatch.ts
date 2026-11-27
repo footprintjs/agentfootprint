@@ -60,7 +60,11 @@
 import { isDevMode } from 'footprintjs';
 import { linkedController } from '../../lib/abort.js';
 import type { Credential } from '../../identity/types.js';
-import { formatToolArgIssues, validateToolArgs } from '../../tools/toolArgsValidation.js';
+import {
+  formatToolArgIssues,
+  validateToolArgs,
+  type ToolArgIssue,
+} from '../../tools/toolArgsValidation.js';
 import {
   isMissing,
   isRefused,
@@ -166,6 +170,8 @@ export interface AgentToolDispatchDeps {
    * `tools` of its own.
    */
   readonly innerContext: (toolName: string, toolCallId: string) => ToolExecutionContext;
+  /** Role membership uses the same view as the outer call. */
+  readonly skillArgumentIssue?: (tool: Tool, args: ToolArgs) => ToolArgIssue | undefined;
   /** The model call's gates, put to each inner call (`innerCallGates.ts`). */
   readonly gates?: InnerCallGates;
   /** Keep one row for each inner call, when it ends (`innerToolCalls.ts`). */
@@ -329,6 +335,8 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
           if (tool !== undefined) refuseUnaccountedRuledArguments(name, tool, ran);
           await pass('middleware');
           if (tool === undefined) throw new Error(unknownNameRefusal(name));
+          const roleIssue = deps.skillArgumentIssue?.(tool, ran);
+          if (roleIssue !== undefined) throw new Error(formatToolArgIssues(name, [roleIssue]));
           const validation = validateToolArgs(ran, tool.schema.inputSchema);
           if (!validation.ok) throw new Error(formatToolArgIssues(name, validation.issues));
           await pass('skillRead');

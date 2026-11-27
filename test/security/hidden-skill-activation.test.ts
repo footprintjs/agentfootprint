@@ -453,7 +453,7 @@ describe('every other activation path refuses a hidden skill', () => {
     });
     await run.agent.run({ message: 'help' });
     expectNeverActivated(run.requests, run.evaluated);
-    expect(run.toolResults.some((r) => r.includes('permission denied'))).toBe(true);
+    expect(run.toolResults.some((r) => r.includes('expected an offered skill id'))).toBe(true);
   });
 
   it('a cursor restored from a conversation the caller may no longer read is dropped', async () => {

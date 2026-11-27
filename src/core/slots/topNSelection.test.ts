@@ -153,6 +153,23 @@ it('shares the discovery bound with eligible pick decisions and ignores hidden a
   expect(served.selection?.rows.at(-1)?.tool).toBe(tools[1]);
 });
 
+it('records a tree-held choice only when the current role can see it', () => {
+  const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
+  const input = {
+    iteration: 3,
+    winners: new Map(),
+    winningTools: new Map(),
+    claimants: new Map(),
+    withheldSkillIds: ['reports'],
+  };
+  commitServedTools(served, { ...input, hiddenSkillIds: ['reports'] });
+  expect(served.selection).toBeUndefined();
+  commitServedTools(served, input);
+  expect(served.selection).toBeUndefined();
+  commitServedTools(served, { ...input, hiddenSkillIds: [] });
+  expect(served.selection?.rows).toEqual([{ kind: 'tree-routed', name: 'reports' }]);
+});
+
 it('retains distinct competing implementations once while offering the first contract', async () => {
   const served: ServedToolParties = { current: new Map(), lastServed: new Map() };
   const first = make('monitor');

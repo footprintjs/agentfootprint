@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest';
-import { Agent, defineTool } from '../../src/index.js';
+import { Agent, ask, checkInApproved, defineTool, isAskPause } from '../../src/index.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 import { defineSkill } from '../../src/injection-engine.js';
 import { mock } from '../../src/providers.js';
+import { recordRun } from '../../src/observe.js';
 import type { PermissionChecker } from '../../src/provider-contract/types.js';
 import { skillScopedTools } from '../../src/tools/skillScopedTools.js';
 
@@ -163,4 +165,141 @@ it('classic dispatch respects the current role while keeping the original tool o
   expect(offers[0]).toContain('prepare_report');
   expect(offers[1]).toEqual(offers[0]);
   expect(entered).not.toHaveBeenCalled();
+});
+
+it.each(['declared', 'listed'] as const)(
+  '%s refreshes the skill view between ordinary turns and files the same served issue',
+  async (skillContext) => {
+    let allowed = true;
+    const offered: boolean[] = [];
+    const replies = [
+      { content: 'first turn' },
+      call('selection', 'read_skill', { id: SKILL }),
+      { content: 'second turn' },
+    ];
+    const provider = mock({
+      respond: ({ tools }) => {
+        offered.push((tools ?? []).some((schema) => schema.name === 'read_skill'));
+        return replies[offered.length - 1]!;
+      },
+    });
+    const agent = Agent.create({
+      provider,
+      model: 'mock',
+      skillContext,
+      permissionChecker: skillRole(() => allowed),
+    })
+      .skill(reportsSkill())
+      .build();
+    const recorder = recordRun(agent);
+    try {
+      await agent.run({ message: 'Prepare.' });
+      allowed = false;
+      await agent.followUp('Continue.');
+      expect(offered).toEqual([true, false, false]);
+      const history = agent.checkpoint()?.history;
+      expect(
+        history?.find((m) => m.role === 'tool' && m.toolCallId === 'selection')?.content,
+      ).toContain('an offered skill id');
+      const event = recorder
+        .toRecording()
+        .events.find((row) => row.type === 'agentfootprint.validation.args_invalid');
+      expect(event?.payload).toMatchObject({
+        toolCallId: 'selection',
+        issues: [{ path: 'id', expected: 'an offered skill id', got: 'string' }],
+      });
+    } finally {
+      recorder.stop();
+      await agent.shutdown();
+    }
+  },
+);
+
+it('a synthetic policy failure withholds the selection and the diagnostic stays generic', async () => {
+  const agent = Agent.create({
+    model: 'mock',
+    provider: mock({
+      replies: [call('selection', 'read_skill', { id: SKILL }), { content: 'done' }],
+    }),
+    permissionChecker: {
+      name: 'test-policy',
+      governs: ['skill_read'],
+      check: ({ capability }) => {
+        if (capability === 'skill_read') throw new Error('Fixture policy unavailable.');
+        return { result: 'allow' };
+      },
+    },
+  })
+    .skill(reportsSkill())
+    .build();
+  await agent.run({ message: 'Try to prepare.' });
+  const result = agent.checkpoint()?.history.find((m) => m.role === 'tool')?.content;
+  expect(result).toContain('an offered skill id');
+  expect(result).not.toContain('Fixture policy unavailable');
+});
+
+it('revalidates an approved selection against the role after a saved pause', async () => {
+  let allowed = true;
+  const agent = Agent.create({
+    provider: mock({
+      replies: [call('selection', 'read_skill', { id: SKILL }), { content: 'done' }],
+    }),
+    model: 'mock',
+    permissionChecker: skillRole(() => allowed),
+  })
+    .skill(reportsSkill())
+    .toolMiddleware({
+      name: 'confirm-selection',
+      onToolCall: () => ask({ question: 'Confirm selection?' }),
+    })
+    .build();
+  const recorder = recordRun(agent);
+  try {
+    const pause = await agent.run({ message: 'Prepare a report.' });
+    if (!isAskPause(pause)) throw new Error('Expected the selection to pause.');
+    const checkpoint = JSON.parse(JSON.stringify(pause.checkpoint)) as typeof pause.checkpoint;
+    allowed = false;
+    await agent.resume(
+      checkpoint,
+      checkInApproved({ request: pausedRequest(pause), by: 'reader' }),
+    );
+    const selection = agent.checkpoint()?.history.find((m) => m.role === 'tool')?.content;
+    expect(selection).toContain('an offered skill id');
+    expect(selection).not.toContain(BODY);
+    const validation = recorder
+      .toRecording()
+      .events.find((row) => row.type === 'agentfootprint.validation.args_invalid');
+    expect(validation?.payload).toMatchObject({ toolCallId: 'selection', enforced: true });
+  } finally {
+    recorder.stop();
+    await agent.shutdown();
+  }
+});
+
+it('a composing tool gets the same role boundary before a skill result can be recorded', async () => {
+  const relay = defineTool({
+    name: 'report_summary',
+    description: 'Summarize a local sample.',
+    inputSchema: schema,
+    execute: async (_args, context) => {
+      if (!context.tools) throw new Error('Expected composed tools.');
+      try {
+        return await context.tools.call('read_skill', { id: SKILL });
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    },
+  });
+  const agent = Agent.create({
+    provider: mock({ replies: [call('relay', 'report_summary'), { content: 'done' }] }),
+    model: 'mock',
+    permissionChecker: skillRole(() => false),
+  })
+    .skill(reportsSkill())
+    .tool(relay)
+    .build();
+  await agent.run({ message: 'Summarize the report.' });
+  const result = agent.checkpoint()?.history.find((m) => m.role === 'tool')?.content;
+  expect(result).toContain('an offered skill id');
+  expect(result).not.toContain(BODY);
 });

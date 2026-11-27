@@ -25,7 +25,7 @@
 import { skillActivationConfirmation } from './skillBodyEvidence.js';
 import type { SkillToolDescriptor } from './hostContract.js';
 import { classifySkillTarget } from './skillGraph.js';
-import { spoken } from '../lib/spokenIds.js';
+import { skillVisibleToRole, spoken } from '../lib/spokenIds.js';
 import type { Injection } from './types.js';
 
 /**
@@ -141,7 +141,7 @@ function visibleSkills(
   offer?: ReadSkillOffer,
 ): readonly Injection[] {
   const hidden = new Set(offer?.hiddenIds ?? []);
-  return hidden.size > 0 ? allSkills.filter((s) => !hidden.has(s.id)) : allSkills;
+  return hidden.size > 0 ? allSkills.filter((s) => skillVisibleToRole(s.id, hidden)) : allSkills;
 }
 
 /**
@@ -295,7 +295,7 @@ function describeOffer(
   // is the honest fallback: that role loses the positive signal, which is the
   // price its own policy asked for.
   const named = offer.cursorId ?? offer.menu?.cursorId;
-  const cursorId = named !== undefined && !hidden.has(named) ? named : undefined;
+  const cursorId = skillVisibleToRole(named, hidden) ? named : undefined;
   const staying = offer.menu?.stay === true && cursorId !== undefined;
   // WHAT THE SECOND HALF MAY SAY: outside an outstanding menu, NOTHING.
   //
@@ -375,7 +375,7 @@ function describeOffer(
   const hopRows = allSkills.filter((s) => classOf(s.id) === 'hop');
   const hopsSpoken = spoken(
     hopRows.map((s) => s.id),
-    (id) => !hidden.has(id),
+    (id) => skillVisibleToRole(id, hidden),
   );
   const nameable = new Set(hopsSpoken.named);
   const open = hopRows.filter((s) => nameable.has(s.id));

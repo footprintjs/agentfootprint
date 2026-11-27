@@ -47,8 +47,8 @@
  * and the README names it.
  */
 
-import { isDevMode } from 'footprintjs';
-import type { TypedScope } from 'footprintjs';
+import { isDevMode, type TypedScope } from 'footprintjs';
+import { skillVisibleToRole } from '../../../lib/spokenIds.js';
 import type { LLMProvider } from '../../../provider-contract/types.js';
 import type { AgentState } from '../types.js';
 import type { InjectionContext } from '../../../injection-engine/types.js';
@@ -197,7 +197,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
           'Fix the resolver passed to hiddenSkillIds.',
       );
     }
-    const visibleEntryIds = plan.entryIds.filter((id) => !hidden.has(id));
+    const visibleEntryIds = plan.entryIds.filter((id) => skillVisibleToRole(id, hidden));
     // Tier 1 reads the role filter off the context, like every other
     // activation decision (`isHiddenSkill`): a keyword in the user message
     // must not start the turn on a skill this caller may not read.
@@ -205,7 +205,7 @@ export function makeRouteTurnStage(deps: RouteTurnDeps) {
     // An inherited cursor on a skill this caller may not read is no cursor:
     // the turn starts cold among the visible entries (the resolver applies
     // the same rule, so the two cannot disagree about where the turn starts).
-    if (inherited !== undefined && hidden.has(inherited)) {
+    if (inherited !== undefined && !skillVisibleToRole(inherited, hidden)) {
       inherited = undefined;
       const { currentSkillId: _dropped, ...cold } = ctx;
       ctx = cold;
@@ -375,7 +375,7 @@ async function runCascade(
   signal: AbortSignal | undefined,
 ): Promise<CascadeVerdict | undefined> {
   const cold = inherited === undefined;
-
+  const canKeepIncumbent = skillVisibleToRole(inherited, hidden);
   // Tier 1 — declared rules, declaration order. Binary: a rule match is
   // decisive by definition, cold or mid-conversation.
   const ruleWin = plan.firstRuleMatch(ctx);
@@ -395,7 +395,7 @@ async function runCascade(
   if (plan.scorer !== undefined) {
     const scorer = plan.scorer;
     const candidates: IntentCandidate[] = [...plan.intentCandidates(hidden)];
-    if (!cold && !hidden.has(inherited!) && !candidates.some((c) => c.id === inherited)) {
+    if (canKeepIncumbent && !candidates.some((c) => c.id === inherited)) {
       // The incumbent is judged by the same numbers as its challengers — its
       // intent is its description when it is not an intent entry.
       candidates.push(plan.incumbentCandidate(inherited!));
@@ -435,8 +435,8 @@ async function runCascade(
       return scorerFellThrough(err, 'entry-scorer', cold, inherited, visibleEntryIds, undefined);
     }
     // Role-hidden candidates never appear in scores, menus or the envelope.
-    let ranked = scoring.ranked.filter((r) => !hidden.has(r.id));
-    if (!cold && !hidden.has(inherited!) && !ranked.some((r) => r.id === inherited)) {
+    let ranked = scoring.ranked.filter((r) => skillVisibleToRole(r.id, hidden));
+    if (canKeepIncumbent && !ranked.some((r) => r.id === inherited)) {
       // The incumbent was not a when-passing entry candidate this turn — score
       // floor-less zero so the same verdict function judges it. (An entry
       // scorer declares no floor, so 0 is a rank, not "unmatched".)

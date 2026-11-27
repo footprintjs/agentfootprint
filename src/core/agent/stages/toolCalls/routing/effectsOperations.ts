@@ -13,7 +13,7 @@ import {
 } from '../../../../../injection-engine/leases.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import { classifySkillTarget } from '../../../../../injection-engine/skillGraph.js';
-import { spoken } from '../../../../../lib/spokenIds.js';
+import { skillVisibleToRole, spoken } from '../../../../../lib/spokenIds.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 
 /** Compose the existing effects callbacks once for this handler. */
@@ -163,7 +163,7 @@ export function buildToolEffectsOperations(
           // filter emptied composes no reachable clause rather than an empty
           // one. Admission is still judged on the raw `hops`.
           const hiddenIds = new Set((scope.hiddenSkillIds as readonly string[] | undefined) ?? []);
-          const mayName = (id: string): boolean => !hiddenIds.has(id);
+          const mayName = (id: string): boolean => skillVisibleToRole(id, hiddenIds);
           const reachable = spoken(hops, mayName);
           const from =
             currentSkillId === undefined
