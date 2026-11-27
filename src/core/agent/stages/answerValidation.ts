@@ -138,13 +138,13 @@ export function withAnswerValidation(
           };
         }
         if (
-          prepared.correction &&
+          prepared.correctionReasons.length > 0 &&
           prepareNegativeCorrection(scope, record, negatives.config.field)
         ) {
           announceHeld(scope, {
             chosen: 'negative-recheck',
             rationale: NEGATIVE_RECHECK_RATIONALE,
-            reason: 'citation-unresolved',
+            reasons: prepared.correctionReasons,
           });
           return 'negative-recheck';
         }

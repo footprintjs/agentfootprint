@@ -263,6 +263,7 @@ export const words1 = {
   rewritten: true,
   rounded: true,
   route: true,
+  'route-chose-to-finish': true,
   rows: true,
   rule: true,
   'ruled-out': true,
@@ -299,5 +300,4 @@ export const words1 = {
   'source-over-bound': true,
   'sources-conflict': true,
   spelling: true,
-  'stage requested pause': true,
 } as const;

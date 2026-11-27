@@ -68,8 +68,8 @@ const ASK = { message: 'Check open incidents for payments.', identity: IDENTITY 
 const GAP = 'incidents filed by email';
 const MODES: readonly ReactMode[] = ['classic', 'dynamic', 'dynamic-grouped'];
 const CITATION_ROUTE_DECISIONS = {
-  provisional: { chosen: 'final' },
-  override: { chosen: 'negative-recheck', reason: 'citation-unresolved' },
+  provisional: { chosen: 'final', label: 'route-chose-to-finish' },
+  override: { chosen: 'negative-recheck', reasons: ['citation-unresolved'] },
 } as const;
 
 // Deliberately projects the model's citation fields. Re-parsing the delivered answer would
@@ -1140,9 +1140,26 @@ describe('negative-claim policy and evidence boundaries', () => {
     },
   );
 
-  it('a follow-up cannot turn its prior assistant answer into current evidence', async () => {
-    const f = fixture([readCall, { content: draft() }, { content: draft() }, { content: draft() }]);
+  it.each([
+    { handles: ['r1'], causes: ['stale-turn'] },
+    { handles: ['r1', 'r404', 'r405'], causes: ['stale-turn', 'citation-unresolved'] },
+  ])('a follow-up records the correction causes $causes', async ({ handles, causes }) => {
+    const followUp = JSON.stringify({
+      summary: 'Here is the follow-up.',
+      negatives: handles.map((handle) => ({
+        kind: 'none',
+        about: 'payments',
+        restsOn: [handle],
+      })),
+    });
+    const f = fixture([
+      readCall,
+      { content: draft() },
+      { content: followUp },
+      { content: followUp },
+    ]);
     const agent = f.builder.build();
+    const recorder = recordRun(agent);
     await agent.run(ASK);
     const checkpoint = agent.checkpoint();
     expect(checkpoint).toBeDefined();
@@ -1155,6 +1172,16 @@ describe('negative-claim policy and evidence boundaries', () => {
       }),
     ).rejects.toBeInstanceOf(AnswerValidationError);
     expect(JSON.stringify(agent.answerValidation())).toContain('stale-turn');
+    const corrections = recorder
+      .toRecording()
+      .events.filter((event) => event.type === 'agentfootprint.agent.route_decided')
+      .filter((event) => event.payload.chosen === 'negative-recheck');
+    expect(corrections.map((event) => event.payload.routeDecisions)).toEqual([
+      {
+        provisional: { chosen: 'final', label: 'route-chose-to-finish' },
+        override: { chosen: 'negative-recheck', reasons: causes },
+      },
+    ]);
     expect(f.read.execute).toHaveBeenCalledTimes(1);
     expect(seen.tokens).toEqual([]);
     expect(seen.ends).toEqual([]);

@@ -18,7 +18,7 @@
  *   holdRouteAnnouncement(scope);            // before `decide(scope)`
  *   …decider calls emitRouteDecided → kept, not emitted
  *   announceHeld(scope)                // 'final' as the decider said, or
- *   announceHeld(scope, { chosen: 'negative-recheck', rationale, reason })
+ *   announceHeld(scope, { chosen: 'negative-recheck', rationale, reasons })
  *
  * Keyed by the stage's own scope object (the per-invocation channel
  * `prepareFinal.ts` · `RAILS_REFUSED` uses), so no state is written and an
@@ -78,7 +78,7 @@ export function emitRouteDecided(
  */
 export function announceHeld(
   scope: TypedScope<AgentState>,
-  instead?: Pick<Override, 'chosen' | 'reason'> & Pick<Announcement, 'rationale'>,
+  instead?: Pick<Override, 'chosen' | 'reasons'> & Pick<Announcement, 'rationale'>,
 ): void {
   if (!HELD.has(scope)) return;
   const held = HELD.get(scope);
@@ -88,8 +88,8 @@ export function announceHeld(
   const decisions: RouteDecisions =
     held?.chosen === 'final' && instead !== undefined
       ? {
-          provisional: { chosen: held.chosen },
-          override: { chosen: instead.chosen, reason: instead.reason },
+          provisional: { chosen: held.chosen, label: 'route-chose-to-finish' },
+          override: { chosen: instead.chosen, reasons: instead.reasons },
         }
       : undefined;
   announceRoute(scope, said.chosen, said.rationale, decisions);

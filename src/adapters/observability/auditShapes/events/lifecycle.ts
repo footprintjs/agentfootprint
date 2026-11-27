@@ -131,10 +131,13 @@ export function lifecycleShapes() {
       // A fixed sentence, or one the library composes (a count, a skill's name).
       rationale: str,
       routeDecisions: shapeOf<RouteDecisions>({
-        provisional: shapeOf<At<RouteDecisions, 'provisional'>>({ chosen: oneOf('final') }),
+        provisional: shapeOf<At<RouteDecisions, 'provisional'>>({
+          chosen: oneOf('final'),
+          label: oneOf('route-chose-to-finish'),
+        }),
         override: shapeOf<At<RouteDecisions, 'override'>>({
           chosen: oneOf('negative-recheck'),
-          reason: oneOf('citation-unresolved'),
+          reasons: listOf(oneOf('citation-unresolved', 'stale-turn')),
         }),
       }),
     }),
