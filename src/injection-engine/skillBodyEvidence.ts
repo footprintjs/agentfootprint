@@ -63,16 +63,23 @@ export function carriesSkillDefinition(
   return record.digest === digest && verifiedSkillBody(message, record) !== undefined;
 }
 
-/** Read an unmarked legacy result for delivery comparisons only. */
+/** Read an unmarked legacy result for comparison with app-owned text. */
 export function legacySkillBody(message: SkillBodyHistoryMessage): string | undefined {
   if (message.role !== 'tool' || message.toolName !== 'read_skill') return undefined;
   return message.toolSkillBody === undefined ? message.content : undefined;
 }
 
+/** Only an unmarked read result with the exact registered text is a legacy body. */
+export function matchesLegacySkillBody(
+  message: SkillBodyHistoryMessage,
+  body: string | undefined,
+): boolean {
+  return body !== undefined && legacySkillBody(message) === body;
+}
+
 /**
  * A 20.x checkpoint can carry a delivered body without its origin record.
- * Exact legacy bytes are a delivery witness only. Readers that attribute
- * origin or tool evidence still require a verified record.
+ * Exact legacy bytes identify app text without attributing origin or tool evidence.
  */
 export function deliveredSkillBody(
   message: SkillBodyHistoryMessage,
@@ -80,7 +87,7 @@ export function deliveredSkillBody(
   body: string,
   digest: string,
 ): boolean {
-  if (message.toolSkillBody === undefined) return legacySkillBody(message) === body;
+  if (message.toolSkillBody === undefined) return matchesLegacySkillBody(message, body);
   const origin = skillBodyOrigin(message);
   return origin?.skillId === skillId && carriesSkillDefinition(message, origin, digest);
 }

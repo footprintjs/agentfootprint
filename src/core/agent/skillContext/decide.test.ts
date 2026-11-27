@@ -175,7 +175,19 @@ describe('activeSkillBodyOccurrences (the window pin)', () => {
     expect(activeSkillBodyOccurrences([legacy], bodies, ['billing'])).toEqual(
       new Set(['1.2.3.4.1']),
     );
-    expect(honestyHistory([legacy], bodies)[0]?.content).toBe('');
+    expect(honestyHistory([legacy], bodies).map(({ role, content }) => [role, content])).toEqual([
+      ['tool', "Skill 'billing' activated for the next iteration."],
+      ['system', body],
+    ]);
+    expect(
+      honestyHistory([legacy], new Map([...bodies, ['support', body]])).map(({ role, content }) => [
+        role,
+        content,
+      ]),
+    ).toEqual([
+      ['tool', ''],
+      ['system', body],
+    ]);
 
     const otherCases = [
       { ...legacy, content: 'Skill loaded.' },
@@ -185,6 +197,7 @@ describe('activeSkillBodyOccurrences (the window pin)', () => {
     for (const result of otherCases) {
       expect(activeSkillBodyOccurrences([result], bodies, ['billing']).size).toBe(0);
     }
+    expect(honestyHistory([otherCases[0]!], bodies)).toEqual([{ ...legacy, content: '' }]);
   });
 
   it('a restored 40-turn history with a body result per turn pins only the newest', () => {

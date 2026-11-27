@@ -3,6 +3,7 @@ import { sha256Hex } from '../../../lib/sha256.js';
 import {
   skillBodyOrigin,
   legacySkillBody,
+  matchesLegacySkillBody,
   carriesSkillDefinition,
 } from '../../../injection-engine/skillBodyEvidence.js';
 import { readCallOccurrenceKey } from '../../../lib/callOccurrence.js';
@@ -36,10 +37,9 @@ export function activeSkillBodyOccurrences(
   for (const message of history) {
     const occurrence = readCallOccurrenceKey(message);
     if (typeof occurrence !== 'string') continue;
-    const legacy = legacySkillBody(message);
-    if (legacy !== undefined) {
+    if (legacySkillBody(message) !== undefined) {
       for (const id of live) {
-        if (bodies.get(id) === legacy) newest.set(id, occurrence);
+        if (matchesLegacySkillBody(message, bodies.get(id))) newest.set(id, occurrence);
       }
       continue;
     }
