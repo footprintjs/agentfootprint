@@ -78,10 +78,8 @@ export function context(node) {
     (ts.isPropertyAccessExpression(node.expression) && node.expression.questionDotToken)
   )
     enclosing('optional chain');
-  let nested = true;
   for (let parent = node.parent; parent && !ts.isSourceFile(parent); parent = parent.parent) {
-    if (parent === boundary) nested = false;
-    if (nested && (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)))
+    if (parent !== boundary && (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)))
       enclosing(functionContext(parent));
     if (
       ts.isCaseClause(parent) ||
