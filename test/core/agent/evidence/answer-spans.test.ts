@@ -21,17 +21,17 @@ describe('answer candidate spans', () => {
     const answer = '📊 **host1,1200,9750,9ms** and **host2,41,200,4ms**.';
     const reading = readAnswer(answer, gate, { captureSpans: true });
     expect(reading.candidates.map(({ value }) => value)).toEqual([
-      'host1',
+      'host1,1200,9750,9ms',
       '1200',
       '9750',
-      'host2',
+      'host2,41,200,4ms',
       '41200',
     ]);
     expect(reading.candidateSpans?.map((span) => span && answer.slice(...span))).toEqual([
-      'host1',
+      'host1,1200,9750,9ms',
       '1200',
       '9750',
-      'host2',
+      'host2,41,200,4ms',
       '41,200',
     ]);
   });

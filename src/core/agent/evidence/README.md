@@ -47,6 +47,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
 | `../../../lib/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
+| `numericCommaItems.ts` | numeric fields inside one legacy token, with exact source offsets and the same thousands rule. The answer and result readers use it without changing literal string matching |
 | `numericRanges.ts` | pure recognition of exactly two numeric endpoints, after app-owned identifier shapes |
 | `numberPrecision.ts` | the single precision and half-unit rounding rule used by both numeric dials, and the one exact reading of a number in scientific notation (`scientificDecimalOf`) |
 | `figureUnits.ts` | the one measurement-unit vocabulary, shared by figures and ranges |

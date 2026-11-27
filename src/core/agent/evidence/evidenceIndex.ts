@@ -18,7 +18,7 @@
  * that is not JSON is tokenized as text. Either way the comparison is
  * token-exact, never substring. Under `decimalRounding` a whole token of
  * text in scientific notation also files the exact decimal it states
- * (`1.12e-02` → `0.0112`, {@link addDecimalOf}); the spelling stays.
+ * (`1.12e-02` → `0.0112`, {@link evidenceTextValues}); the spelling stays.
  *
  * ## What counts as evidence, and what deliberately does not
  *
@@ -110,10 +110,10 @@ import { isCompactedSummary, isSaidByPerson } from '../../../lib/saidByPerson.js
 import { isLibraryAuthoredTurn } from './frames.js';
 import { landedTypedAnswer } from '../../../tools/typedAnswer.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
-import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
-import { scientificDecimalOf } from './numberPrecision.js';
+import { lookupForms, normalizeToken } from '../../../lib/normalize.js';
+import { evidenceTextValues } from './evidenceTextValues.js';
 import { jsonPrefixOf, leadingJsonValues } from '../../../lib/servedJson.js';
-import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
+import type { ResolvedEvidenceGate } from './types.js';
 import {
   carry,
   markCarrier,
@@ -194,7 +194,7 @@ interface Sink extends CarrierSink {
   /**
    * Declared ID shapes preserve comma-bearing identifiers. Under
    * `decimalRounding`, a standalone scientific token also files its exact
-   * decimal unless it matches a declared shape ({@link addDecimalOf}).
+   * decimal unless it matches a declared shape ({@link evidenceTextValues}).
    * The exempt corpus has no evidence gate.
    */
   readonly gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>;
@@ -219,27 +219,11 @@ function add(sink: Sink, raw: string): void {
   }
 }
 
-function addText(sink: Sink, text: string): void {
-  for (const token of tokenize(text, sink.gate?.shapes)) {
+function addText(sink: Sink, text: string, readNumbers = false): void {
+  for (const value of evidenceTextValues(text, sink.gate, readNumbers)) {
     if (sink.budget <= 0) return;
-    add(sink, token);
-    if (sink.gate?.decimalRounding === true) addDecimalOf(sink, token, sink.gate.shapes);
+    add(sink, value);
   }
-}
-
-/**
- * Under `decimalRounding`: a standalone scientific token (`1.12e-02`) also
- * files the exact decimal it states (`0.0112`, `numberPrecision.ts` ·
- * `scientificDecimalOf`) — beside its spelling, never instead of it, and
- * from the same result, so it carries the same turn and the same carrier.
- * A token that matches a declared ID shape is an identifier, not a
- * measurement, and files nothing more. The decimal takes one entry of the
- * same budget as any form.
- */
-function addDecimalOf(sink: Sink, token: string, shapes: readonly EvidenceShape[]): void {
-  const decimal = scientificDecimalOf(token);
-  if (decimal === undefined || shapes.some((shape) => shape.match.test(token))) return;
-  add(sink, decimal.exact);
 }
 
 /** Walk a parsed JSON value, indexing keys and leaves. */
@@ -249,7 +233,7 @@ function walk(node: unknown, sink: Sink): void {
     // Whole value first (a leaf may contain spaces and still be one value),
     // then its tokens (`"fc1/3 is down"` carries `fc1/3`).
     add(sink, node);
-    addText(sink, node);
+    addText(sink, node, true);
     return;
   }
   if (typeof node === 'number' || typeof node === 'boolean' || typeof node === 'bigint') {
@@ -346,11 +330,11 @@ export function readResult(content: string): ResultReading {
 function indexResult(content: string, sink: Sink): void {
   const read = readResult(content);
   if ('text' in read) {
-    addText(sink, read.text);
+    addText(sink, read.text, true);
     return;
   }
   walk(read.parsed, sink);
-  if (read.tail !== undefined) addText(sink, read.tail);
+  if (read.tail !== undefined) addText(sink, read.tail, true);
 }
 
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result

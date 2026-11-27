@@ -50,9 +50,9 @@ import {
   countDigits,
   lookupForms,
   normalizeToken,
-  numericCommaItems,
   tokenize,
 } from '../../../lib/normalize.js';
+import { numericCommaItems } from './numericCommaItems.js';
 import { splitNumericRange } from './numericRanges.js';
 import { decimalsOf, scientificDecimalOf } from './numberPrecision.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
@@ -436,7 +436,6 @@ export function readAnswer(
         : (start, end) => {
             if (spans.length < budget) spans.push([offset + start, offset + end]);
           },
-      keepWhole,
     );
     if (budget <= 0) {
       unread += spellings.length; // past the line: counted, never classified
@@ -453,16 +452,6 @@ export function readAnswer(
       // Test app-owned ID declarations on the intact token before heuristics.
       if (keepWhole(token)) {
         add(spelling, undefined, span);
-        continue;
-      }
-      const items = numericCommaItems(spelling);
-      if (items !== undefined) {
-        let start = span?.[0];
-        for (const item of items) {
-          const end = start === undefined ? undefined : start + item.length;
-          add(item, undefined, start === undefined || end === undefined ? undefined : [start, end]);
-          start = end === undefined ? undefined : end + 1;
-        }
         continue;
       }
       const range = splitNumericRange(spelling, spellings[index + 1]);
@@ -497,6 +486,14 @@ export function readAnswer(
         for (const piece of tokenize(spelling)) add(piece);
       } else {
         add(spelling, undefined, span);
+        for (const item of numericCommaItems(spelling)) {
+          const start = span === undefined ? undefined : span[0] + item.offset;
+          add(
+            item.spelling,
+            undefined,
+            start === undefined ? undefined : [start, start + item.spelling.length],
+          );
+        }
       }
     }
   }
