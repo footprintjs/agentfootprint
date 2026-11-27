@@ -1,3 +1,4 @@
+import { withdrawProvenWindow } from './provenWindowCheckpoint.js';
 import { startRunRecording } from '../recording/recording.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseKnownSpentAnswer, refuseMissingPlainAnswer } from '../../resumeAnswer.js';
@@ -233,6 +234,7 @@ export async function resumeLeg(
       options?.signal,
       options?.env?.signal,
     );
+  checkpoint = withdrawProvenWindow(checkpoint, input, gate !== undefined);
   // Typed data collection is not consent. Validate before changing any run state.
   const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
   let answeredAsk: AnsweredAsk | undefined;

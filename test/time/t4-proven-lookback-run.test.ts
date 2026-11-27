@@ -235,13 +235,27 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
       const { agent, calls } = fixture(true, true, values);
       const first = await agent.run({ message: 'last 2 hours', time: { now } });
       if (!isPaused(first)) throw new Error('Expected a pause before the ruler.');
-      const result = await agent.resume(JSON.parse(JSON.stringify(first.checkpoint)), 'yes', {
+      const result = await agent.resume(JSON.parse(JSON.stringify(first.checkpoint)), true, {
         redact: { patterns: [/^finalContent$/] },
       });
       expect(isInputPause(result)).toBe(true);
       expect(calls).toEqual([]);
     },
   );
+
+  it.each([
+    ['full', 'yes'],
+    ['delta', 'yes'],
+    ['full', 'yes, but I meant the 2 hours before yesterday’s 3 PM outage'],
+    ['delta', 'yes, but I meant the 2 hours before yesterday’s 3 PM outage'],
+  ] as const)('withdraws the %s proof after a free-text pause answer', async (values, input) => {
+    const { agent, calls } = fixture(true, true, values);
+    const first = await agent.run({ message: 'last 2 hours', time: { now } });
+    if (!isPaused(first)) throw new Error('Expected the independent pause before the ruler.');
+    const result = await agent.resume(JSON.parse(JSON.stringify(first.checkpoint)), input);
+    expect(isInputPause(result)).toBe(true);
+    expect(calls).toEqual([]);
+  });
 
   it('asks before dispatch when the model supplies a different interval', async () => {
     const suggested = { from: '2026-11-01T08:30:00Z', to: now };
@@ -385,7 +399,7 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
       const current = fixture(typed, false, values, false, false, undefined, typed);
       const result = await current.agent.resume(
         JSON.parse(JSON.stringify(paused.checkpoint)),
-        'yes',
+        true,
       );
       expect(isInputPause(result)).toBe(true);
       expect(current.calls).toEqual([]);
@@ -400,7 +414,7 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
       if (!isPaused(paused)) throw new Error('Expected the independent pause before the ruler.');
       expect(calls).toEqual([]);
       useTimeRuntime('2027a');
-      const result = await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), 'yes', {
+      const result = await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), true, {
         time: { now: '2026-11-02T09:30:00Z' },
       });
       expect(isPaused(result)).toBe(false);

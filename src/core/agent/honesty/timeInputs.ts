@@ -17,6 +17,7 @@ interface ReadingScope {
   readonly turnNumber?: unknown;
   readonly userMessage?: unknown;
   readonly history?: unknown;
+  readonly provenWindowWithdrawn?: unknown;
 }
 
 /** Project a qualified row only from the active native scope, never from a portable row alone. */
@@ -32,6 +33,7 @@ export function activeTimeReadings(
   const proof = row?.qualifiedLookback;
   if (
     row?.choice?.by !== 'proven' ||
+    scope.provenWindowWithdrawn === true ||
     proof === null ||
     typeof proof !== 'object' ||
     proof.receipt !== provenLookback.receipt ||
