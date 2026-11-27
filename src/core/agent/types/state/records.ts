@@ -129,4 +129,7 @@ export interface RecordsState {
    * assertions, and the current conflict set is a fold, not the rows.
    */
   findingsLedger?: FindingsLedger;
+
+  /** During an admitted look-back, a later reply withdrew the first-input proof. */
+  provenWindowWithdrawn?: true;
 }

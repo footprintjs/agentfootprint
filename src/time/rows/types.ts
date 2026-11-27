@@ -27,6 +27,8 @@ export interface ClockRow extends TimeClock {
   readonly iteration: number;
   /** The run's `time.window`, when it passed one. */
   readonly window?: ControlWindow;
+  /** The retained position of this turn's person-authored input, under the opt-in. */
+  readonly provenInputPosition?: number;
 }
 
 /** A resume passed a `time` that differs from the frozen clock: recorded, not applied (TQ21). */
@@ -119,6 +121,12 @@ export interface TimeReadingRow {
   readonly candidates?: readonly TimeCandidate[];
   /** How the reading settled under the policy — `open` waits for the person. */
   readonly choice?: ReadingChoice;
+  /** The proof and original input position recorded at native seed. */
+  readonly qualifiedLookback?: {
+    readonly receipt: string;
+    readonly inputPosition: number;
+    readonly clockNow: InstantText;
+  };
 }
 
 /**

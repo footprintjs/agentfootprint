@@ -65,12 +65,8 @@ import { finalBranchInput, finalBranchOutput } from './stages/breakFinal.js';
 import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import { mountHostTurn } from './hostEnd/chart.js';
 import { mountAgentMemoryReads } from './memoryReads.js';
-import {
-  timeClockArg,
-  timeLimitsArg,
-  timeWindowsArg,
-  type AgentChartDeps,
-} from './buildAgentChart.js';
+import type { AgentChartDeps } from './buildAgentChart.js';
+import { timeClockArg, timeLimitsArg, timeWindowsArg } from './chartTimeInputs.js';
 import { mountInputsLayer, mountResultsLayer, RESULTS_LOOP_TARGET } from './honesty/mounts.js';
 import type { AgentState } from './types.js';
 import { dynamicTurnSeed } from './dynamicTurnSeed.js';
@@ -205,7 +201,8 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         ...integrityRailInto(parent),
         // The reader's settled windows (step T6b) — the flat chart's line, read INSIDE
         // sf-llm-call off the boundary's `findingsLedger`. See `AgentChartDeps.timeWindows`.
-        ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
+        ...(deps.timeWindows === true &&
+          timeWindowsArg(parent.findingsLedger, parent, deps.stateProvenWindow === true)),
         ...(deps.timeWindows === true && timeClockArg(parent.findingsLedger)),
         // The role-hidden skill ids the Injection Engine resolved THIS iteration
         // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`) — the

@@ -1,3 +1,4 @@
+import { withdrawProvenWindow } from './provenWindowCheckpoint.js';
 import { startRunRecording } from '../recording/recording.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseKnownSpentAnswer, refuseMissingPlainAnswer } from '../../resumeAnswer.js';
@@ -215,16 +216,17 @@ export async function resumeLeg(
   // dispatch loop asks again where the decision is used — and spends it
   // there, once.
   const gate = pauseDemandsDecision(checkpoint.pauseData);
-  if (gate) {
-    checkDecisionAgainst(
-      checkpoint,
-      gate,
-      input,
-      this.configuration.toolMiddleware.map((link) => link.name),
-      // A request minted under a ledger that can prove is spent only there.
-      this.configuration.decisionLedger ?? processDecisionLedger(),
-    );
-  }
+  const decision =
+    gate === undefined
+      ? undefined
+      : checkDecisionAgainst(
+          checkpoint,
+          gate,
+          input,
+          this.configuration.toolMiddleware.map((link) => link.name),
+          // A request minted under a ledger that can prove is spent only there.
+          this.configuration.decisionLedger ?? processDecisionLedger(),
+        );
   if (gate !== undefined)
     await refuseKnownSpentAnswer(
       this.configuration.decisionLedger ?? processDecisionLedger(),
@@ -233,6 +235,7 @@ export async function resumeLeg(
       options?.signal,
       options?.env?.signal,
     );
+  checkpoint = withdrawProvenWindow(checkpoint, input, decision);
   // Typed data collection is not consent. Validate before changing any run state.
   const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
   let answeredAsk: AnsweredAsk | undefined;

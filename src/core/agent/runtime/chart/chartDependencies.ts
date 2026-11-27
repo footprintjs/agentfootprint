@@ -1,3 +1,4 @@
+import { canQualifyProvenWindow } from '../provenWindow.js';
 import { hostWriters } from '../../hostEnd/projection.js';
 import { chooseHostTurn } from '../../hostEnd/settle.js';
 import type { NativeMappingBinding } from 'footprintjs';
@@ -162,6 +163,7 @@ export function chartDependencies(
         // turn's one window, bound to the person's window, or recorded as the model's.
         ...(this.configuration.timeOptions !== undefined && {
           time: {
+            allowProven: canQualifyProvenWindow(this.configuration),
             ...(this.configuration.timeOptions.zone !== undefined && {
               appZone: this.configuration.timeOptions.zone,
             }),
@@ -280,6 +282,7 @@ export function chartDependencies(
     // The Tools mount hands the slot the turn's windows — the reader's (step T6b) and the
     // app's control window (G14) — under `.time()`.
     ...(this.configuration.timeOptions !== undefined && { timeWindows: true as const }),
+    ...(canQualifyProvenWindow(this.configuration) && { stateProvenWindow: true as const }),
     ...(environment.inputsArmed &&
       this.configuration.timeOptions !== undefined && { timeLimits: true as const }),
     ...(this.configuration.answerValidationConfig !== undefined && { hasAnswerValidation: true }),

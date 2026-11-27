@@ -1,10 +1,12 @@
 /** L0 leaf: project a strict range without changing the existing enum's meaning. */
+import { choiceForConfirmation } from '../resolveRecord.js';
 import { parseRange, spellRange, type TimeRange } from '../range.js';
 import { holdReply, type TimeReplyDecision, type TimeReplyInput } from './types.js';
 
 function offeredOf(input: TimeReplyInput) {
   if (input.offered !== undefined) return input.offered;
-  const { candidates = [], choice } = input.row;
+  const { candidates = [] } = input.row;
+  const choice = choiceForConfirmation(input.row.choice);
   const indexes =
     choice?.by === 'open'
       ? choice.remaining

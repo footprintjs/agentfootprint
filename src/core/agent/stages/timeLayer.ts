@@ -33,6 +33,9 @@ import {
   coveringDispatchMatches,
   frozenLookbackDispatchMatches,
 } from '../../../time/frozenDispatch.js';
+import { runKeepsOut } from '../../../redaction/runRedaction.js';
+import { provenLookback } from '../../../time/provenForms/proof.js';
+import { provenLookbackOf } from '../../../time/provenForms/qualification.js';
 import { checkReading, type TimeReading } from '../../../time/reader.js';
 import {
   answeredZoneOf,
@@ -51,6 +54,7 @@ import {
   rulesOf,
   type RuledToolLike,
 } from '../../../tools/declare.js';
+import { canDiscloseProvenWindow } from '../honesty/provenWindowVisibility.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentInput, AgentState } from '../types.js';
@@ -78,14 +82,39 @@ export function stampClock(scope: TypedScope<AgentState>, deps: SeedStageDeps): 
       ? answeredZoneOf(scope.findingsLedger as FindingsLedger | undefined)
       : undefined;
   const clock = completeClock(draft, scope.turnStartMs as number, answered);
+  const position =
+    deps.timeReader?.skipProvenConfirmation === true ? currentPersonPosition(scope) : undefined;
   recordFindings(scope, [
     clockRow(
       clock,
       { turn: scope.turnNumber as number, iteration: scope.iteration as number },
       draft.window,
       draft.display,
+      position,
     ),
   ]);
+}
+
+function currentPersonPosition(scope: TypedScope<AgentState>): number | undefined {
+  const input = scope.$getArgs<AgentInput>();
+  if (
+    scope.turnNumber !== 1 ||
+    input.message !== scope.userMessage ||
+    runKeepsOut(scope, 'history') ||
+    runKeepsOut(scope, 'userMessage') ||
+    runKeepsOut(scope, 'findingsLedger') ||
+    runKeepsOut(scope, 'finalContent')
+  ) {
+    return undefined;
+  }
+  const history = scope.history as readonly LLMMessage[];
+  const message = history[0];
+  return history.length === 1 &&
+    message !== undefined &&
+    isSaidByPerson(message) &&
+    message.content === input.message
+    ? 0
+    : undefined;
 }
 
 /**
@@ -111,23 +140,48 @@ export function readTimeWords(
   if (readingsOf(ledger, turn).length > 0) return;
   const clock = clockOf(ledger);
   const history = scope.history as readonly LLMMessage[];
-  const entry = history[history.length - 1];
+  const inputPosition = history.length - 1;
+  const entry = history[inputPosition];
   if (clock === undefined || entry === undefined || !isSaidByPerson(entry)) return;
   const text = entry.content;
   const { reader, policy } = armed;
   const file = (reading: TimeReading): void => {
     const mentions = checkReading(text, reading, reader.id);
-    recordFindings(
-      scope,
-      timeReadingRows({
-        mentions,
-        clock,
-        policy,
-        reader,
-        tzdata: tzdataVersion(),
-        at: { turn, iteration: scope.iteration as number },
-      }),
-    );
+    const rows = timeReadingRows({
+      mentions,
+      clock,
+      policy,
+      reader,
+      tzdata: tzdataVersion(),
+      at: { turn, iteration: scope.iteration as number },
+    });
+    const row = rows[0];
+    const candidate =
+      armed.skipProvenConfirmation === true &&
+      clock.turn === turn &&
+      clock.provenInputPosition === inputPosition &&
+      text === scope.userMessage
+        ? provenLookbackOf(reader, text, clock, rows)
+        : undefined;
+    if (
+      row !== undefined &&
+      candidate !== undefined &&
+      canDiscloseProvenWindow(scope, candidate.range)
+    ) {
+      recordFindings(scope, [
+        {
+          ...row,
+          choice: { by: 'proven', candidate: 0 },
+          qualifiedLookback: {
+            receipt: provenLookback.receipt,
+            inputPosition,
+            clockNow: clock.now,
+          },
+        },
+      ]);
+      return;
+    }
+    recordFindings(scope, rows);
   };
   const reading = reader.read(text, { locale: reader.locale });
   if (reading !== null && typeof (reading as { then?: unknown }).then === 'function') {

@@ -1,8 +1,8 @@
 /**
- * time/rows/shapes — two row arms of the checkpoint door, split from `rows.ts`
- * BY FILE for its size: a widened or covering fill's fields on a `call-window`
- * row, and a `call` row's `drift`.
+ * time/rows/shapes — checkpoint validation for a widened or covering fill,
+ * for call drift, and for the receipt of a measured look-back.
  */
+import { instantOf } from '../instant.js';
 import { isTimeRange } from '../range.js';
 
 const isCount = (value: unknown): boolean =>
@@ -49,4 +49,15 @@ export function isCallDrift(value: unknown): boolean {
   if (d.byMs === 0) return false;
   if (d.outcome === 'redrawn') return Object.keys(d).length === 3 && isCount(d.form);
   return d.outcome === 'shifted' && Object.keys(d).length === 2;
+}
+
+export function isLookbackReceipt(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const { receipt, inputPosition, clockNow } = value as Record<string, unknown>;
+  return (
+    typeof receipt === 'string' &&
+    /^[a-f0-9]{64}$/.test(receipt) &&
+    isCount(inputPosition) &&
+    instantOf(clockNow, 'strict') !== undefined
+  );
 }

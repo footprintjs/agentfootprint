@@ -13,6 +13,7 @@ import { buildToolRegistry } from '../../buildToolRegistry.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
 import type { buildToolResolver } from '../../stages/toolResolver.js';
+import { canQualifyProvenWindow } from '../provenWindow.js';
 import { evidenceExemptArm } from '../routing/exemptArm.js';
 import type { buildSlots } from '../slots/buildSlots.js';
 
@@ -332,6 +333,7 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       // resume door compares a resume's passed `time` with the kept clock.
       ...(environment.configuration.timeOptions !== undefined && {
         time: {
+          allowProven: canQualifyProvenWindow(environment.configuration),
           takePassedOnResume: () => {
             // Only the agent's own resumed leg takes it — never a member's.
             if (!run.own) return undefined;

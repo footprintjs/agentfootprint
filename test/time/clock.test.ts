@@ -122,6 +122,28 @@ describe('readTimeOptions — the builder fallback', () => {
     expect(problemOf(readTimeOptions({ zone: 'utc' }))).toMatch(/IANA zone name/);
   });
 
+  it('accepts only an explicit boolean opt-in with a reader', () => {
+    const reader = {
+      id: 'clock-test',
+      version: '1',
+      kind: 'rule',
+      locale: 'en-US',
+      read: () => ({ mentions: [] }),
+    };
+    const baseline = valueOf(readTimeOptions({ reader }));
+    expect(valueOf(readTimeOptions({ reader, skipProvenConfirmation: false }))).toEqual(baseline);
+    expect(valueOf(readTimeOptions({ reader, skipProvenConfirmation: true }))).toEqual({
+      ...baseline,
+      skipProvenConfirmation: true,
+    });
+    expect(problemOf(readTimeOptions({ reader, skipProvenConfirmation: 'true' }))).toMatch(
+      /must be a boolean/,
+    );
+    expect(problemOf(readTimeOptions({ skipProvenConfirmation: true }))).toMatch(
+      /requires a time reader/,
+    );
+  });
+
   it('refuses an unknown key, a malformed reader, a policy without a reader, and a malformed zone', () => {
     // The reader and its policy shipped with step T6a (resolve.test.ts pins them).
     expect(problemOf(readTimeOptions({ reader: {} }))).toMatch(/reader\.id/);

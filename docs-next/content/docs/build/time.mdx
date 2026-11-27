@@ -276,6 +276,27 @@ execute: () => requestInput({
 // → paused again: awaitingInput.refused = { answer, reason: 'The start … is not before the end ….' }
 ```
 
+### Skip confirmation for a proven look-back
+
+For prose answers, opt in with
+`.time({ zone: 'UTC', reader: englishTimeReader(), skipProvenConfirmation: true })`.
+On the measured reader and runtime, six standalone phrases can skip the question:
+`last 2 hours`, `past 2 hours`, `last 2 hrs`, `last 2h`, `past 40 minutes`,
+and `last 1 minute`. The record keeps the library's own reading and its frozen
+clock. The answer states the interval with an exclusive end.
+
+The proof matches Node 24.21.0, timezone data 2026c, and ICU 78.3. The app
+zones are UTC, America/Los_Angeles, and Asia/Kolkata. The process zones are
+UTC, America/Los_Angeles, America/New_York, and Asia/Kolkata. Opting in holds
+draft tokens until the final answer on every turn.
+
+Only the person's original first message can use the proof. A mid-turn answer
+restores confirmation unless it is a boolean, a number, null, or an approval
+without a note or an accompanying value; a typed input form restores confirmation.
+Agents with memory recall keep the usual confirmation path. Written ranges, longer or modified
+phrases, unmatched runtimes, protected input or output, typed answers, and
+validated answers also keep confirmation.
+
 ## A tool's period
 
 A tool declares every shape its period takes with `defineTool({ period })`. A

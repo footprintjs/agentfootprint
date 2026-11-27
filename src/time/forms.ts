@@ -1,3 +1,4 @@
+import { choiceForConfirmation } from './resolveRecord.js';
 /**
  * time/forms — every spelling of a time the answer may write, split by
  * WHO produced it (time design § 9.5, step T7).
@@ -208,7 +209,7 @@ function proposalsOf(
     if (row.reader.kind !== 'rule' || row.refused !== undefined || row.quote === undefined)
       continue;
     if (row.mention !== undefined && answered.has(row.mention)) continue;
-    const choice = row.choice;
+    const choice = choiceForConfirmation(row.choice);
     if (choice?.by !== 'open') continue;
     for (const i of choice.remaining) {
       const c = row.candidates?.[i];

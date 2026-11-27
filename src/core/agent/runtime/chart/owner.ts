@@ -1,3 +1,4 @@
+import { canServeProvenWindow } from '../provenWindow.js';
 import { hasNativeToolExecution } from '../../../../provider-contract/nativeToolExecution.js';
 import { codeRunsOf } from '../../../codeRunnerTool.js';
 import { buildCatalog } from '../catalog/buildCatalog.js';
@@ -68,7 +69,9 @@ export function buildChart(
     ThisParameterType<typeof routeFactory>,
 ): FlowChart {
   const readOntologyTools = () => this.ontologyTools;
-  const governsOutput = hasOutputMiddleware(this.configuration.messageMiddleware);
+  const governsOutput =
+    hasOutputMiddleware(this.configuration.messageMiddleware) ||
+    canServeProvenWindow(this.configuration);
   const provider = this.configuration.provider;
   const model = this.configuration.model;
   const temperature = this.configuration.temperature;

@@ -1,6 +1,14 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../types.js';
+import type { TimeReader } from '../../../time/reader.js';
+import type { TimePolicy } from '../../../time/resolve.js';
 import type { SeedStageDeps } from './seed.js';
+
+export interface SeedTimeReader {
+  readonly reader: TimeReader;
+  readonly policy: TimePolicy;
+  readonly skipProvenConfirmation?: true;
+}
 
 /**
  * The time layer's half of seed — the turn's clock stamp, then the person's

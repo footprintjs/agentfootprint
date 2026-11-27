@@ -70,6 +70,16 @@ The app passed `now`, or the library took the turn's start.
 
 ***
 
+### provenInputPosition?
+
+> `readonly` `optional` **provenInputPosition?**: `number`
+
+Defined in: [src/time/rows/types.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L31)
+
+The retained position of this turn's person-authored input, under the opt-in.
+
+***
+
 ### turn
 
 > `readonly` **turn**: `number`

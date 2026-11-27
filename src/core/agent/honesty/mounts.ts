@@ -263,7 +263,9 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
             : proposed;
         // The time layer: this turn's clock and readings — only under the arm, for a batch with calls.
         const timeInputs =
-          deps.time !== undefined && calls.length > 0 ? timeInputsOf(parent) : undefined;
+          deps.time !== undefined && calls.length > 0
+            ? timeInputsOf(parent, deps.time.allowProven === true)
+            : undefined;
         return {
           calls,
           iteration: parent.iteration as number,

@@ -1,7 +1,8 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../types.js';
 import type { FindingsLedger } from '../../findings/types.js';
-import { answersOf, readingsOf, type TimeReadingRow } from '../../../../time/rows.js';
+import { activeTimeReadings } from '../../honesty/timeInputs.js';
+import { answersOf, type TimeReadingRow } from '../../../../time/rows.js';
 import { isOpenForPerson } from '../../../../time/windows.js';
 
 /**
@@ -11,11 +12,14 @@ import { isOpenForPerson } from '../../../../time/windows.js';
  * the person already settled in the time ask (its `time-answer` row) is not
  * open: it is asked once per turn.
  */
-export function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefined {
+export function openReadingOf(
+  scope: TypedScope<AgentState>,
+  allowProven: boolean,
+): TimeReadingRow | undefined {
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
   const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));
-  const open = readingsOf(ledger, turn).filter(
+  const open = activeTimeReadings(scope, allowProven).filter(
     (row) => isOpenForPerson(row) && !answered.has(row.mention ?? 0),
   );
   return open.length === 1 ? (structuredClone(open[0]) as TimeReadingRow) : undefined;

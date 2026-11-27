@@ -4,7 +4,7 @@ title: SourceClockRow
 
 # Interface: SourceClockRow
 
-Defined in: [src/time/rows/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L248)
+Defined in: [src/time/rows/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L256)
 
 A wall-clock source (§ 9.6, step T8): the call minted a dataset whose
 declared time axis (`axis.ts` · `DatasetTimeAxis`, its `zone`) says its rows are
@@ -21,7 +21,7 @@ read as a clock — only a declared axis zone files this row.
 
 > `readonly` `optional` **callOccurrenceKey?**: `CallOccurrenceKey`
 
-Defined in: [src/time/rows/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L47)
+Defined in: [src/time/rows/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L49)
 
 #### Inherited from
 
@@ -33,7 +33,7 @@ Defined in: [src/time/rows/types.ts:47](https://github.com/footprintjs/agentfoot
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L251)
+Defined in: [src/time/rows/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L259)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [src/time/rows/types.ts:251](https://github.com/footprintjs/agentfoo
 
 > `readonly` **kind**: `"source-clock"`
 
-Defined in: [src/time/rows/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L249)
+Defined in: [src/time/rows/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L257)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: [src/time/rows/types.ts:249](https://github.com/footprintjs/agentfoo
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/time/rows/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L45)
+Defined in: [src/time/rows/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L47)
 
 #### Inherited from
 
@@ -61,7 +61,7 @@ Defined in: [src/time/rows/types.ts:45](https://github.com/footprintjs/agentfoot
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/time/rows/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L46)
+Defined in: [src/time/rows/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L48)
 
 #### Inherited from
 
@@ -73,7 +73,7 @@ Defined in: [src/time/rows/types.ts:46](https://github.com/footprintjs/agentfoot
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L250)
+Defined in: [src/time/rows/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L258)
 
 ***
 
@@ -81,4 +81,4 @@ Defined in: [src/time/rows/types.ts:250](https://github.com/footprintjs/agentfoo
 
 > `readonly` **zone**: `string`
 
-Defined in: [src/time/rows/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L252)
+Defined in: [src/time/rows/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L260)

@@ -56,6 +56,18 @@ No default: without one, the person's words are not read — no
 
 ***
 
+### skipProvenConfirmation?
+
+> `readonly` `optional` **skipProvenConfirmation?**: `boolean`
+
+Defined in: [src/time/clock.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L148)
+
+Let a benchmark-qualified, standalone look-back use the library's reading
+without a separate confirmation. The default is false. Unproved readings
+still follow the usual time question.
+
+***
+
 ### zone?
 
 > `readonly` `optional` **zone?**: `string`

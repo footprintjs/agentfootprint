@@ -1,3 +1,4 @@
+import { choiceForConfirmation } from './resolveRecord.js';
 /**
  * time/windows — the turn's windows, read from the record (time design
  * § 5.6): the window the person settled in the time ask (`answered`), a
@@ -99,6 +100,8 @@ export interface TurnWindows {
  */
 function readingCandidate(row: TimeReadingRow): TimeCandidate | undefined {
   const choice = row.choice;
+  if (choice?.by === 'only' && row.qualifiedLookback !== undefined)
+    return row.candidates?.[choice.candidate];
   if (row.reader.kind !== 'model' || choice?.by !== 'open') return undefined;
   if (choice.open.length !== 1 || choice.open[0] !== 'confirm') return undefined;
   return row.candidates?.[choice.remaining[0] as number];
@@ -157,7 +160,7 @@ export function windowToConvert(window: {
  */
 export function isOpenForPerson(row: TimeReadingRow): boolean {
   if (row.mentions === 0 || row.refused !== undefined || row.quote === undefined) return false;
-  const by = row.choice?.by;
+  const by = choiceForConfirmation(row.choice)?.by;
   if (by !== 'open' && by !== 'none') return false;
   return readingCandidate(row) === undefined;
 }
@@ -203,7 +206,7 @@ export function turnWindowsOf(
     }
     const candidate = readingCandidate(row);
     if (candidate === undefined) {
-      const choice = row.choice;
+      const choice = choiceForConfirmation(row.choice);
       const left =
         choice?.by === 'open'
           ? choice.remaining.flatMap((i) => {
@@ -436,11 +439,14 @@ function pendingZonesOf(
  * `pending`. The `control` window is no reading: it rides `control`, never
  * `windows`.
  */
-export function readerWindowsOf(ledger: readonly unknown[] | undefined): ReaderWindows | undefined {
+export function readerWindowsOf(
+  ledger: readonly unknown[] | undefined,
+  activeReadings?: readonly TimeReadingRow[],
+): ReaderWindows | undefined {
   const clock = clockOf(ledger);
   if (clock === undefined) return undefined;
   const turn = clock.turn;
-  const readings = readingsOf(ledger, turn);
+  const readings = activeReadings ?? readingsOf(ledger, turn);
   const answers = answersOf(ledger, turn);
   const { windows } = turnWindowsOf(readings, undefined, answers);
   const pending = pendingQuotesOf(readings, answers);
