@@ -36,7 +36,7 @@ const POOL = ['esx01a', 'vm-0042', '41200', '9750.5', 'fc1/3', 'id-7777', 'h-202
 const WORDS = ['host', 'alpha', 'peak', 'is', 'up', 'the', 'and'];
 const RULES: Record<string, LedgerTableRule> = {
   'cited@1': cited,
-  'traceable-values@1': traceableValues,
+  'traceable-values@2': traceableValues,
   'time-window@1': timeWindow,
 };
 
@@ -137,7 +137,7 @@ describe('generated sessions', () => {
     for (let seed = 1; seed <= SESSIONS; seed++) {
       const { log, served, draft, ruleSet } = await session(seed);
       const reader = readerOf({ seq: log.length, entries: log });
-      expect((log[0] as { rules: string[] }).rules, `seed ${seed}`).toContain('traceable-values@1');
+      expect((log[0] as { rules: string[] }).rules, `seed ${seed}`).toContain('traceable-values@2');
       const report = (served.at(-1) as Reply).report;
       const exempt = new Set(reader.supplied.flatMap((x) => x.tokens));
       for (const claim of report.claims) {
@@ -147,7 +147,7 @@ describe('generated sessions', () => {
         for (const token of tokensOfNote(note))
           if (!exempt.has(token))
             expect(held, `seed ${seed} (${ruleSet}): ${token}`).toContain(token);
-        if (ruleSet !== undefined && !ruleSet.includes('traceable-values@1')) wouldPass++;
+        if (ruleSet !== undefined && !ruleSet.includes('traceable-values@2')) wouldPass++;
       }
       if (report.standing === 'consistent') {
         const held = reader.receipts.flatMap((r) => r.tokens);

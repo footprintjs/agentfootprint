@@ -5,9 +5,8 @@
  *          what `time/instant.ts` · `instantOf` accepts in its `strict`
  *          profile, and gives the same epoch milliseconds for every string it
  *          accepts — pinned by `test/llm-ledger/window-differential.test.ts`.
- *          It is the one named exception to "no other file parses an
- *          instant", because this folder is a closed leaf and cannot import
- *          `src/time/`.
+ *          The parser is generated from the time layer so this folder can stay a closed leaf.
+ *          This wrapper keeps the stored window and entry format narrower than that parser.
  * Role:    the closed leaf's time check: a receipt's and a note's `window`,
  *          and every entry's `at`.
  * Emits:   N/A.
@@ -25,42 +24,13 @@
  * `from` strictly before `to`; the strings are kept as written.
  */
 import type { LedgerWindow } from './types.js';
+import { instantOf } from './instantParser.js';
 
-const INSTANT =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(?:(Z)|([+-])(\d{2}):(\d{2}))$/;
-
-/** Days in `month` (1–12) of the proleptic Gregorian `year`. */
-function daysIn(year: number, month: number): number {
-  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
-  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
-}
-
-/**
- * The epoch milliseconds an instant names, or `undefined` when `value` is not
- * one under the grammar above.
- */
+/** The stored window and entry grammar requires explicit seconds and at most milliseconds. */
 export function instantMs(value: unknown): number | undefined {
-  if (typeof value !== 'string') return undefined;
-  const m = INSTANT.exec(value);
-  if (m === null) return undefined;
-  const [year, month, day, hour, minute, second] = [m[1], m[2], m[3], m[4], m[5], m[6]].map(
-    Number,
-  ) as [number, number, number, number, number, number];
-  if (month < 1 || month > 12 || day < 1 || day > daysIn(year, month)) return undefined;
-  if (hour > 23 || minute > 59 || second > 59) return undefined;
-  let offsetMinutes = 0;
-  if (m[8] === undefined) {
-    const offsetHours = Number(m[10]);
-    const offsetMins = Number(m[11]);
-    if (offsetHours > 23 || offsetMins > 59) return undefined;
-    offsetMinutes = (m[9] === '-' ? -1 : 1) * (offsetHours * 60 + offsetMins);
-  }
-  const millis = m[7] === undefined ? 0 : Number(m[7].padEnd(3, '0'));
-  // `setUTCFullYear`, never `Date.UTC`: the latter reads years 0–99 as 1900–1999.
-  const date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(hour, minute, second, millis);
-  return date.getTime() - offsetMinutes * 60_000;
+  if (typeof value !== 'string' || /\.\d{4}/.test(value)) return undefined;
+  const instant = instantOf(value, 'strict');
+  return instant?.precision === 'minute' ? undefined : instant?.ms;
 }
 
 /** Whether `value` is an instant in UTC (`Z`): what every entry's `at` must be. */

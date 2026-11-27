@@ -93,7 +93,7 @@ const citedOracle = (input: LedgerRuleInput) =>
     ? 'checked-pass'
     : 'checked-fail';
 
-/** `traceable-values@1` by walking token sets. */
+/** `traceable-values@2` by walking token sets. */
 function traceableOracle(input: LedgerRuleInput): string {
   if (input.subject.kind === 'draft') throw new Error('notes only here');
   const stated = new Set(tokensOf(input.subject.note.text));
@@ -146,7 +146,7 @@ function windowOracle(input: LedgerRuleInput): string {
 describe('each built-in rule against its oracle', () => {
   it.each([
     ['cited@1', cited, citedOracle],
-    ['traceable-values@1', traceableValues, traceableOracle],
+    ['traceable-values@2', traceableValues, traceableOracle],
     ['time-window@1', timeWindow, windowOracle],
   ] as const)('%s', async (_name, rule, oracle) => {
     const seen = new Set<string>();
