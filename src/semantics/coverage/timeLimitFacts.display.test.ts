@@ -1,3 +1,9 @@
+/**
+ * A requested saved turn reads its own display declaration; only an omitted
+ * turn uses the latest display. Both audiences preserve the existing period
+ * selection and interpretation-zone policy. The four historical failures go
+ * red again when the display selector is reset to the latest clock.
+ */
 import { expect, it } from 'vitest';
 import { timeLimitFactsOf, type TimeLimitsAudience } from './timeLimitFacts.js';
 
