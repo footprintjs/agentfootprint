@@ -6,9 +6,10 @@ import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type { ProposedCall } from '../batch/paused.js';
 import type { ToolResolution } from '../../toolResolver.js';
 import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.js';
+import type { ListingCapture } from '../../../innerCallOuter.js';
 
 /** What a resumed call's `execute` saw — read by its script row (`deps.scriptRecord`). */
-export interface ResumedCallFacts extends PendingDatasetLimits {
+export interface ResumedCallFacts extends PendingDatasetLimits, ListingCapture {
   readonly callOccurrenceKey?: CallOccurrenceKey;
   /** Invocation-local finalization closure; never serialized or filed as script data. */
   resultFinalizer?: NativeResultFinalizer;

@@ -264,6 +264,7 @@ export const words0 = {
   delete: true,
   denied: true,
   deny: true,
+  derived: true,
   'derived-from-reading': true,
   dev: true,
   'digest-mismatch': true,
@@ -301,5 +302,4 @@ export const words0 = {
   external_net: true,
   extract: true,
   fact: true,
-  'fact-extraction': true,
 } as const;

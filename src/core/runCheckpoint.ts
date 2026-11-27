@@ -76,6 +76,8 @@ import {
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { carriedTicketsOf, ticketsStillServed } from './agent/placedTickets.js';
 import { admitStoredHistory, checkpointReplayHistory } from './checkpointHistory.js';
+import { AGENT_CHECKPOINT_VERSION } from './runCheckpointTypes.js';
+import { markLegacySkillListings } from '../security/skillListingHistory.js';
 import { validateCheckpointLedger } from './checkpointLedger.js';
 import {
   admitRequestReplayCheckpoint,
@@ -428,7 +430,7 @@ export function buildCheckpoint(
   const toolTurnEvidence = toolTurnEvidenceFrom(state);
   const requestReplay = captureRequestReplayCheckpoint(state, history);
   return {
-    version: 1,
+    version: AGENT_CHECKPOINT_VERSION,
     runId: tracker.runId,
     history,
     ...(innerCallPolicyArgs !== undefined && { innerCallPolicyArgs }),
@@ -478,10 +480,10 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   const execution = Object.getOwnPropertyDescriptor(c, 'completedCodeExecution');
   if (execution !== undefined && !Object.hasOwn(execution, 'value'))
     throw new TypeError('[resumeOnError] checkpoint completedCodeExecution must be data.');
-  if (c.version !== 1) {
+  if (c.version !== 1 && c.version !== AGENT_CHECKPOINT_VERSION) {
     throw new TypeError(
       `[resumeOnError] unsupported checkpoint version: ${c.version}. ` +
-        `This runtime supports version 1; persisted checkpoints from a future ` +
+        `This runtime supports versions 1 and 2; persisted checkpoints from a future ` +
         `agentfootprint version need a matching runtime to resume.`,
     );
   }
@@ -566,7 +568,12 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
   const citationSources = citationSourcesOf(c, claimVerification);
   negativeCheckpointOf(c, citationSources === undefined ? undefined : claimVerification);
   if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
-  const checkpoint = checkpointWithCarriers(c, claimVerification, sourceEvidence);
+  const history = c.version === 1 ? markLegacySkillListings(c.history) : c.history;
+  const checkpoint = checkpointWithCarriers(
+    history === c.history ? c : { ...c, history },
+    claimVerification,
+    sourceEvidence,
+  );
   return sourceDeclarationCorrection === undefined &&
     innerCallPolicyArgs === undefined &&
     toolTurnEvidence === undefined &&

@@ -33,6 +33,7 @@ import { CompactionUnmeasurableError } from '../errors.js';
 import { resolveTokenBudgetOptions } from '../options.js';
 import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '../strategy.js';
 import type { TokenBudgetOptions, TokenBudgetRecord } from '../types.js';
+import { frameworkWindowStrategy } from '../catalogView.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
 const TOKEN_BUDGET = 'token-budget';
@@ -53,7 +54,7 @@ const TOKEN_BUDGET = 'token-budget';
 export function tokenBudget(options: TokenBudgetOptions): WindowStrategy {
   const config = resolveTokenBudgetOptions(options, 'tokenBudget');
 
-  return {
+  return frameworkWindowStrategy({
     name: TOKEN_BUDGET,
 
     async plan(input: WindowStrategyInput): Promise<WindowStrategyResult | undefined> {
@@ -94,5 +95,5 @@ export function tokenBudget(options: TokenBudgetOptions): WindowStrategy {
         },
       };
     },
-  };
+  });
 }

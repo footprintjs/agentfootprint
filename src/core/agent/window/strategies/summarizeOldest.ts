@@ -29,7 +29,9 @@ import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '
 import { buildSummaryMessage, isCompactedSummary, runSummarizer } from '../summarize.js';
 import { windowChars } from '../turns.js';
 import { throwIfAborted } from '../../../../lib/abort.js';
+import { foldedSkillListingOf } from '../../../../security/skillListingHistory.js';
 import type { CompactionOptions, CompactionRecord, FoldedSpan, WindowRefusal } from '../types.js';
+import { frameworkWindowStrategy } from '../catalogView.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
 const SUMMARIZE_OLDEST = 'summarize-oldest';
@@ -84,7 +86,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
   // agents never share a verdict.
   const refusedSpans = new Set<string>();
 
-  return {
+  return frameworkWindowStrategy({
     name: SUMMARIZE_OLDEST,
 
     billing: { provider: config.summarizer, model: config.model },
@@ -188,7 +190,7 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         };
       }
 
-      const summaryMessage = buildSummaryMessage(summary.text, {
+      const frame = buildSummaryMessage(summary.text, {
         foldedMessageCount: span.length,
         iteration,
         model,
@@ -197,6 +199,8 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         // now — never re-derived later from the summary's text.
         foldedExempt: exemptLineageOf(span),
       });
+      const skillListing = foldedSkillListingOf(span);
+      const summaryMessage = skillListing === undefined ? frame : { ...frame, skillListing };
       const spend = { model, usage: summary.usage };
 
       // Would the fold actually help? A summary plus its authored frame can be
@@ -271,5 +275,5 @@ export function summarizeOldest(options: CompactionOptions): WindowStrategy {
         spend,
       };
     },
-  };
+  });
 }

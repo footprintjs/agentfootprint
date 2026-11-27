@@ -50,3 +50,5 @@ here.
 - `thinkingRedaction.ts` — the deliberate two-view split: unredacted to the
   provider for signature round-trip, redacted into `scope.history`.
 - `index.ts`.
+
+Saved skill catalog results are projected for the current recipient before model delivery. Version-1 conversation history is admitted with unknown provenance for old unmarked catalog results. A role change that would alter a frozen native-thinking prefix ends replay with a refusal, since the saved prefix cannot safely be served or rewritten.

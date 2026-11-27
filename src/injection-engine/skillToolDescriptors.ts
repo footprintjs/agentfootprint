@@ -425,10 +425,8 @@ function describeOffer(
 }
 
 // LENS · tool-result · persistent-history
-// reads: nothing — it takes no ReadSkillOffer, so it asks neither visibleSkills (the role filter) nor
-//        classifySkillTarget (position): its execute returns the build-time catalog verbatim
-// known gap: unfiltered and un-cursored on a persistent surface. Reachable through SkillRegistry.toTools()
-// and the doors; the Agent's own auto-attach path mounts read_skill only.
+// The standalone descriptor holds one catalog snapshot; the Agent's adapter hands its projection
+// the run's role view. This list concerns authorization independently of graph reachability.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * Describe the `list_skills` tool — a no-arg tool that returns the registered
@@ -443,26 +441,27 @@ function describeOffer(
 export function listSkillsDescriptor(
   skills: readonly Injection[],
 ): SkillToolDescriptor<Record<string, never>, string> | undefined {
+  return skillListingOf(skills)?.descriptor;
+}
+
+/** Keep the role-aware adapter on the descriptor's captured catalog and serializer. */
+export function skillListingOf(skills: readonly Injection[]) {
   if (skills.length === 0) return undefined;
-
-  // Capture a stable snapshot — the registry/agent calls this at
-  // build time, so the tool reflects the catalog as of registration.
-  const catalog = skills.map((s) => ({
-    id: s.id,
-    description: s.description ?? '(no description)',
+  const catalog = skills.map((skill) => ({
+    id: skill.id,
+    description: skill.description ?? '(no description)',
   }));
-
-  return {
+  const select = (hidden?: ReadonlySet<string>) =>
+    hidden === undefined ? catalog : catalog.filter(({ id }) => skillVisibleToRole(id, hidden));
+  const descriptor: SkillToolDescriptor<Record<string, never>, string> = {
     name: 'list_skills',
     description:
       'List all available skills with their ids and descriptions. ' +
       'Use this to discover what skills exist before calling read_skill.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    execute: () => {
-      // Return as a JSON-serialized string so the LLM can parse easily.
-      return JSON.stringify(catalog, null, 2);
-    },
+    execute: () => JSON.stringify(catalog, null, 2),
   };
+  return { descriptor, ids: [...new Set(catalog.map(({ id }) => id))], select };
 }
 
 // LENS · tool-description · request-ephemeral

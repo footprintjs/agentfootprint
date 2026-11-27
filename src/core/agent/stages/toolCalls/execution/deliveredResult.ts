@@ -250,6 +250,7 @@ export function landCallResult(
         toolCallId: frame.tc.id,
         toolName: frame.tc.name,
         ...occurrence,
+        ...frame.execution.skillListingFor?.(frame.delivery.resultStr),
         ...(frame.delivery.toolSkillBody !== undefined && {
           toolSkillBody: frame.delivery.toolSkillBody,
         }),

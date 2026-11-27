@@ -20,6 +20,7 @@ import type { LLMMessage } from '../../../../provider-contract/types.js';
 import type { MemoryIdentity } from '../../../../memory/identity/types.js';
 import { assertContinuable, type AgentRunCheckpoint } from '../../../runCheckpoint.js';
 import { checkpointReplayHistory } from '../../../checkpointHistory.js';
+import { AGENT_CHECKPOINT_VERSION } from '../../../runCheckpointTypes.js';
 import {
   checkpointNegatives,
   clearCitationEvidence,
@@ -143,7 +144,7 @@ export function checkpointFor(
       ? completedCodeExecutionFrom(state, selected!.context.runId)
       : undefined;
   return {
-    version: 1,
+    version: AGENT_CHECKPOINT_VERSION,
     runId: selected!.context.runId,
     history: stored,
     ...(completedCodeExecution !== undefined && { completedCodeExecution }),

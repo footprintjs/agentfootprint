@@ -42,6 +42,7 @@
 import { privateFieldsOfCheckpoint } from '../redaction/privateCheckpoint.js';
 import { UnreadableEnvelopeError } from './errors.js';
 import { validateCheckpoint, type AgentRunCheckpoint } from '../core/runCheckpoint.js';
+import type { LLMMessage } from '../provider-contract/types.js';
 import type {
   CheckpointEnvelope,
   ConversationEnvelope,
@@ -234,17 +235,41 @@ export function envelopeConversationId(envelope: unknown): string | undefined {
  * `[object Object]` is not something anybody said.
  */
 export function envelopeTranscript(envelope: unknown): readonly TranscriptMessage[] {
+  return transcriptText(transcriptFrames(envelope));
+}
+
+/** For a served transcript, apply the recipient's view before dropping framework fields. */
+export async function envelopeTranscriptFor(
+  envelope: unknown,
+  project: (history: readonly LLMMessage[]) => Promise<readonly LLMMessage[]>,
+): Promise<readonly TranscriptMessage[]> {
+  const history = transcriptFrames(envelope);
+  return transcriptText(
+    history.some((entry) => 'skillListing' in entry) ? await project(history) : history,
+  );
+}
+
+type TranscriptFrame = LLMMessage & { readonly role: TranscriptMessage['role'] };
+
+function transcriptText(history: readonly LLMMessage[]): readonly TranscriptMessage[] {
+  return history.flatMap(({ role, content }) =>
+    role === 'user' || role === 'assistant' ? [{ role, content }] : [],
+  );
+}
+
+function transcriptFrames(envelope: unknown): readonly TranscriptFrame[] {
   const history = conversationOf(envelope)?.history;
   if (!Array.isArray(history)) return [];
-  const messages: TranscriptMessage[] = [];
-  for (const message of history) {
-    const role = (message as { role?: unknown }).role;
-    if (role !== 'user' && role !== 'assistant') continue;
-    const content = (message as { content?: unknown }).content;
-    if (typeof content !== 'string' || content.length === 0) continue;
-    messages.push({ role, content });
-  }
-  return messages;
+  return history.filter(
+    (message: unknown): message is TranscriptFrame =>
+      message !== null &&
+      typeof message === 'object' &&
+      'role' in message &&
+      (message.role === 'user' || message.role === 'assistant') &&
+      'content' in message &&
+      typeof message.content === 'string' &&
+      message.content.length > 0,
+  );
 }
 
 /** What the lenient readers look at inside a stored conversation. */

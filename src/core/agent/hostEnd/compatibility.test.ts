@@ -64,10 +64,11 @@ for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
         // in memory (where an unset read is a key with no value) as well as in a saved record.
         expect(hostEndReads(snapshot)).toEqual([]);
         const checkpoint = agent.checkpoint()!;
+        // The stored schema is now v2. Keep the exact bytes of all other fields pinned.
         // The native run supplies its identity and the clock supplies the read time.
         expect(JSON.stringify(checkpoint)).toBe(
           JSON.stringify({
-            version: 1,
+            version: 2,
             runId: snapshot.runId,
             history: [
               { role: 'user', content: 'one' },

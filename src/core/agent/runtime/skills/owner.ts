@@ -2,8 +2,7 @@ import type { ReadSkillFor } from '../../../slots/composeSkillCatalog.js';
 import { isDevMode } from 'footprintjs';
 import { resolveReadSkillDescriptor } from '../../../../injection-engine/skillToolDescriptors.js';
 import { checkerGoverns } from '../../../../provider-contract/types.js';
-import { readPermissionDecision } from '../../../../provider-contract/permissionDecision.js';
-import { skillTarget } from '../../../../security/skillTarget.js';
+import { hiddenSkillIdsFor } from '../../../../security/skillVisibility.js';
 import { memberIdentityIn } from '../../../memberRun.js';
 import type { AgentContext } from '../contracts.js';
 
@@ -163,27 +162,7 @@ export function hiddenSkillIdsNow(
     // member's run (never the instance's last caller) on a mount.
     const run = this.native.runExecution().forScope(scope);
     const identity = run.own ? run.value.identity : memberIdentityIn(scope);
-    const hidden: string[] = [];
-    for (const id of skillIds) {
-      let allowed = false;
-      try {
-        const decision = await checker.check({
-          capability: 'skill_read',
-          actor: 'agent',
-          target: skillTarget(id),
-          ...(identity !== undefined && { identity }),
-        });
-        // The one reader of a checker's answer — the same rule the tool gate uses.
-        allowed = readPermissionDecision(decision).kind === 'allow';
-      } catch {
-        // Fail closed. The refusal the model would read is the dispatch
-        // gate's job; here the only decision is whether to advertise a skill
-        // whose policy is unreachable, and advertising it would be a menu
-        // built on a question nobody answered.
-        allowed = false;
-      }
-      if (!allowed) hidden.push(id);
-    }
-    return hidden;
+    // An unanswered role decision cannot authorize advertising a skill.
+    return hiddenSkillIdsFor(checker, skillIds, identity);
   };
 }

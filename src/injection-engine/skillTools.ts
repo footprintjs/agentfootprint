@@ -29,9 +29,10 @@
 
 import { defineTool } from '../tools/tools.js';
 import type { Tool } from '../tools/tools.js';
+import { skillListingAccess } from '../tools/skillListingAccess.js';
 import { skipStepDescriptor } from './skillSteps.js';
 import {
-  listSkillsDescriptor,
+  skillListingOf,
   resolveReadSkillDescriptor,
   type ReadSkillOffer,
 } from './skillToolDescriptors.js';
@@ -53,13 +54,29 @@ export type { ReadSkillOffer } from './skillToolDescriptors.js';
  * guard or filter undefined out of their tool list.
  */
 export function buildListSkillsTool(skills: readonly Injection[]): Tool | undefined {
-  const d = listSkillsDescriptor(skills);
-  if (!d) return undefined;
+  const listing = skillListingOf(skills);
+  if (listing === undefined) return undefined;
+  const { descriptor: d, ids, select } = listing;
   return defineTool<Record<string, never>, string>({
     name: d.name,
     description: d.description,
     inputSchema: d.inputSchema,
-    execute: (args) => d.execute(args),
+    execute: (args, context) => {
+      const access = skillListingAccess(context);
+      if (access === undefined) return d.execute(args);
+      const deliver = (hidden?: readonly string[]) => {
+        const rows = select(hidden === undefined ? undefined : new Set(hidden));
+        const text = JSON.stringify(rows, null, 2);
+        access.record(
+          rows.map(({ id }) => id),
+          text,
+        );
+        return text;
+      };
+      return access.hiddenIdsFor === undefined
+        ? deliver()
+        : access.hiddenIdsFor(ids, context.signal).then(deliver);
+    },
   });
 }
 

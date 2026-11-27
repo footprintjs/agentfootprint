@@ -31,6 +31,7 @@ import { dropOldestSpan } from './drop.js';
 import { resolveSlidingWindowOptions } from '../options.js';
 import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '../strategy.js';
 import type { SlidingWindowOptions, SlidingWindowRecord } from '../types.js';
+import { frameworkWindowStrategy } from '../catalogView.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
 const SLIDING_WINDOW = 'sliding-window';
@@ -53,7 +54,7 @@ const SLIDING_WINDOW = 'sliding-window';
 export function slidingWindow(options: SlidingWindowOptions): WindowStrategy {
   const config = resolveSlidingWindowOptions(options, 'slidingWindow');
 
-  return {
+  return frameworkWindowStrategy({
     name: SLIDING_WINDOW,
 
     async plan(input: WindowStrategyInput): Promise<WindowStrategyResult | undefined> {
@@ -86,5 +87,5 @@ export function slidingWindow(options: SlidingWindowOptions): WindowStrategy {
         evictions: outcome.evictions,
       };
     },
-  };
+  });
 }

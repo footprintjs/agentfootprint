@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.4.1] - 2026-11-27
+
+### Security
+
+- Apply the current skill access policy when showing catalog results and saved catalog history. Model-authored replies remain part of the conversation. Applications that require those replies to be removed after a role change should start a fresh conversation.
+
+  Conversation checkpoints now use version 2. A governed restore withholds older catalog results whose origin is unknown.
+  The private catalog provenance also travels with newly saved results from agents without a checker and is omitted from provider requests.
+  A withheld result becomes a generic placeholder that carries no catalog names or descriptions.
+
+## [20.4.0] - 2026-11-27
+
+### Added
+
+- **Skip the time question for a proven standalone look-back.** Opt in through
+  `time({ skipProvenConfirmation: true })`. A qualifying prose answer states the
+  frozen window and exclusive end. Written ranges and unproved readings keep the
+  usual confirmation.
+
 ## [20.3.1] - 2026-11-27
 
 ### Security
