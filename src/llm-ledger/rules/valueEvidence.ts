@@ -17,7 +17,7 @@ interface Candidate {
 }
 
 type Match =
-  | { readonly kind: 'supplied' | 'missing' | 'ambiguous' }
+  | { readonly kind: 'supplied' | 'missing' | 'ambiguous' | 'unresolved-zone' }
   | { readonly kind: 'receipt'; readonly seq: number };
 
 function preferred(current: LedgerReceipt | undefined, next: LedgerReceipt): LedgerReceipt {
@@ -44,25 +44,14 @@ export function valueEvidence(
     if (!parsed.has(token)) parsed.set(token, timeValue(token));
     return parsed.get(token);
   };
-  const wanted = {
-    atMinute: new Set<number>(),
-    wallDate: new Set<number>(),
-    utcClock: new Set<number>(),
-    wallClock: new Set<number>(),
-  };
-  let needsTime = false;
+  const wanted = { atMinute: new Set<number>(), utcClock: new Set<number>() };
   for (const token of stated) {
     const value = time(token);
-    if (value === undefined || value.kind === 'unreadable' || value.kind === 'unresolved-zone')
-      continue;
-    needsTime = true;
-    if (value.kind === 'anchored') wanted.atMinute.add(value.minute);
-    if (value.kind === 'floating-date') wanted.wallDate.add(value.minute);
-    if (value.kind === 'clock') {
-      const keys = value.offsetMinutes === undefined ? wanted.wallClock : wanted.utcClock;
-      keys.add(mod(value.minute, DAY_MINUTES));
-    }
+    if (value?.kind === 'anchored') wanted.atMinute.add(value.minute);
+    if (value?.kind === 'clock' && value.offsetMinutes === 0)
+      wanted.utcClock.add(mod(value.minute, DAY_MINUTES));
   }
+  const needsTime = wanted.atMinute.size + wanted.utcClock.size > 0;
   const exemptions = new Set<string>();
   const suppliedTimes: Anchored[] = [];
   for (const entry of supplied) {
@@ -75,8 +64,6 @@ export function valueEvidence(
   const literals = new Map<string, LedgerReceipt>();
   const atMinute = new Map<number, Candidate[]>();
   const utcClock = new Map<number, Candidate[]>();
-  const wallClock = new Map<number, Candidate[]>();
-  const wallDate = new Map<number, Candidate[]>();
   const partials: { value: PartialTime; receipt: LedgerReceipt }[] = [];
 
   for (const receipt of receipts) {
@@ -85,13 +72,9 @@ export function valueEvidence(
       const value = needsTime ? time(token) : undefined;
       if (value?.kind === 'anchored') {
         const candidate = { value, receipt };
-        const wall = value.minute + value.offsetMinutes;
         const utc = mod(value.minute, DAY_MINUTES);
-        const wallMinute = mod(wall, DAY_MINUTES);
         if (wanted.atMinute.has(value.minute)) addCandidate(atMinute, value.minute, candidate);
         if (wanted.utcClock.has(utc)) addCandidate(utcClock, utc, candidate);
-        if (wanted.wallClock.has(wallMinute)) addCandidate(wallClock, wallMinute, candidate);
-        if (wanted.wallDate.has(wall)) addCandidate(wallDate, wall, candidate);
       } else if (value?.kind === 'floating-date' || value?.kind === 'clock') {
         partials.push({ value, receipt });
       }
@@ -101,7 +84,12 @@ export function valueEvidence(
   return (token) => {
     const value = time(token);
     if (value?.kind === 'unreadable') return { kind: 'missing' };
-    if (value?.kind === 'unresolved-zone') return { kind: 'ambiguous' };
+    if (
+      value?.kind === 'unresolved-zone' ||
+      value?.kind === 'floating-date' ||
+      (value?.kind === 'clock' && value.offsetMinutes !== 0)
+    )
+      return { kind: 'unresolved-zone' };
     if (exemptions.has(token)) return { kind: 'supplied' };
     if (value === undefined) {
       const receipt = literals.get(token);
@@ -115,14 +103,7 @@ export function valueEvidence(
       return { kind: 'supplied' };
 
     const key = value.kind === 'clock' ? mod(value.minute, DAY_MINUTES) : value.minute;
-    const candidates =
-      value.kind === 'anchored'
-        ? atMinute.get(key)
-        : value.kind === 'floating-date'
-        ? wallDate.get(key)
-        : value.offsetMinutes === undefined
-        ? wallClock.get(key)
-        : utcClock.get(key);
+    const candidates = value.kind === 'anchored' ? atMinute.get(key) : utcClock.get(key);
     let found: LedgerReceipt | undefined;
     let instant: Anchored | undefined;
     let uncertain = false;
@@ -166,16 +147,10 @@ export function valueEvidence(
           mod(value.minute, DAY_MINUTES) === mod(other.minute, DAY_MINUTES)
         );
       }
-      if (value.kind === 'floating-date' && other.kind === 'floating-date')
-        return value.minute === other.minute;
       const written =
-        value.kind === 'clock' ? value.minute + (value.offsetMinutes ?? 0) : value.minute;
-      const otherWritten =
         other.kind === 'clock' ? other.minute + (other.offsetMinutes ?? 0) : other.minute;
-      return mod(written, DAY_MINUTES) === mod(otherWritten, DAY_MINUTES);
+      return mod(value.minute, DAY_MINUTES) === mod(written, DAY_MINUTES);
     });
-    if (value.kind !== 'anchored' && value.unknownOffset && found !== undefined)
-      return { kind: 'ambiguous' };
     if (uncertain || possiblePartial) return { kind: 'ambiguous' };
     return found === undefined ? { kind: 'missing' } : { kind: 'receipt', seq: found.seq };
   };

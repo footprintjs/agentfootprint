@@ -53,8 +53,7 @@ export const traceableValues: LedgerTableRule = {
       subject.kind === 'draft'
         ? [subject.text]
         : [subject.note.text, ...(subject.note.values ?? [])];
-    const unresolvedZones = new Set<string>();
-    const stated = new Set(texts.flatMap((text) => statementValues(text, unresolvedZones)));
+    const stated = new Set(texts.flatMap(statementValues));
     // Grouped numbers and escaped pieces have no single readable token.
     const unreadable = texts
       .map(readTokens)
@@ -64,17 +63,15 @@ export const traceableValues: LedgerTableRule = {
     const missing: string[] = [];
     let supplied = 0;
     let unsupported = 0;
+    let unresolvedZones = 0;
     for (const token of stated) {
-      if (unresolvedZones.has(token)) {
-        missing.push(token);
-        continue;
-      }
       const evidence = evidenceFor(token);
       if (evidence.kind === 'supplied') supplied++;
       else if (evidence.kind === 'receipt') restsOn.push(evidence.seq);
       else {
         missing.push(token);
         if (evidence.kind === 'missing') unsupported++;
+        if (evidence.kind === 'unresolved-zone') unresolvedZones++;
       }
     }
     const incomplete = input.receipts.filter(isIncomplete).length;
@@ -85,7 +82,7 @@ export const traceableValues: LedgerTableRule = {
         checkable: stated.size - supplied,
         missing: missing.length,
         unsupported,
-        unresolvedZones: unresolvedZones.size,
+        unresolvedZones,
         incomplete,
         unreadable,
       },

@@ -5,38 +5,27 @@ const MINUTE_MS = 60_000;
 export const DAY_MINUTES = 24 * 60;
 const SECOND_NS = 1_000_000_000;
 const MINUTE_NS = 60_000_000_000;
-/** Dateless tokens can be ranges; civil offsets have a narrower grammar than ISO timestamps. */
-const MAX_CLOCK_OFFSET_MINUTES = 14 * 60;
-const CLOCK_OFFSET_STEP_MINUTES = 15;
-
 const BARE_CLOCK = /^(?:\d{4}-\d{2}-\d{2}t)?\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 const ZONED_CLOCK =
   /^((?:\d{4}-\d{2}-\d{2}t)?\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(am|pm)?([a-z][a-z0-9/_+:.-]*)?$/;
-/** Lowercase names that unambiguously look like written zones in ordinary prose. */
-const LOWERCASE_ZONE = /^(?:[a-z]{2}[sd]t|[ecw]et|cest|eest|west|ist|gmt|zulu|local)$/;
 
-function isMeridiem(text: string): boolean {
-  return text === 'am' || text === 'pm';
+function writtenMeridiem(value: string): boolean {
+  return value === 'am' || value === 'pm';
 }
 
-function writtenZone(text: string, end: number): { word: string; end: number } | undefined {
-  const match = /^[\t ]+([A-Za-z][A-Za-z0-9/_+-]*)(?![A-Za-z0-9/_+-])/.exec(
-    text.slice(end, end + 96),
-  );
+function writtenUtc(value: string | undefined): boolean {
+  return value === 'z' || value === 'utc' || value === 'gmt';
+}
+
+function timeSuffix(text: string, end: number): { word: string; end: number } | undefined {
+  // A standalone, adjacent spelling only. An unknown witness never lends its
+  // zone to a clock, and a named offset is not an alias for plain UTC.
+  const match =
+    /^[\t ]+(am|pm|utc|gmt|z)(?![\p{L}\p{N}_+/\-\u2212\u2013\u2014]|\.[\p{L}\p{N}])/iu.exec(
+      text.slice(end, end + 32),
+    );
   if (match === null || match[1] === undefined) return undefined;
-  const raw = match[1];
-  const word = raw.toLowerCase();
-  if (
-    word === 'utc' ||
-    word === 'z' ||
-    isMeridiem(word) ||
-    /^[A-Z]{2,5}$/.test(raw) ||
-    LOWERCASE_ZONE.test(word) ||
-    word.includes('/') ||
-    /^(?:utc|gmt)[+-]/.test(word)
-  )
-    return { word, end: end + match[0].length };
-  return undefined;
+  return { word: match[1].toLowerCase(), end: end + match[0].length };
 }
 
 interface TimeParts {
@@ -48,7 +37,7 @@ interface TimeParts {
 }
 
 export type TimeValue =
-  | ({ readonly kind: 'anchored'; readonly offsetMinutes: number } & TimeParts)
+  | ({ readonly kind: 'anchored' } & TimeParts)
   | ({ readonly kind: 'floating-date'; readonly unknownOffset?: boolean } & TimeParts)
   | ({
       readonly kind: 'clock';
@@ -78,7 +67,7 @@ function clockSpelling(token: string): { clock: string; unresolvedZone: boolean 
   const lexicalZone = ZONED_CLOCK.exec(token);
   if (lexicalZone === null) return { clock: token, unresolvedZone: false };
   const zone = lexicalZone[3];
-  const utc = zone === 'z' || zone === 'utc';
+  const utc = writtenUtc(zone);
   return {
     clock: lexicalZone[1] + (lexicalZone[2] ?? '') + (utc ? 'z' : ''),
     unresolvedZone: zone !== undefined && !utc,
@@ -103,13 +92,7 @@ export function timeValue(token: string): TimeValue | undefined {
   const knownOffset = hasOffset && !tail.endsWith('-00:00');
   const canonical = (hasOffset ? normalized : normalized + 'z').toUpperCase();
   const instant = instantOf(canonical, 'strict');
-  if (
-    instant === undefined ||
-    (!dated &&
-      (Math.abs(instant.offsetMinutes) > MAX_CLOCK_OFFSET_MINUTES ||
-        instant.offsetMinutes % CLOCK_OFFSET_STEP_MINUTES !== 0))
-  )
-    return { kind: 'unreadable' };
+  if (instant === undefined) return { kind: 'unreadable' };
   if (unresolvedZone) return { kind: 'unresolved-zone' };
   const minute = Math.floor(instant.ms / MINUTE_MS);
   const part = mod(instant.ms, MINUTE_MS) * 1_000_000 + instant.nanos;
@@ -119,14 +102,16 @@ export function timeValue(token: string): TimeValue | undefined {
   if (!dated)
     return {
       kind: 'clock',
+      // A non-zero suffix can be a range endpoint. Keep the written wall
+      // clock as partial evidence; it cannot place an instant without a date.
       minute,
       part,
       unit,
-      ...(knownOffset && { offsetMinutes: instant.offsetMinutes }),
-      ...(hasOffset && !knownOffset && { unknownOffset: true }),
+      ...(hasOffset && { offsetMinutes: instant.offsetMinutes }),
+      ...(hasOffset && instant.offsetMinutes !== 0 && { unknownOffset: true }),
     };
   return knownOffset
-    ? { kind: 'anchored', minute, part, unit, offsetMinutes: instant.offsetMinutes }
+    ? { kind: 'anchored', minute, part, unit }
     : { kind: 'floating-date', minute, part, unit, ...(hasOffset && { unknownOffset: true }) };
 }
 
@@ -146,18 +131,16 @@ export function precisionOverlaps(subject: TimeParts, evidence: TimeParts): bool
 }
 
 /** Join only adjacent pieces the bounded statement actually wrote; receipt tokens have no positions. */
-export function statementValues(text: string, unresolvedZones: Set<string>): readonly string[] {
+export function statementValues(text: string): readonly string[] {
   if (!text.includes(':')) return tokensOf(text);
   const occurrences = statementTokenPositions(text);
   const values = new Set<string>();
-  let joinedUntil = 0;
   const joinsDate = (date: (typeof occurrences)[number], clock: (typeof occurrences)[number]) =>
     /^\d{4}-\d{2}-\d{2}$/.test(date.token) &&
     /^\d{2}:\d/.test(clock.token) &&
     text.slice(date.start, date.end) === date.token &&
     /^[\t ]+$/.test(text.slice(date.end, clock.start));
   for (const [index, entry] of occurrences.entries()) {
-    if (entry.start < joinedUntil) continue;
     const next = occurrences[index + 1];
     const previous = occurrences[index - 1];
     if (next !== undefined && joinsDate(entry, next)) continue;
@@ -166,25 +149,17 @@ export function statementValues(text: string, unresolvedZones: Set<string>): rea
     const attached = clockSpelling(value);
     if (attached.unresolvedZone) {
       values.add(attached.clock);
-      unresolvedZones.add(attached.clock);
       continue;
     }
     const attachedMeridiem = /(?:am|pm)$/.test(value);
     const base = attachedMeridiem ? value.slice(0, -2) : value;
     if (BARE_CLOCK.test(base) && text.slice(entry.start, entry.end).toLowerCase() === entry.token) {
-      let suffix = writtenZone(text, entry.end);
-      if (!attachedMeridiem && suffix !== undefined && isMeridiem(suffix.word)) {
+      let suffix = timeSuffix(text, entry.end);
+      if (!attachedMeridiem && suffix !== undefined && writtenMeridiem(suffix.word)) {
         value += suffix.word;
-        joinedUntil = suffix.end;
-        suffix = writtenZone(text, suffix.end);
+        suffix = timeSuffix(text, suffix.end);
       }
-      if (suffix !== undefined && !isMeridiem(suffix.word)) {
-        if (suffix.word === 'utc' || suffix.word === 'z') value += 'z';
-        // The zone's spelling is never a ledger token. Keep only the clock and
-        // one bounded, statement-local bit that prevents it from verifying.
-        else unresolvedZones.add(value);
-        joinedUntil = suffix.end;
-      }
+      if (writtenUtc(suffix?.word)) value += 'z';
     }
     values.add(value);
   }

@@ -52,12 +52,15 @@ it in `opened.rules` whatever the host asked for, and its reply lists the rules 
 | `traceable-values@2` | claim, ruled-out, draft | `visible eq 0` → unreachable; `checkable eq 0` → unreachable ("every value it states was supplied"); `unsupported gt 0` with `incomplete eq 0` → checked-fail; remaining missing values → unreachable when a time needs more evidence or when receipts are incomplete; `unreadable gt 0` → unreachable ("it states a value this rule cannot read"). Default checked-pass. Each token rests on the first observed receipt that holds it, else the first reported one | tokens by the ledger's one token rule (`tokens.ts`), from the note's text and `values` or the draft; that the subject states a value it cannot read (a number with thousands separators, a piece after an escape), which caps the subject at `open` after its visible tokens are checked | the value of a number written with thousands separators or of a piece after an escape (it is counted, never read); all-letter names; numbers under 4 digits; non-time respellings; meaning |
 | `time-window@1` | a note with a `window` (else not-applicable) | `windowed eq 0` → unreachable; `uncoveredMs gt 0` with `unwindowed gt 0` → unreachable; `uncoveredMs gt 0` → checked-fail; `cutInWindow gt 0` → unreachable. Default checked-pass. Rests on the cited receipts whose windows overlap the claim's | the claim's typed window, the cited receipts' declared windows and `isIncomplete` | times written in prose; whether the rows really span a declared window; zones and wall times |
 
-A complete timestamp can match the same instant across written offsets, at the precision the statement wrote. A clock without a date can match when its cited receipts resolve it to one instant at that precision. Conflicting dates and plausible evidence without an offset leave it open. An invalid time or a clock that cannot match any cited receipt is missing. The rule can read spaces and a zone suffix from the statement’s own bounded text. The stored receipt uses only the tokens it retained. Earlier `traceable-values@1` checks are read as recorded.
-
-UTC and explicit supported offsets can establish an instant. A recognized but unresolved zone spelling
-leaves the clock open; it never silently becomes a clock with no zone. A dateless numeric offset must
-use a civil quarter-hour offset within ±14 hours, so a clock range such as `02:14-02:20` is not an offset.
-A duration written as a clock (`took 02:14`) can match by respelling; the rule does not read intent.
+A complete timestamp with a known offset can match the same instant across written offsets at the
+precision the statement wrote. A dateless clock must carry `Z`, `UTC`, `GMT` or an explicitly
+written zero offset. It can then match only when its cited receipts resolve it to one instant at that
+precision. A bare clock is open by design. Unresolved zone names, floating wall times and non-zero
+offsets on dateless clocks stay open. In particular, a hyphen range does not establish an instant.
+The reader joins only adjacent parts of the statement; a separate zone elsewhere in a sentence or
+on another line cannot establish the clock's zone. Invalid times still fail. A duration written as
+a bare clock also stays open. Receipts use the tokens they retained. Earlier `traceable-values@1`
+checks are read as recorded.
 
 A token found only in a `supplied` entry is exempt: neither missing nor support, and only the host
 writes `supplied`. A note's own `values` are what it claims, never support. An incomplete receipt
