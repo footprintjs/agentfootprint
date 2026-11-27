@@ -32,6 +32,7 @@ import { sameToolParty, type ToolParty } from '../../../tools/toolParty.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { keyOfLabel } from '../../../tools/finiteLabel.js';
+import { roleVisibleImplementation } from '../skillContext/toolVisibility.js';
 
 /** One name, resolved. */
 export interface ToolResolution {
@@ -60,6 +61,17 @@ export interface ToolResolverDeps {
 export type ToolResolver = (toolName: string, pinned?: ToolParty) => ToolResolution;
 
 export type ToolRegistrations = Pick<ToolResolverDeps, 'registryByName' | 'toolClaimants'>;
+
+/** Keep the same resolved implementation only if an actual claim is visible. */
+export function resolveSkillToolForRole(
+  candidate: ToolResolution,
+  claims: readonly ToolClaim[],
+  hidden: readonly string[] | undefined,
+): ToolResolution {
+  if (candidate.tool === undefined || candidate.party?.channel !== 'skill') return candidate;
+  const role = hidden === undefined ? undefined : new Set(hidden);
+  return roleVisibleImplementation(candidate.tool, claims, role) ? candidate : {};
+}
 
 /** The declaration currently labeling the provider, not its implementation identity. */
 function providerPartyOf(deps: ToolResolverDeps): ToolParty {

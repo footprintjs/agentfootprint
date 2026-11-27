@@ -48,7 +48,7 @@
  */
 
 import type { TypedScope } from 'footprintjs';
-import { activeSkillBodyCallIds } from '../skillContext/bodies.js';
+import { activeSkillBodyOccurrences } from '../skillContext/bodies.js';
 import type { LLMMessage, PricingTable } from '../../../provider-contract/types.js';
 import type { CompactionMeterHandle } from '../../../recorders/core/CompactionMeter.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
@@ -331,10 +331,10 @@ export function buildWindowStage(
         ? ledgerFactPinsOf(turns, history, standingOf, currentRequestIndex)
         : [];
 
-    const bodyCallIds =
+    const bodyOccurrences =
       deps.skillBodies === undefined
         ? undefined
-        : activeSkillBodyCallIds(history, deps.skillBodies, [
+        : activeSkillBodyOccurrences(history, deps.skillBodies, [
             ...((scope.activatedInjectionIds as readonly string[] | undefined) ?? []),
             ...((scope.activeInjections as readonly { id: string }[] | undefined) ?? []).map(
               (active) => active.id,
@@ -342,8 +342,8 @@ export function buildWindowStage(
           ]);
     const guards: RemovalGuards = {
       answeredCallIds: answeredCallIds(history),
-      ...(bodyCallIds !== undefined &&
-        bodyCallIds.size > 0 && { activeSkillBodyCallIds: bodyCallIds }),
+      ...(bodyOccurrences !== undefined &&
+        bodyOccurrences.size > 0 && { activeSkillBodyOccurrences: bodyOccurrences }),
       ...(currentRequestIndex >= 0 && { currentRequestIndex }),
       ...(pausedToolCallId !== undefined && { pausedToolCallId }),
       ...(scope.pausedCheckIn === true && { pausedCheckIn: true }),

@@ -79,6 +79,7 @@ export const fields1 = {
   on: true,
   only: true,
   ontology: true,
+  ontologyRoleViewRequired: true,
   op: true,
   openedBy: true,
   orderingStrategy: true,
@@ -299,5 +300,4 @@ export const fields1 = {
   substr: true,
   substring: true,
   summary: true,
-  sup: true,
 } as const;

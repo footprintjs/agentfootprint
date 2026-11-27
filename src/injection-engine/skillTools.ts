@@ -32,7 +32,7 @@ import type { Tool } from '../tools/tools.js';
 import { skipStepDescriptor } from './skillSteps.js';
 import {
   listSkillsDescriptor,
-  readSkillDescriptor,
+  resolveReadSkillDescriptor,
   type ReadSkillOffer,
 } from './skillToolDescriptors.js';
 import type { Injection } from './types.js';
@@ -93,7 +93,10 @@ export function buildReadSkillTool(
   skills: readonly Injection[],
   offer?: ReadSkillOffer,
 ): Tool | undefined {
-  const d = readSkillDescriptor(skills, offer);
+  let bodyFor: (id: string) => string | undefined = () => undefined;
+  const d = resolveReadSkillDescriptor(skills, offer, undefined, (lookup) => {
+    bodyFor = lookup;
+  });
   if (!d) return undefined;
   const tool = defineTool<{ id: string }, string>({
     name: d.name,
@@ -101,12 +104,12 @@ export function buildReadSkillTool(
     inputSchema: d.inputSchema,
     execute: (args) => d.execute(args),
   });
-  SKILL_READERS.add(tool);
+  SKILL_READERS.set(tool, bodyFor);
   return tool;
 }
 
 /** Every `read_skill` this library built — the provenance of a skill body, never the name. */
-const SKILL_READERS = new WeakSet<object>();
+const SKILL_READERS = new WeakMap<object, (id: string) => string | undefined>();
 
 /**
  * Is this the library's own `read_skill`, built from registered skills? Its
@@ -116,6 +119,11 @@ const SKILL_READERS = new WeakSet<object>();
  */
 export function isLibrarySkillReader(tool: object | undefined): boolean {
   return tool !== undefined && SKILL_READERS.has(tool);
+}
+
+/** Read the body from the exact descriptor which owns this call's return. */
+export function librarySkillBodyOf(tool: object | undefined, id: string): string | undefined {
+  return tool === undefined ? undefined : SKILL_READERS.get(tool)?.(id);
 }
 
 /**

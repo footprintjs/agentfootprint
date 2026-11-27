@@ -2,6 +2,7 @@ import type { ToolParty } from '../../../../../slots/buildToolsSlot.js';
 import type { Tool } from '../../../../../../tools/tools.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
+import type { SkillRoleView } from '../../../../skillContext/toolVisibility.js';
 import type { TurnStamp } from '../../../../findings/ledger.js';
 import type { SplitFindings } from '../../../../findings/reserved.js';
 import type { Resolution } from '../callFacts.js';
@@ -29,5 +30,5 @@ export interface ToolCatalogOperations {
   ) => void;
   readonly frameworkSkipStepAnswered: (name: string, answered: Tool | undefined) => boolean;
   readonly parkedNow: (scope: TypedScope<AgentState>) => ReadonlySet<string> | undefined;
-  readonly dispatchRoster: (scope: TypedScope<AgentState>) => SpokenIds;
+  readonly dispatchRoster: (scope: TypedScope<AgentState>, liveRole?: SkillRoleView) => SpokenIds;
 }

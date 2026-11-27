@@ -498,6 +498,7 @@ export function buildChart(
     runner: this.runner,
     registryByName,
     toolDeclaringSkills,
+    resolveHiddenSkillIds: hiddenSkillIdsForEngine,
     listedScopedTools,
     scriptRecordArmed,
     inputsArmed,

@@ -17,7 +17,9 @@ import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
 import type { ActiveInjection } from '../../../../../injection-engine/types.js';
+import { checkerGoverns } from '../../../../../provider-contract/types.js';
 import { notLoadedFor } from '../../../skillContext/gate.js';
+import { resolveSkillToolForRole } from '../../toolResolver.js';
 
 interface CallStartLinks {
   readonly resolveTool: ReturnType<typeof buildToolResolver>;
@@ -31,10 +33,11 @@ interface CallStartLinks {
 export function buildCallStart(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'findings' | 'toolMiddleware' | 'listedScopedTools' | 'toolDeclaringSkills'
+    'findings' | 'toolMiddleware' | 'listedScopedTools' | 'toolClaimants' | 'permissionChecker'
   >,
   links: CallStartLinks,
 ) {
+  const rolePolicy = checkerGoverns(deps.permissionChecker, 'skill_read');
   const beginDispatchCall = (
     scope: TypedScope<AgentState>,
     tc: DispatchCall,
@@ -54,18 +57,23 @@ export function buildCallStart(
       ...callOccurrenceField(tc.callOccurrenceKey),
     };
     const emitSecurity = bindToolSecurityEvents(scope, { ...call, iteration });
-    const served = resolveTool(tc.name);
-    // `listed` only: a scoped skill's tool before its skill is loaded is refused (`skillContext/gate.ts`).
+    const candidate = resolveTool(tc.name);
+    const listed = deps.listedScopedTools;
+    // Only a governed skill or the listed load gate reads the role view.
+    const governed = rolePolicy && candidate.party?.channel === 'skill';
+    const hidden = listed !== undefined || governed ? scope.hiddenSkillIds : undefined;
+    const served = governed
+      ? resolveSkillToolForRole(candidate, deps.toolClaimants?.get(tc.name) ?? [], hidden)
+      : candidate;
     const notLoaded =
-      deps.listedScopedTools === undefined
+      listed === undefined
         ? undefined
         : notLoadedFor(
-            deps.listedScopedTools,
-            deps.toolDeclaringSkills,
+            listed,
             tc.name,
             served.party,
             scope.activeInjections as readonly ActiveInjection[] | undefined,
-            scope.hiddenSkillIds as readonly string[] | undefined,
+            hidden,
           );
     const resolved = notLoaded === undefined ? served : { refusal: notLoaded };
     const tool = resolved.tool;

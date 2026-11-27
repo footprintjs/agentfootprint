@@ -1072,6 +1072,7 @@
     "contextChange.appStatement": "kept",
     "contextChange.binding": "kept",
     "contextChange.by": "kept",
+    "contextChange.changes[].cause": "kept",
     "contextChange.changes[].change": "kept",
     "contextChange.changes[].id": "kept",
     "contextChange.changes[].party.channel": "kept",

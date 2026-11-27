@@ -83,4 +83,5 @@ export interface CallDelivery {
   resultStr: string;
   modelResultCapped: boolean;
   toolResultDisposition?: LLMMessage['toolResultDisposition'];
+  toolSkillBody?: LLMMessage['toolSkillBody'];
 }

@@ -3,6 +3,7 @@ import { captureFindingsRequest, type FindingsRequest } from '../../findings/adm
 import { issuedTicketsOf } from '../../placedTickets.js';
 import { callObserved, observeCallRequests } from './servedRequest.js';
 import { trackRecallRequests } from './recallRequest.js';
+import { trackCacheCommands } from './cacheCommands.js';
 import type { TypedScope } from 'footprintjs';
 import type { LLMRequest, LLMResponse } from '../../../../provider-contract/types.js';
 import { liveChunkEmitter } from './liveChunks.js';
@@ -32,6 +33,7 @@ import {
 } from '../../../../provider-contract/intervention.js';
 import { admitInterventionError } from '../../../providerIntervention.js';
 import { captureProviderResponse } from '../../../../provider-contract/responseAdmission.js';
+import { systemSkillRecords } from '../../skillContext/systemBodies.js';
 
 export async function executeCall(
   scope: TypedScope<AgentState>,
@@ -82,7 +84,9 @@ export async function executeCall(
     deps.recordReceipt !== false,
     deps.onReplayPrepared,
   );
-  const providerHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
+  const citationHooks = citations?.attach(ordinaryProviderHooks) ?? ordinaryProviderHooks;
+  const cacheCommands = deps.recordReceipt !== false ? trackCacheCommands(scope) : undefined;
+  const providerHooks = cacheCommands?.hooks(citationHooks) ?? citationHooks;
   const recall =
     deps.recallRequests === undefined
       ? undefined
@@ -113,6 +117,11 @@ export async function executeCall(
     deps.nativeOutputAuto === true,
     detached.outputFormat,
   );
+  const skillRecords =
+    deps.skillContext?.tools.strategy === 'listed'
+      ? systemSkillRecords(prepared.systemPromptInjections)
+      : [];
+  let acceptedSystemSkillBodies: typeof skillRecords = [];
   const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
     try {
       const selectedProvider = hooks.provider ?? provider;
@@ -124,6 +133,10 @@ export async function executeCall(
       let candidate = deps.findings === true ? capture(req) : undefined;
       let offer = choice?.capture(scope, req, baseRequest);
       let stableProjection = preserveReplay && sameReplayProjection(wireMessages, req.messages);
+      let systemBodyWitness = false;
+      const observeSystemPrompt = (request: LLMRequest) => {
+        systemBodyWitness = skillRecords.length > 0 && request.systemPrompt === systemPrompt;
+      };
       if (selectedProvider !== provider) serving?.discard();
       const selectionAttempt = selection?.attempt();
       const ordinaryHooks = observeCallRequests(
@@ -132,10 +145,12 @@ export async function executeCall(
           serving === undefined &&
           deps.findings !== true &&
           !preserveReplay &&
+          skillRecords.length === 0 &&
           choice === undefined
           ? undefined
           : (request) => {
               selectionAttempt?.observe(request);
+              observeSystemPrompt(request);
               serving?.beforeRequest(request);
               if (deps.findings === true) candidate = capture(request);
               if (choice !== undefined) offer = choice.capture(scope, request, baseRequest, offer);
@@ -160,7 +175,7 @@ export async function executeCall(
         textFilter: shown,
         onFirstChunk: hooks.onFirstChunk,
       });
-      let resp = await callObserved(
+      const observedResponse = await callObserved(
         selectedProvider,
         attempts.request,
         attemptHooks,
@@ -171,6 +186,7 @@ export async function executeCall(
             ? dispatchFor.select(attempts.request, selectedProvider)
             : attempts.request;
           dispatch = describeProviderDispatch(selectedProvider, completion);
+          observeSystemPrompt(completion);
           if (deps.findings === true) candidate = capture(completion);
           if (choice !== undefined) offer = choice.capture(scope, completion, baseRequest);
           if (preserveReplay)
@@ -181,10 +197,12 @@ export async function executeCall(
       // An answer that arrived after the abort is not an answer: refused here,
       // before the usage is counted, the turn committed or `llm_end` fired.
       throwIfAborted(runSignal);
-      resp = captureProviderResponse(resp);
+      let resp = captureProviderResponse(observedResponse);
       if (isTerminalIntervention(resp)) {
         answeredBy = dispatch;
-        return attempts.response(resp);
+        const result = attempts.response(resp);
+        cacheCommands?.preserve(observedResponse, result);
+        return result;
       }
       // `'tool-forced'`: the answer arrived as the synthetic tool's ARGUMENTS,
       // so it is moved into `content` and the call is taken off the list here,
@@ -213,7 +231,9 @@ export async function executeCall(
       acceptedFindingsRequest = candidate;
       acceptedOffer = offer;
       acceptedProjection = stableProjection;
+      acceptedSystemSkillBodies = systemBodyWitness ? skillRecords : [];
       const result = attempts.response(answered);
+      cacheCommands?.preserve(observedResponse, result);
       selectionAttempt?.finish(result);
       return result;
     } catch (error) {
@@ -296,6 +316,7 @@ export async function executeCall(
             // A local answer does not inherit the replaced provider's stop reason
             // or native generation. The callback may return arbitrary text.
             localFallback = true;
+            acceptedSystemSkillBodies = [];
             acceptedFindingsRequest = witness;
           };
         },
@@ -320,6 +341,7 @@ export async function executeCall(
     response = await singleProviderCall(llmRequest, {});
   }
 
+  cacheCommands?.accept(response);
   return {
     response,
     answeredBy,
@@ -327,6 +349,7 @@ export async function executeCall(
     acceptedFindingsRequest,
     acceptedOffer,
     acceptedProjection,
+    acceptedSystemSkillBodies,
     recall,
   };
 }

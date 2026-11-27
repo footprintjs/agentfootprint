@@ -2,7 +2,7 @@ import { canQualifyProvenWindow } from '../provenWindow.js';
 import { MAX_SELECTION_ROWS } from '../../../slots/providerOmissions.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
-import type { LLMToolSchema } from '../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMToolSchema } from '../../../../provider-contract/types.js';
 import type { FindingsLedger } from '../../findings/types.js';
 import type { MemoryStore } from '../../../../memory/store/index.js';
 import { draftClock, type ClockDraft } from '../../../../time/clock.js';
@@ -170,6 +170,9 @@ export function seedFactory(environment: SeedEnvironment) {
       ...(environment.configuration.ontology !== undefined && {
         ontology: environment.configuration.ontology,
         ontologyTools: () => environment.ontologyTools,
+        ...(checkerGoverns(environment.configuration.permissionChecker, 'skill_read') && {
+          ontologyRoleViewRequired: true,
+        }),
       }),
       // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
       // on every run; HONORED only when the mounted graph declared

@@ -103,10 +103,15 @@ function note(
   };
 }
 
-function compare(base: ContextBaseline, request: RequestComposition): ContextChange[] {
+function compare(
+  base: ContextBaseline,
+  request: RequestComposition,
+  skillHistory?: readonly LLMMessage[],
+): ContextChange[] {
   return contextChanges(base, {
     systemText: systemTextHash(request.systemText),
     system: pieceEntries(request.systemPieces),
+    skillHistory,
     tools: toolEntries(request.tools, request.parties),
     messages: messageEntries(request.wire.slice(0, base.messages.length)),
   });
@@ -142,6 +147,7 @@ function keep<T>(set: Set<T>, value: T): void {
 export function checkContextBinding(
   holder: ContextBaselineHolder,
   request: RequestComposition & CheckTarget,
+  skillHistory?: readonly LLMMessage[],
 ): ContextCheckOutcome {
   const bases = holder.bases;
   const at = newestSigned(request.wire);
@@ -184,7 +190,7 @@ export function checkContextBinding(
       },
     };
   }
-  const changes = compare(base, request);
+  const changes = compare(base, request, skillHistory);
   if (changes.length === 0) return {};
   const refused =
     request.binding.binding === 'bound' && at > completedAnthropicThrough(request.wire);

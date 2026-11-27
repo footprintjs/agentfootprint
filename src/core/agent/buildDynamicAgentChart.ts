@@ -60,6 +60,7 @@ import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../lib/conventions.
 import type { ActiveInjection } from '../../injection-engine/types.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
+import { systemPromptInput } from './runtime/slots/systemPromptInput.js';
 import { finalBranchInput, finalBranchOutput } from './stages/breakFinal.js';
 import { buildCacheSubflow, cacheMountInput } from './buildCacheSubflow.js';
 import { mountHostTurn } from './hostEnd/chart.js';
@@ -167,20 +168,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
     // of the inner (drilled) log.
     .addSubFlowChartBranch(SUBFLOW_IDS.SYSTEM_PROMPT, deps.systemPromptSubflow, 'System Prompt', {
       tags: milestoneTagsFor(SUBFLOW_IDS.SYSTEM_PROMPT),
-      inputMapper: (parent) => ({
-        userMessage: parent.userMessage as string | undefined,
-        iteration: parent.iteration as number | undefined,
-        // `.configure()`'s per-run system prompt, carried into sf-llm-call by
-        // the boundary mapper below. Spread in only when one was resolved.
-        ...(parent.resolvedInstructions !== undefined && {
-          instructions: parent.resolvedInstructions as string,
-        }),
-        activeInjections: withMemoryRecall(
-          parent.activeInjections as readonly ActiveInjection[] | undefined,
-          parent,
-          memoryIds,
-        ),
-      }),
+      inputMapper: (parent) => systemPromptInput(parent, memoryIds, parent.priorSystemSkillBodies),
       outputMapper: (sf) => ({ systemPromptInjections: sf.systemPromptInjections }),
       arrayMerge: ArrayMergeMode.Replace,
     })

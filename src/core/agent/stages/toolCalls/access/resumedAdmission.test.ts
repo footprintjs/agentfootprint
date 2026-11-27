@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolMiddleware, MiddlewareDecision } from '../../../middleware/types.js';
 import { pauseGatePolicy } from './resumePolicyRecord.js';
-import { recheckResumedCall } from './resumedAdmission.js';
+import { buildResumedSkillAdmission, recheckResumedCall } from './resumedAdmission.js';
+import type { Resolution } from '../contracts/callFacts.js';
 
 const address = { gate: 'checkIn', toolCallId: 'sample-call', iteration: 2 } as const;
 const frame = {
@@ -22,6 +23,52 @@ function capture(policy: unknown, prior: readonly MiddlewareDecision[] = []) {
     middlewareDecisions: prior,
   };
 }
+
+describe('resumed skill-role decision', () => {
+  const tool = {} as never;
+  const candidate: Resolution = { tool, party: { channel: 'skill', id: 'records' } };
+  const permissionChecker = { name: 'role', governs: ['skill_read' as const], check: vi.fn() };
+  const toolClaimants = new Map([
+    ['summary', [{ tool, channel: 'skill' as const, id: 'records' }]],
+  ]);
+  const savedScope = { hiddenSkillIds: [] } as never;
+
+  it('uses the current role decision for a governed skill candidate', async () => {
+    const resolveHiddenSkillIds = vi.fn().mockResolvedValue(['records']);
+    const deps = { permissionChecker, toolClaimants, resolveHiddenSkillIds };
+    const resolve = buildResumedSkillAdmission(deps);
+
+    await expect(Promise.resolve(resolve(savedScope, 'summary', candidate))).resolves.toEqual({
+      resolved: {},
+      role: { hiddenSkillIds: ['records'] },
+    });
+    expect(resolveHiddenSkillIds).toHaveBeenCalledWith(savedScope);
+  });
+
+  it('keeps the ordinary candidate and refreshes the role for its composed calls', async () => {
+    const resolveHiddenSkillIds = vi.fn().mockResolvedValue([]);
+    const deps = { permissionChecker, toolClaimants, resolveHiddenSkillIds };
+    const resolve = buildResumedSkillAdmission(deps);
+    const ordinary: Resolution = { tool };
+
+    await expect(resolve(savedScope, 'summary', ordinary)).resolves.toEqual({
+      resolved: ordinary,
+      role: { hiddenSkillIds: [] },
+    });
+    await expect(resolve(savedScope, 'summary', candidate)).resolves.toEqual({
+      resolved: candidate,
+      role: { hiddenSkillIds: [] },
+    });
+  });
+
+  it('withholds a governed candidate when the current role is unavailable', () => {
+    const resolve = buildResumedSkillAdmission({ permissionChecker, toolClaimants });
+    expect(resolve(savedScope, 'summary', candidate)).toEqual({
+      resolved: {},
+      role: { hiddenSkillIds: undefined },
+    });
+  });
+});
 
 describe('resumed tool admission without execution', () => {
   it('returns the same detached bytes that asynchronous policy saw', async () => {

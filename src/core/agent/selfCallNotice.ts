@@ -144,14 +144,11 @@ export function selfSkillTools(
  * the governance rules, the refusal cap and the after-tool moment, on both
  * channels, before the model reads anything.
  *
- * The one thing not overwritten is a BODY. The live case is `surfaceMode:
- * 'both'` — `'tool-only'` cannot arise here, because `skillBodyDelivery`
- * refuses it at BUILD time for anything but an `llm-activated` skill and only a
- * graph-wired skill can be the cursor. Under `'both'` the body is in the system
- * prompt AND rides the tool result, and the second copy is the whole point of
- * the mode: recency-first delivery, the body at the end of the window rather
- * than only at the top of the prompt. Dropping it here would quietly demote
- * `'both'` to `'system-prompt'` on the one call that asked to re-read.
+ * The notice can repeat a body. Under declared `'both'` this is intentional:
+ * recency-first delivery puts it at the end of the window as well as at the
+ * top of the prompt. Declared `'tool-only'` cannot arise here because
+ * `skillBodyDelivery` refuses it at build time for a graph-routed skill.
+ * Under `listed` the route omits a body the system slot has already supplied.
  *
  * TENSE IS LOAD-BEARING, AND SO IS DEIXIS. Every clause below is past tense
  * about a single named call, and every reference to that call is "that call" —
@@ -169,19 +166,17 @@ export function selfCallNotice(args: {
   readonly skillId: string;
   /** `undefined` when the wire could not be established — see `selfSkillTools`. */
   readonly tools: SelfSkillTools | undefined;
+  readonly instructionsInSystemPrompt?: boolean;
   readonly body?: string;
 }): string {
   const { skillId, tools, body } = args;
-  // "were in that call's system prompt" is a claim about the prompt, and the
-  // evidence for it is that the skill was in the ACTIVE set for that call —
-  // which is exactly what `tools !== undefined` establishes (see
-  // `selfSkillTools`). With no body to append and no proof it was mounted, the
-  // notice says nothing about the instructions rather than asserting where
-  // they were.
+  // Listed passes the system-slot projection explicitly. Declared retains
+  // the existing inference from the active skill's tools.
+  const instructionsInSystemPrompt = args.instructionsInSystemPrompt ?? tools !== undefined;
   const bodyClause =
     body !== undefined
       ? `Its instructions are repeated below. `
-      : tools !== undefined
+      : instructionsInSystemPrompt
       ? `Its instructions were in that call's system prompt. `
       : '';
   const toolClause =

@@ -52,7 +52,11 @@ export function describeContextChange(change: ContextChange): string {
         : change.id === undefined
         ? `the ${change.source} piece`
         : `${change.source} '${quoted(change.id)}'`;
-    if (change.change === 'added') return `${piece} was added to the system prompt`;
+    if (change.change === 'added') {
+      return change.cause === 'read-skill-result-middleware'
+        ? `tool-result middleware changed a read_skill result and ${piece} returned to the system prompt`
+        : `${piece} was added to the system prompt`;
+    }
     if (change.change === 'removed') return `${piece} was removed from the system prompt`;
     return change.source === undefined
       ? 'the system prompt changed'

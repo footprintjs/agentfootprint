@@ -606,10 +606,14 @@ it cannot place) the agent's default `skillContext` is `'listed'`:
 - a call to a scoped skill's tool (`autoActivate: 'currentSkill'`, `scopeTools`,
   `.toolsFromActiveSkill()`) before its skill is loaded is refused with a
   sentence that names the skill and the `read_skill` call that loads it, and
-  the tool does not run;
-- a tool whose declaring skills are all hidden from the caller's role, scoped or
-  not, is not listed, and a call to it is refused without naming the skill (a
-  tool a visible skill also declares stays listed, with its own description).
+  the tool does not run.
+
+In both strategies, the tools slot omits tools owned only by role-hidden
+skills. Direct, resumed and inner calls check the tool's registered skill
+claim. A hidden tool receives the same reply as an unknown tool. A visible
+owner keeps a shared implementation eligible. Resume checks the role again
+before entry. In classic mode the first tool list can stay in context after a
+role change; later dispatch still checks the role.
 
 <CodeFile path="examples/features/skills-listed.ts" region="listed" title="examples/features/skills-listed.ts (region: listed)" />
 
@@ -631,25 +635,25 @@ adapter's `thinkingBinding` option instead, and the default is `'declared'`.
 
 Gotchas:
 
-- A skill the graph activates without a `read_skill` call (an entry, a tree
-  leaf, a declared edge) has no result to carry its body, so its body goes into
-  the system prompt from the first request it is active on. A cursor moved by a
-  declared edge inside a signed tool turn is still refused by name. So is a
-  `read_skill` pick that moves the cursor off such a skill when the graph then
-  stops activating it (a conditional entry): its body leaves the system prompt.
+- A graph can load a body's instructions into the system prompt before any
+  `read_skill` call. Under `'listed'` those instructions stay for the rest of
+  that turn after a cursor hop, while the role still permits them. A read of
+  the current skill acknowledges instructions the model already has.
 - When the `read_skill` result is gone from the history (a summary folded it, a
   conversation paused before this option existed is resumed), the body is served
   in the system prompt as under `'declared'`. Inside a signed tool turn on a
   bound model that change is refused by name before the request is sent.
+  When tool-result middleware replaced or withheld the body, the refusal
+  names that middleware change.
 - A window that drops other turns inside a signed tool turn, step narrowing
   (`steps`), an instruction whose `activeWhen` reads a tool result, and a tool
   provider whose list moves between calls still change the turn, and are still
   refused by name inside a signed tool turn.
 - Listing every skill tool from the first request makes every request's tool
   list longer; with many scoped skills the tools slot can pass its budget.
-- A body is recognised by its exact text: a tool-result middleware that rewrites
-  a `read_skill` result turns it into an ordinary tool result, and the body is
-  then also served in the system prompt.
+- The run records which `read_skill` call carried a body. Appending a note
+  to that result keeps one copy of the body. A replacement or fold that
+  removes the body restores the ordinary system-delivery rule.
 - A `withFallback` pair answers the binding question for its primary: an
   unbound primary with a bound fallback stays `'declared'` unless you state
   `'listed'`.

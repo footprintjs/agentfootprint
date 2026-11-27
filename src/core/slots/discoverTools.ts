@@ -7,6 +7,8 @@ import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import { providerOmissions, type DiscoveryOmissions } from './providerOmissions.js';
 import { emitListUses } from '../../tools/mcpClientUse.js';
 import { requirePrivateQuestionSupport } from '../agent/arguments/privateAnswers.js';
+import { skillVisibleToRole } from '../../lib/spokenIds.js';
+import type { SkillRoleView } from '../agent/skillContext/toolVisibility.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import {
   resultRowsetCatalog,
@@ -42,6 +44,8 @@ export async function discoverTools(
     readonly iteration?: number;
     /** The mount has positively established unrestricted skill visibility. */
     readonly defaultHiddenSkillIds?: readonly string[];
+    /** Fresh admission overrides role state from a saved turn. */
+    readonly roleView?: SkillRoleView;
     /** A compose acquisition has the registry's ownership evidence. Reacquiring for dispatch is not a new offer. */
     readonly claimants?: ReadonlyMap<string, readonly ToolClaim[]>;
   },
@@ -55,6 +59,11 @@ export async function discoverTools(
   }
   scope.$getEnv().signal?.throwIfAborted();
   const args = scope.$getArgs<{ iteration?: number; hiddenSkillIds?: readonly string[] }>();
+  const hiddenIds =
+    config.roleView === undefined
+      ? args.hiddenSkillIds ?? config.defaultHiddenSkillIds
+      : config.roleView.hiddenSkillIds;
+  const hidden = hiddenIds === undefined ? undefined : new Set(hiddenIds);
   const iteration = config.iteration ?? args.iteration ?? 1;
   const env = scope.$getEnv();
   const activatedIds =
@@ -69,13 +78,14 @@ export async function discoverTools(
   const activeSkillIds = (
     (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? []
   )
-    .filter((inj) => inj.flavor === 'skill')
+    .filter((inj) => inj.flavor === 'skill' && skillVisibleToRole(inj.id, hidden))
     .map((inj) => inj.id);
   // The caller's own identity, never a derived one (`ToolDispatchContext.callerIdentity`).
   const callerIdentity = config.callerIdentity;
+  const lastActivated = activatedIds.at(-1);
   const ctx: ToolDispatchContext = {
     iteration,
-    ...(activatedIds.length > 0 && { activeSkillId: activatedIds[activatedIds.length - 1] }),
+    ...(skillVisibleToRole(lastActivated, hidden) && { activeSkillId: lastActivated }),
     ...(activeSkillIds.length > 0 && { activeSkillIds }),
     ...(identity && { identity }),
     ...(callerIdentity !== undefined && { callerIdentity }),
@@ -97,10 +107,7 @@ export async function discoverTools(
     const result =
       config.cache && claimants
         ? listWithSelectionDecisions(toolProvider, ctx, (candidate) => {
-            omissions ??= providerOmissions(
-              claimants,
-              args.hiddenSkillIds ?? config.defaultHiddenSkillIds,
-            );
+            omissions ??= providerOmissions(claimants, hiddenIds);
             omissions.observe(candidate);
           })
         : toolProvider.list(ctx);
@@ -153,12 +160,4 @@ export async function discoverTools(
     holdProviderRowsets(config.cache, rowsetCatalog);
     config.cache.resolved = true;
   }
-}
-
-/** Normal Discover already acquired the list; fresh resume must reacquire it. */
-export function ensureDiscoveredTools(
-  scope: DiscoveryScope,
-  config: Parameters<typeof discoverTools>[1],
-): Promise<void> | undefined {
-  return config.cache?.resolved === true ? undefined : discoverTools(scope, config);
 }

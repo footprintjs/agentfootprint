@@ -21,6 +21,8 @@ import { COMPOSITION_KEYS } from '../../recorders/core/types.js';
 // Writes the context recorder derives its events from — relayed under a policy.
 import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
+import { systemSkillBody } from '../../injection-engine/skillContext.js';
+import { retainSystemSkillRecords } from '../agent/skillContext/systemBodies.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 
 /**
@@ -56,6 +58,7 @@ export interface SystemPromptSlotConfig {
    * guess.
    */
   readonly reason?: string | ((args: SystemPromptSlotArgs) => string);
+  readonly listedSkillIds?: ReadonlySet<string>;
 }
 
 /**
@@ -118,15 +121,11 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
       const activeInjections =
         (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? [];
       for (const inj of activeInjections) {
-        const promptContent = inj.inject.systemPrompt;
-        if (!promptContent || promptContent.length === 0) continue;
-        // Block C — per-mode dispatch. Skills with surfaceMode='tool-only'
-        // do NOT land in the system slot; their body is delivered via
-        // the read_skill tool result instead. Other modes (system-prompt,
-        // both, auto, or absent) keep the current v2.4 path: body lands
-        // here. 'both' lands here AND in the tool result; the duplication
-        // is intentional belt-and-suspenders for high-stakes skills.
-        if (inj.flavor === 'skill' && inj.surfaceMode === 'tool-only') continue;
+        // Block C — a skill with 'tool-only' delivers via read_skill. Other
+        // modes keep the system copy: 'both' intentionally uses both channels.
+        const promptContent =
+          inj.flavor === 'skill' ? systemSkillBody(inj) : inj.inject.systemPrompt;
+        if (!promptContent) continue;
         injections.push({
           contentSummary: truncate(promptContent, 80),
           contentHash: fnv1a(`sp:${inj.flavor}:${inj.id}:${promptContent}`),
@@ -148,6 +147,20 @@ export function buildSystemPromptSlot(config: SystemPromptSlotConfig): FlowChart
         });
       }
 
+      if (config.listedSkillIds !== undefined) {
+        const prior = scope.$getValue('priorSystemSkillBodies') as
+          | readonly InjectionRecord[]
+          | undefined;
+        if (prior && prior.length > 0) {
+          retainSystemSkillRecords(
+            injections,
+            prior,
+            activeInjections,
+            config.listedSkillIds,
+            (scope.$getValue('hiddenSkillIds') as readonly string[] | undefined) ?? [],
+          );
+        }
+      }
       setEventSource(scope, INJECTION_KEYS.SYSTEM_PROMPT, injections);
       const composition = composeSlot('system-prompt', args.iteration ?? 1, injections, budgetCap);
       setEventSource(scope, COMPOSITION_KEYS.SLOT_COMPOSED, composition);

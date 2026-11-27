@@ -227,6 +227,7 @@ export function decisionsShapes() {
           >({
             slot: oneOf('messages', 'system-prompt', 'tools'),
             change: oneOf('added', 'changed', 'removed'),
+            cause: oneOf('read-skill-result-middleware'),
             source: oneOf(
               'assistant',
               'base',

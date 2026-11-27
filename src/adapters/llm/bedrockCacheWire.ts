@@ -4,7 +4,7 @@
  * Model eligibility and TTL restrictions have one owner: bedrockModels.ts.
  */
 import type { PromptCaching, CacheMarker } from '../../cache/types.js';
-import { bedrockCacheFacts } from './bedrockModels.js';
+import type { BedrockCacheFacts } from './bedrockModels.js';
 
 export interface BedrockCachePoint {
   cachePoint: { type: 'default'; ttl?: '1h' };
@@ -25,8 +25,9 @@ export interface BedrockCacheUsage {
   readonly cacheWriteInputTokens?: number;
 }
 
-export function bedrockPromptCaching(model: string): PromptCaching | undefined {
-  const facts = bedrockCacheFacts(model);
+export function bedrockPromptCaching(
+  facts: BedrockCacheFacts | undefined,
+): PromptCaching | undefined {
   return facts === undefined
     ? undefined
     : {
@@ -45,11 +46,10 @@ export function bedrockPromptCaching(model: string): PromptCaching | undefined {
 export function applyCacheMarkers(
   body: MarkableBody,
   markers: readonly CacheMarker[],
-  model: string,
+  facts: BedrockCacheFacts | undefined,
   positions: readonly (BedrockMessagePosition | undefined)[],
-): void {
-  const facts = bedrockCacheFacts(model);
-  if (facts === undefined) return;
+): number {
+  if (facts === undefined) return 0;
   const boundaries = new Map<
     string,
     { array: unknown[]; index: number; order: number; long: boolean }
@@ -98,6 +98,7 @@ export function applyCacheMarkers(
     return { ...boundary, point };
   });
   for (const { array, index, point } of points.reverse()) array.splice(index + 1, 0, point);
+  return points.length;
 }
 
 /** Present zero is measured; absent or malformed cache counters stay absent.

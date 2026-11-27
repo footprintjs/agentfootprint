@@ -70,6 +70,13 @@ export function buildSlots(
           reason: 'Agent.system()',
         }),
     ...(budget?.systemPrompt !== undefined && { budgetCap: budget.systemPrompt }),
+    ...(this.configuration.skillContext?.strategy === 'listed' && {
+      listedSkillIds: new Set(
+        this.configuration.injections
+          .filter((injection) => injection.flavor === 'skill')
+          .map((injection) => injection.id),
+      ),
+    }),
   });
   const messagesSubflow = buildMessagesSlot({
     ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
@@ -225,10 +232,6 @@ export function buildSlots(
     }),
     toolClaimants: environment.toolClaimants,
     ...(readSkillFor && { readSkillFor }),
-    // The `listed` skill context: hidden skills' tools leave the static list per role.
-    ...(this.configuration.skillContext?.strategy === 'listed' && {
-      listedSkillTools: true as const,
-    }),
     ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
     // Steps (9.18.0): per-step narrowing + banner + the skip_step offer.
     ...(environment.stepPlanFor !== undefined && { stepPlanFor: environment.stepPlanFor }),

@@ -30,7 +30,11 @@ import { requestEvidenceFor } from '../../../../../tools/requestEvidence.js';
 import { mcpClientUseFor } from '../../../../../tools/mcpClientUse.js';
 import { runEndedBy, runsAsAsked, gatedCallOf } from '../../../../consentRequest.js';
 import { rewrittenAfterApproval } from '../access/bindings.js';
-import { recheckResumedCall, recordResumedRefusal } from '../access/resumedAdmission.js';
+import {
+  buildResumedSkillAdmission,
+  recheckResumedCall,
+  recordResumedRefusal,
+} from '../access/resumedAdmission.js';
 import { resumedCredential } from './resumedCredential.js';
 import { resumedPauseRefusal } from './resumedPauseRefusal.js';
 import { classifyToolFailure } from './outcomeField.js';
@@ -65,9 +69,12 @@ export function buildResumedInvocation(
     | 'answerLayer'
     | 'currentRun'
     | 'isRunRetired'
+    | 'toolClaimants'
+    | 'resolveHiddenSkillIds'
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
+  const resolveSkillAdmission = buildResumedSkillAdmission(deps);
   // Resolve a tool's declared credential (declare-and-push) and execute it,
   // emitting the same credential.* events as the main loop. Used by the
   // check-in RESUME path when a human APPROVES — the tool never ran at pause
@@ -84,7 +91,7 @@ export function buildResumedInvocation(
   const executeResumed = async (
     binding: OuterCallBinding,
     scope: TypedScope<AgentState>,
-    resolved: Resolution,
+    candidate: Resolution,
     toolName: string,
     approved: Readonly<Record<string, unknown>>,
     toolCallId: string,
@@ -93,6 +100,8 @@ export function buildResumedInvocation(
     heldTo: PausedGatePolicy['gate'],
     seen?: ResumedCallFacts,
   ): Promise<ResumedCallResult> => {
+    const admission = resolveSkillAdmission(scope, toolName, candidate, env.signal);
+    const { resolved, role } = admission instanceof Promise ? await admission : admission;
     const tool = resolved.tool;
     const occurrence = callOccurrenceField(seen?.callOccurrenceKey);
     if (seen !== undefined)
@@ -112,7 +121,7 @@ export function buildResumedInvocation(
     // and a name whose offered party cannot answer on this resume.
     if (!tool) {
       return {
-        result: resolved.refusal ?? unknownToolResult(toolName, links.dispatchRoster(scope)),
+        result: resolved.refusal ?? unknownToolResult(toolName, links.dispatchRoster(scope, role)),
         error: true,
       };
     }
@@ -248,6 +257,7 @@ export function buildResumedInvocation(
             binding,
           },
           env.signal,
+          role,
         ),
       };
       // The last moment before the call runs, after every await that prepared

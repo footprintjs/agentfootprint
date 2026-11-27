@@ -3,7 +3,10 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { PausedGatePolicy } from '../../../types/state/pause.js';
 import type { MiddlewareDecision } from '../../../middleware/types.js';
-import type { LLMMessage } from '../../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMMessage } from '../../../../../provider-contract/types.js';
+import { resolveSkillToolForRole } from '../../toolResolver.js';
+import type { SkillRoleView } from '../../../skillContext/toolVisibility.js';
+import type { Resolution } from '../contracts/callFacts.js';
 import type { Tool } from '../../../../../tools/tools.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { ResumedCallResult } from '../contracts/operations/resumedInvocation.js';
@@ -33,6 +36,37 @@ import {
   beforeToolPolicyNames,
   pausedGatePolicyOf,
 } from './resumePolicyRecord.js';
+
+interface ResumedSkillAdmission {
+  readonly resolved: Resolution;
+  readonly role?: SkillRoleView;
+}
+
+/** Refresh the role for this call, its refusal roster and its composed calls. */
+export function buildResumedSkillAdmission(
+  deps: Pick<ToolCallsHandlerDeps, 'permissionChecker' | 'toolClaimants' | 'resolveHiddenSkillIds'>,
+) {
+  const rolePolicy = checkerGoverns(deps.permissionChecker, 'skill_read');
+  const resolveHiddenSkillIds = deps.resolveHiddenSkillIds;
+  return (
+    scope: TypedScope<AgentState>,
+    toolName: string,
+    candidate: Resolution,
+    signal?: AbortSignal,
+  ): ResumedSkillAdmission | Promise<ResumedSkillAdmission> => {
+    if (!rolePolicy) return { resolved: candidate };
+    const applyRole = (hiddenSkillIds?: readonly string[]): ResumedSkillAdmission => ({
+      resolved: resolveSkillToolForRole(
+        candidate,
+        deps.toolClaimants?.get(toolName) ?? [],
+        hiddenSkillIds,
+      ),
+      role: { hiddenSkillIds },
+    });
+    if (resolveHiddenSkillIds === undefined) return applyRole();
+    return awaitUnder(signal, () => resolveHiddenSkillIds(scope)).then(applyRole);
+  };
+}
 
 type AccessDeps = Pick<ToolCallsHandlerDeps, 'permissionChecker' | 'toolMiddleware'>;
 type ResumedAdmission =

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.2.0] - 2026-11-27
+
+### Added
+
+- **Prompt caching for Bedrock inference profiles.** A supported system profile ARN or a declared application profile can use the same cache points as its backing model. Call receipts record prepared points and can link them to the response that supplied measured usage.
+
+### Security
+
+- **Apply skill-tool role visibility to the catalog and dispatch in both strategies.** The composed tool list omits tools owned only by skills hidden from the current role. Direct, resumed, and inner calls to those tools receive the unknown-tool response and do not run. Resume checks the current role again. A visible owner keeps its shared implementation available. Classic mode can retain the first tool list after a role change; dispatch still applies the role check. Provider discovery and model-facing tool references use the resolved role view.
+
+## [20.1.1] - 2026-11-27
+
+### Fixed
+
+- **Ground values in compact comma-separated results.** Adjacent numeric values can ground an answer even when the result has no spaces after commas. Valid thousands groups and declared identifier shapes keep their existing meaning.
+
 ## [20.1.0] - 2026-11-26
 
 ### Added

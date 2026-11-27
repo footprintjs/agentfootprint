@@ -3,6 +3,8 @@ import type { WireCollision } from './wireCollisions.js';
 import type { Tool } from '../../tools/tools.js';
 import type { ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
+import { roleVisibleClaim } from '../agent/skillContext/toolVisibility.js';
+import { skillVisibleToRole } from '../../lib/spokenIds.js';
 import {
   MAX_SELECTION_ROWS,
   combineOmissions,
@@ -101,7 +103,7 @@ function slotSelection(input: SlotCommit): SlotSelection | undefined {
   const rows: SelectionRow[] = [...(discovered?.rows ?? [])];
   const hidden = input.hiddenSkillIds && new Set(input.hiddenSkillIds);
   for (const name of new Set(input.withheldSkillIds)) {
-    if (!hidden || hidden.has(name)) continue;
+    if (!skillVisibleToRole(name, hidden)) continue;
     if (rows.length === MAX_SELECTION_ROWS) return { iteration, rows, complete: false };
     rows.push({ kind: 'tree-routed', name });
   }
@@ -126,10 +128,13 @@ function slotSelection(input: SlotCommit): SlotSelection | undefined {
     const claims = claimants.get(name);
     if (
       party.channel === 'skill' &&
-      (party.id === undefined ||
-        !hidden ||
-        hidden.has(party.id) ||
-        !claims?.some((c) => c.channel === 'skill' && c.id === party.id && c.tool === tool))
+      !claims?.some(
+        (claim) =>
+          claim.channel === 'skill' &&
+          claim.id === party.id &&
+          claim.tool === tool &&
+          roleVisibleClaim(claim, hidden),
+      )
     )
       continue;
     if (!visibleToolClaim(claims, tool, hidden)) continue;
