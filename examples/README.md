@@ -354,6 +354,7 @@ _Run `npm run examples:readme` after adding/editing examples._
 | — | [`answer-source-link.ts`](features/answer-source-link.ts) | Record the source of a checked answer value | A scripted agent records a match between its final answer and a served tool result. |
 | — | [`context-changed-in-tool-turn.ts`](features/context-changed-in-tool-turn.ts) | A changed tool turn, refused by name | A skill loaded mid-turn on Claude Haiku 5.5 under skillContext: 'declared' is refused before sending with ContextChangedError naming the skill and its tool; under the default, listed, the same skill passes. |
 | — | [`skills-listed.ts`](features/skills-listed.ts) | Skills that keep a signed tool turn intact | On Claude Haiku 5.5 a scoped skill is listed from the first request and its body arrives as the read_skill result, so a load mid-turn changes nothing; a call to its tool before the load is refused and does not run. |
+| — | [`viewer-display-zone.ts`](features/viewer-display-zone.ts) | A viewer zone for display | A scripted agent keeps the exact UTC interval while showing both its interpretation and viewer zones. |
 
 ### [`canonical/`](canonical/) — end-to-end patterns
 

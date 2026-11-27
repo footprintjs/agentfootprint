@@ -70,6 +70,9 @@ export interface Presentation {
   readonly zone: ZoneName;
   /** A BCP 47 language tag (`'en-US'`). Rendered through `Intl`; the zone is always named. */
   readonly locale?: string;
+  readonly viewerZone?: ZoneName;
+  /** Metadata was present but could not be read; no zone is guessed. */
+  readonly viewerDisplayUnavailable?: true;
 }
 
 /** How finely a person said a time (time design § 3.2). */
@@ -299,7 +302,7 @@ function render(a: Point, b: Point, zone: ZoneName, precision: Precision): strin
  * One instant for a person: its wall time in the presentation zone, written
  * as finely as it needs (never coarser than minutes), and the zone named.
  */
-export function presentInstant(value: InstantText, presentation: Presentation): string {
+function presentInstantOne(value: InstantText, presentation: Presentation): string {
   const zone = assertZone(presentation, 'presentInstant');
   const instant = readInstant(value, 'presentInstant');
   const point = pointOf(instant, zone);
@@ -315,7 +318,7 @@ export function presentInstant(value: InstantText, presentation: Presentation): 
  * person, each shown as declared (no end moved), in the presentation zone.
  * Accepts the lenient profile: a period a result declares.
  */
-export function presentSpan(
+function presentSpanOne(
   from: InstantText,
   to: InstantText,
   presentation: Presentation,
@@ -342,7 +345,7 @@ export function presentSpan(
  * (`semantics/coverage/period.ts` · `periodLine` for a `Period:` line, and
  * `periodCheckLine` for a result check's ranges). The coverage module is on every
  * agent's graph and this one loads only under `.time()`, so it is HANDED the
- * renderers (`agent/stages/prepareFinal.ts` loads this module through
+ * renderers (`agent/stages/prepareFinal/presentation.ts` loads this module through
  * `import()`) and never imports them — the optional-family law of docs-next's
  * site budget.
  */
@@ -368,7 +371,7 @@ export function bindPresentation(presentation: Presentation): BoundPresentation 
  * `'day'` range `[9 Oct, 10 Oct)` shows `2026-10-09`. Without a grain (an
  * exact range) both ends are shown as they are.
  */
-export function presentRange(range: TimeRange, presentation: Presentation, grain?: Grain): string {
+function presentRangeOne(range: TimeRange, presentation: Presentation, grain?: Grain): string {
   const zone = assertZone(presentation, 'presentRange');
   const from = readInstant(range?.from, 'presentRange');
   const to = readInstant(range?.to, 'presentRange');
@@ -396,4 +399,49 @@ export function presentRange(range: TimeRange, presentation: Presentation, grain
   }
   const b = pointOf({ ...to, ms: lastMs, nanos: 0 }, zone);
   return render(a, b, zone, precision);
+}
+
+function withViewer(
+  primary: string,
+  presentation: Presentation,
+  renderViewer: (viewer: Presentation) => string,
+): string {
+  if (presentation.viewerDisplayUnavailable) return `${primary} (viewer display unavailable)`;
+  if (presentation.viewerZone === undefined) return primary;
+  const viewer = {
+    zone: presentation.viewerZone,
+    ...(presentation.locale !== undefined && { locale: presentation.locale }),
+  };
+  return `${primary} (viewer display: ${renderViewer(viewer)})`;
+}
+
+/** Render the same instant in its interpretation zone and optional viewer display. */
+export function presentInstant(value: InstantText, presentation: Presentation): string {
+  return withViewer(presentInstantOne(value, presentation), presentation, (viewer) =>
+    presentInstantOne(value, viewer),
+  );
+}
+
+/** Two unchanged declared endpoints, with optional viewer presentation. */
+export function presentSpan(
+  from: InstantText,
+  to: InstantText,
+  presentation: Presentation,
+  mode: 'display' | 'exact' = 'display',
+): string {
+  return withViewer(presentSpanOne(from, to, presentation, mode), presentation, (viewer) =>
+    presentSpanOne(from, to, viewer, mode),
+  );
+}
+
+/** A legacy grain is never reinterpreted in the viewer's calendar. */
+export function presentRange(range: TimeRange, presentation: Presentation, grain?: Grain): string {
+  return withViewer(
+    presentRangeOne(range, presentation, grain),
+    presentation,
+    (viewer) =>
+      `${presentSpanOne(range.from, range.to, viewer, 'exact')}${
+        grain === undefined ? '' : ' (end excluded)'
+      }`,
+  );
 }

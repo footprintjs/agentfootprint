@@ -3,6 +3,7 @@ import type { DurationText } from '../duration.js';
 import type { InstantText } from '../instant.js';
 import type { TimeRange } from '../range.js';
 import type { ZoneName } from '../zone.js';
+import type { TimeDisplay } from '../display.js';
 import type { ClockChange, TimeClock } from '../clock.js';
 import type { MentionRefusal, TimeParts } from '../reader.js';
 import type { CallWindow, WindowSource } from '../bind.js';
@@ -17,6 +18,8 @@ export interface ControlWindow extends RecordedWindow {
 
 /** The turn's clock stamp — one per turn (time design § 4). */
 export interface ClockRow extends TimeClock {
+  /** Reported viewer zone, explicitly excluded from interpretation. */
+  readonly display?: TimeDisplay;
   readonly kind: 'clock';
   /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
   readonly turn: number;

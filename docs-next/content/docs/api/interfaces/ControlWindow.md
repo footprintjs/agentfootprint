@@ -4,7 +4,7 @@ title: ControlWindow
 
 # Interface: ControlWindow
 
-Defined in: [src/time/rows/types.ts:14](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L14)
+Defined in: [src/time/rows/types.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L15)
 
 A window set in a UI, as the clock row records it.
 
@@ -42,7 +42,7 @@ Defined in: [src/time/range.ts:60](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **source**: `"control"`
 
-Defined in: [src/time/rows/types.ts:15](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L15)
+Defined in: [src/time/rows/types.ts:16](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L16)
 
 ***
 

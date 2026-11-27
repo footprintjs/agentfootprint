@@ -1,0 +1,1 @@
+| seeing a question's time window in the interpretation zone and a separately labelled viewer zone, without changing the tool's exact interval | `AgentInput` + `timeDisplay` | `src/core/agent/types/input.ts` | unreleased |

@@ -35,6 +35,7 @@ import {
   type SourceClock,
 } from '../../time/checkRecord.js';
 import type { ZoneName } from '../../time/zone.js';
+import { displayOfTurn } from '../../time/display.js';
 import { retentionRefusalsOf } from '../../time/retentionRefusals.js';
 
 /** Who reads the lines: the person (the limits block) or the model (the served time line). */
@@ -42,6 +43,7 @@ export type TimeLimitsAudience = 'person' | 'model';
 
 /** The unrendered limits of one turn — see the file header. */
 export interface TimeLimitFacts {
+  readonly display?: unknown;
   /** The clock's zone — every range is rendered in it. */
   readonly zone: ZoneName;
   /** The turn's `period` rows that carry a check line, in the order filed. */
@@ -86,7 +88,8 @@ export function timeLimitFactsOf(
 ): TimeLimitFacts | undefined {
   const zone = presentationZoneOf(ledger);
   if (zone === undefined || ledger === undefined) return undefined;
-  const zoneUnknown = clockOf(ledger)?.zoneSource === 'unknown';
+  const clock = clockOf(ledger);
+  const zoneUnknown = clock?.zoneSource === 'unknown';
   const retentionRefusals = retentionRefusalsOf(ledger, turn).map(({ toolName }) => toolName);
   const period: PeriodRow[] = [];
   for (const row of ledger) {
@@ -101,6 +104,7 @@ export function timeLimitFactsOf(
   if (period.length === 0 && retentionRefusals.length === 0 && !clocks) return undefined;
   return {
     zone,
+    ...displayOfTurn(ledger, turn ?? clock?.turn),
     period,
     ...(retentionRefusals.length > 0 && { retentionRefusals }),
     sources,
