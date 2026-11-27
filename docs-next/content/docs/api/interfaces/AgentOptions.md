@@ -68,7 +68,7 @@ Agent.create({ provider, model, argumentAskContext: () => ({ routing: { step: 'm
 
 ### artifacts?
 
-> `readonly` `optional` **artifacts?**: [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| [`AgentArtifactsOptions`](/docs/api/interfaces/AgentArtifactsOptions)
+> `readonly` `optional` **artifacts?**: [`AgentArtifactsOptions`](/docs/api/interfaces/AgentArtifactsOptions) \| [`ArtifactStore`](/docs/api/interfaces/ArtifactStore)
 
 Defined in: [src/core/agent/types.ts:629](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L629)
 

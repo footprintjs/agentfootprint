@@ -7,8 +7,8 @@ import { coverageOfRecordedTurn } from '../core/agent/turnEvidence/coverage.js';
 import { verdictOfRecordedTurn } from '../core/agent/turnEvidence/verdict.js';
 import { assessmentDataFrom } from '../core/agent/assessment/compose.js';
 import type { AssessmentReason } from '../core/agent/assessment/types.js';
-import { recordedStandingWitnesses } from './facts/standing.js';
-import { recordingView } from './view.js';
+import { recordedStandingWitnesses } from '../answer-account/facts/standing.js';
+import { recordingView } from '../answer-account/view.js';
 
 const omissionReasons: ReadonlySet<AssessmentReason> = new Set([
   'result-cut',

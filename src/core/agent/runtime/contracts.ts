@@ -145,6 +145,8 @@ export interface AgentMethods {
   assertNoPendingQuestion(door: string, values: AgentRunValues | undefined): void;
   recordPendingQuestion(values: AgentRunValues, outcome: AgentOutput | RunnerPauseOutcome): void;
   bindSelfExplain(binding: ReturnType<SelfExplainExtension['binding']>): void;
+  why: typeof import('../turnEvidence/completedTurnQueries.js').why;
+  whatWasNotRead: typeof import('../turnEvidence/completedTurnQueries.js').whatWasNotRead;
   toolRunFacts(run: RunnerScopeValues<AgentRunValues>): {
     readonly runContext: RunContext;
     readonly runId: string;

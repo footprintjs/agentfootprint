@@ -21,6 +21,17 @@ export function registerCompletedTurnQueries(readers: CompletedTurnQueries): voi
   queries = readers;
 }
 
-export function completedTurnQueries(): CompletedTurnQueries {
-  return queries;
+export function why(
+  this: { readonly runner: object },
+  node: CompletedTurnNode,
+  turn?: CompletedAgentTurn,
+): Promise<Report> {
+  return queries.why(this.runner, node, turn);
+}
+
+export function whatWasNotRead(
+  this: { readonly runner: object },
+  turn?: CompletedAgentTurn,
+): Promise<Report> {
+  return queries.whatWasNotRead(this.runner, turn);
 }

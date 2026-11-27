@@ -9,7 +9,6 @@ import { classifyOutcome } from './agent/runtime/observations/owner.js';
 import type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 export type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 import { type AroundTurn } from './agent/aroundTurn/index.js';
-import { completedTurnQueries } from './agent/turnEvidence/completedTurnQueries.js';
 import type {
   CompletedAgentTurn,
   CompletedTurnNode,
@@ -912,11 +911,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   }
   /** Explain an evidence node from a host-authorized, completed turn. */
   why(node: CompletedTurnNode, turn?: CompletedAgentTurn) {
-    return completedTurnQueries().why(this, node, turn);
+    return getAgentRuntime(this).why(node, turn);
   }
   /** Read coverage and witnessed omissions for a host-authorized, completed turn. */
   whatWasNotRead(turn?: CompletedAgentTurn) {
-    return completedTurnQueries().whatWasNotRead(this, turn);
+    return getAgentRuntime(this).whatWasNotRead(turn);
   }
 
   /**
