@@ -13,12 +13,12 @@
  * So a wrapper that may re-route HOLDS the decider's announcement for the
  * scope it hands down, and releases it once it knows the branch: the held
  * one as it was, or its own in place of it. Exactly one `route_decided` per
- * iteration, naming the branch taken:
+ * iteration, naming the branch taken. A citation override also keeps both decisions:
  *
  *   holdRouteAnnouncement(scope);            // before `decide(scope)`
  *   …decider calls emitRouteDecided → kept, not emitted
- *   announceHeld(scope, emit)                // 'final' as the decider said, or
- *   announceHeld(scope, emit, { chosen: 'negative-recheck', rationale })
+ *   announceHeld(scope)                // 'final' as the decider said, or
+ *   announceHeld(scope, { chosen: 'negative-recheck', rationale, reasons })
  *
  * Keyed by the stage's own scope object (the per-invocation channel
  * `prepareFinal.ts` · `RAILS_REFUSED` uses), so no state is written and an
@@ -26,6 +26,8 @@
  */
 
 import type { TypedScope } from 'footprintjs';
+import type { AgentRouteDecidedPayload } from '../../../events/payloads.js';
+import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import type { RouteBranch } from './route.js';
 
@@ -34,7 +36,8 @@ interface Announcement {
   readonly rationale: string;
 }
 
-type Emit = (scope: TypedScope<AgentState>, chosen: RouteBranch, rationale: string) => void;
+type RouteDecisions = AgentRouteDecidedPayload['routeDecisions'];
+type Override = NonNullable<RouteDecisions>['override'];
 
 /** The held scopes: `null` while held with nothing announced yet. */
 const HELD = new WeakMap<object, Announcement | null>();
@@ -44,11 +47,29 @@ export function holdRouteAnnouncement(scope: object): void {
   HELD.set(scope, null);
 }
 
-/** `route.ts` · `emitRouteDecided` asks first: `true` = held, kept here and not emitted. */
-export function keptForWrapper(scope: object, chosen: RouteBranch, rationale: string): boolean {
-  if (!HELD.has(scope)) return false;
-  HELD.set(scope, { chosen, rationale });
-  return true;
+function announceRoute(
+  scope: TypedScope<AgentState>,
+  chosen: RouteBranch,
+  rationale: string,
+  routeDecisions?: RouteDecisions,
+): void {
+  typedEmit(scope, 'agentfootprint.agent.route_decided', {
+    turnIndex: 0,
+    iterIndex: scope.iteration as number,
+    chosen,
+    rationale,
+    ...(routeDecisions !== undefined && { routeDecisions }),
+  });
+}
+
+/** Publish the Route decision unless the validation wrapper is still resolving it. */
+export function emitRouteDecided(
+  scope: TypedScope<AgentState>,
+  chosen: RouteBranch,
+  rationale: string,
+): void {
+  if (HELD.has(scope)) HELD.set(scope, { chosen, rationale });
+  else announceRoute(scope, chosen, rationale);
 }
 
 /**
@@ -57,12 +78,19 @@ export function keptForWrapper(scope: object, chosen: RouteBranch, rationale: st
  */
 export function announceHeld(
   scope: TypedScope<AgentState>,
-  emit: Emit,
-  instead?: Announcement,
+  instead?: Pick<Override, 'chosen' | 'reasons'> & Pick<Announcement, 'rationale'>,
 ): void {
   if (!HELD.has(scope)) return;
   const held = HELD.get(scope);
   HELD.delete(scope);
   const said = instead ?? held;
-  if (said !== undefined && said !== null) emit(scope, said.chosen, said.rationale);
+  if (said === undefined || said === null) return;
+  const decisions: RouteDecisions =
+    held?.chosen === 'final' && instead !== undefined
+      ? {
+          provisional: { chosen: held.chosen, label: 'route-chose-to-finish' },
+          override: { chosen: instead.chosen, reasons: instead.reasons },
+        }
+      : undefined;
+  announceRoute(scope, said.chosen, said.rationale, decisions);
 }

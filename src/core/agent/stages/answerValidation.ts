@@ -27,7 +27,7 @@ import { overclaimCheckOf, type NegativeOverclaim } from '../negativeClaims/over
 import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
 import type { ResolvedNegativeClaimPhrases } from '../../../integrity/negative-claim/phrases.js';
 import { selectDeliveredAnswerEvidence, takeAnswerEvidence } from './answerEvidence.js';
-import { emitRouteDecided, type RouteBranch } from './route.js';
+import type { RouteBranch } from './route.js';
 import { announceHeld, holdRouteAnnouncement } from './routeAnnouncement.js';
 
 /** Wrap only the configured agent's terminal decision, in the outer scope.
@@ -141,14 +141,15 @@ export function withAnswerValidation(
           prepared.correction &&
           prepareNegativeCorrection(scope, record, negatives.config.field)
         ) {
-          announceHeld(scope, emitRouteDecided, {
+          announceHeld(scope, {
             chosen: 'negative-recheck',
             rationale: NEGATIVE_RECHECK_RATIONALE,
+            reasons: prepared.correctionReasons,
           });
           return 'negative-recheck';
         }
         // No correction: the decider's own announcement stands, said now.
-        announceHeld(scope, emitRouteDecided);
+        announceHeld(scope);
         // Observe the model's original strings, never the statements just composed
         // by the library. Rejected correction drafts return before this writer.
         const prose = observeNegativeProse(
@@ -169,7 +170,7 @@ export function withAnswerValidation(
         candidateParser = { parse: (value: unknown) => value };
         scope.answerNegatives = prepared.answer;
       } catch {
-        announceHeld(scope, emitRouteDecided);
+        announceHeld(scope);
         // The app's parser was already invoked once; do not repeat a stateful parser.
         candidateParser = {
           parse: () => {
@@ -237,7 +238,7 @@ export function withAnswerValidation(
     try {
       return await validated(scope);
     } finally {
-      announceHeld(scope, emitRouteDecided);
+      announceHeld(scope);
     }
   };
 }

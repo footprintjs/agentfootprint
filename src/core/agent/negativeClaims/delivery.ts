@@ -46,7 +46,7 @@ export interface RuntimeNegativeRow extends Omit<TypedNegativeRow, 'code' | 'dis
   /** Audit-only notice; it cannot confirm, block or select evidence. */
   readonly notes?: readonly 'absence-kind-normalized'[];
 }
-import type { DeliveredNegative } from '../../../events/payloads.js';
+import type { AgentRouteDecidedPayload, DeliveredNegative } from '../../../events/payloads.js';
 export type { DeliveredNegative } from '../../../events/payloads.js';
 export type AnswerNegatives = import('../../../events/payloads.js').AnswerNegativesPayload;
 
@@ -144,13 +144,23 @@ const positivePeer = (other: TurnCall, cited: TurnCall): boolean =>
   populationsMayOverlap(other, cited) &&
   !rowsOutside(other, cited);
 
+type CorrectionReasons = NonNullable<
+  AgentRouteDecidedPayload['routeDecisions']
+>['override']['reasons'];
+
 export function renderNegativeCandidate(
   candidate: unknown,
   config: NegativeDeliveryConfig,
   record: TurnRecord,
   trusted: (call: TurnCall) => boolean,
   interpretation: 'kind-only' | 'evidence-owned' = 'evidence-owned',
-): { candidate: unknown; answer: AnswerNegatives; correction: boolean; allowed: boolean } {
+): {
+  candidate: unknown;
+  answer: AnswerNegatives;
+  correction: boolean;
+  correctionReasons: CorrectionReasons;
+  allowed: boolean;
+} {
   const source = copyJson(candidate, 1024 * 1024, false);
   if (!own(source)) throw new Error('A negative-claims answer must be a JSON object.');
   const entries = source[config.field];
@@ -167,7 +177,7 @@ export function renderNegativeCandidate(
   });
   const checks: RuntimeNegativeRow[] = [];
   const claims: DeliveredNegative[] = [];
-  let correction = false;
+  const correctionReasons = new Set<CorrectionReasons[number]>();
   for (let i = 0; i < judgments.length; i++) {
     const raw = rawEntries[i];
     const entry = own(raw) ? raw : {};
@@ -295,7 +305,9 @@ export function renderNegativeCandidate(
     )
       row = { ...row, notes: ['absence-kind-normalized'] };
     checks.push(row);
-    correction ||= row.code === 'citation-unresolved' || row.code === 'stale-turn';
+    if (row.code === 'citation-unresolved' || row.code === 'stale-turn') {
+      correctionReasons.add(row.code);
+    }
     const subjects = canDescribe || established ? derivedSubjects(reads) : [];
     claims.push({
       kind: row.kind,
@@ -343,7 +355,13 @@ export function renderNegativeCandidate(
       .filter((call) => call.turn === record.turn && call.dispatched && call.effect !== 'read')
       .map((call) => ({ tool: call.toolName, outcome: call.outcome })),
   };
-  return { candidate: { ...source, [config.field]: claims }, answer, correction, allowed };
+  return {
+    candidate: { ...source, [config.field]: claims },
+    answer,
+    correction: correctionReasons.size > 0,
+    correctionReasons: [...correctionReasons],
+    allowed,
+  };
 }
 
 /**
