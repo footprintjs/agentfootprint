@@ -6,7 +6,13 @@ import {
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
-import { checkerGoverns, type LLMMessage } from '../../../../../provider-contract/types.js';
+import {
+  checkerGoverns,
+  type LLMMessage,
+  type PermissionRequest,
+} from '../../../../../provider-contract/types.js';
+import { bindSkillListingAccess } from '../../../../../tools/skillListingAccess.js';
+import { hiddenSkillIdsFor } from '../../../../../security/skillVisibility.js';
 import { hasSkillClaim, type SkillRoleView } from '../../../skillContext/toolVisibility.js';
 import { resolveSkillToolForRole } from '../../toolResolver.js';
 import type { ToolExecutionContext } from '../../../../../tools/tools.js';
@@ -75,6 +81,26 @@ export function buildToolContextOperations(
   links: ToolContextOperationsLinks,
 ): ToolContextOperations {
   const governsSkillRole = checkerGoverns(deps.permissionChecker, 'skill_read');
+  const skillListingIn = (
+    scope: TypedScope<AgentState>,
+    binding: OuterCallBinding,
+    inner: boolean,
+  ) => {
+    const checker = deps.permissionChecker;
+    return bindSkillListingAccess({
+      ...(governsSkillRole &&
+        checker !== undefined && {
+          hiddenIdsFor: (ids, signal) =>
+            hiddenSkillIdsFor(
+              checker,
+              ids,
+              scope.runIdentity as PermissionRequest['identity'],
+              signal,
+            ),
+        }),
+      record: (ids, text) => binding.recordSkillListing(ids, text, inner),
+    });
+  };
   const lookupInnerTool = (
     scope: TypedScope<AgentState>,
     name: string,
@@ -308,6 +334,7 @@ export function buildToolContextOperations(
     signal?: AbortSignal,
     liveRole?: SkillRoleView,
   ): Pick<ToolExecutionContext, 'tools'> => ({
+    ...skillListingIn(scope, call.binding, false),
     tools: agentToolDispatch({
       outerToolCallId: call.toolCallId,
       lookup: (name) => lookupInnerTool(scope, name, liveRole),
@@ -343,6 +370,7 @@ export function buildToolContextOperations(
         return {
           toolCallId: innerId,
           iteration: call.iteration,
+          ...skillListingIn(scope, call.binding, true),
           ...(signal && { signal }),
           ...(redact !== undefined && { redact }),
           credentials: reportingCredentials(

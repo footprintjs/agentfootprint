@@ -15,7 +15,7 @@ import { type AgentRunValues } from '../../runValues.js';
 import { bindRunnerStage, type RunnerScopeValues } from '../../../runnerExecution.js';
 import { type FlowChart } from 'footprintjs';
 
-import type { LLMToolSchema } from '../../../../provider-contract/types.js';
+import { checkerGoverns, type LLMToolSchema } from '../../../../provider-contract/types.js';
 
 import { buildWindowStage } from '../../stages/window.js';
 import { resumeStagedRefs } from '../../stages/stagedRefsNudge.js';
@@ -409,6 +409,9 @@ export function buildChart(
           (run) =>
             (run.value.window ??= buildWindowStage({
               strategy: configuredWindow,
+              ...(checkerGoverns(permissionChecker, 'skill_read') && {
+                skillListingChecker: permissionChecker,
+              }),
               meter: run.value.compactionMeter!,
               ...(run.value.evictedTurnsHandle !== undefined && {
                 evictedTurns: run.value.evictedTurnsHandle,

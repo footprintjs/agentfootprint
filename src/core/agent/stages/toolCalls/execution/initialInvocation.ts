@@ -172,7 +172,7 @@ export async function invokeInitialTool(
     // resume path's twin in `resolveCredentialAndExecute`.
     const codeRunSlot: CodeRunSlot = {};
     // The outer call's hold on the inner calls its tool makes (`innerCallOuter.ts`).
-    const binding = bindOuterCall();
+    const binding = bindOuterCall(frame.execution);
     const executionContext = {
       [CODE_RUN_SLOT]: codeRunSlot,
       toolCallId: frame.tc.id,

@@ -22,6 +22,10 @@ import { assertStoredTypedAnswerMark } from '../tools/typedAnswer.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import { applyReplayRetirements } from '../thinking/replayHistory.js';
 import type { RunCheckpointTracker } from './runCheckpoint.js';
+import type { FlowchartCheckpoint } from 'footprintjs';
+import { withCheckpointData } from '../redaction/privateCaller.js';
+import { markLegacySkillListings } from '../security/skillListingHistory.js';
+import { AGENT_CHECKPOINT_VERSION } from './runCheckpointTypes.js';
 
 /** Read only approved replay edits onto the history each checkpoint already owns. */
 export function checkpointReplayHistory(
@@ -29,6 +33,26 @@ export function checkpointReplayHistory(
   tracker?: RunCheckpointTracker,
 ): readonly LLMMessage[] {
   return applyReplayRetirements(history, tracker?.replayRetirements ?? []);
+}
+
+/** The Agent's catalog provenance floor is separate from the engine checkpoint version. */
+export function stampAgentPause(checkpoint: FlowchartCheckpoint): FlowchartCheckpoint {
+  return withCheckpointData(checkpoint, { agentCheckpointVersion: AGENT_CHECKPOINT_VERSION });
+}
+
+/** Old Agent pauses have the same provenance limits as old conversation checkpoints. */
+export function admitPauseCatalogHistory(checkpoint: FlowchartCheckpoint): FlowchartCheckpoint {
+  if (
+    Object.getOwnPropertyDescriptor(checkpoint, 'agentCheckpointVersion')?.value ===
+    AGENT_CHECKPOINT_VERSION
+  )
+    return checkpoint;
+  const state = checkpoint.sharedState;
+  if (!Array.isArray(state?.history)) return checkpoint;
+  const history = markLegacySkillListings(state.history as readonly LLMMessage[]);
+  return history === state.history
+    ? checkpoint
+    : withCheckpointData(checkpoint, { sharedState: withCheckpointData(state, { history }) });
 }
 
 /** Admit stored conversation messages and any marks on their retained folded originals. */

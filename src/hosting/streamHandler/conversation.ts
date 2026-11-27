@@ -1,4 +1,5 @@
 import type { AgentRunCheckpoint } from '../../core/runCheckpoint.js';
+import { AGENT_CHECKPOINT_VERSION } from '../../core/runCheckpointTypes.js';
 import { closedConversation } from '../answeredPause.js';
 import type { ThreadBinding } from '../protocolAdapter.js';
 import type { SessionLifecycle } from '../types.js';
@@ -35,7 +36,7 @@ export function noConversation(
       ? turn.plan.turn.message
       : turn.held.paused?.conversation.originalInput.message ?? '';
   return {
-    version: 1,
+    version: AGENT_CHECKPOINT_VERSION,
     runId: recordRunId ?? 'unknown',
     history: [],
     lastCompletedIteration: 0,

@@ -267,6 +267,7 @@ export const fields0 = {
   history: true,
   id: true,
   idleCalls: true,
+  ids: true,
   inProgress: true,
   in_progress: true,
   includes: true,
@@ -299,5 +300,4 @@ export const fields0 = {
   kind: true,
   label: true,
   language: true,
-  lastError: true,
 } as const;

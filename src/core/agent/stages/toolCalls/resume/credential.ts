@@ -230,6 +230,7 @@ export function buildResumeCredential(
             {
               role: 'tool',
               content: consentResultStr,
+              ...scriptSeen.skillListingFor?.(consentResultStr),
               ...(deps.negativeClaimsArmed === true && { toolChars: consentToolChars }),
               toolCallId,
               toolName,

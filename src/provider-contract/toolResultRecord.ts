@@ -63,6 +63,11 @@ export interface ToolResultRecord {
 
 /** Recording fields carried with the conversation and stripped before the provider port. */
 export interface MessageRecord extends ToolResultRecord {
+  /** Catalog IDs actually returned by the library adapter. Never sent to a provider. */
+  readonly skillListing?: {
+    readonly kind: 'rows' | 'derived' | 'unknown';
+    readonly ids: readonly string[];
+  };
   /** Who supplied the accepted reply, including after an output-policy rewrite.
    * A mark from a checkpoint is its writer's declaration. Only the run's own
    * request and usage receipts can establish a provider call or its cost. */

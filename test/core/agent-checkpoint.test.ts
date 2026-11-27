@@ -39,7 +39,7 @@ describe('agent.checkpoint()', () => {
     const agent = terseAgent(mock({ reply: 'Blue.' }));
     await agent.run({ message: 'What colour is the sky?' });
     const conversation = agent.checkpoint()!;
-    expect(conversation.version).toBe(1);
+    expect(conversation.version).toBe(2);
     expect(conversation.history).toEqual([
       { role: 'user', content: 'What colour is the sky?' },
       { role: 'assistant', content: 'Blue.' },

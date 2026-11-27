@@ -19,6 +19,8 @@ import { registerServingConversation } from '../../servingConversation.js';
 
 import { TOOL_TEARDOWN_STAGE_ID } from '../../run/eventStageIds.js';
 import type { AgentContext } from '../contracts.js';
+import { checkerGoverns } from '../../../../provider-contract/types.js';
+import { projectSkillListingHistory } from '../../../../security/skillListingHistory.js';
 
 export function initializeAgent(
   this: Pick<
@@ -103,8 +105,13 @@ export function initializeAgent(
   });
   const live = runnerLive(this.runner);
   if (live === undefined) throw new TypeError('Agent live taps were not initialized');
+  const checker = this.configuration.permissionChecker;
   registerRunnerLive(this.runner, {
     ...live,
+    skillListingView: (history, identity) =>
+      checkerGoverns(checker, 'skill_read')
+        ? projectSkillListingHistory(history, checker, identity)
+        : Promise.resolve(history),
     turn: hostedTurns(this.native.runExecution(), {
       run: (run, input, options) => this.runOwned(run, input, options),
       resume: (run, checkpoint, input, options) =>

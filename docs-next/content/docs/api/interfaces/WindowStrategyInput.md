@@ -26,7 +26,7 @@ The agent's own model — the sensible default for a strategy that bills.
 
 Defined in: [src/core/agent/window/strategy.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/window/strategy.ts#L68)
 
-The window as it stands, detached.
+The detached window, with governed catalog content projected for the current role.
 
 ***
 

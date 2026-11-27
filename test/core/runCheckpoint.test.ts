@@ -99,7 +99,7 @@ describe('runCheckpoint — P2 boundary', () => {
     expect(captured).toBeInstanceOf(RunCheckpointError);
     expect(captured!.code).toBe('ERR_RUN_CHECKPOINT');
     expect(captured!.cause.message).toMatch(/vendor 503/);
-    expect(captured!.checkpoint.version).toBe(1);
+    expect(captured!.checkpoint.version).toBe(2);
     expect(captured!.checkpoint.history.length).toBeGreaterThan(0);
     expect(captured!.checkpoint.lastCompletedIteration).toBeGreaterThanOrEqual(0);
     expect(captured!.checkpoint.originalInput.message).toBe('try');
@@ -250,8 +250,7 @@ describe('runCheckpoint — P4 property', () => {
     expect(cp.findingsLedger).toEqual(LEDGER);
     const validated = validateCheckpoint(JSON.parse(JSON.stringify(cp)));
     expect(validated.findingsLedger).toEqual(LEDGER);
-    // Version 1 still — an optional field is not a format change.
-    expect(validated.version).toBe(1);
+    expect(validated.version).toBe(2);
   });
 });
 
@@ -266,7 +265,7 @@ describe('runCheckpoint — P5 security', () => {
 
   it('P5 rejects checkpoint with wrong version (forward-compat guard)', () => {
     const futureCheckpoint = {
-      version: 2,
+      version: 3,
       runId: 'r',
       history: [],
       lastCompletedIteration: 0,

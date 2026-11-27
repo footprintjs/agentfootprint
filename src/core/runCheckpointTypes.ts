@@ -8,6 +8,9 @@ import type { NegativeCheckpoint } from './agent/negativeClaims/checkpoint.js';
 import type { StoredCitationSource } from './agent/citations/capture.js';
 import type { SourceEvidenceIndex } from '../artifacts/sourceEvidence/types.js';
 
+/** Current conversation checkpoint format and native-pause provenance floor. @internal */
+export const AGENT_CHECKPOINT_VERSION = 2;
+
 /** Internal repair state kept separately from the human conversation.
  * Restored only when retrying the same failed request, never on a new turn. */
 export interface EvidenceRecoveryCheckpoint {
@@ -25,8 +28,8 @@ export interface EvidenceRecoveryCheckpoint {
  * to ANY durable store (Redis / Postgres / S3 / disk / queue) and
  * resume hours / days / deploys later via `agent.resumeOnError(...)`.
  *
- * **Stable shape** — the `version` field guards forward compat. v1
- * → v2 transitions will be supported via a migration helper.
+ * **Versioned shape** — the runtime reads v1 and v2 and now writes v2.
+ * Version 2 distinguishes checkpoints produced with catalog provenance.
  */
 export interface AgentRunCheckpoint {
   /** Private policy inputs for trusted checkpoint storage. Keep this field alongside the
@@ -37,8 +40,8 @@ export interface AgentRunCheckpoint {
   /** Private admitted negative evidence; keep checkpoints on the trusted host. */
   readonly negativeClaimState?: NegativeCheckpoint['negativeClaimState'];
   readonly resultIdentities?: NegativeCheckpoint['resultIdentities'];
-  /** Schema version. v1 = conversation-history-based. */
-  readonly version: 1;
+  /** Schema version. Version 1 lacks a guarantee of catalog provenance. */
+  readonly version: 1 | typeof AGENT_CHECKPOINT_VERSION;
   /** Method evidence bound to this checkpoint's completed answer. */
   readonly completedCodeExecution?: import('./agent/scripts/executionEvidence.js').CompletedCodeExecutionReceipt;
   /** `runId` of the FAILING run — lets the consumer correlate a

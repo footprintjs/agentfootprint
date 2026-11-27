@@ -583,7 +583,7 @@ export function buildResumedInvocation(
   const resolveCredentialAndExecute: ResumedInvocation['resolveCredentialAndExecute'] = async (
     ...call
   ) => {
-    const binding = bindOuterCall();
+    const binding = bindOuterCall(call[8]); // The resumed call's facts survive until delivery.
     try {
       const answer = await executeResumed(binding, ...call);
       return binding.halt === undefined ? answer : { ...answer, halt: binding.halt };

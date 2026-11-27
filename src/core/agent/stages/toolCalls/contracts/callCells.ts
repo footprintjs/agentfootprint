@@ -9,7 +9,7 @@ import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { CodeRunFacts } from '../../../../codeRunnerTool.js';
 import type { NegativeDispatch } from '../../../negativeClaims/capture.js';
 import type { NativeResultFinalizer } from '../../../resultRowsets/finalization.js';
-import type { InnerCallHalt } from '../../../innerCallOuter.js';
+import type { InnerCallHalt, ListingCapture } from '../../../innerCallOuter.js';
 import type { ToolFailureDeclaration } from '../../../../../semantics/toolFailure.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
@@ -43,7 +43,7 @@ export interface CallArguments {
   chainedArgs: ToolArgs;
 }
 
-export interface CallExecution extends PendingDatasetLimits {
+export interface CallExecution extends PendingDatasetLimits, ListingCapture {
   resultFinalizer?: NativeResultFinalizer;
   denied: boolean;
   executed: boolean;

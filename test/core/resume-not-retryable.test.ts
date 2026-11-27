@@ -182,7 +182,7 @@ describe('RunCheckpointError — a context-length failure', () => {
     // The checkpoint is still built and still carries the conversation.
     expect(error.checkpoint.history.length).toBeGreaterThan(0);
     expect(canResume(error.cause)).toBe(false);
-    expect(JSON.parse(JSON.stringify(error.checkpoint)).version).toBe(1);
+    expect(JSON.parse(JSON.stringify(error.checkpoint)).version).toBe(2);
   });
 });
 
