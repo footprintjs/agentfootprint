@@ -94,17 +94,14 @@ export {
 // consumer's own vocabulary). Fold: derived from the recorded log, never a
 // re-walk — see src/time-travel/README.md.
 export { milestoneOf, milestoneStops, milestoneStopsStrategy } from './time-travel/index.js';
-// THE RECEIPT AT THE STOP (9.88.0). The wire a model receives is assembled from
-// committed pieces and is itself never committed — so `servedAt(snapshot, k)`
-// REBUILDS it from those pieces, and `receiptAt(snapshot, k)` reads the
-// hashes-and-references record the call left behind at the same stop. The law
-// they hold together is `receiptHash(runId, servedAt(k).system.text) ===
-// receiptAt(k).system.hash`; whatever the log cannot rebuild is named in
-// `servedAt(k).gaps` rather than quietly missing. `epochAt` / `epochLocations`
-// are the one owner of where an iteration's pieces live in either chart shape.
-// `receiptAt` answers a `StoredReceipt` (9.94.1): the receipt AS STORED, by
-// the release that minted it — a container a later release added may be
-// absent, and a reader reads it as "cannot say", never as a throw.
+// Served views rebuild the model input from committed pieces. The receipt
+// keeps hashes and references from the call at the same stop.
+// receiptHash(runId, servedAt(k).system.text) matches receiptAt(k).system.hash.
+// A Served gap names data the rebuild cannot recover.
+// Epoch locations resolve the call log in both chart shapes. The invocation
+// reader identifies a child by its exact native commit.
+// StoredReceipt preserves the originally recorded format. Newer fields may
+// be absent on old recordings.
 export {
   epochAt,
   epochLocations,
