@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-414 exported from `agentfootprint`.
+415 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -257,6 +257,7 @@ title: Interfaces
 - [`ReceiptPiece`](/docs/api/interfaces/ReceiptPiece)
 - [`ReceiptRequestOnlyMessage`](/docs/api/interfaces/ReceiptRequestOnlyMessage)
 - [`RecordedDispatch`](/docs/api/interfaces/RecordedDispatch)
+- [`RecordedModelCall`](/docs/api/interfaces/RecordedModelCall)
 - [`RecordingMintFacts`](/docs/api/interfaces/RecordingMintFacts)
 - [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 - [`RedactionReport`](/docs/api/interfaces/RedactionReport)

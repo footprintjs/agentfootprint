@@ -138,6 +138,24 @@ classified without the strategy being told which one it holds. One strategy
 therefore serves the outer cursor and every drilled one — see the two shapes
 below.
 
+## Model input inside a recorded child
+
+Use `readInvocationModelInput(opened, position)` once the host has authorized
+and opened the saved recording with `openSavedRecording`. The position names
+the original engine run, log owner, full invocation path, local commit index
+and runtime stage ID. The index is on the original invocation log, including
+its input-mapper commit when present. Presentation projections can omit that
+commit and keep only write paths; resolve the native position before calling
+the reader.
+
+The result carries the rebuilt Served view and its stored receipt when the
+exact native model call and its receipt are available. An exact call that
+recorded no receipt exposes the existing gap and has no `receipt` field.
+Mismatched addresses, non-call commits and unsupported logs return a named
+unavailable result. The read uses the original recording policy and, for a
+grouped call, the owning child's run log. It requests no sibling invocation.
+The epoch-only `servedAt` and `receiptAt` APIs retain their existing contract.
+
 ## The receipt at the stop
 
 An llm-turn stop is where a person actually stands when they ask the question
