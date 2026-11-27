@@ -12,7 +12,10 @@ import { isOpenForPerson } from '../../../../time/windows.js';
  * the person already settled in the time ask (its `time-answer` row) is not
  * open: it is asked once per turn.
  */
-export function openReadingOf(scope: TypedScope<AgentState>, allowProven: boolean): TimeReadingRow | undefined {
+export function openReadingOf(
+  scope: TypedScope<AgentState>,
+  allowProven: boolean,
+): TimeReadingRow | undefined {
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
   const turn = scope.turnNumber as number;
   const answered = new Set(answersOf(ledger, turn).map((a) => a.mention));

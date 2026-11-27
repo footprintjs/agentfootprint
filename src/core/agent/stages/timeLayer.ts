@@ -99,7 +99,6 @@ function currentPersonPosition(scope: TypedScope<AgentState>): number | undefine
   const input = scope.$getArgs<AgentInput>();
   if (
     scope.turnNumber !== 1 ||
-    input.messageFrom === 'composed' ||
     input.message !== scope.userMessage ||
     runKeepsOut(scope, 'history') ||
     runKeepsOut(scope, 'userMessage') ||

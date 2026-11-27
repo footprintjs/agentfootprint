@@ -173,6 +173,7 @@ describe('T4 standalone look-back at the native time and dispatch stages', () =>
       isInputPause(await agent.run({ message: 'last 2 hours', continueFrom, time: { now } })),
     ).toBe(true);
     expect(calls).toEqual([]);
+    expect(agent.findings().some((row) => 'qualifiedLookback' in row)).toBe(false);
   });
 
   it('asks when the accepted literal differs from the text the person sent', async () => {
