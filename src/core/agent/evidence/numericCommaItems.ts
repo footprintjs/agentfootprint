@@ -12,7 +12,11 @@ function groupedNumber(spelling: string): boolean {
   return spelling.includes(',') && !normalizeToken(spelling).includes(',');
 }
 
-/** Read numeric fields inside one legacy token while leaving its literal identity intact. */
+/**
+ * Read numeric fields inside one legacy token, keeping exact source offsets
+ * and using the existing thousands rule. The answer and result readers use
+ * these fields while literal matching still uses the original token.
+ */
 export function* numericCommaItems(token: string): IterableIterator<NumericCommaItem> {
   if (!token.includes(',')) return;
   const fields = token.split(',');
