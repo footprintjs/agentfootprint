@@ -15,14 +15,14 @@
  *
  * The fold never trusts that the value law ran. A log written by hand, or checked by a build
  * without it, can hold passing records for a value no receipt holds, so: a subject with no
- * `traceable-values@1` record reads at most `open` (`check-unreachable`), and a submit with no
+ * value-law record reads at most `open` (`check-unreachable`), and a submit with no
  * value-law record for its draft reads `not-assessed` at best.
  */
 import { isIncomplete } from './entries.js';
 import type { LedgerReader } from './reader.js';
 import { weakest } from './rules/port.js';
 import type { LedgerCheckCounts } from './rules/port.js';
-import { VALUE_LAW } from './rules/traceableValues.js';
+import { isValueLaw } from './rules/traceableValues.js';
 import type { LedgerCheckWhy, LedgerDisposition, LedgerNote, LedgerVerdict } from './types.js';
 
 /** The report's standing, in AgentFootprint's words. */
@@ -111,16 +111,13 @@ export const REPORT_SENTENCES: readonly string[] = Object.freeze([
 /** Why an `open` check is open: nothing to compare (`claim-unsettled`), or the check could not run. */
 function openReason(check: LedgerCheckView): 'claim-unsettled' | 'check-unreachable' {
   // The value law's `unreachable` with nothing missing: no value seen, all supplied, or one it cannot read.
-  const unsettled =
-    check.why === undefined &&
-    check.rule.startsWith('traceable-values@') &&
-    check.counts.missing === 0;
+  const unsettled = check.why === undefined && isValueLaw(check.rule) && check.counts.missing === 0;
   return unsettled ? 'claim-unsettled' : 'check-unreachable';
 }
 
 /** Whether `checks` hold a record of the value law (whatever its disposition). */
 const valueLawRan = (checks: readonly LedgerCheckView[]): boolean =>
-  checks.some((c) => c.rule === VALUE_LAW);
+  checks.some((c) => isValueLaw(c.rule));
 
 /** One subject's line, from its checks: at most `open` without a value-law record. */
 function subjectOf(reader: LedgerReader, checks: readonly LedgerCheckView[]): LedgerSubjectReport {

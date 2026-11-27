@@ -205,7 +205,7 @@ export function loadLog(frame: CallFrame) {
 
 /** The session's rules that this process lacks. */
 const missingRules = (frame: CallFrame): boolean =>
-  (frame.reader?.opened?.rules ?? []).some((key) => !frame.rules.has(key));
+  withValueLaw(frame.reader?.opened?.rules ?? []).some((key) => !frame.rules.has(key));
 
 /** `admit`: flat facts into scope, then one `decide()`: the first refusal wins, else `go`. */
 export function admit(frame: CallFrame) {
