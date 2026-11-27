@@ -21,9 +21,10 @@
  * note's `values` are what it claims, never support.
  */
 import { isIncomplete } from '../entries.js';
-import { readTokens, tokensOf } from '../tokens.js';
+import { readTokens } from '../tokens.js';
 import type { LedgerTableRule } from './port.js';
 import { valueEvidence } from './valueEvidence.js';
+import { statementValues } from './valueTime.js';
 
 /** The value law's key. It runs in every session, whatever the session pins (`withValueLaw`). */
 export const VALUE_LAW = 'traceable-values@2';
@@ -50,8 +51,8 @@ export const traceableValues: LedgerTableRule = {
     const subject = input.subject;
     const stated = new Set(
       subject.kind === 'draft'
-        ? tokensOf(subject.text)
-        : [subject.note.text, ...(subject.note.values ?? [])].flatMap(tokensOf),
+        ? statementValues(subject.text)
+        : [subject.note.text, ...(subject.note.values ?? [])].flatMap(statementValues),
     );
     // Values the token rule cannot read as one token: numbers with thousands separators, pieces after an escape.
     const unreadable = (

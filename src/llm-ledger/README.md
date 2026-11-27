@@ -25,7 +25,8 @@ this folder imports it yet, and no `package.json` door reaches it.
 | `entries.ts` | `entryFault`, the one check of an entry's shape (context-free: every reference is to an EARLIER seq); `isIncomplete`, the one answer to "was this receipt cut, holding numbers with thousands separators or pieces that read two ways, masked or limited?"; `citeProblem`, the cite check a note is admitted with |
 | `build.ts` | the record-time builders, one per kind text enters through (`receiptEntry`, `suppliedEntry`, `noteEntry`, `withdrawalEntry`, `submitEntry`, `deliveredEntry`, `openedEntry`). Each drops the text it was handed once it has the tokens or the digest it keeps, and refuses with `bad-input`, `too-large` or `bad-window` |
 | `tokens.ts` | which tokens of a text are values (rules 1–3 of the evidence extractor's header, as a closed copy; a token is a literal piece of the text, below), the receipt's capped reading (`readTokens`, and `readTokensUpTo` under another cap) and `utf8Bytes` |
-| `window.ts` | the ledger's one instant validator (`instantMs`) and the window on it (`readWindow`) |
+| `window.ts` | the narrow stored timestamp check (`instantMs`) and the window on it (`readWindow`) |
+| `instantParser.ts` | generated from the time layer’s canonical parser, keeping the ledger’s runtime dependency fence closed |
 | `digest.ts` | the folder's one door to Web Crypto: `digestOf` (`sha256:<hex>`) and `randomBytes` |
 | `session.ts` | the session id (`ls_` + 26 Crockford base32 characters, 128 random bits): `isSessionId`, `sessionIdOf`, `mintSessionId` |
 | `store.ts` | the `LedgerStore` port, `LedgerStoreError` and its closed codes, the admission both adapters share (`admitBatch`, `lineBytesOf`, `lineOverheadBytes`), and `withHighWater` (bounded, least recently used out) |

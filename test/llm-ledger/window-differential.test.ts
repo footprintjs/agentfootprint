@@ -3,8 +3,8 @@
  * grammar (case table 5.4; conflict 8, "a second time parser").
  *
  * `src/time/README.md` says no other file parses an instant. `src/llm-ledger/` is a closed leaf
- * and cannot import `src/time/`, so it carries a 30-line VALIDATOR, and this test is what keeps it
- * from becoming a second grammar: every string the ledger accepts, `time/instant.ts` · `instantOf`
+ * and cannot import `src/time/`, so its parser is generated from that source. This test pins
+ * the stored window wrapper's intentionally narrower grammar: every string the ledger accepts, `time/instant.ts` · `instantOf`
  * accepts in its `strict` profile, with the same epoch milliseconds. And the other way: every
  * string `strict` accepts and the ledger refuses is refused for one of the two named reasons —
  * no seconds, or more than three fraction digits.
@@ -12,6 +12,7 @@
  * Inputs: seeded (the same strings on every run), built field by field around the edges of each
  * rule, plus free text from the pieces that matter.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { instantMs, readWindow } from '../../src/llm-ledger/window.js';
@@ -94,6 +95,14 @@ const FREE = seededTexts(
   20_000,
   14,
 );
+
+it('ships the time layer’s canonical parser inside the closed ledger', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  expect(read('../../src/llm-ledger/instantParser.ts')).toBe(
+    '// Generated from src/time/instant.ts by scripts/gen-ledger-instant.mjs.\n' +
+      read('../../src/time/instant.ts'),
+  );
+});
 
 describe('the ledger validator against the time layer’s strict profile', () => {
   it('every string the ledger accepts, strict accepts, at the same epoch milliseconds', () => {

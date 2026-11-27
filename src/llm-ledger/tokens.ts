@@ -182,9 +182,10 @@ function tokenOf(raw: string): string | undefined {
  */
 function readRough(
   rough: string,
+  offset: number,
   escape: number,
   slashAfter: boolean,
-  into: (token: string) => void,
+  into: (token: string, start: number, end: number) => void,
   unread: Unread,
 ): void {
   // Each grouped number as [its first comma, the end of its last group's piece]. An escape's own
@@ -213,18 +214,22 @@ function readRough(
       if (DIGIT.test(piece)) unread.escaped++;
     } else if (!(k < groups.length && (groups[k] as number) < at)) {
       const token = tokenOf(piece);
-      if (token !== undefined) into(token);
+      if (token !== undefined) into(token, offset + at, offset + at + piece.length);
     }
     at += piece.length + 1;
   }
 }
 
 /** Every token of `text`, duplicates kept; what it could not read is counted in `unread`. */
-function readPieces(text: string, into: (token: string) => void, unread: Unread): void {
+function readPieces(
+  text: string,
+  into: (token: string, start: number, end: number) => void,
+  unread: Unread,
+): void {
   for (const m of text.matchAll(ROUGH)) {
     const end = m.index + m[0].length;
     const slashAfter = text.charCodeAt(end) === BACKSLASH && text.charCodeAt(end + 1) === SLASH;
-    readRough(m[0], escapeLength(text, m.index, m[0]), slashAfter, into, unread);
+    readRough(m[0], m.index, escapeLength(text, m.index, m[0]), slashAfter, into, unread);
   }
 }
 
@@ -233,6 +238,20 @@ export function tokensOf(text: string): string[] {
   const seen = new Set<string>();
   readPieces(text, (token) => void seen.add(token), { grouped: 0, escaped: 0 });
   return [...seen];
+}
+
+/** Ordered admitted value occurrences. Comparison may use adjacency in a statement’s own text. */
+export function statementTokenPositions(text: string): readonly {
+  readonly token: string;
+  readonly start: number;
+  readonly end: number;
+}[] {
+  const tokens: { token: string; start: number; end: number }[] = [];
+  readPieces(text, (token, start, end) => tokens.push({ token, start, end }), {
+    grouped: 0,
+    escaped: 0,
+  });
+  return tokens;
 }
 
 /** Whether `value` is exactly one token, spelled as `tokensOf` writes it. */

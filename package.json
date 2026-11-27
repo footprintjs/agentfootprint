@@ -77,7 +77,7 @@
     "docs:api": "typedoc",
     "docs:regen": "npm run build && npm run docs:generate",
     "docs:chart-map": "node scripts/generate-chart-map.mjs",
-    "docs:generate": "node scripts/gen-ai-instructions.mjs && node scripts/generate-answer-warning-readme.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:chart-map && npm run docs:truth:report",
+    "docs:generate": "node scripts/gen-ledger-instant.mjs && node scripts/gen-ai-instructions.mjs && node scripts/generate-answer-warning-readme.mjs && npm run examples:readme && node scripts/gen-fumadocs-api.mjs && npm run docs:chart-map && npm run docs:truth:report",
     "docs:check": "npm run docs:regen && node scripts/check-generated.mjs",
     "docs:truth": "node scripts/docs-truth-check.mjs",
     "docs:truth:baseline": "node scripts/docs-truth-check.mjs --update-baseline",

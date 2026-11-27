@@ -7,15 +7,21 @@ import legacy from './fixtures/value-law-v1.json';
 
 const at = '2026-11-27T15:00:00Z';
 
-async function inspect(text: string, evidence: string, supplied?: string) {
+async function inspect(text: string, evidence: string | readonly string[], supplied?: string) {
   const ledger = createLedger({ store: memoryLedgerStore(), clock: () => at });
   const opened = await ledger.host.open({ askRunsRules: true });
   if (!opened.ok || !('session' in opened)) throw new Error('Fixture session did not open.');
   const { session } = opened;
-  await ledger.host.record(session, { source: 'fixture', text: evidence, how: 'observed' });
+  const receipts = typeof evidence === 'string' ? [evidence] : evidence;
+  for (const receipt of receipts)
+    await ledger.host.record(session, { source: 'fixture', text: receipt, how: 'observed' });
   if (supplied !== undefined) await ledger.host.supply(session, { from: 'person', text: supplied });
   const agent = ledger.agentFor(session);
-  const noted = await agent.note({ kind: 'claim', text, cites: [2] });
+  const noted = await agent.note({
+    kind: 'claim',
+    text,
+    cites: receipts.map((_, index) => index + 2),
+  });
   if (!noted.ok || !('note' in noted)) throw new Error('Fixture note was refused.');
   const asked = await agent.ask();
   const submitted = await agent.submit({ draft: text, claims: [noted.note] });
@@ -38,7 +44,8 @@ async function inspect(text: string, evidence: string, supplied?: string) {
 it.each([
   ['2026-11-21T02:14:18Z', '2026-11-20T20:14:18-06:00', 'checked-pass'],
   ['2026-11-21T02:14:18.100Z', '2026-11-21T03:14:18.1+01:00', 'checked-pass'],
-  ['2026-11-21T02:14:18.101Z', '2026-11-21T03:14:18.1+01:00', 'checked-fail'],
+  ['2026-11-21T02:14:18.101Z', '2026-11-21T03:14:18.100+01:00', 'checked-fail'],
+  ['2026-11-21T02:14:18.101Z', '2026-11-21T03:14:18.1+01:00', 'unreachable'],
   ['2026-11-21T02:14Z', '2026-11-20T20:14:18-06:00', 'checked-pass'],
   ['2026-11-21T02:14:18Z', '2026-11-20T20:14-06:00', 'unreachable'],
   ['2026-11-21T02:14Z', '2026-11-21T02:14-00:00', 'unreachable'],
@@ -56,8 +63,23 @@ it.each([
   ['2026-11-21T02:14:18Z', '20:15:18', 'unreachable'],
   ['2026-11-21T02:14:18Z', '20:15:19', 'checked-fail'],
   ['2026-11-21T02:14:18-00:00', '2026-11-21T02:14:18Z', 'unreachable'],
-  ['02:14', '2026-11-21T02:14:18Z', 'unreachable'],
-  ['02:14Z', '2026-11-21T02:14:18Z', 'unreachable'],
+  ['02:14', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['02:14Z', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['02:14 UTC', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['2:14am', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['at 2:14', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['2026-11-21 02:14', '2026-11-21T02:14:18Z', 'checked-pass'],
+  ['02:14Z', '2026-11-21T03:14:18+01:00', 'checked-pass'],
+  ['03:14', '2026-11-21T03:14:18+01:00', 'checked-pass'],
+  ['05:55', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['05:55Z', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['02:14+05:30', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['2026-11-31T02:14:18Z', '2026-11-31T02:14:18Z', 'checked-fail'],
+  ['2026-11-21T24:00Z', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['23:59:60Z', '2026-11-21T02:14:18Z', 'checked-fail'],
+  ['2026-11-21T02:14:18Z', '2026-11-21T02:14:18.123456Z', 'checked-pass'],
+  ['2026-11-21T02:14:18.123Z', '2026-11-21T02:14:18.123456Z', 'checked-pass'],
+  ['2026-11-21T02:14:18.123457Z', '2026-11-21T02:14:18.123456Z', 'checked-fail'],
   ['02:14', '2026-11-21T02:14:18Z and 02:14', 'checked-pass'],
   ['02:14 and id-4040', '2026-11-21T02:14:18Z', 'checked-fail'],
 ] as const)('compares %s with %s on each door', async (text, evidence, disposition) => {
@@ -67,9 +89,23 @@ it.each([
     expect(check).toMatchObject({
       rule: 'traceable-values@2',
       disposition,
-      restsOn: disposition === 'checked-pass' ? [2] : [],
+      restsOn: disposition === 'checked-pass' || text.includes('id-4040') ? [2] : [],
     });
 });
+
+it.each([
+  [['2026-11-21T02:14:18Z', '2026-11-22T02:14:18Z'], 'unreachable'],
+  [['2026-11-21T02:14:18Z', '2026-11-21T02:14:18-00:00'], 'unreachable'],
+  [['2026-11-21T02:14:18Z', '02:14'], 'unreachable'],
+  [['2026-11-21T02:14:18Z', '2026-11-20T20:14:18-06:00'], 'checked-pass'],
+  [['2026-11-21T02:14:18Z', '2026-11-21T02:14:38Z'], 'checked-pass'],
+] as const)(
+  'requires one instant at the written precision across the receipts for a dateless UTC clock: %j',
+  async (receipts, disposition) => {
+    const checks = await inspect('02:14Z', receipts);
+    for (const check of checks) expect(check?.disposition).toBe(disposition);
+  },
+);
 
 it('an equivalent value supplied by the person remains exempt', async () => {
   const checks = await inspect(
