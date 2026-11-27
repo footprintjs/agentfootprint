@@ -14,13 +14,19 @@ import {
 } from '../../errors.js';
 import { type VerifiedIdentity } from '../../identityVerification.js';
 import { deliverSessions } from '../artifacts/facts.js';
-import { envelopeOwner, envelopeTranscript } from '../../envelope.js';
+import { envelopeOwner, envelopeTranscriptFor } from '../../envelope.js';
 import { readStoredSession, unanswerablePause } from '../../answeredPause.js';
 import { resolveSessionOwner } from '../../sessionOwnership.js';
+import { runnerLive, type RunnerLive } from '../../../core/runnerLive.js';
+import { projectSkillListingHistory } from '../../../security/skillListingHistory.js';
+import { identityForRequest } from '../identity/request.js';
 
 type HistoryOptions = Pick<Configuration, 'sessions' | 'sharedAgent' | 'identityOptions'>;
 
-export function createSessionHistory({ sessions, sharedAgent, identityOptions }: HistoryOptions) {
+export function createSessionHistory(
+  { sessions, sharedAgent, identityOptions }: HistoryOptions,
+  pooledView?: (sessionId: string) => RunnerLive['skillListingView'],
+) {
   /**
    * Answer "which conversations are mine?" and "what did we say?" — the two
    * session-history ops (9.26.0) — and "what is it waiting on?" (`pending`).
@@ -122,10 +128,21 @@ export function createSessionHistory({ sessions, sharedAgent, identityOptions }:
       reply.fail(new SessionNotFoundError(op.sessionId));
       return;
     }
+    const messages = await envelopeTranscriptFor(stored, (history) => {
+      const view =
+        sharedAgent === undefined
+          ? pooledView?.(op.sessionId)
+          : runnerLive(sharedAgent)?.skillListingView;
+      // A cold pooled session has no live policy. Reading it never builds an agent.
+      if (view === undefined) return projectSkillListingHistory(history, undefined, undefined);
+      const held = readStoredSession(stored);
+      const storedIdentity = (held.waiting?.conversation ?? held.prior)?.identity;
+      return view(history, identityForRequest(verified.userId, op.sessionId, storedIdentity));
+    });
     deliverSessions(reply, opName, {
       op: 'transcript',
       sessionId: op.sessionId,
-      messages: envelopeTranscript(stored),
+      messages,
     });
   }
 

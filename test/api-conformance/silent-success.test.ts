@@ -571,7 +571,7 @@ describe('silent success — stored conversations', () => {
     const agent = withId('support', 'S');
     await agent.run({ message: 'one', identity: { conversationId: 'c1' } });
     const revived = JSON.parse(JSON.stringify(agent.checkpoint()));
-    expect(revived.version).toBe(1);
+    expect(revived.version).toBe(2);
     expect(revived.identity).toEqual({ conversationId: 'c1' });
     expect(revived.agent).toEqual({ id: 'support' });
     await expect(agent.run({ message: 'two', continueFrom: revived })).resolves.toBeTypeOf(

@@ -183,9 +183,8 @@ describe('failure phase is OBSERVED, not guessed (8.14.0)', () => {
 
     const round = JSON.parse(JSON.stringify(err.checkpoint)) as typeof err.checkpoint;
     expect(round.failurePoint?.stage).toBe('call-llm');
-    // Still v1: an OPTIONAL field is not a format change, and bumping the
-    // version would make an older deployment refuse a session it can serve.
-    expect(round.version).toBe(1);
+    // The version tracks catalog provenance independently of this optional field.
+    expect(round.version).toBe(2);
   });
 
   it('SECURITY — no URL, no key, nothing but the declared name reaches the checkpoint', async () => {

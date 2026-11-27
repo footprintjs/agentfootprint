@@ -64,7 +64,7 @@ export interface RemovalFacts {
 
 /** Everything a strategy is allowed to look at. */
 export interface WindowStrategyInput {
-  /** The window as it stands, detached. */
+  /** The detached window, with governed catalog content projected for the current role. */
   readonly history: readonly LLMMessage[];
   /** The same window, segmented into turns. */
   readonly turns: readonly Turn[];

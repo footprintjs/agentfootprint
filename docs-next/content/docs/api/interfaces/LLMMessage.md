@@ -248,7 +248,7 @@ Replay layout and local consistency evidence (including known loss); JSON/checkp
 
 > `readonly` `optional` **replyOrigin?**: `object`
 
-Defined in: [src/provider-contract/toolResultRecord.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L69)
+Defined in: [src/provider-contract/toolResultRecord.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L74)
 
 Who supplied the accepted reply, including after an output-policy rewrite.
 A mark from a checkpoint is its writer's declaration. Only the run's own
@@ -283,6 +283,28 @@ Tool-only status of an admitted return. Never derived from `content` or sent to 
 > `readonly` **role**: `ContextRole`
 
 Defined in: [src/provider-contract/types/message.ts:8](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types/message.ts#L8)
+
+***
+
+### skillListing?
+
+> `readonly` `optional` **skillListing?**: `object`
+
+Defined in: [src/provider-contract/toolResultRecord.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/toolResultRecord.ts#L67)
+
+Catalog IDs actually returned by the library adapter. Never sent to a provider.
+
+#### ids
+
+> `readonly` **ids**: readonly `string`[]
+
+#### kind
+
+> `readonly` **kind**: `"unknown"` \| `"rows"` \| `"derived"`
+
+#### Inherited from
+
+`MessageRecord.skillListing`
 
 ***
 

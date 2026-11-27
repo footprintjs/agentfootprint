@@ -332,6 +332,7 @@ export function buildResumeAsk(
             {
               role: 'tool',
               content: askResultStr,
+              ...scriptSeen.skillListingFor?.(askResultStr),
               ...(deps.negativeClaimsArmed === true && { toolChars: askToolChars }),
               toolCallId,
               toolName,

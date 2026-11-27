@@ -60,6 +60,7 @@ import { installDurabilityBarrier } from '../core/durabilityBarrier.js';
 import { SessionNotFoundError, SessionOwnershipConflictError } from './errors.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
+import { AGENT_CHECKPOINT_VERSION } from '../core/runCheckpointTypes.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { DurabilityMode } from './types.js';
 
@@ -192,7 +193,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
     queued = {
       sessionId,
       conversation: {
-        version: 1,
+        version: AGENT_CHECKPOINT_VERSION,
         runId,
         // Read from the run's live committed state. Clone on the way to a
         // store so nothing a persistence layer does can reach back into the

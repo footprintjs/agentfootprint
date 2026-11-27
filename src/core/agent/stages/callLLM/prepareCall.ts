@@ -33,6 +33,8 @@ import type { OntologyPiece } from '../../../../ontology/serve.js';
 import { ontologyRoleJoin, type ScopedOntologyRecord } from '../../../../ontology/roleView.js';
 import type { AgentState } from '../../types.js';
 import { contextCheckFor } from '../../contextBinding/forCall.js';
+import { projectSkillListingHistory } from '../../../../security/skillListingHistory.js';
+import { UnsafeThinkingReplayError } from '../../../../thinking/replay.js';
 
 /** The wrap-up call's tool list (9.56.0). A frozen module constant so the
  *  withholding allocates nothing on the one call it applies to. */
@@ -121,10 +123,19 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
   // internals on someone's wire. Stripping removes a FIELD, never a message,
   // so `messages[i]` is still the message the cache marker's index names.
   // `committed` keeps both markers for the readers below that must see them.
-  const committed = (scope.history as readonly LLMMessage[] | undefined) ?? [];
-  const projected = stripFrameworkFields(committed, true);
+  const recorded = (scope.history as readonly LLMMessage[] | undefined) ?? [];
+  const committed =
+    deps.skillListingChecker !== undefined && recorded.some((entry) => 'skillListing' in entry)
+      ? await projectSkillListingHistory(
+          recorded,
+          deps.skillListingChecker,
+          scope.runIdentity,
+          scope.$getEnv().signal,
+        )
+      : recorded;
+  const projected = stripFrameworkFields(recorded, true);
   // Receipt assembly keeps a stable list even when stripping returns a live array.
-  const history = projected === committed ? [...projected] : projected;
+  const history = projected === recorded ? [...projected] : projected;
 
   // ── the findings ledger, served (9.101.0, step 3) ──────────────────
   // ONE gated read of the committed key, used twice. The COLLAPSE rewrites,
@@ -149,7 +160,7 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     deps.hasFindingsLedger === true
       ? collapseJudged(committed, ledger, deps.findingsServe ?? 'ledger-and-facts')
       : committed;
-  const rendered = collapsed === committed ? history : stripFrameworkFields(collapsed, true);
+  const rendered = collapsed === recorded ? history : stripFrameworkFields(collapsed, true);
   // ── the declared ontology, served (9.106.0) ──────────────────────────
   // ONE gated read of the run constant seed wrote; the piece is a pure
   // function of the spec and nothing else (no call number, no clock — the
@@ -216,6 +227,15 @@ export async function prepareCall(scope: TypedScope<AgentState>, deps: CallLLMSt
     rendered,
     recoveryPiece !== undefined && withheld !== null,
   );
+  // An open native turn can retain old message bytes and request-only additions.
+  // A new role decision cannot authorize replay of that frozen prefix.
+  if (continuing !== undefined && committed !== recorded) {
+    const changed = committed.findIndex(
+      (entry, index) => index < continuing.frozenBefore && entry !== recorded[index],
+    );
+    if (changed !== -1)
+      throw new UnsafeThinkingReplayError(provider.name, model, changed, 'prefix-changed');
+  }
   // The forced schema rides on the wire and in `llm_start`. Offered contracts
   // specialize the findings instruction in request-only copies that replay rebuilds.
   const recoveryNote =

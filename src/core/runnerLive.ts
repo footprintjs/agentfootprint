@@ -35,6 +35,7 @@ import type { AgentRunCheckpoint } from './runCheckpoint.js';
 import type { TurnMethod } from './agent/aroundTurn/guards.js';
 import type { ArtifactMeta, ArtifactScope } from '../artifacts/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
+import type { LLMMessage, PermissionRequest } from '../provider-contract/types.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
@@ -82,6 +83,11 @@ export interface RunnerLive {
   liveState(): Readonly<Record<string, unknown>> | undefined;
   /** The current (or last) run's snapshot, live and unserved. */
   liveSnapshot(): RuntimeSnapshot | undefined;
+  /** Agent-only transcript policy for a verified recipient, without running an agent. */
+  readonly skillListingView?: (
+    history: readonly LLMMessage[],
+    identity: PermissionRequest['identity'],
+  ) => Promise<readonly LLMMessage[]>;
   /** Agent-only execution port; never follows a later selected run. */
   readonly turn?: {
     run(

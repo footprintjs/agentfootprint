@@ -283,6 +283,7 @@ export function buildResumeCheckIn(
             {
               role: 'tool',
               content: decisionResultStr,
+              ...scriptSeen.skillListingFor?.(decisionResultStr),
               ...(deps.negativeClaimsArmed === true && { toolChars: decisionToolChars }),
               toolCallId,
               toolName,

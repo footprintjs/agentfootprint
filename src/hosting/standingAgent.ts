@@ -7,6 +7,8 @@ import { createSessionHistory } from './standingAgent/sessions/history.js';
 import { createTurnRunner } from './standingAgent/turn/run.js';
 import { readConfiguration } from './standingAgent/configuration/read.js';
 import { recordHostRefusal } from './ingressRecord.js';
+import { runnerLive } from '../core/runnerLive.js';
+import { laneKeyOf } from './standingAgent/lanes/keys.js';
 
 /**
  * hosting/standingAgent — an agent that stays up and remembers.
@@ -138,7 +140,10 @@ export async function standingAgent<TH extends HostHandle>(
   const { host, ingressSink } = configuration;
   const lanePool = createLanePool({ ...configuration, isClosing: () => closing !== undefined });
   const { shared, pool } = lanePool;
-  const history = createSessionHistory(configuration);
+  const history = createSessionHistory(configuration, (id) => {
+    const agent = pool.get(laneKeyOf(id))?.agent;
+    return agent === undefined ? undefined : runnerLive(agent)?.skillListingView;
+  });
   const access = createArtifactAccess({
     ...configuration,
     shared,
