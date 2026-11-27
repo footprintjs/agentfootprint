@@ -21,6 +21,7 @@ export interface SeedEnvironment {
   readonly cachingDisabled: boolean;
   readonly costBudget: AgentConfiguration['costBudget'];
   readonly toolSchemasResolved: readonly LLMToolSchema[];
+  readonly observesCodeExecution: boolean;
   readonly seededToolWants: Readonly<Record<string, readonly string[]>> | undefined;
   readonly seededRuledTools: ReadonlyMap<string, Tool> | undefined;
   readonly seededHonestyLayers: HonestyLayers | undefined;
@@ -44,6 +45,8 @@ export function seedFactory(environment: SeedEnvironment) {
     };
     const seed = buildSeedStage({
       hostDecision: run.value.hostTurn !== undefined,
+      observesCodeExecution:
+        run.own && environment.observesCodeExecution && run.value.hostTurn === undefined,
       hostOnly: run.value.hostTurn?.hasInput === false,
       ...(environment.configuration.sourceEvidenceConfig !== undefined && {
         sourceEvidenceMaxReceipts:

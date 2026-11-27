@@ -65,6 +65,7 @@ export interface PendingResumeHistory {
    */
   readonly turn?: number;
   readonly toolTurnEvidence?: ToolTurnEvidence;
+  readonly previousCodeExecutionReceipt?: import('../../scripts/executionEvidence.js').CompletedCodeExecutionReceipt;
   readonly requestReplay?: RequestReplayValue;
   readonly negatives?: NegativeCheckpoint;
   readonly citations?: CitationCheckpoint;

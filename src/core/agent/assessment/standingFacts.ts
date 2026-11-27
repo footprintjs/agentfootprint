@@ -7,6 +7,7 @@ import {
 } from './callStandingWords.js';
 import { legacyConflictWitness } from './conflicts.js';
 import { dispatchProofWitness } from './entryEvidence.js';
+import { isExecutionClaimWitness } from './answer/receipt/record.js';
 import type {
   AnswerAssessment,
   AssessmentPointer,
@@ -36,6 +37,8 @@ export interface StandingNames {
   readonly omitDeclaredWhy?: true;
   readonly answerValidationGap?: true;
   readonly submittedSourcesConflict?: true;
+  readonly executionClaimContradiction?: true;
+  readonly executionClaimUnverified?: true;
 }
 
 /** Reconstruct exact older warning variants from the same retained evidence. */
@@ -111,6 +114,7 @@ export function standingFactsOf(
   );
   const unreachable = assessment.reasons.find((r) => r.reason === 'check-unreachable')?.witness;
   const gaps = unreachable === undefined ? undefined : unreachableWitnessGroups(unreachable);
+  const unsupported = assessment.reasons.find((r) => r.reason === 'unsupported-claim')?.witness;
   return {
     ...(libraryLimits !== undefined && { libraryLimits }),
     ...(retrievalWarnings !== undefined && { retrievalWarnings }),
@@ -131,5 +135,9 @@ export function standingFactsOf(
     ...(gaps?.conflict.length && { legacyConflictGap: true as const }),
     ...(gaps?.validator.length && { answerValidationGap: true as const }),
     ...(assessment.citations?.conflicts?.length && { submittedSourcesConflict: true as const }),
+    ...(unsupported?.length &&
+      unsupported.every(isExecutionClaimWitness) && { executionClaimContradiction: true as const }),
+    ...(unreachable?.length &&
+      unreachable.every(isExecutionClaimWitness) && { executionClaimUnverified: true as const }),
   };
 }

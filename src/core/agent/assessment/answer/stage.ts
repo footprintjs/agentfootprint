@@ -5,6 +5,8 @@ import type { AssessmentPointer } from '../types.js';
 import { witnessRows } from '../answerWitnesses.js';
 import { answerCompletionReasons } from './completion/completion.js';
 import { readCitationRows } from './citations/record.js';
+import { readExecutionClaimRows } from './receipt/record.js';
+import type { RetainedReasonState } from '../reasonDetails.js';
 
 /**
  * Layer 4, the answer's own rows: the evidence gate's verdict (a flag —
@@ -19,8 +21,10 @@ export function readAnswerRows(
   state: Readonly<Record<string, unknown>>,
   g: Gathered,
   served: boolean,
+  retain: RetainedReasonState,
 ): void {
   readCitationRows(state, g, served);
+  readExecutionClaimRows(state, g, retain);
   const witnesses = witnessRows(state);
   const unsupported = state.unsupportedValues;
   if (isRecord(unsupported)) {

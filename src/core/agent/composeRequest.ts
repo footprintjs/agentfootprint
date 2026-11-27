@@ -203,6 +203,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
     toolResultExecution: _resultExecution,
     toolOutputCounts: _outputCounts,
     toolFailureCategory: _failureCategory,
+    toolDeclaredFailure: _declaredFailure,
     toolChars: _toolBytes,
     foldedExempt: _lineage,
     replyOrigin: _replyOrigin,
@@ -220,6 +221,7 @@ function stripMessageFields(m: LLMMessage): LLMMessage {
   void _resultExecution;
   void _outputCounts;
   void _failureCategory;
+  void _declaredFailure;
   void _toolBytes;
   void _lineage;
   void _replyOrigin;
@@ -250,6 +252,7 @@ function carriesFrameworkFields(message: LLMMessage): boolean {
     message.toolResultExecution !== undefined ||
     message.toolOutputCounts !== undefined ||
     'toolFailureCategory' in message ||
+    'toolDeclaredFailure' in message ||
     message.toolChars !== undefined ||
     message.foldedExempt !== undefined ||
     'replyOrigin' in message ||

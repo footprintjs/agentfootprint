@@ -1,3 +1,4 @@
+import { admitDeclaredToolFailure } from '../../../honesty/declaredToolDispatch.js';
 import { recordServedLimits } from '../../../honesty/libraryResultLimits.js';
 import { callOccurrenceField } from '../../../../../lib/callOccurrence.js';
 import { finalizeResumedResult } from '../../../resultRowsets/resumed.js';
@@ -326,31 +327,36 @@ export function buildResumeAsk(
       const askSettlement = links.settleBatch(
         [
           ...(scope.history as readonly LLMMessage[]),
-          {
-            role: 'tool',
-            content: askResultStr,
-            ...(deps.negativeClaimsArmed === true && { toolChars: askToolChars }),
-            toolCallId,
-            toolName,
-            ...occurrence,
-            ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
-            ...toolResultExecutionField(
-              deps.answerLayer,
-              scriptSeen.toolResultExecution,
-              !stepToolRan || resultReplaced,
-              { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
-            ),
-            ...(toolResultDisposition !== undefined && { toolResultDisposition }),
-            ...toolFailureCategoryField(
-              scriptSeen,
-              askSettled,
-              resultReplaced || toolResultDisposition !== undefined,
-            ),
-            ...innerCallsFieldOf(scope, toolCallId, iteration),
-            // A declined ask ran nothing → 'refused'; read by the check-in trail.
-            ...outcomeField(askSettled),
-            ...reportedStatusField(askSettled),
-          },
+          admitDeclaredToolFailure(
+            scope,
+            {
+              role: 'tool',
+              content: askResultStr,
+              ...(deps.negativeClaimsArmed === true && { toolChars: askToolChars }),
+              toolCallId,
+              toolName,
+              ...occurrence,
+              ...(deps.findings === true &&
+                !toolRan && { toolResultOrigin: 'not-entered' as const }),
+              ...toolResultExecutionField(
+                deps.answerLayer,
+                scriptSeen.toolResultExecution,
+                !stepToolRan || resultReplaced,
+                { scope, counts: resumeEnvelope?.outputCounts, disposition: toolResultDisposition },
+              ),
+              ...(toolResultDisposition !== undefined && { toolResultDisposition }),
+              ...toolFailureCategoryField(
+                scriptSeen,
+                askSettled,
+                resultReplaced || toolResultDisposition !== undefined,
+              ),
+              ...innerCallsFieldOf(scope, toolCallId, iteration),
+              // A declined ask ran nothing → 'refused'; read by the check-in trail.
+              ...outcomeField(askSettled),
+              ...reportedStatusField(askSettled),
+            },
+            resumeEnvelope?.declaredFailure,
+          ),
         ],
         { toolName, toolCallId, ...occurrence },
       );

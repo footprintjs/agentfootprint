@@ -3,6 +3,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { Tool } from '../../../../../tools/tools.js';
+import { noteExecutionExit } from '../../../scripts/executionEvidence.js';
 import type { CallSettlement } from '../../../scripts/label.js';
 import { type CodeRunFacts, type CodeRunSlot, codeRunsOf } from '../../../../codeRunnerTool.js';
 import { scriptOf } from '../../../../../tools/script.js';
@@ -213,10 +214,16 @@ export function buildToolScriptsOperations(
     scope: TypedScope<AgentState>,
     tool: Tool,
     slot: CodeRunSlot,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly takeListed: boolean },
+    call: {
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly takeListed: boolean;
+      readonly callOccurrenceKey?: CallOccurrenceKey | undefined;
+    },
   ): CodeRunFacts | undefined => {
     const facts = slot.facts;
     slot.facts = undefined;
+    if (facts !== undefined) noteExecutionExit(scope, call.callOccurrenceKey, facts.exitCode);
     const listed = codeRunsOf(tool);
     const filed = call.takeListed ? listed?.get(call.toolCallId) : undefined;
     if (filed !== undefined) listed?.delete(call.toolCallId);

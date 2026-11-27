@@ -45,6 +45,7 @@ export function composeWarning(
       turnBegins: begins,
       declarationAddresses,
       failureCategories: detail.failureByHistory,
+      declaredFailures: detail.declaredByHistory,
     },
     detail,
     consultation,

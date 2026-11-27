@@ -281,6 +281,7 @@ describe('regression: the check adds no step to the narrative', () => {
       .map((entry) => entry.text.replace(/turnStartMs = \d+/g, 'turnStartMs = <clock>'));
     const reference = JSON.parse(readFileSync(NATIVE_NARRATIVE_REFERENCE, 'utf8')) as string[];
     // Explicit14 correction: remove only the initial undefined owner read and renumber steps.
+    // The terminal W2 check adds one read of the accepted reply at Route.
     // All remaining reads, writes, payloads and observed order stay exact.
     const reads = (lines: readonly string[]) => lines.filter((line) => / Read \w+/.test(line));
     expect(reads(narrative)).toEqual(reads(reference));

@@ -223,6 +223,14 @@ export function chartDependencies(
           sourceNotConsulted: this.configuration.answerLayerOption.sourceNotConsulted === true,
         }),
         ...this.configuration.answerLayerOption,
+        ...(this.configuration.citationOptions !== undefined && {
+          retainedCitationsFor: (scope: object) => {
+            const { value } = this.native.runExecution().forScope(scope);
+            const retained = value.retainedCitations;
+            delete value.retainedCitations;
+            return retained;
+          },
+        }),
         ...(this.configuration.answerLayerOption.sourceNotConsulted === true && {
           omissionCheckFor: (scope: object) =>
             this.native.runExecution().forScope(scope).value.sourceConsultation?.checksOmission,
