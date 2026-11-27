@@ -52,3 +52,5 @@ here.
 - `index.ts`.
 
 Saved skill catalog results are projected for the current recipient before model delivery. Version-1 conversation history is admitted with unknown provenance for old unmarked catalog results. A role change that would alter a frozen native-thinking prefix ends replay with a refusal, since the saved prefix cannot safely be served or rewritten.
+
+**Rolling upgrades.** Older runtimes refuse version-2 conversation checkpoints, including those in hosted session envelopes. Finish the upgrade across all runtimes before resuming sessions across versions. Before rolling back, make sure the older runtime cannot read any retained version-2 checkpoint. Closing a hosted pause can leave its version-2 checkpoint in storage. Keep affected sessions on a compatible runtime until their retained version-2 checkpoints can no longer reach the older runtime.
