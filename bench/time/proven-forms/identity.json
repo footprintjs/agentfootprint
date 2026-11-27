@@ -1,0 +1,14 @@
+{
+  "reader": {
+    "id": "agentfootprint/english",
+    "version": "1.4.0",
+    "kind": "rule"
+  },
+  "node": "v24.21.0",
+  "tz": "2026c",
+  "icu": "78.3",
+  "timeTree": "9d2eefd5fc05b061d0cab218ed0a3dacd7e49a76",
+  "rulerBlob": "3ada6624c55d569237953dd5831603abe53a0254",
+  "grammar": "2ec98650e78ca926ba29d0a064a7afb8ceb00226f392ce4bd14542320a665039",
+  "manifest": "47701ead8f5cfb3bc1a02047c0e71b5372c3a55864258386b51b762e23f82bbb"
+}
